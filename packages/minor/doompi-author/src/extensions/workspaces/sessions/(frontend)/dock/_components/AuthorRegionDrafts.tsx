@@ -22,20 +22,24 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   };
-  if (!workspace.candidate && workspace.regions.length === 0) return null;
+  if (!workspace.candidate && workspace.annotations.length === 0) return null;
+  const candidateKind = workspace.candidate?.mode === 'point' ? 'point' : 'region';
   return (
     <section className="space-y-2" data-testid="author-region-drafts">
       {workspace.candidate ? (
         <>
-          <h3 className="text-base font-semibold text-doom-text">Current selection</h3>
-          <p className="text-base text-doom-dim sm:text-sm">Add a comment to keep this selection as an unsent draft.</p>
-          {workspace.candidate.anchor.kind === 'video-time-rect' ? (
+          <h3 className="text-base font-semibold text-doom-text">Current {candidateKind}</h3>
+          <p className="text-base text-doom-dim sm:text-sm">
+            Add feedback to keep this {candidateKind} as an unsent annotation.
+          </p>
+          {workspace.candidate.anchor.kind === 'video-time-rect' ||
+          workspace.candidate.anchor.kind === 'video-time-point' ? (
             <p className="text-base text-doom-dim sm:text-sm">
               Frame at {workspace.candidate.anchor.timeSeconds.toFixed(3)}s
             </p>
           ) : null}
           <textarea
-            aria-label="Region comment"
+            aria-label="Annotation comment"
             value={comment}
             onChange={(event) => {
               setComment(event.target.value);
@@ -49,9 +53,9 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
             className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
             variant="outline"
             onClick={add}
-            disabled={!workspace.candidate || !comment.trim() || workspace.regions.length >= 16}
+            disabled={!workspace.candidate || !comment.trim() || workspace.annotations.length >= 16}
           >
-            add region
+            add annotation
           </Button>
           <Button
             variant="ghost"
@@ -63,30 +67,32 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
               setError(undefined);
             }}
           >
-            Discard selection
+            Discard annotation
           </Button>
         </>
       ) : null}
       {error ? <output className="block text-base text-doom-red">{error}</output> : null}
-      {workspace.regions.length > 0 ? (
-        <h3 className="text-base font-semibold text-doom-text">Unsent drafts ({workspace.regions.length})</h3>
+      {workspace.annotations.length > 0 ? (
+        <h3 className="text-base font-semibold text-doom-text">Unsent annotations ({workspace.annotations.length})</h3>
       ) : null}
       <ol className="space-y-2">
-        {workspace.regions.map((region, index) => (
+        {workspace.annotations.map((region, index) => (
           <li
             key={region.id}
             className="rounded border border-doom-border bg-doom-panel p-2 text-base leading-normal text-doom-text sm:text-sm"
           >
             <span>
-              ({index + 1}) {region.comment}
+              ({index + 1}) {region.mode === 'point' ? 'Point' : 'Region'}: {region.comment}
             </span>
-            {region.anchor.kind === 'video-time-rect' ? (
+            {region.anchor.kind === 'video-time-rect' || region.anchor.kind === 'video-time-point' ? (
               <Button
                 variant="outline"
                 className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
                 disabled={workspace.candidate !== undefined}
                 onClick={() => {
-                  if (region.anchor.kind === 'video-time-rect') seekAuthorVideo(sessionId, region.anchor.timeSeconds);
+                  if (region.anchor.kind === 'video-time-rect' || region.anchor.kind === 'video-time-point') {
+                    seekAuthorVideo(sessionId, region.anchor.timeSeconds);
+                  }
                 }}
               >
                 Go to {region.anchor.timeSeconds.toFixed(3)}s
@@ -95,7 +101,7 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
             <Button
               className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
               variant="ghost"
-              aria-label={`Remove region ${index + 1}`}
+              aria-label={`Remove annotation ${index + 1}`}
               onClick={() => removeAuthorRegion(sessionId, region.id)}
             >
               remove

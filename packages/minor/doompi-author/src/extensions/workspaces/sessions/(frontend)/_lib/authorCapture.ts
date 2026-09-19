@@ -38,6 +38,8 @@ export interface AuthorCapturePacketRegion {
   id: string;
   ordinal: number;
   comment: string;
+  version: number;
+  mode: 'region' | 'point';
   quote?: string;
   anchor: AuthorNativeAnchor;
   viewport: AuthorRegionDraft['viewport'];
@@ -113,6 +115,8 @@ export function createAuthorCapturePacket(
         id: region.id,
         ordinal: index + 1,
         comment: region.comment,
+        version: region.version ?? 1,
+        mode: region.mode ?? ('point' in region.anchor ? 'point' : 'region'),
         ...(region.quote === undefined ? {} : { quote: utf8Prefix(region.quote, AUTHOR_QUOTE_MAX_BYTES) }),
         anchor: structuredClone(region.anchor),
         viewport: { ...region.viewport },
@@ -192,7 +196,7 @@ export function authorCaptureContext(packet: AuthorCapturePacket): WebPluginCont
     kind: 'author-capture',
     source: 'author',
     id: packet.captureId,
-    label: `${packet.regions.length} region${packet.regions.length === 1 ? '' : 's'} · ${packet.document.path}`,
+    label: `${packet.regions.length} annotation${packet.regions.length === 1 ? '' : 's'} · ${packet.document.path}`,
     content,
     metadata,
   };
@@ -326,6 +330,19 @@ export function multiRegionCaptureProvider(regions: readonly AuthorRegionDraft[]
             context.strokeRect(rx, ry, rw, rh);
             labelX = rx;
             labelY = ry;
+          } else if ('point' in region.anchor) {
+            const px = drawX + region.anchor.point.x * drawWidth;
+            const py = drawY + region.anchor.point.y * drawHeight;
+            const radius = Math.max(6, Math.min(14, Math.min(drawWidth, drawHeight) / 12));
+            context.beginPath();
+            context.arc(px, py, radius, 0, Math.PI * 2);
+            context.fillStyle = annotationColor;
+            context.fill();
+            context.strokeStyle = annotationForeground(annotationColor);
+            context.lineWidth = 2;
+            context.stroke();
+            labelX = px + radius;
+            labelY = py - radius;
           }
         }
         // Keep ordinals readable after downscaling, but never larger than their image.

@@ -19,6 +19,10 @@ function canvasFixture(blobs: (Blob | null)[] = [new Blob(['png'])]) {
     scale: vi.fn(),
     fillRect: vi.fn(),
     strokeRect: vi.fn(),
+    beginPath: vi.fn(),
+    arc: vi.fn(),
+    fill: vi.fn(),
+    stroke: vi.fn(),
     fillText: vi.fn(),
     measureText: (text: string) => ({ width: text.length * 10 }),
   };
@@ -144,6 +148,33 @@ describe('Author browser capture providers', () => {
     expect(context.fillText).toHaveBeenNthCalledWith(1, '1', 156, 81);
     expect(context.fillRect).toHaveBeenCalledWith(150, 75, 22, 36);
     expect(context.fillText).toHaveBeenNthCalledWith(2, '2', 6, 306);
+  });
+  it('renders point pins at their normalized thumbnail coordinates', async () => {
+    const { context } = canvasFixture();
+    vi.stubGlobal(
+      'Image',
+      class {
+        naturalWidth = 600;
+        naturalHeight = 300;
+        onload?: () => void;
+        set src(_url: string) {
+          this.onload?.();
+        }
+      },
+    );
+    await multiRegionCaptureProvider([
+      {
+        ...region,
+        mode: 'point',
+        thumbnailUrl: 'blob:point',
+        anchor: { kind: 'image-point', point: { x: 0.25, y: 0.75 }, naturalWidth: 600, naturalHeight: 300 },
+      },
+    ]).capture();
+
+    expect(context.arc).toHaveBeenCalledWith(150, 225, 14, 0, Math.PI * 2);
+    expect(context.fill).toHaveBeenCalledOnce();
+    expect(context.stroke).toHaveBeenCalledOnce();
+    expect(context.fillText).toHaveBeenCalledWith('1', 170, 217);
   });
   it('clamps high-contrast ordinal badges at all image edges, including two-digit ordinals', async () => {
     const { context } = canvasFixture();

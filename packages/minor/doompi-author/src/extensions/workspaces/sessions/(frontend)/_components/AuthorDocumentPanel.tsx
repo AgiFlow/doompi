@@ -3,7 +3,11 @@ import { Button } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 
-import { authorPreviewActionSlot, type AuthorPreviewActionSource } from '../../../../../types/authorPreview';
+import {
+  authorPreviewActionSlot,
+  type AuthorPreviewActionSource,
+  type AuthorPreviewDisplayedAnnotation,
+} from '../../../../../types/authorPreview';
 import { focusAuthorViewport } from '../_lib/authorBrowserBridge';
 import { loadAuthorDocument, saveAuthorDocument } from '../_lib/authorFiles';
 import { authorProfilesForDocument } from '../_lib/authorProfiles';
@@ -18,6 +22,8 @@ import {
   putAuthorDocument,
   releaseAuthorDocumentFocus,
   requestAuthorSave,
+  setAuthorRegionCandidate,
+  setAuthorStoryPreview,
   syncAuthorDocumentFocus,
   type AuthorSessionWorkspace,
 } from '../_lib/authorWorkspaceStore';
@@ -157,6 +163,16 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
   };
   const gridVisible = autonomousVoiceGridVisible(statuses);
   const displayedRegions = displayedAuthorRegions(workspace);
+  const displayedPreviewAnnotations: readonly AuthorPreviewDisplayedAnnotation[] =
+    displayedRegions.flatMap<AuthorPreviewDisplayedAnnotation>(({ ordinal, region }) => {
+      if (region.anchor.kind === 'story-preview-rect') {
+        return [{ ordinal, mode: 'region' as const, point: region.anchor.rect, rect: region.anchor.rect }];
+      }
+      if (region.anchor.kind === 'story-preview-point') {
+        return [{ ordinal, mode: 'point' as const, point: region.anchor.point }];
+      }
+      return [];
+    });
   const textPanel = (
     <AuthorTextView
       sessionId={sessionId}
@@ -225,7 +241,30 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
       {status === undefined ? null : <output className="px-4 py-1 text-xs text-doom-faint">{status}</output>}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {previewOpen && PreviewPanel !== undefined && previewSource !== undefined ? (
-          <PreviewPanel {...props} source={previewSource} />
+          <PreviewPanel
+            {...props}
+            source={previewSource}
+            activeTool={activeTool === 'crop' ? 'select' : activeTool}
+            displayedAnnotations={displayedPreviewAnnotations}
+            pendingCandidate={workspace?.candidate !== undefined}
+            onAnnotationCandidate={(candidate) => {
+              setAuthorStoryPreview(sessionId, document.path, candidate.preview);
+              setAuthorRegionCandidate(sessionId, {
+                documentPath: document.path,
+                revision: document.version,
+                sourceSha256: document.sourceSha256,
+                mode: candidate.mode,
+                anchor:
+                  candidate.mode === 'region' && candidate.rect !== undefined
+                    ? { kind: 'story-preview-rect', rect: candidate.rect, preview: candidate.preview }
+                    : { kind: 'story-preview-point', point: candidate.point, preview: candidate.preview },
+                viewport: candidate.preview.viewport,
+                evidence: candidate.evidence,
+                thumbnailUrl: candidate.thumbnailUrl,
+                createdAt: Date.now(),
+              });
+            }}
+          />
         ) : (
           sourcePanel
         )}

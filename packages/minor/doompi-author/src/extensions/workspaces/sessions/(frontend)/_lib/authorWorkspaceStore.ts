@@ -374,7 +374,7 @@ export function setAuthorCandidateText(sessionId: string, candidateText: string)
 export function commitAuthorRegion(sessionId: string, comment: string): string {
   const id = crypto.randomUUID();
   const session = authorSessionWorkspace(sessionId);
-  if (session.candidate === undefined) throw new Error('Select a document region before adding a comment.');
+  if (session.candidate === undefined) throw new Error('Select a document annotation before adding a comment.');
   addAuthorRegion(sessionId, { ...session.candidate, id, comment, version: 1 });
   updateSession(sessionId, (current) => {
     const path = current.focusedDocument?.path;
@@ -391,14 +391,14 @@ export function commitAuthorRegion(sessionId: string, comment: string): string {
 export const commitAuthorAnnotation = commitAuthorRegion;
 
 export function addAuthorRegion(sessionId: string, region: AuthorRegionDraft): void {
-  if (region.comment.trim() === '') throw new Error('Every Author region requires a comment.');
+  if (region.comment.trim() === '') throw new Error('Every Author annotation requires a comment.');
   updateSession(sessionId, (session) => {
     const focused = session.focusedDocument;
     if (focused === undefined || focused.path !== normalizeAuthorPath(region.documentPath)) {
-      throw new Error('The Author region does not belong to the focused document.');
+      throw new Error('The Author annotation does not belong to the focused document.');
     }
     if (focused.revision !== region.revision || focused.sourceSha256 !== region.sourceSha256) {
-      throw new Error('The Author region is stale for the focused document.');
+      throw new Error('The Author annotation is stale for the focused document.');
     }
     if (session.annotations.length >= AUTHOR_REGION_LIMIT)
       throw new Error(`Author requests support at most ${AUTHOR_REGION_LIMIT} annotations.`);
@@ -411,10 +411,13 @@ export function addAuthorRegion(sessionId: string, region: AuthorRegionDraft): v
 
 export const addAuthorAnnotationDraft = addAuthorRegion;
 
-export function removeAuthorRegion(sessionId: string, regionId: string): void {
+export function removeAuthorRegion(sessionId: string, regionId: string, expectedVersion?: number): void {
   let thumbnail: string | undefined;
   updateSession(sessionId, (session) => {
     const annotation = session.annotations.find((candidate) => candidate.id === regionId);
+    if (annotation !== undefined && expectedVersion !== undefined && (annotation.version ?? 1) !== expectedVersion) {
+      return session;
+    }
     thumbnail = annotation?.thumbnailUrl;
     const annotations = session.annotations.filter((candidate) => candidate.id !== regionId);
     const path = session.focusedDocument?.path;
@@ -574,6 +577,14 @@ export function dropAuthorSession(sessionId: string): void {
       sessions,
     };
   });
+}
+
+export function setAuthorStoryPreview(
+  sessionId: string,
+  path: string,
+  storyPreview: NonNullable<AuthorWorkspaceDocument['storyPreview']>,
+): void {
+  updateDocument(sessionId, path, (document) => ({ ...document, storyPreview: structuredClone(storyPreview) }));
 }
 
 function updateDocument(

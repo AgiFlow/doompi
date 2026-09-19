@@ -74,12 +74,13 @@ function progressLabel(request: AuthorRequestRecord): string {
   const pending = request.pendingRegions?.length;
   if (request.status === 'CHANGING' && request.currentOperation === 'Agent is working on this request')
     return 'Processing request';
-  if (request.status === 'CHANGING' && pending !== undefined) return `${total - pending} of ${total} regions applied`;
+  if (request.status === 'CHANGING' && pending !== undefined)
+    return `${total - pending} of ${total} annotations applied`;
   if (request.status === 'CHANGED') return 'Changes applied · awaiting save';
   if (request.status === 'COMPLETE') return 'Agent finished processing this request';
   if (request.status === 'FAILED') return 'Stopped with an error';
   if (request.status === 'CANCELLED') return 'Stopped before completion';
-  return `${total} region${total === 1 ? '' : 's'} queued`;
+  return `${total} annotation${total === 1 ? '' : 's'} queued`;
 }
 
 function RequestRecord({ request, prominent = false }: { request: AuthorRequestRecord; prominent?: boolean }) {
