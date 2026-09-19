@@ -69,7 +69,12 @@ export function AuthorToolPalette({
           { label: 'List', glyph: '≡', action: () => format('List') },
         ]
       : []),
-    { label: 'Comment', glyph: '□', action: () => setAuthorToolMode(sessionId, 'mark') },
+    {
+      label: 'Comment',
+      glyph: '●',
+      action: () => setAuthorToolMode(sessionId, activeTool === 'comment' ? 'select' : 'comment'),
+      active: activeTool === 'comment',
+    },
   ];
   return (
     <section data-testid="author-tool-palette" className="space-y-2 border-b border-doom-border-soft pb-3">
@@ -96,7 +101,9 @@ export function AuthorToolPalette({
       <p className="text-base leading-normal text-doom-dim sm:text-sm">
         {activeTool === 'mark'
           ? 'Drag over the document to mark a region.'
-          : 'Choose Region to mark an area for a comment.'}
+          : activeTool === 'comment'
+            ? 'Click the document to place a comment pin.'
+            : 'Choose Region to drag an area, or Comment to place a point.'}
       </p>
       {error ? <output className="block text-base text-doom-red">{error}</output> : null}
     </section>

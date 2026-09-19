@@ -9,8 +9,28 @@ export interface AuthorPreviewActionSource {
   sourceSha256?: string;
 }
 
+export interface AuthorPreviewAnnotationLocation {
+  mode: 'region' | 'point';
+  point: { x: number; y: number };
+  rect?: { x: number; y: number; width: number; height: number };
+}
+
+export interface AuthorPreviewDisplayedAnnotation extends AuthorPreviewAnnotationLocation {
+  ordinal: number;
+}
+
+export interface AuthorPreviewAnnotationCandidate extends AuthorPreviewAnnotationLocation {
+  preview: AuthorStoryPreviewIdentity;
+  evidence: Blob;
+  thumbnailUrl: string;
+}
+
 export interface AuthorPreviewPanelProps extends WebPluginSlotProps {
   source: AuthorPreviewActionSource;
+  activeTool?: 'select' | 'mark' | 'comment';
+  displayedAnnotations?: readonly AuthorPreviewDisplayedAnnotation[];
+  pendingCandidate?: boolean;
+  onAnnotationCandidate?: (candidate: AuthorPreviewAnnotationCandidate) => void;
 }
 
 export interface AuthorPreviewAction {

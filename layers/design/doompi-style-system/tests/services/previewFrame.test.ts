@@ -1,6 +1,7 @@
 import {
   isolatedPreviewHtml,
   normalizedAnnotationRect,
+  previewAnnotationLocation,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/previewFrame';
 
 describe('preview frame helpers', () => {
@@ -24,6 +25,19 @@ describe('preview frame helpers', () => {
     expect(isolatedPreviewHtml('<!doctype html><button>Story</button>')).toMatch(
       /^<!doctype html><head><meta http-equiv="Content-Security-Policy"/,
     );
+  });
+
+  it('maps Region drags and Comment clicks to distinct overlay locations', () => {
+    expect(previewAnnotationLocation('comment', { x: 0.1, y: 0.2 }, { x: 0.7, y: 0.8 })).toEqual({
+      mode: 'point',
+      point: { x: 0.7, y: 0.8 },
+    });
+    expect(previewAnnotationLocation('mark', { x: 0.8, y: 0.7 }, { x: 0.2, y: 0.1 })).toEqual({
+      mode: 'region',
+      point: { x: 0.2, y: 0.1, width: 0.6000000000000001, height: 0.6 },
+      rect: { x: 0.2, y: 0.1, width: 0.6000000000000001, height: 0.6 },
+    });
+    expect(previewAnnotationLocation('mark', { x: 0.2, y: 0.1 }, { x: 0.2, y: 0.8 })).toBeNull();
   });
 
   it('normalizes reverse drag coordinates', () => {

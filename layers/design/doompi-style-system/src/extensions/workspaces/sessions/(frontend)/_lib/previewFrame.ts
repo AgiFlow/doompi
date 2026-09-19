@@ -59,3 +59,16 @@ export function normalizedAnnotationRect(start: PreviewPoint, end: PreviewPoint)
     height: Math.abs(end.y - start.y),
   };
 }
+
+export function previewAnnotationLocation(
+  tool: 'mark' | 'comment',
+  start: PreviewPoint,
+  end: PreviewPoint,
+):
+  | { mode: 'region'; point: PreviewPoint; rect: PreviewAnnotationRect }
+  | { mode: 'point'; point: PreviewPoint }
+  | null {
+  if (tool === 'comment') return { mode: 'point', point: end };
+  const rect = normalizedAnnotationRect(start, end);
+  return rect.width === 0 || rect.height === 0 ? null : { mode: 'region', point: rect, rect };
+}

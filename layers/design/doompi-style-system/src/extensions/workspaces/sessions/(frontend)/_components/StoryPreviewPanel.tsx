@@ -13,6 +13,7 @@ import { buildPreview, disposePreview, exportPreviewImage, storyMetadata } from 
 import {
   isolatedPreviewHtml,
   normalizedAnnotationRect,
+  previewAnnotationLocation,
   type PreviewAnnotationRect,
   type PreviewPoint,
 } from '../_lib/previewFrame';
@@ -40,9 +41,36 @@ interface StoryPreviewSource {
   sourceSha256?: string;
 }
 
+interface StoryPreviewIdentity {
+  version: 1;
+  provider: string;
+  projectPath: string;
+  storyPath: string;
+  storyExport: string;
+  buildRevision: string;
+  viewport: { width: number; height: number };
+  sources: readonly { path: string; sha256: string }[];
+}
+
 interface StoryPreviewPanelProps extends WebPluginSlotProps {
   seed?: StoryPreviewSeed;
   source?: StoryPreviewSource;
+  activeTool?: 'select' | 'mark' | 'comment';
+  displayedAnnotations?: readonly {
+    ordinal: number;
+    mode: 'region' | 'point';
+    point: PreviewPoint;
+    rect?: PreviewAnnotationRect;
+  }[];
+  pendingCandidate?: boolean;
+  onAnnotationCandidate?: (candidate: {
+    mode: 'region' | 'point';
+    point: PreviewPoint;
+    rect?: PreviewAnnotationRect;
+    preview: StoryPreviewIdentity;
+    evidence: Blob;
+    thumbnailUrl: string;
+  }) => void;
 }
 
 function preferredExport(exports: readonly StoryPreviewMetadataView['exports'][number][]): string {
@@ -53,7 +81,16 @@ function errorText(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
 }
 
-export function StoryPreviewPanel({ sessionId, submitCapture, seed, source }: StoryPreviewPanelProps) {
+export function StoryPreviewPanel({
+  sessionId,
+  submitCapture,
+  seed,
+  source,
+  activeTool = 'select',
+  displayedAnnotations = [],
+  pendingCandidate = false,
+  onAnnotationCandidate,
+}: StoryPreviewPanelProps) {
   const contextualSource = source ?? seed?.source;
   const sourcePath = contextualSource?.path ?? '';
   const sourceDirty = contextualSource?.hasUnsavedChanges === true;
@@ -87,6 +124,7 @@ export function StoryPreviewPanel({ sessionId, submitCapture, seed, source }: St
   const builtRequestRef = useRef<BuildStoryPreviewRequest | undefined>(undefined);
   const workingRef = useRef(false);
   const dirtyRef = useRef(sourceDirty);
+  const annotationExportRef = useRef('');
 
   dirtyRef.current = sourceDirty;
 
@@ -287,14 +325,70 @@ export function StoryPreviewPanel({ sessionId, submitCapture, seed, source }: St
     setStatus('Annotation image ready. Drag a region or comment on the whole preview.');
   }
 
+  useEffect(() => {
+    if (onAnnotationCandidate === undefined) return;
+    if (activeTool === 'select') {
+      annotationExportRef.current = '';
+      setAnnotationImage(undefined);
+      setAnnotationStart(undefined);
+      setAnnotationRect(undefined);
+      return;
+    }
+    if (
+      preview === undefined ||
+      annotationImage !== undefined ||
+      working ||
+      annotationExportRef.current === preview.handle
+    )
+      return;
+    annotationExportRef.current = preview.handle;
+    const generation = generationRef.current;
+    void image().then((result) => {
+      if (result === undefined || generationRef.current !== generation) return;
+      setAnnotationImage(result);
+      setStatus('Frozen source-backed image ready for Author annotations.');
+    });
+  }, [activeTool, annotationImage, image, onAnnotationCandidate, preview, working]);
+
   function updateAnnotation(event: ReactPointerEvent<HTMLDivElement>): void {
     if (annotationStart === undefined) return;
     const end = point(event);
     setAnnotationRect(normalizedAnnotationRect(annotationStart, end));
   }
 
+  function authorCandidate(location: PreviewPoint, rect?: PreviewAnnotationRect): void {
+    if (annotationImage === undefined || onAnnotationCandidate === undefined || builtRequest === undefined) return;
+    const binary = atob(annotationImage.data);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    const evidence = new Blob([bytes], { type: annotationImage.mimeType });
+    const thumbnailUrl = URL.createObjectURL(evidence);
+    try {
+      onAnnotationCandidate({
+        mode: rect === undefined ? 'point' : 'region',
+        point: location,
+        ...(rect === undefined ? {} : { rect }),
+        preview: {
+          version: 1,
+          provider: 'style-system',
+          projectPath: builtRequest.appPath,
+          storyPath: annotationImage.storyPath,
+          storyExport: annotationImage.storyExport,
+          buildRevision: annotationImage.sourceSha256,
+          viewport: { width: annotationImage.width, height: annotationImage.height },
+          sources: [{ path: annotationImage.storyPath, sha256: annotationImage.sourceSha256 }],
+        },
+        evidence,
+        thumbnailUrl,
+      });
+    } catch (reason) {
+      URL.revokeObjectURL(thumbnailUrl);
+      setStatus(errorText(reason));
+    }
+  }
+
   const multipleExports = storyExports !== undefined && storyExports.length > 1;
   const previewVisible = preview !== undefined;
+  const authorAnnotationActive = onAnnotationCandidate !== undefined && activeTool !== 'select';
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-3 p-3" data-testid="style-system-preview-panel">
@@ -401,9 +495,15 @@ export function StoryPreviewPanel({ sessionId, submitCapture, seed, source }: St
         >
           Export PNG
         </Button>
-        <Button variant="outline" disabled={preview === undefined || working} onClick={() => void prepareAnnotation()}>
-          Prepare annotation
-        </Button>
+        {onAnnotationCandidate === undefined ? (
+          <Button
+            variant="outline"
+            disabled={preview === undefined || working}
+            onClick={() => void prepareAnnotation()}
+          >
+            Prepare annotation
+          </Button>
+        ) : null}
         <label className="flex items-center gap-1 text-xs text-doom-dim">
           <input type="checkbox" checked={darkMode} onChange={(event) => setDarkMode(event.target.checked)} /> Dark mode
         </label>
@@ -420,6 +520,87 @@ export function StoryPreviewPanel({ sessionId, submitCapture, seed, source }: St
         <div className="grid min-h-48 place-items-center rounded border border-dashed border-doom-border text-sm text-doom-faint">
           No preview built.
         </div>
+      ) : authorAnnotationActive && annotationImage !== undefined ? (
+        <div className="grid min-h-0 flex-1 place-items-center overflow-hidden rounded border border-doom-border bg-doom-deep">
+          <div
+            className="relative max-h-full w-fit max-w-full touch-none overflow-hidden"
+            aria-label={
+              activeTool === 'comment' ? 'Click to place an annotation point' : 'Drag to mark an annotation region'
+            }
+            data-testid="style-system-author-annotation-overlay"
+            onPointerDown={(event) => {
+              if (pendingCandidate || (activeTool !== 'mark' && activeTool !== 'comment')) return;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              const start = point(event);
+              setAnnotationStart(start);
+              setAnnotationRect(activeTool === 'mark' ? { ...start, width: 0, height: 0 } : undefined);
+            }}
+            onPointerMove={(event) => {
+              if (activeTool === 'mark') updateAnnotation(event);
+            }}
+            onPointerUp={(event) => {
+              const start = annotationStart;
+              if (start === undefined) return;
+              const end = point(event);
+              setAnnotationStart(undefined);
+              const location = previewAnnotationLocation(activeTool === 'comment' ? 'comment' : 'mark', start, end);
+              if (location === null) return;
+              setAnnotationRect(location.mode === 'region' ? location.rect : undefined);
+              authorCandidate(location.point, location.mode === 'region' ? location.rect : undefined);
+            }}
+            onPointerCancel={() => {
+              setAnnotationStart(undefined);
+              setAnnotationRect(undefined);
+            }}
+          >
+            <img
+              className="block max-h-full max-w-full select-none"
+              src={`data:${annotationImage.mimeType};base64,${annotationImage.data}`}
+              alt="Frozen source-backed story render for Author annotation"
+              draggable={false}
+            />
+            {displayedAnnotations.map((annotation) =>
+              annotation.mode === 'point' || annotation.rect === undefined ? (
+                <span
+                  key={annotation.ordinal}
+                  data-author-point={annotation.ordinal}
+                  className="pointer-events-none absolute z-10 flex h-5 min-w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-doom-deep bg-doom-yellow px-1 text-2xs font-bold text-doom-deep"
+                  style={{
+                    left: `${String(annotation.point.x * 100)}%`,
+                    top: `${String(annotation.point.y * 100)}%`,
+                  }}
+                >
+                  {annotation.ordinal}
+                </span>
+              ) : (
+                <div
+                  key={annotation.ordinal}
+                  data-author-region={annotation.ordinal}
+                  className="pointer-events-none absolute border border-doom-yellow bg-doom-yellow/10"
+                  style={{
+                    left: `${String(annotation.rect.x * 100)}%`,
+                    top: `${String(annotation.rect.y * 100)}%`,
+                    width: `${String(annotation.rect.width * 100)}%`,
+                    height: `${String(annotation.rect.height * 100)}%`,
+                  }}
+                >
+                  <span className="bg-doom-yellow text-doom-deep">{annotation.ordinal}</span>
+                </div>
+              ),
+            )}
+            {annotationRect === undefined ? null : (
+              <div
+                className="pointer-events-none absolute border-2 border-red-500 bg-red-500/10"
+                style={{
+                  left: `${String(annotationRect.x * 100)}%`,
+                  top: `${String(annotationRect.y * 100)}%`,
+                  width: `${String(annotationRect.width * 100)}%`,
+                  height: `${String(annotationRect.height * 100)}%`,
+                }}
+              />
+            )}
+          </div>
+        </div>
       ) : (
         <iframe
           key={preview.handle}
@@ -430,7 +611,7 @@ export function StoryPreviewPanel({ sessionId, submitCapture, seed, source }: St
           className="min-h-0 flex-1 rounded border border-doom-border bg-white"
         />
       )}
-      {annotationImage === undefined ? null : (
+      {annotationImage === undefined || onAnnotationCandidate !== undefined ? null : (
         <div className="grid gap-2">
           <div
             className="relative max-h-80 w-fit max-w-full touch-none overflow-hidden rounded border border-doom-border"
@@ -470,7 +651,7 @@ export function StoryPreviewPanel({ sessionId, submitCapture, seed, source }: St
           </p>
         </div>
       )}
-      {preview === undefined ? null : (
+      {preview === undefined || onAnnotationCandidate !== undefined ? null : (
         <div className="flex gap-2">
           <label className="grid min-w-0 flex-1 gap-1 text-xs text-doom-dim">
             AI design feedback

@@ -42,6 +42,8 @@ export function recordAuthorComposerSubmission(submission: ComposerSubmission): 
       revision: packet.document.revision,
       sourceSha256: packet.document.sourceSha256,
       comment: region.comment,
+      version: region.version ?? 1,
+      mode: region.mode,
       quote: region.quote,
       anchor: structuredClone(region.anchor),
       viewport: { ...region.viewport },
@@ -61,7 +63,7 @@ export function recordAuthorComposerSubmission(submission: ComposerSubmission): 
       revision: packet.document.revision,
       sourceSha256: packet.document.sourceSha256,
     });
-    for (const region of packet.regions) removeAuthorRegion(submission.sessionId, region.id);
+    for (const region of packet.regions) removeAuthorRegion(submission.sessionId, region.id, region.version ?? 1);
   }
 }
 

@@ -16,6 +16,7 @@ import {
   putAuthorDocument,
   putAuthorRequest,
   reviseAuthorDocument,
+  updateAuthorRegionComment,
   updateAuthorRequest,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 import {
@@ -79,6 +80,38 @@ describe('Author request lifecycle', () => {
     ).resolves.toMatchObject({ changed: true, before: 'hello', after: 'updated', revision: 1 });
     expect(authorDocument('s1', 'notes.md')?.content).toBe('updated');
     expect(authorSessionWorkspace('s1').requests[0]).toMatchObject({ status: 'CHANGED', revision: 1 });
+  });
+
+  it('keeps a draft edited after capture while accepting its matching captured version', () => {
+    const document = putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', sourceSha256: 'sha' });
+    focusAuthorDocument('s1', document.path, document.version, document.sourceSha256);
+    const region: AuthorRegionDraft = {
+      id: 'r1',
+      version: 1,
+      documentPath: document.path,
+      revision: document.version,
+      sourceSha256: document.sourceSha256,
+      comment: 'first',
+      anchor: { kind: 'text-range', startOffset: 0, endOffset: 1, startLine: 1, endLine: 1 },
+      viewport: { width: 800, height: 600 },
+      createdAt: 1,
+    };
+    addAuthorRegion('s1', region);
+    const context = authorCaptureContext(createAuthorCapturePacket('capture-versioned', 2, document, [region]));
+    updateAuthorRegionComment('s1', region.id, 'newer');
+
+    recordAuthorComposerSubmission({
+      sessionId: 's1',
+      message: 'use captured feedback',
+      delivery: 'submit',
+      submittedAt: 3,
+      contextItems: [context],
+    });
+
+    expect(authorSessionWorkspace('s1').annotations).toMatchObject([{ id: 'r1', version: 2, comment: 'newer' }]);
+    expect(authorSessionWorkspace('s1').requests[0]?.regions).toMatchObject([
+      { id: 'r1', version: 1, comment: 'first' },
+    ]);
   });
 
   it('keeps a multi-region request active and rebases untouched text anchors', async () => {
