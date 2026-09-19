@@ -52,6 +52,10 @@ describe('paired Session peer transport', () => {
       peers: [{ ...peer, url: 'http://remote.example.test' }],
     });
     expect(readSessionPeerConfig(directory)).toBeUndefined();
+    writeConfig(directory, config());
+    fs.chmodSync(sessionPeerConfigPath(directory), 0o644);
+    expect(readSessionPeerConfig(directory)).toBeUndefined();
+    fs.chmodSync(sessionPeerConfigPath(directory), 0o600);
     writeConfig(directory, { version: 1, hostId: 'local-host', peers: [{ ...peer, allowedSessionIds: [] }] });
     expect(readSessionPeerConfig(directory)?.peers[0]?.allowedSessionIds).toEqual([]);
   });

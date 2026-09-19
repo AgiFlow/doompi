@@ -70,7 +70,9 @@ export function sessionPeerConfigPath(homeDirectory: string): string {
 export function readSessionPeerConfig(homeDirectory: string): SessionPeerConfig | undefined {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(fs.readFileSync(sessionPeerConfigPath(homeDirectory), 'utf8')) as unknown;
+    const file = sessionPeerConfigPath(homeDirectory);
+    if ((fs.statSync(file).mode & 0o077) !== 0) return undefined;
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown;
   } catch {
     return undefined;
   }
