@@ -81,14 +81,15 @@ describe('Author workspace boundary and retention contracts', () => {
     workspace.setAuthorRegionCandidate(session, undefined);
     expect(revoke).toHaveBeenCalledTimes(2);
   });
-  it('cleans up thumbnails on refocus, revision changes and teardown even if revocation fails', () => {
+  it('preserves thumbnails on refocus and cleans them on revision changes even if revocation fails', () => {
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {
       throw new Error('already revoked');
     });
     workspace.setAuthorRegionCandidate(session, { ...region, thumbnailUrl: 'blob:candidate' });
     workspace.addAuthorRegion(session, { ...region, thumbnailUrl: 'blob:region' });
     workspace.focusAuthorDocument(session, 'other.md', 0);
-    expect(revoke).toHaveBeenCalledTimes(2);
+    expect(revoke).not.toHaveBeenCalled();
+    expect(workspace.authorDocumentAnnotations(session, 'a.md')?.annotations).toHaveLength(1);
     const generation = workspace.focusAuthorDocument(session, 'a.md', 0, 'sha');
     workspace.syncAuthorDocumentFocus(session, generation + 1, 1, 'new');
     expect(workspace.authorSessionWorkspace(session).focusedDocument?.revision).toBe(0);
@@ -103,10 +104,10 @@ describe('Author workspace boundary and retention contracts', () => {
     expect(workspace.authorSessionWorkspace(session).focusedDocument).toBeUndefined();
     workspace.focusAuthorDocument(session, 'a.md', 0, 'sha');
     workspace.setAuthorRegionCandidate(session, { ...region, thumbnailUrl: 'blob:candidate' });
-    workspace.addAuthorRegion(session, { ...region, thumbnailUrl: 'blob:region' });
+    workspace.addAuthorRegion(session, { ...region, id: 'r2', thumbnailUrl: 'blob:region-2' });
     workspace.reviseAuthorDocument(session, 'a.md', 'b');
     expect(workspace.authorSessionWorkspace(session).regions).toEqual([]);
-    expect(revoke).toHaveBeenCalledTimes(4);
+    expect(revoke).toHaveBeenCalledTimes(3);
   });
   it('treats missing documents, unchanged text and fragment edits as no-ops', () => {
     workspace.reviseAuthorDocument(session, 'missing', 'b');

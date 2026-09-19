@@ -189,6 +189,7 @@ export function AuthorMediaView({
         anchor,
         viewport: { width: bounds.width, height: bounds.height },
         thumbnailUrl,
+        evidence: blob,
         createdAt: Date.now(),
       });
       setError(undefined);

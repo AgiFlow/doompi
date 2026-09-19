@@ -124,8 +124,11 @@ export function createAuthorCapturePacket(
   return packet;
 }
 
+function percent(value: number): string {
+  return `${String(Math.round(value * 1_000) / 10)}%`;
+}
+
 function rectLocation(rect: AuthorCrop): string {
-  const percent = (value: number) => `${String(Math.round(value * 1_000) / 10)}%`;
   return `x ${percent(rect.x)}, y ${percent(rect.y)}, w ${percent(rect.width)}, h ${percent(rect.height)}`;
 }
 
@@ -147,6 +150,14 @@ function anchorLocation(anchor: AuthorNativeAnchor): string {
       return `time ${anchor.timeSeconds.toFixed(3)}s${anchor.frame === undefined ? '' : `, frame ${String(anchor.frame)}`}, ${rectLocation(anchor.rect)}`;
     case 'story-preview-rect':
       return `story preview ${rectLocation(anchor.rect)}`;
+    case 'image-point':
+      return `image point x ${percent(anchor.point.x)}, y ${percent(anchor.point.y)}`;
+    case 'pdf-page-point':
+      return `page ${String(anchor.page)}, point x ${percent(anchor.point.x)}, y ${percent(anchor.point.y)}`;
+    case 'video-time-point':
+      return `time ${anchor.timeSeconds.toFixed(3)}s, point x ${percent(anchor.point.x)}, y ${percent(anchor.point.y)}`;
+    case 'story-preview-point':
+      return `story preview point x ${percent(anchor.point.x)}, y ${percent(anchor.point.y)}`;
   }
 }
 

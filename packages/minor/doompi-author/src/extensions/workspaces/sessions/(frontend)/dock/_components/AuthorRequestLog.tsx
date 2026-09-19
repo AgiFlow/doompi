@@ -53,6 +53,19 @@ function anchorLabel(anchor: AuthorNativeAnchor): string {
     }
     case 'story-preview-rect':
       return `${anchor.preview.storyPath}#${anchor.preview.storyExport}`;
+    case 'image-point':
+      return 'Image point';
+    case 'pdf-page-point':
+      return `Page ${anchor.page} point`;
+    case 'video-time-point': {
+      const minutes = Math.floor(anchor.timeSeconds / 60);
+      const seconds = Math.floor(anchor.timeSeconds % 60)
+        .toString()
+        .padStart(2, '0');
+      return `Video ${minutes}:${seconds} point`;
+    }
+    case 'story-preview-point':
+      return `${anchor.preview.storyPath}#${anchor.preview.storyExport} point`;
   }
 }
 

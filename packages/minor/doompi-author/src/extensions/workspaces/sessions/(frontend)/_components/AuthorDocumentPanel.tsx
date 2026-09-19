@@ -36,7 +36,7 @@ function tabId(path: string): string {
 }
 
 export function displayedAuthorRegions(
-  workspace: AuthorSessionWorkspace | undefined,
+  workspace: Pick<AuthorSessionWorkspace, 'regions' | 'requests'> | undefined,
 ): readonly AuthorDisplayedRegion[] {
   const draftRegions = workspace?.regions ?? [];
   if (draftRegions.length > 0) return draftRegions.map((region, index) => ({ ordinal: index + 1, region }));

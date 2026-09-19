@@ -6,11 +6,12 @@ import {
   commitAuthorRegion,
   removeAuthorRegion,
   seekAuthorVideo,
+  setAuthorCandidateText,
   setAuthorRegionCandidate,
 } from '../../_lib/authorWorkspaceStore';
 
 export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string; workspace: AuthorSessionWorkspace }) {
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState(workspace.candidateText);
   const [error, setError] = useState<string>();
   const add = () => {
     try {
@@ -36,7 +37,10 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
           <textarea
             aria-label="Region comment"
             value={comment}
-            onChange={(event) => setComment(event.target.value)}
+            onChange={(event) => {
+              setComment(event.target.value);
+              setAuthorCandidateText(sessionId, event.target.value);
+            }}
             placeholder="What should change here?"
             rows={3}
             className="min-h-11 w-full resize-y rounded border border-doom-border bg-doom-deep p-2 text-lg leading-normal text-doom-text focus:border-doom-red focus:outline-none sm:text-sm"
@@ -54,6 +58,7 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
             className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
             onClick={() => {
               setAuthorRegionCandidate(sessionId, undefined);
+              setAuthorCandidateText(sessionId, '');
               setComment('');
               setError(undefined);
             }}
