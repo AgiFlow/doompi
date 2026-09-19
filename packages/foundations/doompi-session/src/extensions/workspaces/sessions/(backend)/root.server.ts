@@ -51,9 +51,9 @@ export default defineRoot((pluginContext: DoomServerPluginContext) => ({
         admitPrompt: (prompt, delivery) => session.admitPrompt!(prompt, delivery),
       });
       const service = readDoomSessionDelivery(context);
-      if (!service) throw new Error('Session delivery service was not installed.');
+      if (!service?.receive) throw new Error('Session peer delivery receiver was not installed.');
       const unregister = registerSessionPeerInbox(agent.context.sessionId, (sourceKey, kind, payload) =>
-        service.receive(sourceKey, kind, payload),
+        service.receive?.(sourceKey, kind, payload),
       );
       return async () => {
         unregister();

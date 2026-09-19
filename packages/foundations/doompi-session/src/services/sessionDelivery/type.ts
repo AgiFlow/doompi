@@ -52,8 +52,8 @@ export interface DoomSessionDeliveryService {
   deliver(request: DoomSessionDeliveryRequest): Promise<{ deliveryId: string }>;
   waitForAdmission(deliveryId: string, timeoutMs?: number): Promise<DoomSessionDeliveryInboxState | undefined>;
   inbox(query?: DoomSessionInboxQuery): readonly DoomSessionInboxEntry[];
-  /** Host-routed authenticated peer envelope admission. Not a composition control surface. */
-  receive(senderKey: string, kind: string, payload: unknown): DoomSessionDeliveryInboxState | undefined;
+  /** Optional host-routed peer envelope admission. Local-only consumers need no transport receiver. */
+  receive?(senderKey: string, kind: string, payload: unknown): DoomSessionDeliveryInboxState | undefined;
   consume(deliveryId: string): boolean;
   outbox(deliveryId: string): DoomSessionOutboxEntry | undefined;
   close(): Promise<void>;
