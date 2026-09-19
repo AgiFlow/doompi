@@ -177,7 +177,9 @@ export function createPeerCommunication(options: {
       const remote = parseRemoteSessionReference(target);
       if (!remote) return options.local.publish(target, type, payload);
       const peer = config?.peers.find((candidate) => candidate.hostId === remote.hostId);
-      if (!config || !peer) return false;
+      // Pairing is not a grant. Outbound delivery needs the same explicit target
+      // allowlist that the receiver enforces for inbound envelopes.
+      if (!config || !peer || !peer.allowedSessionIds.includes(remote.sessionId)) return false;
       const body = JSON.stringify({
         sourceSessionId: options.local.sessionId,
         targetSessionId: remote.sessionId,

@@ -135,6 +135,9 @@ describe('paired Session peer transport', () => {
     expect(request).toBeInstanceOf(URL);
     if (!(request instanceof URL)) throw new Error('Peer transport did not publish to a URL.');
     expect(request.href).toBe('https://remote.example.test/api/plugins/session-peer/inbox');
+    expect(communication.publish('peer/remote-host/ungranted-session', 'doom/session-delivery/envelope', {})).toBe(
+      false,
+    );
     expect(communication.publish('peer/missing/target-session', 'doom/session-delivery/envelope', {})).toBe(false);
     expect(local.publish).not.toHaveBeenCalled();
   });
