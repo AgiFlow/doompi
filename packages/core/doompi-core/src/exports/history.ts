@@ -28,4 +28,6 @@ export type {
   OpenSessionRegistry,
   OpenSessionRegistryOptions,
 } from '../services/openSessionRegistry';
+export { createWorkspaceRegistry } from '../services/workspaceRegistry';
+export type { WorkspaceRecord, WorkspaceRegistry, WorkspaceRegistryOptions } from '../services/workspaceRegistry';
 export type { V3ExportLoss, V3ExportLossReport, V3ExportOptions, V3ExportResult } from '../services/v3Export';

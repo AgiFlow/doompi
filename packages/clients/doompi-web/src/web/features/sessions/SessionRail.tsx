@@ -14,25 +14,28 @@ import {
   GearIcon,
   Input,
   KebabIcon,
+  PlusIcon,
 } from '@agimon-ai/doompi-web-components';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { PluginSurface } from '../../components/PluginSurface';
 import { RemoteAccessButton } from '../../components/RemoteAccessButton';
-import { restartSession, stopSession } from '../../lib/hubApi';
+import { listWorkspaces, restartSession, stopSession } from '../../lib/hubApi';
 import { HOST_SLOTS } from '../../lib/pluginRegistry';
 import { sessionStatusLine } from '../../lib/sessionSummary';
-import { DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections';
+import { DEFAULT_REPOSITORY_SETTINGS_SECTION, DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections';
 import { closeNewSession, openNewSession, newSessionStore } from '../../stores/newSessionStore';
 import { paletteStore } from '../../stores/paletteStore';
 import { openRemoteDialog, remoteAccessStore, turnRemoteAccessOff } from '../../stores/remoteAccessStore';
 import { applySessionRemoved, resolveParentId, sessionsStore, type SessionMeta } from '../../stores/sessionsStore';
 import { renameSession, sessionStoreFor } from '../../stores/sessionStore';
+import { applyWorkspacesSnapshot, selectWorkspace, workspacesStore } from '../../stores/workspacesStore';
+import { AddWorkspaceDialog } from './AddWorkspaceDialog';
 import { NewSessionDialog } from './NewSessionDialog';
 import { ResumeSessionDialog } from './ResumeSessionDialog';
-import { SessionCardView, SessionRailView } from './SessionRailView';
+import { SessionCardView, SessionRailView, WorkspaceGroupView } from './SessionRailView';
 const STATUS_REFRESH_MS = 30_000;
 
 /**
@@ -69,7 +72,7 @@ function RemoveSessionDialog({
         <DialogBody>
           <DialogDescription>
             this stops <span className="font-bold text-doom-hi">{name || 'untitled'}</span> and removes it from the
-            rail. anything it is running ends now.
+            rail. anything it is running ends now, but its saved history remains available to resume.
           </DialogDescription>
           <DialogFooter>
             <Button
@@ -280,6 +283,83 @@ function SessionCard({
   );
 }
 
+function workspaceName(root: string): string {
+  const trimmed = root.replace(/\/+$/u, '');
+  return trimmed.slice(trimmed.lastIndexOf('/') + 1) || root;
+}
+
+function WorkspaceSection({
+  workspaceId,
+  root,
+  available,
+  cards,
+  hasSessions,
+  onCreate,
+  onOpenSettings,
+}: {
+  workspaceId: string;
+  root: string;
+  available: boolean;
+  cards: ReactNode;
+  hasSessions: boolean;
+  onCreate: () => void;
+  onOpenSettings: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [resumeOpen, setResumeOpen] = useState(false);
+  return (
+    <WorkspaceGroupView
+      workspaceId={workspaceId}
+      name={workspaceName(root)}
+      path={root}
+      available={available}
+      hasSessions={hasSessions}
+      cards={cards}
+      createAction={
+        <Button
+          variant="ghost"
+          size="icon"
+          data-testid={`workspace-new-session-${workspaceId}`}
+          title="new session"
+          aria-label={`new session in ${workspaceName(root)}`}
+          disabled={!available}
+          onClick={onCreate}
+          className="text-doom-faint hover:text-doom-hi"
+        >
+          <PlusIcon className="h-3 w-3" />
+        </Button>
+      }
+      menuAction={
+        <>
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                data-testid={`workspace-menu-${workspaceId}`}
+                title="workspace actions"
+                aria-label={`${workspaceName(root)} actions`}
+                className="text-doom-faint hover:text-doom-hi"
+              >
+                <KebabIcon className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem disabled={!available} onSelect={() => setResumeOpen(true)}>
+                resume session
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!available} onSelect={onOpenSettings}>
+                workspace settings
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {resumeOpen ? <ResumeSessionDialog workspaceId={workspaceId} onClose={() => setResumeOpen(false)} /> : null}
+        </>
+      }
+    />
+  );
+}
+
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
@@ -290,31 +370,48 @@ function insideOverlay(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('[role="dialog"], [role="menu"], [role="alertdialog"]') !== null;
 }
 
-/** The mockup's rail: brand, live session cards, the new-session flow, and nothing else. */
+/** The workspace-first rail: durable roots own their live and resumable sessions. */
 export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
   const navigate = useNavigate();
   const order = useStore(sessionsStore, (state) => state.order);
   const byId = useStore(sessionsStore, (state) => state.byId);
   const activeId = useStore(sessionsStore, (state) => state.activeId);
+  const workspaceOrder = useStore(workspacesStore, (state) => state.order);
+  const workspacesById = useStore(workspacesStore, (state) => state.byId);
+  const selectedWorkspaceId = useStore(workspacesStore, (state) => state.selectedId);
+  const workspacesHydrated = useStore(workspacesStore, (state) => state.hydrated);
   const hasDialog = useStore(sessionStoreFor(activeId), (state) => state.dialog !== null);
   const remote = useStore(remoteAccessStore, (state) => state.view);
-  // Shared, because the welcome panel in the other column opens the same
-  // dialog and a feature may not reach into a sibling.
-  const creating = useStore(newSessionStore, (state) => state.open);
+  const creating = useStore(newSessionStore, (state) => state);
   const [now, setNow] = useState(() => Date.now());
 
-  // Keeps "running · 12m" honest without any frame arriving.
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), STATUS_REFRESH_MS);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
+    if (workspacesHydrated) return;
+    let stale = false;
+    void listWorkspaces().then((result) => {
+      if (!stale && 'workspaces' in result) applyWorkspacesSnapshot(result);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [workspacesHydrated]);
+
+  useEffect(() => {
+    const workspaceId = activeId === null ? undefined : byId[activeId]?.summary.workspaceId;
+    if (workspaceId !== undefined && workspacesById[workspaceId] !== undefined) selectWorkspace(workspaceId);
+  }, [activeId, byId, workspacesById]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === 't') {
         event.preventDefault();
         onDismiss?.();
-        openNewSession();
+        openNewSession(selectedWorkspaceId);
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
@@ -329,24 +426,81 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [order, hasDialog, navigate, onDismiss]);
+  }, [order, hasDialog, navigate, onDismiss, selectedWorkspaceId]);
 
-  const cards = order.map((id, index) => (
-    <SessionCard
-      key={id}
-      meta={byId[id]}
-      ordinal={index + 1}
-      active={id === activeId}
-      now={now}
-      onNavigate={onDismiss}
-      nested={resolveParentId(byId, id) !== undefined}
-    />
-  ));
+  const groupedIds = new Set<string>();
+  const ordinalById = new Map(order.map((id, index) => [id, index + 1]));
+  const groups: ReactNode[] = workspaceOrder.map((workspaceId) => {
+    const workspace = workspacesById[workspaceId];
+    const ids = order.filter((id) => byId[id]?.summary.workspaceId === workspaceId);
+    for (const id of ids) groupedIds.add(id);
+    const cards = ids.map((id) => (
+      <SessionCard
+        key={id}
+        meta={byId[id]}
+        ordinal={ordinalById.get(id) ?? 0}
+        active={id === activeId}
+        now={now}
+        onNavigate={onDismiss}
+        nested={resolveParentId(byId, id) !== undefined}
+      />
+    ));
+    return (
+      <WorkspaceSection
+        key={workspaceId}
+        workspaceId={workspaceId}
+        root={workspace.root}
+        available={workspace.available !== false}
+        cards={cards}
+        hasSessions={ids.length > 0}
+        onCreate={() => {
+          selectWorkspace(workspaceId);
+          openNewSession(workspaceId);
+        }}
+        onOpenSettings={() => {
+          selectWorkspace(workspaceId);
+          onDismiss?.();
+          void navigate({
+            to: '/settings/$section',
+            params: { section: DEFAULT_REPOSITORY_SETTINGS_SECTION },
+            search: { workspace: workspaceId },
+          });
+        }}
+      />
+    );
+  });
+  const legacyIds = order.filter((id) => !groupedIds.has(id));
+  if (legacyIds.length > 0) {
+    const root = byId[legacyIds[0]].summary.cwd;
+    groups.push(
+      <WorkspaceSection
+        key="legacy-workspace"
+        workspaceId="legacy-workspace"
+        root={root}
+        available={false}
+        hasSessions
+        cards={legacyIds.map((id) => (
+          <SessionCard
+            key={id}
+            meta={byId[id]}
+            ordinal={ordinalById.get(id) ?? 0}
+            active={id === activeId}
+            now={now}
+            onNavigate={onDismiss}
+            nested={resolveParentId(byId, id) !== undefined}
+          />
+        ))}
+        onCreate={() => undefined}
+        onOpenSettings={() => undefined}
+      />,
+    );
+  }
 
+  const targetWorkspace = creating.workspaceId === null ? undefined : workspacesById[creating.workspaceId];
   return (
     <SessionRailView
-      hasSessions={order.length > 0}
-      cards={cards}
+      hasWorkspaces={groups.length > 0}
+      workspaceGroups={groups}
       remote={remote}
       remoteAccessButton={
         <RemoteAccessButton
@@ -364,6 +518,7 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
           <Link
             to="/settings/$section"
             params={{ section: DEFAULT_SETTINGS_SECTION }}
+            search={{ workspace: selectedWorkspaceId ?? undefined }}
             data-testid="settings-open"
             aria-label="settings"
             onClick={onDismiss}
@@ -374,14 +529,22 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
       }
       onDismiss={onDismiss}
       onOpenRemote={openRemoteDialog}
-      onOpenNewSession={() => {
+      onAddWorkspace={() => {
         onDismiss?.();
-        openNewSession();
+        openNewSession(null);
       }}
       onTurnRemoteOff={() => void turnRemoteAccessOff()}
     >
-      {creating ? (
-        <NewSessionDialog onClose={closeNewSession} suggestedCwds={remote?.settings.sandbox.workspaces ?? []} />
+      {creating.open ? (
+        targetWorkspace === undefined ? (
+          <AddWorkspaceDialog onClose={closeNewSession} suggestedRoots={remote?.settings.sandbox.workspaces ?? []} />
+        ) : (
+          <NewSessionDialog
+            workspaceId={targetWorkspace.id}
+            workspaceRoot={targetWorkspace.root}
+            onClose={closeNewSession}
+          />
+        )
       ) : null}
     </SessionRailView>
   );

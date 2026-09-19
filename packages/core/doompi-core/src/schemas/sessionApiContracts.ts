@@ -116,7 +116,18 @@ const HubServerFrame = Type.Union([
   Type.Object({ type: Type.Literal('thread_backlog'), sessionId: Text, threadId: Text, frames: Type.Array(Frame) }),
   Type.Object({
     type: Type.String({
-      not: { enum: ['sessions_snapshot', 'session_upsert', 'session_removed', 'thread_frame', 'thread_backlog'] },
+      not: {
+        enum: [
+          'sessions_snapshot',
+          'session_upsert',
+          'session_removed',
+          'workspaces_snapshot',
+          'workspace_upsert',
+          'workspace_removed',
+          'thread_frame',
+          'thread_backlog',
+        ],
+      },
     }),
     sessionId: Text,
     payload: Json,

@@ -17,10 +17,12 @@ function SectionLinks({
   active,
   sections,
   onNavigate,
+  repositoryId,
 }: {
   active: string | undefined;
   sections: readonly SettingsSection[];
   onNavigate?: () => void;
+  repositoryId?: string;
 }) {
   return sections.map((section) => {
     const current = section.id === active;
@@ -29,6 +31,7 @@ function SectionLinks({
         key={section.id}
         to="/settings/$section"
         params={{ section: section.id }}
+        search={{ workspace: repositoryId }}
         data-testid={`settings-section-${section.id}`}
         data-active={current}
         onClick={onNavigate}
@@ -46,7 +49,15 @@ function SectionLinks({
   });
 }
 
-export function SettingsMenu({ active, workspace }: { active: string | undefined; workspace: SettingsWorkspace }) {
+export function SettingsMenu({
+  active,
+  workspace,
+  repositoryId,
+}: {
+  active: string | undefined;
+  workspace: SettingsWorkspace;
+  repositoryId?: string;
+}) {
   const [open, setOpen] = useState(false);
   const sections = settingsSections(workspace);
   const current = sections.find((section) => section.id === active) ?? sections[0];
@@ -81,7 +92,7 @@ export function SettingsMenu({ active, workspace }: { active: string | undefined
         <span className="px-[11px] pb-1 pt-0.5 text-2xs font-bold uppercase tracking-wide text-doom-faint">
           {workspace}
         </span>
-        <SectionLinks active={active} sections={sections} />
+        <SectionLinks active={active} sections={sections} repositoryId={repositoryId} />
       </nav>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -97,7 +108,12 @@ export function SettingsMenu({ active, workspace }: { active: string | undefined
           </DialogHeader>
           <DialogBody className="gap-1 p-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <nav aria-label={`${workspace} settings sections`} className="flex flex-col gap-1">
-              <SectionLinks active={active} sections={sections} onNavigate={() => setOpen(false)} />
+              <SectionLinks
+                active={active}
+                sections={sections}
+                repositoryId={repositoryId}
+                onNavigate={() => setOpen(false)}
+              />
             </nav>
           </DialogBody>
         </DialogContent>

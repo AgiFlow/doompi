@@ -52,7 +52,7 @@ const GATED_ROUTES: readonly { method: string; pattern: RegExp; action: StepUpAc
     method: 'POST',
     // Reviving a recorded session starts an agent in a directory, so it is gated
     // exactly as creating one is.
-    pattern: /^\/api\/workspaces\/[^/]+\/sessions(?:\/[^/]+\/(?:resume|revive))?$/u,
+    pattern: /^\/api\/workspaces\/[^/]+\/(?:resume|sessions(?:\/[^/]+\/(?:resume|revive))?)$/u,
     action: 'session.create',
   },
   { method: 'POST', pattern: /^\/api\/plugins\/doompi\/logins(?:\/[^/]+\/answer)?$/u, action: 'provider.login' },

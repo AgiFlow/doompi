@@ -14,16 +14,19 @@ import { useStore } from '@tanstack/react-store';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { PiSessionHistoryItem } from '../../../types/hub';
-import { listSessionHistory, resumeSession } from '../../lib/hubApi';
-import { sessionsStore, waitForSession } from '../../stores/sessionsStore';
+import { listSessionHistory, listWorkspaceHistory, resumeSession, resumeWorkspaceSession } from '../../lib/hubApi';
+import { applySessionUpsert, sessionsStore, waitForSession } from '../../stores/sessionsStore';
 
 function threadLabel(thread: PiSessionHistoryItem): string {
   return thread.name?.trim() || thread.firstMessage.trim().split('\n', 1)[0] || 'untitled';
 }
 
-/** Searchable Pi history for replacing one live card with an earlier thread. */
-export function ResumeSessionDialog({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
+type ResumeSource = { sessionId: string; workspaceId?: never } | { workspaceId: string; sessionId?: never };
+
+/** Searchable saved history for either replacing a session or adding one to a workspace. */
+export function ResumeSessionDialog({ sessionId, workspaceId, onClose }: ResumeSource & { onClose: () => void }) {
   const navigate = useNavigate();
+  const sourceId = workspaceId ?? sessionId;
   const byId = useStore(sessionsStore, (state) => state.byId);
   const [threads, setThreads] = useState<PiSessionHistoryItem[]>([]);
   const [query, setQuery] = useState('');
@@ -34,7 +37,8 @@ export function ResumeSessionDialog({ sessionId, onClose }: { sessionId: string;
 
   useEffect(() => {
     let stale = false;
-    void listSessionHistory(sessionId).then((result) => {
+    const history = workspaceId === undefined ? listSessionHistory(sessionId) : listWorkspaceHistory(workspaceId);
+    void history.then((result) => {
       if (stale) return;
       setLoading(false);
       if ('error' in result) {
@@ -46,7 +50,7 @@ export function ResumeSessionDialog({ sessionId, onClose }: { sessionId: string;
     return () => {
       stale = true;
     };
-  }, [sessionId]);
+  }, [sessionId, workspaceId]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -58,12 +62,16 @@ export function ResumeSessionDialog({ sessionId, onClose }: { sessionId: string;
     if (selectedId === null || busy || byId[selectedId] !== undefined) return;
     setBusy(true);
     setError('');
-    const result = await resumeSession(sessionId, selectedId);
+    const result =
+      workspaceId === undefined
+        ? await resumeSession(sessionId, selectedId)
+        : await resumeWorkspaceSession(workspaceId, selectedId);
     if ('error' in result) {
       setBusy(false);
       setError(result.error);
       return;
     }
+    if (result.session !== undefined) applySessionUpsert({ session: result.session });
     const appeared = await waitForSession(result.sessionId);
     if (!appeared) {
       setBusy(false);
@@ -76,7 +84,7 @@ export function ResumeSessionDialog({ sessionId, onClose }: { sessionId: string;
 
   return (
     <Dialog open onOpenChange={(next) => !next && !busy && onClose()}>
-      <DialogContent width="md" data-testid={`session-resume-dialog-${sessionId}`} aria-describedby={undefined}>
+      <DialogContent width="md" data-testid={`session-resume-dialog-${sourceId}`} aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>resume Pi thread</DialogTitle>
         </DialogHeader>

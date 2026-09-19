@@ -22,7 +22,7 @@ test('opens the settings pages from the rail and lists providers', async ({ page
   await cockpit.session.waitForAttach();
 
   await page.getByTestId('settings-open').click();
-  await expect(page).toHaveURL(/\/settings\/providers$/);
+  await expect(page).toHaveURL(/\/settings\/providers\?workspace=[^&]+$/);
   await expect(page.getByTestId('settings-section-providers')).toHaveAttribute('data-active', 'true');
 
   const anthropic = page.getByTestId('provider-anthropic');
@@ -359,7 +359,7 @@ test.describe('with the synced bundle, which carries the doompi-log metrics page
 
     await page.getByTestId('settings-open').click();
     await page.getByTestId('settings-section-metrics').click();
-    await expect(page).toHaveURL(/\/settings\/metrics$/);
+    await expect(page).toHaveURL(/\/settings\/metrics\?workspace=[^&]+$/);
 
     // The page is drawn by the package rather than rendered from declared
     // fields, so reaching it exercises the whole settings-panel contribution.

@@ -106,6 +106,17 @@ function frameOf(event: HeadlessHubEvent): HubFrame {
       return { type: 'session_upsert', session: sessionView(event.session) };
     case 'removed':
       return { type: 'session_removed', sessionId: event.sessionId };
+    case 'workspace_upsert':
+      return {
+        type: 'workspace_upsert',
+        workspace: {
+          id: event.workspace.id,
+          root: event.workspace.root,
+          available: event.workspace.available !== false,
+        },
+      };
+    case 'workspace_removed':
+      return { type: 'workspace_removed', workspaceId: event.workspaceId };
     case 'channel':
       return { type: event.frameType, sessionId: event.sessionId, payload: event.payload as JsonValue };
   }
@@ -164,7 +175,24 @@ function managementHost(
             .map(dormantView),
         ],
       });
+      publish({
+        type: 'workspaces_snapshot',
+        workspaces: hub
+          .workspaces()
+          .filter((workspace) => mount.scope === 'global' || workspace.id === mount.workspaceId)
+          .map((workspace) => ({
+            id: workspace.id,
+            root: workspace.root,
+            available: workspace.available !== false,
+          })),
+      });
       const stopEvents = hub.onEvent((event) => {
+        if (event.kind === 'workspace_upsert' || event.kind === 'workspace_removed') {
+          const workspaceId = event.kind === 'workspace_upsert' ? event.workspace.id : event.workspaceId;
+          if (mount.scope !== 'global' && mount.workspaceId !== workspaceId) return;
+          publish(frameOf(event));
+          return;
+        }
         if (event.kind === 'removed') {
           if (!visible.delete(event.sessionId)) return;
         } else {

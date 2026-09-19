@@ -9,7 +9,12 @@ import { createHeadlessHub, type HeadlessHub } from '@agimon-ai/doompi-core/head
 import { serveHeadlessServer } from '@agimon-ai/doompi-core/headless-server';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '@agimon-ai/doompi-core/headless-session-host';
 import { createHeadlessSessionManager } from '@agimon-ai/doompi-core/headless-session-manager';
-import { createOpenSessionRegistry, listSavedSessions, readSqliteTranscript } from '@agimon-ai/doompi-core/history';
+import {
+  createOpenSessionRegistry,
+  createWorkspaceRegistry,
+  listSavedSessions,
+  readSqliteTranscript,
+} from '@agimon-ai/doompi-core/history';
 import type { OpenSessionRecord } from '@agimon-ai/doompi-core/history';
 import type {
   DoomHubSessionApiRequest,
@@ -58,10 +63,12 @@ async function bounded(operation: Promise<unknown>, label: string, notice: (mess
 export async function runServerRuntime(options: ServeOptions, runtime: ServerRuntimeEnvironment): Promise<number> {
   const { cwd: baseCwd, environment: baseEnvironment, notice, resolveHarnessOptions, signal, syncWorkspace } = runtime;
   const telemetry = createServerTelemetry({ cwd: baseCwd, env: baseEnvironment, warn: notice });
+  const serverDirectory = path.join(piAgentDirectory(baseEnvironment), 'server');
+  const workspaces = createWorkspaceRegistry({ directory: serverDirectory, onNotice: notice });
   // Beside the journals it names, because a record pointing at a sessions
   // directory it is not stored next to is a record that can outlive its target.
   const openSessions = createOpenSessionRegistry({
-    directory: path.join(piAgentDirectory(baseEnvironment), 'server'),
+    directory: serverDirectory,
     onNotice: notice,
   });
   let nextEventLoopTick = performance.now() + 1_000;
@@ -175,14 +182,17 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   ) => Promise<DoomHubSessionScope> = async () => {
     throw new Error('The cockpit session service is not ready.');
   };
-  let admitWorkspace: (root: string) => Promise<{ id: string; root: string }> = async () => {
+  let admitWorkspace: (root: string) => Promise<{ id: string; root: string; available: boolean }> = async () => {
     throw new Error('Workspace admission is not ready.');
   };
   let hub!: HeadlessHub;
   hub = createHeadlessHub({
     manager: sessionManager,
     admitWorkspace: (root) => admitWorkspace(root),
-    onWorkspaceRemoved: (workspaceId) => webCompositions?.remove({ scope: 'workspace', workspaceId }),
+    onWorkspaceRemoved: (workspaceId) => {
+      workspaces.remove(workspaceId);
+      webCompositions?.remove({ scope: 'workspace', workspaceId });
+    },
     createSession: (request) => openSession(request),
     onNotice: notice,
     hubToken: () => attachToken,
@@ -286,14 +296,17 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         readSyncRegistration(globalRoot, homeDirectory)!,
         hub.channelTypes(),
       );
-      const admissions = new Map<string, Promise<{ id: string; root: string }>>();
+      const admissions = new Map<string, Promise<{ id: string; root: string; available: boolean }>>();
       admitWorkspace = async (from) => {
         const root = fs.realpathSync(findRepositoryRoot(from));
         const id = resolveSyncLocation(root, homeDirectory).identity.worktreeId;
         const existing = hub.workspaces().find((workspace) => workspace.id === id);
-        if (existing) return existing;
+        if (existing !== undefined && existing.available !== false) return { ...existing, available: true };
         const pending = admissions.get(id);
         if (pending) return pending;
+        const wasRemembered = workspaces.list().some((workspace) => workspace.id === id);
+        if (!wasRemembered) workspaces.add({ id, root });
+        hub.registerWorkspace({ id, root, available: false });
         const admission = (async () => {
           const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: root };
           for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete syncEnvironment[key];
@@ -312,15 +325,55 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             readSyncRegistration(root, homeDirectory)!,
             hub.channelTypes(),
           );
-          return { id, root };
+          return { id, root, available: true };
         })();
         admissions.set(id, admission);
         try {
           return await admission;
+        } catch (error) {
+          if (!wasRemembered) {
+            await hub.removeWorkspace(id);
+            workspaces.remove(id);
+          }
+          throw error;
         } finally {
           admissions.delete(id);
         }
       };
+      for (const record of openSessions.list()) {
+        if (workspaces.list().some((workspace) => workspace.id === record.workspaceId)) continue;
+        try {
+          const root = fs.realpathSync(findRepositoryRoot(record.cwd));
+          const id = resolveSyncLocation(root, homeDirectory).identity.worktreeId;
+          if (id === record.workspaceId) workspaces.add({ id, root });
+          else
+            notice(
+              `Session '${record.sessionId}' no longer resolves to its recorded workspace; skipping registration.`,
+            );
+        } catch (error) {
+          notice(
+            `Session '${record.sessionId}' workspace could not be registered: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      for (const workspace of workspaces.list()) {
+        hub.registerWorkspace({ ...workspace, available: false });
+        try {
+          const root = fs.realpathSync(findRepositoryRoot(workspace.root));
+          const id = resolveSyncLocation(root, homeDirectory).identity.worktreeId;
+          if (root !== workspace.root || id !== workspace.id) {
+            notice(
+              `Workspace '${workspace.root}' no longer resolves to its recorded identity; leaving it unavailable.`,
+            );
+            continue;
+          }
+          await admitWorkspace(workspace.root);
+        } catch (error) {
+          notice(
+            `Workspace '${workspace.root}' could not be restored: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
 
       const sessionHostOptions = (
         context: Awaited<ReturnType<typeof buildHarnessContext>>,
@@ -511,12 +564,50 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       };
     });
 
+    const workspaceResumes = new Map<string, Promise<string>>();
     cockpit = await serveHeadlessServer({
       port: options.webPort,
       headlessHub: hub,
       token: attachToken,
       sessionMcpPublicOrigin: () => remoteRuntime?.remote.publicOrigin(),
       sessionMcpPublicOriginRevision: () => remoteRuntime?.remote.publicOriginRevision() ?? 0,
+      workspaceHistory: (workspaceId) => {
+        const workspaceRoot = hub
+          .workspaces()
+          .find((workspace) => workspace.id === workspaceId && workspace.available !== false)?.root;
+        if (!workspaceRoot) throw new Error('Workspace not found.');
+        return listSavedSessions(
+          path.join(serverDirectory, 'sessions'),
+          workspaceRoot,
+          new Set(hub.snapshot().map((active) => active.id)),
+        );
+      },
+      resumeWorkspaceSession: async (workspaceId, targetSessionId) => {
+        const key = `${workspaceId}\0${targetSessionId}`;
+        const pending = workspaceResumes.get(key);
+        if (pending) return pending;
+        const resume = (async () => {
+          const workspaceRoot = hub
+            .workspaces()
+            .find((workspace) => workspace.id === workspaceId && workspace.available !== false)?.root;
+          if (!workspaceRoot) throw new Error('Workspace not found.');
+          const saved = await listSavedSessions(
+            path.join(serverDirectory, 'sessions'),
+            workspaceRoot,
+            new Set(hub.snapshot().map((active) => active.id)),
+          );
+          const target = saved.find((item) => item.id === targetSessionId);
+          if (!target) throw new Error('Saved Pi thread not found in this workspace.');
+          await openSession({ cwd: workspaceRoot, name: target.name ?? 'untitled' }, target.id);
+          return target.id;
+        })();
+        workspaceResumes.set(key, resume);
+        try {
+          return await resume;
+        } finally {
+          workspaceResumes.delete(key);
+        }
+      },
       sessionHistory: (session) => {
         const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
         if (!workspaceRoot) throw new Error('Session workspace not found.');

@@ -67,7 +67,19 @@ export const HubUpsertFrameSchema = Type.Object({
   session: SessionSummarySchema,
 });
 export const HubRemovedFrameSchema = Type.Object({ type: Type.Literal('session_removed'), sessionId: Text });
-const Workspace = Type.Object({ id: Text, root: Text });
+const Workspace = Type.Object({ id: Text, root: Text, available: Optional(Flag) });
+export const WorkspaceSnapshotFrameSchema = Type.Object({
+  type: Type.Literal('workspaces_snapshot'),
+  workspaces: Type.Array(Workspace),
+});
+export const WorkspaceUpsertFrameSchema = Type.Object({
+  type: Type.Literal('workspace_upsert'),
+  workspace: Workspace,
+});
+export const WorkspaceRemovedFrameSchema = Type.Object({
+  type: Type.Literal('workspace_removed'),
+  workspaceId: Text,
+});
 const SavedSession = Type.Object({
   id: Text,
   name: Optional(Text),
@@ -208,16 +220,32 @@ export const headlessHttpContracts: DoomHttpContract[] = [
     responses: jsonApiResponses(Type.Object({ workspace: Workspace }), 201),
   }),
   host('workspaces.get', '/api/workspaces/{workspaceId}', 'GET', Type.Object({ workspace: Workspace })),
+  host(
+    'workspaces.history',
+    '/api/workspaces/{workspaceId}/history',
+    'GET',
+    Type.Object({ sessions: Type.Array(SavedSession) }),
+    {
+      availability: 'Host provides workspaceHistory',
+    },
+  ),
+  host('workspaces.resume', '/api/workspaces/{workspaceId}/resume', 'POST', Type.Object({ sessionId: Text }), {
+    availability: 'Host provides resumeWorkspaceSession',
+    body: body(Type.Object({ targetSessionId: Type.String({ pattern: '^[A-Za-z0-9_-]+$' }) })),
+  }),
   host('workspaces.remove', '/api/workspaces/{workspaceId}', 'DELETE', ApiOkSchema),
   host('events', '/api/events', 'GET', Text, {
     responses: {
       '200': {
         description:
-          'SSE sessions_snapshot, session_upsert, session_removed and selected channel frames. Selected extension channel payloads are defined by the corresponding AsyncAPI channel operations.',
+          'SSE session and workspace snapshots, membership changes, and selected channel frames. Selected extension channel payloads are defined by the corresponding AsyncAPI channel operations.',
         events: {
           sessions_snapshot: HubSnapshotFrameSchema,
           session_upsert: HubUpsertFrameSchema,
           session_removed: HubRemovedFrameSchema,
+          workspaces_snapshot: WorkspaceSnapshotFrameSchema,
+          workspace_upsert: WorkspaceUpsertFrameSchema,
+          workspace_removed: WorkspaceRemovedFrameSchema,
         },
         contentType: 'text/event-stream',
         schema: Text,

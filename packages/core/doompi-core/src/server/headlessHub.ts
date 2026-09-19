@@ -54,11 +54,14 @@ export interface HeadlessHubSession {
 export interface HeadlessWorkspace {
   readonly id: string;
   readonly root: string;
+  readonly available?: boolean;
 }
 
 export type HeadlessHubEvent =
   | { kind: 'upsert'; session: HeadlessHubSession }
   | { kind: 'removed'; sessionId: string }
+  | { kind: 'workspace_upsert'; workspace: HeadlessWorkspace }
+  | { kind: 'workspace_removed'; workspaceId: string }
   | { kind: 'channel'; frameType: string; sessionId: string; payload: unknown; connectionId?: string };
 
 export interface HeadlessHubOptions {
@@ -85,11 +88,14 @@ export interface HeadlessHub {
   register(session: HeadlessHubSession): void;
   create(options: HeadlessSessionHostOptions): Promise<HeadlessHubSession>;
   closeSession(sessionId: string): Promise<void>;
+  /** Publishes removal of a persisted session that has no live host. */
+  notifySessionRemoved(sessionId: string): void;
   /** Dispatches an authenticated package API request inside the owning process. */
   requestSessionApi(scope: DoomHubSessionScope, request: DoomHubSessionApiRequest): Promise<Response>;
   /** Mounts the selected hub facets once, before the headless server accepts clients. */
   mountFacets(facets: readonly (DoomServerFacet | LoadedServerFacet)[], context?: DoomApiContext): Promise<void>;
   workspaces(): readonly HeadlessWorkspace[];
+  registerWorkspace(workspace: HeadlessWorkspace): void;
   admitWorkspace(root: string): Promise<HeadlessWorkspace>;
   removeWorkspace(workspaceId: string): Promise<void>;
   requestApi(mount: DoomApiMount, basePath: string, request: Request): Promise<Response>;
@@ -525,8 +531,11 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
         throw new Error('The headless hub was closed while mounting facets.');
       }
       mounts.set(key, { host, installed });
-      if (mount.scope === 'workspace')
-        workspaces.set(mount.workspaceId, { id: mount.workspaceId, root: context.workspaceRoot! });
+      if (mount.scope === 'workspace') {
+        const workspace = { id: mount.workspaceId, root: context.workspaceRoot!, available: true };
+        workspaces.set(mount.workspaceId, workspace);
+        emit({ kind: 'workspace_upsert', workspace });
+      }
     } catch (error) {
       host.dispose();
       throw error;
@@ -544,8 +553,15 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       return () => listeners.delete(listener);
     },
     register,
+    notifySessionRemoved(sessionId) {
+      emit({ kind: 'removed', sessionId });
+    },
     mountFacets,
     workspaces: () => [...workspaces.values()],
+    registerWorkspace(workspace) {
+      workspaces.set(workspace.id, workspace);
+      emit({ kind: 'workspace_upsert', workspace });
+    },
     admitWorkspace: async (root) => {
       if (!options.admitWorkspace) throw new Error('Workspace admission is unavailable.');
       return options.admitWorkspace(root);
@@ -555,10 +571,12 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
         throw new Error('Workspace still has live sessions.');
       const key = mountKey({ scope: 'workspace', workspaceId: id });
       const mounted = mounts.get(key);
+      if (!workspaces.has(id)) return;
+      options.onWorkspaceRemoved?.(id);
+      workspaces.delete(id);
+      emit({ kind: 'workspace_removed', workspaceId: id });
       if (!mounted) return;
       mounts.delete(key);
-      workspaces.delete(id);
-      options.onWorkspaceRemoved?.(id);
       try {
         await mounted.installed.dispose();
       } finally {

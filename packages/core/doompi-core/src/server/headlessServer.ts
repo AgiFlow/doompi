@@ -65,6 +65,8 @@ export interface HeadlessServerOptions {
   compositions?: () => unknown;
   requestAsset?: (request: Request) => Promise<Response | undefined>;
   sessionHistory?: (session: HeadlessHubSession) => Promise<SavedSession[]>;
+  workspaceHistory?: (workspaceId: string) => Promise<SavedSession[]>;
+  resumeWorkspaceSession?: (workspaceId: string, targetSessionId: string) => Promise<string>;
   readDormantTranscript?: (
     record: OpenSessionRecord,
     request: TranscriptPageRequest,
@@ -297,6 +299,10 @@ function eventFrame(event: HeadlessHubEvent): Record<string, unknown> {
       return { type: 'session_upsert', session: sessionView(event.session) };
     case 'removed':
       return { type: 'session_removed', sessionId: event.sessionId };
+    case 'workspace_upsert':
+      return { type: 'workspace_upsert', workspace: event.workspace };
+    case 'workspace_removed':
+      return { type: 'workspace_removed', workspaceId: event.workspaceId };
     case 'channel':
       return {
         type: 'channel_frame',
@@ -510,6 +516,10 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         return;
       }
       if (request.method === 'POST') {
+        if (workspace.available === false) {
+          json(response, 409, { error: 'Workspace is unavailable.' });
+          return;
+        }
         const body = parseJson(await readBody(request));
         if (!body || typeof body !== 'object' || ('name' in body && typeof body.name !== 'string')) {
           json(response, 400, { error: 'A session accepts an optional name.' });
@@ -535,6 +545,10 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         type: 'sessions_snapshot',
         sessions: [...options.headlessHub.snapshot().map(sessionView), ...dormant().map(dormantView)],
       });
+      writeSse(response, 'workspaces_snapshot', {
+        type: 'workspaces_snapshot',
+        workspaces: options.headlessHub.workspaces(),
+      });
       return;
     }
     if (url.pathname === '/api/workspaces') {
@@ -553,6 +567,43 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         return;
       }
     }
+    const workspaceHistoryMatch = /^\/api\/workspaces\/([^/]+)\/history$/u.exec(url.pathname);
+    if (workspaceHistoryMatch && request.method === 'GET' && options.workspaceHistory) {
+      const workspaceId = decodeURIComponent(workspaceHistoryMatch[1]);
+      const workspace = options.headlessHub.workspaces().find((entry) => entry.id === workspaceId);
+      if (!workspace) {
+        json(response, 404, { error: 'Workspace not found.' });
+        return;
+      }
+      if (workspace.available === false) {
+        json(response, 409, { error: 'Workspace is unavailable.' });
+        return;
+      }
+      json(response, 200, { sessions: await options.workspaceHistory(workspaceId) });
+      return;
+    }
+    const workspaceResumeMatch = /^\/api\/workspaces\/([^/]+)\/resume$/u.exec(url.pathname);
+    if (workspaceResumeMatch && request.method === 'POST' && options.resumeWorkspaceSession) {
+      const workspaceId = decodeURIComponent(workspaceResumeMatch[1]);
+      const workspace = options.headlessHub.workspaces().find((entry) => entry.id === workspaceId);
+      if (!workspace) {
+        json(response, 404, { error: 'Workspace not found.' });
+        return;
+      }
+      if (workspace.available === false) {
+        json(response, 409, { error: 'Workspace is unavailable.' });
+        return;
+      }
+      const body = parseJson(await readBody(request));
+      const targetSessionId =
+        body && typeof body === 'object' && 'targetSessionId' in body ? body.targetSessionId : undefined;
+      if (typeof targetSessionId !== 'string' || !/^[A-Za-z0-9_-]+$/u.test(targetSessionId)) {
+        json(response, 400, { error: 'Invalid target session id.' });
+        return;
+      }
+      json(response, 200, { sessionId: await options.resumeWorkspaceSession(workspaceId, targetSessionId) });
+      return;
+    }
     const workspaceMatch = /^\/api\/workspaces\/([^/]+)$/u.exec(url.pathname);
     if (workspaceMatch && request.method === 'GET') {
       const workspace = options.headlessHub
@@ -567,8 +618,11 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         json(response, 404, { error: 'Workspace not found.' });
         return;
       }
-      if (options.headlessHub.snapshot().some((session) => session.workspaceId === id)) {
-        json(response, 409, { error: 'Workspace still has live sessions.' });
+      if (
+        options.headlessHub.snapshot().some((session) => session.workspaceId === id) ||
+        dormant().some((session) => session.workspaceId === id)
+      ) {
+        json(response, 409, { error: 'Workspace still has sessions.' });
         return;
       }
       await options.headlessHub.removeWorkspace(id);
@@ -711,6 +765,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       );
       if (request.method === 'DELETE' && record !== undefined && options.removeDormantSession !== undefined) {
         await options.removeDormantSession(record);
+        options.headlessHub.notifySessionRemoved(record.sessionId);
         json(response, 200, { ok: true });
         return;
       }
@@ -785,7 +840,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     }
     if (
       mount.scope !== 'global' &&
-      (!options.headlessHub.workspaces().some((entry) => entry.id === mount.workspaceId) ||
+      (!options.headlessHub.workspaces().some((entry) => entry.id === mount.workspaceId && entry.available !== false) ||
         (mount.scope === 'session' && options.headlessHub.session(mount.sessionId)?.workspaceId !== mount.workspaceId))
     ) {
       socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
