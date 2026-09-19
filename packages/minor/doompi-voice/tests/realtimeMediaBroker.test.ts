@@ -53,7 +53,7 @@ function fixture(fakeTimers = false) {
   const syncOwnership = () =>
     post(VOICE_OWNERSHIP_ROUTES.sync, {
       registration: {
-        version: 2,
+        version: 3,
         leaseId: 'lease',
         revision: 1,
         label: 'Voice',

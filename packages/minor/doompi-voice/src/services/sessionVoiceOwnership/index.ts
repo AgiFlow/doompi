@@ -48,6 +48,8 @@ function isOwnershipActive(state: AutoCaptureActivationState): boolean {
 export class SessionVoiceOwnership {
   private binding: RuntimeBinding | undefined;
   private targets: VoiceOwnershipTarget[] = [];
+  private catalogRevision: string | undefined;
+  private prepared: { handoffId: string; controllerId: string; leaseId: string; revision: number } | undefined;
   private activationRequest: VoiceOwnershipActivationRequest | undefined;
   private handoffRequest: VoiceOwnershipHandoffRequest | undefined;
   private lastAcknowledgement: VoiceOwnershipAcknowledgement | undefined;
@@ -63,6 +65,8 @@ export class SessionVoiceOwnership {
       active: isOwnershipActive(input.controller.state),
     };
     this.targets = [];
+    this.catalogRevision = undefined;
+    this.prepared = undefined;
     this.activationRequest = undefined;
     this.handoffRequest = undefined;
     this.lastAcknowledgement = undefined;
@@ -71,6 +75,8 @@ export class SessionVoiceOwnership {
       if (this.binding !== binding) return;
       this.binding = undefined;
       this.targets = [];
+      this.catalogRevision = undefined;
+      this.prepared = undefined;
       this.activationRequest = undefined;
       this.handoffRequest = undefined;
     };
@@ -102,6 +108,7 @@ export class SessionVoiceOwnership {
     return {
       ...(registration === undefined ? {} : { registration }),
       targets: this.targets,
+      ...(this.catalogRevision === undefined ? {} : { catalogRevision: this.catalogRevision }),
       ...(this.activationRequest === undefined ? {} : { activation: this.activationRequest }),
       ...(this.handoffRequest === undefined ? {} : { handoff: this.handoffRequest }),
       ...(this.lastAcknowledgement === undefined ? {} : { acknowledgement: this.lastAcknowledgement }),
@@ -122,15 +129,16 @@ export class SessionVoiceOwnership {
     if (this.activationRequest?.requestId === requestId) this.activationRequest = undefined;
   }
 
-  public handoff(order: number): VoiceOwnershipHandoffRequest | undefined {
+  public handoff(order: number, catalogRevision = this.catalogRevision): VoiceOwnershipHandoffRequest | undefined {
     const binding = this.binding;
-    if (binding?.controller.state !== 'active') return undefined;
+    if (binding?.controller.state !== 'active' || catalogRevision !== this.catalogRevision) return undefined;
     const target = this.targets.find((candidate) => candidate.order === order);
-    if (target === undefined) return undefined;
+    if (target === undefined || catalogRevision === undefined) return undefined;
     this.handoffRequest = {
       version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
       requestId: globalThis.crypto.randomUUID(),
       handle: target.handle,
+      catalogRevision,
     };
     return this.handoffRequest;
   }
@@ -148,19 +156,59 @@ export class SessionVoiceOwnership {
     }
     if (command.action === 'catalog') {
       this.targets = command.targets ?? [];
+      this.catalogRevision = command.catalogRevision;
       return this.ack(command, true);
     }
-    const controller = this.binding?.controller;
-    if (controller === undefined) return this.ack(command, false, 'Voice runtime is unavailable.');
+    const binding = this.binding;
+    const controller = binding?.controller;
+    if (controller === undefined || binding === undefined)
+      return this.ack(command, false, 'Voice runtime is unavailable.');
+    const staged =
+      command.handoffId === undefined
+        ? undefined
+        : {
+            handoffId: command.handoffId,
+            controllerId: command.controllerId!,
+            leaseId: command.leaseId!,
+            revision: command.revision!,
+          };
+    if (staged !== undefined && (staged.leaseId !== binding.leaseId || staged.revision !== binding.revision))
+      return this.ack(command, false, 'Voice target incarnation changed.');
     try {
+      if (command.action === 'prepare') {
+        if (!binding.eligible || controller.state !== 'disabled')
+          return this.ack(command, false, 'Voice target is not eligible for preparation.');
+        if (
+          this.prepared !== undefined &&
+          (this.prepared.handoffId !== staged!.handoffId || this.prepared.controllerId !== staged!.controllerId)
+        )
+          return this.ack(command, false, 'Voice target is reserved by another controller.');
+        this.prepared = staged;
+        return this.ack(command, true);
+      }
+      if (command.action === 'readiness') {
+        const ready = this.samePreparation(staged) && isOwnershipActive(controller.state);
+        return this.ack(command, ready, ready ? undefined : 'Voice media is not ready.');
+      }
+      if (command.action === 'fence') {
+        if (!this.samePreparation(staged)) return this.ack(command, true);
+        this.prepared = undefined;
+        if (controller.state !== 'disabled') await controller.deactivateVoice();
+        return this.ack(command, !isOwnershipActive(controller.state));
+      }
       if (command.action === 'activate') {
         this.activationRequest = undefined;
+        if (staged !== undefined && !this.samePreparation(staged))
+          return this.ack(command, false, 'Voice target preparation is stale.');
+        if (staged === undefined && this.prepared !== undefined)
+          return this.ack(command, false, 'Voice target is reserved by another controller.');
         if (!isOwnershipActive(controller.state)) await controller.activateVoice();
         if (!isOwnershipActive(controller.state))
           return this.ack(command, false, controller.activationError ?? 'Autonomous voice did not activate.');
       } else {
         this.activationRequest = undefined;
         this.handoffRequest = undefined;
+        this.prepared = undefined;
         await controller.deactivateVoice();
         if (isOwnershipActive(controller.state))
           return this.ack(command, false, 'Autonomous voice did not deactivate.');
@@ -173,6 +221,18 @@ export class SessionVoiceOwnership {
         error instanceof Error ? error.message.slice(0, 300) : 'Voice ownership command failed.',
       );
     }
+  }
+
+  private samePreparation(
+    staged: { handoffId: string; controllerId: string; leaseId: string; revision: number } | undefined,
+  ): boolean {
+    return (
+      staged !== undefined &&
+      this.prepared?.handoffId === staged.handoffId &&
+      this.prepared.controllerId === staged.controllerId &&
+      this.prepared.leaseId === staged.leaseId &&
+      this.prepared.revision === staged.revision
+    );
   }
 
   private ack(command: VoiceOwnershipCommand, ok: boolean, error?: string): VoiceOwnershipAcknowledgement {

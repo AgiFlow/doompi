@@ -9,8 +9,11 @@ export const TRANSFER_VOICE_TOOL_NAME = 'transfer_voice';
 const TransferVoiceInputSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['target'],
-  properties: { target: { type: 'integer', minimum: 1, maximum: 10_000 } },
+  required: ['target', 'revision'],
+  properties: {
+    target: { type: 'integer', minimum: 1, maximum: 10_000 },
+    revision: { type: 'string', minLength: 1, maxLength: 128 },
+  },
 } as unknown as typeof VoiceToolDescribeInputSchema;
 
 function result(text: string, accepted: boolean): AgentToolResult<{ accepted: boolean }> {
@@ -18,9 +21,9 @@ function result(text: string, accepted: boolean): AgentToolResult<{ accepted: bo
 }
 
 function description(): string {
-  const targets = sessionVoiceOwnership.snapshot().targets;
-  const catalog = targets.map((target) => `${target.order}. ${target.label}`).join('\n');
-  return `Hand autonomous voice to one eligible session by its current number. Session IDs remain private.\n\nEligible sessions:\n${catalog || '(none)'}`;
+  const snapshot = sessionVoiceOwnership.snapshot();
+  const catalog = snapshot.targets.map((target) => `${target.order}. ${target.label}`).join('\n');
+  return `Hand autonomous voice to one eligible session by its current number and catalog revision. Session IDs remain private.\n\nCatalog revision: ${snapshot.catalogRevision ?? '(unavailable)'}\nEligible sessions:\n${catalog || '(none)'}`;
 }
 
 function definition(): ToolDefinition<typeof TransferVoiceInputSchema, { accepted: boolean }> {
@@ -30,17 +33,17 @@ function definition(): ToolDefinition<typeof TransferVoiceInputSchema, { accepte
     description: description(),
     promptSnippet: 'Hand autonomous voice to an eligible session.',
     promptGuidelines: [
-      'Use the numbered target currently listed in this tool description.',
+      'Use the numbered target and exact catalog revision currently listed in this tool description.',
       'The server turns off this session before it activates the target session.',
     ],
     parameters: TransferVoiceInputSchema,
     executionMode: 'sequential',
     async execute(_toolCallId, params, _signal, _onUpdate, _context: ExtensionContext) {
-      const target = (params as unknown as { target?: unknown }).target;
-      if (!Number.isSafeInteger(target) || (target as number) < 1)
-        return result('Voice handoff rejected: target session number is invalid.', false);
+      const { target, revision } = params as unknown as { target?: unknown; revision?: unknown };
+      if (!Number.isSafeInteger(target) || (target as number) < 1 || typeof revision !== 'string')
+        return result('Voice handoff rejected: target session number or catalog revision is invalid.', false);
       const catalogTarget = sessionVoiceOwnership.snapshot().targets.find((candidate) => candidate.order === target);
-      if (catalogTarget === undefined || sessionVoiceOwnership.handoff(target as number) === undefined)
+      if (catalogTarget === undefined || sessionVoiceOwnership.handoff(target as number, revision) === undefined)
         return result('Voice handoff rejected: the target is unavailable or no longer eligible.', false);
       return result(
         `Voice handoff to "${catalogTarget.label}" requested. The current agent continues working while the server switches autonomous voice.`,

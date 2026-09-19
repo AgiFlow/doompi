@@ -302,7 +302,7 @@ async function createFixture(provider?: RealtimeProvider) {
   expect(
     (
       await authenticated(VOICE_OWNERSHIP_ROUTES.sync, {
-        registration: { version: 2, leaseId: 'lease', revision: 1, label: 'Voice', eligible: true, active: true },
+        registration: { version: 3, leaseId: 'lease', revision: 1, label: 'Voice', eligible: true, active: true },
         targets: [],
       })
     ).status,

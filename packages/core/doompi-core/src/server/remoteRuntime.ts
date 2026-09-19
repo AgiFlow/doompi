@@ -37,7 +37,7 @@ const SEALED_HTTP_VERSION = 1;
 const SEALED_HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
 /** HMAC-authenticated peer routes are the only non-device tunnel APIs. */
 const SESSION_PEER_INBOX_ROUTE = '/api/plugins/session-peer/inbox';
-const VOICE_PEER_ROUTE = '/api/plugins/voice/peer';
+const VOICE_PEER_ROUTES = new Set(['/api/plugins/voice/peer', '/api/plugins/voice/peer-ownership']);
 const FORBIDDEN_HEADERS = new Set([
   'authorization',
   'connection',
@@ -151,7 +151,7 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
     const path = context.req.path;
     const publicSessionMcp = isPublicSessionMcpRoute(context.req.method, path);
     const publicSessionPeer = context.req.method === 'POST' && path === SESSION_PEER_INBOX_ROUTE;
-    const publicVoicePeer = context.req.method === 'POST' && path === VOICE_PEER_ROUTE;
+    const publicVoicePeer = context.req.method === 'POST' && VOICE_PEER_ROUTES.has(path);
     const verdict = originVerdict({
       listener: 'tunnel',
       // Exact OAuth, MCP, and HMAC-authenticated peer routes authenticate at the
@@ -459,7 +459,7 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
     if (
       !isPublicSessionMcpRoute(context.req.method, context.req.path) &&
       !(context.req.method === 'POST' && context.req.path === SESSION_PEER_INBOX_ROUTE) &&
-      !(context.req.method === 'POST' && context.req.path === VOICE_PEER_ROUTE)
+      !(context.req.method === 'POST' && VOICE_PEER_ROUTES.has(context.req.path))
     )
       return context.notFound();
     return options.forward(context.req.raw);

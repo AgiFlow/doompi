@@ -56,6 +56,7 @@ async function installOwner(state: { value: 'active' | 'disabled' }) {
     commandId: 'catalog-tool',
     action: 'catalog',
     targets: [{ handle: 'target-handle', label: 'Target', order: 1 }],
+    catalogRevision: 'catalog-tool',
   };
   await sessionVoiceOwnership.command(catalog);
   return dispose;
@@ -81,9 +82,16 @@ describe('transfer_voice server handoff tool', () => {
     };
 
     expect(tool.description).toContain('1. Target');
-    await expect(tool.execute('call', { target: '1' })).resolves.toMatchObject({ details: { accepted: false } });
-    await expect(tool.execute('call', { target: 2 })).resolves.toMatchObject({ details: { accepted: false } });
-    const accepted = await tool.execute('call', { target: 1 });
+    await expect(tool.execute('call', { target: '1', revision: 'catalog-tool' })).resolves.toMatchObject({
+      details: { accepted: false },
+    });
+    await expect(tool.execute('call', { target: 2, revision: 'catalog-tool' })).resolves.toMatchObject({
+      details: { accepted: false },
+    });
+    await expect(tool.execute('call', { target: 1, revision: 'stale' })).resolves.toMatchObject({
+      details: { accepted: false },
+    });
+    const accepted = await tool.execute('call', { target: 1, revision: 'catalog-tool' });
     expect(accepted.details.accepted).toBe(true);
     expect(accepted.content[0]?.text).toContain('Target');
     expect(sessionVoiceOwnership.snapshot().handoff).toMatchObject({ handle: 'target-handle' });
@@ -95,6 +103,7 @@ describe('transfer_voice server handoff tool', () => {
       commandId: 'catalog-tool-2',
       action: 'catalog',
       targets: [{ handle: 'target-2', label: 'Second', order: 1 }],
+      catalogRevision: 'catalog-tool-2',
     });
     registration.sessionStarted();
     expect(registerTool).toHaveBeenCalledTimes(2);
