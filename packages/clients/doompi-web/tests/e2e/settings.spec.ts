@@ -22,7 +22,7 @@ test('opens the settings pages from the rail and lists providers', async ({ page
   await cockpit.session.waitForAttach();
 
   await page.getByTestId('settings-open').click();
-  await expect(page).toHaveURL(/\/settings\/providers$/);
+  await expect(page).toHaveURL(/\/settings\/providers\?workspace=[^&]+$/);
   await expect(page.getByTestId('settings-section-providers')).toHaveAttribute('data-active', 'true');
 
   const anthropic = page.getByTestId('provider-anthropic');
