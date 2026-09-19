@@ -35,6 +35,9 @@ const videoDraft: AuthorRegionDraft = {
 const workspace = (overrides: Partial<AuthorSessionWorkspace>): AuthorSessionWorkspace => ({
   generation: 1,
   activeTool: 'mark',
+  annotationsByDocument: {},
+  annotations: [],
+  candidateText: '',
   regions: [],
   requests: [],
   ...overrides,

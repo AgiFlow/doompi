@@ -47,6 +47,9 @@ export type ExportStoryPreviewImageRequest = BuildStoryPreviewRequest;
 export interface ExportStoryPreviewImageView {
   data: string;
   mimeType: 'image/png';
+  captureId: string;
+  width: number;
+  height: number;
   storyPath: string;
   storyExport: string;
   sourceSha256: string;

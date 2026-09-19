@@ -43,6 +43,7 @@ type Pointer = {
 type Props = {
   children?: ReactNode;
   'data-testid'?: string;
+  'data-author-point'?: number;
   onChange?: (value: string) => void;
   onSelect?: (range: Range) => void;
   onPointerMove?: (event: Pointer) => void;
@@ -183,7 +184,15 @@ class CanvasElement {
 }
 function mediaFixture(
   kind: 'image' | 'video' | 'pdf' | 'opaque' = 'image',
-  options: { image?: ImageElement | null; video?: unknown; pdf?: unknown; blob?: Blob | null; context?: boolean } = {},
+  options: {
+    image?: ImageElement | null;
+    video?: unknown;
+    pdf?: unknown;
+    blob?: Blob | null;
+    context?: boolean;
+    activeTool?: 'mark' | 'comment';
+    displayedRegions?: readonly AuthorDisplayedRegion[];
+  } = {},
 ) {
   const { document, cell } = setup(kind);
   vi.stubGlobal('HTMLImageElement', ImageElement);
@@ -204,8 +213,8 @@ function mediaFixture(
   const root = AuthorMediaView({
     sessionId: 's',
     document,
-    activeTool: 'mark',
-    displayedRegions: displayed,
+    activeTool: options.activeTool ?? 'mark',
+    displayedRegions: options.displayedRegions ?? displayed,
   }) as ReactElement<Props>;
   const pointer = (target: unknown, x: number, y: number): Pointer => ({
     target,
@@ -249,6 +258,33 @@ describe('Author media selection integration', () => {
     });
     root.props.onPointerCancel!();
     expect(hooks.setters.at(-3)).toHaveBeenLastCalledWith(undefined);
+  });
+  it('creates and renders point annotations from Comment clicks', async () => {
+    const pointRegion: AuthorDisplayedRegion = {
+      ordinal: 1,
+      region: {
+        ...displayed[0]!.region,
+        id: 'point',
+        mode: 'point',
+        anchor: { kind: 'image-point', point: { x: 0.25, y: 0.5 }, naturalWidth: 1600, naturalHeight: 800 },
+      },
+    };
+    hooks.states = [
+      { playing: false, currentTime: 0, duration: 3 },
+      true,
+      undefined,
+      undefined,
+      { source: undefined, url: 'blob:media' },
+    ];
+    const fixture = mediaFixture('image', { activeTool: 'comment', displayedRegions: [pointRegion] });
+    await fixture.drag(fixture.image, { x: 200, y: 300 });
+
+    expect(workspace.authorSessionWorkspace('s').candidate).toMatchObject({
+      mode: 'point',
+      anchor: { kind: 'image-point', point: { x: 0.25, y: 0.75 } },
+      thumbnailUrl: 'blob:selection',
+    });
+    expect(nodes(fixture.root).some((node) => node.props['data-author-point'] === 1)).toBe(true);
   });
   it('resolves image cells and captures source-normalized rectangles', async () => {
     const fixture = mediaFixture();

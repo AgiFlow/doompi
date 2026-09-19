@@ -2,6 +2,8 @@ import { defineGlobalStore } from '@agimon-ai/doompi-core/web';
 
 import type {
   AuthorAnnotation,
+  AuthorAnnotationCandidate,
+  AuthorAnnotationDraft,
   AuthorCrop,
   AuthorDocumentInput,
   AuthorDraftRevision,
@@ -29,12 +31,27 @@ export interface AuthorWorkspaceDocument extends AuthorDocumentInput {
   savingVersion?: number;
 }
 
+export interface AuthorDocumentAnnotationCollection {
+  revision: number;
+  sourceSha256?: string;
+  stale: boolean;
+  candidate?: AuthorAnnotationCandidate;
+  candidateText: string;
+  annotations: readonly AuthorAnnotationDraft[];
+  updatedAt: number;
+}
+
 export interface AuthorSessionWorkspace {
   generation: number;
   focusedDocument?: AuthorFocusedDocument;
   activeTool: AuthorToolMode;
+  annotationsByDocument: Readonly<Record<string, AuthorDocumentAnnotationCollection>>;
+  /** Mixed annotations for the focused document. */
+  annotations: readonly AuthorAnnotationDraft[];
   candidate?: AuthorRegionCandidate;
+  candidateText: string;
   videoSeekRequest?: { path: string; generation: number; timeSeconds: number; sequence: number };
+  /** Compatibility alias for annotations while region-only consumers migrate. */
   regions: readonly AuthorRegionDraft[];
   requests: readonly AuthorRequestRecord[];
 }
@@ -44,7 +61,15 @@ export interface AuthorWorkspaceState {
   sessions: Readonly<Record<string, AuthorSessionWorkspace>>;
 }
 
-const EMPTY_SESSION: AuthorSessionWorkspace = { generation: 0, activeTool: 'select', regions: [], requests: [] };
+const EMPTY_SESSION: AuthorSessionWorkspace = {
+  generation: 0,
+  activeTool: 'select',
+  annotationsByDocument: {},
+  annotations: [],
+  candidateText: '',
+  regions: [],
+  requests: [],
+};
 
 export function normalizeAuthorPath(path: string): string {
   const parts: string[] = [];
@@ -70,6 +95,60 @@ export function authorDocument(sessionId: string | null, path: string): AuthorWo
 export function authorSessionWorkspace(sessionId: string | null): AuthorSessionWorkspace {
   if (sessionId === null) return EMPTY_SESSION;
   return authorWorkspace.store.state.sessions[sessionId] ?? EMPTY_SESSION;
+}
+
+export function authorDocumentAnnotations(
+  sessionId: string | null,
+  path: string,
+): AuthorDocumentAnnotationCollection | undefined {
+  return sessionId === null
+    ? undefined
+    : authorWorkspace.store.state.sessions[sessionId]?.annotationsByDocument[normalizeAuthorPath(path)];
+}
+
+export interface AuthorAnnotationHydrationRecord {
+  sessionId: string;
+  documentPath: string;
+  collection: AuthorDocumentAnnotationCollection;
+}
+
+export function hydrateAuthorAnnotationCollections(records: readonly AuthorAnnotationHydrationRecord[]): void {
+  authorWorkspace.update((state) => {
+    let sessions = state.sessions;
+    for (const record of records) {
+      const path = normalizeAuthorPath(record.documentPath);
+      if (path === '') continue;
+      const session = sessions[record.sessionId] ?? EMPTY_SESSION;
+      const previous = session.annotationsByDocument[path];
+      if (previous !== undefined && previous.updatedAt >= record.collection.updatedAt) continue;
+      const document = state.documents[authorDocumentKey(record.sessionId, path)];
+      const stale =
+        record.collection.stale ||
+        (document !== undefined &&
+          (document.version !== record.collection.revision ||
+            document.sourceSha256 !== record.collection.sourceSha256));
+      const collection = restoreCollectionEvidence({ ...record.collection, stale });
+      const focused = session.focusedDocument;
+      const visible = focused?.path === path && !stale;
+      const annotations = visible ? collection.annotations : session.annotations;
+      sessions = {
+        ...sessions,
+        [record.sessionId]: {
+          ...session,
+          annotationsByDocument: { ...session.annotationsByDocument, [path]: collection },
+          ...(visible
+            ? {
+                annotations,
+                regions: annotations,
+                candidate: collection.candidate,
+                candidateText: collection.candidateText,
+              }
+            : {}),
+        },
+      };
+    }
+    return sessions === state.sessions ? state : { ...state, sessions };
+  });
 }
 
 export function putAuthorDocument(sessionId: string, input: AuthorDocumentInput): AuthorWorkspaceDocument {
@@ -100,10 +179,13 @@ export function putAuthorDocument(sessionId: string, input: AuthorDocumentInput)
     if (sourceChanged && session?.focusedDocument?.path === path) {
       staleThumbnails.push(
         ...(session.candidate?.thumbnailUrl === undefined ? [] : [session.candidate.thumbnailUrl]),
-        ...session.regions.flatMap((region) => (region.thumbnailUrl === undefined ? [] : [region.thumbnailUrl])),
+        ...session.annotations.flatMap((annotation) =>
+          annotation.thumbnailUrl === undefined ? [] : [annotation.thumbnailUrl],
+        ),
       );
       const now = Date.now();
       const generation = session.generation + 1;
+      const staleCollection = staleAuthorCollection(session.annotationsByDocument[path], now);
       sessions = {
         ...sessions,
         [sessionId]: {
@@ -116,8 +198,14 @@ export function putAuthorDocument(sessionId: string, input: AuthorDocumentInput)
             sourceSha256: input.sourceSha256,
             focusedAt: now,
           },
+          annotationsByDocument: {
+            ...session.annotationsByDocument,
+            ...(staleCollection && { [path]: staleCollection }),
+          },
+          annotations: [],
           regions: [],
           candidate: undefined,
+          candidateText: '',
           requests: session.requests.map((request) =>
             input.kind !== 'story-preview' &&
             request.documentPath === path &&
@@ -133,6 +221,24 @@ export function putAuthorDocument(sessionId: string, input: AuthorDocumentInput)
           ),
         },
       };
+    } else if (sourceChanged && session?.annotationsByDocument[path] !== undefined) {
+      const collection = session.annotationsByDocument[path];
+      if (collection.candidate?.thumbnailUrl !== undefined) staleThumbnails.push(collection.candidate.thumbnailUrl);
+      staleThumbnails.push(
+        ...collection.annotations.flatMap((annotation) =>
+          annotation.thumbnailUrl === undefined ? [] : [annotation.thumbnailUrl],
+        ),
+      );
+      sessions = {
+        ...sessions,
+        [sessionId]: {
+          ...session,
+          annotationsByDocument: {
+            ...session.annotationsByDocument,
+            [path]: staleAuthorCollection(collection, Date.now())!,
+          },
+        },
+      };
     }
     return { documents: { ...state.documents, [key]: result }, sessions };
   });
@@ -143,18 +249,16 @@ export function putAuthorDocument(sessionId: string, input: AuthorDocumentInput)
 /** Claims focus and returns a generation token that makes cleanup race-safe. */
 export function focusAuthorDocument(sessionId: string, path: string, revision: number, sourceSha256?: string): number {
   const normalized = normalizeAuthorPath(path);
-  const staleThumbnails: string[] = [];
   let generation = 0;
   authorWorkspace.update((state) => {
     const session = state.sessions[sessionId] ?? EMPTY_SESSION;
     generation = session.generation + 1;
-    const keepRegions = session.focusedDocument?.path === normalized;
-    if (!keepRegions) {
-      staleThumbnails.push(
-        ...(session.candidate?.thumbnailUrl === undefined ? [] : [session.candidate.thumbnailUrl]),
-        ...session.regions.flatMap((region) => (region.thumbnailUrl === undefined ? [] : [region.thumbnailUrl])),
-      );
-    }
+    const stored = session.annotationsByDocument[normalized];
+    const current =
+      stored !== undefined && stored.revision === revision && stored.sourceSha256 === sourceSha256 && !stored.stale
+        ? stored
+        : undefined;
+    const annotations = current?.annotations ?? [];
     return {
       ...state,
       sessions: {
@@ -169,13 +273,14 @@ export function focusAuthorDocument(sessionId: string, path: string, revision: n
             sourceSha256,
             focusedAt: Date.now(),
           },
-          regions: keepRegions ? session.regions : [],
-          candidate: keepRegions ? session.candidate : undefined,
+          annotations,
+          regions: annotations,
+          candidate: current?.candidate,
+          candidateText: current?.candidateText ?? '',
         },
       },
     };
   });
-  staleThumbnails.forEach(revokeThumbnail);
   return generation;
 }
 
@@ -194,16 +299,17 @@ export function syncAuthorDocumentFocus(
 }
 
 export function releaseAuthorDocumentFocus(sessionId: string, generation: number): void {
-  const staleThumbnails: string[] = [];
   updateSession(sessionId, (session) => {
     if (session.focusedDocument?.generation !== generation) return session;
-    staleThumbnails.push(
-      ...(session.candidate?.thumbnailUrl === undefined ? [] : [session.candidate.thumbnailUrl]),
-      ...session.regions.flatMap((region) => (region.thumbnailUrl === undefined ? [] : [region.thumbnailUrl])),
-    );
-    return { ...session, focusedDocument: undefined, candidate: undefined, regions: [] };
+    return {
+      ...session,
+      focusedDocument: undefined,
+      candidate: undefined,
+      candidateText: '',
+      annotations: [],
+      regions: [],
+    };
   });
-  staleThumbnails.forEach(revokeThumbnail);
 }
 
 export function seekAuthorVideo(sessionId: string, timeSeconds: number): boolean {
@@ -246,57 +352,112 @@ export function setAuthorRegionCandidate(sessionId: string, candidate: AuthorReg
         throw new Error('The Author selection is stale for the focused document.');
       }
     }
+    if (focused === undefined) return session;
     staleThumbnail = session.candidate?.thumbnailUrl;
-    return { ...session, candidate: candidate === undefined ? undefined : structuredClone(candidate) };
+    const copied = candidate === undefined ? undefined : copyCandidate(candidate);
+    return withFocusedCollection({ ...session, candidate: copied }, focused.path, { candidate: copied });
   });
   if (staleThumbnail !== undefined && staleThumbnail !== candidate?.thumbnailUrl) revokeThumbnail(staleThumbnail);
+}
+
+export const setAuthorAnnotationCandidate = setAuthorRegionCandidate;
+
+export function setAuthorCandidateText(sessionId: string, candidateText: string): void {
+  if (new TextEncoder().encode(candidateText).byteLength > 2 * 1024)
+    throw new Error('Author candidate text must not exceed 2 KiB.');
+  updateSession(sessionId, (session) => {
+    const path = session.focusedDocument?.path;
+    return path === undefined ? session : withFocusedCollection({ ...session, candidateText }, path, { candidateText });
+  });
 }
 
 export function commitAuthorRegion(sessionId: string, comment: string): string {
   const id = crypto.randomUUID();
   const session = authorSessionWorkspace(sessionId);
-  if (session.candidate === undefined) throw new Error('Select a document region before adding a comment.');
-  addAuthorRegion(sessionId, { ...session.candidate, id, comment });
-  updateSession(sessionId, (current) => ({ ...current, candidate: undefined }));
+  if (session.candidate === undefined) throw new Error('Select a document annotation before adding a comment.');
+  addAuthorRegion(sessionId, { ...session.candidate, id, comment, version: 1 });
+  updateSession(sessionId, (current) => {
+    const path = current.focusedDocument?.path;
+    return path === undefined
+      ? current
+      : withFocusedCollection({ ...current, candidate: undefined, candidateText: '' }, path, {
+          candidate: undefined,
+          candidateText: '',
+        });
+  });
   return id;
 }
 
+export const commitAuthorAnnotation = commitAuthorRegion;
+
 export function addAuthorRegion(sessionId: string, region: AuthorRegionDraft): void {
-  if (region.comment.trim() === '') throw new Error('Every Author region requires a comment.');
+  if (region.comment.trim() === '') throw new Error('Every Author annotation requires a comment.');
   updateSession(sessionId, (session) => {
     const focused = session.focusedDocument;
     if (focused === undefined || focused.path !== normalizeAuthorPath(region.documentPath)) {
-      throw new Error('The Author region does not belong to the focused document.');
+      throw new Error('The Author annotation does not belong to the focused document.');
     }
     if (focused.revision !== region.revision || focused.sourceSha256 !== region.sourceSha256) {
-      throw new Error('The Author region is stale for the focused document.');
+      throw new Error('The Author annotation is stale for the focused document.');
     }
-    if (session.regions.length >= AUTHOR_REGION_LIMIT)
-      throw new Error(`Author requests support at most ${AUTHOR_REGION_LIMIT} regions.`);
-    if (session.regions.some((candidate) => candidate.id === region.id))
-      throw new Error(`Author region '${region.id}' already exists.`);
-    return { ...session, regions: [...session.regions, copyRegion(region)] };
+    if (session.annotations.length >= AUTHOR_REGION_LIMIT)
+      throw new Error(`Author requests support at most ${AUTHOR_REGION_LIMIT} annotations.`);
+    if (session.annotations.some((candidate) => candidate.id === region.id))
+      throw new Error(`Author annotation '${region.id}' already exists.`);
+    const annotations = [...session.annotations, copyRegion({ ...region, version: region.version ?? 1 })];
+    return withFocusedCollection({ ...session, annotations, regions: annotations }, focused.path, { annotations });
   });
 }
 
-export function removeAuthorRegion(sessionId: string, regionId: string): void {
+export const addAuthorAnnotationDraft = addAuthorRegion;
+
+export function removeAuthorRegion(
+  sessionId: string,
+  regionId: string,
+  expectedVersion?: number,
+  documentPath?: string,
+): void {
   let thumbnail: string | undefined;
   updateSession(sessionId, (session) => {
-    const region = session.regions.find((candidate) => candidate.id === regionId);
-    thumbnail = region?.thumbnailUrl;
-    const regions = session.regions.filter((candidate) => candidate.id !== regionId);
-    return regions.length === session.regions.length ? session : { ...session, regions };
+    const path = documentPath === undefined ? session.focusedDocument?.path : normalizeAuthorPath(documentPath);
+    if (path === undefined) return session;
+    const focused = session.focusedDocument?.path === path;
+    const collection = session.annotationsByDocument[path];
+    const current = focused ? session.annotations : collection?.annotations;
+    if (current === undefined) return session;
+    const annotation = current.find((candidate) => candidate.id === regionId);
+    if (annotation === undefined || (expectedVersion !== undefined && (annotation.version ?? 1) !== expectedVersion)) {
+      return session;
+    }
+    thumbnail = annotation.thumbnailUrl;
+    const annotations = current.filter((candidate) => candidate.id !== regionId);
+    if (focused) return withFocusedCollection({ ...session, annotations, regions: annotations }, path, { annotations });
+    return {
+      ...session,
+      annotationsByDocument: {
+        ...session.annotationsByDocument,
+        [path]: { ...collection, annotations, updatedAt: Date.now() },
+      },
+    };
   });
   if (thumbnail !== undefined) revokeThumbnail(thumbnail);
 }
 
+export const removeAuthorAnnotation = removeAuthorRegion;
+
 export function updateAuthorRegionComment(sessionId: string, regionId: string, comment: string): void {
-  if (comment.trim() === '') throw new Error('Every Author region requires a comment.');
-  updateSession(sessionId, (session) => ({
-    ...session,
-    regions: session.regions.map((region) => (region.id === regionId ? { ...region, comment } : region)),
-  }));
+  if (comment.trim() === '') throw new Error('Every Author annotation requires a comment.');
+  updateSession(sessionId, (session) => {
+    const path = session.focusedDocument?.path;
+    if (path === undefined) return session;
+    const annotations = session.annotations.map((annotation) =>
+      annotation.id === regionId ? { ...annotation, comment, version: (annotation.version ?? 1) + 1 } : annotation,
+    );
+    return withFocusedCollection({ ...session, annotations, regions: annotations }, path, { annotations });
+  });
 }
+
+export const updateAuthorAnnotationComment = updateAuthorRegionComment;
 
 export function putAuthorRequest(sessionId: string, record: AuthorRequestRecord): void {
   if (record.requestText.trim() === '') throw new Error('An Author request requires verbatim request text.');
@@ -417,10 +578,12 @@ export function completeAuthorSave(
 export function dropAuthorSession(sessionId: string): void {
   const prefix = `${sessionId}\n`;
   const session = authorWorkspace.store.state.sessions[sessionId];
-  if (session?.candidate?.thumbnailUrl !== undefined) revokeThumbnail(session.candidate.thumbnailUrl);
-  session?.regions.forEach((region) => {
-    if (region.thumbnailUrl !== undefined) revokeThumbnail(region.thumbnailUrl);
-  });
+  for (const collection of Object.values(session?.annotationsByDocument ?? {})) {
+    if (collection.candidate?.thumbnailUrl !== undefined) revokeThumbnail(collection.candidate.thumbnailUrl);
+    collection.annotations.forEach((annotation) => {
+      if (annotation.thumbnailUrl !== undefined) revokeThumbnail(annotation.thumbnailUrl);
+    });
+  }
   authorWorkspace.update((state) => {
     const sessions = { ...state.sessions };
     delete sessions[sessionId];
@@ -429,6 +592,14 @@ export function dropAuthorSession(sessionId: string): void {
       sessions,
     };
   });
+}
+
+export function setAuthorStoryPreview(
+  sessionId: string,
+  path: string,
+  storyPreview: NonNullable<AuthorWorkspaceDocument['storyPreview']>,
+): void {
+  updateDocument(sessionId, path, (document) => ({ ...document, storyPreview: structuredClone(storyPreview) }));
 }
 
 function updateDocument(
@@ -450,16 +621,27 @@ function updateDocument(
     if (identityChanged) {
       staleThumbnails.push(
         ...(session.candidate?.thumbnailUrl === undefined ? [] : [session.candidate.thumbnailUrl]),
-        ...session.regions.flatMap((region) => (region.thumbnailUrl === undefined ? [] : [region.thumbnailUrl])),
+        ...session.annotations.flatMap((annotation) =>
+          annotation.thumbnailUrl === undefined ? [] : [annotation.thumbnailUrl],
+        ),
       );
     }
+    const staleCollection = identityChanged
+      ? staleAuthorCollection(session.annotationsByDocument[document.path], Date.now())
+      : undefined;
     const sessions = identityChanged
       ? {
           ...state.sessions,
           [sessionId]: {
             ...session,
             focusedDocument: { ...focused, revision: next.version, sourceSha256: next.sourceSha256 },
+            annotationsByDocument: {
+              ...session.annotationsByDocument,
+              ...(staleCollection && { [document.path]: staleCollection }),
+            },
             candidate: undefined,
+            candidateText: '',
+            annotations: [],
             regions: [],
           },
         }
@@ -477,14 +659,59 @@ function updateSession(sessionId: string, update: (session: AuthorSessionWorkspa
   });
 }
 
-function copyRegion(region: AuthorRegionDraft): AuthorRegionDraft {
-  const anchor = 'rect' in region.anchor ? { ...region.anchor, rect: { ...region.anchor.rect } } : { ...region.anchor };
+function copyCandidate<T extends AuthorAnnotationCandidate>(candidate: T): T {
+  const anchor =
+    'rect' in candidate.anchor
+      ? { ...candidate.anchor, rect: { ...candidate.anchor.rect } }
+      : 'point' in candidate.anchor
+        ? { ...candidate.anchor, point: { ...candidate.anchor.point } }
+        : { ...candidate.anchor };
   return {
-    ...region,
+    ...candidate,
     anchor,
-    viewport: { ...region.viewport },
-    voiceGrid: region.voiceGrid && { ...region.voiceGrid },
+    viewport: { ...candidate.viewport },
+    voiceGrid: candidate.voiceGrid && { ...candidate.voiceGrid },
   };
+}
+
+function copyRegion(region: AuthorRegionDraft): AuthorRegionDraft {
+  return copyCandidate(region);
+}
+
+function staleAuthorCollection(
+  collection: AuthorDocumentAnnotationCollection | undefined,
+  updatedAt: number,
+): AuthorDocumentAnnotationCollection | undefined {
+  if (collection === undefined) return undefined;
+  return {
+    ...collection,
+    stale: true,
+    candidate: collection.candidate && { ...copyCandidate(collection.candidate), thumbnailUrl: undefined },
+    annotations: collection.annotations.map((annotation) => ({ ...copyRegion(annotation), thumbnailUrl: undefined })),
+    updatedAt,
+  };
+}
+
+function withFocusedCollection(
+  session: AuthorSessionWorkspace,
+  path: string,
+  update: Partial<Pick<AuthorDocumentAnnotationCollection, 'annotations' | 'candidate' | 'candidateText'>>,
+): AuthorSessionWorkspace {
+  const focused = session.focusedDocument;
+  if (focused === undefined || focused.path !== path) return session;
+  const previous = session.annotationsByDocument[path];
+  const collection: AuthorDocumentAnnotationCollection = {
+    ...previous,
+    revision: focused.revision,
+    sourceSha256: focused.sourceSha256,
+    stale: false,
+    candidate: session.candidate,
+    candidateText: session.candidateText,
+    annotations: session.annotations,
+    updatedAt: Date.now(),
+    ...update,
+  };
+  return { ...session, annotationsByDocument: { ...session.annotationsByDocument, [path]: collection } };
 }
 
 function boundedHistoryText(value: string | undefined): string | undefined {
@@ -515,6 +742,28 @@ function boundHistory(records: readonly AuthorRequestRecord[]): readonly AuthorR
     next.splice(terminal, 1);
   }
   return next;
+}
+
+function restoreCollectionEvidence(collection: AuthorDocumentAnnotationCollection): AuthorDocumentAnnotationCollection {
+  const restore = <T extends AuthorAnnotationCandidate>(item: T): T => {
+    const copied = copyCandidate(item);
+    const existingVersion: unknown = Reflect.get(copied, 'version');
+    const versioned =
+      'id' in copied
+        ? ({ ...copied, version: typeof existingVersion === 'number' ? existingVersion : 1 } as T)
+        : copied;
+    if (versioned.thumbnailUrl !== undefined || versioned.evidence === undefined) return versioned;
+    try {
+      return { ...versioned, thumbnailUrl: URL.createObjectURL(versioned.evidence) };
+    } catch {
+      return versioned;
+    }
+  };
+  return {
+    ...collection,
+    candidate: collection.candidate && restore(collection.candidate),
+    annotations: collection.annotations.map(restore),
+  };
 }
 
 function revokeThumbnail(url: string): void {

@@ -109,6 +109,23 @@ describe('the Author web plugin', () => {
       const markup = renderToStaticMarkup(createElement(OpenAuthoringFileToolCard, { ...props, ...update }));
       expect(markup).not.toContain('open in Author');
     }
+
+    const unavailable = renderToStaticMarkup(
+      createElement(OpenAuthoringFileToolCard, { ...props, result: { content: [], details: null } }),
+    );
+    expect(unavailable).toContain('unavailable');
+    expect(unavailable).not.toContain('waiting');
+
+    const failed = renderToStaticMarkup(
+      createElement(OpenAuthoringFileToolCard, {
+        ...props,
+        result: { content: [{ type: 'text', text: 'ENOENT: missing' }], details: null },
+        output: 'ENOENT: missing',
+        isError: true,
+      }),
+    );
+    expect(failed).toContain('ENOENT: missing');
+    expect(failed).toContain('failed');
   });
 
   it('creates and focuses the successful open tool transient tab exactly once per explicit action', () => {
@@ -124,6 +141,23 @@ describe('the Author web plugin', () => {
     expect(webPlugin.toolRenderers).toEqual(
       expect.arrayContaining([expect.objectContaining({ tools: ['open_authoring_file'] })]),
     );
+    const renderer = webPlugin.toolRenderers?.find(({ tools }) => tools.includes('open_authoring_file'));
+    expect(
+      renderer?.completionTab?.({
+        sessionId: 'origin',
+        toolCallId: 'call-1',
+        args: { path: 'docs/report.md' },
+        result: { content: [], details: { path: 'docs/report.md' } },
+      }),
+    ).toMatchObject({ label: 'report.md', retainComposer: true });
+    expect(
+      renderer?.completionTab?.({
+        sessionId: 'origin',
+        toolCallId: 'call-2',
+        args: { path: 'docs/report.md' },
+        result: { content: [], details: null },
+      }),
+    ).toBeUndefined();
   });
 
   it('keeps stable visible numbers for draft and pending document regions', () => {
@@ -146,17 +180,16 @@ describe('the Author web plugin', () => {
     };
 
     expect(
-      displayedAuthorRegions({ generation: 0, activeTool: 'select', regions: [first, second], requests: [] }).map(
-        ({ ordinal, region }) => [ordinal, region.id],
-      ),
+      displayedAuthorRegions({ regions: [first, second], requests: [] }).map(({ ordinal, region }) => [
+        ordinal,
+        region.id,
+      ]),
     ).toEqual([
       [1, 'first'],
       [2, 'second'],
     ]);
     expect(
       displayedAuthorRegions({
-        generation: 0,
-        activeTool: 'select',
         regions: [],
         requests: [
           {
@@ -219,7 +252,7 @@ describe('the Author web plugin', () => {
     expect(markup).toContain('● WORKING');
     expect(markup).toContain('Replacing selected introduction');
     expect(markup).toContain('Make the opening direct.');
-    expect(markup).toContain('0 of 1 regions applied');
+    expect(markup).toContain('0 of 1 annotations applied');
     expect(markup).not.toContain('Referenced context');
     expect(markup).not.toContain('&quot;private&quot;');
     expect(markup).toContain('EARLIER REQUESTS (1)');

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import {
@@ -21,6 +22,9 @@ import type {
 
 const STORY_FILE_PATTERN = /\.stories\.(?:js|jsx|ts|tsx)$/u;
 const STORY_EXPORT_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 1600;
 const NON_STORY_EXPORTS = new Set([
   'afterAll',
   'afterEach',
@@ -153,8 +157,61 @@ const defaultDependencies: StoryPreviewServiceDependencies = {
   createBundler(_config: DesignSystemConfig): BaseBundlerService {
     return createDefaultBundlerService();
   },
+  createRenderer(config, appPath) {
+    return new ComponentRendererService(config, appPath);
+  },
+  rendererTemporaryRoot: () => path.join(os.tmpdir(), 'style-system'),
   createHandle: randomUUID,
 };
+
+function pngCrc(data: Buffer): number {
+  let crc = 0xffffffff;
+  for (const byte of data) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngDimensions(image: Buffer): { width: number; height: number } {
+  if (image.length < PNG_SIGNATURE.length || !image.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+    throw new Error('Style-system returned an invalid PNG image');
+  }
+  let offset = PNG_SIGNATURE.length;
+  let width = 0;
+  let height = 0;
+  let chunks = 0;
+  let hasImageData = false;
+  let hasEnd = false;
+  while (offset < image.length) {
+    if (image.length - offset < 12) throw new Error('Style-system returned an invalid PNG image');
+    const length = image.readUInt32BE(offset);
+    const end = offset + 12 + length;
+    if (end > image.length) throw new Error('Style-system returned an invalid PNG image');
+    const type = image.toString('ascii', offset + 4, offset + 8);
+    if (!/^[A-Za-z]{4}$/u.test(type)) throw new Error('Style-system returned an invalid PNG image');
+    if (image.readUInt32BE(end - 4) !== pngCrc(image.subarray(offset + 4, end - 4))) {
+      throw new Error('Style-system returned an invalid PNG image');
+    }
+    if (chunks === 0) {
+      if (type !== 'IHDR' || length !== 13) throw new Error('Style-system returned an invalid PNG image');
+      width = image.readUInt32BE(offset + 8);
+      height = image.readUInt32BE(offset + 12);
+    } else if (type === 'IHDR') throw new Error('Style-system returned an invalid PNG image');
+    if (type === 'IDAT') hasImageData = true;
+    if (type === 'IEND') {
+      if (length !== 0 || end !== image.length) throw new Error('Style-system returned an invalid PNG image');
+      hasEnd = true;
+    }
+    chunks += 1;
+    offset = end;
+  }
+  if (!hasImageData || !hasEnd) throw new Error('Style-system returned an invalid PNG image');
+  if (width === 0 || height === 0 || width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+    throw new Error('Style-system returned PNG dimensions outside the supported range');
+  }
+  return { width, height };
+}
 
 /** Owns disposable static story-preview artifacts for one trusted workspace. */
 export class StoryPreviewService {
@@ -162,9 +219,9 @@ export class StoryPreviewService {
   private readonly dependencies: StoryPreviewServiceDependencies;
   private readonly artifacts = new Map<string, OwnedArtifact>();
 
-  constructor(workspaceRoot: string, dependencies: StoryPreviewServiceDependencies = defaultDependencies) {
+  constructor(workspaceRoot: string, dependencies: Partial<StoryPreviewServiceDependencies> = {}) {
     this.root = path.resolve(workspaceRoot);
-    this.dependencies = dependencies;
+    this.dependencies = { ...defaultDependencies, ...dependencies };
   }
 
   async metadata(input: StoryPreviewMetadataRequest): Promise<StoryPreviewMetadataView> {
@@ -281,31 +338,41 @@ export class StoryPreviewService {
       throw new Error('storyPath must name a .stories.js, .stories.jsx, .stories.ts, or .stories.tsx file');
 
     const [source, config] = await Promise.all([fs.readFile(storyPath, 'utf8'), this.dependencies.loadConfig(appPath)]);
-    const renderer = new ComponentRendererService(config, appPath);
-    let imagePath: string | undefined;
+    const renderer = this.dependencies.createRenderer(config, appPath);
+    let ownedImagePath: string | undefined;
     try {
       const component = await this.exactStory(root, storyPath, input.storyExport);
       const rendered = await renderer.renderComponent(component, {
         storyName: input.storyExport,
         darkMode: input.darkMode,
       });
-      const renderedImagePath = await fs.realpath(rendered.imagePath);
-      const imageRoot = await fs.realpath(path.join(appPath, '.tmp'));
-      if (!isContained(imageRoot, renderedImagePath)) {
-        throw new Error('Style-system returned an image artifact outside the project temporary directory');
+      const [renderedImagePath, imageRoot] = await Promise.all([
+        fs.realpath(rendered.imagePath),
+        fs.realpath(this.dependencies.rendererTemporaryRoot()),
+      ]);
+      if (renderedImagePath === imageRoot || !isContained(imageRoot, renderedImagePath)) {
+        throw new Error('Style-system returned an image artifact outside its temporary directory');
       }
-      imagePath = renderedImagePath;
-      const image = await fs.readFile(imagePath);
+      const imageStat = await fs.stat(renderedImagePath);
+      if (!imageStat.isFile()) throw new Error('Style-system returned a non-regular PNG image');
+      ownedImagePath = renderedImagePath;
+      if (imageStat.size > MAX_IMAGE_BYTES) throw new Error('Style-system returned an oversized PNG image');
+      const image = await fs.readFile(renderedImagePath);
+      if (image.length !== imageStat.size) throw new Error('Style-system PNG changed while it was being read');
+      const { width, height } = pngDimensions(image);
       return {
         data: image.toString('base64'),
         mimeType: 'image/png',
+        captureId: this.dependencies.createHandle(),
+        width,
+        height,
         storyPath: relativeWorkspacePath(root, storyPath),
         storyExport: input.storyExport,
         sourceSha256: createHash('sha256').update(source).digest('hex'),
       };
     } finally {
       try {
-        if (imagePath !== undefined) await fs.rm(imagePath, { force: true });
+        if (ownedImagePath !== undefined) await fs.rm(ownedImagePath, { force: true });
       } finally {
         await renderer.dispose();
       }
@@ -337,5 +404,6 @@ export type {
   StoryPreviewBuildInput,
   StoryPreviewBuildResult,
   StoryPreviewImageResult,
+  StoryPreviewRenderer,
   StoryPreviewServiceDependencies,
 } from './type';

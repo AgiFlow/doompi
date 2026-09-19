@@ -34,7 +34,7 @@ export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, status
         <>
           <h2 className="text-base font-semibold text-doom-text">Annotations</h2>
           <p className="text-base leading-normal text-doom-dim sm:text-sm">
-            Select a region, add a comment, then submit here. Requests queue while the agent is working.
+            Drag a region or place a point, add feedback, then submit here. Requests queue while the agent is working.
           </p>
           {focused.kind === 'video' ? (
             <p className="text-base text-doom-dim sm:text-sm">
@@ -52,7 +52,7 @@ export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, status
             </div>
           ) : null}
           <AuthorRegionDrafts key={focused.path} sessionId={sessionId} workspace={workspace} />
-          {workspace.regions.length > 0 ? (
+          {workspace.annotations.length > 0 ? (
             <div className="space-y-1.5 border-b border-doom-border-soft pb-3">
               <Button
                 className="min-h-11 min-w-11 w-full text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
@@ -68,9 +68,9 @@ export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, status
                       crypto.randomUUID(),
                       Date.now(),
                       focused,
-                      workspace.regions,
+                      workspace.annotations,
                     );
-                    const image = await multiRegionCaptureProvider(workspace.regions).capture();
+                    const image = await multiRegionCaptureProvider(workspace.annotations).capture();
                     await submitCapture({ ...image, context: authorCaptureContext(packet) });
                     setCaptureStatus('Request submitted. You can keep annotating here.');
                   } catch (reason) {
@@ -82,11 +82,11 @@ export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, status
               >
                 {capturing
                   ? 'Submitting…'
-                  : `Submit ${workspace.regions.length} annotation${workspace.regions.length === 1 ? '' : 's'}`}
+                  : `Submit ${workspace.annotations.length} annotation${workspace.annotations.length === 1 ? '' : 's'}`}
               </Button>
               {workspace.candidate ? (
                 <p className="text-base text-doom-dim sm:text-sm">
-                  Add or discard the current selection before submitting.
+                  Add or discard the current annotation before submitting.
                 </p>
               ) : null}
             </div>

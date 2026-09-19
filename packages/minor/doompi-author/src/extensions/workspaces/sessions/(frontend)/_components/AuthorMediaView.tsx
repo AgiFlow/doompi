@@ -40,13 +40,20 @@ export function AuthorMediaView({
   const video = useRef<MediaPreviewController>(null);
   const pdf = useRef<PdfPreviewController>(null);
   const start = useRef<
-    { x: number; y: number; element: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement } | undefined
+    | {
+        x: number;
+        y: number;
+        mode: 'mark' | 'comment';
+        element: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
+      }
+    | undefined
   >(undefined);
   const [playback, setPlayback] = useState<MediaPlaybackState>({ playing: false, currentTime: 0, duration: 0 });
   const [frameReady, setFrameReady] = useState(false);
   const [selection, setSelection] = useState<{
     path: string;
-    rect: NonNullable<ReturnType<typeof normalizedAuthorRectangle>>;
+    rect?: NonNullable<ReturnType<typeof normalizedAuthorRectangle>>;
+    point?: { x: number; y: number };
   }>();
   const [error, setError] = useState<string>();
   const [media, setMedia] = useState<{ source: string; url: string }>();
@@ -136,14 +143,22 @@ export function AuthorMediaView({
     start.current = undefined;
     if (!drag) return;
     const bounds = drag.element.getBoundingClientRect();
-    const rect = normalizedAuthorRectangle(bounds, {
-      left: drag.x,
-      top: drag.y,
-      right: event.clientX,
-      bottom: event.clientY,
-    });
-    if (!rect) return;
-    setSelection({ path: source.path, rect });
+    if (bounds.width <= 0 || bounds.height <= 0) return;
+    const point = {
+      x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
+      y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
+    };
+    const rect =
+      drag.mode === 'mark'
+        ? normalizedAuthorRectangle(bounds, {
+            left: drag.x,
+            top: drag.y,
+            right: event.clientX,
+            bottom: event.clientY,
+          })
+        : undefined;
+    if (drag.mode === 'mark' && !rect) return;
+    setSelection(drag.mode === 'mark' ? { path: source.path, rect: rect! } : { path: source.path, point });
     const focused = authorSessionWorkspace(sessionId).focusedDocument;
     if (!focused || focused.path !== source.path) return;
     let anchor: AuthorNativeAnchor;
@@ -153,7 +168,10 @@ export function AuthorMediaView({
       if (drag.element instanceof HTMLImageElement) {
         const image = drag.element;
         if (!image.naturalWidth || !image.naturalHeight) throw new Error('Image is not ready.');
-        anchor = { kind: 'image-rect', rect, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight };
+        anchor =
+          drag.mode === 'mark'
+            ? { kind: 'image-rect', rect: rect!, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight }
+            : { kind: 'image-point', point, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight };
         const canvas = document.createElement('canvas');
         const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
         canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
@@ -165,18 +183,30 @@ export function AuthorMediaView({
       } else if (source.kind === 'pdf') {
         const page = pdf.current?.getState();
         if (!page?.sourceWidth) throw new Error('PDF page is not ready.');
-        anchor = { kind: 'pdf-page-rect', page: page.page, rect };
+        anchor =
+          drag.mode === 'mark'
+            ? { kind: 'pdf-page-rect', page: page.page, rect: rect! }
+            : { kind: 'pdf-page-point', page: page.page, point };
         blob = await pdf.current!.capturePage();
       } else {
         const frame = await video.current?.captureFrame();
         if (!frame) throw new Error('Video frame is not ready.');
-        anchor = {
-          kind: 'video-time-rect',
-          rect,
-          timeSeconds: frame.timeSeconds,
-          intrinsicWidth: frame.width,
-          intrinsicHeight: frame.height,
-        };
+        anchor =
+          drag.mode === 'mark'
+            ? {
+                kind: 'video-time-rect',
+                rect: rect!,
+                timeSeconds: frame.timeSeconds,
+                intrinsicWidth: frame.width,
+                intrinsicHeight: frame.height,
+              }
+            : {
+                kind: 'video-time-point',
+                point,
+                timeSeconds: frame.timeSeconds,
+                intrinsicWidth: frame.width,
+                intrinsicHeight: frame.height,
+              };
         blob = frame.blob;
       }
       if (!blob) throw new Error('Unable to capture selected media.');
@@ -186,9 +216,11 @@ export function AuthorMediaView({
         documentPath: source.path,
         revision: source.version,
         sourceSha256: source.sourceSha256,
+        mode: drag.mode === 'mark' ? 'region' : 'point',
         anchor,
         viewport: { width: bounds.width, height: bounds.height },
         thumbnailUrl,
+        evidence: blob,
         createdAt: Date.now(),
       });
       setError(undefined);
@@ -198,6 +230,7 @@ export function AuthorMediaView({
     }
   };
   const selected = selection?.path === source.path ? selection.rect : undefined;
+  const selectedPoint = selection?.path === source.path ? selection.point : undefined;
   const selectionOverlay =
     selected === undefined ? null : (
       <div
@@ -211,6 +244,18 @@ export function AuthorMediaView({
         }}
       />
     );
+  const pointPin = (ordinal: number | undefined, point: { x: number; y: number }, key: string) => (
+    <span
+      key={key}
+      data-author-point={ordinal}
+      data-testid={ordinal === undefined ? 'author-media-point-selection' : undefined}
+      className={`pointer-events-none absolute z-10 flex h-5 min-w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 px-1 text-2xs font-bold ${ordinal === undefined ? 'border-white bg-doom-red text-white' : 'border-doom-deep bg-doom-yellow text-doom-deep'}`}
+      style={{ left: `${String(point.x * 100)}%`, top: `${String(point.y * 100)}%` }}
+    >
+      {ordinal ?? '•'}
+    </span>
+  );
+  const pointSelectionOverlay = selectedPoint === undefined ? null : pointPin(undefined, selectedPoint, 'selection');
   return (
     <div
       ref={host}
@@ -221,7 +266,7 @@ export function AuthorMediaView({
       }}
       onPointerMove={(event) => {
         const drag = start.current;
-        if (drag === undefined) return;
+        if (drag === undefined || drag.mode !== 'mark') return;
         const rect = normalizedAuthorRectangle(drag.element.getBoundingClientRect(), {
           left: drag.x,
           top: drag.y,
@@ -231,7 +276,7 @@ export function AuthorMediaView({
         setSelection(rect === null ? undefined : { path: source.path, rect });
       }}
       onPointerDownCapture={(event) => {
-        if (activeTool === 'select' || event.button !== 0 || pendingCandidate) return;
+        if ((activeTool !== 'mark' && activeTool !== 'comment') || event.button !== 0 || pendingCandidate) return;
         const element = event.target;
         if (
           !(
@@ -250,7 +295,7 @@ export function AuthorMediaView({
           }
           video.current?.pause();
         }
-        start.current = { x: event.clientX, y: event.clientY, element };
+        start.current = { x: event.clientX, y: event.clientY, mode: activeTool, element };
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
       onPointerUp={(event) => void mark(event)}
@@ -265,7 +310,9 @@ export function AuthorMediaView({
         <div className="relative inline-block max-w-full">
           <img ref={image} src={mediaUrl} alt={source.path} draggable={false} className="block max-w-full" />
           {selectionOverlay}
+          {pointSelectionOverlay}
           {displayedRegions.flatMap(({ ordinal, region }) => {
+            if (region.anchor.kind === 'image-point') return [pointPin(ordinal, region.anchor.point, region.id)];
             if (region.anchor.kind !== 'image-rect') return [];
             const { rect } = region.anchor;
             return [
@@ -303,33 +350,59 @@ export function AuthorMediaView({
               if (state.playing) setSelection(undefined);
             }}
           />
-          {source.kind === 'video' ? selectionOverlay : null}
-          {source.kind === 'video'
-            ? displayedRegions.map(({ ordinal, region }) => {
-                if (
-                  region.anchor.kind !== 'video-time-rect' ||
-                  playback.playing ||
-                  Math.abs(region.anchor.timeSeconds - playback.currentTime) > 0.1
-                )
-                  return null;
-                const { rect } = region.anchor;
-                return (
-                  <div
-                    key={region.id}
-                    data-author-region={ordinal}
-                    className="pointer-events-none absolute border border-doom-yellow bg-doom-yellow/10"
-                    style={{
-                      left: `${rect.x * 100}%`,
-                      top: `${rect.y * 100}%`,
-                      width: `${rect.width * 100}%`,
-                      height: `${rect.height * 100}%`,
-                    }}
-                  >
-                    <span className="bg-doom-yellow text-doom-deep">{ordinal}</span>
-                  </div>
-                );
-              })
-            : null}
+          {selectionOverlay}
+          {pointSelectionOverlay}
+          {displayedRegions.map(({ ordinal, region }) => {
+            if (source.kind === 'pdf') {
+              if (region.anchor.kind !== 'pdf-page-point' && region.anchor.kind !== 'pdf-page-rect') return null;
+              if (region.anchor.page !== pdf.current?.getState().page) return null;
+              if (region.anchor.kind === 'pdf-page-point') return pointPin(ordinal, region.anchor.point, region.id);
+              const { rect } = region.anchor;
+              return (
+                <div
+                  key={region.id}
+                  data-author-region={ordinal}
+                  className="pointer-events-none absolute border border-doom-yellow bg-doom-yellow/10"
+                  style={{
+                    left: `${String(rect.x * 100)}%`,
+                    top: `${String(rect.y * 100)}%`,
+                    width: `${String(rect.width * 100)}%`,
+                    height: `${String(rect.height * 100)}%`,
+                  }}
+                >
+                  <span className="bg-doom-yellow text-doom-deep">{ordinal}</span>
+                </div>
+              );
+            }
+            if (source.kind !== 'video' || playback.playing) return null;
+            if (
+              region.anchor.kind === 'video-time-point' &&
+              Math.abs(region.anchor.timeSeconds - playback.currentTime) <= 0.1
+            ) {
+              return pointPin(ordinal, region.anchor.point, region.id);
+            }
+            if (
+              region.anchor.kind !== 'video-time-rect' ||
+              Math.abs(region.anchor.timeSeconds - playback.currentTime) > 0.1
+            )
+              return null;
+            const { rect } = region.anchor;
+            return (
+              <div
+                key={region.id}
+                data-author-region={ordinal}
+                className="pointer-events-none absolute border border-doom-yellow bg-doom-yellow/10"
+                style={{
+                  left: `${rect.x * 100}%`,
+                  top: `${rect.y * 100}%`,
+                  width: `${rect.width * 100}%`,
+                  height: `${rect.height * 100}%`,
+                }}
+              >
+                <span className="bg-doom-yellow text-doom-deep">{ordinal}</span>
+              </div>
+            );
+          })}
         </div>
       )}
       {source.kind === 'video' ? (

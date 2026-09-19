@@ -33,8 +33,8 @@ const render = (...requests: AuthorRequestRecord[]) =>
 describe('Author request presentation boundaries', () => {
   it('renders the empty state', () => expect(render()).toContain('No requests or changes yet.'));
   it.each([
-    ['REQUESTED', '1 region queued'],
-    ['CHANGING', '1 region queued'],
+    ['REQUESTED', '1 annotation queued'],
+    ['CHANGING', '1 annotation queued'],
     ['CHANGED', 'Changes applied'],
     ['COMPLETE', 'Agent finished processing this request'],
     ['FAILED', 'Stopped with an error'],
@@ -69,7 +69,7 @@ describe('Author request presentation boundaries', () => {
       regions: [region, { ...region, id: 'two', quote: 'text' }],
       requestText: 'Change it Referenced context "hidden"',
     });
-    expect(markup).toContain('2 regions queued');
+    expect(markup).toContain('2 annotations queued');
     expect(markup).toContain('Change it');
     expect(markup).not.toContain('Referenced context');
     expect(markup).toContain('“text”');

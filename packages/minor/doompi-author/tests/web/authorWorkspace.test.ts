@@ -4,6 +4,7 @@ import {
   addAuthorAnnotation,
   addAuthorRegion,
   authorDocument,
+  authorDocumentAnnotations,
   authorSessionWorkspace,
   authorWorkspace,
   completeAuthorSave,
@@ -12,11 +13,13 @@ import {
   normalizeAuthorPath,
   putAuthorDocument,
   putAuthorRequest,
+  releaseAuthorDocumentFocus,
   removeAuthorRegion,
   requestAuthorSave,
   reviseAuthorDocument,
   reviseAuthorFragment,
   setAuthorCrop,
+  updateAuthorRegionComment,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 
 afterEach(() => authorWorkspace.reset());
@@ -103,6 +106,34 @@ describe('Author workspace store', () => {
     expect(authorSessionWorkspace('s2').regions).toEqual([]);
     removeAuthorRegion('s1', 'r1');
     expect(authorSessionWorkspace('s1').regions.map(({ id }) => id)).toEqual(['r2']);
+  });
+
+  it('keeps versioned mixed annotations per document across focus release and tab switches', () => {
+    putAuthorDocument('s1', { path: 'one.png', kind: 'image', sourceSha256: 'one' });
+    putAuthorDocument('s1', { path: 'two.png', kind: 'image', sourceSha256: 'two' });
+    const firstGeneration = focusAuthorDocument('s1', 'one.png', 0, 'one');
+    addAuthorRegion('s1', {
+      id: 'point',
+      documentPath: 'one.png',
+      revision: 0,
+      sourceSha256: 'one',
+      mode: 'point',
+      comment: 'Move this',
+      anchor: { kind: 'image-point', point: { x: 0.5, y: 0.25 }, naturalWidth: 100, naturalHeight: 100 },
+      viewport: { width: 100, height: 100 },
+      createdAt: 1,
+    });
+    updateAuthorRegionComment('s1', 'point', 'Move this lower');
+    expect(authorSessionWorkspace('s1').annotations[0]).toMatchObject({ id: 'point', version: 2, mode: 'point' });
+
+    focusAuthorDocument('s1', 'two.png', 0, 'two');
+    expect(authorSessionWorkspace('s1').annotations).toEqual([]);
+    expect(authorDocumentAnnotations('s1', 'one.png')?.annotations).toHaveLength(1);
+    focusAuthorDocument('s1', 'one.png', 0, 'one');
+    expect(authorSessionWorkspace('s1').regions[0]).toMatchObject({ id: 'point', version: 2 });
+
+    releaseAuthorDocumentFocus('s1', firstGeneration);
+    expect(authorDocumentAnnotations('s1', 'one.png')?.annotations).toHaveLength(1);
   });
 
   it('invalidates unsent anchors after a local document revision', () => {

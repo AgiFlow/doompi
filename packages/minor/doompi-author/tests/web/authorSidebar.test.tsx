@@ -138,7 +138,7 @@ describe('Author annotation sidebar', () => {
     void review.props.onClick!();
     expect(multiRegionCaptureProvider).not.toHaveBeenCalled();
     const drafts = nodes(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') }));
-    void drafts.find((node) => node.props.children === 'Discard selection')!.props.onClick!();
+    void drafts.find((node) => node.props.children === 'Discard annotation')!.props.onClick!();
     expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
     expect(workspace.authorSessionWorkspace('s').regions).toHaveLength(1);
   });

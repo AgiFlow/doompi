@@ -44,10 +44,14 @@ export interface AuthorDraftRevision {
   content: string;
 }
 
-/** A rectangle expressed relative to its source, not its current CSS size. */
-export interface AuthorNormalizedRect {
+/** A point expressed relative to its source, not its current CSS size. */
+export interface AuthorNormalizedPoint {
   x: number;
   y: number;
+}
+
+/** A rectangle expressed relative to its source, not its current CSS size. */
+export interface AuthorNormalizedRect extends AuthorNormalizedPoint {
   width: number;
   height: number;
 }
@@ -108,7 +112,35 @@ export interface AuthorStoryPreviewRectAnchor {
   preview: AuthorStoryPreviewIdentity;
 }
 
-export type AuthorNativeAnchor =
+export interface AuthorImagePointAnchor {
+  kind: 'image-point';
+  point: AuthorNormalizedPoint;
+  naturalWidth: number;
+  naturalHeight: number;
+}
+
+export interface AuthorPdfPagePointAnchor {
+  kind: 'pdf-page-point';
+  page: number;
+  point: AuthorNormalizedPoint;
+}
+
+export interface AuthorVideoTimePointAnchor {
+  kind: 'video-time-point';
+  timeSeconds: number;
+  point: AuthorNormalizedPoint;
+  frame?: number;
+  intrinsicWidth?: number;
+  intrinsicHeight?: number;
+}
+
+export interface AuthorStoryPreviewPointAnchor {
+  kind: 'story-preview-point';
+  point: AuthorNormalizedPoint;
+  preview: AuthorStoryPreviewIdentity;
+}
+
+export type AuthorRegionAnchor =
   | AuthorTextRangeAnchor
   | AuthorCellAnchor
   | AuthorSlideElementAnchor
@@ -116,6 +148,14 @@ export type AuthorNativeAnchor =
   | AuthorPdfPageRectAnchor
   | AuthorVideoTimeRectAnchor
   | AuthorStoryPreviewRectAnchor;
+
+export type AuthorPointAnchor =
+  | AuthorImagePointAnchor
+  | AuthorPdfPagePointAnchor
+  | AuthorVideoTimePointAnchor
+  | AuthorStoryPreviewPointAnchor;
+
+export type AuthorNativeAnchor = AuthorRegionAnchor | AuthorPointAnchor;
 
 /** View state retained as capture evidence, never as mutation authority. */
 export interface AuthorViewportSnapshot {
@@ -137,33 +177,34 @@ export interface AuthorVoiceGridEvidence {
   snapshotId: string;
 }
 
-export type AuthorToolMode = 'select' | 'mark' | 'crop';
+export type AuthorAnnotationMode = 'region' | 'point';
+export type AuthorToolMode = 'select' | 'mark' | 'comment' | 'crop';
 
-export interface AuthorRegionCandidate {
+export interface AuthorAnnotationCandidate {
   documentPath: string;
   revision: number;
   sourceSha256?: string;
+  mode?: AuthorAnnotationMode;
   quote?: string;
   anchor: AuthorNativeAnchor;
   viewport: AuthorViewportSnapshot;
   voiceGrid?: AuthorVoiceGridEvidence;
   thumbnailUrl?: string;
+  /** Durable capture evidence. Object URLs remain transient. */
+  evidence?: Blob;
   createdAt: number;
 }
 
-export interface AuthorRegionDraft {
+export interface AuthorAnnotationDraft extends AuthorAnnotationCandidate {
   id: string;
-  documentPath: string;
-  revision: number;
-  sourceSha256?: string;
   comment: string;
-  quote?: string;
-  anchor: AuthorNativeAnchor;
-  viewport: AuthorViewportSnapshot;
-  voiceGrid?: AuthorVoiceGridEvidence;
-  thumbnailUrl?: string;
-  createdAt: number;
+  /** Monotonically increases when the unsent annotation changes. */
+  version?: number;
 }
+
+/** Compatibility names retained while region-only call sites migrate to mixed annotations. */
+export type AuthorRegionCandidate = AuthorAnnotationCandidate;
+export type AuthorRegionDraft = AuthorAnnotationDraft;
 
 /** A region paired with the stable request/draft number shown in the document. */
 export interface AuthorDisplayedRegion {

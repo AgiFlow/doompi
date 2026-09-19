@@ -111,7 +111,7 @@ describe('Author multi-region capture packet', () => {
     ).toThrow('requires source provenance');
   });
 
-  it('includes concise video timestamps and spatial anchors in model-visible text', () => {
+  it('describes mixed region and point anchors in model-visible text', () => {
     const video = {
       ...region('video'),
       anchor: {
@@ -121,9 +121,24 @@ describe('Author multi-region capture packet', () => {
         rect: { x: 0.25, y: 0.5, width: 0.125, height: 0.2 },
       },
     };
-    const context = authorCaptureContext(createAuthorCapturePacket('capture-video', 10, document, [video]));
+    const point = {
+      ...region('point', 'Move this control'),
+      mode: 'point' as const,
+      version: 3,
+      anchor: {
+        kind: 'image-point' as const,
+        point: { x: 0.2, y: 0.75 },
+        naturalWidth: 800,
+        naturalHeight: 600,
+      },
+    };
+    const context = authorCaptureContext(createAuthorCapturePacket('capture-video', 10, document, [video, point]));
+    const packet = JSON.parse(context.metadata!) as ReturnType<typeof createAuthorCapturePacket>;
 
     expect(context.content).toContain('(1) change this [time 12.346s, frame 370, x 25%, y 50%, w 12.5%, h 20%]');
+    expect(context.content).toContain('(2) Move this control [image point x 20%, y 75%]');
+    expect(context.label).toBe('2 annotations · notes.md');
+    expect(packet.regions[1]).toMatchObject({ mode: 'point', version: 3 });
     expect(context.content).not.toContain('"timeSeconds"');
   });
   it('rejects stale, missing, excess, and oversized comments without mutating drafts', () => {
