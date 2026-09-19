@@ -106,7 +106,9 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
 
   const managed =
     options.target === undefined
-      ? GENERATED_ENTRY_NAMES.filter((name) => name !== 'mcp').map((name) => `${GENERATED_DIR}/${name}.ts`)
+      ? GENERATED_ENTRY_NAMES.filter(
+          (name) => name !== 'mcp' || !fs.existsSync(path.join(options.packageDir, 'tsdown.mcp.config.ts')),
+        ).map((name) => `${GENERATED_DIR}/${name}.ts`)
       : [`${GENERATED_DIR}/${ENTRY_FILENAME[options.target]}.${ENTRY_EXTENSION[options.target]}`];
   const { changed } = writeGenerated(options.packageDir, files, options.check, managed);
   return { graph, packageName, pluginId, files, changed, notices, targets };

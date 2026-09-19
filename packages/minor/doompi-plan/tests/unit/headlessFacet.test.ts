@@ -19,13 +19,23 @@ import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
 import { facet as planServerFacet } from '../../generated/server';
+import {
+  DOOM_SUBAGENT_POLICY_SERVICE,
+  type DoomSubagentPolicyService,
+  type SubagentPolicy,
+} from '../../src/services/optionalTeamServices';
 
-async function fixture() {
+interface FixtureOptions {
+  minorModes?: string[];
+  policy?: DoomSubagentPolicyService;
+}
+
+async function fixture(options: FixtureOptions = {}) {
   let selection: DoomHeadlessSelection = {
     majorMode: 'copilot',
     activeLayers: [],
     domains: [],
-    state: { 'minor-mode': ['retained'] },
+    state: { 'minor-mode': options.minorModes ?? ['retained'] },
   };
   let mode!: DoomHeadlessMinorMode;
   const resources: DoomHeadlessResource[] = [];
@@ -33,6 +43,10 @@ async function fixture() {
   const tools: DoomHeadlessTool[] = [];
   const publish = vi.fn();
   const dispose = vi.fn();
+  const selectionListeners = new Set<(next: DoomHeadlessSelection) => void | Promise<void>>();
+  const notifySelection = async (): Promise<void> => {
+    for (const listener of selectionListeners) await listener(selection);
+  };
   const registration = () => ({ dispose });
   const execution = {
     repoRoot: '/fixture-repository',
@@ -50,9 +64,13 @@ async function fixture() {
     context: execution,
     changeSelection: async (change: { axis: 'state'; key: string; values: string[] }) => {
       selection = { ...selection, state: { ...selection.state, [change.key]: change.values } };
+      await notifySelection();
     },
     assertActive: vi.fn(),
-    subscribeSelection: vi.fn(() => () => undefined),
+    subscribeSelection: vi.fn((listener: (next: DoomHeadlessSelection) => void | Promise<void>) => {
+      selectionListeners.add(listener);
+      return () => selectionListeners.delete(listener);
+    }),
     registerToolRestriction: registration,
     registerResource: (value: DoomHeadlessResource) => {
       resources.push(value);
@@ -76,10 +94,15 @@ async function fixture() {
     } as unknown as Context,
     host,
     registerOwner,
+    options.policy,
   );
   const action = (id: string, args: Record<string, string> = {}, signal = new AbortController().signal) =>
     mode.handleAction(id, args, { signal, context: execution } as Parameters<DoomHeadlessMinorMode['handleAction']>[2]);
-  return { mode, action, execution, resources, hooks, tools, publish, dispose, close };
+  const setMinorModes = async (minorModes: string[]): Promise<void> => {
+    selection = { ...selection, state: { ...selection.state, 'minor-mode': minorModes } };
+    await notifySelection();
+  };
+  return { mode, action, setMinorModes, execution, resources, hooks, tools, publish, dispose, close };
 }
 
 describe('headless planning resources and selection', () => {
@@ -136,6 +159,45 @@ describe('headless planning resources and selection', () => {
       systemPrompt: expect.stringMatching(/^\[PLAN MODE ACTIVE\]/),
     });
   });
+
+  it('restricts new and restored Plan subagents to exploration tools', async () => {
+    const handles: Array<{ update: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> }> = [];
+    const policy: DoomSubagentPolicyService = {
+      register: vi.fn((_value: SubagentPolicy) => {
+        const handle = { update: vi.fn(), dispose: vi.fn() };
+        handles.push(handle);
+        return handle;
+      }),
+    };
+    const test = await fixture({ policy });
+    expect(policy.register).not.toHaveBeenCalled();
+
+    await test.action('activate', { flavor: 'normal' });
+    expect(policy.register).toHaveBeenCalledWith({
+      owner: '@agimon-ai/doompi-plan',
+      allowedTools: ['read', 'bash', 'grep', 'find', 'ls', 'mcp'],
+      requiredTools: ['bash'],
+      allowMcpTools: true,
+      allowedExternalProfiles: [],
+      denyExtensions: false,
+    });
+    await test.action('deactivate');
+    expect(handles[0]!.dispose).toHaveBeenCalledOnce();
+
+    await test.setMinorModes(['retained', 'plan']);
+    expect(policy.register).toHaveBeenCalledTimes(2);
+    await test.setMinorModes(['retained']);
+    expect(handles[1]!.dispose).toHaveBeenCalledOnce();
+
+    await test.close?.();
+  });
+
+  it('registers the child ceiling for an initially restored Plan selection', async () => {
+    const policy: DoomSubagentPolicyService = { register: vi.fn(() => ({ update: vi.fn(), dispose: vi.fn() })) };
+    const test = await fixture({ minorModes: ['retained', 'plan'], policy });
+    await vi.waitFor(() => expect(policy.register).toHaveBeenCalledOnce());
+    await test.close?.();
+  });
 });
 
 async function mountFacet(
@@ -143,11 +205,13 @@ async function mountFacet(
   existing: Context,
   host: DoomHeadlessHostService,
   registerOwner: ReturnType<typeof vi.fn>,
+  policy?: DoomSubagentPolicyService,
 ) {
   const root = new Context();
   root.provide(TEST_SERVER, existing.get(TEST_SERVER));
   root.provide(TEST_AGENT, host);
   root.provide(TEST_CATALOG, { registerOwner } as never);
+  if (policy) root.provide(DOOM_SUBAGENT_POLICY_SERVICE as never, policy as never);
   const owner = root.extend({ [TEST_OWNER]: { packageName: '@fixture/mode' } });
   const release = await facet.apply(owner);
   await vi.waitFor(() => expect(registerOwner).toHaveBeenCalled());

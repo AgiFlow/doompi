@@ -37,23 +37,27 @@ interface SkillSource {
 }
 
 const LOCAL_ONLY_MCP_PACKAGES = new Set([
-  '@agimon-ai/doompi-voice',
+  '@agimon-ai/doompi-author',
   '@agimon-ai/doompi-git',
-  '@agimon-ai/doompi-workflow',
-  '@agimon-ai/doompi-user-feedback',
-  '@agimon-ai/doompi-loop',
   '@agimon-ai/doompi-goal',
+  '@agimon-ai/doompi-help',
+  '@agimon-ai/doompi-loop',
+  '@agimon-ai/doompi-user-feedback',
+  '@agimon-ai/doompi-voice',
+  '@agimon-ai/doompi-workflow',
 ]);
 
 async function isMcpSkillPlugin(entry: PluginEntry): Promise<boolean> {
   if (entry.source?.type === 'npm') return !LOCAL_ONLY_MCP_PACKAGES.has(entry.source.package);
   try {
-    const manifest = JSON.parse(await readFile(path.join(entry.directory, 'package.json'), 'utf8')) as {
-      name?: unknown;
-    };
-    return typeof manifest.name !== 'string' || !LOCAL_ONLY_MCP_PACKAGES.has(manifest.name);
-  } catch {
-    return true;
+    const manifest = JSON.parse(await readFile(path.join(entry.directory, 'package.json'), 'utf8')) as unknown;
+    if (typeof manifest !== 'object' || manifest === null || Array.isArray(manifest)) return false;
+    const name = (manifest as { name?: unknown }).name;
+    return typeof name === 'string' && name.length > 0 && name.trim() === name && !LOCAL_ONLY_MCP_PACKAGES.has(name);
+  } catch (error) {
+    // A package manifest is optional for catalog plugins, but a present identity
+    // that cannot be read or parsed must never make the plugin remotely eligible.
+    return (error as NodeJS.ErrnoException).code === 'ENOENT';
   }
 }
 
@@ -122,7 +126,14 @@ export async function discoverServerSkills(
       });
       try {
         if (collected.skillDirectories.length > 0) {
-          sources.push({ domain, paths: [...collected.skillDirectories], mcpPaths: mcpPluginRoots });
+          const paths = [...collected.skillDirectories];
+          sources.push({
+            domain,
+            paths,
+            // Exact collected paths retain this domain's per-plugin skill subset.
+            // A plugin root would also admit skills loaded for another domain.
+            mcpPaths: paths.filter((skillPath) => within(skillPath, mcpPluginRoots)),
+          });
         }
       } finally {
         await collected.cleanup();

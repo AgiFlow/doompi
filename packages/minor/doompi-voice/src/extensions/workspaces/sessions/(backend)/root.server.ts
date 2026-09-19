@@ -4,7 +4,6 @@ import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
 
 import { VoiceMediaBroker } from '../../../../services/clientMediaApi';
-import { mountMcpTools } from '../../../../services/mcpTools';
 import { createRealtimeRuntime } from '../../../../services/realtimeRuntime';
 import { registerVoicePeerBroker } from '../../../../services/voicePeerRelay';
 import { createVoiceServer } from '../../../../services/voiceServer';
@@ -36,11 +35,7 @@ export default defineRoot(({ agent, host }: DoomServerPluginContext) => {
   };
   return {
     value,
-    services: [
-      ...(value.services ?? []),
-      ...(value.tools?.length ? [mountMcpTools(value.tools)] : []),
-      () => registerVoicePeerBroker(agent.context.sessionId, broker),
-    ],
+    services: [...(value.services ?? []), () => registerVoicePeerBroker(agent.context.sessionId, broker)],
     activities: value.activities,
     onStart: value.onStart,
     onStop: value.onStop,
