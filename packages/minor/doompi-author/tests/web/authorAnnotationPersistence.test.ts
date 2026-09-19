@@ -57,6 +57,32 @@ afterEach(() => {
 describe('Author annotation persistence', () => {
   it('validates structure, point anchors, bounds, identity keys, and Blob evidence', () => {
     expect(validateAuthorAnnotationRecord(record())).toBeDefined();
+    const anchors = [
+      { kind: 'text-range', startOffset: 0, endOffset: 1, startLine: 1, endLine: 1 },
+      { kind: 'cell', fragmentId: 'cell', location: 'A1' },
+      { kind: 'slide-element', fragmentId: 'shape', slide: 1, location: 'Slide 1' },
+      { kind: 'image-rect', rect: { x: 0, y: 0, width: 0.5, height: 0.5 }, naturalWidth: 100, naturalHeight: 50 },
+      { kind: 'pdf-page-rect', page: 1, rect: { x: 0, y: 0, width: 0.5, height: 0.5 } },
+      { kind: 'video-time-rect', timeSeconds: 1, rect: { x: 0, y: 0, width: 0.5, height: 0.5 } },
+      { kind: 'story-preview-rect', rect: { x: 0, y: 0, width: 0.5, height: 0.5 }, preview: {} },
+      { kind: 'pdf-page-point', page: 1, point: { x: 0.5, y: 0.5 } },
+      { kind: 'video-time-point', timeSeconds: 1, point: { x: 0.5, y: 0.5 } },
+      { kind: 'story-preview-point', point: { x: 0.5, y: 0.5 }, preview: {} },
+    ];
+    for (const anchor of anchors) {
+      expect(
+        validateAuthorAnnotationRecord({
+          ...record(),
+          collection: { ...record().collection, annotations: [{ ...annotation, anchor }] },
+        }),
+      ).toBeDefined();
+    }
+    expect(
+      validateAuthorAnnotationRecord({
+        ...record(),
+        collection: { ...record().collection, annotations: [{ ...annotation, anchor: { kind: 'unknown' } }] },
+      }),
+    ).toBeUndefined();
     expect(validateAuthorAnnotationRecord({ ...record(), key: 'other' })).toBeUndefined();
     expect(
       validateAuthorAnnotationRecord({
