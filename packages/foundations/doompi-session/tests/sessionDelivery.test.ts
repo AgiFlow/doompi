@@ -164,6 +164,36 @@ describe('session delivery', () => {
     expect(admit).not.toHaveBeenCalled();
     expect(receiver.inbox()).toEqual([]);
   });
+  it('does not retry a queued message after its communication authority is removed', async () => {
+    const directEvents = createDirectEvents();
+    let allowed = true;
+    const sender = createSessionDeliveryService({
+      databasePath: temporaryDatabase('sender'),
+      recipientKey: 'parent',
+      communication: directEvents.bind('parent'),
+      authorizePeer: () => allowed,
+      admitPrompt: async () => undefined,
+    });
+    services.push(sender);
+    await sender.deliver({ deliveryId: 'removed', recipientKey: 'child', kind: 'message', prompt: 'Do not replay' });
+    allowed = false;
+
+    const admit = vi.fn(async () => undefined);
+    const receiver = createSessionDeliveryService({
+      databasePath: temporaryDatabase('receiver'),
+      recipientKey: 'child',
+      communication: directEvents.bind('child'),
+      authorizePeer: () => true,
+      admitPrompt: admit,
+    });
+    services.push(receiver);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(admit).not.toHaveBeenCalled();
+    expect(receiver.inbox()).toEqual([]);
+    expect(sender.outbox('removed')?.state).toBe('queued');
+  });
+
   it('replays every queued envelope when a recipient announces readiness', async () => {
     const directEvents = createDirectEvents();
     const sender = createSessionDeliveryService({
@@ -232,6 +262,7 @@ describe('session delivery', () => {
       deliveryId: 'same-id',
       recipientKey: 'child',
       kind: 'message',
+      metadata: {},
       state: 'acknowledged',
       recipientState: 'admitted',
     });

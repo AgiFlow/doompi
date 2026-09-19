@@ -232,7 +232,7 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
   const receiveEnvelope = (senderKey: string, value: unknown): DoomSessionDeliveryInboxState | undefined => {
     if (closed) return undefined;
     const envelope = envelopeOf(value);
-    if (!envelope || !options.authorizePeer(senderKey)) return undefined;
+    if (!envelope || !options.authorizePeer(senderKey, envelope.metadata)) return undefined;
     database
       .prepare(
         `INSERT OR IGNORE INTO session_delivery_inbox
@@ -266,9 +266,8 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
   };
 
   const receiveAck = (recipientKey: string, value: unknown): void => {
-    if (closed || !options.authorizePeer(recipientKey)) return;
     const ack = ackOf(value);
-    if (!ack) return;
+    if (closed || !ack) return;
     database
       .prepare(
         `UPDATE session_delivery_outbox
@@ -283,12 +282,14 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
       .prepare("SELECT * FROM session_delivery_outbox WHERE delivery_id = ? AND state = 'queued'")
       .get(deliveryId) as OutboxRow | undefined;
     if (!row) return;
+    const metadata = JSON.parse(row.metadata_json) as DoomSessionDeliveryMetadata;
+    if (!options.authorizePeer(row.recipient_key, metadata)) return;
     options.communication.publish(row.recipient_key, DELIVERY_EVENT, {
       deliveryId: row.delivery_id,
       kind: row.kind,
       prompt: row.prompt,
       delivery: row.delivery_mode,
-      metadata: JSON.parse(row.metadata_json) as DoomSessionDeliveryMetadata,
+      metadata,
     } satisfies DeliveryEnvelope);
   };
 
@@ -337,7 +338,7 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
       if (!deliveryId.trim() || !request.recipientKey.trim() || !request.kind.trim() || !isMode(mode)) {
         throw new TypeError('Delivery id, recipient key, kind, and mode must be valid.');
       }
-      if (!options.authorizePeer(request.recipientKey)) {
+      if (!options.authorizePeer(request.recipientKey, request.metadata)) {
         throw new Error(`Session '${request.recipientKey}' is not an authorized communication peer.`);
       }
       const metadata = normalizedMetadata(request.metadata);
@@ -432,7 +433,7 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
     outbox(deliveryId: string): DoomSessionOutboxEntry | undefined {
       const row = database
         .prepare(
-          'SELECT delivery_id, recipient_key, kind, state, recipient_state FROM session_delivery_outbox WHERE delivery_id = ?',
+          'SELECT delivery_id, recipient_key, kind, metadata_json, state, recipient_state FROM session_delivery_outbox WHERE delivery_id = ?',
         )
         .get(deliveryId) as OutboxRow | undefined;
       if (!row) return undefined;
@@ -440,6 +441,7 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
         deliveryId: row.delivery_id,
         recipientKey: row.recipient_key,
         kind: row.kind,
+        metadata: JSON.parse(row.metadata_json) as DoomSessionDeliveryMetadata,
         state: row.state,
         ...(row.recipient_state === null ? {} : { recipientState: row.recipient_state }),
       };

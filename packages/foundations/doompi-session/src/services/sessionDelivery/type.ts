@@ -43,6 +43,7 @@ export interface DoomSessionOutboxEntry {
   readonly deliveryId: string;
   readonly recipientKey: string;
   readonly kind: string;
+  readonly metadata: DoomSessionDeliveryMetadata;
   readonly state: 'queued' | 'acknowledged';
   readonly recipientState?: DoomSessionDeliveryInboxState;
 }
@@ -63,8 +64,8 @@ export interface SessionDeliveryServiceOptions {
   readonly databasePath: string;
   readonly recipientKey: string;
   readonly communication: DoomSessionCommunicationEndpoint;
-  /** Host-owned relationship check applied to both outbound recipients and inbound senders. */
-  readonly authorizePeer: (peerKey: string) => boolean;
+  /** Host-owned relationship check applied before sends, retries, and recipient acceptance. */
+  readonly authorizePeer: (peerKey: string, metadata?: DoomSessionDeliveryMetadata) => boolean;
   readonly admitPrompt: (prompt: string, delivery?: DoomSessionDeliveryMode) => Promise<void>;
 }
 

@@ -15,6 +15,40 @@ export {
   type SessionPeerReplayGuard,
 } from '../services/peerTransport';
 export {
+  createSessionDirectory,
+  type DiscoveredSession,
+  type SessionActivityState,
+  type SessionDirectory,
+  type SessionDirectoryOptions,
+  type SessionDiscoveryGrant,
+  type SessionHostReachability,
+  type SessionPresenceFacts,
+  type SessionPresenceObservation,
+  type SessionRuntimeState,
+  type SessionVoiceReadiness,
+} from '../services/sessionDirectory';
+export {
+  createSessionGroupStore,
+  SessionGroupRevisionError,
+  type SessionCommunicationGroup,
+  type SessionGroupMutation,
+  type SessionGroupStore,
+  type SessionGroupStoreOptions,
+} from '../services/sessionGroups';
+export {
+  DOOM_SESSION_INTERCOM_SERVICE,
+  createSessionGroupDeliveryAuthorizer,
+  createSessionIntercom,
+  readSessionIntercom,
+  requireSessionIntercom,
+  type SessionGroupDeliveryAuthorizationOptions,
+  type SessionIntercom,
+  type SessionIntercomMessage,
+  type SessionIntercomOptions,
+  type SessionIntercomSendRequest,
+  type SessionReportStatus,
+} from '../services/sessionIntercom';
+export {
   DOOM_SESSION_DELIVERY_SERVICE,
   createSessionDeliveryService,
   provideSessionDeliveryService,
