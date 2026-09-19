@@ -95,30 +95,30 @@ Matching names across the two sides are the join, and the platform suffix is not
 
 A directory per kind, filename is identity.
 
-| Surface                                     | `(backend)` produces                   | `(frontend)` produces                |
-| ------------------------------------------- | -------------------------------------- | ------------------------------------ |
+| Surface                                     | `(backend)` produces                                            | `(frontend)` produces                |
+| ------------------------------------------- | --------------------------------------------------------------- | ------------------------------------ |
 | `tool/`                                     | `tools` on CLI and server, explicit remote tools with `.mcp.ts` | CLI renderers or web `toolRenderers` |
-| `skill/`                                    | explicit remote Markdown resources with `.mcp.ts` | not scanned                          |
-| `tool-restriction/`                         | tool restrictions                      | not scanned                          |
-| `command/`                                  | `commands` on CLI and server           | web `paletteCommands`                |
-| `shortcut/`                                 | CLI shortcuts                          | not scanned                          |
-| `hook/`                                     | CLI `events`, server `hooks`           | not scanned                          |
-| `mode/<id>/mode.*`                          | server `minorModes`                    | web `minorModes`                     |
-| `provider/`                                 | CLI providers                          | not scanned                          |
-| `api/`                                      | server HTTP routes                     | generated typed client               |
-| `channel/`                                  | `channels`, filename is the frame type | web `channels`                       |
-| `method/`                                   | server `methods`                       | generated typed caller               |
-| `resource/`                                 | CLI and server resources               | not scanned                          |
-| `message/`                                  | not scanned                            | CLI message renderers                |
-| `tab/`, `dock/`                             | not scanned                            | web tabs and dock faces              |
-| `setting/`                                  | not scanned                            | web settings sections or panels      |
-| `slot/`, `fill/`                            | not scanned                            | web slots and fills                  |
-| `action/`                                   | not scanned                            | web context or user-message actions  |
-| `store/`                                    | not scanned                            | a web store at the folder's scope    |
-| `overlay/`                                  | not scanned                            | CLI TUI view opened on demand        |
-| `activity-group/`, `leader/`                | not scanned                            | web cockpit contributions            |
-| `selection-axis/`, `lifecycle/`             | not scanned                            | web singleton or named contributions |
-| `file-links/`, `repository-settings-panel/` | not scanned                            | web host integration                 |
+| `skill/`                                    | explicit remote Markdown resources with `.mcp.ts`               | not scanned                          |
+| `tool-restriction/`                         | tool restrictions                                               | not scanned                          |
+| `command/`                                  | `commands` on CLI and server                                    | web `paletteCommands`                |
+| `shortcut/`                                 | CLI shortcuts                                                   | not scanned                          |
+| `hook/`                                     | CLI `events`, server `hooks`                                    | not scanned                          |
+| `mode/<id>/mode.*`                          | server `minorModes`                                             | web `minorModes`                     |
+| `provider/`                                 | CLI providers                                                   | not scanned                          |
+| `api/`                                      | server HTTP routes                                              | generated typed client               |
+| `channel/`                                  | `channels`, filename is the frame type                          | web `channels`                       |
+| `method/`                                   | server `methods`                                                | generated typed caller               |
+| `resource/`                                 | CLI and server resources                                        | not scanned                          |
+| `message/`                                  | not scanned                                                     | CLI message renderers                |
+| `tab/`, `dock/`                             | not scanned                                                     | web tabs and dock faces              |
+| `setting/`                                  | not scanned                                                     | web settings sections or panels      |
+| `slot/`, `fill/`                            | not scanned                                                     | web slots and fills                  |
+| `action/`                                   | not scanned                                                     | web context or user-message actions  |
+| `store/`                                    | not scanned                                                     | a web store at the folder's scope    |
+| `overlay/`                                  | not scanned                                                     | CLI TUI view opened on demand        |
+| `activity-group/`, `leader/`                | not scanned                                                     | web cockpit contributions            |
+| `selection-axis/`, `lifecycle/`             | not scanned                                                     | web singleton or named contributions |
+| `file-links/`, `repository-settings-panel/` | not scanned                                                     | web host integration                 |
 
 The backend scope root owns service injection and startup work. It returns Cordis `services` and, for a server session, host `activities` alongside shared state and cleanup hooks. A server activity can bind session intercom or report suspended runs. It is unrelated to the browser's `activity` slot or `activity-group/` surface.
 
