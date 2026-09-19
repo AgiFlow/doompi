@@ -8,10 +8,10 @@ export async function createSkillServer(
   agent: DoomHeadlessHostService,
   signal: AbortSignal,
 ): Promise<DoomServerSessionPlugin> {
-  const { inventory, catalog, groups } = await discoverServerSkills(agent.context, signal);
+  const { inventory, catalog, groups, mcpGroups } = await discoverServerSkills(agent.context, signal);
   return {
     commands: createSkillCommands(inventory, catalog, groups),
-    services: [mountMcpSkills(groups, signal)],
+    services: [mountMcpSkills(mcpGroups, signal)],
     resources: [
       { name: 'doompi/skills', kind: 'skill', read: () => catalog },
       ...['doompi-author-skill', 'doompi-use-skill'].map((name) => ({

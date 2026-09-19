@@ -48,12 +48,12 @@ it('exposes repository and selected domain skills, deduplicates shared skills, a
     );
   }
   const lifetime = new AbortController();
-  const { groups } = await discoverServerSkills(
+  const { mcpGroups } = await discoverServerSkills(
     { cwd: root, repoRoot: root, environment: { HOME: root } } as unknown as DoomHeadlessExecutionContext,
     lifetime.signal,
   );
   const services = new Context();
-  mountMcpSkills(groups, lifetime.signal)(services);
+  mountMcpSkills(mcpGroups, lifetime.signal)(services);
   const selected = new AbortController();
   const context = remote(services, ['writing', 'code'], selected.signal);
   const skills = discovered(context);

@@ -17,7 +17,7 @@ async function writeSkill(directory: string, name: string): Promise<void> {
   await writeFile(path.join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\n---\n# ${name}\n`);
 }
 
-async function writePlugin(repoRoot: string, name: string, skill: string): Promise<void> {
+async function writePlugin(repoRoot: string, name: string, skill: string, packageName?: string): Promise<void> {
   const pluginRoot = path.join(repoRoot, 'plugins', name);
   await writeSkill(path.join(pluginRoot, 'skills', skill), skill);
   await mkdir(path.join(pluginRoot, '.claude-plugin'), { recursive: true });
@@ -25,6 +25,7 @@ async function writePlugin(repoRoot: string, name: string, skill: string): Promi
     path.join(pluginRoot, '.claude-plugin', 'plugin.json'),
     JSON.stringify({ name, version: '0.1.0', description: name }),
   );
+  if (packageName) await writeFile(path.join(pluginRoot, 'package.json'), JSON.stringify({ name: packageName }));
 }
 
 async function repository(domainsYaml: string): Promise<string> {
@@ -80,5 +81,15 @@ describe('discoverServerSkills', () => {
 
     expect(groups).toEqual([{ skills: [expect.objectContaining({ name: 'house-style' })] }]);
     expect(catalog).toContain('house-style');
+  });
+
+  it('keeps local-only package skills out of remote groups', async () => {
+    const root = await repository('plugins:\n  roots: [plugins]\n\ndomains:\n  workflow:\n    plugins: [workflow]\n');
+    await writePlugin(root, 'workflow', 'workflow-recovery', '@agimon-ai/doompi-workflow');
+
+    const { groups, mcpGroups } = await discoverServerSkills(execution(root), signal());
+
+    expect(groups.flatMap((group) => group.skills.map((skill) => skill.name))).toContain('workflow-recovery');
+    expect(mcpGroups.flatMap((group) => group.skills.map((skill) => skill.name))).not.toContain('workflow-recovery');
   });
 });
