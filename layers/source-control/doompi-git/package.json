@@ -75,6 +75,7 @@
   },
   "dependencies": {
     "@agimon-ai/doompi-core": "workspace:*",
+    "@agimon-ai/doompi-session": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "@tanstack/react-store": "0.11.1",

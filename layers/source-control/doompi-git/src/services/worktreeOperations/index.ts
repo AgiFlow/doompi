@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 
 import type { DoomHubSessionService } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomSessionDeliveryService } from '@agimon-ai/doompi-session';
 
 import { WORKTREE_RECORD_VERSION } from '../../types/worktreeRegistry';
 import type { WorktreeGit, WorktreeRecord } from '../../types/worktreeRegistry';
@@ -13,6 +14,9 @@ import { MAX_WORKTREE_MESSAGE_BYTES, type WorktreeMessageInbox, type WorktreeMes
 import { planPrune, reconcile, refuseClose, refuseSpawn, worktreeDirectory } from '../worktreeNaming';
 import { createWorktreeRegistry } from '../worktreeRegistry';
 
+const GIT_WORKTREE_DELEGATION_KIND = 'git.worktree.delegation';
+const GIT_WORKTREE_MESSAGE_KIND = 'git.worktree.message';
+const GIT_WORKTREE_REPORT_KIND = 'git.worktree.report';
 export interface WorktreeContext {
   /** Where the calling session is working, used to find the repository. */
   cwd: string;
@@ -24,6 +28,7 @@ export interface SpawnWorktreeRequest {
   branch: string;
   baseRef?: string;
   name?: string;
+  task?: string;
 }
 
 export interface SpawnOptions {
@@ -48,8 +53,10 @@ export interface WorktreeOperationsDeps {
   git: WorktreeGit;
   /** The canonical hub-owned session lifecycle. */
   sessionService?: DoomHubSessionService;
-  /** Session-local inbox for parent/worktree messages. */
+  /** Legacy in-memory fallback used outside the fixed Session composition. */
   messageInbox?: WorktreeMessageInbox;
+  /** Reads the active Session provider when an operation executes. */
+  sessionDelivery?: () => DoomSessionDeliveryService | undefined;
   /** Injected so a test never copies a real dependency tree. */
   mirror?: typeof mirrorComposition;
   homeDir?: string;
@@ -71,6 +78,13 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
     if (deps.messageInbox === undefined)
       throw new HubUnavailableError('The Git message service is unavailable. Start the cockpit and try again.');
     return deps.messageInbox;
+  };
+  const readSessionDelivery = (): DoomSessionDeliveryService | undefined => deps.sessionDelivery?.();
+  const requireSessionDelivery = (): DoomSessionDeliveryService => {
+    const delivery = readSessionDelivery();
+    if (delivery === undefined)
+      throw new HubUnavailableError('The Session delivery service is unavailable. Start the cockpit and try again.');
+    return delivery;
   };
   const probe = {
     alive: (record: WorktreeRecord) => requireSessionService().isLive(record.sessionId),
@@ -164,6 +178,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       if (refusal !== undefined) {
         throw new DoomGitExpectedError('worktree_exists', refusal, false, 'Pick another branch name, or close it.');
       }
+      const taskDelivery = request.task === undefined ? undefined : requireSessionDelivery();
       const baseRef = request.baseRef ?? (await git.currentBranch(root)) ?? 'HEAD';
       const id = shortId(randomUUID());
       const path = worktreeDirectory({
@@ -272,6 +287,36 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           'Check the registry file for permissions or free space, then try again.',
         );
       }
+      if (request.task !== undefined && taskDelivery !== undefined) {
+        try {
+          const receipt = await taskDelivery.deliver({
+            recipientKey: sessionId,
+            kind: GIT_WORKTREE_DELEGATION_KIND,
+            prompt: request.task,
+            metadata: {
+              worktreeId: record.id,
+              fromRole: 'parent',
+              text: request.task,
+              sentAt: record.createdAt,
+            },
+          });
+          const admission = await taskDelivery.waitForAdmission(receipt.deliveryId);
+          if (admission !== 'admitted') {
+            throw new Error(
+              admission === 'recovery_required'
+                ? 'The recipient could not admit the task.'
+                : 'The recipient did not confirm task admission before the timeout.',
+            );
+          }
+        } catch (error) {
+          throw new DoomGitExpectedError(
+            'task_delivery_failed',
+            `Worktree ${record.id} was created, but its task admission was not confirmed (${(error as Error).message}).`,
+            true,
+            `Use send with worktree ${record.id} to deliver the task without recreating the worktree.`,
+          );
+        }
+      }
       return record;
     },
 
@@ -345,21 +390,72 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       const record = require(records, id);
       const peer = peerFor(context, record);
       requirePeerLive(peer.sessionId);
+      const sentAt = new Date().toISOString();
+      const delivery = readSessionDelivery();
+      if (delivery !== undefined) {
+        const kind = peer.party === 'parent' ? GIT_WORKTREE_MESSAGE_KIND : GIT_WORKTREE_REPORT_KIND;
+        const receipt = await delivery.deliver({
+          recipientKey: peer.sessionId,
+          kind,
+          prompt:
+            peer.party === 'parent'
+              ? `Parent message for worktree ${record.id}:\n\n${message}`
+              : `Report from worktree ${record.id}:\n\n${message}`,
+          metadata: { worktreeId: record.id, fromRole: peer.party, text: message, sentAt },
+        });
+        const admission = await delivery.waitForAdmission(receipt.deliveryId);
+        if (admission !== 'admitted') {
+          throw new DoomGitExpectedError(
+            'message_delivery_failed',
+            `Worktree ${record.id} persisted the message, but its session did not confirm admission.`,
+            true,
+            admission === 'recovery_required'
+              ? 'Call messages from the recipient session to recover the persisted text.'
+              : 'The message remains durable; retry after the recipient is ready.',
+          );
+        }
+        return;
+      }
       requireMessageInbox().send(peer.sessionId, {
         version: 1,
         worktreeId: record.id,
         fromSessionId: context.sessionId,
         from: peer.party,
         text: message,
-        sentAt: new Date().toISOString(),
+        sentAt,
       });
     },
 
     async messages(context, id) {
       const { records } = await resolve(context);
       const record = require(records, id);
-      peerFor(context, record);
-      return requireMessageInbox().receive(record.id);
+      const peer = peerFor(context, record);
+      const delivery = readSessionDelivery();
+      if (delivery === undefined) return requireMessageInbox().receive(record.id);
+      const entries = delivery
+        .inbox({ consumed: false, metadata: { worktreeId: record.id } })
+        .filter(
+          (entry) =>
+            entry.senderKey === peer.sessionId &&
+            (entry.state === 'admitted' || entry.state === 'recovery_required') &&
+            (peer.party === 'parent'
+              ? entry.kind === GIT_WORKTREE_REPORT_KIND
+              : entry.kind === GIT_WORKTREE_MESSAGE_KIND || entry.kind === GIT_WORKTREE_DELEGATION_KIND),
+        );
+      return entries.map((entry) => {
+        delivery.consume(entry.deliveryId);
+        return {
+          version: 1,
+          worktreeId: record.id,
+          fromSessionId: entry.senderKey,
+          from: peer.party === 'parent' ? ('child' as const) : ('parent' as const),
+          text:
+            entry.state === 'recovery_required'
+              ? `[Recovery required: prompt admission was not confirmed] ${entry.metadata.text ?? entry.prompt}`
+              : (entry.metadata.text ?? entry.prompt),
+          sentAt: entry.metadata.sentAt ?? '',
+        };
+      });
     },
 
     async prune(context, dryRun) {

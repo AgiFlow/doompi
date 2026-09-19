@@ -102,6 +102,22 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     };
   }
 
+  const owningSessionService = options.sessionService;
+  const communication = owningSessionService?.bindCommunication?.(options.sessionId);
+  const exposedSessionService: DoomHubSessionService | undefined =
+    owningSessionService === undefined
+      ? undefined
+      : {
+          create: (request) => owningSessionService.create(request),
+          close: (sessionId) => owningSessionService.close(sessionId),
+          isLive: (sessionId) => owningSessionService.isLive(sessionId),
+          ...(owningSessionService.canCommunicate === undefined
+            ? {}
+            : {
+                canCommunicate: (sourceSessionId: string, targetSessionId: string) =>
+                  owningSessionService.canCommunicate?.(sourceSessionId, targetSessionId) === true,
+              }),
+        };
   const context: DoomApiContext = {
     scope: 'session',
     sessionId: options.sessionId,
@@ -113,7 +129,8 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     directEvents: options.directEvents,
     ...(options.internalToken === undefined ? {} : { internalToken: options.internalToken }),
     ...(options.hubToken === undefined ? {} : { hubToken: options.hubToken }),
-    ...(options.sessionService === undefined ? {} : { sessionService: options.sessionService }),
+    ...(exposedSessionService === undefined ? {} : { sessionService: exposedSessionService }),
+    ...(communication === undefined ? {} : { sessionCommunication: communication }),
     onNotice: options.onNotice,
   };
   const host = createDoomServerHost({
@@ -133,11 +150,13 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
       throw error;
     }
   } catch (error) {
+    communication?.close();
     host.dispose();
     throw error;
   }
   if (host.mounted().length === 0 && !options.prepareFacets) {
     await installed.dispose();
+    communication?.close();
     host.dispose();
     return {
       request: async () => Response.json({ error: 'No package APIs are mounted.' }, { status: 404 }),
@@ -211,6 +230,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     close: () => {
       closePromise ??= (async () => {
         await installed.dispose();
+        communication?.close();
         host.dispose();
       })();
       return closePromise;

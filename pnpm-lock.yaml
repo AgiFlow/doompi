@@ -326,6 +326,9 @@ importers:
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-core
+      '@agimon-ai/doompi-session':
+        specifier: workspace:*
+        version: link:../../../packages/foundations/doompi-session
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-components

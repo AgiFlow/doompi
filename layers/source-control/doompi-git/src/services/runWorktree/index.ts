@@ -131,6 +131,7 @@ export async function executeRunWorktreeTool(
           branch: params.branch,
           ...(params.baseRef === undefined ? {} : { baseRef: params.baseRef }),
           ...(params.name === undefined ? {} : { name: params.name }),
+          ...(params.task === undefined ? {} : { task: params.task }),
         },
         options,
       );
@@ -138,7 +139,9 @@ export async function executeRunWorktreeTool(
         content: text(
           `Worktree ${record.id} created on ${record.branch} from ${record.baseRef}.`,
           `Path: ${record.path}`,
-          `Session ${record.sessionId} is starting; it appears nested under this one in the rail.`,
+          params.task === undefined
+            ? `Session ${record.sessionId} is starting; it appears nested under this one in the rail.`
+            : `Session ${record.sessionId} is starting with its task; it appears nested under this one in the rail.`,
         ),
         details: { action: params.action, records: [record] },
       };

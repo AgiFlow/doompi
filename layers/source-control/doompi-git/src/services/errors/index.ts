@@ -19,6 +19,8 @@ export type DoomGitErrorCode =
   | 'hub_unavailable'
   | 'spawn_cancelled'
   | 'registry_write_failed'
+  | 'task_delivery_failed'
+  | 'message_delivery_failed'
   | 'message_too_large'
   | 'git_failed';
 
