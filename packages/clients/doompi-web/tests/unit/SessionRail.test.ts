@@ -17,6 +17,7 @@ vi.mock('../../src/web/components/PluginSurface', () => ({
 import type { SessionSummary } from '../../src/types/hub';
 import { SessionRail } from '../../src/web/features/sessions/SessionRail';
 import { applySessionsSnapshot, resetSessions } from '../../src/web/stores/sessionsStore';
+import { applyWorkspacesSnapshot, resetWorkspaces } from '../../src/web/stores/workspacesStore';
 
 function summary(id: string, createdAt: string, overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
@@ -56,6 +57,50 @@ function render(): string {
 
 beforeEach(() => {
   resetSessions();
+  resetWorkspaces();
+});
+
+describe('SessionRail workspaces', () => {
+  it('renders admitted workspaces independently of their sessions', () => {
+    applyWorkspacesSnapshot({
+      type: 'workspaces_snapshot',
+      workspaces: [
+        { id: 'one', root: '/Users/dev/workspace/one', available: true },
+        { id: 'empty', root: '/Users/dev/workspace/empty', available: true },
+      ],
+    });
+    applySessionsSnapshot({
+      type: 'sessions_snapshot',
+      sessions: [summary('a', '2026-08-24T00:00:10.000Z', { workspaceId: 'one' })],
+    });
+
+    const markup = render();
+    expect(markup).toContain('data-testid="workspace-group-one"');
+    expect(markup).toContain('data-testid="workspace-group-empty"');
+    expect(markup).toContain('no sessions · create or resume one');
+    expect(markup.indexOf('workspace-group-one')).toBeLessThan(markup.indexOf('session-card-a'));
+  });
+
+  it('keeps the global session ordinal when sessions are grouped', () => {
+    applyWorkspacesSnapshot({
+      type: 'workspaces_snapshot',
+      workspaces: [
+        { id: 'one', root: '/one', available: true },
+        { id: 'two', root: '/two', available: true },
+      ],
+    });
+    applySessionsSnapshot({
+      type: 'sessions_snapshot',
+      sessions: [
+        summary('a', '2026-08-24T00:00:10.000Z', { workspaceId: 'one' }),
+        summary('b', '2026-08-24T00:00:20.000Z', { workspaceId: 'two' }),
+      ],
+    });
+
+    const markup = render();
+    expect(card(markup, 'a')).toContain('press 1 to focus');
+    expect(card(markup, 'b')).toContain('press 2 to focus');
+  });
 });
 
 describe('SessionRail nesting', () => {

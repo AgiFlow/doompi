@@ -13,8 +13,20 @@ export const HUB_PROTOCOL_VERSION = 2;
 /** Role marker in the health payload; doompi-server probes for it before binding the port. */
 export const HUB_ROLE = 'hub';
 
+/** REST endpoint for admitting and listing durable workspaces. */
+export const WORKSPACES_API_ROUTE = '/api/workspaces';
+
 /** REST endpoint for creating sessions and browsing resumable Pi history. */
 export const SESSIONS_API_ROUTE = '/api/workspaces/:workspaceId/sessions';
+
+/** One durable repository workspace shown in the rail, even while it has no sessions. */
+export interface WorkspaceSummary {
+  id: string;
+  root: string;
+  /** A remembered workspace whose root could not be mounted on this server start. */
+  available?: boolean;
+  error?: string;
+}
 
 /** One inactive Pi thread available to resume in a live session's workspace. */
 export interface PiSessionHistoryItem {
@@ -126,6 +138,9 @@ export interface SessionSummary {
 }
 
 export const HUB_HELLO_TYPE = 'hub_hello';
+export const WORKSPACES_SNAPSHOT_TYPE = 'workspaces_snapshot';
+export const WORKSPACE_UPSERT_TYPE = 'workspace_upsert';
+export const WORKSPACE_REMOVED_TYPE = 'workspace_removed';
 export const SESSIONS_SNAPSHOT_TYPE = 'sessions_snapshot';
 export const SESSION_UPSERT_TYPE = 'session_upsert';
 export const SESSION_REMOVED_TYPE = 'session_removed';
@@ -306,6 +321,21 @@ export interface HubHelloFrame {
   protocol: number;
   /** Frame types of the hub's loaded data channels; lets a panel tell "plugin server not installed" from "no data". */
   channels: string[];
+}
+
+export interface WorkspacesSnapshotFrame {
+  type: typeof WORKSPACES_SNAPSHOT_TYPE;
+  workspaces: WorkspaceSummary[];
+}
+
+export interface WorkspaceUpsertFrame {
+  type: typeof WORKSPACE_UPSERT_TYPE;
+  workspace: WorkspaceSummary;
+}
+
+export interface WorkspaceRemovedFrame {
+  type: typeof WORKSPACE_REMOVED_TYPE;
+  workspaceId: string;
 }
 
 export interface SessionsSnapshotFrame {

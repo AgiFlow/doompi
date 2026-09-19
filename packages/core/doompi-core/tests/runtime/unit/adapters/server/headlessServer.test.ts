@@ -634,8 +634,8 @@ describe('serveHeadlessServer', () => {
     const post = (body: string) => fetch(`${server.url}/api/workspaces`, { method: 'POST', body });
     expect(await (await fetch(`${server.url}/api/workspaces`)).json()).toEqual({
       workspaces: [
-        { id: 'one', root: '/one' },
-        { id: 'test-workspace', root: '/repo' },
+        { id: 'one', root: '/one', available: true },
+        { id: 'test-workspace', root: '/repo', available: true },
       ],
     });
     for (const body of ['', 'null', '[]', '{}', '{"root":1}']) {
@@ -651,7 +651,54 @@ describe('serveHeadlessServer', () => {
     expect((await fetch(`${server.url}/api/workspaces/one`, { method: 'DELETE' })).status).toBe(409);
     await hub.closeSession('session');
     expect((await fetch(`${server.url}/api/workspaces/one`, { method: 'DELETE' })).status).toBe(200);
-    expect(hub.workspaces()).toEqual([{ id: 'test-workspace', root: '/repo' }]);
+    expect(hub.workspaces()).toEqual([{ id: 'test-workspace', root: '/repo', available: true }]);
+    await hub.close();
+  });
+
+  it('lists and resumes saved history without requiring a live session', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const saved = {
+      id: 'saved-one',
+      name: 'Saved',
+      firstMessage: 'hello',
+      createdAt: '2025-01-01',
+      updatedAt: '2025-01-02',
+      messageCount: 1,
+    };
+    const workspaceHistory = vi.fn(async () => [saved]);
+    const resumeWorkspaceSession = vi.fn(async () => saved.id);
+    const server = await serveHeadlessServer({
+      headlessHub: hub,
+      port: 0,
+      workspaceHistory,
+      resumeWorkspaceSession,
+    });
+    servers.push(server);
+
+    const history = await fetch(`${server.url}/api/workspaces/test-workspace/history`);
+    expect(history.status).toBe(200);
+    expect(await history.json()).toEqual({ sessions: [saved] });
+    const resumed = await fetch(`${server.url}/api/workspaces/test-workspace/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ targetSessionId: saved.id }),
+    });
+    expect(resumed.status).toBe(200);
+    expect(await resumed.json()).toEqual({ sessionId: saved.id });
+    expect(resumeWorkspaceSession).toHaveBeenCalledWith('test-workspace', saved.id);
+    expect(
+      (
+        await fetch(`${server.url}/api/workspaces/test-workspace/resume`, {
+          method: 'POST',
+          body: JSON.stringify({ targetSessionId: '../escape' }),
+        })
+      ).status,
+    ).toBe(400);
     await hub.close();
   });
 
