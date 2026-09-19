@@ -138,12 +138,16 @@ describe('global remote control', () => {
     const mcp = await tunnel(port, '/api/workspaces/work/sessions/session/mcp', 'POST', {}, undefined, false);
     expect(mcp.status).toBe(200);
     expect(await mcp.json()).toEqual({ path: '/api/workspaces/work/sessions/session/mcp' });
+    const peerInbox = await tunnel(port, '/api/plugins/session-peer/inbox', 'POST', {}, undefined, false);
+    expect(peerInbox.status).toBe(200);
+    expect(await peerInbox.json()).toEqual({ path: '/api/plugins/session-peer/inbox' });
     const token = await tunnel(port, '/oauth/token', 'POST', {}, undefined, false);
     expect(token.status).toBe(200);
     expect(await token.json()).toEqual({ path: '/oauth/token' });
+    expect((await tunnel(port, '/api/plugins/session-peer/other', 'POST', {}, undefined, false)).status).toBe(403);
     expect((await tunnel(port, '/api/workspaces/work/sessions/session/mcp/clients')).status).toBe(401);
     expect((await tunnel(port, '/oauth/register', 'POST', {})).status).toBe(401);
-    expect(forward).toHaveBeenCalledTimes(3);
+    expect(forward).toHaveBeenCalledTimes(4);
   });
 
   it('completes session MCP OAuth and lists tools through the public tunnel', async () => {
@@ -159,6 +163,17 @@ describe('global remote control', () => {
         runtime: { exited: new Promise<number>(() => undefined) } as never,
         host: undefined,
         toolSurface: {
+          readSurface: () => ({
+            revision: 1,
+            tools: [
+              { name: 'read', label: 'Read', description: 'Read a file', parameters: { type: 'object' } as never },
+            ],
+            skills: [],
+          }),
+          invokeTool: vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'done' }] })),
+          readSkill: vi.fn(),
+        },
+        mcpSurface: {
           readSurface: () => ({
             revision: 1,
             tools: [

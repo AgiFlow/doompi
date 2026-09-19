@@ -5,7 +5,13 @@ import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
 
 import { provideBackgroundWorkService } from '../../../../services/backgroundWorkService';
-import { provideSessionDeliveryService } from '../../../../services/sessionDelivery';
+import { registerSessionPeerInbox } from '../../../../services/peerInbox';
+import {
+  createPeerCommunication,
+  parseRemoteSessionReference,
+  readSessionPeerConfig,
+} from '../../../../services/peerTransport';
+import { provideSessionDeliveryService, readDoomSessionDelivery } from '../../../../services/sessionDelivery';
 
 export default defineRoot((pluginContext: DoomServerPluginContext) => ({
   value: undefined,
@@ -24,13 +30,35 @@ export default defineRoot((pluginContext: DoomServerPluginContext) => ({
       }
       const directory = path.join(homeDirectory, '.pi', '.doom', 'session', 'delivery');
       fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-      return provideSessionDeliveryService(context, {
+      const peerCommunication = createPeerCommunication({ local: communication, homeDirectory });
+      const peerConfig = readSessionPeerConfig(homeDirectory);
+      const remotePeerIsGranted = (peerKey: string): boolean => {
+        const peer = parseRemoteSessionReference(peerKey);
+        return (
+          peer !== undefined &&
+          peerConfig?.peers.some(
+            (candidate) =>
+              candidate.hostId === peer.hostId && candidate.allowedSessionIds.includes(agent.context.sessionId),
+          ) === true
+        );
+      };
+      const closeDelivery = provideSessionDeliveryService(context, {
         databasePath: path.join(directory, `${agent.context.sessionId}.sqlite`),
         recipientKey: agent.context.sessionId,
-        communication,
-        authorizePeer: (peerKey) => sessionService.canCommunicate?.(agent.context.sessionId, peerKey) === true,
+        communication: peerCommunication,
+        authorizePeer: (peerKey) =>
+          sessionService.canCommunicate?.(agent.context.sessionId, peerKey) === true || remotePeerIsGranted(peerKey),
         admitPrompt: (prompt, delivery) => session.admitPrompt!(prompt, delivery),
       });
+      const service = readDoomSessionDelivery(context);
+      if (!service) throw new Error('Session delivery service was not installed.');
+      const unregister = registerSessionPeerInbox(agent.context.sessionId, (sourceKey, kind, payload) =>
+        service.receive(sourceKey, kind, payload),
+      );
+      return async () => {
+        unregister();
+        await closeDelivery();
+      };
     },
   ],
 }));

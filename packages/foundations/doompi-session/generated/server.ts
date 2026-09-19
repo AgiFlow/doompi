@@ -3,13 +3,25 @@ import { defineServerPlugin, type DoomServerSessionPlugin } from '@agimon-ai/doo
 import { composeRootHooks } from '@agimon-ai/doompi-core/extension-file';
 
 import rootSession from '../src/extensions/workspaces/sessions/(backend)/root.server';
+import apiRoute from '../src/extensions/(backend)/api/session-peer/route.server';
+
+type Factory<T, C> = (context: C) => T;
+const at = <T, C>(value: T | Factory<T, C>, context: C): T =>
+  typeof value === 'function' ? (value as Factory<T, C>)(context) : value;
 
 export const facet = defineServerPlugin({
   name: '@agimon-ai/doompi-session',
+  global: (context) => ({
+    get api(): DoomServerSessionPlugin['api'] { return [at(apiRoute, context)]; },
+  }),
+  workspace: (context) => ({
+    get api(): DoomServerSessionPlugin['api'] { return [at(apiRoute, context)]; },
+  }),
   session: async (context) => {
     const scopeSession = await rootSession(context);
     return {
       ...composeRootHooks(scopeSession),
+      get api(): DoomServerSessionPlugin['api'] { return [at(apiRoute, context)]; },
       services: [...(scopeSession.services ?? [])],
       get activities(): DoomServerSessionPlugin['activities'] { return [...(scopeSession.activities ?? [])]; },
     };

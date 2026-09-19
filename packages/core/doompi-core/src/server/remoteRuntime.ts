@@ -30,6 +30,8 @@ const TUNNEL_CONNECTION_LIMIT = 64;
 const TUNNEL_REQUESTS_PER_SOCKET = 100;
 const SEALED_HTTP_VERSION = 1;
 const SEALED_HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
+/** HMAC-authenticated Session peer delivery is the only non-device tunnel API. */
+const SESSION_PEER_INBOX_ROUTE = '/api/plugins/session-peer/inbox';
 const FORBIDDEN_HEADERS = new Set([
   'authorization',
   'connection',
@@ -142,12 +144,12 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
     if (context.env.listener === 'local') return next();
     const path = context.req.path;
     const publicSessionMcp = isPublicSessionMcpRoute(context.req.method, path);
+    const publicSessionPeer = context.req.method === 'POST' && path === SESSION_PEER_INBOX_ROUTE;
     const verdict = originVerdict({
       listener: 'tunnel',
-      // Exact OAuth and MCP routes authenticate at the application layer. Treat
-      // an absent Origin like a server-to-server read while retaining Host and
-      // supplied-Origin validation.
-      method: publicSessionMcp ? 'GET' : context.req.method,
+      // Exact OAuth, MCP, and HMAC-authenticated Session peer routes authenticate at
+      // the application layer. Treat an absent Origin like a server-to-server read.
+      method: publicSessionMcp || publicSessionPeer ? 'GET' : context.req.method,
       isUpgrade: false,
       origin: context.req.header('origin'),
       host: context.req.header('host'),
@@ -155,7 +157,7 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
       tunnel: remote.tunnelPolicy(),
     });
     if (verdict !== 'allow') return context.json({ error: `Tunnel request refused: ${verdict}.` }, 403);
-    if (isPublicPairingRoute(context.req.method, path) || publicSessionMcp) return next();
+    if (isPublicPairingRoute(context.req.method, path) || publicSessionMcp || publicSessionPeer) return next();
     const device = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
     if (device === undefined) return context.json({ error: 'This device is not paired.' }, 401);
     if (context.env.sealedDeviceId === device) return next();
@@ -441,7 +443,11 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
       : context.json({ error: `The sealed response failed: ${sealed.failure}.` }, 503);
   });
   app.on(['POST', 'DELETE'], '*', async (context) => {
-    if (!isPublicSessionMcpRoute(context.req.method, context.req.path)) return context.notFound();
+    if (
+      !isPublicSessionMcpRoute(context.req.method, context.req.path) &&
+      !(context.req.method === 'POST' && context.req.path === SESSION_PEER_INBOX_ROUTE)
+    )
+      return context.notFound();
     return options.forward(context.req.raw);
   });
   app.on(['GET', 'HEAD'], '*', async (context) => {

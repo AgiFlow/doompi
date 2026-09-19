@@ -229,10 +229,10 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
       });
   };
 
-  const receiveEnvelope = (senderKey: string, value: unknown): void => {
-    if (closed) return;
+  const receiveEnvelope = (senderKey: string, value: unknown): DoomSessionDeliveryInboxState | undefined => {
+    if (closed) return undefined;
     const envelope = envelopeOf(value);
-    if (!envelope || !options.authorizePeer(senderKey)) return;
+    if (!envelope || !options.authorizePeer(senderKey)) return undefined;
     database
       .prepare(
         `INSERT OR IGNORE INTO session_delivery_inbox
@@ -251,7 +251,7 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
         Date.now(),
       );
     const current = readInboxRow(envelope.deliveryId);
-    if (!current) return;
+    if (!current) return undefined;
     const sameEnvelope =
       current.sender_key === senderKey &&
       current.recipient_key === options.recipientKey &&
@@ -259,9 +259,10 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
       current.prompt === envelope.prompt &&
       current.delivery_mode === envelope.delivery &&
       sameMetadata(JSON.parse(current.metadata_json) as DoomSessionDeliveryMetadata, envelope.metadata);
-    if (!sameEnvelope) return;
+    if (!sameEnvelope) return undefined;
     publishAck(envelope.deliveryId, current.sender_key, current.state);
     if (current.state === 'accepted') scheduleAdmission(envelope.deliveryId);
+    return current.state;
   };
 
   const receiveAck = (recipientKey: string, value: unknown): void => {
@@ -298,6 +299,13 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
       publishOutbox(row.delivery_id);
     }
   };
+  const publishAllQueued = (): void => {
+    for (const row of database
+      .prepare("SELECT delivery_id FROM session_delivery_outbox WHERE state = 'queued'")
+      .all() as { delivery_id: string }[]) {
+      publishOutbox(row.delivery_id);
+    }
+  };
   const releaseEnvelope = options.communication.subscribe(DELIVERY_EVENT, receiveEnvelope);
   const releaseAck = options.communication.subscribe(ACK_EVENT, receiveAck);
   const releaseReady = options.communication.onPeerReady(publishQueued);
@@ -314,13 +322,11 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
   }[]) {
     scheduleAdmission(row.delivery_id);
   }
-  for (const row of database
-    .prepare("SELECT delivery_id FROM session_delivery_outbox WHERE state = 'queued'")
-    .all() as {
-    delivery_id: string;
-  }[]) {
-    publishOutbox(row.delivery_id);
-  }
+  publishAllQueued();
+  // A publish only means the transport accepted the envelope. Repeat stable delivery
+  // IDs until the durable acknowledgement arrives, including after a tunnel restart.
+  const retryTimer = setInterval(publishAllQueued, 1_000);
+  retryTimer.unref();
 
   return Object.freeze({
     recipientKey: options.recipientKey,
@@ -380,6 +386,14 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
       } while (!closed);
       return state;
     },
+    receive(senderKey: string, kind: string, payload: unknown) {
+      if (kind === DELIVERY_EVENT) return receiveEnvelope(senderKey, payload);
+      if (kind === ACK_EVENT) {
+        receiveAck(senderKey, payload);
+        return 'accepted';
+      }
+      return undefined;
+    },
     inbox(query: DoomSessionInboxQuery = {}): readonly DoomSessionInboxEntry[] {
       const rows = database
         .prepare('SELECT * FROM session_delivery_inbox ORDER BY created_at, delivery_id')
@@ -433,6 +447,7 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
     async close(): Promise<void> {
       if (closed) return;
       closed = true;
+      clearInterval(retryTimer);
       releaseEnvelope();
       releaseAck();
       releaseReady();
