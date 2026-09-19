@@ -148,6 +148,17 @@ describe('generateExtension', () => {
     expect(result.changed).toEqual(['generated/web.ts']);
     expect(exists(dir, 'generated/web.ts')).toBe(false);
   });
+
+  it('removes a stale MCP entry when the package no longer has an MCP build', () => {
+    const dir = packageWith({
+      'src/extensions/(backend)/tool/grep.cli.ts': EMPTY,
+      'generated/mcp.ts': EMPTY,
+    });
+
+    generateExtension({ packageDir: dir });
+
+    expect(exists(dir, 'generated/mcp.ts')).toBe(false);
+  });
 });
 
 describe('doompiExtension', () => {

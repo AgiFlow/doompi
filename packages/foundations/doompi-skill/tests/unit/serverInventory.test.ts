@@ -83,13 +83,75 @@ describe('discoverServerSkills', () => {
     expect(catalog).toContain('house-style');
   });
 
-  it('keeps local-only package skills out of remote groups', async () => {
-    const root = await repository('plugins:\n  roots: [plugins]\n\ndomains:\n  workflow:\n    plugins: [workflow]\n');
-    await writePlugin(root, 'workflow', 'workflow-recovery', '@agimon-ai/doompi-workflow');
+  it('keeps minor modes other than computer-use and plan, plus git and user-feedback, local only', async () => {
+    const localOnlyPackages = [
+      '@agimon-ai/doompi-author',
+      '@agimon-ai/doompi-git',
+      '@agimon-ai/doompi-goal',
+      '@agimon-ai/doompi-help',
+      '@agimon-ai/doompi-loop',
+      '@agimon-ai/doompi-user-feedback',
+      '@agimon-ai/doompi-voice',
+      '@agimon-ai/doompi-workflow',
+    ];
+    const remotePackages = ['@agimon-ai/doompi-computer-use', '@agimon-ai/doompi-plan', '@example/catalog-plugin'];
+    const packages = [...localOnlyPackages, ...remotePackages];
+    const pluginNames = packages.map((_, index) => `plugin-${index}`);
+    const root = await repository(
+      `plugins:\n  roots: [plugins]\n\ndomains:\n  all:\n    plugins: [${pluginNames.join(', ')}]\n`,
+    );
+    await Promise.all(
+      packages.map((packageName, index) => writePlugin(root, pluginNames[index]!, `skill-${index}`, packageName)),
+    );
+
+    const { groups, inventory, mcpGroups } = await discoverServerSkills(execution(root), signal());
+    const localSkills = groups.flatMap((group) => group.skills.map((skill) => skill.name));
+    const remoteSkills = mcpGroups.flatMap((group) => group.skills.map((skill) => skill.name));
+
+    expect(localSkills).toEqual(packages.map((_, index) => `skill-${index}`));
+    expect(inventory.skills.map((skill) => skill.name)).toEqual(localSkills);
+    expect(remoteSkills).toEqual(remotePackages.map((_, index) => `skill-${index + localOnlyPackages.length}`));
+  });
+
+  it('fails closed for a malformed package identity without removing its local skill', async () => {
+    const root = await repository('plugins:\n  roots: [plugins]\n\ndomains:\n  local:\n    plugins: [broken]\n');
+    await writePlugin(root, 'broken', 'broken-skill');
+    await writeFile(path.join(root, 'plugins', 'broken', 'package.json'), '{"name":');
 
     const { groups, mcpGroups } = await discoverServerSkills(execution(root), signal());
 
-    expect(groups.flatMap((group) => group.skills.map((skill) => skill.name))).toContain('workflow-recovery');
-    expect(mcpGroups.flatMap((group) => group.skills.map((skill) => skill.name))).not.toContain('workflow-recovery');
+    expect(groups.flatMap((group) => group.skills.map((skill) => skill.name))).toEqual(['broken-skill']);
+    expect(mcpGroups.flatMap((group) => group.skills)).toEqual([]);
+  });
+
+  it('retains each domain skill subset when another domain loads the whole plugin', async () => {
+    const root = await repository(
+      [
+        'plugins:',
+        '  roots: [plugins]',
+        'domains:',
+        '  narrow:',
+        '    plugins:',
+        '      - name: toolkit',
+        '        skills: [selected]',
+        '  broad:',
+        '    plugins: [toolkit]',
+        '',
+      ].join('\n'),
+    );
+    await writePlugin(root, 'toolkit', 'selected', '@example/toolkit');
+    await writeSkill(path.join(root, 'plugins', 'toolkit', 'skills', 'other'), 'other');
+
+    const { groups, inventory, mcpGroups } = await discoverServerSkills(execution(root), signal());
+
+    expect(groups.find((group) => group.domain === 'narrow')?.skills.map((skill) => skill.name)).toEqual(['selected']);
+    expect(mcpGroups.find((group) => group.domain === 'narrow')?.skills.map((skill) => skill.name)).toEqual([
+      'selected',
+    ]);
+    expect(mcpGroups.find((group) => group.domain === 'broad')?.skills.map((skill) => skill.name)).toEqual([
+      'other',
+      'selected',
+    ]);
+    expect(inventory.skills.map((skill) => skill.name)).toEqual(['other', 'selected']);
   });
 });

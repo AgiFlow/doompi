@@ -8,6 +8,7 @@ import { type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
 import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
+import type { Context } from '@deepseek-ai/cordis';
 
 import { loadDoomConfig, resolvePlanningPlansDirectory } from '../../schemas/plan/config';
 import {
@@ -25,6 +26,12 @@ import {
   PLAN_STATUS_KEY,
   formatPlanStatus,
 } from '../../types/planApi';
+import {
+  DOOM_SUBAGENT_POLICY_SERVICE,
+  readDoomSubagentPolicyService,
+  type SubagentPolicy,
+  type SubagentPolicyHandle,
+} from '../optionalTeamServices';
 import {
   parseDebugEvidencePacket,
   PLAN_CONTINUE_TEXT,
@@ -87,6 +94,42 @@ const PLAN_MODE_ALLOWED_TOOLS = [
   'use_voice_tools',
   WRITE_PLAN_TOOL,
 ] as const;
+const PLAN_SUBAGENT_POLICY_OWNER = '@agimon-ai/doompi-plan';
+const PLAN_SUBAGENT_POLICY: SubagentPolicy = {
+  owner: PLAN_SUBAGENT_POLICY_OWNER,
+  allowedTools: ['read', 'bash', 'grep', 'find', 'ls', 'mcp'],
+  requiredTools: ['bash'],
+  allowMcpTools: true,
+  allowedExternalProfiles: [],
+  denyExtensions: false,
+};
+
+function serverPlanSubagentPolicy(host: DoomHeadlessHostService): (context: Context) => void {
+  return (context) => {
+    context.inject([DOOM_SUBAGENT_POLICY_SERVICE], (child) => {
+      const service = readDoomSubagentPolicyService(child);
+      if (!service) return undefined;
+      let handle: SubagentPolicyHandle | undefined;
+      const sync = (): void => {
+        if (modeSelected(host)) {
+          if (handle) handle.update(PLAN_SUBAGENT_POLICY);
+          else handle = service.register(PLAN_SUBAGENT_POLICY);
+        } else {
+          handle?.dispose();
+          handle = undefined;
+        }
+      };
+      sync();
+      child.effect(() => host.subscribeSelection(sync));
+      return () => handle?.dispose();
+    });
+  };
+}
+
+function modeSelected(host: DoomHeadlessHostService): boolean {
+  return (host.context.selection.state?.['minor-mode'] ?? []).includes(PLAN_MODE_ID);
+}
+
 function output(value: unknown, isError = false): DoomHeadlessToolResult {
   return {
     content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }],
@@ -101,7 +144,7 @@ export function createPlanServerSession(
   let flavor: PlanningFlavor = 'normal';
   let debugEvidence: DebugEvidencePacket | undefined;
   let modeOwner: MinorModeOwner | undefined;
-  const modeSelected = (): boolean => (host.context.selection.state?.['minor-mode'] ?? []).includes(PLAN_MODE_ID);
+  const selected = (): boolean => modeSelected(host);
   const homeDirectory = (): string => host.context.environment.HOME ?? os.homedir();
   // One resolution for the prompt and for write_plan. They named different directories before,
   // so the prompt could advertise a path the tool would not write to.
@@ -129,7 +172,7 @@ export function createPlanServerSession(
     host.context.client.setStatus(PLAN_STATUS_KEY, formatPlanStatus(title, planStampOf(writtenAt)));
   };
   const modeState = (): MinorModeState => {
-    const active = modeSelected();
+    const active = selected();
     return {
       activation: active ? 'active' : 'inactive',
       condition: 'ready',
@@ -164,7 +207,7 @@ export function createPlanServerSession(
     await session.appendCustomEntry(PLAN_MODEL_SNAPSHOT, null);
   };
   const selectPlan = async (enabled: boolean, nextFlavor = flavor): Promise<void> => {
-    const wasEnabled = modeSelected();
+    const wasEnabled = selected();
     const session = host.context.session;
     if (enabled && !wasEnabled) {
       const config = loadDoomConfig(host.context.repoRoot, homeDirectory()).modes?.planning?.main;
@@ -280,7 +323,7 @@ export function createPlanServerSession(
     },
   }).createOwner(undefined);
   return {
-    services: [serverMinorModes([modeOwner])],
+    services: [serverMinorModes([modeOwner]), serverPlanSubagentPolicy(host)],
     toolRestrictions: [
       {
         when: { state: { 'minor-mode': PLAN_MODE_ID } },
@@ -485,7 +528,7 @@ export function createPlanServerSession(
               formatPlanStatus(pointer.title, planStampOf(pointer.writtenAt)),
             );
           // Restore a saved model override if Plan was not restored with the session.
-          if (!modeSelected()) await restoreModel();
+          if (!selected()) await restoreModel();
         },
       },
     ],
