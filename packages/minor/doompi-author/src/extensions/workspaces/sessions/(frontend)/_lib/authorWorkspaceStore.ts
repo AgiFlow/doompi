@@ -411,19 +411,34 @@ export function addAuthorRegion(sessionId: string, region: AuthorRegionDraft): v
 
 export const addAuthorAnnotationDraft = addAuthorRegion;
 
-export function removeAuthorRegion(sessionId: string, regionId: string, expectedVersion?: number): void {
+export function removeAuthorRegion(
+  sessionId: string,
+  regionId: string,
+  expectedVersion?: number,
+  documentPath?: string,
+): void {
   let thumbnail: string | undefined;
   updateSession(sessionId, (session) => {
-    const annotation = session.annotations.find((candidate) => candidate.id === regionId);
-    if (annotation !== undefined && expectedVersion !== undefined && (annotation.version ?? 1) !== expectedVersion) {
+    const path = documentPath === undefined ? session.focusedDocument?.path : normalizeAuthorPath(documentPath);
+    if (path === undefined) return session;
+    const focused = session.focusedDocument?.path === path;
+    const collection = session.annotationsByDocument[path];
+    const current = focused ? session.annotations : collection?.annotations;
+    if (current === undefined) return session;
+    const annotation = current.find((candidate) => candidate.id === regionId);
+    if (annotation === undefined || (expectedVersion !== undefined && (annotation.version ?? 1) !== expectedVersion)) {
       return session;
     }
-    thumbnail = annotation?.thumbnailUrl;
-    const annotations = session.annotations.filter((candidate) => candidate.id !== regionId);
-    const path = session.focusedDocument?.path;
-    return annotations.length === session.annotations.length || path === undefined
-      ? session
-      : withFocusedCollection({ ...session, annotations, regions: annotations }, path, { annotations });
+    thumbnail = annotation.thumbnailUrl;
+    const annotations = current.filter((candidate) => candidate.id !== regionId);
+    if (focused) return withFocusedCollection({ ...session, annotations, regions: annotations }, path, { annotations });
+    return {
+      ...session,
+      annotationsByDocument: {
+        ...session.annotationsByDocument,
+        [path]: { ...collection, annotations, updatedAt: Date.now() },
+      },
+    };
   });
   if (thumbnail !== undefined) revokeThumbnail(thumbnail);
 }

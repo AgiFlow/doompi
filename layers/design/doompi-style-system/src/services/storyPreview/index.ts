@@ -164,16 +164,49 @@ const defaultDependencies: StoryPreviewServiceDependencies = {
   createHandle: randomUUID,
 };
 
+function pngCrc(data: Buffer): number {
+  let crc = 0xffffffff;
+  for (const byte of data) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
 function pngDimensions(image: Buffer): { width: number; height: number } {
-  if (
-    image.length < 24 ||
-    !image.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE) ||
-    image.toString('ascii', 12, 16) !== 'IHDR'
-  ) {
+  if (image.length < PNG_SIGNATURE.length || !image.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
     throw new Error('Style-system returned an invalid PNG image');
   }
-  const width = image.readUInt32BE(16);
-  const height = image.readUInt32BE(20);
+  let offset = PNG_SIGNATURE.length;
+  let width = 0;
+  let height = 0;
+  let chunks = 0;
+  let hasImageData = false;
+  let hasEnd = false;
+  while (offset < image.length) {
+    if (image.length - offset < 12) throw new Error('Style-system returned an invalid PNG image');
+    const length = image.readUInt32BE(offset);
+    const end = offset + 12 + length;
+    if (end > image.length) throw new Error('Style-system returned an invalid PNG image');
+    const type = image.toString('ascii', offset + 4, offset + 8);
+    if (!/^[A-Za-z]{4}$/u.test(type)) throw new Error('Style-system returned an invalid PNG image');
+    if (image.readUInt32BE(end - 4) !== pngCrc(image.subarray(offset + 4, end - 4))) {
+      throw new Error('Style-system returned an invalid PNG image');
+    }
+    if (chunks === 0) {
+      if (type !== 'IHDR' || length !== 13) throw new Error('Style-system returned an invalid PNG image');
+      width = image.readUInt32BE(offset + 8);
+      height = image.readUInt32BE(offset + 12);
+    } else if (type === 'IHDR') throw new Error('Style-system returned an invalid PNG image');
+    if (type === 'IDAT') hasImageData = true;
+    if (type === 'IEND') {
+      if (length !== 0 || end !== image.length) throw new Error('Style-system returned an invalid PNG image');
+      hasEnd = true;
+    }
+    chunks += 1;
+    offset = end;
+  }
+  if (!hasImageData || !hasEnd) throw new Error('Style-system returned an invalid PNG image');
   if (width === 0 || height === 0 || width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
     throw new Error('Style-system returned PNG dimensions outside the supported range');
   }

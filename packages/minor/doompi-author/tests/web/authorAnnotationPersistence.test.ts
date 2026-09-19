@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AUTHOR_ANNOTATION_EVIDENCE_BYTE_LIMIT,
+  IndexedDbAuthorAnnotationRepository,
   startAuthorAnnotationPersistence,
   validateAuthorAnnotationRecord,
   type AuthorAnnotationPersistenceRecord,
@@ -96,7 +97,7 @@ describe('Author annotation persistence', () => {
       replace: vi.fn(async (records) => {
         (writes as AuthorAnnotationPersistenceRecord[][]).push([...records]);
       }),
-      close: vi.fn(),
+      close: vi.fn(async () => undefined),
     };
     const stop = startAuthorAnnotationPersistence(repository);
 
@@ -112,7 +113,7 @@ describe('Author annotation persistence', () => {
     expect(authorDocumentAnnotations('s', 'notes.md')?.annotations.map(({ id }) => id)).toEqual(['newer']);
     expect(writes).toHaveLength(1);
     expect(writes[0]?.[0]?.collection.annotations[0]?.id).toBe('newer');
-    stop();
+    await stop();
     expect(repository.close).toHaveBeenCalledOnce();
   });
 
@@ -121,12 +122,52 @@ describe('Author annotation persistence', () => {
     const repository: AuthorAnnotationRepository = {
       load: async () => [record()],
       replace: vi.fn(async () => undefined),
-      close: vi.fn(),
+      close: vi.fn(async () => undefined),
     };
     const stop = startAuthorAnnotationPersistence(repository);
     await tick();
 
     expect(authorDocumentAnnotations('s', 'notes.md')).toMatchObject({ stale: true, sourceSha256: 'sha' });
-    stop();
+    await stop();
+  });
+
+  it('drains queued IndexedDB writes before closing the database', async () => {
+    let completeWrite!: () => void;
+    const close = vi.fn();
+    const transaction = {
+      objectStore: () => ({ clear: vi.fn(), put: vi.fn() }),
+      oncomplete: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+      onabort: null as (() => void) | null,
+      error: null,
+    };
+    completeWrite = () => transaction.oncomplete?.();
+    const database = {
+      objectStoreNames: { contains: () => true },
+      transaction: () => transaction,
+      close,
+    };
+    const request = {
+      result: database,
+      error: null,
+      onupgradeneeded: null as (() => void) | null,
+      onsuccess: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+    };
+    const repository = new IndexedDbAuthorAnnotationRepository({
+      open: () => {
+        queueMicrotask(() => request.onsuccess?.());
+        return request;
+      },
+    } as unknown as IDBFactory);
+
+    const write = repository.replace([record()]);
+    await tick();
+    const closing = repository.close();
+    await tick();
+    expect(close).not.toHaveBeenCalled();
+    completeWrite();
+    await Promise.all([write, closing]);
+    expect(close).toHaveBeenCalledOnce();
   });
 });

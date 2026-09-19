@@ -32,6 +32,7 @@ vi.mock('react', async (importOriginal) => ({
 }));
 type Props = {
   children?: ReactNode;
+  value?: unknown;
   'aria-label'?: string;
   disabled?: boolean;
   onClick?: (event: { currentTarget: { getBoundingClientRect: () => { width: number; height: number } } }) => void;
@@ -103,14 +104,16 @@ describe('Author editing controls', () => {
       expect(workspace.authorSessionWorkspace('s').activeTool).toBe('comment');
     }
   });
-  it('commits a commented draft and removes its region', () => {
+  it('controls the candidate comment from workspace state, commits it, and removes its region', () => {
     workspace.setAuthorRegionCandidate('s', region);
-    hooks.values = ['Keep this'];
     let controls = nodes(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') }));
-    controls.find((node) => node.type === 'textarea')!.props.onChange!({ target: { value: 'Typed' } });
-    expect(hooks.setters[0]).toHaveBeenCalledWith('Typed');
+    const textarea = controls.find((node) => node.type === 'textarea')!;
+    expect(textarea.props.value).toBe('');
+    textarea.props.onChange!({ target: { value: 'Typed' } });
+    controls = nodes(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') }));
+    expect(controls.find((node) => node.type === 'textarea')!.props.value).toBe('Typed');
     controls.find((node) => node.props.children === 'add annotation')!.props.onClick!(event);
-    expect(workspace.authorSessionWorkspace('s').regions[0]?.comment).toBe('Keep this');
+    expect(workspace.authorSessionWorkspace('s').regions[0]?.comment).toBe('Typed');
     controls = nodes(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') }));
     controls.find((node) => node.props['aria-label'] === 'Remove annotation 1')!.props.onClick!(event);
     expect(workspace.authorSessionWorkspace('s').regions).toEqual([]);
@@ -122,7 +125,7 @@ describe('Author editing controls', () => {
     const add = controls.find((node) => node.props.children === 'add annotation')!;
     expect(add.props.disabled).toBe(true);
     add.props.onClick!(event);
-    expect(hooks.setters[1]).toHaveBeenCalledWith('Every Author annotation requires a comment.');
+    expect(hooks.setters[0]).toHaveBeenCalledWith('Every Author annotation requires a comment.');
   });
   it.each(['csv', 'xlsx', 'slides', 'pptx'] as const)(
     'marks and edits native %s fragments with matching grid anchors',

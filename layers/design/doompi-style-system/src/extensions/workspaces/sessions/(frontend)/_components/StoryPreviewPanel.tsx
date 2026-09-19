@@ -341,10 +341,10 @@ export function StoryPreviewPanel({
       annotationExportRef.current === preview.handle
     )
       return;
-    annotationExportRef.current = preview.handle;
     const generation = generationRef.current;
     void image().then((result) => {
       if (result === undefined || generationRef.current !== generation) return;
+      annotationExportRef.current = preview.handle;
       setAnnotationImage(result);
       setStatus('Frozen source-backed image ready for Author annotations.');
     });

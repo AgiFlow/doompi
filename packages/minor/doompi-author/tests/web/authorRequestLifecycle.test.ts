@@ -9,6 +9,7 @@ import type { AuthorRegionDraft } from '../../src/extensions/workspaces/sessions
 import {
   addAuthorRegion,
   authorDocument,
+  authorDocumentAnnotations,
   authorSessionWorkspace,
   authorWorkspace,
   completeAuthorSave,
@@ -82,7 +83,7 @@ describe('Author request lifecycle', () => {
     expect(authorSessionWorkspace('s1').requests[0]).toMatchObject({ status: 'CHANGED', revision: 1 });
   });
 
-  it('keeps a draft edited after capture while accepting its matching captured version', () => {
+  it('consumes matching captured versions from their document while another document is focused', () => {
     const document = putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', sourceSha256: 'sha' });
     focusAuthorDocument('s1', document.path, document.version, document.sourceSha256);
     const region: AuthorRegionDraft = {
@@ -96,9 +97,15 @@ describe('Author request lifecycle', () => {
       viewport: { width: 800, height: 600 },
       createdAt: 1,
     };
+    const matching = { ...region, id: 'r2', comment: 'second' };
     addAuthorRegion('s1', region);
-    const context = authorCaptureContext(createAuthorCapturePacket('capture-versioned', 2, document, [region]));
+    addAuthorRegion('s1', matching);
+    const context = authorCaptureContext(
+      createAuthorCapturePacket('capture-versioned', 2, document, [region, matching]),
+    );
     updateAuthorRegionComment('s1', region.id, 'newer');
+    const other = putAuthorDocument('s1', { path: 'other.md', kind: 'markdown', sourceSha256: 'other' });
+    focusAuthorDocument('s1', other.path, other.version, other.sourceSha256);
 
     recordAuthorComposerSubmission({
       sessionId: 's1',
@@ -108,9 +115,13 @@ describe('Author request lifecycle', () => {
       contextItems: [context],
     });
 
-    expect(authorSessionWorkspace('s1').annotations).toMatchObject([{ id: 'r1', version: 2, comment: 'newer' }]);
+    expect(authorSessionWorkspace('s1').focusedDocument?.path).toBe('other.md');
+    expect(authorDocumentAnnotations('s1', 'notes.md')?.annotations).toMatchObject([
+      { id: 'r1', version: 2, comment: 'newer' },
+    ]);
     expect(authorSessionWorkspace('s1').requests[0]?.regions).toMatchObject([
       { id: 'r1', version: 1, comment: 'first' },
+      { id: 'r2', version: 1, comment: 'second' },
     ]);
   });
 

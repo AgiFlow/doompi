@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { deflateSync } from 'node:zlib';
 
 import type { BaseBundlerService, DesignSystemConfig } from '@agimon-ai/style-system';
 
@@ -11,13 +12,39 @@ function config(): DesignSystemConfig {
   return {} as DesignSystemConfig;
 }
 
-function png(width = 320, height = 180, size = 24): Buffer {
-  const image = Buffer.alloc(size);
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(image);
-  image.write('IHDR', 12, 'ascii');
-  image.writeUInt32BE(width, 16);
-  image.writeUInt32BE(height, 20);
-  return image;
+function crc32(data: Buffer): number {
+  let crc = 0xffffffff;
+  for (const byte of data) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data = Buffer.alloc(0)): Buffer {
+  const name = Buffer.from(type, 'ascii');
+  const chunk = Buffer.alloc(data.length + 12);
+  chunk.writeUInt32BE(data.length);
+  name.copy(chunk, 4);
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(crc32(Buffer.concat([name, data])), chunk.length - 4);
+  return chunk;
+}
+
+function png(width = 320, height = 180, size?: number): Buffer {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 6;
+  const rows = Buffer.alloc(height * (1 + width * 4));
+  const image = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', deflateSync(rows)),
+    pngChunk('IEND'),
+  ]);
+  return size === undefined || size <= image.length ? image : Buffer.concat([image, Buffer.alloc(size - image.length)]);
 }
 
 describe('StoryPreviewService', () => {
@@ -193,9 +220,17 @@ describe('StoryPreviewService', () => {
     fs.mkdirSync(imageRoot, { recursive: true });
     fs.writeFileSync(story, "export default { title: 'Button' }; export const Primary = {};\n");
 
+    const valid = png();
+    const badCrc = Buffer.from(valid);
+    badCrc[29] ^= 1;
+    const signature = valid.subarray(0, 8);
     for (const [name, image, error] of [
       ['large.png', png(320, 180, 2 * 1024 * 1024 + 1), 'oversized PNG'],
       ['bad.png', Buffer.from('not png'), 'invalid PNG'],
+      ['truncated.png', valid.subarray(0, valid.length - 1), 'invalid PNG'],
+      ['missing-end.png', valid.subarray(0, valid.length - 12), 'invalid PNG'],
+      ['bad-crc.png', badCrc, 'invalid PNG'],
+      ['wrong-first-chunk.png', Buffer.concat([signature, pngChunk('IDAT'), pngChunk('IEND')]), 'invalid PNG'],
       ['wide.png', png(1601, 180), 'dimensions outside'],
     ] as const) {
       const imagePath = path.join(imageRoot, name);

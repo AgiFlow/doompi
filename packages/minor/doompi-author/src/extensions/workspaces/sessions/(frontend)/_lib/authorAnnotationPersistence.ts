@@ -21,7 +21,7 @@ export interface AuthorAnnotationPersistenceRecord extends AuthorAnnotationHydra
 export interface AuthorAnnotationRepository {
   load(): Promise<readonly unknown[]>;
   replace(records: readonly AuthorAnnotationPersistenceRecord[]): Promise<void>;
-  close(): void;
+  close(): Promise<void>;
 }
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -208,14 +208,19 @@ export class IndexedDbAuthorAnnotationRepository implements AuthorAnnotationRepo
     return this.#writes;
   }
 
-  close(): void {
-    void this.#database.then((database) => database.close()).catch(() => undefined);
+  async close(): Promise<void> {
+    try {
+      await this.#writes;
+    } finally {
+      const database = await this.#database;
+      database.close();
+    }
   }
 }
 
-export function startAuthorAnnotationPersistence(repository?: AuthorAnnotationRepository): () => void {
+export function startAuthorAnnotationPersistence(repository?: AuthorAnnotationRepository): () => Promise<void> {
   const factory = typeof indexedDB === 'undefined' ? undefined : indexedDB;
-  if (repository === undefined && factory === undefined) return () => undefined;
+  if (repository === undefined && factory === undefined) return async () => undefined;
   const storage = repository ?? new IndexedDbAuthorAnnotationRepository(factory!);
   let stopped = false;
   let hydrated = false;
@@ -238,12 +243,13 @@ export function startAuthorAnnotationPersistence(repository?: AuthorAnnotationRe
       if (dirty || records.length > 0) void storage.replace(persistenceRecords()).catch(() => undefined);
     })
     .catch(() => {
+      if (stopped) return;
       hydrated = true;
       if (dirty) void storage.replace(persistenceRecords()).catch(() => undefined);
     });
-  return () => {
+  return async () => {
     stopped = true;
     subscription.unsubscribe();
-    storage.close();
+    await storage.close();
   };
 }
