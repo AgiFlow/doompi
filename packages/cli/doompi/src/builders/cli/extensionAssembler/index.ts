@@ -142,6 +142,7 @@ const FIXED_CORE_PACKAGES = new Set([
   '@agimon-ai/doompi-minor-mode',
   '@agimon-ai/doompi-notification',
   '@agimon-ai/doompi-profile',
+  '@agimon-ai/doompi-session',
   '@agimon-ai/doompi-skill',
   '@agimon-ai/doompi-ui',
 ]);
@@ -166,6 +167,7 @@ const CORE_PACKAGE_ENTRIES = {
   minorMode: '@agimon-ai/doompi-minor-mode/extensions/pi',
   notification: '@agimon-ai/doompi-notification/extensions/pi',
   profile: '@agimon-ai/doompi-profile/extensions/pi',
+  session: '@agimon-ai/doompi-session/extensions/pi',
   skill: '@agimon-ai/doompi-skill/extensions/pi',
   ui: '@agimon-ai/doompi-ui/extensions/pi',
 } as const;
@@ -467,6 +469,7 @@ function parentActivation(
     resolve.packageEntry(CORE_PACKAGE_ENTRIES.minorMode),
     resolve.ownEntry(OWN_ENTRIES.contextCatalog),
     resolve.packageEntry(CORE_PACKAGE_ENTRIES.config),
+    resolve.packageEntry(CORE_PACKAGE_ENTRIES.session),
     resolve.ownEntry(OWN_ENTRIES.transitionCoordinator),
     resolve.packageEntry(CORE_PACKAGE_ENTRIES.ui),
   ];
@@ -501,6 +504,7 @@ function childActivation(
     resolve.ownEntry(OWN_ENTRIES.cordisHost),
     resolve.ownEntry(OWN_ENTRIES.terminalChildSession),
     resolve.packageEntry(CORE_PACKAGE_ENTRIES.config),
+    resolve.packageEntry(CORE_PACKAGE_ENTRIES.session),
     ...distributionPaths,
     ...featurePaths,
   ];

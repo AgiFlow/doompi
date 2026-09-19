@@ -1,3 +1,4 @@
+import { readDoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
 import { readDoomChildSessionService } from '@agimon-ai/doompi-core/child';
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import {
@@ -27,6 +28,7 @@ import {
 } from '@agimon-ai/doompi-core/readiness';
 import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { provideBackgroundWorkService } from '@agimon-ai/doompi-session';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
@@ -562,7 +564,13 @@ const createTeamRootExtension =
         },
         sessionShutdown,
       },
-      services: [collaboration.plugin, runtimeService],
+      services: [
+        (context: Context) => {
+          if (readDoomBackgroundWorkService(context) === undefined) provideBackgroundWorkService(context);
+        },
+        collaboration.plugin,
+        runtimeService,
+      ],
       onStart() {
         completionNotifier.attachHost(pi);
         pollScheduler.start();

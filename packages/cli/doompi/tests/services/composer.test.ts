@@ -469,6 +469,7 @@ describe('composeLoadOrder', () => {
       '/own/cordisHost.ts',
       '/own/terminalChildSession.ts',
       '/pkg/@agimon-ai/doompi-config/extensions/pi',
+      '/pkg/@agimon-ai/doompi-session/extensions/pi',
       ...configuredDefaultPackages.map((name) => `/pkg/${name}`),
       '/pkg/@agimon-ai/doompi-team',
       '/pkg/@agimon-ai/doompi-user-feedback',

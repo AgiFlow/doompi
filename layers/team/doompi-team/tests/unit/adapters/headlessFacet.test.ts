@@ -1,5 +1,10 @@
 import * as fs from 'node:fs';
 
+import {
+  DOOM_BACKGROUND_WORK_SERVICE,
+  type BackgroundWorkProvider,
+  type DoomBackgroundWorkService,
+} from '@agimon-ai/doompi-core/background-work';
 import { DOOM_DELEGATION_SERVICE, type DoomDelegationService } from '@agimon-ai/doompi-core/delegation';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
@@ -60,6 +65,18 @@ async function fixture(options: { serverHost?: unknown } = {}) {
   let runtime: TeamExtensionRuntime | undefined;
   let context!: Context;
 
+  const backgroundWork: DoomBackgroundWorkService = {
+    generation: 'test-background-work',
+    register(provider: BackgroundWorkProvider) {
+      return {
+        provider: provider.provider,
+        generation: `test:${provider.provider}`,
+        update: vi.fn(),
+        dispose: vi.fn(),
+      };
+    },
+    snapshot: () => ({ items: [], errors: [] }),
+  };
   const registration = () => {
     const dispose = vi.fn();
     disposers.push(dispose);
@@ -96,6 +113,7 @@ async function fixture(options: { serverHost?: unknown } = {}) {
   };
   context = {
     get: (name: string) => {
+      if (name === DOOM_BACKGROUND_WORK_SERVICE) return backgroundWork;
       if (name === DOOM_HEADLESS_HOST_SERVICE) return host;
       if (name === DOOM_SERVER_HOST_SERVICE) return serverHost;
       return undefined;

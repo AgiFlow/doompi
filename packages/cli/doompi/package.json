@@ -294,6 +294,7 @@
     "@agimon-ai/doompi-minor-mode": "workspace:*",
     "@agimon-ai/doompi-notification": "workspace:*",
     "@agimon-ai/doompi-profile": "workspace:*",
+    "@agimon-ai/doompi-session": "workspace:*",
     "@agimon-ai/doompi-skill": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",

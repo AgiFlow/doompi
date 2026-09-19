@@ -21,6 +21,7 @@ const FIXED_CORE_DEPENDENCIES = [
   '@agimon-ai/doompi-major-mode',
   '@agimon-ai/doompi-notification',
   '@agimon-ai/doompi-profile',
+  '@agimon-ai/doompi-session',
   '@agimon-ai/doompi-skill',
   '@agimon-ai/doompi-telemetry',
   '@agimon-ai/doompi-ui',

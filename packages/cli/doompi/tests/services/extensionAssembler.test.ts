@@ -164,12 +164,13 @@ describe('standard extension composition', () => {
     const config = modes({ feature: layer({ packages: ['feature-package'] }) });
     const entries = assembleExtensions(context(config));
 
-    expect(entries.slice(0, 7)).toEqual([
+    expect(entries.slice(0, 8)).toEqual([
       '/own/cordisHost.ts',
       '/own/terminalChildSession.ts',
       '/package/@agimon-ai/doompi-minor-mode/extensions/pi.mjs',
       '/own/contextCatalog.ts',
       '/package/@agimon-ai/doompi-config/extensions/pi.mjs',
+      '/package/@agimon-ai/doompi-session/extensions/pi.mjs',
       '/own/transitionCoordinator.ts',
       '/package/@agimon-ai/doompi-ui/extensions/pi.mjs',
     ]);

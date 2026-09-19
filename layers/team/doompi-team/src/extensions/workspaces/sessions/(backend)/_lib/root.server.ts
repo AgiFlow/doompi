@@ -1,16 +1,16 @@
-import { DOOM_BACKGROUND_WORK_SERVICE } from '@agimon-ai/doompi-core/background-work';
+import { readDoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
 import { readDoomChildSessionService } from '@agimon-ai/doompi-core/child';
 import { DOOM_DELEGATION_SERVICE } from '@agimon-ai/doompi-core/delegation';
 import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
 import type { DoomHeadlessActivity } from '@agimon-ai/doompi-core/headless';
 import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import { provideBackgroundWorkService } from '@agimon-ai/doompi-session';
 import type { Context } from '@deepseek-ai/cordis';
 
 import { DOOM_SUBAGENT_POLICY_SERVICE } from '../../../../../schemas/subagentPolicy';
 import { resolveActiveTeamModelSpecs } from '../../../../../services/agentDiscovery';
 import type { NativeAsyncJobProjection, TrackedAsyncJob } from '../../../../../services/asyncJobTracker';
-import { createBackgroundWorkService } from '../../../../../services/backgroundWorkService';
 import { loadConfig } from '../../../../../services/config';
 import { createDelegationBridge } from '../../../../../services/delegationBridge';
 import { registerDirectRunBackgroundWork } from '../../../../../services/directRunBackgroundWork';
@@ -265,8 +265,8 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
           captureForkSource: () => execution.session?.forkSource?.(),
         }),
       );
-      const backgroundWork = createBackgroundWorkService(providerContext);
-      providerContext.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork);
+      const backgroundWork = readDoomBackgroundWorkService(providerContext);
+      if (backgroundWork === undefined) throw new Error('Team requires the DoomPi Session foundation.');
       registerDirectRunBackgroundWork(providerContext, backgroundWork, execution.sessionId, runtime.asyncJobTracker);
       providerContext.provide(DOOM_SUBAGENT_POLICY_SERVICE, createSubagentPolicyService(runtime.capabilityPolicies));
     });
@@ -324,7 +324,12 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
       directEvents,
       environment: serverHost.context.environment,
     },
-    services: [serverService],
+    services: [
+      (context: Context) => {
+        if (readDoomBackgroundWorkService(context) === undefined) provideBackgroundWorkService(context);
+      },
+      serverService,
+    ],
     activities: [activity],
     // Mirrors `root.cli.ts`, which starts the scheduler in its own `onStart`.
     // Without this the delegation bridge's progress subscription never ticks
