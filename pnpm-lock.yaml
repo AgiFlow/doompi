@@ -2667,6 +2667,9 @@ importers:
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
         version: link:../../foundations/doompi-minor-mode
+      '@agimon-ai/doompi-session':
+        specifier: workspace:*
+        version: link:../../foundations/doompi-session
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../foundations/doompi-telemetry

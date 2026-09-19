@@ -141,13 +141,16 @@ describe('global remote control', () => {
     const peerInbox = await tunnel(port, '/api/plugins/session-peer/inbox', 'POST', {}, undefined, false);
     expect(peerInbox.status).toBe(200);
     expect(await peerInbox.json()).toEqual({ path: '/api/plugins/session-peer/inbox' });
+    const voicePeer = await tunnel(port, '/api/plugins/voice/peer', 'POST', {}, undefined, false);
+    expect(voicePeer.status).toBe(200);
+    expect(await voicePeer.json()).toEqual({ path: '/api/plugins/voice/peer' });
     const token = await tunnel(port, '/oauth/token', 'POST', {}, undefined, false);
     expect(token.status).toBe(200);
     expect(await token.json()).toEqual({ path: '/oauth/token' });
     expect((await tunnel(port, '/api/plugins/session-peer/other', 'POST', {}, undefined, false)).status).toBe(403);
     expect((await tunnel(port, '/api/workspaces/work/sessions/session/mcp/clients')).status).toBe(401);
     expect((await tunnel(port, '/oauth/register', 'POST', {})).status).toBe(401);
-    expect(forward).toHaveBeenCalledTimes(4);
+    expect(forward).toHaveBeenCalledTimes(5);
   });
 
   it('completes session MCP OAuth and lists tools through the public tunnel', async () => {

@@ -16,8 +16,10 @@ export interface SessionPeer {
   readonly hostId: string;
   readonly url: string;
   readonly secret: string;
-  /** Explicit remote targets this peer may deliver to. Empty means no delivery grant. */
+  /** Explicit remote durable-message targets. Empty means no delivery grant. */
   readonly allowedSessionIds: readonly string[];
+  /** Explicit remote Voice media targets. Empty means no media grant. */
+  readonly allowedVoiceSessionIds: readonly string[];
 }
 
 export interface SessionPeerConfig {
@@ -58,8 +60,18 @@ function peerOf(value: unknown): SessionPeer | undefined {
     Array.isArray(record.allowedSessionIds) && record.allowedSessionIds.every(validId)
       ? record.allowedSessionIds
       : undefined;
+  const allowedVoiceSessionIds =
+    Array.isArray(record.allowedVoiceSessionIds) && record.allowedVoiceSessionIds.every(validId)
+      ? record.allowedVoiceSessionIds
+      : [];
   if (allowedSessionIds === undefined || record.secret.length < 32) return undefined;
-  return { hostId: record.hostId, url: url.toString(), secret: record.secret, allowedSessionIds };
+  return {
+    hostId: record.hostId,
+    url: url.toString(),
+    secret: record.secret,
+    allowedSessionIds,
+    allowedVoiceSessionIds,
+  };
 }
 
 export function sessionPeerConfigPath(homeDirectory: string): string {

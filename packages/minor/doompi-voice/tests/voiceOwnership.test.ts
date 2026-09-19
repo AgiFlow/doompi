@@ -118,6 +118,13 @@ describe('voice ownership protocol', () => {
       parseBrowserVoiceOwnershipPayload({
         type: 'browser-media-session',
         version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+        activeSessionId: 'peer/work-host/voice-session',
+      }),
+    ).toBeDefined();
+    expect(
+      parseBrowserVoiceOwnershipPayload({
+        type: 'browser-media-session',
+        version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
         activeSessionId: 'session-a',
         acknowledgement: true,
       }),

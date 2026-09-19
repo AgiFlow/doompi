@@ -9,7 +9,13 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
 
-import { DOOM_API_CALLER_HEADERS, parseDoomSocketPath, type DoomApiMount } from '../exports/packageApi';
+import {
+  DOOM_API_CALLER_HEADERS,
+  DOOM_API_CALLER_LOCALITY_HEADER,
+  DOOM_API_CALLER_STEP_UP_HEADER,
+  parseDoomSocketPath,
+  type DoomApiMount,
+} from '../exports/packageApi';
 import type { TranscriptPage, TranscriptPageRequest } from '../exports/sessionProtocol';
 import type { OpenSessionRecord } from '../services/openSessionRegistry';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
@@ -667,6 +673,10 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
           (trustedCaller || !DOOM_API_CALLER_HEADERS.includes(name as (typeof DOOM_API_CALLER_HEADERS)[number]))
         )
           headers.set(name, Array.isArray(value) ? value.join(', ') : value);
+      }
+      if (!trustedCaller) {
+        headers.set(DOOM_API_CALLER_LOCALITY_HEADER, 'local');
+        headers.set(DOOM_API_CALLER_STEP_UP_HEADER, 'not-required');
       }
       const abort = new AbortController();
       const disconnected = (): void => {

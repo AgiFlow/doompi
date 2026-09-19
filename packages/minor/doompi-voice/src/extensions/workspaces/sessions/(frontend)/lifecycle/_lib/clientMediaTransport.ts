@@ -1,7 +1,7 @@
 import type { ApiResult } from '@agimon-ai/doompi-core/web';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
-import { voiceMedia } from '../../../../../../../generated/client';
+import { voice, voiceMedia } from '../../../../../../../generated/client';
 import {
   VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
@@ -19,9 +19,10 @@ import {
   VOICE_MEDIA_PLAYBACK_STATE_HEADER,
   type VoiceMediaWake,
   VOICE_MEDIA_PROTOCOL_VERSION,
+  VOICE_MEDIA_ROUTES,
   type VoiceMediaTransport,
 } from '../../../../../../types/clientMedia';
-import type { RealtimeBrowserState } from '../../../../../../types/realtime';
+import { REALTIME_ROUTES, type RealtimeBrowserState } from '../../../../../../types/realtime';
 import { parseVoiceMediaWakePayload, waitForVoiceMediaWake } from '../../_lib/voiceMediaWakeStore';
 
 const JSON_CONTENT_TYPE = 'application/json';
@@ -76,6 +77,12 @@ function jsonBody(value: object): RequestInit {
   return { method: 'POST', headers: { 'content-type': JSON_CONTENT_TYPE }, body: JSON.stringify(value) };
 }
 
+function route(path: string, query: Record<string, string | number | undefined> = {}): string {
+  const url = new URL(path, 'http://doompi.local');
+  for (const [name, value] of Object.entries(query)) if (value !== undefined) url.searchParams.set(name, String(value));
+  return `${url.pathname}${url.search}`;
+}
+
 function cancelResponseBody(response: Response | undefined): void {
   try {
     void response?.body?.cancel().catch(() => undefined);
@@ -90,6 +97,8 @@ async function boundedControlRequest<T>(
   deadlineMs: number,
   consume: (response: Response) => Promise<T> | T,
   parentSignal?: AbortSignal,
+  transport: (input: string, init: RequestInit) => Promise<Response> = (input, init) =>
+    sealedTransport.fetch(input, init),
 ): Promise<T> {
   const deadlineController = new AbortController();
   const signal = parentSignal ?? deadlineController.signal;
@@ -115,7 +124,7 @@ async function boundedControlRequest<T>(
 
   let fetched: Promise<Response>;
   try {
-    fetched = sealedTransport.fetch(input, { ...init, signal });
+    fetched = transport(input, { ...init, signal });
   } catch (error) {
     clearTimeout(timer);
     parentSignal?.removeEventListener('abort', abortParent);
@@ -142,6 +151,7 @@ async function boundedControlRequest<T>(
 export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
   private push: PushConnection | undefined;
   private controlLocation: 'local' | 'remote' | undefined;
+  private binding: { id: string; connectionId: string; expiresAt: number } | undefined;
 
   public constructor(private readonly sessionId: string) {}
 
@@ -153,6 +163,82 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
    */
   private media(): ReturnType<typeof voiceMedia.session> {
     return voiceMedia.session(this.sessionId);
+  }
+
+  private remote(): boolean {
+    return /^peer\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(this.sessionId);
+  }
+
+  private async fetch(path: string, directUrl: string, init: RequestInit = {}): Promise<Response> {
+    if (!this.remote()) return sealedTransport.fetch(directUrl, init);
+    const request = new Request(new URL(path, 'http://doompi.local'), init);
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    const requestUrl = new URL(request.url);
+    let connectionId = requestUrl.searchParams.get('connectionId') ?? undefined;
+    if (!connectionId && bytes.byteLength > 0) {
+      try {
+        const value = JSON.parse(new TextDecoder().decode(bytes)) as { connectionId?: unknown };
+        if (typeof value.connectionId === 'string') connectionId = value.connectionId;
+      } catch {
+        connectionId = undefined;
+      }
+    }
+    if (!connectionId) throw new Error('Paired Voice request has no connection binding.');
+    if (
+      !this.binding ||
+      this.binding.connectionId !== connectionId ||
+      this.binding.expiresAt <= Date.now() + CONTROL_REQUEST_DEADLINE_MS
+    ) {
+      const issued = await voice.global.relayBinding({ body: { target: this.sessionId, connectionId } });
+      if (!issued.ok) throw resultError(issued);
+      const value = issued.data as { binding?: unknown; expiresAt?: unknown };
+      if (typeof value.binding !== 'string' || !Number.isSafeInteger(value.expiresAt))
+        throw new Error('Paired Voice media binding is invalid.');
+      this.binding = { id: value.binding, connectionId, expiresAt: value.expiresAt as number };
+    }
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    const result = await voice.global.relay({
+      query: { binding: this.binding.id },
+      body: {
+        targetSessionId: '',
+        method: request.method === 'GET' ? 'GET' : 'POST',
+        path,
+        headers: [...request.headers.entries()],
+        body: btoa(binary),
+      },
+    });
+    if (!result.ok) throw resultError(result);
+    const envelope = result.data as { status?: unknown; headers?: unknown; body?: unknown };
+    if (!Number.isSafeInteger(envelope.status) || !Array.isArray(envelope.headers) || typeof envelope.body !== 'string')
+      throw new Error('Paired Voice relay response is invalid.');
+    const decoded = atob(envelope.body);
+    const body = Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+    return new Response(body.byteLength === 0 ? null : body, {
+      status: envelope.status as number,
+      headers: envelope.headers as Array<[string, string]>,
+    });
+  }
+
+  private async remoteResult<T>(path: string, directUrl: string, init: RequestInit): Promise<ApiResult<T>> {
+    const response = await this.fetch(path, directUrl, init);
+    let data: unknown;
+    try {
+      data = response.status === 204 ? undefined : await response.json();
+    } catch {
+      data = undefined;
+    }
+    if (response.ok) return { ok: true, status: response.status, data: data as T, response };
+    return {
+      ok: false,
+      status: response.status,
+      error:
+        typeof data === 'object' && data !== null && 'error' in data && typeof data.error === 'string'
+          ? data.error
+          : `Voice media request failed with status ${String(response.status)}.`,
+      data,
+      response,
+    };
   }
 
   public async connect(
@@ -183,11 +269,15 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
 
   public async disconnect(clientId: string, connectionId: string): Promise<void> {
     try {
-      const result = await this.media().clientDisconnect({ body: { clientId, connectionId } });
+      const body = { clientId, connectionId };
+      const result = this.remote()
+        ? await this.remoteResult(VOICE_MEDIA_ROUTES.clientDisconnect, '', jsonBody(body))
+        : await this.media().clientDisconnect({ body });
       if (!result.ok && result.status !== 409) throw resultError(result);
     } finally {
       this.push = undefined;
       this.controlLocation = undefined;
+      this.binding = undefined;
     }
   }
 
@@ -218,16 +308,17 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     capabilities: VoiceMediaCapabilities,
     controlLocation: 'local' | 'remote',
   ): Promise<ApiResult<VoiceMediaConnectResult>> {
-    return this.media().clientConnect({
-      body: {
-        version: VOICE_MEDIA_PROTOCOL_VERSION,
-        clientId,
-        connectionId,
-        clientKind: 'browser',
-        controlLocation,
-        capabilities,
-      },
-    });
+    const body = {
+      version: VOICE_MEDIA_PROTOCOL_VERSION,
+      clientId,
+      connectionId,
+      clientKind: 'browser' as const,
+      controlLocation,
+      capabilities,
+    };
+    return this.remote()
+      ? this.remoteResult(VOICE_MEDIA_ROUTES.clientConnect, '', jsonBody(body))
+      : this.media().clientConnect({ body });
   }
 
   private async fetchEvent(
@@ -237,15 +328,19 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     signal: AbortSignal,
     nonblocking: boolean,
   ): Promise<VoiceMediaClientEvent | undefined> {
+    const path = route(VOICE_MEDIA_ROUTES.clientEvents, {
+      clientId,
+      connectionId,
+      after,
+      ...(nonblocking ? { wait: VOICE_MEDIA_EVENT_WAIT_NONE } : {}),
+    });
+    const directUrl = this.remote()
+      ? ''
+      : this.media().clientEvents.url({
+          query: { clientId, connectionId, after, ...(nonblocking ? { wait: VOICE_MEDIA_EVENT_WAIT_NONE } : {}) },
+        });
     return boundedControlRequest(
-      this.media().clientEvents.url({
-        query: {
-          clientId,
-          connectionId,
-          after,
-          ...(nonblocking ? { wait: VOICE_MEDIA_EVENT_WAIT_NONE } : {}),
-        },
-      }),
+      directUrl,
       {},
       CONTROL_REQUEST_DEADLINE_MS,
       async (response) => {
@@ -254,12 +349,15 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
         return (await response.json()) as VoiceMediaClientEvent;
       },
       signal,
+      (_input, init) => this.fetch(path, directUrl, init),
     );
   }
 
   private heartbeat(clientId: string, connectionId: string): Promise<VoiceMediaWake> {
+    const path = VOICE_MEDIA_ROUTES.clientHeartbeat;
+    const directUrl = this.remote() ? '' : this.media().clientHeartbeat.url();
     return boundedControlRequest(
-      this.media().clientHeartbeat.url(),
+      directUrl,
       jsonBody({ clientId, connectionId }),
       CONTROL_REQUEST_DEADLINE_MS,
       async (response) => {
@@ -268,6 +366,8 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
         if (wake === null) throw new Error('Voice media heartbeat response is invalid.');
         return wake;
       },
+      undefined,
+      (_input, init) => this.fetch(path, directUrl, init),
     );
   }
 
@@ -278,29 +378,28 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     pcm: Uint8Array,
     activity?: VoiceMediaCaptureActivity,
   ): Promise<void> {
-    const result = await this.media().clientAudio({
-      query: { clientId, connectionId, captureId },
-      headers: {
-        'content-type': VOICE_MEDIA_CONTENT_TYPE,
-        ...(activity === undefined
-          ? {}
-          : {
-              [VOICE_MEDIA_ACTIVITY_STATE_HEADER]: activity.state,
-              [VOICE_MEDIA_ACTIVITY_LEVEL_HEADER]: String(activity.levelDbfs),
-              [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: String(activity.elapsedMs),
-              ...(activity.epoch === undefined ? {} : { [VOICE_MEDIA_ACTIVITY_EPOCH_HEADER]: String(activity.epoch) }),
-              ...(activity.classifiedSpeechMs === undefined
-                ? {}
-                : { [VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER]: String(activity.classifiedSpeechMs) }),
-              ...(activity.echoDiscriminatedSpeechMs === undefined
-                ? {}
-                : { [VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER]: String(activity.echoDiscriminatedSpeechMs) }),
-            }),
-      },
-      // A Blob, because the sealed relay carries one verbatim; a plain typed
-      // array would be JSON-encoded into an object of indices.
-      body: new Blob([new Uint8Array(pcm)], { type: VOICE_MEDIA_CONTENT_TYPE }),
-    });
+    const query = { clientId, connectionId, captureId };
+    const headers = {
+      'content-type': VOICE_MEDIA_CONTENT_TYPE,
+      ...(activity === undefined
+        ? {}
+        : {
+            [VOICE_MEDIA_ACTIVITY_STATE_HEADER]: activity.state,
+            [VOICE_MEDIA_ACTIVITY_LEVEL_HEADER]: String(activity.levelDbfs),
+            [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: String(activity.elapsedMs),
+            ...(activity.epoch === undefined ? {} : { [VOICE_MEDIA_ACTIVITY_EPOCH_HEADER]: String(activity.epoch) }),
+            ...(activity.classifiedSpeechMs === undefined
+              ? {}
+              : { [VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER]: String(activity.classifiedSpeechMs) }),
+            ...(activity.echoDiscriminatedSpeechMs === undefined
+              ? {}
+              : { [VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER]: String(activity.echoDiscriminatedSpeechMs) }),
+          }),
+    };
+    const body = new Blob([new Uint8Array(pcm)], { type: VOICE_MEDIA_CONTENT_TYPE });
+    const result = this.remote()
+      ? await this.remoteResult(route(VOICE_MEDIA_ROUTES.clientAudio, query), '', { method: 'POST', headers, body })
+      : await this.media().clientAudio({ query, headers, body });
     if (!result.ok) throw resultError(result);
   }
 
@@ -310,9 +409,10 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     captureId: string,
     error?: string,
   ): Promise<void> {
-    const result = await this.media().clientCaptureStopped({
-      body: { clientId, connectionId, captureId, ...(error === undefined ? {} : { error }) },
-    });
+    const body = { clientId, connectionId, captureId, ...(error === undefined ? {} : { error }) };
+    const result = this.remote()
+      ? await this.remoteResult(VOICE_MEDIA_ROUTES.clientCaptureStopped, '', jsonBody(body))
+      : await this.media().clientCaptureStopped({ body });
     if (!result.ok) throw resultError(result);
   }
 
@@ -332,9 +432,12 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
   ): Promise<Uint8Array> {
     const chunks: Uint8Array[] = [];
     let byteLength = 0;
-    const url = this.media().clientPlaybackAudio.url({ query: { clientId, connectionId, playbackId } });
+    const path = route(VOICE_MEDIA_ROUTES.clientPlaybackAudio, { clientId, connectionId, playbackId });
+    const url = this.remote()
+      ? ''
+      : this.media().clientPlaybackAudio.url({ query: { clientId, connectionId, playbackId } });
     while (!signal.aborted) {
-      const response = await sealedTransport.fetch(url, { signal });
+      const response = await this.fetch(path, url, { signal });
       if (response.status === 200 && response.headers.get('content-type')?.startsWith(VOICE_MEDIA_CONTENT_TYPE)) {
         const chunk = new Uint8Array(await response.arrayBuffer());
         chunks.push(chunk);
@@ -361,7 +464,10 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     connectionId: string,
     result: VoiceMediaPlaybackResult,
   ): Promise<void> {
-    const answer = await this.media().clientPlaybackResult({ body: { clientId, connectionId, ...result } });
+    const body = { clientId, connectionId, ...result };
+    const answer = this.remote()
+      ? await this.remoteResult(VOICE_MEDIA_ROUTES.clientPlaybackResult, '', jsonBody(body))
+      : await this.media().clientPlaybackResult({ body });
     if (!answer.ok) throw resultError(answer);
   }
 
@@ -372,8 +478,10 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     sdp: string,
     signal: AbortSignal,
   ): Promise<string> {
+    const path = REALTIME_ROUTES.clientNegotiate;
+    const directUrl = this.remote() ? '' : this.media().realtimeNegotiate.url();
     return boundedControlRequest(
-      this.media().realtimeNegotiate.url(),
+      directUrl,
       jsonBody({ clientId, connectionId, activationId, sdp }),
       REALTIME_NEGOTIATION_DEADLINE_MS,
       async (response) => {
@@ -384,6 +492,7 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
         return (body as { sdp: string }).sdp;
       },
       signal,
+      (_input, init) => this.fetch(path, directUrl, init),
     );
   }
 
@@ -393,7 +502,12 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     activationId: string,
     event: string,
   ): Promise<void> {
-    await this.postRealtime(this.media().realtimeEvent.url(), { clientId, connectionId, activationId, event });
+    await this.postRealtime(REALTIME_ROUTES.clientEvent, this.remote() ? '' : this.media().realtimeEvent.url(), {
+      clientId,
+      connectionId,
+      activationId,
+      event,
+    });
   }
 
   public async realtimeState(
@@ -402,12 +516,24 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     activationId: string,
     state: RealtimeBrowserState,
   ): Promise<void> {
-    await this.postRealtime(this.media().realtimeState.url(), { clientId, connectionId, activationId, state });
+    await this.postRealtime(REALTIME_ROUTES.clientState, this.remote() ? '' : this.media().realtimeState.url(), {
+      clientId,
+      connectionId,
+      activationId,
+      state,
+    });
   }
 
-  private postRealtime(url: string, body: object): Promise<void> {
-    return boundedControlRequest(url, jsonBody(body), CONTROL_REQUEST_DEADLINE_MS, async (response) => {
-      if (!response.ok) throw await responseError(response);
-    });
+  private postRealtime(path: string, directUrl: string, body: object): Promise<void> {
+    return boundedControlRequest(
+      directUrl,
+      jsonBody(body),
+      CONTROL_REQUEST_DEADLINE_MS,
+      async (response) => {
+        if (!response.ok) throw await responseError(response);
+      },
+      undefined,
+      (_input, init) => this.fetch(path, directUrl, init),
+    );
   }
 }

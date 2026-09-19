@@ -6,7 +6,7 @@ The foundation owns the session-scoped background-work coordinator used by optio
 
 ## Paired hosts
 
-A paired host is configured privately in `~/.pi/.doom/session/peers.json`. Each peer needs an HTTPS tunnel URL, a shared secret of at least 32 characters, and an explicit allowlist of local recipient session IDs. Pairing alone grants no Session access.
+A paired host is configured privately in `~/.pi/.doom/session/peers.json`. The file must be owner-only (`0600`). Each peer needs an HTTPS tunnel URL, a shared secret of at least 32 characters, and explicit operation-specific session allowlists. Pairing alone grants no Session or Voice access.
 
 ```json
 {
@@ -17,13 +17,14 @@ A paired host is configured privately in `~/.pi/.doom/session/peers.json`. Each 
       "hostId": "work-host",
       "url": "https://work.example.net/",
       "secret": "replace-with-a-private-32-character-minimum-secret",
-      "allowedSessionIds": ["approved-local-session-id"]
+      "allowedSessionIds": ["approved-message-session-id"],
+      "allowedVoiceSessionIds": ["approved-voice-session-id"]
     }
   ]
 }
 ```
 
-Use `peer/<host-id>/<session-id>` as the durable recipient key. Messages and acknowledgements are HMAC-authenticated and retried until the receiving durable inbox acknowledges them.
+Use `peer/<host-id>/<session-id>` as a qualified target. `allowedSessionIds` grants durable messages and acknowledgements. `allowedVoiceSessionIds` separately grants bounded Voice client-media relay operations. Neither grant exposes owner, `/host/*`, or `/hub/*` routes.
 
 ## Development
 

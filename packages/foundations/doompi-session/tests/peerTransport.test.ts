@@ -33,6 +33,7 @@ const peer: SessionPeer = {
   url: 'https://remote.example.test/tunnel/',
   secret: 'peer-secret-with-at-least-thirty-two-characters',
   allowedSessionIds: ['target-session'],
+  allowedVoiceSessionIds: ['voice-session'],
 };
 
 function config(): object {

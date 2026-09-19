@@ -35,8 +35,9 @@ const TUNNEL_CONNECTION_LIMIT = 64;
 const TUNNEL_REQUESTS_PER_SOCKET = 100;
 const SEALED_HTTP_VERSION = 1;
 const SEALED_HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
-/** HMAC-authenticated Session peer delivery is the only non-device tunnel API. */
+/** HMAC-authenticated peer routes are the only non-device tunnel APIs. */
 const SESSION_PEER_INBOX_ROUTE = '/api/plugins/session-peer/inbox';
+const VOICE_PEER_ROUTE = '/api/plugins/voice/peer';
 const FORBIDDEN_HEADERS = new Set([
   'authorization',
   'connection',
@@ -150,11 +151,12 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
     const path = context.req.path;
     const publicSessionMcp = isPublicSessionMcpRoute(context.req.method, path);
     const publicSessionPeer = context.req.method === 'POST' && path === SESSION_PEER_INBOX_ROUTE;
+    const publicVoicePeer = context.req.method === 'POST' && path === VOICE_PEER_ROUTE;
     const verdict = originVerdict({
       listener: 'tunnel',
-      // Exact OAuth, MCP, and HMAC-authenticated Session peer routes authenticate at
-      // the application layer. Treat an absent Origin like a server-to-server read.
-      method: publicSessionMcp || publicSessionPeer ? 'GET' : context.req.method,
+      // Exact OAuth, MCP, and HMAC-authenticated peer routes authenticate at the
+      // application layer. Treat an absent Origin like a server-to-server read.
+      method: publicSessionMcp || publicSessionPeer || publicVoicePeer ? 'GET' : context.req.method,
       isUpgrade: false,
       origin: context.req.header('origin'),
       host: context.req.header('host'),
@@ -162,7 +164,8 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
       tunnel: remote.tunnelPolicy(),
     });
     if (verdict !== 'allow') return context.json({ error: `Tunnel request refused: ${verdict}.` }, 403);
-    if (isPublicPairingRoute(context.req.method, path) || publicSessionMcp || publicSessionPeer) return next();
+    if (isPublicPairingRoute(context.req.method, path) || publicSessionMcp || publicSessionPeer || publicVoicePeer)
+      return next();
     const device = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
     if (device === undefined) return context.json({ error: 'This device is not paired.' }, 401);
     if (context.env.sealedDeviceId === device) return next();
@@ -455,7 +458,8 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
   app.on(['POST', 'DELETE'], '*', async (context) => {
     if (
       !isPublicSessionMcpRoute(context.req.method, context.req.path) &&
-      !(context.req.method === 'POST' && context.req.path === SESSION_PEER_INBOX_ROUTE)
+      !(context.req.method === 'POST' && context.req.path === SESSION_PEER_INBOX_ROUTE) &&
+      !(context.req.method === 'POST' && context.req.path === VOICE_PEER_ROUTE)
     )
       return context.notFound();
     return options.forward(context.req.raw);

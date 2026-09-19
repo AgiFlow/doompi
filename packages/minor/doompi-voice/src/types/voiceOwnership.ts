@@ -231,7 +231,10 @@ export function parseBrowserVoiceOwnershipPayload(value: unknown): BrowserVoiceO
     !exact(input, ['type', 'version', 'activeSessionId']) ||
     input.type !== 'browser-media-session' ||
     input.version !== VOICE_OWNERSHIP_PROTOCOL_VERSION ||
-    (input.activeSessionId !== null && !id(input.activeSessionId, 200))
+    (input.activeSessionId !== null &&
+      (typeof input.activeSessionId !== 'string' ||
+        (!id(input.activeSessionId, 200) &&
+          !/^peer\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(input.activeSessionId))))
   )
     return undefined;
   return input as unknown as BrowserVoiceOwnershipPayload;

@@ -257,6 +257,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           directory: path.dirname(registration.mcpBundle.path),
           generation: registration.generation,
           fingerprint: registration.mcpBundle.fingerprint,
+          descriptorSha256: registration.mcpBundle.sha256,
           majorMode: selection.majorMode,
           activeLayers: selection.activeLayers,
           retainCandidates: true,

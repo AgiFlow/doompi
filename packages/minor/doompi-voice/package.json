@@ -98,6 +98,7 @@
     "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-minor-mode": "workspace:*",
+    "@agimon-ai/doompi-session": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
