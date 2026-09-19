@@ -2,6 +2,7 @@ import type { DoomApi, DoomApiHandler } from '@agimon-ai/doompi-core/package-api
 
 import { deliverSessionPeerEnvelope } from '../peerInbox';
 import {
+  createPeerReplayGuard,
   parseSessionPeerEnvelope,
   peerSessionReference,
   readSessionPeerConfig,
@@ -20,6 +21,7 @@ export const peerInboxApi: DoomApi = {
   basePath: 'session-peer',
   start(context): DoomApiHandler {
     const config = context.homeDirectory === undefined ? undefined : readSessionPeerConfig(context.homeDirectory);
+    const replay = context.homeDirectory === undefined ? undefined : createPeerReplayGuard(context.homeDirectory);
     return {
       async fetch(request) {
         if (request.method !== 'POST' || new URL(request.url).pathname !== '/inbox') return response(404, 'Not found.');
@@ -31,6 +33,7 @@ export const peerInboxApi: DoomApi = {
         if (Buffer.byteLength(body) > MAX_BODY_BYTES) return response(413, 'Request body is too large.');
         const peer = verifyPeerRequest(config, request, body);
         if (!peer) return response(401, 'Paired Session request is unauthorized.');
+        if (!replay?.admit(request)) return response(409, 'Paired Session request was already received.');
         let parsed: unknown;
         try {
           parsed = JSON.parse(body) as unknown;
@@ -52,7 +55,7 @@ export const peerInboxApi: DoomApi = {
           ? response(404, 'Target Session is unavailable.')
           : Response.json({ accepted: true, state }, { status: 202 });
       },
-      close: () => undefined,
+      close: () => replay?.close(),
     };
   },
 };

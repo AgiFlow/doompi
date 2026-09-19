@@ -1,6 +1,7 @@
 export { createBackgroundWorkService, provideBackgroundWorkService } from '../services/backgroundWorkService';
 export {
   createPeerCommunication,
+  createPeerReplayGuard,
   parseRemoteSessionReference,
   peerRequestHeaders,
   peerSessionReference,
@@ -11,6 +12,7 @@ export {
   type SessionPeer,
   type SessionPeerConfig,
   type SessionPeerEnvelope,
+  type SessionPeerReplayGuard,
 } from '../services/peerTransport';
 export {
   DOOM_SESSION_DELIVERY_SERVICE,

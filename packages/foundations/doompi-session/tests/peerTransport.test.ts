@@ -73,9 +73,10 @@ describe('paired Session peer transport', () => {
       type: 'doom/session-delivery/envelope',
       payload: { deliveryId: 'delivery-1' },
     });
+    const headers = peerRequestHeaders('remote-host', peer, 'POST', '/inbox', body);
     const request = new Request('http://doompi.local/inbox', {
       method: 'POST',
-      headers: peerRequestHeaders('remote-host', peer, 'POST', '/inbox', body),
+      headers,
       body,
     });
 
@@ -83,6 +84,14 @@ describe('paired Session peer transport', () => {
     expect(received).toHaveBeenCalledWith('peer/remote-host/source-session', 'doom/session-delivery/envelope', {
       deliveryId: 'delivery-1',
     });
+    expect((await api.fetch(new Request('http://doompi.local/inbox', { method: 'POST', headers, body }))).status).toBe(
+      409,
+    );
+    api.close();
+    const restarted = peerInboxApi.start({ scope: 'global', homeDirectory: directory, onNotice: () => undefined });
+    expect(
+      (await restarted.fetch(new Request('http://doompi.local/inbox', { method: 'POST', headers, body }))).status,
+    ).toBe(409);
     unregister();
 
     const forbiddenBody = JSON.stringify({ ...JSON.parse(body), targetSessionId: 'ungranted-session' });
@@ -91,7 +100,8 @@ describe('paired Session peer transport', () => {
       headers: peerRequestHeaders('remote-host', peer, 'POST', '/inbox', forbiddenBody),
       body: forbiddenBody,
     });
-    expect((await api.fetch(forbidden)).status).toBe(403);
+    expect((await restarted.fetch(forbidden)).status).toBe(403);
+    restarted.close();
   });
 
   it('rejects tampered and expired peer requests', async () => {

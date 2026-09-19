@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import type { DoomSessionCommunicationEndpoint } from '@agimon-ai/doompi-core/hub-channel';
 
@@ -11,6 +12,8 @@ const PEER_HEADER = 'x-doompi-session-peer';
 const TIMESTAMP_HEADER = 'x-doompi-session-timestamp';
 const SIGNATURE_HEADER = 'x-doompi-session-signature';
 const MAX_CLOCK_SKEW_MS = 5 * 60_000;
+const MAX_REPLAY_ENTRIES = 10_000;
+const REPLAY_DATABASE_FILE = 'peer-replay.sqlite';
 
 export interface SessionPeer {
   readonly hostId: string;
@@ -38,6 +41,11 @@ export interface SessionPeerEnvelope {
   readonly targetSessionId: string;
   readonly type: string;
   readonly payload: unknown;
+}
+
+export interface SessionPeerReplayGuard {
+  admit(request: Request, now?: number): boolean;
+  close(): void;
 }
 
 function validId(value: unknown): value is string {
@@ -136,6 +144,48 @@ export function peerRequestHeaders(
     [TIMESTAMP_HEADER]: timestamp,
     [SIGNATURE_HEADER]: signature(peer.secret, method, pathname, timestamp, body),
   });
+}
+
+/** Persists accepted peer signatures so a valid request cannot be replayed within its clock-skew window. */
+export function createPeerReplayGuard(homeDirectory: string): SessionPeerReplayGuard {
+  const directory = path.dirname(sessionPeerConfigPath(homeDirectory));
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const database = new DatabaseSync(path.join(directory, REPLAY_DATABASE_FILE));
+  database.exec(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS peer_request_replays (
+      signature TEXT PRIMARY KEY,
+      expires_at INTEGER NOT NULL
+    );
+  `);
+  const removeExpired = database.prepare('DELETE FROM peer_request_replays WHERE expires_at < ?');
+  const insert = database.prepare('INSERT OR IGNORE INTO peer_request_replays (signature, expires_at) VALUES (?, ?)');
+  const count = database.prepare('SELECT COUNT(*) AS count FROM peer_request_replays');
+  const trim = database.prepare(`
+    DELETE FROM peer_request_replays
+    WHERE signature IN (
+      SELECT signature FROM peer_request_replays ORDER BY expires_at ASC, signature ASC LIMIT ?
+    )
+  `);
+  return {
+    admit(request, now = Date.now()) {
+      const supplied = request.headers.get(SIGNATURE_HEADER);
+      if (!supplied) return false;
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        removeExpired.run(now);
+        const accepted = insert.run(supplied, now + MAX_CLOCK_SKEW_MS).changes === 1;
+        const total = Number((count.get() as { count: number | bigint }).count);
+        if (total > MAX_REPLAY_ENTRIES) trim.run(total - MAX_REPLAY_ENTRIES);
+        database.exec('COMMIT');
+        return accepted;
+      } catch (cause) {
+        database.exec('ROLLBACK');
+        throw cause;
+      }
+    },
+    close: () => database.close(),
+  };
 }
 
 export function verifyPeerRequest(
