@@ -657,10 +657,14 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         return;
       }
       const headers = new Headers();
+      // Only the authenticated loopback proxy knows the server token and may
+      // forward caller stamps. Browser-supplied stamps remain untrusted.
+      const trustedCaller = options.token !== undefined && authorized(request, options.token);
       for (const [name, value] of Object.entries(request.headers)) {
         if (
           value !== undefined &&
-          !['host', 'authorization', 'x-doompi-token', ...DOOM_API_CALLER_HEADERS].includes(name)
+          !['host', 'authorization', 'x-doompi-token'].includes(name) &&
+          (trustedCaller || !DOOM_API_CALLER_HEADERS.includes(name as (typeof DOOM_API_CALLER_HEADERS)[number]))
         )
           headers.set(name, Array.isArray(value) ? value.join(', ') : value);
       }

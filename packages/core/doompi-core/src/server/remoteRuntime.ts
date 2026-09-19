@@ -8,7 +8,12 @@ import { getCookie } from 'hono/cookie';
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
 
 import { DEVICE_COOKIE, REMOTE_CHANNEL_ROUTE, REMOTE_HTTP_ROUTE, STEP_UP_HEADER } from '../constants/remote';
-import { parseDoomSocketPath } from '../schemas/packageApi';
+import {
+  DOOM_API_CALLER_DEVICE_ID_HEADER,
+  DOOM_API_CALLER_LOCALITY_HEADER,
+  DOOM_API_CALLER_STEP_UP_HEADER,
+  parseDoomSocketPath,
+} from '../schemas/packageApi';
 import { createRemoteAccess, type RemoteAccess } from '../services/remoteAccess';
 import { createRemoteAccessStore } from '../services/remoteAccessStore';
 import {
@@ -406,6 +411,11 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
         stepUpDenied = true;
     }
     headers.delete(STEP_UP_HEADER);
+    // Caller stamps are assigned after the sealed request is opened. They never
+    // originate from browser-controlled sealed headers.
+    headers.set(DOOM_API_CALLER_LOCALITY_HEADER, 'remote');
+    headers.set(DOOM_API_CALLER_DEVICE_ID_HEADER, device);
+    headers.set(DOOM_API_CALLER_STEP_UP_HEADER, action && remote.stepUpRequired(action) ? 'verified' : 'not-required');
     let response: Response;
     if (stepUpDenied) {
       response = context.json({ error: 'This action needs a fresh passkey gesture.', action }, 401);
