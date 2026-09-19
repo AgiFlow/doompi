@@ -58,7 +58,7 @@ function render(activeTool: 'select' | 'mark'): void {
     sessionId: 'session',
     activeTool,
     onAnnotationCandidate: vi.fn(),
-  } as Parameters<typeof StoryPreviewPanel>[0]);
+  } as unknown as Parameters<typeof StoryPreviewPanel>[0]);
   const pending = hooks.pending.splice(0);
   pending.forEach((effect) => effect());
 }
