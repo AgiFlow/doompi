@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
@@ -22,11 +18,5 @@
     "allowImportingTsExtensions": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": [
-    "src/types",
-    "src/extensions/**/(frontend)/**/*",
-    "generated/web.ts",
-    "generated/client.ts",
-    "tests/web"
-  ]
+  "include": ["src/types", "src/extensions/**/(frontend)/**/*", "generated/web.ts", "generated/client.ts", "tests/web"]
 }
