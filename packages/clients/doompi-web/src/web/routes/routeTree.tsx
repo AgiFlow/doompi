@@ -3,6 +3,10 @@ import { createRootRoute, createRoute, Outlet } from '@tanstack/react-router';
 import { CockpitPage } from './CockpitPage';
 import { SettingsPage } from './SettingsPage';
 
+function settingsSearch(search: Record<string, unknown>): { workspace?: string } {
+  return typeof search.workspace === 'string' && search.workspace !== '' ? { workspace: search.workspace } : {};
+}
+
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
 });
@@ -32,12 +36,14 @@ const sessionTabRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
+  validateSearch: settingsSearch,
   component: SettingsPage,
 });
 
 const settingsSectionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/$section',
+  validateSearch: settingsSearch,
   component: SettingsPage,
 });
 

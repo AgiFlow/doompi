@@ -3,6 +3,7 @@ import {
   BranchIcon,
   Button,
   buttonVariants,
+  ChevronDownIcon,
   CloseIcon,
   cn,
   Dot,
@@ -141,9 +142,58 @@ export function SessionCardView({
   );
 }
 
-export interface SessionRailViewProps {
-  hasSessions: boolean;
+export interface WorkspaceGroupViewProps {
+  workspaceId: string;
+  name: string;
+  path: string;
+  available?: boolean;
   cards: ReactNode;
+  hasSessions: boolean;
+  createAction: ReactNode;
+  menuAction: ReactNode;
+}
+
+/** A flat workspace heading and its indented sessions; separation replaces card chrome. */
+export function WorkspaceGroupView({
+  workspaceId,
+  name,
+  path,
+  available = true,
+  cards,
+  hasSessions,
+  createAction,
+  menuAction,
+}: WorkspaceGroupViewProps) {
+  return (
+    <section
+      data-testid={`workspace-group-${workspaceId}`}
+      data-available={available}
+      className="border-b border-doom-border/70 py-2 last:border-b-0"
+    >
+      <div className="flex min-w-0 items-center gap-1 px-2">
+        <ChevronDownIcon className="h-3 w-3 shrink-0 text-doom-faint" />
+        <div className="min-w-0 flex-1 py-1">
+          <p className="truncate text-sm font-bold text-doom-hi">{name}</p>
+          <p className="truncate text-2xs text-doom-faint" title={path}>
+            {path}
+          </p>
+        </div>
+        {createAction}
+        {menuAction}
+      </div>
+      {!available ? <p className="px-8 pt-2 text-2xs text-doom-red">workspace unavailable</p> : null}
+      {hasSessions ? (
+        <div className="mt-1 flex flex-col gap-1 pl-3">{cards}</div>
+      ) : available ? (
+        <p className="px-8 py-2 text-2xs text-doom-faint">no sessions · create or resume one</p>
+      ) : null}
+    </section>
+  );
+}
+
+export interface SessionRailViewProps {
+  hasWorkspaces: boolean;
+  workspaceGroups: ReactNode;
   remote?: RemoteAccessStateView;
   remoteAccessButton: ReactNode;
   railContent?: ReactNode;
@@ -151,13 +201,13 @@ export interface SessionRailViewProps {
   children?: ReactNode;
   onDismiss?: () => void;
   onOpenRemote: () => void;
-  onOpenNewSession: () => void;
+  onAddWorkspace: () => void;
   onTurnRemoteOff: () => void;
 }
 
 export function SessionRailView({
-  hasSessions,
-  cards,
+  hasWorkspaces,
+  workspaceGroups,
   remote,
   remoteAccessButton,
   railContent,
@@ -165,7 +215,7 @@ export function SessionRailView({
   children,
   onDismiss,
   onOpenRemote,
-  onOpenNewSession,
+  onAddWorkspace,
   onTurnRemoteOff,
 }: SessionRailViewProps) {
   return (
@@ -201,33 +251,33 @@ export function SessionRailView({
       </div>
 
       <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
-        <SectionLabel>sessions</SectionLabel>
+        <SectionLabel>workspaces</SectionLabel>
         <span className="flex items-center gap-2.5">
           <Button
             variant="ghost"
             size="icon"
-            data-testid="new-session-open"
-            title="new session"
-            aria-label="new session"
-            onClick={onOpenNewSession}
+            data-testid="add-workspace-open"
+            title="add workspace"
+            aria-label="add workspace"
+            onClick={onAddWorkspace}
             className="text-doom-faint hover:text-doom-hi"
           >
             <PlusIcon className="h-3 w-3" />
           </Button>
         </span>
       </div>
-      <div className="flex flex-col gap-1 px-2.5">{cards}</div>
-      {!hasSessions ? (
+      <div className="px-2.5">{workspaceGroups}</div>
+      {!hasWorkspaces ? (
         <div className="px-2.5 pt-2">
           <Button
             variant="outline"
             size="lg"
-            data-testid="new-session-empty"
-            onClick={onOpenNewSession}
-            className="w-full justify-start px-[11px] text-sm"
+            data-testid="add-workspace-empty"
+            onClick={onAddWorkspace}
+            className="w-full justify-start px-3 text-sm"
           >
             <PlusIcon className="h-3 w-3" />
-            new session
+            add workspace
           </Button>
         </div>
       ) : null}

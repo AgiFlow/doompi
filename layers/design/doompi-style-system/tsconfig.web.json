@@ -18,5 +18,5 @@
     "allowImportingTsExtensions": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/types", "src/extensions/**/(frontend)/**/*", "generated/web.ts", "generated/client.ts"]
+  "include": ["src/types", "src/extensions/**/(frontend)/**/*", "generated/web.ts", "generated/client.ts", "tests/web"]
 }

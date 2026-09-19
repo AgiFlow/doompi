@@ -1,48 +1,77 @@
 import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
 import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 
-import { DIRECTORIES_API_ROUTE, type PiSessionHistoryItem, type SessionSummary } from '../../types/hub';
+import {
+  DIRECTORIES_API_ROUTE,
+  WORKSPACES_API_ROUTE,
+  type PiSessionHistoryItem,
+  type SessionSummary,
+  type WorkspaceSummary,
+} from '../../types/hub';
 import { sealedHttpSession } from './sealedSession';
 import { fetchWithStepUp } from './stepUp';
 
 export type CreateSessionResult = { sessionId: string; session?: SessionSummary } | { error: string };
+export type WorkspaceResult = { workspace: WorkspaceSummary } | { error: string };
+export type WorkspacesResult = { workspaces: WorkspaceSummary[] } | { error: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Asks the hub to start a new doompi-server in the given directory.
- *
- * The one place the page talks REST to the hub; if creation ever moves onto
- * the WebSocket, only this file changes.
- */
-export async function createSession(input: { cwd: string; name?: string }): Promise<CreateSessionResult> {
-  let response: Response;
-  let workspaceId: string;
+function asWorkspace(value: unknown): WorkspaceSummary | undefined {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.root !== 'string') return undefined;
+  return {
+    id: value.id,
+    root: value.root,
+    ...(typeof value.available === 'boolean' ? { available: value.available } : {}),
+    ...(typeof value.error === 'string' ? { error: value.error } : {}),
+  };
+}
+
+export async function listWorkspaces(): Promise<WorkspacesResult> {
   try {
-    // Creating a session picks a directory to run an agent in, which is one
-    // of the two actions a live remote session is not enough for.
-    const admission = await fetchWithStepUp('/api/workspaces', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ root: input.cwd }),
-    });
-    const admitted: unknown = await admission.json().catch(() => undefined);
-    if (
-      !admission.ok ||
-      !isRecord(admitted) ||
-      !isRecord(admitted.workspace) ||
-      typeof admitted.workspace.id !== 'string'
-    ) {
+    const response = await sealedHttpSession.fetch(WORKSPACES_API_ROUTE);
+    const body: unknown = await response.json().catch(() => undefined);
+    if (response.ok && isRecord(body) && Array.isArray(body.workspaces)) {
       return {
-        error:
-          isRecord(admitted) && typeof admitted.error === 'string'
-            ? admitted.error
-            : `The hub answered ${admission.status}.`,
+        workspaces: body.workspaces.map(asWorkspace).filter((entry): entry is WorkspaceSummary => entry !== undefined),
       };
     }
-    workspaceId = admitted.workspace.id;
+    return {
+      error: isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`,
+    };
+  } catch {
+    return { error: 'The cockpit hub is unreachable.' };
+  }
+}
+
+/** Admits a server-side repository root without starting a session. */
+export async function admitWorkspace(root: string): Promise<WorkspaceResult> {
+  try {
+    const response = await fetchWithStepUp(WORKSPACES_API_ROUTE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root }),
+    });
+    const body: unknown = await response.json().catch(() => undefined);
+    const workspace = isRecord(body) ? asWorkspace(body.workspace) : undefined;
+    if (response.ok && workspace !== undefined) return { workspace };
+    return {
+      error: isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`,
+    };
+  } catch {
+    return { error: 'The cockpit hub is unreachable.' };
+  }
+}
+
+/** Starts a session in an already admitted workspace. */
+export async function createWorkspaceSession(
+  workspaceId: string,
+  input: { name?: string } = {},
+): Promise<CreateSessionResult> {
+  let response: Response;
+  try {
     response = await fetchWithStepUp(`/api/workspaces/${encodeURIComponent(workspaceId)}/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -51,29 +80,32 @@ export async function createSession(input: { cwd: string; name?: string }): Prom
   } catch {
     return { error: 'The cockpit hub is unreachable.' };
   }
-  let body: unknown;
+  const body: unknown = await response.json().catch(() => undefined);
+  if (!response.ok || !isRecord(body) || typeof body.sessionId !== 'string') {
+    return {
+      error: isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`,
+    };
+  }
+  const sessionId = body.sessionId;
   try {
-    body = await response.json();
-  } catch {
-    body = undefined;
-  }
-  if (response.ok && isRecord(body) && typeof body.sessionId === 'string') {
-    const sessionId = body.sessionId;
-    try {
-      const detail = await sealedHttpSession.fetch(
-        `/api/workspaces/${encodeURIComponent(workspaceId)}/sessions/${encodeURIComponent(sessionId)}`,
-      );
-      const session: unknown = await detail.json().catch(() => undefined);
-      if (detail.ok && isRecord(session) && session.id === sessionId) {
-        return { sessionId, session: session as unknown as SessionSummary };
-      }
-    } catch {
-      // The socket can still deliver the summary; this read only closes a missed-event race.
+    const detail = await sealedHttpSession.fetch(
+      `/api/workspaces/${encodeURIComponent(workspaceId)}/sessions/${encodeURIComponent(sessionId)}`,
+    );
+    const session: unknown = await detail.json().catch(() => undefined);
+    if (detail.ok && isRecord(session) && session.id === sessionId) {
+      return { sessionId, session: session as unknown as SessionSummary };
     }
-    return { sessionId };
+  } catch {
+    // The socket can still deliver the summary; this read only closes a missed-event race.
   }
-  const error = isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`;
-  return { error };
+  return { sessionId };
+}
+
+/** Compatibility flow for callers that have not admitted a workspace yet. */
+export async function createSession(input: { cwd: string; name?: string }): Promise<CreateSessionResult> {
+  const admission = await admitWorkspace(input.cwd);
+  if ('error' in admission) return admission;
+  return createWorkspaceSession(admission.workspace.id, { name: input.name });
 }
 
 export type StopSessionResult = { ok: true } | { error: string };
@@ -179,9 +211,15 @@ export async function readDormantTranscriptPage(
 export type SessionHistoryResult = { sessions: PiSessionHistoryItem[] } | { error: string };
 
 /** Lists the Pi threads saved for a live session's workspace. */
-export async function listSessionHistory(sessionId: string): Promise<SessionHistoryResult> {
+export function listSessionHistory(sessionId: string): Promise<SessionHistoryResult> {
+  return listHistoryAt(`${sessionApiPath(sessionId)}/history`);
+}
+
+export type ResumeSessionResult = { sessionId: string; session?: SessionSummary } | { error: string };
+
+async function listHistoryAt(path: string): Promise<SessionHistoryResult> {
   try {
-    const response = await sealedHttpSession.fetch(`${sessionApiPath(sessionId)}/history`);
+    const response = await sealedHttpSession.fetch(path);
     const body = (await response.json()) as unknown;
     if (response.ok && isRecord(body) && Array.isArray(body.sessions)) {
       return {
@@ -205,7 +243,45 @@ export async function listSessionHistory(sessionId: string): Promise<SessionHist
   }
 }
 
-export type ResumeSessionResult = { sessionId: string } | { error: string };
+/** Lists saved history without requiring a live session in the workspace. */
+export function listWorkspaceHistory(workspaceId: string): Promise<SessionHistoryResult> {
+  return listHistoryAt(`/api/workspaces/${encodeURIComponent(workspaceId)}/history`);
+}
+
+/** Starts one saved thread without replacing another live session. */
+export async function resumeWorkspaceSession(
+  workspaceId: string,
+  targetSessionId: string,
+): Promise<ResumeSessionResult> {
+  try {
+    const response = await fetchWithStepUp(`/api/workspaces/${encodeURIComponent(workspaceId)}/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetSessionId }),
+    });
+    const body = (await response.json()) as unknown;
+    if (!response.ok || !isRecord(body) || typeof body.sessionId !== 'string') {
+      return {
+        error: isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`,
+      };
+    }
+    const sessionId = body.sessionId;
+    try {
+      const detail = await sealedHttpSession.fetch(
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/sessions/${encodeURIComponent(sessionId)}`,
+      );
+      const session: unknown = await detail.json().catch(() => undefined);
+      if (detail.ok && isRecord(session) && session.id === sessionId) {
+        return { sessionId, session: session as unknown as SessionSummary };
+      }
+    } catch {
+      // The socket can still deliver the summary; this read only closes a missed-event race.
+    }
+    return { sessionId };
+  } catch {
+    return { error: 'The cockpit hub is unreachable.' };
+  }
+}
 
 /** Replaces one live card with a selected Pi thread from the same workspace. */
 export async function resumeSession(sessionId: string, targetSessionId: string): Promise<ResumeSessionResult> {

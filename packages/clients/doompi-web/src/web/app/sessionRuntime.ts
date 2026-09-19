@@ -16,6 +16,9 @@ import {
   THREAD_BACKLOG_TYPE,
   THREAD_FRAME_TYPE,
   unsubscribeFrame,
+  WORKSPACE_REMOVED_TYPE,
+  WORKSPACE_UPSERT_TYPE,
+  WORKSPACES_SNAPSHOT_TYPE,
 } from '../../types/hub';
 import { parseDoomNotificationEntry } from '../../types/notification';
 import { REMOTE_PAIRING_REQUEST_TYPE, REMOTE_STATE_TYPE, type RemoteAccessStateView } from '../../types/remoteAccess';
@@ -59,6 +62,7 @@ import {
 } from '../stores/sessionStore';
 import { applyThreadTranscriptFrame, dropThreads, resubscribeThreads, threadStoreKey } from '../stores/threadStore';
 import { dropTransientTabs, openTransientTab } from '../stores/transientTabsStore';
+import { applyWorkspaceRemoved, applyWorkspacesSnapshot, applyWorkspaceUpsert } from '../stores/workspacesStore';
 import { startProtocolRuntime } from './protocolRuntime';
 
 const BUNDLE_REFRESH_INTERVAL_MS = 60_000;
@@ -336,6 +340,15 @@ export function startSessionRuntime(): () => void {
           applyRemoteFrame(frame);
           return;
 
+        case WORKSPACES_SNAPSHOT_TYPE:
+          applyWorkspacesSnapshot(frame);
+          return;
+        case WORKSPACE_UPSERT_TYPE:
+          applyWorkspaceUpsert(frame);
+          return;
+        case WORKSPACE_REMOVED_TYPE:
+          applyWorkspaceRemoved(frame);
+          return;
         case SESSIONS_SNAPSHOT_TYPE:
           recordBrowserPerformance({ name: 'web.browser.ready', duration_ms: browserReadyDuration() });
           applySessionsSnapshot(frame);

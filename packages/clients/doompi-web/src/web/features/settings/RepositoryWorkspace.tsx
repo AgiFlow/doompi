@@ -16,7 +16,7 @@ import { sealedHttpSession } from '../../lib/sealedSession';
 import { listSettingsRepositories } from '../../lib/settingsApi';
 import type { SettingsSection } from '../../lib/settingsSections';
 import { fetchWithStepUp } from '../../lib/stepUp';
-import { sessionsStore } from '../../stores/sessionsStore';
+import { workspacesStore } from '../../stores/workspacesStore';
 import { ContributedSettings } from './ContributedSettings';
 import { RepositorySettings } from './RepositorySettings';
 import { SettingsMenu } from './SettingsMenu';
@@ -45,14 +45,18 @@ function rememberRepository(repositoryId: string): void {
 
 export function RepositoryWorkspace({
   current,
+  initialRepositoryId,
+  onRepositoryChange,
   onReady,
 }: {
   current: SettingsSection;
+  initialRepositoryId?: string;
+  onRepositoryChange?: (repositoryId: string) => void;
   onReady?: (ready: boolean) => void;
 }) {
-  const sessionFingerprint = useStore(sessionsStore, (state) => Object.keys(state.byId).sort().join('\n'));
+  const workspaceFingerprint = useStore(workspacesStore, (state) => state.order.join('\n'));
   const [repositories, setRepositories] = useState<readonly SettingsRepository[]>([]);
-  const [repositoryId, setRepositoryId] = useState(rememberedRepository);
+  const [repositoryId, setRepositoryId] = useState(() => initialRepositoryId ?? rememberedRepository());
   const [loading, setLoading] = useState(true);
   const repository = useMemo(
     () => repositories.find((candidate) => candidate.id === repositoryId) ?? null,
@@ -78,7 +82,7 @@ export function RepositoryWorkspace({
     return () => {
       currentRequest = false;
     };
-  }, [sessionFingerprint]);
+  }, [workspaceFingerprint]);
 
   useEffect(() => {
     if (loading) return;
@@ -96,6 +100,7 @@ export function RepositoryWorkspace({
   const selectRepository = (next: string): void => {
     setRepositoryId(next);
     rememberRepository(next);
+    onRepositoryChange?.(next);
   };
   const panel = current.repositoryPanel;
   const Panel = panel?.component;
@@ -146,7 +151,7 @@ export function RepositoryWorkspace({
         </Button>
       </div>
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <SettingsMenu active={current.id} workspace="repository" />
+        <SettingsMenu active={current.id} workspace="repository" repositoryId={repositoryId} />
         <section
           data-testid="settings-content"
           className="min-w-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-5 lg:px-8"

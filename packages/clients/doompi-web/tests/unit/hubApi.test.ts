@@ -4,11 +4,16 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  admitWorkspace,
   createSession,
+  createWorkspaceSession,
   listSessionHistory,
+  listWorkspaceHistory,
+  listWorkspaces,
   readDormantTranscriptPage,
   restartSession,
   resumeSession,
+  resumeWorkspaceSession,
   reviveSession,
   searchDirectories,
 } from '../../src/web/lib/hubApi';
@@ -19,6 +24,74 @@ function respond(status: number, body: unknown): Response {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('workspace sessions', () => {
+  it('lists and admits durable workspaces without creating a session', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(respond(200, { workspaces: [{ id: 'one', root: '/one', available: true }] }))
+      .mockResolvedValueOnce(respond(201, { workspace: { id: 'two', root: '/two', available: true } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(listWorkspaces()).resolves.toEqual({
+      workspaces: [{ id: 'one', root: '/one', available: true }],
+    });
+    await expect(admitWorkspace('/two')).resolves.toEqual({
+      workspace: { id: 'two', root: '/two', available: true },
+    });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/workspaces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: '/two' }),
+    });
+  });
+
+  it('creates directly in an admitted workspace', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(respond(201, { sessionId: 'fresh' }))
+      .mockResolvedValueOnce(respond(200, { id: 'fresh' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createWorkspaceSession('one/two', { name: 'work' })).resolves.toEqual({
+      sessionId: 'fresh',
+      session: { id: 'fresh' },
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/one%2Ftwo/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'work' }),
+    });
+  });
+
+  it('lists and resumes workspace history without a live replacement session', async () => {
+    const thread = {
+      id: 'saved',
+      firstMessage: 'continue',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      messageCount: 2,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(respond(200, { sessions: [thread] }))
+      .mockResolvedValueOnce(respond(200, { sessionId: 'saved' }))
+      .mockResolvedValueOnce(respond(200, { id: 'saved' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(listWorkspaceHistory('one/two')).resolves.toEqual({ sessions: [thread] });
+    await expect(resumeWorkspaceSession('one/two', 'saved')).resolves.toEqual({
+      sessionId: 'saved',
+      session: { id: 'saved' },
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/workspaces/one%2Ftwo/history', undefined);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/workspaces/one%2Ftwo/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetSessionId: 'saved' }),
+    });
+  });
 });
 
 describe('createSession', () => {

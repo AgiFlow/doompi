@@ -1,5 +1,5 @@
 import { Button } from '@agimon-ai/doompi-web-components';
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 
@@ -31,6 +31,7 @@ import { useWebPluginRegistry } from '../stores/useWebPluginRegistry';
 export function SettingsPage() {
   useWebPluginRegistry();
   const { section } = useParams({ strict: false });
+  const { workspace: workspaceId } = useSearch({ strict: false });
   const navigate = useNavigate();
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const [railOpen, setRailOpen] = useState(false);
@@ -49,6 +50,7 @@ export function SettingsPage() {
         void navigate({
           to: '/settings/$section',
           params: { section: DEFAULT_SETTINGS_SECTION },
+          search: { workspace: workspaceId },
           replace: true,
         });
       })
@@ -58,7 +60,7 @@ export function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [current, section, navigate, workspace, repositoryReady]);
+  }, [current, section, navigate, workspace, workspaceId, repositoryReady]);
 
   return (
     <div data-testid="settings" className="relative flex h-full min-w-0 overflow-hidden">
@@ -106,6 +108,7 @@ export function SettingsPage() {
               <Link
                 to="/settings/$section"
                 params={{ section: DEFAULT_SETTINGS_SECTION }}
+                search={{ workspace: workspaceId }}
                 data-testid="settings-workspace-general"
               >
                 general
@@ -120,6 +123,7 @@ export function SettingsPage() {
               <Link
                 to="/settings/$section"
                 params={{ section: DEFAULT_REPOSITORY_SETTINGS_SECTION }}
+                search={{ workspace: workspaceId }}
                 data-testid="settings-workspace-repository"
               >
                 repository
@@ -141,12 +145,22 @@ export function SettingsPage() {
         </header>
         {workspace === 'repository' ? (
           <RepositoryWorkspace
+            key={workspaceId ?? 'remembered-workspace'}
             current={current ?? { id: section ?? '', label: '', detail: '', workspace: 'repository' }}
+            initialRepositoryId={workspaceId}
+            onRepositoryChange={(nextWorkspaceId) => {
+              void navigate({
+                to: '/settings/$section',
+                params: { section: current?.id ?? section ?? DEFAULT_REPOSITORY_SETTINGS_SECTION },
+                search: { workspace: nextWorkspaceId },
+                replace: true,
+              });
+            }}
             onReady={setRepositoryReady}
           />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-            <SettingsMenu active={current?.id} workspace="general" />
+            <SettingsMenu active={current?.id} workspace="general" repositoryId={workspaceId} />
             <section
               data-testid="settings-content"
               className="min-w-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-5 lg:px-8"

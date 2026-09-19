@@ -7,6 +7,7 @@ describe('stepUpActionFor', () => {
     // Reviving starts an agent in a directory. A paired remote device reaching
     // it without step-up would be creating a session by another name.
     expect(stepUpActionFor('POST', '/api/workspaces/w/sessions')).toBe('session.create');
+    expect(stepUpActionFor('POST', '/api/workspaces/w/resume')).toBe('session.create');
     expect(stepUpActionFor('POST', '/api/workspaces/w/sessions/one/revive')).toBe('session.create');
     expect(stepUpActionFor('POST', '/api/workspaces/w/sessions/one/resume')).toBe('session.create');
   });

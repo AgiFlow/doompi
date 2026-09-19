@@ -1,29 +1,27 @@
 import { Store } from '@tanstack/store';
 
-/**
- * Whether the new-session dialog is open.
- *
- * There are three ways in and they are in two different columns: ctrl+t and
- * the rail's plus on one side, the welcome panel's button on the other. A flag
- * held by whichever component happens to mount the dialog would put the other
- * column's button out of reach, and a feature may not import a sibling, so the
- * flag lives here and the dialog stays mounted once in the rail.
- */
+/** The shared rail dialog and the workspace a new session belongs to. */
 export interface NewSessionState {
   open: boolean;
+  /** Null means admit a workspace first instead of creating a session. */
+  workspaceId: string | null;
 }
 
-export const newSessionStore = new Store<NewSessionState>({ open: false });
+const initialState: NewSessionState = { open: false, workspaceId: null };
 
-export function openNewSession(): void {
-  newSessionStore.setState((state) => (state.open ? state : { open: true }));
+export const newSessionStore = new Store<NewSessionState>(initialState);
+
+export function openNewSession(workspaceId: string | null = null): void {
+  newSessionStore.setState((state) =>
+    state.open && state.workspaceId === workspaceId ? state : { open: true, workspaceId },
+  );
 }
 
 export function closeNewSession(): void {
-  newSessionStore.setState((state) => (state.open ? { open: false } : state));
+  newSessionStore.setState((state) => (state.open ? initialState : state));
 }
 
 /** Test seam. */
 export function resetNewSessionStore(): void {
-  newSessionStore.setState(() => ({ open: false }));
+  newSessionStore.setState(() => initialState);
 }
