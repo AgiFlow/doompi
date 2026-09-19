@@ -33,5 +33,5 @@ export interface SessionToolInvocation {
 export interface SessionToolSurface {
   readSurface(): SessionToolSurfaceSnapshot;
   invokeTool(invocation: SessionToolInvocation): Promise<DoomHeadlessToolResult>;
-  readSkill(revision: number, uri: string): string;
+  readSkill(revision: number, uri: string): string | Promise<string>;
 }

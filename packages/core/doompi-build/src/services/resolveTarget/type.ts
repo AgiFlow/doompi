@@ -1,7 +1,7 @@
 import type { ExtensionEntry, ExtensionNotice } from '../../types/extensionGraph';
 
-/** The three hosts an entry can be generated for. */
-export type BuildTarget = 'cli' | 'server' | 'web';
+/** The hosts an entry can be generated for. */
+export type BuildTarget = 'cli' | 'server' | 'web' | 'mcp';
 
 /** One file and the host contribution array it belongs in. */
 export interface ResolvedContribution {

@@ -79,13 +79,14 @@ The sides separate logic from presentation. They do not name a host or an owner.
 
 There are two narrow CLI exceptions. A session command may import a session frontend `overlay/*.cli.ts` route, or a private helper beside it, to open a TUI view. The session Pi root may import a private overlay helper to mount terminal status. Lint rejects other cross-side imports. Put shared data contracts in `src/types`, `src/constants`, `src/schemas`, or the generated API contract.
 
-Each side has its own platform suffixes: `cli` and `server` inside `(backend)`, and `cli`, `web`, `ios`, `android`, or `desktop` inside `(frontend)`. Every public routed file must name one. The scanner still parses an unsuffixed file so it can report a useful notice, but relying on the side to infer a host is not valid authored layout. Files inside a `_folder` are private, so they do not need a platform suffix.
+Each side has its own platform suffixes: `cli`, `server`, and `mcp` inside `(backend)`, and `cli`, `web`, `ios`, `android`, or `desktop` inside `(frontend)`. Every public routed file must name one. The scanner still parses an unsuffixed file so it can report a useful notice, but relying on the side to infer a host is not valid authored layout. Files inside a `_folder` are private, so they do not need a platform suffix.
 
 ```text
 (backend)/tool/write-plan.cli.ts       CLI only
 (backend)/tool/write-plan.server.ts    server only
 (frontend)/tool/write-plan.web.tsx     that tool's renderer in the browser
 (frontend)/tool/write-plan.ios.tsx     iOS override. no iOS build target yet, so no host builds it
+(backend)/tool/write-plan.mcp.ts       explicit remote MCP tool, never added to the local agent
 ```
 
 Matching names across the two sides are the join, and the platform suffix is not part of the name. `(backend)/channel/tasks.server.ts` and `(frontend)/channel/tasks.web.ts` are one frame type. `(backend)/tool/write-plan.server.ts` and `(frontend)/tool/write-plan.web.tsx` are one tool and its renderer.
@@ -96,7 +97,8 @@ A directory per kind, filename is identity.
 
 | Surface                                     | `(backend)` produces                   | `(frontend)` produces                |
 | ------------------------------------------- | -------------------------------------- | ------------------------------------ |
-| `tool/`                                     | `tools` on CLI and server              | CLI renderers or web `toolRenderers` |
+| `tool/`                                     | `tools` on CLI and server, explicit remote tools with `.mcp.ts` | CLI renderers or web `toolRenderers` |
+| `skill/`                                    | explicit remote Markdown resources with `.mcp.ts` | not scanned                          |
 | `tool-restriction/`                         | tool restrictions                      | not scanned                          |
 | `command/`                                  | `commands` on CLI and server           | web `paletteCommands`                |
 | `shortcut/`                                 | CLI shortcuts                          | not scanned                          |
@@ -119,6 +121,10 @@ A directory per kind, filename is identity.
 | `file-links/`, `repository-settings-panel/` | not scanned                            | web host integration                 |
 
 The backend scope root owns service injection and startup work. It returns Cordis `services` and, for a server session, host `activities` alongside shared state and cleanup hooks. A server activity can bind session intercom or report suspended runs. It is unrelated to the browser's `activity` slot or `activity-group/` surface.
+
+### Remote MCP declarations
+
+Remote MCP is opt-in. Author `tool/[name].mcp.ts` or `skill/[name].mcp.ts` below a session backend scope and build it with `tsdown.mcp.config.ts`. The generated MCP entry is admitted with package ownership and integrity checks. It has its own session surface, so local tools, server resources, and Pi contributions never become remote MCP capabilities by inference. MCP declarations may read explicitly mounted services from their MCP context, but must not import a generic server registration root.
 
 A frontend `overlay/*.cli.ts` file owns the interactive view that a session command opens through Pi's `ui.custom`. Pi has no overlay registration array.
 

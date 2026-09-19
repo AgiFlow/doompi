@@ -121,7 +121,7 @@ describe('generateExtension', () => {
       {
         path: 'src/extensions/(frontend)/tab/Panel.ios.tsx',
         message:
-          "'ios' is a forward-looking platform with no build target; this file is not emitted for cli, server or web",
+          "'ios' is a forward-looking platform with no build target; this file is not emitted for cli, server, web or mcp",
       },
     ]);
     expect(read(dir, 'generated/web.ts')).not.toContain('Panel.ios');

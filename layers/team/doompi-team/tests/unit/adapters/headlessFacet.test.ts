@@ -22,6 +22,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { facet as teamHeadlessFacet } from '../../../generated/server';
 import { SUBAGENT_ACTIONS } from '../../../src/exports/subagentTool';
 import { TEAM_API_BASE_PATH } from '../../../src/extensions/workspaces/sessions/(backend)/api/_lib/route.server';
+import { TEAM_MCP_TOOLS_SERVICE, type McpToolCatalog } from '../../../src/services/mcpTools';
 import { nativeRunProjection } from '../../../src/services/nativeRunProjection';
 import { sessionScopeDir } from '../../../src/services/sessionPaths';
 import * as runtimeModule from '../../../src/services/teamRuntime';
@@ -136,6 +137,10 @@ async function fixture(options: { serverHost?: unknown } = {}) {
     runtimeSpy.mockRestore();
   }
   if (!dispose || !runtime) throw new Error('Team headless facet did not mount');
+  const mcpCatalog = (context.provide as ReturnType<typeof vi.fn>).mock.calls.find(
+    ([name]) => name === TEAM_MCP_TOOLS_SERVICE,
+  )?.[1] as McpToolCatalog | undefined;
+  if (!mcpCatalog) throw new Error('Team MCP tools did not mount');
   return {
     serverHost: defaultServerHost,
     activities,
@@ -144,6 +149,7 @@ async function fixture(options: { serverHost?: unknown } = {}) {
     dispose,
     disposers,
     execution,
+    mcpCatalog,
     resources,
     runtime,
     sessionId,
@@ -185,11 +191,16 @@ describe('teamHeadlessFacet', () => {
       activityStop = await test.activities[0]!.start(test.execution);
       const jobs = test.runtime.asyncJobTracker.forSession(test.sessionId, scope);
       const intercom = test.tools.find((tool) => tool.name === 'intercom');
-      if (!intercom) throw new Error('intercom headless tool was not registered');
+      const remoteIntercom = test.mcpCatalog.get('intercom');
+      const remoteSubagent = test.mcpCatalog.get('subagent');
+      if (!intercom || !remoteIntercom || !remoteSubagent) throw new Error('Team tools were not registered');
       jobs.track('retained-run');
       expect(jobs.list()).toMatchObject([{ runId: 'retained-run', status: undefined }]);
       await expect(
-        intercom.execute('active', { action: 'members' }, undefined, undefined, test.execution),
+        remoteSubagent.execute('status', { action: 'status' }, undefined, undefined, test.execution),
+      ).resolves.toMatchObject({ details: { runs: [{ runId: 'retained-run' }] } });
+      await expect(
+        remoteIntercom.execute('active', { action: 'members' }, undefined, undefined, test.execution),
       ).resolves.toMatchObject({
         details: { members: [{ name: 'main', role: 'main' }] },
       });

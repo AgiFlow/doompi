@@ -124,7 +124,8 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && tsdown --config tsdown.mcp.config.ts",
+    "build:mcp": "tsdown --config tsdown.mcp.config.ts",
     "test": "vitest --run",
     "test-system": "vitest run --config vitest.system.config.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
@@ -182,6 +183,13 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiMcp": {
+    "entry": "./generated/mcp.ts",
+    "dist": "./dist/extensions/mcp.mjs",
+    "scopes": [
+      "session"
+    ]
   },
   "doompiServer": {
     "entry": "./generated/server.ts",

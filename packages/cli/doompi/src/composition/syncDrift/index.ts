@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { parseCompiledContracts } from '@agimon-ai/doompi-core/api-contracts';
+import { parseDoomMcpBundle } from '@agimon-ai/doompi-core/mcp-facet';
 import { parseDoomServerBundle } from '@agimon-ai/doompi-core/server-facet';
 import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 
@@ -11,8 +12,9 @@ import { readStartupBootstrapStatus, readBootstrapStatus } from '../../builders/
 import { inputsAreFresh, parseInputFingerprint } from '../../compiler/inputs';
 import {
   computeInputsHash,
-  computeWebSourcesHash,
+  computeMcpSourcesHash,
   computeServerSourcesHash,
+  computeWebSourcesHash,
   readSyncState,
   type SyncState,
 } from '../syncState';
@@ -24,7 +26,8 @@ export type SyncDriftReason =
   | 'runtime-stale'
   | 'cockpit-bundle-missing'
   | 'package-apis-missing'
-  | 'server-bundle-stale';
+  | 'server-bundle-stale'
+  | 'mcp-bundle-stale';
 
 export interface SyncDrift {
   /** True when nothing needs syncing before a session starts. */
@@ -144,6 +147,75 @@ export function serverBundleIsRuntimeUsable(
   return serverBundleIsUsable(state, registration, false);
 }
 
+function mcpBundleIsUsable(
+  state: Pick<SyncState, 'mcpBundle' | 'resolved'>,
+  registration: Pick<SyncRegistration, 'generation' | 'generationRoot' | 'mcpBundle'>,
+  requireFreshSources: boolean,
+): boolean {
+  const bundle = state.mcpBundle;
+  if (!bundle || !registration.mcpBundle) return false;
+  try {
+    if (requireFreshSources && bundle.sourcesHash !== computeMcpSourcesHash(state.resolved)) return false;
+    const descriptorPath = fs.realpathSync(bundle.descriptorPath);
+    if (descriptorPath !== fs.realpathSync(registration.mcpBundle.path)) return false;
+    const descriptorBytes = fs.readFileSync(descriptorPath);
+    if (crypto.createHash('sha256').update(descriptorBytes).digest('hex') !== registration.mcpBundle.sha256)
+      return false;
+    const descriptor = parseDoomMcpBundle(JSON.parse(descriptorBytes.toString('utf8')));
+    if (
+      descriptor.generation !== registration.generation ||
+      descriptor.fingerprint !== bundle.fingerprint ||
+      descriptor.fingerprint !== registration.mcpBundle.fingerprint
+    )
+      return false;
+
+    const root = fs.realpathSync(registration.generationRoot);
+    const inside = (target: string) => {
+      const relative = path.relative(root, fs.realpathSync(target));
+      return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    };
+    if (Object.keys(bundle.compilerManifests).length !== descriptor.entries.length) return false;
+    for (const entry of descriptor.entries) {
+      const manifestPath = bundle.compilerManifests[entry.packageName];
+      if (!manifestPath || !inside(manifestPath)) return false;
+      const receipt = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
+      const modulePath = path.resolve(path.dirname(descriptorPath), entry.module);
+      if (
+        typeof receipt.output !== 'string' ||
+        !inside(receipt.output) ||
+        fs.realpathSync(receipt.output) !== fs.realpathSync(modulePath) ||
+        crypto.createHash('sha256').update(fs.readFileSync(modulePath)).digest('hex') !== entry.sha256 ||
+        !Array.isArray(receipt.artifacts) ||
+        !receipt.artifacts.every((file) => typeof file === 'string' && inside(file))
+      )
+        return false;
+      const inputs = Array.isArray(receipt.inputs) ? receipt.inputs.map(parseInputFingerprint) : [];
+      if (inputs.length === 0 || inputs.some((input) => input === undefined)) return false;
+      if (requireFreshSources && !inputsAreFresh(inputs as NonNullable<(typeof inputs)[number]>[])) return false;
+      if (!artifactReceiptIsIntact(receipt, inside)) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Validate MCP source inputs, descriptor identity, and compiler artifact receipts. */
+export function mcpBundleIsFresh(
+  state: Pick<SyncState, 'mcpBundle' | 'resolved'>,
+  registration: Pick<SyncRegistration, 'generation' | 'generationRoot' | 'mcpBundle'>,
+): boolean {
+  return mcpBundleIsUsable(state, registration, true);
+}
+
+/** Validate admitted MCP artifacts while allowing producer sources to drift. */
+export function mcpBundleIsRuntimeUsable(
+  state: Pick<SyncState, 'mcpBundle' | 'resolved'>,
+  registration: Pick<SyncRegistration, 'generation' | 'generationRoot' | 'mcpBundle'>,
+): boolean {
+  return mcpBundleIsUsable(state, registration, false);
+}
+
 /**
  * Whether this repository is synced for the composition it would launch.
  *
@@ -223,6 +295,8 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
     !(requireFreshSources ? serverBundleIsFresh(state, registration) : serverBundleIsRuntimeUsable(state, registration))
   )
     reasons.push('server-bundle-stale');
+  if (!(requireFreshSources ? mcpBundleIsFresh(state, registration) : mcpBundleIsRuntimeUsable(state, registration)))
+    reasons.push('mcp-bundle-stale');
 
   return {
     fresh: reasons.length === 0,
@@ -243,6 +317,7 @@ export function describeSyncDrift(drift: SyncDrift): string {
     'cockpit-bundle-missing': 'the cockpit bundle is missing',
     'package-apis-missing': 'the package API routes are missing',
     'server-bundle-stale': 'its server bundle is missing or out of date',
+    'mcp-bundle-stale': 'its MCP bundle is missing or out of date',
   };
   return drift.reasons.map((reason) => detail[reason]).join(', ');
 }

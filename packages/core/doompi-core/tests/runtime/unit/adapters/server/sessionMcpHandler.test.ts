@@ -39,7 +39,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
     codeVerifier: VERIFIER,
   });
   const invokeTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'called' }] }));
-  const readSkill = vi.fn(() => '# Allowed skill');
+  const readSkill = vi.fn(async () => '# Allowed skill');
   let revision = 12;
   let includeNewCapabilities = false;
   const toolSurface: SessionToolSurface = {
@@ -222,6 +222,19 @@ describe('session MCP Streamable HTTP handler', () => {
     });
     await expect(
       (await invoking.request('tools/call', { name: 'allowed_tool', arguments: {} })).json(),
+    ).resolves.toMatchObject({
+      error: { message: expect.stringContaining('The session grant is no longer active.') },
+    });
+  });
+
+  it('rechecks revocation after an asynchronous skill read', async () => {
+    const reading = fixture();
+    reading.readSkill.mockImplementationOnce(async () => {
+      reading.authorization.revokeGrant(reading.grantId);
+      return '# must not return';
+    });
+    await expect(
+      (await reading.request('resources/read', { uri: 'doompi://session/alpha/skills/allowed-skill' })).json(),
     ).resolves.toMatchObject({
       error: { message: expect.stringContaining('The session grant is no longer active.') },
     });

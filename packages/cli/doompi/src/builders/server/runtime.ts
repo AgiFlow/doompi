@@ -21,6 +21,7 @@ import type {
   DoomHubSessionCreateRequest,
   DoomHubSessionScope,
 } from '@agimon-ai/doompi-core/hub-channel';
+import { loadMcpBundle, type LoadedMcpBundle } from '@agimon-ai/doompi-core/mcp-facet';
 import { serveSessionApis, type PackageApiServer } from '@agimon-ai/doompi-core/package-api-server';
 import { piAgentDirectory } from '@agimon-ai/doompi-core/pi-settings';
 import { createRemoteRuntime, type RemoteRuntime } from '@agimon-ai/doompi-core/remote-runtime';
@@ -95,7 +96,11 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         .filter(({ state }) => state.activation === 'active')
         .map(({ descriptor }) => ({ id: descriptor.id, label: descriptor.label, kind: 'minor' })),
   });
-  type SessionSetup = { cleanup: () => Promise<void>; bundle: Awaited<ReturnType<typeof loadServerBundle>> };
+  type SessionSetup = {
+    cleanup: () => Promise<void>;
+    bundle: Awaited<ReturnType<typeof loadServerBundle>>;
+    mcpBundle: LoadedMcpBundle;
+  };
   type SessionArtifacts = SessionSetup & { apis: PackageApiServer };
   const pendingSessions = new Map<string, SessionSetup>();
   const sessionArtifacts = new Map<string, SessionArtifacts>();
@@ -241,6 +246,23 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           onNotice: notice,
         });
       };
+      const loadSessionMcp = async (
+        root: string,
+        selection: { majorMode: string; activeLayers: readonly string[] },
+      ): Promise<LoadedMcpBundle> => {
+        const registration = readSyncRegistration(root, homeDirectory);
+        if (registration?.mcpBundle === undefined)
+          throw new Error(`Run the scoped DoomPi sync for '${root}' before opening its MCP runtime.`);
+        return loadMcpBundle({
+          directory: path.dirname(registration.mcpBundle.path),
+          generation: registration.generation,
+          fingerprint: registration.mcpBundle.fingerprint,
+          majorMode: selection.majorMode,
+          activeLayers: selection.activeLayers,
+          retainCandidates: true,
+          onNotice: notice,
+        });
+      };
       const sharedApiContext = {
         homeDirectory,
         environment: baseEnvironment,
@@ -381,6 +403,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       const sessionHostOptions = (
         context: Awaited<ReturnType<typeof buildHarnessContext>>,
         bundle: Awaited<ReturnType<typeof loadServerBundle>>,
+        mcpBundle: LoadedMcpBundle,
         identity: {
           sessionId: string;
           sessionName: string;
@@ -431,6 +454,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             return { majorMode: defaults.majorMode, domains: defaults.domains, profile: defaults.profile };
           },
           candidates: bundle.descriptor.entries,
+          mcpPlugins: mcpBundle.plugins,
           resolveSelection: (requested) => {
             const config = loadMajorModesConfig(policyOptions.repoRoot, policyOptions.homeDirectory);
             return {
@@ -504,11 +528,16 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             majorMode: harnessContext.options.majorMode,
             activeLayers: harnessContext.selectedLayers,
           });
+          const initialMcpBundle = await loadSessionMcp(harnessContext.options.repoRoot, {
+            majorMode: harnessContext.options.majorMode,
+            activeLayers: harnessContext.selectedLayers,
+          });
           pendingSessions.set(resolved.identity.sessionId, {
             cleanup: () => activeHarnessContext.cleanup(),
             bundle: initialBundle,
+            mcpBundle: initialMcpBundle,
           });
-          await hub.create(sessionHostOptions(harnessContext, initialBundle, resolved.identity));
+          await hub.create(sessionHostOptions(harnessContext, initialBundle, initialMcpBundle, resolved.identity));
         } catch (error) {
           pendingSessions.delete(resolved.identity.sessionId);
           await activeHarnessContext.cleanup().catch((cleanupError: unknown) => notice(String(cleanupError)));
@@ -542,8 +571,12 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             majorMode: childContext.options.majorMode,
             activeLayers: childContext.selectedLayers,
           });
-          pendingSessions.set(identity.sessionId, { cleanup: () => childContext.cleanup(), bundle });
-          const created = await hub.create(sessionHostOptions(childContext, bundle, identity));
+          const mcpBundle = await loadSessionMcp(childContext.options.repoRoot, {
+            majorMode: childContext.options.majorMode,
+            activeLayers: childContext.selectedLayers,
+          });
+          pendingSessions.set(identity.sessionId, { cleanup: () => childContext.cleanup(), bundle, mcpBundle });
+          const created = await hub.create(sessionHostOptions(childContext, bundle, mcpBundle, identity));
           // Recorded only once the session is live, and only with a workspace,
           // because a record the revive route cannot address is a rail card that
           // never wakes.

@@ -19,6 +19,7 @@ export default defineConfig({
     footer: 'src/exports/footer.ts',
     help: 'src/exports/help.ts',
     leader: 'src/exports/leader.ts',
+    'mcp-facet': 'src/exports/mcpFacet.ts',
     'mcp-projection': 'src/exports/mcpProjection.ts',
     'mcp-session': 'src/exports/mcpSession.ts',
     'mcp-status': 'src/exports/mcpStatus.ts',

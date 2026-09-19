@@ -13,6 +13,7 @@ function host(): HeadlessSessionHost {
     runtime: { exited: new Promise<number>(() => undefined) } as HeadlessSessionHost['runtime'],
     host: undefined,
     toolSurface: {} as HeadlessSessionHost['toolSurface'],
+    mcpSurface: {} as HeadlessSessionHost['mcpSurface'],
     prepareFacets: () => undefined,
     activateFacets: async () => undefined,
     canDispatch: () => true,

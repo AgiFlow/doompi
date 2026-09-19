@@ -220,6 +220,11 @@
       "import": "./dist/main.mjs",
       "require": "./dist/main.cjs"
     },
+    "./mcp-facet": {
+      "types": "./dist/mcp-facet.d.mts",
+      "import": "./dist/mcp-facet.mjs",
+      "require": "./dist/mcp-facet.cjs"
+    },
     "./mcp-projection": {
       "types": "./dist/mcp-projection.d.mts",
       "import": "./dist/mcp-projection.mjs",

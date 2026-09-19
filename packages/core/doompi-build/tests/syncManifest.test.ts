@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { scanExtensions } from '../src/services/scan';
-import { syncManifest } from '../src/services/syncManifest';
+import { syncManifest, syncMcpManifest } from '../src/services/syncManifest';
 
 const created: string[] = [];
 
@@ -38,5 +38,18 @@ describe('syncManifest', () => {
     });
 
     expect(manifest.doompiWeb).toMatchObject({ channels: ['current_state'] });
+  });
+
+  it('adds or removes only MCP-owned metadata', () => {
+    const existing = {
+      doompiServer: { entry: './generated/server.ts' },
+      exports: { '.': { import: './dist/index.mjs' } },
+    };
+    expect(syncMcpManifest(existing, true)).toMatchObject({
+      doompiMcp: { entry: './generated/mcp.ts', dist: './dist/extensions/mcp.mjs', scopes: ['session'] },
+      doompiServer: existing.doompiServer,
+      exports: existing.exports,
+    });
+    expect(syncMcpManifest({ ...existing, doompiMcp: {} }, false)).toEqual(existing);
   });
 });

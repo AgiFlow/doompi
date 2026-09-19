@@ -3,6 +3,8 @@ import type { BuildTarget } from '../resolveTarget/type';
 import type { ScanOptions } from '../scan/type';
 
 export interface GenerateOptions extends ScanOptions {
+  /** Generate only one isolated host target. Omitted preserves the normal build. */
+  readonly target?: BuildTarget;
   /** Defaults to the name in the package's own package.json. */
   readonly packageName?: string;
   /** Defaults to the package name without its scope and `doompi-` prefix. */

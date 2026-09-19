@@ -64,6 +64,15 @@ function host() {
         invokeTool: vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'done' }] })),
         readSkill: vi.fn(() => '# Review'),
       },
+      mcpSurface: {
+        readSurface: () => ({
+          revision: 1,
+          tools: [{ name: 'read', label: 'Read', description: 'Read a file', parameters: { type: 'object' } as never }],
+          skills: [{ name: 'review', description: 'Review code', uri: 'doompi://session/session/skills/review' }],
+        }),
+        invokeTool: vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'done' }] })),
+        readSkill: vi.fn(() => '# Review'),
+      },
       prepareFacets: () => undefined,
       activateFacets: async () => undefined,
       canDispatch: () => true,

@@ -3,8 +3,8 @@ import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headle
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
 
 import { COMMAND_NAME } from '../../../../../../constants/task';
+import { reducerAction } from '../../../../../../services/taskTool';
 import type { TaskServerScope } from '../../_lib/root.server';
-import { reducerAction } from '../../tool/_lib/task.server';
 
 export default (context: WithRoot<DoomServerPluginContext, TaskServerScope>) => ({
   name: COMMAND_NAME,

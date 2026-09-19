@@ -23,6 +23,7 @@ function host() {
       runtime,
       host: undefined,
       toolSurface: {} as HeadlessSessionHost['toolSurface'],
+      mcpSurface: {} as HeadlessSessionHost['mcpSurface'],
       prepareFacets: () => undefined,
       activateFacets: async () => undefined,
       canDispatch: () => true,

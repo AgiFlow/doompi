@@ -14,6 +14,9 @@ import type { NativeAsyncJobProjection, TrackedAsyncJob } from '../../../../../s
 import { loadConfig } from '../../../../../services/config';
 import { createDelegationBridge } from '../../../../../services/delegationBridge';
 import { registerDirectRunBackgroundWork } from '../../../../../services/directRunBackgroundWork';
+import { createHeadlessIntercomTool } from '../../../../../services/headlessIntercomTool';
+import { createHeadlessSubagentTool } from '../../../../../services/headlessSubagentTool';
+import { mountMcpTools } from '../../../../../services/mcpTools';
 import { toModelInfo } from '../../../../../services/modelInfo';
 import { nativeRunProjection } from '../../../../../services/nativeRunProjection';
 import { subscribeNativeRunProjection } from '../../../../../services/nativeRunProjection';
@@ -329,6 +332,7 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
         if (readDoomBackgroundWorkService(context) === undefined) provideBackgroundWorkService(context);
       },
       serverService,
+      mountMcpTools([createHeadlessIntercomTool(channel), createHeadlessSubagentTool(runtime, execution)]),
     ],
     activities: [activity],
     // Mirrors `root.cli.ts`, which starts the scheduler in its own `onStart`.

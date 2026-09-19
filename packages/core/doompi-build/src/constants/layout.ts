@@ -52,7 +52,7 @@ export const GENERATED_DIR = 'generated';
  * and adding a fourth generated file silently rotates which host each entry
  * belongs to.
  */
-export const GENERATED_ENTRY_FILENAMES = { cli: 'pi', server: 'server', web: 'web' } as const;
+export const GENERATED_ENTRY_FILENAMES = { cli: 'pi', server: 'server', web: 'web', mcp: 'mcp' } as const;
 
 /**
  * The generated typed client, which is not a build target.
@@ -80,7 +80,7 @@ export const API_ROUTES_MODULE = 'src/types/apiRoutes.ts';
  * constants module holds data a reader can see without running it. The cost is
  * that the names appear twice; the generate tests assert the two agree.
  */
-export const GENERATED_ENTRY_NAMES: readonly string[] = ['pi', 'server', 'web', 'client'];
+export const GENERATED_ENTRY_NAMES: readonly string[] = ['pi', 'server', 'web', 'mcp', 'client'];
 
 /**
  * Platform suffixes, scoped to their side. A target may not reuse one of these words.
@@ -94,11 +94,11 @@ export const GENERATED_ENTRY_NAMES: readonly string[] = ['pi', 'server', 'web', 
  * be a browser, which is why the side axis is logic against presentation
  * rather than Node against browser.
  */
-export const BACKEND_PLATFORMS: readonly string[] = ['cli', 'server'];
+export const BACKEND_PLATFORMS: readonly string[] = ['cli', 'server', 'mcp'];
 export const FRONTEND_PLATFORMS: readonly string[] = ['cli', 'web', 'ios', 'android', 'desktop'];
 
 /** The hosts this build emits. A frontend platform outside this set is authorable but unbuildable. */
-export const BUILD_TARGET_PLATFORMS: readonly string[] = ['cli', 'server', 'web'];
+export const BUILD_TARGET_PLATFORMS: readonly string[] = ['cli', 'server', 'web', 'mcp'];
 
 /**
  * Surfaces that produce contributions on the backend side.
@@ -108,6 +108,7 @@ export const BUILD_TARGET_PLATFORMS: readonly string[] = ['cli', 'server', 'web'
  */
 export const BACKEND_SURFACES: readonly string[] = [
   'tool',
+  'skill',
   'tool-restriction',
   'command',
   'shortcut',

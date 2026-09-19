@@ -65,7 +65,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && pnpm build:mcp",
+    "build:mcp": "tsdown --config tsdown.mcp.config.ts",
     "test": "vitest --run",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint . && oxfmt . --check",
@@ -95,6 +96,13 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiMcp": {
+    "entry": "./generated/mcp.ts",
+    "dist": "./dist/extensions/mcp.mjs",
+    "scopes": [
+      "session"
+    ]
   },
   "doompiServer": {
     "entry": "./generated/server.ts",

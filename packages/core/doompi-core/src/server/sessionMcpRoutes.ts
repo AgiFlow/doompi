@@ -152,7 +152,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
           const resolved = target(workspaceId, sessionId);
           return resolved === undefined
             ? undefined
-            : { generation: resolved.generation, toolSurface: resolved.session.host.toolSurface };
+            : { generation: resolved.generation, toolSurface: resolved.session.host.mcpSurface };
         },
       });
       return handler(new Request(audience, request));
@@ -286,7 +286,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         if (configuredOrigin === undefined) return json(503, { error: 'Session MCP public origin is unavailable.' });
         let surface;
         try {
-          surface = resolved.session.host.toolSurface.readSurface();
+          surface = resolved.session.host.mcpSurface.readSurface();
         } catch {
           return json(409, { error: 'The session capability surface is not ready.' });
         }
@@ -336,7 +336,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         if (scope === 'restricted') {
           let surface;
           try {
-            surface = resolved.session.host.toolSurface.readSurface();
+            surface = resolved.session.host.mcpSurface.readSurface();
           } catch {
             return json(409, { error: 'The session capability surface is not ready.' });
           }

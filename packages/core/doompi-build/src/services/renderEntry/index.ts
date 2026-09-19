@@ -24,6 +24,7 @@ const FACTORY_FIELDS: Readonly<Record<BuildTarget, readonly string[]>> = {
   cli: ['channels'],
   server: ['channels'],
   web: [],
+  mcp: [],
 };
 
 /**
@@ -51,6 +52,7 @@ const CONTRIBUTIONS_TYPE: Readonly<Record<BuildTarget, string>> = {
   cli: 'PiPluginContributions',
   server: 'DoomServerSessionPlugin',
   web: 'WebPluginContributions',
+  mcp: 'DoomMcpSessionPlugin',
 };
 
 /**
@@ -670,6 +672,29 @@ export function renderServerEntry(resolution: TargetResolution, options: RenderO
     '});',
     '',
     'export default facet;',
+    '',
+  ]);
+}
+
+/** The explicit remote-MCP entry. It intentionally imports only .mcp declarations. */
+export function renderMcpEntry(resolution: TargetResolution, options: RenderOptions): string {
+  const bindings = bind(resolution, options);
+  const body = bodyFor(bindings, '    ', () => 'context', 'mcp', options);
+  return compact([
+    HEADER,
+    "import { defineMcpPlugin, type DoomMcpSessionPlugin } from '@agimon-ai/doompi-core/mcp-facet';",
+    '',
+    ...importsFor(bindings, [], [], options.entryDir),
+    '',
+    ...resolverFor(body),
+    'export const mcp = defineMcpPlugin({',
+    `  name: '${options.packageName}',`,
+    '  session: (context) => ({',
+    ...body,
+    '  }) satisfies DoomMcpSessionPlugin,',
+    '});',
+    '',
+    'export default mcp;',
     '',
   ]);
 }

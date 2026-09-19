@@ -5,7 +5,7 @@ import { GENERATED_DIR } from '../../constants/layout';
 import { generateExtension } from '../generate';
 import type { GenerateOptions } from '../generate/type';
 import { toKebab } from '../identity';
-import { writeManifest } from '../syncManifest';
+import { writeManifest, writeMcpManifest } from '../syncManifest';
 
 interface EmittedFile {
   readonly type: 'asset' | 'chunk';
@@ -155,18 +155,24 @@ export function doompiExtension(
 
   for (const notice of result.notices) process.stderr.write(`[doompi-build] ${notice.path}: ${notice.message}\n`);
 
-  const entry: Record<string, string> = {
-    ...exportEntries(packageDir, options.exportsDir ?? DEFAULT_EXPORTS_DIR),
-    ...(result.targets.includes('cli') ? { 'extensions/pi': `${GENERATED_DIR}/pi.ts` } : {}),
-    ...(result.targets.includes('server') ? { 'extensions/server': `${GENERATED_DIR}/server.ts` } : {}),
-    ...options.entry,
-  };
+  const mcpOnly = options.target === 'mcp';
+  const entry: Record<string, string> = mcpOnly
+    ? result.targets.includes('mcp')
+      ? { 'extensions/mcp': `${GENERATED_DIR}/mcp.ts` }
+      : {}
+    : {
+        ...exportEntries(packageDir, options.exportsDir ?? DEFAULT_EXPORTS_DIR),
+        ...(result.targets.includes('cli') ? { 'extensions/pi': `${GENERATED_DIR}/pi.ts` } : {}),
+        ...(result.targets.includes('server') ? { 'extensions/server': `${GENERATED_DIR}/server.ts` } : {}),
+        ...options.entry,
+      };
 
   const node: PresetConfig = {
     entry,
-    clean: true,
+    // MCP shares dist/ with the normal build, so neither build may erase the other.
+    clean: false,
     dts: { incremental: true, parallel: false, eager: true },
-    exports: true,
+    exports: !mcpOnly,
     format: ['esm', 'cjs'],
     // No minify. This is a library build, and a mangled stack trace inside a
     // published extension is far more expensive than the bytes it saves.
@@ -180,19 +186,21 @@ export function doompiExtension(
     sourcemap: true,
     unbundle: true,
     hooks: {
-      'build:done': () =>
-        void writeManifest({
+      'build:done': () => {
+        if (mcpOnly) {
+          writeMcpManifest(packageDir, result.targets.includes('mcp'));
+          return;
+        }
+        writeManifest({
           packageDir,
-          manifest: JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8')) as Record<
-            string,
-            unknown
-          >,
+          manifest: JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8')) as Record<string, unknown>,
           graph: result.graph,
           targets: result.targets,
           pluginId: result.pluginId,
-        }),
+        });
+      },
     },
   };
 
-  return result.targets.includes('web') ? [node, browserConfig()] : node;
+  return !mcpOnly && result.targets.includes('web') ? [node, browserConfig()] : node;
 }

@@ -174,13 +174,15 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       const { snapshot, skills } = grantedSurface(active.grant, active.target.toolSurface);
       const skill = skills.find((candidate) => candidate.uri === message.params.uri);
       if (skill === undefined) throw new McpError(ErrorCode.InvalidParams, 'Skill resource is not granted or active.');
+      const text = await active.target.toolSurface.readSkill(snapshot.revision, skill.uri);
+      await authorizeOperation();
       return {
         contents: [
           {
             uri: skill.uri,
             name: skill.name,
             mimeType: 'text/markdown',
-            text: active.target.toolSurface.readSkill(snapshot.revision, skill.uri),
+            text,
           },
         ],
       };
