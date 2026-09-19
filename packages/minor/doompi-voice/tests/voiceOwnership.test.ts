@@ -379,7 +379,7 @@ describe('SessionVoiceOwnership', () => {
     });
   });
 
-  it('acknowledges ownership while autonomous media capture is starting', async () => {
+  it('does not acknowledge ownership until autonomous media capture is active', async () => {
     let state: 'disabled' | 'starting' | 'active' = 'disabled';
     const ownership = new SessionVoiceOwnership();
     ownership.register({
@@ -399,10 +399,11 @@ describe('SessionVoiceOwnership', () => {
     });
 
     await expect(ownership.command(command('starting-activation', 'activate'))).resolves.toMatchObject({
-      ok: true,
-      active: true,
+      ok: false,
+      active: false,
+      error: 'Autonomous voice did not activate.',
     });
-    expect(ownership.registration()).toMatchObject({ active: true });
+    expect(ownership.registration()).toMatchObject({ active: false });
   });
 
   it('releases ownership while autonomous media capture is draining', async () => {

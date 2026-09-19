@@ -40,8 +40,9 @@ function ownershipLabel(value: string | (() => string), fallback: string): strin
   }
 }
 
+/** Starting only reserves capture. Ownership needs usable media, which is reported as active. */
 function isOwnershipActive(state: AutoCaptureActivationState): boolean {
-  return state === 'starting' || state === 'active';
+  return state === 'active';
 }
 
 export class SessionVoiceOwnership {
