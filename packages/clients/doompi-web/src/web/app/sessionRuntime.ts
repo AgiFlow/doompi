@@ -26,6 +26,7 @@ import { dispatchChannelFrame } from '../lib/pluginRegistry';
 import { focusSessionWebPlugins, removeSessionWebPluginRuntime } from '../lib/pluginRuntime';
 import { createProtocolHubSocket } from '../lib/protocolHubSocket';
 import { hasSessionProtocol } from '../lib/sessionProtocolCommands';
+import { createToolCompletionTabs } from '../lib/toolCompletionTabs';
 import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } from '../lib/transport';
 import { applyCaptureFrame, disconnectCaptures, pendingCaptureSessions } from '../stores/captureStore';
 import { dropComposerState, restoreComposerDrafts, saveComposerDrafts } from '../stores/composerStore';
@@ -57,7 +58,7 @@ import {
   seedHistoryCursor,
 } from '../stores/sessionStore';
 import { applyThreadTranscriptFrame, dropThreads, resubscribeThreads, threadStoreKey } from '../stores/threadStore';
-import { dropTransientTabs } from '../stores/transientTabsStore';
+import { dropTransientTabs, openTransientTab } from '../stores/transientTabsStore';
 import { startProtocolRuntime } from './protocolRuntime';
 
 const BUNDLE_REFRESH_INTERVAL_MS = 60_000;
@@ -75,6 +76,13 @@ function voiceOwner(frame: Record<string, unknown>): string | null | undefined {
 
 function navigateToTransferredSession(sessionId: string): void {
   window.history.pushState(null, '', `/session/${encodeURIComponent(sessionId)}`);
+  window.dispatchEvent(new Event('popstate'));
+}
+
+function openCompletedToolTab(sessionId: string, tab: Parameters<typeof openTransientTab>[1]): void {
+  openTransientTab(sessionId, tab);
+  if (sessionsStore.state.activeId !== sessionId) return;
+  window.history.pushState(null, '', `/session/${encodeURIComponent(sessionId)}/${encodeURIComponent(tab.id)}`);
   window.dispatchEvent(new Event('popstate'));
 }
 
@@ -179,12 +187,14 @@ export function startSessionRuntime(): () => void {
   // Focus, voice ownership, and pending captures each own a hub subscription.
   // Socket loss ends captures; a fresh snapshot restores the remaining owners.
   const subscribed = new Set<string>();
+  const toolCompletionTabs = createToolCompletionTabs(openCompletedToolTab);
   let currentVoiceOwner: string | null = null;
   let pendingVoiceTransferTarget: string | undefined;
   let pendingVoiceTransferFocus: Promise<void> | undefined;
   let deferredVoiceOwnershipFrame: Record<string, unknown> | undefined;
   const applyPresentationFrame = (sessionId: string, frame: Record<string, unknown>, replay: boolean): void => {
     applySessionFrame(sessionId, frame, { replay });
+    toolCompletionTabs.apply(sessionId, frame, replay);
     // The direct protocol callback has no hub envelope, but channel demux needs the session identity.
     dispatchChannelFrame({ ...frame, sessionId });
     if (replay) return;
@@ -484,6 +494,7 @@ export function startSessionRuntime(): () => void {
   return () => {
     stopBundleWatch();
     stopFileLinkModes();
+    toolCompletionTabs.dispose();
     subscription.unsubscribe();
     captureSubscription.unsubscribe();
     disposeDormantTranscripts();

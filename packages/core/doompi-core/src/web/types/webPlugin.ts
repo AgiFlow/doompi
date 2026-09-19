@@ -718,6 +718,13 @@ export interface ToolPromptContribution {
  * component per claimed tool owns the whole item. One tool name belongs to
  * one renderer.
  */
+export interface ToolCompletionEvent {
+  sessionId: string;
+  toolCallId: string;
+  args: Record<string, unknown>;
+  result: ToolResultView;
+}
+
 export interface ToolRendererContribution {
   /** Tool names as registered with Pi (registerTool's `name`). */
   tools: string[];
@@ -731,6 +738,8 @@ export interface ToolRendererContribution {
    */
   matches?(toolName: string, statuses: Readonly<Record<string, string>>): boolean;
   message: ComponentType<ToolMessageRenderProps>;
+  /** A temporary tab to add when a live invocation completes successfully. History and failed calls do not invoke it. */
+  completionTab?(event: ToolCompletionEvent): TransientTab | undefined;
   /** Stands in for the composer input while this tool runs and holds a request. */
   prompt?: ToolPromptContribution;
 }

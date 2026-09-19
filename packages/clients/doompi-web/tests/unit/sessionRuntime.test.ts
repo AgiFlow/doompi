@@ -27,6 +27,9 @@ const menuState = vi.hoisted(() => ({ claimed: [] as string[], cleared: 0 }));
 
 vi.mock('../../src/web/lib/pluginRegistry', () => ({
   dispatchChannelFrame: (frame: Record<string, unknown>) => pluginState.dispatched.push(frame),
+  sessionToolRenderer: () => undefined,
+  sessionWebPluginsInstalled: () => false,
+  subscribeWebPluginRegistry: () => () => undefined,
 }));
 
 vi.mock('../../src/web/lib/pluginRuntime', () => ({

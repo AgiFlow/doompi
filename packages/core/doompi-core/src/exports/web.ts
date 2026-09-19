@@ -139,6 +139,7 @@ export type {
   SurfaceContribution,
   TabContribution,
   ThreadViewOptions,
+  ToolCompletionEvent,
   ToolMessageRenderProps,
   ToolPromptContribution,
   ToolPromptDialog,
