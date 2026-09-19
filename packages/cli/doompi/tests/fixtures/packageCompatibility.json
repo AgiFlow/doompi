@@ -730,6 +730,7 @@
       "./log-sink-telemetry": "tir",
       "./machine-api": "tir",
       "./main": "tir",
+      "./mcp-facet": "tir",
       "./mcp-projection": "tir",
       "./mcp-schema-cost": "tir",
       "./mcp-session": "tir",
@@ -983,6 +984,11 @@
         "types": "./dist/main.d.mts",
         "import": "./dist/main.mjs",
         "require": "./dist/main.cjs"
+      },
+      "./mcp-facet": {
+        "types": "./dist/mcp-facet.d.mts",
+        "import": "./dist/mcp-facet.mjs",
+        "require": "./dist/mcp-facet.cjs"
       },
       "./mcp-projection": {
         "types": "./dist/mcp-projection.d.mts",
@@ -2784,6 +2790,49 @@
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-sandbox/SKILL.md"],
     "files": ["dist", "src/prompts", "llms.txt", "README.md", "LICENSE", "package.json"],
+    "os": [],
+    "cpu": []
+  },
+  "@agimon-ai/doompi-session": {
+    "exports": {
+      ".": "tir",
+      "./api-contracts": "tir",
+      "./extensions/pi": "tir",
+      "./extensions/server": "tir",
+      "./package.json": "esm"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./api-contracts": {
+        "types": "./dist/api-contracts.d.mts",
+        "import": "./dist/api-contracts.mjs",
+        "require": "./dist/api-contracts.cjs"
+      },
+      "./extensions/pi": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      },
+      "./extensions/server": {
+        "types": "./dist/extensions/server.d.mts",
+        "import": "./dist/extensions/server.mjs",
+        "require": "./dist/extensions/server.cjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.cts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": {
+      "extensions": ["./dist/extensions/pi.mjs"]
+    },
+    "assets": [],
+    "files": ["dist", "llms.txt", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },

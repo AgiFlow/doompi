@@ -1844,8 +1844,8 @@ describe('consumer ownership boundaries', () => {
 
   it('keeps the matrix explicit instead of silently dropping standard entries', () => {
     const names = PACKAGE_MATRIX.map((entry) => entry.name);
-    expect(PACKAGE_MATRIX).toHaveLength(49);
-    expect(standardPackageSet.size).toBe(35);
+    expect(PACKAGE_MATRIX).toHaveLength(50);
+    expect(standardPackageSet.size).toBe(36);
     expect(standardPackageSet).toContain('@agimon-ai/doompi-author');
     expect(standardPackageSet).toContain('@agimon-ai/doompi-computer-use');
     expect(standardPackageSet).toContain('@agimon-ai/doompi-help');
