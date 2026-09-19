@@ -400,20 +400,20 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       // Minor tool restrictions run in the tools sink only after this owner gate.
       this.applying = selection;
       this.refreshing = true;
+      let compositionChanged = false;
       try {
         const previousValues = new Map(
           this.kernel.slots.map((slot) => [slot, this.kernel.activeValues(slot)] as const),
         );
         await this.kernel.setActiveLayers(eligible.map((entry) => entry.packageName));
         await this.refreshChangedSelection(this.applied, selection, previousValues);
-        const compositionChanged =
+        compositionChanged =
           this.appliedRevision === 0 ||
           !sameSelection(this.applied, selection) ||
           this.restrictionsChanged ||
           this.contributionsChanged ||
           !sameValues(previousValues.get('tools') ?? [], this.kernel.activeValues('tools')) ||
           !sameValues(previousValues.get('resources') ?? [], this.kernel.activeValues('resources'));
-        if (compositionChanged) await this.options.onApplied?.(selection, revision);
         this.restrictionsChanged = false;
         this.contributionsChanged = false;
       } finally {
@@ -426,6 +426,7 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       this.failure = undefined;
       this.ready = revision === this.requestedRevision;
       for (const listener of this.selectionListeners) await listener(selection);
+      if (compositionChanged) await this.options.onApplied?.(selection, revision);
     };
     const result = this.tail.catch(() => undefined).then(apply);
     this.tail = result.catch((error: unknown) => {

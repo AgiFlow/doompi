@@ -127,7 +127,8 @@ export function resolveTarget(graph: ExtensionGraph, target: BuildTarget): Targe
 
   for (const entry of graph.entries) {
     if (!drawsFrom(entry, target)) continue;
-    if (target === 'mcp' ? entry.platform !== 'mcp' : entry.platform !== undefined && entry.platform !== target) continue;
+    if (target === 'mcp' ? entry.platform !== 'mcp' : entry.platform !== undefined && entry.platform !== target)
+      continue;
     if (entry.role === 'escape-hatch') {
       escapeHatches.push(entry);
       continue;

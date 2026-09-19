@@ -8,9 +8,10 @@ import type {
   DoomHeadlessHostService,
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-core/headless';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import mcp from '../../generated/mcp';
 import { facet as skillHeadlessFacet } from '../../generated/server';
 
 const temporaryDirectories: string[] = [];
@@ -59,10 +60,10 @@ describe('skill headless facet', () => {
         return registration();
       },
     } as unknown as DoomHeadlessHostService;
-    const close = await skillHeadlessFacet.apply({
-      effect() {},
-      get: (name: string) => (name === 'doom/server-host' ? { scope: 'session' } : host),
-    } as unknown as Context);
+    const services = new Context();
+    services.provide('doom/server-host', { scope: 'session' });
+    services.provide('doom/headless-host', host);
+    const close = await skillHeadlessFacet.apply(services);
     if (!command) throw new Error('Skill command was not registered');
     const notify = vi.fn();
     const prompt = vi.fn();
@@ -118,16 +119,32 @@ describe('skill headless facet', () => {
         return { dispose: vi.fn() };
       },
     } as unknown as DoomHeadlessHostService;
-    const close = await skillHeadlessFacet.apply({
-      effect() {},
-      get: (name: string) => (name === 'doom/server-host' ? { scope: 'session' } : host),
-    } as unknown as Context);
+    const services = new Context();
+    services.provide('doom/server-host', { scope: 'session' });
+    services.provide('doom/headless-host', host);
+    const close = await skillHeadlessFacet.apply(services);
 
     // The facet mounts once, so the command has to carry the condition rather
     // than be rebuilt: this is what lets a cockpit /domains switch add and
     // remove it without restarting the session.
     expect(commands.get('skill:outline')?.when).toEqual({ domain: 'writing' });
+    const createRemote = mcp.session;
+    if (typeof createRemote !== 'function') throw new Error('Expected MCP session factory');
+    const remote = (domains: readonly string[]) =>
+      createRemote({
+        execution: host.context,
+        services,
+        selection: { read: () => ({ majorMode: 'default', activeLayers: [], domains }), change: async () => {} },
+        signal: new AbortController().signal,
+      });
+    expect((await remote([])).skills?.map((skill) => skill.name)).not.toContain('outline');
+    const skills = (await remote(['writing'])).skills!;
+    expect(skills.map((skill) => skill.name)).toContain('outline');
+    expect(skills.map((skill) => skill.name)).toContain('doompi-use-skill');
+    const outline = skills.find((skill) => skill.name === 'outline')!;
+    expect(await outline.read(host.context)).toContain('# Outline');
 
     await close?.();
+    await expect(outline.read(host.context)).rejects.toThrow();
   });
 });

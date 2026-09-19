@@ -15,6 +15,8 @@ export interface LoadMcpBundleOptions {
   readonly directory: string;
   readonly generation: string;
   readonly fingerprint: string;
+  /** SHA-256 of the descriptor bytes admitted by sync registration. */
+  readonly descriptorSha256: string;
   readonly majorMode: string;
   readonly activeLayers: readonly string[];
   readonly onNotice?: (message: string) => void;
@@ -52,9 +54,11 @@ function isMcpPlugin(value: unknown): value is DoomMcpPluginDefinition {
 /** Imports only modules named by an admitted MCP descriptor. */
 export async function loadMcpBundle(options: LoadMcpBundleOptions): Promise<LoadedMcpBundle> {
   const directory = fs.realpathSync(options.directory);
-  const descriptor = parseDoomMcpBundle(
-    JSON.parse(fs.readFileSync(containedFile(directory, DOOM_MCP_BUNDLE_FILE), 'utf8')),
-  );
+  const descriptorBytes = fs.readFileSync(containedFile(directory, DOOM_MCP_BUNDLE_FILE));
+  const descriptorSha256 = crypto.createHash('sha256').update(descriptorBytes).digest('hex');
+  if (descriptorSha256 !== options.descriptorSha256)
+    throw new Error('MCP descriptor hash does not match the admitted descriptor');
+  const descriptor = parseDoomMcpBundle(JSON.parse(descriptorBytes.toString('utf8')));
   if (descriptor.generation !== options.generation || descriptor.fingerprint !== options.fingerprint)
     throw new Error('MCP bundle does not match the admitted generation');
   const plugins: LoadedMcpPlugin[] = [];

@@ -1,5 +1,5 @@
-import { defineMcpTool } from '@agimon-ai/doompi-core/mcp-facet';
+import { defineMcpTool, type DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
 
-import { createAskUserHeadlessTool } from '../_tools/askUserHeadless';
+import { bindMcpHeadlessTool } from '../../../../../services/mcpHeadlessTools';
 
-export default defineMcpTool(createAskUserHeadlessTool());
+export default defineMcpTool((context: DoomMcpPluginContext) => bindMcpHeadlessTool(context, 'ask_user_question'));

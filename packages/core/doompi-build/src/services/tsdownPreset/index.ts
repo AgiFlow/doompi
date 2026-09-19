@@ -38,7 +38,9 @@ interface BrowserPresetConfig {
 interface PresetConfig {
   entry: Record<string, string>;
   clean: boolean;
-  dts: { incremental: boolean; parallel: boolean; eager: boolean };
+  dts: false | { incremental: boolean; parallel: boolean; eager: boolean };
+  write?: false;
+  plugins?: QueryAssetPlugin[];
   exports: boolean;
   format: ('esm' | 'cjs')[];
   platform: 'node';
@@ -147,6 +149,18 @@ function browserConfig(): BrowserPresetConfig {
   };
 }
 
+/** Removes only filenames owned by the isolated MCP build, including obsolete declarations. */
+function cleanMcpOutput(packageDir: string): void {
+  const dist = path.join(packageDir, 'dist');
+  if (!fs.existsSync(dist)) return;
+  for (const relative of fs.readdirSync(dist, { recursive: true, encoding: 'utf8' })) {
+    const normalized = relative.split(path.sep).join('/');
+    if (!/^(?:extensions\/mcp|.+\.mcp)\.(?:mjs|cjs|d\.mts|d\.cts)(?:\.map)?$/u.test(normalized)) continue;
+    const absolute = path.join(dist, relative);
+    if (fs.lstatSync(absolute).isFile()) fs.rmSync(absolute);
+  }
+}
+
 export function doompiExtension(
   options: ExtensionPresetOptions = { packageDir: process.cwd() },
 ): PresetConfig | (PresetConfig | BrowserPresetConfig)[] {
@@ -156,10 +170,14 @@ export function doompiExtension(
   for (const notice of result.notices) process.stderr.write(`[doompi-build] ${notice.path}: ${notice.message}\n`);
 
   const mcpOnly = options.target === 'mcp';
+  if (mcpOnly && !options.check) cleanMcpOutput(packageDir);
+  const emptyMcp = mcpOnly && !result.targets.includes('mcp');
+  const emptyEntry = '\0doompi-empty-mcp';
+  if (emptyMcp && !options.check) writeMcpManifest(packageDir, false);
   const entry: Record<string, string> = mcpOnly
     ? result.targets.includes('mcp')
       ? { 'extensions/mcp': `${GENERATED_DIR}/mcp.ts` }
-      : {}
+      : { 'extensions/mcp': emptyEntry }
     : {
         ...exportEntries(packageDir, options.exportsDir ?? DEFAULT_EXPORTS_DIR),
         ...(result.targets.includes('cli') ? { 'extensions/pi': `${GENERATED_DIR}/pi.ts` } : {}),
@@ -171,7 +189,21 @@ export function doompiExtension(
     entry,
     // MCP shares dist/ with the normal build, so neither build may erase the other.
     clean: false,
-    dts: { incremental: true, parallel: false, eager: true },
+    dts: emptyMcp ? false : { incremental: true, parallel: false, eager: true },
+    // tsdown rejects both an empty entry and an empty config array. A virtual
+    // input completes its normal lifecycle without publishing an empty facet.
+    ...(emptyMcp
+      ? {
+          write: false as const,
+          plugins: [
+            {
+              name: 'doompi-empty-mcp',
+              resolveId: (source: string) => (source === emptyEntry ? emptyEntry : undefined),
+              load: (id: string) => (id === emptyEntry ? 'export {};' : undefined),
+            },
+          ],
+        }
+      : {}),
     exports: !mcpOnly,
     format: ['esm', 'cjs'],
     // No minify. This is a library build, and a mangled stack trace inside a
@@ -184,7 +216,9 @@ export function doompiExtension(
       dts: format === 'es' ? '.d.mts' : '.d.cts',
     }),
     sourcemap: true,
-    unbundle: true,
+    // Bundle MCP separately so its generated entry cannot overwrite the normal
+    // build's unbundled internal modules in the shared dist directory.
+    unbundle: !mcpOnly,
     hooks: {
       'build:done': () => {
         if (mcpOnly) {
@@ -193,7 +227,10 @@ export function doompiExtension(
         }
         writeManifest({
           packageDir,
-          manifest: JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8')) as Record<string, unknown>,
+          manifest: JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8')) as Record<
+            string,
+            unknown
+          >,
           graph: result.graph,
           targets: result.targets,
           pluginId: result.pluginId,

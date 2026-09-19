@@ -1186,9 +1186,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     invocation: Parameters<SessionToolSurface['invokeTool']>[0],
     readRevision: () => number,
     readTools: () => Map<string, AppliedSessionTool>,
-    ready: boolean,
+    ready: () => boolean,
+    lifecycleSignal?: AbortSignal,
   ): Promise<import('../../../exports/headless').DoomHeadlessToolResult> => {
-    if (disposed || !headlessReady || !ready || !headlessHost?.status.ready)
+    if (disposed || !headlessReady || !ready() || !headlessHost?.status.ready)
       throw new Error('Headless capability preparation is not ready.');
     if (invocation.revision !== readRevision()) throw new Error('The session tool surface has changed');
     if (!isJsonObject(invocation.arguments)) throw new Error('Tool arguments must be a JSON object');
@@ -1196,6 +1197,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     if (applied === undefined) throw new Error(`Tool '${invocation.name}' is not active`);
     if (!Value.Check(applied.descriptor.parameters, invocation.arguments))
       throw new Error(`Invalid arguments for tool '${invocation.name}'`);
+    const signals = [invocation.signal, lifecycleSignal].filter(
+      (signal): signal is AbortSignal => signal !== undefined,
+    );
+    const signal = signals.length === 0 ? undefined : AbortSignal.any(signals);
+    signal?.throwIfAborted();
     return runtime.runExternalOperation(async () => {
       const toolCallId = `external-${randomUUID()}`;
       const before = await beforeTool(
@@ -1206,6 +1212,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       const args = before?.args ?? (invocation.arguments as Record<string, JsonValue>);
       if (!Value.Check(applied.descriptor.parameters, args))
         throw new Error(`A tool hook produced invalid arguments for '${invocation.name}'`);
+      await invocation.authorize?.();
+      signal?.throwIfAborted();
+      if (disposed || !headlessReady || !ready() || !headlessHost?.status.ready)
+        throw new Error('Headless capability preparation is not ready.');
       if (invocation.revision !== readRevision() || readTools().get(invocation.name) !== applied)
         throw new Error(`Tool '${invocation.name}' is no longer active`);
       emitTo(listeners, {
@@ -1218,7 +1228,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       });
       let result;
       try {
-        result = await applied.execute(toolCallId, args, invocation.signal, (partial) => {
+        result = await applied.execute(toolCallId, args, signal, (partial) => {
           emitTo(listeners, {
             type: 'tool_execution_update',
             runId: EXTERNAL_OPERATION,
@@ -1284,7 +1294,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         invocation,
         () => surfaceRevision,
         () => appliedSessionTools,
-        toolSurfaceReady,
+        () => toolSurfaceReady,
       ),
     readSkill(revision, uri) {
       if (disposed || !headlessReady || !toolSurfaceReady || !headlessHost?.status.ready)
@@ -1311,7 +1321,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         invocation,
         () => mcpSurfaceRevision,
         () => appliedMcpTools,
-        mcpSurfaceReady,
+        () => mcpSurfaceReady,
+        mcpLifecycle.signal,
       ),
     async readSkill(revision, uri) {
       if (disposed || !headlessReady || !mcpSurfaceReady || !headlessHost?.status.ready)
@@ -1319,7 +1330,12 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       if (revision !== mcpSurfaceRevision) throw new Error('The session MCP surface has changed');
       const skill = appliedMcpSkills.get(uri)?.skill;
       if (skill === undefined) throw new Error('The session MCP skill is not active');
-      return skill.read(headlessHost.context);
+      const text = await skill.read(headlessHost.context);
+      if (disposed || !headlessReady || !mcpSurfaceReady || !headlessHost?.status.ready)
+        throw new Error('MCP capability preparation is not ready.');
+      if (revision !== mcpSurfaceRevision || appliedMcpSkills.get(uri)?.skill !== skill)
+        throw new Error('The session MCP surface has changed');
+      return text;
     },
   };
 
