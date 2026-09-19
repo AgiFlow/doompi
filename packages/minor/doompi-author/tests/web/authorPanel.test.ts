@@ -180,17 +180,16 @@ describe('the Author web plugin', () => {
     };
 
     expect(
-      displayedAuthorRegions({ generation: 0, activeTool: 'select', regions: [first, second], requests: [] }).map(
-        ({ ordinal, region }) => [ordinal, region.id],
-      ),
+      displayedAuthorRegions({ regions: [first, second], requests: [] }).map(({ ordinal, region }) => [
+        ordinal,
+        region.id,
+      ]),
     ).toEqual([
       [1, 'first'],
       [2, 'second'],
     ]);
     expect(
       displayedAuthorRegions({
-        generation: 0,
-        activeTool: 'select',
         regions: [],
         requests: [
           {
