@@ -405,7 +405,7 @@ export function definePiExtension<TOptions = undefined>(
       await install(context, pi, options, connection.runtime);
     });
     let completion: Promise<void> | undefined;
-    let unsubscribeShutdown: (() => void) | undefined;
+    let unsubscribeShutdown: ReturnType<ExtensionAPI['on']> | undefined;
     const dispose = (): Promise<void> =>
       (completion ??= (async () => {
         try {
@@ -418,8 +418,7 @@ export function definePiExtension<TOptions = undefined>(
       })());
     try {
       await fiber;
-      const shutdownRegistration = pi.on('session_shutdown', dispose) as unknown;
-      if (typeof shutdownRegistration === 'function') unsubscribeShutdown = shutdownRegistration as () => void;
+      unsubscribeShutdown = pi.on('session_shutdown', dispose);
     } catch (error) {
       try {
         await dispose();
