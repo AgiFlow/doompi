@@ -83,7 +83,9 @@ export function createPluginLifecycle<TContext>(
           await dispose();
         } catch (cleanupError) {
           const errors = cleanupError instanceof AggregateError ? cleanupError.errors : [cleanupError];
-          throw new AggregateError([error, ...errors], 'Plugin startup and cleanup failed.', { cause: error });
+          throw new AggregateError([error, ...errors], error instanceof Error ? error.message : String(error), {
+            cause: error,
+          });
         }
         throw error;
       });

@@ -360,8 +360,8 @@ export function definePiExtension<TOptions = undefined>(
           });
         }
         // The public mapped handlers retain each native event's input and return type.
-        const on = pi.on.bind(pi) as (event: string, handler: unknown) => void;
-        for (const [event, handler] of Object.entries(contributions.events ?? {})) on(event, handler);
+        const on = pi.on.bind(pi) as (event: string, handler: unknown) => ReturnType<ExtensionAPI['on']>;
+        for (const [event, handler] of Object.entries(contributions.events ?? {})) lifecycle.own(on(event, handler));
         for (const item of contributions.providers ?? []) pi.registerProvider(...item);
         for (const item of contributions.messageRenderers ?? []) pi.registerMessageRenderer(...item);
         for (const item of contributions.entryRenderers ?? []) pi.registerEntryRenderer(...item);
@@ -405,9 +405,12 @@ export function definePiExtension<TOptions = undefined>(
       await install(context, pi, options, connection.runtime);
     });
     let completion: Promise<void> | undefined;
+    let unsubscribeShutdown: (() => void) | undefined;
     const dispose = (): Promise<void> =>
       (completion ??= (async () => {
         try {
+          unsubscribeShutdown?.();
+          unsubscribeShutdown = undefined;
           await fiber.dispose();
         } finally {
           await connection.dispose();
@@ -415,7 +418,8 @@ export function definePiExtension<TOptions = undefined>(
       })());
     try {
       await fiber;
-      pi.on('session_shutdown', dispose);
+      const shutdownRegistration = pi.on('session_shutdown', dispose) as unknown;
+      if (typeof shutdownRegistration === 'function') unsubscribeShutdown = shutdownRegistration as () => void;
     } catch (error) {
       try {
         await dispose();

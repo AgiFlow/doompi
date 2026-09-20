@@ -15,7 +15,7 @@ function rejected(error: unknown, filePath?: string): Result<never, FileError> {
 /**
  * Own the destination before pinned JsonlSessionRepo computes its final path.
  * Storage remains upstream-owned. Only acquisition and destructive cleanup are gated.
- * Pinned 0.85.1 stages at destination + '.tmp'; an unexpected write fails closed.
+ * Pinned 0.86.0 stages at destination + '.tmp'; an unexpected write fails closed.
  */
 export function createHistoryCreationFileSystem(
   backend: FileSystem,
@@ -30,11 +30,14 @@ export function createHistoryCreationFileSystem(
     cwd: backend.cwd,
     absolutePath: backend.absolutePath.bind(backend),
     readTextFile: backend.readTextFile.bind(backend),
+    openTextLineReader: backend.openTextLineReader.bind(backend),
     readTextLines: backend.readTextLines.bind(backend),
     readBinaryFile: backend.readBinaryFile.bind(backend),
     async appendFile(filePath, content, context) {
       try {
-        if (!admitted || !published || filePath !== destination)
+        const ownsStaging = filePath === staging && stagingWritten;
+        const ownsPublished = filePath === destination && published;
+        if (!admitted || (!ownsStaging && !ownsPublished))
           return rejected(new Error('Unowned history append'), filePath);
         return await backend.appendFile(filePath, content, context);
       } catch (error) {

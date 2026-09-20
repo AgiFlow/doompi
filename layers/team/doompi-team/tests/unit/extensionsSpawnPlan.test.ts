@@ -555,6 +555,24 @@ describe('SpawnPlanner', () => {
       expect(spawner.calls).toEqual([]);
     });
 
+    it('adds ceiling-required tools to the native child request', async () => {
+      const policies = new SubagentCapabilityPolicyStore();
+      policies.register(
+        { owner: '@agimon-ai/doompi-plan', allowedTools: ['bash', 'read'], requiredTools: ['bash'] },
+        'plan-generation',
+      );
+      planner = new TestableSpawnPlanner(discovery, spawner, policies, skills);
+
+      await planner.spawn(
+        baseRequest({
+          single: { agent: 'read-only', task: 'inspect', inlineAgent: { systemPrompt: 'Inspect only.' } },
+        }),
+        config,
+      );
+
+      expect(planner.child.calls[0]?.tools).toEqual(['read', 'grep', 'find', 'ls', 'bash']);
+    });
+
     it('rejects external runtimes while a capability ceiling is active', async () => {
       discovery.agents.set('external', agentConfig('external', { runtime: 'claude' }));
       const policies = new SubagentCapabilityPolicyStore();

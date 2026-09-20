@@ -38,14 +38,14 @@ afterEach(() => {
 });
 
 describe('NodeLifeline', () => {
-  it('listens on a socket and publishes it to spawned runners', async () => {
+  it('listens on a socket without changing the process environment', async () => {
     const lifeline = new NodeLifeline(pathsFor());
 
     const target = await lifeline.arm('session-a');
 
     expect(target).toBeDefined();
     expect(fs.statSync(target as string).isSocket()).toBe(true);
-    expect(process.env[LIFELINE_ENV]).toBe(target);
+    expect(process.env[LIFELINE_ENV]).toBeUndefined();
     lifeline.dispose();
   });
 

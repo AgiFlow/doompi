@@ -23,12 +23,8 @@ export interface InputFingerprint {
 }
 
 /**
- * Verdicts already reached, so a rebuild that rewrote every input without
- * changing it does not re-hash the whole graph on every poll.
- *
- * Keyed by the stats actually found on disk, so it can never answer for a set
- * it did not see. Bounded by the compiler manifests in one composition, which
- * is single digits.
+ * Verdicts already reached, keyed by both the receipt and the stats now on disk,
+ * so one receipt cannot answer the freshness question for another.
  */
 const freshnessVerdicts = new Map<string, boolean>();
 
@@ -86,7 +82,7 @@ export function inputsAreFresh(inputs: readonly InputFingerprint[]): boolean {
       return false;
     }
     if (!stat.isFile()) return false;
-    key.update(`${input.path} ${String(stat.size)} ${String(stat.mtimeMs)} `);
+    key.update(JSON.stringify([input.path, input.size, input.mtimeMs, input.sha256, stat.size, stat.mtimeMs]));
     if (stat.size !== input.size || stat.mtimeMs !== input.mtimeMs) moved.push(input);
   }
   if (moved.length === 0) return true;

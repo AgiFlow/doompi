@@ -60,7 +60,7 @@ export function createRunnerDependencies(
   const logFile = memoize(() => overrides.logFile ?? new LogFile(paths()));
   const logReader = memoize(() => overrides.logReader ?? new LogReader());
   const launcher = memoize(
-    () => overrides.launcher ?? new Launcher(spawner(), processControl(), logFile(), clock(), paths()),
+    () => overrides.launcher ?? new Launcher(spawner(), processControl(), logFile(), clock(), paths(), lifeline()),
   );
   const rmuxBackend = memoize(
     () => overrides.rmuxBackend ?? new PtyBackendChain(new RmuxBackend(paths()), new TmuxBackend(paths())),

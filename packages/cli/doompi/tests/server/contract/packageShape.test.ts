@@ -34,11 +34,11 @@ describe('doompi core server surface', () => {
   it('declares the server runtime dependencies', async () => {
     const manifest = await readManifest();
     expect(manifest.dependencies).toMatchObject({
-      '@earendil-works/chord': '0.85.1',
-      '@earendil-works/pi-protocol': '0.85.1',
+      '@earendil-works/chord': '0.86.0',
+      '@earendil-works/pi-protocol': '0.86.0',
       '@hono/node-server': '2.1.1',
     });
-    expect(manifest.devDependencies?.['@earendil-works/pi-client']).toBe('0.85.1');
+    expect(manifest.devDependencies?.['@earendil-works/pi-client']).toBe('0.86.0');
   });
 
   it('keeps serve as a dedicated tsdown entry', async () => {

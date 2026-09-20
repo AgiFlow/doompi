@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
+import { DOOM_MCP_BUNDLE_FILE } from '@agimon-ai/doompi-core/mcp-facet';
 import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '@agimon-ai/doompi-core/pi-settings';
 import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
@@ -36,7 +37,7 @@ import {
   selectionEnvironment,
   toSelection,
 } from '../../src/cli/commands/sync';
-import { computeServerSourcesHash } from '../../src/composition/syncState';
+import { computeMcpSourcesHash, computeServerSourcesHash } from '../../src/composition/syncState';
 import { HARNESS_STATE_POINTER } from '../../src/exports/harnessState';
 import {
   computeInputsHash,
@@ -253,6 +254,16 @@ async function writeMatchingState(root: string): Promise<SyncState> {
     compilerManifests: {},
     sourcesHash: computeServerSourcesHash(state.resolved),
   };
+  const mcpDirectory = path.join(generationRoot, 'mcp');
+  const mcpDescriptorPath = path.join(mcpDirectory, DOOM_MCP_BUNDLE_FILE);
+  fs.mkdirSync(mcpDirectory, { recursive: true });
+  fs.writeFileSync(mcpDescriptorPath, JSON.stringify({ version: 1, generation, fingerprint, entries: [] }));
+  state.mcpBundle = {
+    descriptorPath: mcpDescriptorPath,
+    fingerprint,
+    compilerManifests: {},
+    sourcesHash: computeMcpSourcesHash(state.resolved),
+  };
   const statePath = await writeSyncState(root, state, homeDirectory, path.join(generationRoot, 'state.json'));
   const packageRoot = fs.realpathSync(path.resolve(import.meta.dirname, '../..'));
   const manifestPath = path.join(packageRoot, 'package.json');
@@ -274,6 +285,7 @@ async function writeMatchingState(root: string): Promise<SyncState> {
       webDirectory: null,
       apiDirectory,
       serverBundle: { path: descriptorPath, fingerprint, sha256: syncStateSha256(descriptorPath) },
+      mcpBundle: { path: mcpDescriptorPath, fingerprint, sha256: syncStateSha256(mcpDescriptorPath) },
       package: {
         root: packageRoot,
         version: manifest.version,
@@ -447,6 +459,16 @@ describe('drift', () => {
     fs.appendFileSync(path.join(root, '.doom', 'modes.yaml'), '\n# edited\n');
 
     expect(collectDrift(root, SELECTION, state, environmentFor(root))).toContain('.doom configuration changed');
+  });
+
+  it('notices a missing MCP bundle', async () => {
+    const root = makeRepository();
+    const state = await writeMatchingState(root);
+    fs.rmSync(state.mcpBundle!.descriptorPath);
+
+    expect(collectDrift(root, SELECTION, state, environmentFor(root))).toContain(
+      'sync registration is missing or invalid',
+    );
   });
 
   it('checks every precompiled bundle in diagnostic mode', async () => {

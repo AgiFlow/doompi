@@ -59,6 +59,20 @@ function writeSkill(directory: string, name: string): void {
   fs.writeFileSync(path.join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: Does ${name}.\n---\n\nBody.\n`);
 }
 
+function systemPromptOptions(root: string, skills: Skill[] = []): BeforeAgentStartEvent['systemPromptOptions'] {
+  return {
+    cwd: root,
+    selectedTools: ['read'],
+    toolSnippets: {},
+    toolGuidelines: {},
+    promptGuidelines: [],
+    appendSystemPrompt: '',
+    sections: {},
+    contextFiles: [],
+    skills,
+  };
+}
+
 /** Resolves the overlay with the first skill the command discovered. */
 function invokeFirstSkill(): void {
   openOverlay.mockImplementation(async (_ctx, options) => {
@@ -283,7 +297,7 @@ describe('skills pi extension', () => {
         type: 'before_agent_start',
         prompt: 'hello',
         systemPrompt: 'base',
-        systemPromptOptions: { cwd: root, selectedTools: ['read'] },
+        systemPromptOptions: systemPromptOptions(root),
       } satisfies BeforeAgentStartEvent;
 
       await handlers.get('session_start')?.(
@@ -346,7 +360,7 @@ describe('skills pi extension', () => {
       type: 'before_agent_start',
       prompt: 'hello',
       systemPrompt: 'base',
-      systemPromptOptions: { cwd: root, selectedTools: ['read'], skills: [] },
+      systemPromptOptions: systemPromptOptions(root),
     } satisfies BeforeAgentStartEvent;
     expect(await handlers.get('before_agent_start')?.(before, ctx)).toMatchObject({
       systemPrompt: expect.stringContaining('workflow-help'),

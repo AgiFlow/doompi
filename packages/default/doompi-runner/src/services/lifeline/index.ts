@@ -7,7 +7,6 @@ import path from 'node:path';
 import { SOCKET_HASH_LENGTH, SOCKET_MODE, SOCKET_NAME, SOCKET_PATH_LIMIT } from '../../constants/lifeline';
 import type { ILifeline } from '../../types/lifeline';
 import type { IRunnerPaths } from '../runnerPaths/type';
-import { LIFELINE_ENV } from './client';
 
 /** Unix socket paths are capped at 104 bytes, so a long agent directory falls back to the temp dir. */
 
@@ -39,7 +38,6 @@ export class NodeLifeline implements ILifeline {
       server.unref();
       this.server = server;
       this.target = target;
-      process.env[LIFELINE_ENV] = target;
       return target;
     } catch (error) {
       // Runners stay unwatched rather than unlaunchable, so a session without a
@@ -74,7 +72,6 @@ export class NodeLifeline implements ILifeline {
       }
       this.target = undefined;
     }
-    if (process.env[LIFELINE_ENV]) delete process.env[LIFELINE_ENV];
   }
 
   /** Keeps the socket beside the session it belongs to unless that path is too long to bind. */
