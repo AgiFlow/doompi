@@ -188,8 +188,8 @@
     "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.85.1",
-    "@earendil-works/pi-tui": "0.85.1",
+    "@earendil-works/pi-coding-agent": "0.86.0",
+    "@earendil-works/pi-tui": "0.86.0",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
     "@types/node": "26.5.1",
@@ -204,8 +204,8 @@
   "peerDependencies": {
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.85.1",
-    "@earendil-works/pi-tui": "0.85.1"
+    "@earendil-works/pi-coding-agent": "0.86.0",
+    "@earendil-works/pi-tui": "0.86.0"
   },
   "peerDependenciesMeta": {
     "@agimon-ai/doompi-web-components": {

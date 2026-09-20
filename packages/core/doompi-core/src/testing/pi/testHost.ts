@@ -270,10 +270,16 @@ export function createPiTestHost(options: PiTestHostOptions = {}): PiTestHost {
   const runExec = options.exec ?? ((): ExecutionResult => DEFAULT_EXEC);
 
   const pi: ExtensionAPI = {
-    on(event: string, handler: LifecycleHandler): void {
+    on(event: string, handler: LifecycleHandler): () => void {
       const registered = lifecycle.get(event) ?? [];
       registered.push(handler);
       lifecycle.set(event, registered);
+      return () => {
+        const index = registered.indexOf(handler);
+        if (index === -1) return;
+        registered.splice(index, 1);
+        if (registered.length === 0) lifecycle.delete(event);
+      };
     },
     // Generic exactly as Pi declares it. Storage erases the schema generics; the
     // signature is the half that has to keep matching.

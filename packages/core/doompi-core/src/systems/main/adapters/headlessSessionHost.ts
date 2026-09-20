@@ -462,7 +462,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
    *
    * The server had none of this: its prompt began at the --system-prompt flag, so a
    * repository's own instructions reached a terminal session and never a cockpit one.
-   * Mirrors @earendil-works/pi-coding-agent@0.85.1 dist/core/system-prompt.js:21-27
+   * Mirrors @earendil-works/pi-coding-agent@0.86.0 dist/core/system-prompt.js:21-27
    * (the customPrompt branch, which is the shape this host matches). `buildSystemPrompt`
    * is not exported and the package exports map has no wildcard, so the four literals
    * below are copied; re-diff them against that file on upgrade.

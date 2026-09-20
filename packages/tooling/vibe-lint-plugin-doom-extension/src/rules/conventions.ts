@@ -9,7 +9,7 @@ import { piDiscoveryEntryStems, projectPath, sourceStem } from './manifestEntrie
 import { hasPluginHelperCall } from './pluginWiring.js';
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
-const PI_VERSION = '0.85.1';
+const PI_VERSION = '0.86.0';
 const PI_PACKAGES = [
   '@earendil-works/pi-agent-core',
   '@earendil-works/pi-ai',
