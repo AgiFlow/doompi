@@ -365,9 +365,10 @@ export const webPluginToolRenderers: RuleDefinition = {
     const manifest = readManifest(configRoot);
     if (manifest === null) return null;
     const { tools, ignored } = toolDefinitions(configRoot);
-    if (tools.length === 0) return null;
+    const renderedTools = tools.filter((tool) => tool.resolved.kind !== 'literal' || !ignored.has(tool.resolved.name));
+    if (renderedTools.length === 0) return null;
     if (pluginBlocks(manifest).length === 0) {
-      const named = tools.flatMap((tool) =>
+      const named = renderedTools.flatMap((tool) =>
         tool.resolved.kind === 'literal' ? [tool.resolved.name] : [tool.resolved.text],
       );
       return `This package registers Pi tools (${named.join(', ')}) but ships no doompiWeb plugin to render them; add one with scaffold-doom-web-plugin, then a toolRenderers entry per tool.`;
@@ -375,7 +376,7 @@ export const webPluginToolRenderers: RuleDefinition = {
     const { claimed, hasMatcher } = webClaims(configRoot);
     const missing: string[] = [];
     const unresolvable: string[] = [];
-    for (const tool of tools) {
+    for (const tool of renderedTools) {
       if (tool.resolved.kind === 'literal') {
         if (!claimed.has(tool.resolved.name) && !ignored.has(tool.resolved.name)) {
           missing.push(`${tool.resolved.name} (${tool.file})`);

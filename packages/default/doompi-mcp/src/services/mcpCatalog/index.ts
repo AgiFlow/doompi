@@ -145,7 +145,7 @@ export class McpCatalog {
    */
   applyStateChange(
     change: McpCatalogStateChange,
-    tools: McpCatalogToolInput[] = [],
+    tools?: McpCatalogToolInput[],
     resourceCount?: number,
   ): CatalogTool[] {
     const entry = this.entries.get(change.serverName) ?? {
@@ -159,14 +159,28 @@ export class McpCatalog {
     else delete entry.error;
     if (resourceCount !== undefined) entry.resourceCount = resourceCount;
 
-    const known = new Set(entry.tools.map((tool) => tool.toolName));
-    const added = this.claimTools(
-      change.serverName,
-      tools.filter((tool) => !known.has(tool.name)),
-    );
-    entry.tools = [...entry.tools, ...added];
+    if (change.state === 'connected' && tools !== undefined) {
+      const known = new Map(entry.tools.map((tool) => [tool.toolName, tool]));
+      const next: CatalogTool[] = [];
+      const added: CatalogTool[] = [];
+      for (const tool of tools) {
+        const current = known.get(tool.name);
+        if (current !== undefined) {
+          next.push(toCatalogTool(change.serverName, tool));
+          continue;
+        }
+        const [claimed] = this.claimTools(change.serverName, [tool]);
+        if (claimed !== undefined) {
+          next.push(claimed);
+          added.push(claimed);
+        }
+      }
+      entry.tools = next;
+      this.entries.set(change.serverName, entry);
+      return added;
+    }
     this.entries.set(change.serverName, entry);
-    return added;
+    return [];
   }
 
   /**

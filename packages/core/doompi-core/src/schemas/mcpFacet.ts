@@ -7,6 +7,20 @@ import type {
   DoomHeadlessTool,
 } from './headless';
 
+/** Repository-scoped instructions and applied selection safe to disclose to a remote MCP client. */
+export interface DoomMcpContextSnapshot {
+  readonly session: { readonly id: string; readonly revision: number };
+  readonly repository: { readonly root: string; readonly cwd: string };
+  readonly selection: {
+    readonly profile: string | null;
+    readonly domains: readonly string[];
+    readonly majorMode: string;
+    readonly activeLayers: readonly string[];
+  };
+  readonly instructions: readonly { readonly path: string; readonly content: string }[];
+  readonly persona: string | null;
+}
+
 /** A lazy Markdown resource available only to remote MCP clients. */
 export interface DoomMcpSkill {
   readonly name: string;
@@ -32,8 +46,12 @@ export interface DoomMcpPluginContext {
     read(): DoomHeadlessSelection;
     change(change: DoomHeadlessSelectionChange): Promise<void>;
   };
+  /** Reads the allowlisted repository context from the current applied session selection. */
+  loadContext(): DoomMcpContextSnapshot;
   /** Aborted when this plugin surface is replaced or the session closes. */
   readonly signal: AbortSignal;
+  /** Rebuilds the remote surface after a live MCP catalog changes. */
+  refresh(): void;
 }
 
 export interface DoomMcpPluginDefinition {

@@ -20,6 +20,7 @@ import { readSessionConfig } from '../../services/sessionConfig';
 import type { McpSessionConfig } from '../../types/mcpConfig';
 import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../types/webMcp';
 import { registerLeaderContribution } from '../leader';
+import { createMcpSessionToolsService, MCP_SESSION_TOOLS_SERVICE } from '../mcpSessionTools';
 
 const INFO = 'info';
 const WARNING = 'warning';
@@ -120,9 +121,11 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
             generation: `${hostSession.generation}:mcp-tool-resolver`,
             resolve: (selectors: readonly string[]) => session.resolveToolSelectors(selectors),
           });
+          const sessionTools = createMcpSessionToolsService(session, `${hostSession.generation}:mcp-tools`);
           sessionContext.plugin((providerContext) => {
             providerContext.provide(DOOM_MCP_STATUS_SERVICE, status);
             providerContext.provide(DOOM_MCP_TOOL_RESOLVER_SERVICE, toolResolver);
+            providerContext.provide(MCP_SESSION_TOOLS_SERVICE, sessionTools);
           });
           for (const diagnostic of session.getDiagnostics()) context.ui?.notify(diagnostic, WARNING);
           return async () => {

@@ -186,7 +186,7 @@ export function McpSessionAuthSection({
             </div>
           </DialogHeader>
           <DialogBody className="px-4 py-4 sm:px-5 sm:py-5">
-            <p role="status" className="text-sm text-doom-muted">
+            <output className="text-sm text-doom-muted">
               {server?.state === 'connected'
                 ? 'Authorization complete. This server is connected.'
                 : server?.state === 'closed'
@@ -198,7 +198,7 @@ export function McpSessionAuthSection({
                       : server
                         ? 'Preparing the authorization link...'
                         : 'This server is no longer available in the session.'}
-            </p>
+            </output>
             {popupBlocked ? (
               <p className="text-xs text-doom-muted">
                 The browser blocked the new tab. Open the link below when it is ready.
@@ -225,11 +225,7 @@ export function McpSessionAuthSection({
                 </Button>
               </div>
             ) : null}
-            {copyFeedback ? (
-              <p role="status" className="text-xs text-doom-muted">
-                {copyFeedback}
-              </p>
-            ) : null}
+            {copyFeedback ? <output className="text-xs text-doom-muted">{copyFeedback}</output> : null}
           </DialogBody>
           <DialogFooter className="flex-wrap justify-end border-t border-doom-border-soft px-4 py-3 sm:px-5">
             {server?.state === 'connected' && selected ? (

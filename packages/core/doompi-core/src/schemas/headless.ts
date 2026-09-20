@@ -95,6 +95,12 @@ export interface DoomHeadlessSession {
   forkSource?(): Promise<{ kind: 'v4-fork'; sessionFile: string; branch: string; entryId?: string }>;
 }
 
+/** A grant-filtered skill view available only during one remote MCP tool invocation. */
+export interface DoomMcpSkillAccess {
+  list(): Promise<readonly { name: string; description: string }[]>;
+  read(name: string): Promise<string>;
+}
+
 export interface DoomHeadlessExecutionContext {
   readonly cwd: string;
   /** Admitted configuration root, distinct from the tool execution directory. */
@@ -119,6 +125,8 @@ export interface DoomHeadlessExecutionContext {
     ): Promise<string>;
   };
   readonly selection: DoomHeadlessSelection;
+  /** Present only while an authenticated remote MCP tool is running. */
+  readonly mcpSkills?: DoomMcpSkillAccess;
   shutdown(): void;
 }
 

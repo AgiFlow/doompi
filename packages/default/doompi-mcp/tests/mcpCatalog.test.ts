@@ -93,6 +93,16 @@ describe('McpCatalog', () => {
       expect(catalog.activeToolNames()).toEqual(['pencil_get_screenshot', 'pencil_export_html']);
     });
 
+    it('replaces a connected server tool list so removed tools are no longer active', () => {
+      catalog.applyStateChange({ serverName: 'pencil', state: 'connected' }, [
+        mcpTool('get_screenshot'),
+        mcpTool('export_html'),
+      ]);
+      catalog.applyStateChange({ serverName: 'pencil', state: 'connected' }, [mcpTool('get_screenshot')]);
+
+      expect(catalog.activeToolNames()).toEqual(['pencil_get_screenshot']);
+    });
+
     it('accepts a server that was never in the cache', () => {
       const added = catalog.applyStateChange({ serverName: 'boomlink', state: 'connected' }, [mcpTool('search')]);
 

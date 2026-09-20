@@ -29,6 +29,7 @@ let listTools: ReturnType<typeof vi.fn>;
 let listResources: ReturnType<typeof vi.fn>;
 let disconnectServer: ReturnType<typeof vi.fn>;
 let ensureConnected: ReturnType<typeof vi.fn>;
+let callTool: ReturnType<typeof vi.fn>;
 let runtimeDisposals: Array<ReturnType<typeof vi.fn>>;
 let surfaces: DoomToolSurfaceService[];
 
@@ -121,7 +122,8 @@ beforeEach(() => {
   disconnectServer = vi.fn().mockResolvedValue(undefined);
   // The manager announces `connected` before it registers the client, so the tool
   // read has to go through ensureConnected; getClient would still be empty.
-  ensureConnected = vi.fn().mockResolvedValue({ callTool: vi.fn(), listTools, listResources });
+  callTool = vi.fn();
+  ensureConnected = vi.fn().mockResolvedValue({ callTool, listTools, listResources });
   runtimeDisposals = [];
   surfaces = [];
 
@@ -137,6 +139,7 @@ beforeEach(() => {
         getClient: () => undefined,
         disconnectServer,
         ensureConnected,
+        getServerRequestTimeout: () => 500,
       },
       connectionsSettled: Promise.resolve(),
       dispose,
@@ -531,6 +534,7 @@ describe('McpSession', () => {
       active.setEnabled('pencil', false);
 
       expect(activeTools()).toEqual(['read']);
+      expect(active.activeToolDefinitions()).toEqual([]);
     });
 
     it('restores them on the way back without re-registering anything', async () => {
@@ -551,6 +555,32 @@ describe('McpSession', () => {
       active.setEnabled('pencil', false);
 
       expect(disconnectServer).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remote tool invocations', () => {
+    it('calls the active tool through the live session runtime', async () => {
+      const { pi } = fakePi();
+      const active = await session(pi);
+      active.install();
+      await active.start();
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(active.activeToolDefinitions()).toHaveLength(1));
+      callTool.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
+
+      await expect(active.invokeTool('pencil_get_screenshot', { quality: 'full' })).resolves.toEqual({
+        content: [{ type: 'text', text: 'ok' }],
+        details: { server: 'pencil', tool: 'get_screenshot' },
+      });
+      expect(callTool).toHaveBeenCalledWith('get_screenshot', { quality: 'full' }, { timeout: 500 });
+    });
+
+    it('rejects tools outside the current session configuration', async () => {
+      const active = await session(fakePi().pi);
+
+      await expect(active.invokeTool('missing', {})).rejects.toThrow(
+        'not available in the current session configuration',
+      );
     });
   });
 

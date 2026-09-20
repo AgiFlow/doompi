@@ -14,6 +14,7 @@ import { buildMcpConfigGroups } from '../configSources';
 import { readDirectToolFilter } from '../directToolsEnvironment';
 import { type CatalogTool, McpCatalog } from '../mcpCatalog';
 import { type McpRuntimeOwner, readCachedCatalog } from '../mcpRuntime';
+import { toAgentToolResult } from '../mcpTools';
 import { readSessionConfig } from '../sessionConfig';
 import { mcpToolRestriction } from '../toolVisibility';
 
@@ -208,6 +209,12 @@ export class McpSession {
     }
   }
 
+  /** Tools the session currently permits on both local and remote surfaces. */
+  activeToolDefinitions(): readonly CatalogTool[] {
+    const active = new Set(this.catalog.activeToolNames());
+    return this.toolDefinitions().filter((tool) => active.has(tool.piName));
+  }
+
   toolDefinitions(): readonly CatalogTool[] {
     return [...this.retainedTools.values()].filter(
       (tool) =>
@@ -218,12 +225,37 @@ export class McpSession {
   }
 
   isToolAvailable(registeredTool: CatalogTool): boolean {
-    if (this.disconnectedServers.has(registeredTool.serverName) || this.incompatibleNames.has(registeredTool.piName))
-      return false;
+    if (!this.catalog.activeToolNames().includes(registeredTool.piName)) return false;
     const current = this.catalog.findTool(registeredTool.piName);
     return (
       current !== undefined && toolRegistrationFingerprint(current) === toolRegistrationFingerprint(registeredTool)
     );
+  }
+
+  /** Executes through this session's existing manager, never a remote replacement runtime. */
+  async invokeTool(
+    name: string,
+    parameters: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<import('@agimon-ai/doompi-core/headless').DoomHeadlessToolResult> {
+    const tool = this.activeToolDefinitions().find((candidate) => candidate.piName === name);
+    if (!tool || !this.isToolAvailable(tool))
+      throw new Error(`MCP tool ${name} is not available in the current session configuration.`);
+    const runtime = this.runtime;
+    const services = runtime?.getServices();
+    if (!runtime || !services) throw new Error(RUNTIME_NOT_STARTED);
+    signal?.throwIfAborted();
+    const connection = await services.clientManager.ensureConnected(tool.serverName);
+    signal?.throwIfAborted();
+    if (!runtime.isCurrent(services) || !this.isToolAvailable(tool))
+      throw new Error(`MCP tool ${name} is no longer available in the current session configuration.`);
+    const timeout = services.clientManager.getServerRequestTimeout(tool.serverName);
+    const result = await connection.callTool(
+      tool.toolName,
+      parameters,
+      timeout === undefined ? undefined : { timeout },
+    );
+    return toAgentToolResult(tool, result);
   }
 
   /**

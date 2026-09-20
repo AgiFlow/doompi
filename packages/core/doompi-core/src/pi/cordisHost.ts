@@ -290,7 +290,10 @@ export async function installDoomCordisHost(
 }
 
 /** Resolves the composed host installed by the canonical runtime. */
-export async function connectDoomCordisHost(pi: ExtensionAPI, source: string): Promise<DoomCordisHostConnection> {
+export async function connectDoomCordisHost(
+  pi: Pick<ExtensionAPI, 'events'>,
+  source: string,
+): Promise<DoomCordisHostConnection> {
   const responder = exactlyOneHost(discoverHosts(pi, source), source);
   if (!responder)
     throw new Error('The composed Doom Cordis host is unavailable. Ensure cordisHost is the first extension.');

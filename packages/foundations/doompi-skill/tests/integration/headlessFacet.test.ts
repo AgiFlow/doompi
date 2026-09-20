@@ -136,6 +136,10 @@ describe('skill headless facet', () => {
         services,
         selection: { read: () => ({ majorMode: 'default', activeLayers: [], domains }), change: async () => {} },
         signal: new AbortController().signal,
+        refresh: () => {},
+        loadContext: () => {
+          throw new Error('Not used by this test.');
+        },
       });
     expect((await remote([])).skills?.map((skill) => skill.name)).not.toContain('outline');
     const skills = (await remote(['writing'])).skills!;
