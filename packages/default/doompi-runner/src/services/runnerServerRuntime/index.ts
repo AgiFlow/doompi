@@ -18,6 +18,7 @@ export interface RunnerServerRuntime {
   readonly container: RunnerDependencies;
   readonly activity: DoomHeadlessActivity;
   readonly backgroundWorkPlugin: (context: Context) => void;
+  ensureSession(sessionId: string): Promise<void>;
   dispose(this: void): Promise<void>;
 }
 export function createRunnerServerRuntime(
@@ -32,31 +33,34 @@ export function createRunnerServerRuntime(
 
   // The activity is optional and source-gated. The retained facet owns the
   // session runtime, so disabling the activity must not tear down its jobs.
-  const startSupervision = (executionContext: DoomHeadlessExecutionContext): Promise<void> => {
-    sessionId ??= executionContext.sessionId;
+  const ensureSession = (requestedSessionId: string): Promise<void> => {
+    if (sessionId !== undefined && sessionId !== requestedSessionId) {
+      throw new Error(`Runner runtime belongs to session ${sessionId}.`);
+    }
+    sessionId ??= requestedSessionId;
     supervision ??= (async () => {
-      try {
-        container.paths.setSessionId(executionContext.sessionId);
-        await container.lifeline.arm(executionContext.sessionId);
-        const reconciled = await reconcileActiveRunners({
-          registry: container.runnerRegistry,
-          launcher: container.launcher,
-          rmuxBackend: container.rmuxBackend,
-          processControl: container.processControl,
-          currentHostPid: process.pid,
-          startup: true,
-        });
-        for (const error of reconciled.errors) process.emitWarning(error);
-      } catch (error) {
-        process.emitWarning(`Could not initialize headless runner supervision: ${String(error)}`);
+      container.paths.setSessionId(requestedSessionId);
+      if ((await container.lifeline.arm(requestedSessionId)) === undefined) {
+        throw new Error('Could not arm runner supervision lifeline.');
       }
+      const reconciled = await reconcileActiveRunners({
+        registry: container.runnerRegistry,
+        launcher: container.launcher,
+        rmuxBackend: container.rmuxBackend,
+        processControl: container.processControl,
+        currentHostPid: process.pid,
+        startup: true,
+      });
+      for (const error of reconciled.errors) process.emitWarning(error);
     })();
     return supervision;
   };
 
   const disposeRuntime = (): Promise<void> => {
     runtimeDisposal ??= (async () => {
-      await supervision;
+      await supervision?.catch((error: unknown) =>
+        process.emitWarning(`Could not initialize headless runner supervision: ${String(error)}`),
+      );
       const ownedSessionId = sessionId;
       if (ownedSessionId === undefined) return;
       const records = await container.runnerRegistry.listBySession(ownedSessionId).catch(() => []);
@@ -129,7 +133,7 @@ export function createRunnerServerRuntime(
   const activity: DoomHeadlessActivity = {
     name: 'runner',
     start: async (executionContext: DoomHeadlessExecutionContext) => {
-      await startSupervision(executionContext);
+      await ensureSession(executionContext.sessionId);
       const unsubscribe = container.runnerRegistry.subscribe(
         () => requestPublish(executionContext.sessionId),
         executionContext.sessionId,
@@ -148,6 +152,7 @@ export function createRunnerServerRuntime(
   return {
     container,
     activity,
+    ensureSession,
     backgroundWorkPlugin: (context) => {
       context.inject([DOOM_BACKGROUND_WORK_SERVICE], (serviceContext) => {
         const service = readDoomBackgroundWorkService(serviceContext);

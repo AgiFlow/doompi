@@ -10,6 +10,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { facet as runnerServerFacet } from '../../../generated/server';
+import { RUNNER_SERVER_SCOPE_SERVICE } from '../../../src/extensions/workspaces/sessions/(backend)/_lib/serverRoot';
 
 const lifecycleMocks = vi.hoisted(() => {
   const container = {
@@ -184,6 +185,15 @@ describe('runnerServerFacet', () => {
 
     expect(harness.registered).toEqual([]);
     expect(typeof dispose).toBe('function');
+  });
+
+  it('provides the session-owned Bash tool to MCP plugins', async () => {
+    const harness = hostContext('session');
+    const dispose = await runnerServerFacet.apply(harness.context);
+
+    expect(harness.context.get(RUNNER_SERVER_SCOPE_SERVICE)?.tool).toBeDefined();
+
+    await (dispose as () => void | Promise<void>)?.();
   });
 
   it('retains runner ownership across activation changes and cleans it on session disposal', async () => {

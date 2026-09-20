@@ -1,10 +1,20 @@
-import { defineMcpTool } from '@agimon-ai/doompi-core/mcp-facet';
+import { defineMcpTool, type DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
 
-import { createHeadlessBashTool } from '../../../../../services/headless';
-import { summarizeLog } from '../../../../../services/logReader';
-import { createRunnerDependencies } from '../../../../../services/runnerDependencies';
+import { RUNNER_SERVER_SCOPE_SERVICE, type RunnerServerScope } from '../_lib/serverRoot';
 
-export default defineMcpTool(() => {
-  const dependencies = createRunnerDependencies({ environment: Object.freeze({ ...process.env }) });
-  return createHeadlessBashTool({ run: (request) => dependencies.bashRunService.run(request) }, summarizeLog);
+export default defineMcpTool((context: DoomMcpPluginContext) => {
+  const scope = context.services.get<RunnerServerScope>(RUNNER_SERVER_SCOPE_SERVICE);
+  if (!scope) throw new Error('Runner session service is unavailable.');
+  return {
+    ...scope.tool,
+    execute(toolCallId, parameters, signal, onUpdate, execution) {
+      return scope.tool.execute(
+        toolCallId,
+        parameters,
+        AbortSignal.any([context.signal, signal ?? context.signal]),
+        onUpdate,
+        execution,
+      );
+    },
+  };
 });

@@ -60,7 +60,7 @@ import { HARNESS_STATE_POINTER, loadHarnessState } from '../../../composition/ha
 import { ensureLayerPackages, missingLayerPackageSpecifiers } from '../../../composition/layerPackageInstaller';
 import { loadDoomConfigLenient } from '../../../composition/projectTrust';
 import { resolveDoomConfigurationRoot } from '../../../composition/repository';
-import { readSyncDrift } from '../../../composition/syncDrift';
+import { readSyncDrift, type SyncDriftReason } from '../../../composition/syncDrift';
 import {
   computeInputsHash,
   computeMcpSourcesHash,
@@ -359,10 +359,18 @@ export function collectDrift(
       drift.push('synced theme location is out of date');
     }
   }
-  if (
-    readSyncDrift({ repoRoot, homeDirectory: environment.HOME ?? os.homedir() }).reasons.includes('server-bundle-stale')
-  ) {
-    drift.push('server bundle is missing or stale');
+  const sharedDrift = readSyncDrift({ repoRoot, homeDirectory: environment.HOME ?? os.homedir() });
+  const sharedMessages: Partial<Record<SyncDriftReason, string>> = {
+    'never-synced': 'sync registration is missing or invalid',
+    'code-changed': 'cockpit sources changed since the last sync',
+    'cockpit-bundle-missing': 'cockpit bundle is missing',
+    'package-apis-missing': 'package API routes are missing',
+    'server-bundle-stale': 'server bundle is missing or stale',
+    'mcp-bundle-stale': 'MCP bundle is missing or stale',
+  };
+  for (const reason of sharedDrift.reasons) {
+    const message = sharedMessages[reason];
+    if (message) drift.push(message);
   }
   return drift;
 }

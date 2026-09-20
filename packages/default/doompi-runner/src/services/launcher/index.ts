@@ -10,9 +10,11 @@ import {
 import { PI_SESSION_ID_ENV } from '../../constants/session';
 import type { IClock } from '../../types/clock';
 import type { ILauncher, LaunchRequest, RunHandle } from '../../types/launcher';
+import type { ILifeline } from '../../types/lifeline';
 import type { ILogFile } from '../../types/logFile';
 import type { IProcessControl } from '../../types/processControl';
 import type { ExitResult, ISpawner } from '../../types/spawner';
+import { LIFELINE_ENV } from '../lifeline/client';
 import { getResultMaxBytes } from '../runnerConfig';
 import type { IRunnerPaths } from '../runnerPaths/type';
 import {
@@ -39,6 +41,7 @@ export class Launcher implements ILauncher {
     private readonly logFile: ILogFile,
     private readonly clock: IClock,
     private readonly paths: IRunnerPaths,
+    private readonly lifeline?: ILifeline,
   ) {}
 
   launch(request: LaunchRequest): RunHandle {
@@ -57,11 +60,13 @@ export class Launcher implements ILauncher {
 
     this.paths.ensureDirectories(request.sessionId);
     const supervisor = supervisorPaths(this.paths.stateDirectory(request.sessionId), request.id);
+    const { [LIFELINE_ENV]: _inheritedLifeline, ...environment } = process.env;
     const env = {
-      ...process.env,
+      ...environment,
       ...NON_INTERACTIVE_ENV,
       ...NO_TERMINAL_INPUT_ENV,
       [PI_SESSION_ID_ENV]: request.sessionId,
+      [LIFELINE_ENV]: this.lifeline?.path(),
     };
     cleanupSupervisorFiles(supervisor);
     writeCommandSpec(supervisor.spec, { command: request.command, cwd: request.cwd, env: defined(env) });

@@ -853,7 +853,9 @@ export class SpawnPlanner implements SpawnPlannerContract {
               ...(agentConfig.subagentOnlyExtensions
                 ? { subagentOnlyExtensions: agentConfig.subagentOnlyExtensions }
                 : {}),
-              ...(agentConfig.tools ? { tools: agentConfig.tools } : {}),
+              ...(agentConfig.tools
+                ? { tools: [...new Set([...agentConfig.tools, ...(capabilityCeiling?.requiredTools ?? [])])] }
+                : {}),
               ...(excludeTools ? { excludeTools } : {}),
               ...(agentConfig.skills ? { skills: agentConfig.skills } : {}),
               ...(agentConfig.mcpDirectTools ? { mcpDirectTools: agentConfig.mcpDirectTools } : {}),
