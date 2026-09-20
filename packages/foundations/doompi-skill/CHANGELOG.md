@@ -1,3 +1,23 @@
+## 0.0.1-alpha.56 (2026-09-20)
+
+### 🚀 Features
+
+- **doompi-mcp:** expose session tools and skills remotely ([#144](https://github.com/AgiFlow/doompi/pull/144))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.7
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.77
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.56
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.78
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.78
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.73
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.55 (2026-09-19)
 
 ### 🚀 Features
