@@ -22,6 +22,10 @@ function remote(services: Context, domains: readonly string[], signal = new Abor
     signal,
     execution: {} as unknown as DoomHeadlessExecutionContext,
     selection: { read: () => ({ majorMode: 'default', activeLayers: [], domains }), change: async () => {} },
+    refresh: () => {},
+    loadContext: () => {
+      throw new Error('Not used by this test.');
+    },
   } satisfies DoomMcpPluginContext;
 }
 

@@ -15,9 +15,18 @@ This is an inbound connection. It is separate from outbound MCP servers, remote 
 7. In ChatGPT, select **`client_secret_post`** as the token endpoint authentication method, not `none`.
 8. Complete the OAuth connection and verify the available tools and skill resources.
 
+## Skills
+
+Remote clients can use `search_skills` to discover repository and active-domain skills, then `load_skill` with an exact skill name to retrieve its Markdown. Both tools see only skills granted to the connection. Existing skill resources remain available for clients that support MCP resources.
 The client name is generated from the trusted Remote Control domain. The callback must be the exact absolute HTTPS URL supplied by ChatGPT. It is not safe to derive one from the DoomPi domain.
 
 Access follows the active major mode, minor modes, domains, and profile, including later changes. Session tools run with the session process's permissions. Granting shell access can reach the filesystem, environment, network, and operating system privileges available to that session. OAuth is not a sandbox. Third-party packages must ship their own explicit MCP declarations to expose capabilities remotely.
+
+## Context
+
+Remote agents can call `load_context` at session startup, and again after a profile or mode change. It returns the session's repository instructions, active persona, and selected profile, domains, major mode, and layers. Instructions are the files loaded when the session started and are limited to the repository. It does not return global or ancestor instructions, environment values, credentials, history, skills, or the assembled system prompt.
+
+The tool follows the same capability grants as every other session MCP tool. A restricted connection must explicitly grant `load_context`.
 
 ## OAuth policy
 

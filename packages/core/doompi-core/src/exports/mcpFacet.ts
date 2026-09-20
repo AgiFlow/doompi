@@ -2,6 +2,7 @@ export {
   defineMcpPlugin,
   defineMcpSkill,
   defineMcpTool,
+  type DoomMcpContextSnapshot,
   type DoomMcpPluginContext,
   type DoomMcpPluginDefinition,
   type DoomMcpServiceScope,

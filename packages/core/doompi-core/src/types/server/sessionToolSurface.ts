@@ -1,6 +1,6 @@
 import type { TSchema } from 'typebox';
 
-import type { DoomHeadlessToolResult } from '../../schemas/headless';
+import type { DoomHeadlessToolResult, DoomMcpSkillAccess } from '../../schemas/headless';
 
 export interface SessionToolDescriptor {
   readonly name: string;
@@ -26,7 +26,8 @@ export interface SessionToolInvocation {
   readonly name: string;
   readonly arguments: Record<string, unknown>;
   readonly signal?: AbortSignal;
-  /** Revalidate transport authorization after hooks, immediately before execution. */
+  /** Grant-filtered remote skills for this invocation only. */
+  readonly mcpSkills?: DoomMcpSkillAccess;
   readonly authorize?: () => void | Promise<void>;
   readonly onUpdate?: (result: DoomHeadlessToolResult) => void;
 }

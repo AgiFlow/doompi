@@ -8,7 +8,8 @@ import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { DoomHeadlessSession } from '../../../../../src/exports/headless';
+import type { DoomHeadlessSession, DoomHeadlessTool } from '../../../../../src/exports/headless';
+import type { DoomMcpPluginContext } from '../../../../../src/exports/mcpFacet';
 import { DOOM_NOTIFICATION_ENTRY_TYPE } from '../../../../../src/exports/notification';
 import { createHeadlessSessionHost } from '../../../../../src/systems/main/adapters/headlessSessionHost';
 
@@ -38,6 +39,8 @@ async function fixture(mcpPlugins: Parameters<typeof createHeadlessSessionHost>[
   const cwd = path.join(root, 'project');
   fs.mkdirSync(agentDir);
   fs.mkdirSync(cwd);
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), 'outside repository');
+  fs.writeFileSync(path.join(cwd, 'AGENTS.md'), 'inside repository');
   fs.writeFileSync(
     path.join(agentDir, 'settings.json'),
     JSON.stringify({ defaultProvider: model.provider, defaultModel: model.id }),
@@ -132,7 +135,9 @@ describe('headless session facet surface', () => {
 
 describe('MCP execution boundary', () => {
   async function remoteFixture(owner = { majorMode: 'test', layer: 'default' }) {
-    const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'done' }] }));
+    const execute = vi.fn(async (..._args: Parameters<DoomHeadlessTool['execute']>) => ({
+      content: [{ type: 'text' as const, text: 'done' }],
+    }));
     const read = vi.fn(async () => '# skill');
     const current = await fixture([
       {
@@ -196,6 +201,41 @@ describe('MCP execution boundary', () => {
     expect(current.snapshot.skills.map(({ name }) => name)).toEqual(['guide']);
     expect(current.read).not.toHaveBeenCalled();
     expect(current.execute).not.toHaveBeenCalled();
+  });
+
+  it('shares only repository instructions through the remote context reader', async () => {
+    let context: DoomMcpPluginContext | undefined;
+    const current = await fixture([
+      {
+        declaration: {
+          packageName: 'test',
+          entry: './mcp.mjs',
+          module: './mcp.mjs',
+          sha256: '0'.repeat(64),
+          owners: [{ majorMode: 'test', layer: 'default' }],
+        },
+        plugin: { name: 'test', session: (value) => ((context = value), {}) },
+      },
+    ]);
+    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
+    await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
+
+    expect(context!.loadContext()).toMatchObject({
+      repository: { root: current.host.host!.context.repoRoot, cwd: current.host.host!.context.cwd },
+      selection: { profile: null, domains: [], majorMode: 'test', activeLayers: [] },
+      instructions: [{ path: 'AGENTS.md', content: 'inside repository' }],
+      persona: null,
+    });
+  });
+
+  it('passes remote skill access only through the invocation execution context', async () => {
+    const current = await remoteFixture();
+    const mcpSkills = { list: async () => [], read: async () => '# guide' };
+
+    await current.host.mcpSurface.invokeTool({ ...current.invocation, mcpSkills });
+
+    expect(current.execute.mock.calls[0]![4]).toMatchObject({ mcpSkills });
+    expect(current.host.host!.context.mcpSkills).toBeUndefined();
   });
 
   it('reauthorizes after tool hooks and never executes on denial', async () => {

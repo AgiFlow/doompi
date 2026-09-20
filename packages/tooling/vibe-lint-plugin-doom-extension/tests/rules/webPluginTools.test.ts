@@ -184,12 +184,11 @@ describe('web-plugin-tool-renderers', () => {
   });
 
   it('honours the ignore marker beside a definition', () => {
-    const file = manifest();
+    const file = manifest(false);
     write(
       'src/tools/child.ts',
       `// web-plugin-tool-renderers: ignore structured_output (child process only)\n${tool("'structured_output'")}`,
     );
-    write('src/web/index.ts', entry('[]'));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
   });
 

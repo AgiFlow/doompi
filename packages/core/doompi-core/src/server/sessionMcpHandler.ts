@@ -156,6 +156,8 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       }
       const controller = new AbortController();
       operations.set(key, controller);
+      const signal = AbortSignal.any([request.signal, extra.signal, controller.signal]);
+      let skillAccessOpen = true;
       try {
         const active = await authorizeOperation();
         if (active.grant.scope === 'restricted' && !active.grant.tools.includes(message.params.name)) {
@@ -165,11 +167,39 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         if (!tools.some((tool) => tool.name === message.params.name)) {
           throw new McpError(ErrorCode.InvalidParams, `Tool '${message.params.name}' is not active.`);
         }
+        const authorizedSkills = async () => {
+          if (!skillAccessOpen)
+            throw new McpError(ErrorCode.InvalidRequest, 'Remote skill access is no longer active.');
+          signal.throwIfAborted();
+          const current = await authorizeOperation();
+          if (current.target.toolSurface !== active.target.toolSurface)
+            throw new McpError(ErrorCode.InvalidRequest, 'The session tool surface has changed.');
+          signal.throwIfAborted();
+          return grantedSurface(current.grant, current.target.toolSurface);
+        };
+        const mcpSkills = {
+          async list() {
+            const { skills } = await authorizedSkills();
+            return skills.map(({ name, description }) => ({ name, description }));
+          },
+          async read(name: string) {
+            const current = await authorizedSkills();
+            const skill = current.skills.find((candidate) => candidate.name === name);
+            if (skill === undefined) throw new McpError(ErrorCode.InvalidParams, 'Skill is not granted or active.');
+            const text = await active.target.toolSurface.readSkill(current.snapshot.revision, skill.uri);
+            signal.throwIfAborted();
+            const after = await authorizedSkills();
+            if (after.snapshot.revision !== current.snapshot.revision)
+              throw new McpError(ErrorCode.InvalidRequest, 'The session skill surface has changed.');
+            return text;
+          },
+        };
         const result = await active.target.toolSurface.invokeTool({
           revision: snapshot.revision,
           name: message.params.name,
           arguments: message.params.arguments ?? {},
-          signal: AbortSignal.any([request.signal, extra.signal, controller.signal]),
+          signal,
+          mcpSkills,
           authorize: async () => {
             const current = await authorizeOperation();
             if (current.target.toolSurface !== active.target.toolSurface) {
@@ -183,6 +213,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         await authorizeOperation();
         return { content: result.content, isError: result.isError ?? false };
       } finally {
+        skillAccessOpen = false;
         operations.delete(key);
       }
     });

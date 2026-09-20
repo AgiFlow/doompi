@@ -53,6 +53,10 @@ describe('MCP Bash adapter', () => {
       services: servicesFor(ownedTool),
       selection: { read: () => execution.selection, change: vi.fn() },
       signal: controller.signal,
+      refresh: () => {},
+      loadContext: () => {
+        throw new Error('Not used by this test.');
+      },
     });
 
     await tool.execute('call', { command: 'pwd' }, undefined, undefined, execution);
@@ -68,6 +72,10 @@ describe('MCP Bash adapter', () => {
       services: servicesFor(createHeadlessBashTool({ run: vi.fn() })),
       selection: { read: () => execution.selection, change: vi.fn() },
       signal: controller.signal,
+      refresh: () => {},
+      loadContext: () => {
+        throw new Error('Not used by this test.');
+      },
     });
 
     await expect(tool.execute('call', { command: 'pwd' }, undefined, undefined, execution)).rejects.toThrow(
@@ -82,6 +90,10 @@ describe('MCP Bash adapter', () => {
         services: { get: <T>() => undefined as T | undefined },
         selection: { read: () => execution.selection, change: vi.fn() },
         signal: new AbortController().signal,
+        refresh: () => {},
+        loadContext: () => {
+          throw new Error('Not used by this test.');
+        },
       }),
     ).toThrow('Runner session service is unavailable.');
   });

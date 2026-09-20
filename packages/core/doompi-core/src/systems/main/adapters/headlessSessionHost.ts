@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Context as CordisContext } from '@deepseek-ai/cordis';
@@ -26,7 +27,7 @@ import type {
   DoomHeadlessSelection,
   DoomHeadlessTool,
 } from '../../../exports/headless';
-import type { DoomMcpSkill } from '../../../exports/mcpFacet';
+import type { DoomMcpContextSnapshot, DoomMcpSkill } from '../../../exports/mcpFacet';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
 import { createDirectHarnessRuntime } from '../../../server/directHarnessRuntime';
 import { buildContextDetail } from '../../../services/contextDetail';
@@ -70,6 +71,7 @@ interface AppliedSessionTool {
     parameters: Record<string, unknown>,
     signal?: AbortSignal,
     onUpdate?: Parameters<SessionToolSurface['invokeTool']>[0]['onUpdate'],
+    execution?: DoomHeadlessExecutionContext,
   ): Promise<import('../../../exports/headless').DoomHeadlessToolResult>;
 }
 
@@ -476,10 +478,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
    * Resolved once: cwd is fixed for the host's lifetime, and composeSystemPrompt runs
    * on every generation.
    */
+  const projectContextFiles = loadProjectContextFiles({ cwd: options.cwd, agentDir });
   const projectContextBlock = (() => {
-    const files = loadProjectContextFiles({ cwd: options.cwd, agentDir });
-    if (files.length === 0) return '';
-    const instructions = files
+    if (projectContextFiles.length === 0) return '';
+    const instructions = projectContextFiles
       .map(
         ({ path: filePath, content }) =>
           `<project_instructions path="${filePath}">\n${content}\n</project_instructions>\n`,
@@ -743,6 +745,55 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   let publishComposition: (selection?: DoomHeadlessSelection) => Promise<void> = async () => {
     throw new Error('Direct headless composition publisher is not installed.');
   };
+  const readMcpContext = (signal: AbortSignal): DoomMcpContextSnapshot => {
+    signal.throwIfAborted();
+    const host = headlessHost;
+    if (!host || disposed) throw new Error('Session context is unavailable.');
+    const status = host.status;
+    if (!status.ready || status.requestedRevision !== status.appliedRevision)
+      throw new Error('Session context is unavailable.');
+    const root = fs.realpathSync(options.repoRoot);
+    const globalInstruction = path.join(fs.realpathSync(agentDir), 'AGENTS.md');
+    const instructions = projectContextFiles.flatMap(({ path: filePath, content }) => {
+      const relative = path.relative(options.repoRoot, filePath);
+      if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) return [];
+      try {
+        const canonicalPath = fs.realpathSync(filePath);
+        if (canonicalPath === globalInstruction) return [];
+        const canonicalRelative = path.relative(root, canonicalPath);
+        if (canonicalRelative === '' || canonicalRelative.startsWith('..') || path.isAbsolute(canonicalRelative))
+          return [];
+      } catch {
+        return [];
+      }
+      return [{ path: relative.replaceAll(path.sep, '/'), content }];
+    });
+    const selection = host.context.selection;
+    const persona = host.appliedResources.find(
+      ({ name, kind }) => name === 'doompi/profile-config' && kind === 'context',
+    )?.text;
+    signal.throwIfAborted();
+    const current = host.status;
+    if (
+      !current.ready ||
+      current.appliedRevision !== status.appliedRevision ||
+      current.requestedRevision !== current.appliedRevision
+    )
+      throw new Error('Session context changed. Call load_context again.');
+    return {
+      session: { id: runtime.sessionId, revision: status.appliedRevision },
+      repository: { root: options.repoRoot, cwd: options.cwd },
+      selection: {
+        profile: selection.profile ?? null,
+        domains: [...selection.domains],
+        majorMode: selection.majorMode,
+        activeLayers: [...selection.activeLayers],
+      },
+      instructions,
+      persona: persona ?? null,
+    };
+  };
+
   const childSessionProvider = createHeadlessChildSessionServiceProvider({
     parentSessionId: runtime.sessionId,
     cwd: options.cwd,
@@ -892,21 +943,40 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   let mcpSurfaceReady = false;
   let appliedMcpTools = new Map<string, AppliedSessionTool>();
   let appliedMcpSkills = new Map<string, { descriptor: SessionSkillDescriptor; skill: DoomMcpSkill }>();
+  let mcpRefreshQueued = false;
+
+  const scheduleMcpRefresh = (): void => {
+    if (mcpRefreshQueued || disposed || !headlessReady) return;
+    mcpRefreshQueued = true;
+    queueMicrotask(() => {
+      mcpRefreshQueued = false;
+      if (disposed || !headlessReady) return;
+      void prepareMcpSurface().catch((error: unknown) =>
+        options.onNotice?.(`MCP tool refresh failed: ${error instanceof Error ? error.message : String(error)}`),
+      );
+    });
+  };
 
   const prepareMcpSurface = async (): Promise<void> => {
     if (!headlessHost?.status.ready) throw new Error('Headless capabilities are not installed.');
     if (mcpServiceRoot === undefined) throw new Error('MCP session services are not installed.');
     mcpSurfaceReady = false;
     mcpLifecycle.abort();
-    mcpLifecycle = new AbortController();
+    const lifecycle = new AbortController();
+    mcpLifecycle = lifecycle;
     const pluginContext = {
       execution: headlessHost.context,
-      services: { get: <T>(name: string): T | undefined => mcpServiceRoot?.get(name) as T | undefined },
+      services: {
+        get: <T>(name: string): T | undefined =>
+          (mcpServiceRoot?.get(name) as T | undefined) ?? piHost?.getService<T>(name),
+      },
       selection: {
         read: () => headlessHost!.context.selection,
         change: (change: Parameters<HeadlessHost['changeSelection']>[0]) => headlessHost!.changeSelection(change),
       },
-      signal: mcpLifecycle.signal,
+      loadContext: () => readMcpContext(lifecycle.signal),
+      signal: lifecycle.signal,
+      refresh: scheduleMcpRefresh,
     };
     const nextTools = new Map<string, AppliedSessionTool>();
     const nextSkills = new Map<string, { descriptor: SessionSkillDescriptor; skill: DoomMcpSkill }>();
@@ -933,8 +1003,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
             description: tool.description,
             parameters: tool.parameters,
           },
-          execute: (toolCallId, parameters, signal, onUpdate) =>
-            tool.execute(toolCallId, parameters, signal, onUpdate, headlessHost!.context),
+          execute: (toolCallId, parameters, signal, onUpdate, execution) =>
+            tool.execute(toolCallId, parameters, signal, onUpdate, execution ?? headlessHost!.context),
         });
       }
       for (const skill of scope.skills ?? []) {
@@ -1228,17 +1298,23 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       });
       let result;
       try {
-        result = await applied.execute(toolCallId, args, signal, (partial) => {
-          emitTo(listeners, {
-            type: 'tool_execution_update',
-            runId: EXTERNAL_OPERATION,
-            turnId: EXTERNAL_OPERATION,
-            toolCallId,
-            toolName: invocation.name,
-            partialResult: partial,
-          });
-          invocation.onUpdate?.(partial);
-        });
+        result = await applied.execute(
+          toolCallId,
+          args,
+          signal,
+          (partial) => {
+            emitTo(listeners, {
+              type: 'tool_execution_update',
+              runId: EXTERNAL_OPERATION,
+              turnId: EXTERNAL_OPERATION,
+              toolCallId,
+              toolName: invocation.name,
+              partialResult: partial,
+            });
+            invocation.onUpdate?.(partial);
+          },
+          invocation.mcpSkills === undefined ? undefined : { ...headlessHost.context, mcpSkills: invocation.mcpSkills },
+        );
       } catch (error) {
         result = {
           content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],

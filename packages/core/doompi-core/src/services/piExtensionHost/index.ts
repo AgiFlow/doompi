@@ -37,6 +37,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 
 import type { DoomHeadlessClient, DoomHeadlessClientRequest, DoomHeadlessToolResult } from '../../exports/headless';
+import { connectDoomCordisHost, type DoomCordisHostConnection } from '../../pi/cordisHost';
 import { contextTokensOf, contextUsageOf, latestAssistantUsage } from '../../services/contextUsage';
 import {
   fromPiSessionEntry,
@@ -85,15 +86,11 @@ export async function preloadPiExtensions(options: {
   readonly models: ModelRuntime;
   readonly extensionPaths: readonly string[];
   readonly onNotice?: (message: string) => void;
-}): Promise<LoadExtensionsResult | undefined> {
+}): Promise<(LoadExtensionsResult & { readonly events?: ReturnType<typeof createEventBus> }) | undefined> {
   if (options.extensionPaths.length === 0) return undefined;
 
-  const result = await discoverAndLoadExtensions(
-    [...options.extensionPaths],
-    options.cwd,
-    options.agentDir,
-    createEventBus(),
-  );
+  const events = createEventBus();
+  const result = await discoverAndLoadExtensions([...options.extensionPaths], options.cwd, options.agentDir, events);
   for (const failure of result.errors) options.onNotice?.(`Pi extension ${failure.path}: ${failure.error}`);
 
   // The same target bindCore uses: without providerActions it registers through ModelRegistry,
@@ -122,7 +119,7 @@ export async function preloadPiExtensions(options: {
   result.runtime.pendingProviderRegistrations = [];
   result.runtime.pendingNativeProviderRegistrations = [];
 
-  return result;
+  return Object.assign(result, { events });
 }
 /**
  * Pi native extensions are session lifetime. They contribute tools once and are never
@@ -145,7 +142,7 @@ export interface PiExtensionHostOptions {
    * Extensions already loaded by `preloadPiExtensions`, or undefined when this worktree
    * contributes none. Reused rather than re-discovered so each factory runs exactly once.
    */
-  readonly preload: LoadExtensionsResult | undefined;
+  readonly preload: (LoadExtensionsResult & { readonly events?: ReturnType<typeof createEventBus> }) | undefined;
   /** Current model, tracked by the caller because harness session metadata does not carry it. */
   readonly getModel: () => Model<Api> | undefined;
   readonly getThinkingLevel: () => ThinkingLevel;
@@ -193,10 +190,11 @@ export interface PiExtensionHost {
   transformContext(messages: AgentMessage[]): Promise<AgentMessage[]>;
   /** Pi's `session_before_compact` event, translated into the harness hook's answer. */
   beforeCompaction(event: HookMap['before_compaction']['event']): Promise<HookMap['before_compaction']['result']>;
+  /** Reads a session service from the Pi Cordis root without exposing registration APIs. */
+  getService<T>(name: string): T | undefined;
   load(): Promise<void>;
   shutdown(): Promise<void>;
 }
-
 /** Pi does not export the preparation type on its own, only through the event that carries it. */
 type PiCompactionPreparation = SessionBeforeCompactEvent['preparation'];
 
@@ -580,6 +578,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   // before load must not read as "everything is hidden".
   let activeNames = new Set<string>();
   let unsubscribeEvents: (() => void) | undefined;
+  let cordisConnection: DoomCordisHostConnection | undefined;
 
   // Pi's ExtensionContext getters are synchronous while every harness read is not, so the
   // facts they answer from are tracked off the harness event stream and primed from history.
@@ -934,6 +933,9 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       return skills;
     },
 
+    getService<T>(name: string): T | undefined {
+      return cordisConnection?.root.get(name) as T | undefined;
+    },
     executeTool(name, toolCallId, parameters, signal, onUpdate) {
       const tool = registered.find((entry) => entry.definition.name === name);
       if (tool === undefined) throw new Error(`Unknown Pi extension tool '${name}'`);
@@ -980,6 +982,8 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       // Pi opens session-scoped extension services before resource discovery. Doom tool
       // restrictions depend on the same ordering.
       await runner.emit({ type: 'session_start', reason: 'startup' });
+      if (preload.events !== undefined)
+        cordisConnection = await connectDoomCordisHost({ events: preload.events }, 'headless-pi-extension-host');
       skills = await loadPiSkills(runner, cwd, agentDir, options.onNotice);
     },
 
@@ -990,8 +994,13 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       sessionManager = undefined;
       runMessages = [];
       toolArguments.clear();
-      if (runner === undefined) return;
-      await runner.emit({ type: 'session_shutdown', reason: 'quit' });
+      const connection = cordisConnection;
+      cordisConnection = undefined;
+      try {
+        if (runner !== undefined) await runner.emit({ type: 'session_shutdown', reason: 'quit' });
+      } finally {
+        await connection?.dispose();
+      }
     },
   };
 }

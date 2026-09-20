@@ -185,6 +185,7 @@ describe('session MCP Streamable HTTP handler', () => {
       name: 'allowed_tool',
       arguments: {},
       signal: expect.any(AbortSignal),
+      mcpSkills: expect.any(Object),
       authorize: expect.any(Function),
     });
 
@@ -309,6 +310,25 @@ describe('session MCP Streamable HTTP handler', () => {
 
     const hidden = await request('resources/read', { uri: 'doompi://session/alpha/skills/hidden-skill' });
     await expect(hidden.json()).resolves.toMatchObject({ error: { code: -32602 } });
+  });
+
+  it('passes only granted skills to an MCP tool and expires access when the call ends', async () => {
+    const current = fixture();
+    let captured: Parameters<SessionToolSurface['invokeTool']>[0]['mcpSkills'];
+    current.invokeTool.mockImplementationOnce(async (invocation) => {
+      captured = invocation.mcpSkills;
+      await expect(captured!.list()).resolves.toEqual([{ name: 'allowed-skill', description: 'May read' }]);
+      await expect(captured!.read('allowed-skill')).resolves.toBe('# Allowed skill');
+      await expect(captured!.read('hidden-skill')).rejects.toMatchObject({ code: -32602 });
+      return { content: [{ type: 'text' as const, text: 'called' }] };
+    });
+
+    await expect(
+      (await current.request('tools/call', { name: 'allowed_tool', arguments: {} })).json(),
+    ).resolves.toMatchObject({
+      result: { content: [{ text: 'called' }] },
+    });
+    await expect(captured!.list()).rejects.toMatchObject({ code: -32600 });
   });
 
   it('rechecks revocation after session resolution and tool invocation await points', async () => {
