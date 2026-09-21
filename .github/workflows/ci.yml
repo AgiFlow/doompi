@@ -21,9 +21,36 @@ concurrency:
 # disposable hosted runner satisfies that for every trigger, not just forks.
 
 jobs:
-  quality:
+  # The quality gate used to run every check serially in one job. Keep the
+  # independent checks on separate hosted runners so pull-request feedback is
+  # bounded by the slowest shard instead of the sum of every command.
+  quality_checks:
+    name: Quality (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Repository checks
+            command: |
+              pnpm runner:check
+              node --test scripts/fetch-runner-binaries.test.mjs
+              pnpm audit:workspace
+              pnpm fmt:check
+              pnpm hooks:check
+          - name: Build and examples
+            command: |
+              pnpm nx run-many -t build --parallel=3
+              pnpm examples:check
+          - name: Lint
+            command: pnpm nx run-many -t lint --parallel=3
+          - name: Vibe-Lint
+            command: pnpm lint:vibe --preflight-only
+          - name: Type-check
+            command: pnpm nx run-many -t typecheck --parallel=3
+          - name: Tests
+            command: pnpm nx run-many -t test --parallel=3
     steps:
       - name: Check out materialized package snapshot
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,39 +60,25 @@ jobs:
       - name: Set up DoomPi workspace
         uses: ./.github/actions/setup-monorepo
 
-      - name: Verify Runner native payloads
-        run: pnpm runner:check
+      - name: Run ${{ matrix.name }}
+        run: ${{ matrix.command }}
 
-      - name: Test Runner payload downloads
-        run: node --test scripts/fetch-runner-binaries.test.mjs
-
-      - name: Audit ownership and dependency boundaries
-        run: pnpm audit:workspace
-
-      - name: Check formatting
-        run: pnpm fmt:check
-
-      - name: Check generated hook settings
-        run: pnpm hooks:check
-
-      - name: Build packages
-        run: pnpm nx run-many -t build --parallel=3
-
-      - name: Validate plugin and workflow examples
-        run: pnpm examples:check
-
-      - name: Lint packages
-        run: pnpm nx run-many -t lint --parallel=3
-
-      - name: Run deterministic Vibe-Lint review
-        run: pnpm lint:vibe --preflight-only
-
-      - name: Type-check packages
-        run: pnpm nx run-many -t typecheck --parallel=3
-
-      - name: Test packages
-        run: pnpm nx run-many -t test --parallel=1
-
+  # Keep the existing stable quality check name for branch protection while the
+  # execution strategy evolves behind it.
+  quality:
+    if: always()
+    needs: quality_checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every quality shard to pass
+        env:
+          QUALITY_RESULT: ${{ needs.quality_checks.result }}
+        run: |
+          if [[ "$QUALITY_RESULT" != "success" ]]; then
+            printf "A quality shard finished with result: %s\n" "$QUALITY_RESULT"
+            exit 1
+          fi
   # Browser gate for the cockpit.
   #
   # Package tests render every plugin component to static markup, which proves
@@ -75,8 +88,8 @@ jobs:
   # dialogs, leader keys, and the plugin tabs.
   #
   # Each shard gets a disposable hosted runner. They intentionally start beside
-  # quality instead of waiting for it, trading some runner minutes on an early
-  # failure for a shorter pull-request feedback loop.
+  # the quality shards instead of waiting for them, trading some runner minutes
+  # on an early failure for a shorter pull-request feedback loop.
   browser:
     name: Browser E2E (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest

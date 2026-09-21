@@ -22,7 +22,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { PluginSurface } from '../../components/PluginSurface';
 import { RemoteAccessButton } from '../../components/RemoteAccessButton';
-import { listWorkspaces, restartSession, stopSession } from '../../lib/hubApi';
+import { listWorkspaces, removeWorkspace, restartSession, stopSession } from '../../lib/hubApi';
 import { HOST_SLOTS } from '../../lib/pluginRegistry';
 import { sessionStatusLine } from '../../lib/sessionSummary';
 import { DEFAULT_REPOSITORY_SETTINGS_SECTION, DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections';
@@ -31,7 +31,12 @@ import { paletteStore } from '../../stores/paletteStore';
 import { openRemoteDialog, remoteAccessStore, turnRemoteAccessOff } from '../../stores/remoteAccessStore';
 import { applySessionRemoved, resolveParentId, sessionsStore, type SessionMeta } from '../../stores/sessionsStore';
 import { renameSession, sessionStoreFor } from '../../stores/sessionStore';
-import { applyWorkspacesSnapshot, selectWorkspace, workspacesStore } from '../../stores/workspacesStore';
+import {
+  applyWorkspaceRemoved,
+  applyWorkspacesSnapshot,
+  selectWorkspace,
+  workspacesStore,
+} from '../../stores/workspacesStore';
 import { AddWorkspaceDialog } from './AddWorkspaceDialog';
 import { NewSessionDialog } from './NewSessionDialog';
 import { PendingSessionCard } from './PendingSessionCard';
@@ -290,6 +295,73 @@ function workspaceName(root: string): string {
   return trimmed.slice(trimmed.lastIndexOf('/') + 1) || root;
 }
 
+function RemoveWorkspaceDialog({
+  workspaceId,
+  name,
+  path,
+  open,
+  error,
+  removing,
+  onConfirm,
+  onCancel,
+}: {
+  workspaceId: string;
+  name: string;
+  path: string;
+  open: boolean;
+  error?: string;
+  removing: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !removing) onCancel();
+      }}
+    >
+      <DialogContent width="sm" data-testid={`workspace-delete-dialog-${workspaceId}`} aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>delete workspace</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <DialogDescription>
+            this unregisters <span className="font-bold text-doom-hi">{name}</span> from DoomPi only. files at{' '}
+            <code>{path}</code> stay on disk. its sessions must be removed first.
+          </DialogDescription>
+          {error ? (
+            <p data-testid={`workspace-delete-error-${workspaceId}`} className="text-xs text-doom-red">
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="md"
+              data-testid={`workspace-delete-cancel-${workspaceId}`}
+              disabled={removing}
+              autoFocus
+              onClick={onCancel}
+            >
+              cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="md"
+              data-testid={`workspace-delete-confirm-${workspaceId}`}
+              disabled={removing}
+              onClick={onConfirm}
+            >
+              {removing ? 'deleting…' : 'delete'}
+            </Button>
+          </DialogFooter>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function WorkspaceSection({
   workspaceId,
   root,
@@ -309,10 +381,26 @@ function WorkspaceSection({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeError, setRemoveError] = useState('');
+  const [removing, setRemoving] = useState(false);
+  const name = workspaceName(root);
+  const unregister = async (): Promise<void> => {
+    setRemoving(true);
+    setRemoveError('');
+    const result = await removeWorkspace(workspaceId);
+    if ('error' in result) {
+      setRemoving(false);
+      setRemoveError(result.error);
+      return;
+    }
+    setRemoveOpen(false);
+    applyWorkspaceRemoved({ workspaceId });
+  };
   return (
     <WorkspaceGroupView
       workspaceId={workspaceId}
-      name={workspaceName(root)}
+      name={name}
       path={root}
       available={available}
       hasSessions={hasSessions}
@@ -323,7 +411,7 @@ function WorkspaceSection({
           size="icon"
           data-testid={`workspace-new-session-${workspaceId}`}
           title="new session"
-          aria-label={`new session in ${workspaceName(root)}`}
+          aria-label={`new session in ${name}`}
           disabled={!available}
           onClick={onCreate}
           className="text-doom-faint hover:text-doom-hi"
@@ -353,9 +441,31 @@ function WorkspaceSection({
               <DropdownMenuItem disabled={!available} onSelect={onOpenSettings}>
                 workspace settings
               </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                data-testid={`workspace-delete-${workspaceId}`}
+                onSelect={() => {
+                  setRemoveError('');
+                  setRemoveOpen(true);
+                }}
+              >
+                delete workspace
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           {resumeOpen ? <ResumeSessionDialog workspaceId={workspaceId} onClose={() => setResumeOpen(false)} /> : null}
+          {removeOpen ? (
+            <RemoveWorkspaceDialog
+              workspaceId={workspaceId}
+              name={name}
+              path={root}
+              open={removeOpen}
+              error={removeError || undefined}
+              removing={removing}
+              onConfirm={() => void unregister()}
+              onCancel={() => setRemoveOpen(false)}
+            />
+          ) : null}
         </>
       }
     />
