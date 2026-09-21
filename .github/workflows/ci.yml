@@ -46,7 +46,9 @@ jobs:
           - name: Lint
             command: pnpm nx run-many -t lint --parallel=3
           - name: Vibe-Lint
-            command: pnpm lint:vibe --preflight-only
+            command: |
+              pnpm nx run-many -t build --parallel=3
+              pnpm lint:vibe --preflight-only
           - name: Type-check
             command: pnpm nx run-many -t typecheck --parallel=3
           - name: Tests
