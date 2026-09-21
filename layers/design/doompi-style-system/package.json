@@ -80,9 +80,9 @@
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
-    "@agimon-ai/style-system": "0.1.3",
-    "hono": "4.13.7",
-    "typebox": "1.3.30"
+    "@agimon-ai/style-system": "0.1.5",
+    "hono": "4.13.8",
+    "typebox": "1.3.34"
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
