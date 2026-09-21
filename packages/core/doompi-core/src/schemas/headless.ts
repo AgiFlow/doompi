@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { Static, TSchema } from 'typebox';
 
 import type { DoomNotificationRequest } from './notification';
@@ -40,6 +40,8 @@ export interface DoomHeadlessToolResult {
   content: DoomHeadlessContent[];
   /** Public MCP result data. Internal renderer details are not a remote result contract. */
   structuredContent?: Record<string, unknown>;
+  /** Component-only MCP metadata, never inferred from internal renderer details. */
+  _meta?: CallToolResult['_meta'];
   details?: unknown;
   isError?: boolean;
 }
@@ -153,6 +155,13 @@ export interface DoomHeadlessTool<TParameters extends TSchema = TSchema> {
   parameters: TParameters;
   annotations?: Tool['annotations'];
   outputSchema?: Tool['outputSchema'];
+  /** Remote presentation only. Component tool access must be explicitly opted into. */
+  _meta?: Tool['_meta'] & {
+    ui?: {
+      resourceUri?: string;
+      visibility?: ('model' | 'app')[];
+    };
+  };
   promptSnippet?: string;
   promptGuidelines?: readonly string[];
   executionMode?: 'parallel' | 'serial';

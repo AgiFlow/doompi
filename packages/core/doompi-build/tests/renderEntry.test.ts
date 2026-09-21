@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { renderCliEntry, renderServerEntry, renderWebEntry } from '../src/services/renderEntry';
+import { renderCliEntry, renderMcpEntry, renderServerEntry, renderWebEntry } from '../src/services/renderEntry';
 import { resolveTarget } from '../src/services/resolveTarget';
 import { scanExtensions } from '../src/services/scan';
 
@@ -76,6 +76,26 @@ function parses(source: string): boolean {
   }
   return stack.length === 0;
 }
+
+describe('renderMcpEntry', () => {
+  it('emits UI resources only on the dedicated remote surface', () => {
+    const files = {
+      'src/extensions/workspaces/sessions/(backend)/tool/show_session.mcp.ts': EMPTY,
+      'src/extensions/workspaces/sessions/(backend)/resource/session-view.mcp.ts': EMPTY,
+    };
+    const graph = scanExtensions({ packageDir: packageWith(files) });
+    expect(graph.notices).toEqual([]);
+    const mcp = renderMcpEntry(resolveTarget(graph, 'mcp'), OPTIONS);
+    expect(mcp).toContain('uiResources');
+    expect(mcp).toContain('resource/session-view.mcp');
+    expect(mcp).toContain('tool/show_session.mcp');
+    expect(mcp).toContain('satisfies DoomMcpSessionPlugin');
+    for (const source of Object.values(raw(files))) {
+      expect(source).not.toContain('session-view.mcp');
+      expect(source).not.toContain('show_session.mcp');
+    }
+  });
+});
 
 describe('renderCliEntry', () => {
   it('recognizes a session TUI overlay without registering it as a Pi contribution', () => {

@@ -24,7 +24,9 @@ afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
-function fixture(routing: 'session' | 'conversation' = 'conversation') {
+const UI_URI = 'ui://doompi/session/v1/index.html';
+
+function fixture(routing: 'session' | 'conversation' = 'conversation', withUi = false) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doom-mcp-routing-')));
   roots.push(root);
   const parentCwd = path.join(root, 'parent');
@@ -39,13 +41,17 @@ function fixture(routing: 'session' | 'conversation' = 'conversation') {
     const surface: SessionToolSurface = {
       readSurface: () => ({
         revision: 1,
-        tools: ['write', 'load_context', 'load_skill'].map((name) => ({
+        tools: ['write', 'load_context', 'load_skill', ...(withUi ? ['show_session'] : [])].map((name) => ({
           name,
           label: name,
           description: name,
           parameters: Type.Object({ path: Type.Optional(Type.String()), text: Type.Optional(Type.String()) }),
+          ...(name === 'show_session'
+            ? { _meta: { ui: { resourceUri: UI_URI, visibility: ['model' as const, 'app' as const] } } }
+            : {}),
         })),
         skills: [{ name: 'guide', description: 'Target guide', uri: `doompi://session/${id}/guide` }],
+        uiResources: withUi ? [{ uri: UI_URI, name: 'Session', mimeType: 'text/html;profile=mcp-app' }] : [],
       }),
       invokeTool: vi.fn(async (invocation: SessionToolInvocation) => {
         await invocation.authorize?.();
@@ -55,6 +61,7 @@ function fixture(routing: 'session' | 'conversation' = 'conversation') {
         return { content: [{ type: 'text' as const, text }], structuredContent: { sessionId: id, cwd } };
       }),
       readSkill: () => `guide for ${id}`,
+      readUiResource: vi.fn(() => '<!doctype html><title>Static session view</title>'),
     };
     surfaces.set(id, surface);
     const session = {
@@ -212,6 +219,66 @@ function fixture(routing: 'session' | 'conversation' = 'conversation') {
 }
 
 describe('conversation-bound Session MCP routing', () => {
+  it('prefetches static UI without allocating a child or exposing session guidance', async () => {
+    const f = fixture('conversation', true);
+    expect((await f.rpc('resources/list')).result?.resources).toEqual([
+      { uri: UI_URI, name: 'Session', mimeType: 'text/html;profile=mcp-app' },
+    ]);
+    expect(await f.rpc('resources/read', { uri: UI_URI })).toMatchObject({
+      result: {
+        contents: [
+          {
+            uri: UI_URI,
+            mimeType: 'text/html;profile=mcp-app',
+            text: '<!doctype html><title>Static session view</title>',
+          },
+        ],
+      },
+    });
+    expect((await f.rpc('resources/read', { uri: 'doompi://session/parent/guide' })).error).toBeDefined();
+    expect(f.store.list()).toHaveLength(0);
+    expect(f.create).not.toHaveBeenCalled();
+    expect(f.surfaces.get('parent')!.invokeTool).not.toHaveBeenCalled();
+  });
+
+  it('keeps widget calls and refreshes bound to their own conversations', async () => {
+    const f = fixture('conversation', true);
+    expect((await f.call(undefined, 'show_session')).result?.structuredContent?.code).toBe('CONVERSATION_ID_REQUIRED');
+    const firstA = await f.call('chat-a', 'show_session');
+    const firstB = await f.call('chat-b', 'show_session');
+    await f.setup(String(firstA.result!.structuredContent!.bindingId));
+    await f.setup(String(firstB.result!.structuredContent!.bindingId));
+    const a = await f.call('chat-a', 'show_session');
+    const b = await f.call('chat-b', 'show_session');
+    expect(a.result?.isError).toBe(false);
+    expect(b.result?.isError).toBe(false);
+    expect(a.result?.structuredContent?.sessionId).not.toBe(b.result?.structuredContent?.sessionId);
+    expect(a.result?.structuredContent?.sessionId).not.toBe('parent');
+    expect((await f.call('chat-a', 'show_session')).result?.structuredContent).toEqual(a.result?.structuredContent);
+    expect((await f.call('chat-b', 'show_session')).result?.structuredContent).toEqual(b.result?.structuredContent);
+    expect(f.surfaces.get('parent')!.invokeTool).not.toHaveBeenCalled();
+  });
+
+  it('rejects a child with a different UI tool contract', async () => {
+    const f = fixture('conversation', true);
+    const first = await f.call('chat-a', 'show_session');
+    await f.setup(String(first.result!.structuredContent!.bindingId));
+    const ready = await f.call('chat-a', 'show_session');
+    const surface = f.surfaces.get(String(ready.result!.structuredContent!.sessionId))!;
+    const snapshot = surface.readSurface();
+    surface.readSurface = () => ({
+      ...snapshot,
+      tools: snapshot.tools.map((tool) =>
+        tool.name === 'show_session'
+          ? { ...tool, _meta: { ui: { resourceUri: 'ui://doompi/session/v2/index.html' } } }
+          : tool,
+      ),
+    });
+    expect((await f.call('chat-a', 'show_session')).result?.structuredContent?.code).toBe(
+      'SESSION_TOOL_SURFACE_CHANGED',
+    );
+    expect(surface.invokeTool).toHaveBeenCalledTimes(1);
+  });
   it('does not create runtimes during discovery, missing identity, or concurrent first calls', async () => {
     const f = fixture();
     await f.rpc('initialize', {

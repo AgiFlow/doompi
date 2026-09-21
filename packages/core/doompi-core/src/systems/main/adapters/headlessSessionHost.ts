@@ -27,7 +27,7 @@ import type {
   DoomHeadlessSelection,
   DoomHeadlessTool,
 } from '../../../exports/headless';
-import type { DoomMcpContextSnapshot, DoomMcpSkill } from '../../../exports/mcpFacet';
+import type { DoomMcpContextSnapshot, DoomMcpSkill, DoomMcpUiResource } from '../../../exports/mcpFacet';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
 import { createDirectHarnessRuntime } from '../../../server/directHarnessRuntime';
 import { buildContextDetail } from '../../../services/contextDetail';
@@ -49,6 +49,7 @@ import type {
   SessionSkillDescriptor,
   SessionToolDescriptor,
   SessionToolSurface,
+  SessionUiResourceDescriptor,
 } from '../../../types/server/sessionToolSurface';
 import { createHeadlessChildSessionServiceProvider } from '../../child/adapters/headlessChildSessionService';
 import type { ResolvedHeadlessResource } from '../types/headlessHost';
@@ -944,6 +945,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   let mcpSurfaceReady = false;
   let appliedMcpTools = new Map<string, AppliedSessionTool>();
   let appliedMcpSkills = new Map<string, { descriptor: SessionSkillDescriptor; skill: DoomMcpSkill }>();
+  let appliedMcpUiResources = new Map<
+    string,
+    { descriptor: SessionUiResourceDescriptor; resource: DoomMcpUiResource }
+  >();
   let mcpRefreshQueued = false;
 
   const scheduleMcpRefresh = (): void => {
@@ -981,6 +986,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     };
     const nextTools = new Map<string, AppliedSessionTool>();
     const nextSkills = new Map<string, { descriptor: SessionSkillDescriptor; skill: DoomMcpSkill }>();
+    const nextUiResources = new Map<string, { descriptor: SessionUiResourceDescriptor; resource: DoomMcpUiResource }>();
     for (const loaded of options.mcpPlugins ?? []) {
       const selection = headlessHost.context.selection;
       if (
@@ -995,8 +1001,36 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         typeof loaded.plugin.session === 'function'
           ? await loaded.plugin.session(pluginContext)
           : loaded.plugin.session;
+      lifecycle.signal.throwIfAborted();
+      const resources = scope.uiResources ?? [];
+      for (const resource of resources) {
+        const uri = new URL(resource.uri);
+        if (
+          uri.protocol !== 'ui:' ||
+          !uri.hostname ||
+          uri.username ||
+          uri.password ||
+          uri.search ||
+          uri.hash ||
+          uri.href !== resource.uri ||
+          resource.mimeType !== 'text/html;profile=mcp-app'
+        )
+          throw new Error(`Invalid MCP UI resource '${resource.uri}'`);
+        if (nextUiResources.has(resource.uri)) throw new Error(`Duplicate MCP UI resource '${resource.uri}'`);
+        const descriptor: SessionUiResourceDescriptor = {
+          uri: resource.uri,
+          name: resource.name,
+          mimeType: resource.mimeType,
+          ...(resource.description === undefined ? {} : { description: resource.description }),
+          ...(resource._meta === undefined ? {} : { _meta: resource._meta }),
+        };
+        nextUiResources.set(resource.uri, { descriptor, resource });
+      }
       for (const tool of scope.tools ?? []) {
         if (nextTools.has(tool.name)) throw new Error(`Duplicate MCP tool '${tool.name}'`);
+        const resourceUri = tool._meta?.ui?.resourceUri;
+        if (resourceUri !== undefined && !resources.some((resource) => resource.uri === resourceUri))
+          throw new Error(`MCP tool '${tool.name}' references a UI resource not owned by its plugin`);
         nextTools.set(tool.name, {
           descriptor: {
             name: tool.name,
@@ -1005,6 +1039,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
             parameters: tool.parameters,
             ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
             ...(tool.outputSchema === undefined ? {} : { outputSchema: tool.outputSchema }),
+            ...(tool._meta === undefined ? {} : { _meta: tool._meta }),
           },
           execute: (toolCallId, parameters, signal, onUpdate, execution) =>
             tool.execute(toolCallId, parameters, signal, onUpdate, execution ?? headlessHost!.context),
@@ -1022,6 +1057,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     }
     appliedMcpTools = nextTools;
     appliedMcpSkills = nextSkills;
+    appliedMcpUiResources = nextUiResources;
     mcpSurfaceRevision += 1;
     mcpSurfaceReady = true;
   };
@@ -1341,6 +1377,12 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         ...(patch?.content !== undefined || patch?.isError !== undefined || result.structuredContent === undefined
           ? {}
           : { structuredContent: result.structuredContent }),
+        ...(patch?.content !== undefined ||
+        patch?.isError !== undefined ||
+        patch?.details !== undefined ||
+        result._meta === undefined
+          ? {}
+          : { _meta: result._meta }),
         ...(patch?.details !== undefined
           ? { details: patch.details }
           : result.details === undefined
@@ -1397,6 +1439,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         revision: mcpSurfaceRevision,
         tools: [...appliedMcpTools.values()].map((tool) => tool.descriptor),
         skills: [...appliedMcpSkills.values()].map((skill) => skill.descriptor),
+        uiResources: [...appliedMcpUiResources.values()].map((resource) => resource.descriptor),
       };
     },
     invokeTool: (invocation) =>
@@ -1407,6 +1450,19 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         () => mcpSurfaceReady,
         mcpLifecycle.signal,
       ),
+    async readUiResource(revision, uri) {
+      if (disposed || !headlessReady || !mcpSurfaceReady || !headlessHost?.status.ready)
+        throw new Error('MCP capability preparation is not ready.');
+      if (revision !== mcpSurfaceRevision) throw new Error('The session MCP surface has changed');
+      const resource = appliedMcpUiResources.get(uri)?.resource;
+      if (resource === undefined) throw new Error('The session MCP UI resource is not active');
+      const text = await resource.read();
+      if (disposed || !headlessReady || !mcpSurfaceReady || !headlessHost?.status.ready)
+        throw new Error('MCP capability preparation is not ready.');
+      if (revision !== mcpSurfaceRevision || appliedMcpUiResources.get(uri)?.resource !== resource)
+        throw new Error('The session MCP surface has changed');
+      return text;
+    },
     async readSkill(revision, uri) {
       if (disposed || !headlessReady || !mcpSurfaceReady || !headlessHost?.status.ready)
         throw new Error('MCP capability preparation is not ready.');

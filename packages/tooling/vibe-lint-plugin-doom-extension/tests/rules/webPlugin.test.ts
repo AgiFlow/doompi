@@ -129,6 +129,19 @@ describe('Doom web plugin rules', () => {
       expect(webPluginImportAllowlist.check?.(filePath, root)).toBeNull();
     });
 
+    it('allows the browser MCP App SDK but not its server or host subpaths', () => {
+      const app = write(`${FRONTEND}/_lib/sessionApp.ts`, "import { App } from '@modelcontextprotocol/ext-apps';");
+      expect(webPluginImportAllowlist.check?.(app, root)).toBeNull();
+      for (const specifier of [
+        '@modelcontextprotocol/ext-apps/server',
+        '@modelcontextprotocol/ext-apps/app-bridge',
+        '@modelcontextprotocol/sdk/server/index.js',
+      ]) {
+        const file = write(`${FRONTEND}/_lib/invalid.ts`, `import { Server } from '${specifier}';`);
+        expect(webPluginImportAllowlist.check?.(file, root)).toContain(specifier);
+      }
+    });
+
     it('rejects node builtins, other packages, and relative imports outside the browser half and src/types', () => {
       const filePath = write(
         `${FRONTEND}/tab/demo.web.ts`,

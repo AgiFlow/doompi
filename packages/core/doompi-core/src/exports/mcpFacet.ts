@@ -2,12 +2,14 @@ export {
   defineMcpPlugin,
   defineMcpSkill,
   defineMcpTool,
+  defineMcpUiResource,
   type DoomMcpContextSnapshot,
   type DoomMcpPluginContext,
   type DoomMcpPluginDefinition,
   type DoomMcpServiceScope,
   type DoomMcpSessionPlugin,
   type DoomMcpSkill,
+  type DoomMcpUiResource,
 } from '../schemas/mcpFacet';
 export {
   DOOM_MCP_BUNDLE_FILE,

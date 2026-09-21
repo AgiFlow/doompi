@@ -133,7 +133,11 @@ const boundaries: BoundaryConfig[] = [
   {
     name: 'extensions',
     pattern: 'src/extensions/**',
-    allowedImports: layer('constants', 'extensions', 'models', 'schemas', 'services', 'tui', 'types'),
+    allowedImports: [
+      ...layer('constants', 'extensions', 'models', 'schemas', 'services', 'tui', 'types'),
+      // Self-contained MCP App assets are build output, not generated host entrypoints.
+      'generated/mcp-apps/**',
+    ],
   },
   {
     name: 'tui',

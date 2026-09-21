@@ -1,6 +1,7 @@
 import type { TSchema } from 'typebox';
 
 import type { DoomHeadlessTool, DoomHeadlessToolResult, DoomMcpSkillAccess } from '../../schemas/headless';
+import type { DoomMcpUiResource } from '../../schemas/mcpFacet';
 
 export interface SessionToolDescriptor {
   readonly name: string;
@@ -9,6 +10,7 @@ export interface SessionToolDescriptor {
   readonly parameters: TSchema;
   readonly annotations?: DoomHeadlessTool['annotations'];
   readonly outputSchema?: DoomHeadlessTool['outputSchema'];
+  readonly _meta?: DoomHeadlessTool['_meta'];
 }
 
 export interface SessionSkillDescriptor {
@@ -17,10 +19,13 @@ export interface SessionSkillDescriptor {
   readonly uri: string;
 }
 
+export type SessionUiResourceDescriptor = Omit<DoomMcpUiResource, 'read'>;
+
 export interface SessionToolSurfaceSnapshot {
   readonly revision: number;
   readonly tools: readonly SessionToolDescriptor[];
   readonly skills: readonly SessionSkillDescriptor[];
+  readonly uiResources?: readonly SessionUiResourceDescriptor[];
 }
 
 export interface SessionToolInvocation {
@@ -39,4 +44,5 @@ export interface SessionToolSurface {
   readSurface(): SessionToolSurfaceSnapshot;
   invokeTool(invocation: SessionToolInvocation): Promise<DoomHeadlessToolResult>;
   readSkill(revision: number, uri: string): string | Promise<string>;
+  readUiResource?(revision: number, uri: string): string | Promise<string>;
 }
