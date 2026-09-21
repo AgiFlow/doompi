@@ -44,13 +44,15 @@ describe('resolveTarget', () => {
       entry({ file: 'server', side: 'backend', surface: 'tool', name: 'grep', platform: 'server' }),
       entry({ file: 'mcp-tool', side: 'backend', surface: 'tool', name: 'grep', platform: 'mcp' }),
       entry({ file: 'mcp-skill', side: 'backend', surface: 'skill', name: 'guide', platform: 'mcp' }),
+      entry({ file: 'mcp-resource', side: 'backend', surface: 'resource', name: 'session-view', platform: 'mcp' }),
       entry({ file: 'neutral', side: 'backend', surface: 'tool', name: 'read' }),
     ]);
     expect(resolveTarget(graph, 'mcp').contributions.map((contribution) => contribution.entry.file)).toEqual([
       'mcp-tool',
       'mcp-skill',
+      'mcp-resource',
     ]);
-    expect(fieldsFor(graph, 'mcp')).toEqual(['skills', 'tools']);
+    expect(fieldsFor(graph, 'mcp')).toEqual(['skills', 'tools', 'uiResources']);
     expect(resolveTarget(graph, 'server').contributions.map((contribution) => contribution.entry.file)).toEqual([
       'server',
       'neutral',

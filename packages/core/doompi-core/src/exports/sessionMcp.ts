@@ -28,4 +28,5 @@ export type {
   SessionToolInvocation,
   SessionToolSurface,
   SessionToolSurfaceSnapshot,
+  SessionUiResourceDescriptor,
 } from '../types/server/sessionToolSurface';

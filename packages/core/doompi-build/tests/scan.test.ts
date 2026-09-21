@@ -38,26 +38,27 @@ describe('scanExtensions', () => {
     'workspaces/sessions/(frontend)/tool/example.mcp.ts',
     'workspaces/sessions/(backend)/root.mcp.ts',
     'workspaces/sessions/(backend)/command/example.mcp.ts',
-    'workspaces/sessions/(backend)/resource/example.mcp.ts',
+    'workspaces/(backend)/resource/example.mcp.ts',
     'workspaces/sessions/(backend)/mode/plan/mode.mcp.ts',
   ])('rejects invalid MCP placement: %s', (relative) => {
     const file = `src/extensions/${relative}`;
     const graph = scanExtensions({ packageDir: packageWith({ [file]: EMPTY }) });
     expect(graph.entries).toEqual([]);
     expect(graph.notices).toEqual([
-      { path: file, message: 'MCP declarations belong in a session backend tool/ or skill/ surface' },
+      { path: file, message: 'MCP declarations belong in a session backend tool/, skill/, or resource/ surface' },
     ]);
   });
 
-  it('accepts session backend MCP tools and skills, including gated declarations', () => {
+  it('accepts session backend MCP tools, skills, and UI resources, including gated declarations', () => {
     const graph = scanExtensions({
       packageDir: packageWith({
         'src/extensions/workspaces/sessions/(backend)/tool/example.mcp.ts': EMPTY,
         'src/extensions/workspaces/sessions/(backend)/mode/plan/skill/guide.mcp.ts': EMPTY,
+        'src/extensions/workspaces/sessions/(backend)/resource/session-view.mcp.ts': EMPTY,
       }),
     });
     expect(graph.notices).toEqual([]);
-    expect(graph.entries).toHaveLength(2);
+    expect(graph.entries).toHaveLength(3);
     expect(graph.entries.every((entry) => entry.platform === 'mcp' && entry.scope === 'session')).toBe(true);
   });
 

@@ -108,7 +108,7 @@ A directory per kind, filename is identity.
 | `api/`                                      | server HTTP routes                                              | generated typed client               |
 | `channel/`                                  | `channels`, filename is the frame type                          | web `channels`                       |
 | `method/`                                   | server `methods`                                                | generated typed caller               |
-| `resource/`                                 | CLI and server resources                                        | not scanned                          |
+| `resource/`                                 | CLI/server resources, static MCP App HTML with `.mcp.ts`        | not scanned                          |
 | `message/`                                  | not scanned                                                     | CLI message renderers                |
 | `tab/`, `dock/`                             | not scanned                                                     | web tabs and dock faces              |
 | `setting/`                                  | not scanned                                                     | web settings sections or panels      |
@@ -124,7 +124,15 @@ The backend scope root owns service injection and startup work. It returns Cordi
 
 ### Remote MCP declarations
 
-Remote MCP is opt-in. Author `tool/[name].mcp.ts` or `skill/[name].mcp.ts` below a session backend scope and build it with `tsdown.mcp.config.ts`. The generated MCP entry is admitted with package ownership and integrity checks. It has its own session surface, so local tools, server resources, and Pi contributions never become remote MCP capabilities by inference. MCP declarations may read explicitly mounted services from their MCP context, but must not import a generic server registration root.
+Remote MCP is opt-in. Author `tool/[name].mcp.ts`, `skill/[name].mcp.ts`, or `resource/[name].mcp.ts` below a session backend scope and build it with `tsdown.mcp.config.ts`. The generated MCP entry is admitted with package ownership and integrity checks. It has its own session surface, so local tools, server resources, and Pi contributions never become remote MCP capabilities by inference. MCP declarations may read explicitly mounted services from their MCP context, but must not import a generic server registration root.
+
+MCP App resources use `defineMcpUiResource` from `@agimon-ai/doompi-core/mcp-facet` and contribute to `uiResources`. Their MIME type is `text/html;profile=mcp-app`. A tool links to its own package's resource through `_meta.ui.resourceUri`; duplicate resource URIs and cross-package references are rejected. Tools default to model-only UI visibility. A widget-callable tool explicitly declares `_meta.ui.visibility: ['model', 'app']`. Visibility is a host UI policy, not a replacement for the server's grant checks.
+
+The resource's `read()` loads immutable, session-independent HTML without an execution context. Use a content-addressed URI and keep all session data in tool results. The host may prefetch the template before a tool runs, without conversation metadata or child-session creation. Resource listing and reads are limited to templates linked to granted, active tools. Conversation-bound refreshes still run through the authenticated tool path, never through a browser-supplied session ID.
+
+The component source belongs in a private `(frontend)/_lib` folder and uses the standard browser MCP Apps SDK. Build self-contained assets into `generated/mcp-apps/` and embed them in the MCP facet. Backend declarations may import these generated assets; browser code may not import generated host entrypoints. The Config package's `show_session` tool and `tsdown.app.config.ts` provide the working example.
+
+Tool results keep `content` and `structuredContent` model-visible. Explicit `_meta` is component-only data, not a credentials channel. Internal renderer `details` are never exported as metadata, and result-rewriting hooks remove the original component metadata.
 
 A frontend `overlay/*.cli.ts` file owns the interactive view that a session command opens through Pi's `ui.custom`. Pi has no overlay registration array.
 

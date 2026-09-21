@@ -134,11 +134,22 @@ describe('headless session facet surface', () => {
 });
 
 describe('MCP execution boundary', () => {
-  async function remoteFixture(owner = { majorMode: 'test', layer: 'default' }) {
+  const uiUri = 'ui://doompi/session/v1/index.html';
+  async function remoteFixture(
+    owner = { majorMode: 'test', layer: 'default' },
+    ui: { uri?: string; toolUri?: string; duplicate?: boolean } = {},
+  ) {
     const execute = vi.fn<DoomHeadlessTool['execute']>(async (..._args) => ({
       content: [{ type: 'text' as const, text: 'done' }],
     }));
     const read = vi.fn(async () => '# skill');
+    const readUi = vi.fn(async () => '<!doctype html><title>Session</title>');
+    const resource = {
+      uri: ui.uri ?? uiUri,
+      name: 'Session',
+      mimeType: 'text/html;profile=mcp-app' as const,
+      read: readUi,
+    };
     const current = await fixture([
       {
         declaration: {
@@ -158,10 +169,12 @@ describe('MCP execution boundary', () => {
                 parameters: Type.Object({}),
                 annotations: { readOnlyHint: true },
                 outputSchema: { type: 'object', properties: { status: { type: 'string' } } },
+                _meta: { ui: { resourceUri: ui.toolUri ?? uiUri, visibility: ['model', 'app'] } },
                 execute,
               },
             ],
             skills: [{ name: 'guide', description: 'Guide', read }],
+            uiResources: ui.duplicate ? [resource, resource] : [resource],
           },
         },
       },
@@ -173,6 +186,7 @@ describe('MCP execution boundary', () => {
       ...current,
       execute,
       read,
+      readUi,
       snapshot,
       invocation: { revision: snapshot.revision, name: 'remote', arguments: {} },
     };
@@ -183,13 +197,16 @@ describe('MCP execution boundary', () => {
     expect(current.snapshot.tools[0]).toMatchObject({
       annotations: { readOnlyHint: true },
       outputSchema: { type: 'object' },
+      _meta: { ui: { resourceUri: uiUri, visibility: ['model', 'app'] } },
     });
     current.execute.mockResolvedValue({
       content: [{ type: 'text', text: 'sensitive' }],
       structuredContent: { status: 'sensitive' },
+      _meta: { displayValue: 'sensitive' },
     });
     await expect(current.host.mcpSurface.invokeTool(current.invocation)).resolves.toMatchObject({
       structuredContent: { status: 'sensitive' },
+      _meta: { displayValue: 'sensitive' },
     });
     vi.spyOn(current.host.host!, 'dispatchHook').mockImplementation(async (name) =>
       name === 'tool_result' ? [{ content: [{ type: 'text', text: 'redacted' }] }] : [],
@@ -197,6 +214,7 @@ describe('MCP execution boundary', () => {
     const result = await current.host.mcpSurface.invokeTool(current.invocation);
     expect(result.content).toEqual([{ type: 'text', text: 'redacted' }]);
     expect(result.structuredContent).toBeUndefined();
+    expect(result._meta).toBeUndefined();
   });
 
   it('keeps the remote surface empty without explicit declarations', async () => {
@@ -220,6 +238,8 @@ describe('MCP execution boundary', () => {
 
     expect(current.snapshot.tools).toEqual([]);
     expect(current.snapshot.skills).toEqual([]);
+    expect(current.snapshot.uiResources).toEqual([]);
+    expect(current.readUi).not.toHaveBeenCalled();
     expect(current.read).not.toHaveBeenCalled();
     expect(current.execute).not.toHaveBeenCalled();
   });
@@ -349,5 +369,41 @@ describe('MCP execution boundary', () => {
     await expect(
       current.host.mcpSurface.readSkill(current.snapshot.revision, current.snapshot.skills[0]!.uri),
     ).rejects.toThrow('not ready');
+  });
+  it('loads static UI lazily without passing session execution context', async () => {
+    const current = await remoteFixture();
+    expect(current.snapshot.uiResources).toEqual([
+      { uri: uiUri, name: 'Session', mimeType: 'text/html;profile=mcp-app' },
+    ]);
+    expect(current.readUi).not.toHaveBeenCalled();
+    await expect(current.host.mcpSurface.readUiResource!(current.snapshot.revision, uiUri)).resolves.toBe(
+      '<!doctype html><title>Session</title>',
+    );
+    expect(current.readUi).toHaveBeenCalledWith();
+    await expect(current.host.mcpSurface.readUiResource!(current.snapshot.revision - 1, uiUri)).rejects.toThrow(
+      'changed',
+    );
+    await expect(
+      current.host.mcpSurface.readUiResource!(current.snapshot.revision, 'ui://missing/view'),
+    ).rejects.toThrow('not active');
+  });
+
+  it.each(['selection', 'disposal'] as const)('rejects UI returned after %s changes', async (change) => {
+    const current = await remoteFixture();
+    current.readUi.mockImplementationOnce(async () => {
+      if (change === 'disposal') await current.host.dispose();
+      else await current.host.host!.changeSelection({ axis: 'state', key: 'test', values: ['other'] });
+      return 'stale';
+    });
+    await expect(current.host.mcpSurface.readUiResource!(current.snapshot.revision, uiUri)).rejects.toThrow();
+  });
+
+  it.each([
+    { uri: 'https://untrusted.example/widget.html' },
+    { uri: 'ui://doompi/session.html?session=private' },
+    { duplicate: true },
+    { toolUri: 'ui://another-package/view.html' },
+  ])('rejects invalid or unowned UI registrations: %j', async (ui) => {
+    await expect(remoteFixture(undefined, ui)).rejects.toThrow();
   });
 });

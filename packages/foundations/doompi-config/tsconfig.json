@@ -22,6 +22,15 @@
     "outDir": "dist",
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src", "tests", "vitest.config.ts", "tsdown.config.ts", "tsdown.mcp.config.ts", "generated"],
-  "exclude": ["node_modules", "dist", "coverage"]
+  "include": [
+    "src",
+    "tests",
+    "vitest.config.ts",
+    "tsdown.config.ts",
+    "tsdown.mcp.config.ts",
+    "tsdown.app.config.ts",
+    "playwright.app.config.ts",
+    "generated"
+  ],
+  "exclude": ["node_modules", "dist", "coverage", "src/extensions/**/(frontend)/**", "tests/browser"]
 }

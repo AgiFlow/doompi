@@ -48,6 +48,8 @@ const ALLOWED_BARE_SPECIFIERS = new Set([
   'react/jsx-runtime',
   '@tanstack/store',
   '@tanstack/react-store',
+  // The browser-only MCP App bridge. Server and host SDK subpaths remain disallowed.
+  '@modelcontextprotocol/ext-apps',
   WEB_CONTRACTS_ENTRY,
   COMPONENTS_PACKAGE,
   SECURITY_BROWSER_PACKAGE,

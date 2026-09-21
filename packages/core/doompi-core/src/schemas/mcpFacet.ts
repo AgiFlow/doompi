@@ -29,10 +29,33 @@ export interface DoomMcpSkill {
   read(context: DoomHeadlessExecutionContext): string | Promise<string>;
 }
 
+/** A package-owned, immutable UI template. Session data belongs in tool results, never in this HTML. */
+export interface DoomMcpUiResource {
+  readonly uri: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly mimeType: 'text/html;profile=mcp-app';
+  readonly _meta?: Record<string, unknown> & {
+    ui?: {
+      csp?: {
+        connectDomains?: string[];
+        resourceDomains?: string[];
+        frameDomains?: string[];
+        baseUriDomains?: string[];
+      };
+      domain?: string;
+      prefersBorder?: boolean;
+    };
+  };
+  /** Loads static packaged HTML without an execution context. */
+  read(): string | Promise<string>;
+}
+
 /** A dedicated remote surface, deliberately separate from local agent registrations. */
 export interface DoomMcpSessionPlugin {
   readonly tools?: readonly DoomHeadlessTool<TSchema>[];
   readonly skills?: readonly DoomMcpSkill[];
+  readonly uiResources?: readonly DoomMcpUiResource[];
 }
 
 export interface DoomMcpServiceScope {
@@ -79,4 +102,9 @@ export function defineMcpSkill<TContext = unknown>(
   skill: DoomMcpSkill | ((context: TContext) => DoomMcpSkill),
 ): DoomMcpSkill | ((context: TContext) => DoomMcpSkill) {
   return skill;
+}
+
+/** `resource/[name].mcp.ts`. Static UI resources stay separate from session guidance. */
+export function defineMcpUiResource(resource: DoomMcpUiResource): DoomMcpUiResource {
+  return resource;
 }

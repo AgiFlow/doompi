@@ -82,10 +82,13 @@ function grantedSurface(grant: SessionMcpAccessGrant, surface: SessionToolSurfac
   const snapshot = surface.readSurface();
   const toolNames = new Set(grant.tools);
   const skillNames = new Set(grant.skills);
+  const tools = grant.scope === 'session' ? snapshot.tools : snapshot.tools.filter((tool) => toolNames.has(tool.name));
+  const resourceUris = new Set(tools.map((tool) => tool._meta?.ui?.resourceUri));
   return {
     snapshot,
-    tools: grant.scope === 'session' ? snapshot.tools : snapshot.tools.filter((tool) => toolNames.has(tool.name)),
+    tools,
     skills: grant.scope === 'session' ? snapshot.skills : snapshot.skills.filter((skill) => skillNames.has(skill.name)),
+    uiResources: (snapshot.uiResources ?? []).filter((resource) => resourceUris.has(resource.uri)),
   };
 }
 
@@ -180,6 +183,11 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           inputSchema: tool.parameters as Tool['inputSchema'],
           ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
           ...(tool.outputSchema === undefined ? {} : { outputSchema: tool.outputSchema }),
+          _meta: {
+            ...tool._meta,
+            // Doompi tools can execute code and write files. UI access is opt-in, not the spec's default.
+            ui: { ...tool._meta?.ui, visibility: tool._meta?.ui?.visibility ?? ['model'] },
+          },
         })),
       };
     });
@@ -232,7 +240,8 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           !selected ||
           !isDeepStrictEqual(selected.parameters, advertised.parameters) ||
           !isDeepStrictEqual(selected.outputSchema, advertised.outputSchema) ||
-          !isDeepStrictEqual(selected.annotations, advertised.annotations)
+          !isDeepStrictEqual(selected.annotations, advertised.annotations) ||
+          !isDeepStrictEqual(selected._meta, advertised._meta)
         ) {
           throw new SessionMcpConversationError(
             'SESSION_TOOL_SURFACE_CHANGED',
@@ -293,6 +302,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         return {
           content: result.content,
           ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
+          ...(result._meta === undefined ? {} : { _meta: result._meta }),
           isError: result.isError ?? false,
         };
       } catch (error) {
@@ -313,25 +323,50 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
     });
     server.setRequestHandler(ListResourcesRequestSchema, async () => {
       const active = await authorizeOperation();
-      if (active.grant.routing === 'conversation') return { resources: [] };
-      const { skills } = grantedSurface(active.grant, active.target.toolSurface);
+      const { skills, uiResources } = grantedSurface(active.grant, active.target.toolSurface);
       return {
-        resources: skills.map((skill) => ({
-          uri: skill.uri,
-          name: skill.name,
-          description: skill.description,
-          mimeType: 'text/markdown',
-        })),
+        resources: [
+          ...uiResources,
+          ...(active.grant.routing === 'conversation'
+            ? []
+            : skills.map((skill) => ({
+                uri: skill.uri,
+                name: skill.name,
+                description: skill.description,
+                mimeType: 'text/markdown',
+              }))),
+        ],
       };
     });
     server.setRequestHandler(ReadResourceRequestSchema, async (message) => {
       const active = await authorizeOperation();
+      const { snapshot, skills, uiResources } = grantedSurface(active.grant, active.target.toolSurface);
+      const resource = uiResources.find((candidate) => candidate.uri === message.params.uri);
+      if (resource !== undefined && active.target.toolSurface.readUiResource !== undefined) {
+        // Templates are immutable and session-independent, so hosts may prefetch them without a conversation ID.
+        request.signal.throwIfAborted();
+        const text = await active.target.toolSurface.readUiResource(snapshot.revision, resource.uri);
+        request.signal.throwIfAborted();
+        const current = await authorizeOperation();
+        const after = grantedSurface(current.grant, current.target.toolSurface);
+        if (
+          current.target.toolSurface !== active.target.toolSurface ||
+          after.snapshot.revision !== snapshot.revision ||
+          !isDeepStrictEqual(
+            after.uiResources.find((candidate) => candidate.uri === resource.uri),
+            resource,
+          )
+        )
+          throw new McpError(ErrorCode.InvalidRequest, 'The session UI resource surface has changed.');
+        return { contents: [{ ...resource, text }] };
+      }
+      if (message.params.uri.startsWith('ui:'))
+        throw new McpError(ErrorCode.InvalidParams, 'UI resource is not granted or active.');
       if (active.grant.routing === 'conversation')
         throw new McpError(
           ErrorCode.InvalidParams,
           'Use load_skill with conversation metadata to read target-session guidance.',
         );
-      const { snapshot, skills } = grantedSurface(active.grant, active.target.toolSurface);
       const skill = skills.find((candidate) => candidate.uri === message.params.uri);
       if (skill === undefined) throw new McpError(ErrorCode.InvalidParams, 'Skill resource is not granted or active.');
       const text = await active.target.toolSurface.readSkill(snapshot.revision, skill.uri);

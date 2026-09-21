@@ -128,6 +128,29 @@ The package publishes `src/prompts/doompi-author-config`, links it from `llms.tx
 `doompi-author-config` with the `doom/help` Cordis service. The guidance is visible to the AI only
 while the parent Help minor mode is active.
 
+## Remote session app
+
+The remote-only `show_session` tool returns a read-only summary and links it to an MCP App.
+Compatible hosts render the repository name, session identity, revision, profile, domains, layers,
+and modes. Text-only clients receive the same information as readable text. `load_context` remains
+separate and does not open a widget.
+
+The component refreshes through the host's `tools/call` bridge. It receives no access token, does
+not contact localhost or an external asset server, and does not include instructions, persona text,
+or absolute repository paths. Conversation-routed connections still require host-supplied
+conversation metadata on every tool call, including refresh. A host that cannot preserve that
+metadata must use a dedicated-session connection; there is no fallback to a shared session.
+
+`build:mcp` first runs `build:app`. The browser SDK and HTML are bundled into
+`generated/mcp-apps/session.ts`, then embedded in the published MCP facet. The `ui://` resource URI
+contains a hash of the complete HTML. Do not edit generated assets or reuse an old URI for changed
+content. Resource reads are authorized static prefetches and never create a child session.
+
+Connect an MCP Apps host to the existing session MCP URL. After rebuilding and restarting the
+server, refresh the host's tool catalog and invoke `show_session`. ChatGPT developer-mode
+connections use the same endpoint. Public app submission, a stable production widget origin, and
+upstream third-party widget forwarding are separate deployment work.
+
 ## Development
 
 ```bash
@@ -135,7 +158,13 @@ pnpm build
 pnpm typecheck
 pnpm test
 pnpm lint
+pnpm test:app
 ```
+
+The browser tests require Playwright Chromium (`pnpm exec playwright install chromium`). They
+exercise the packaged HTML in a sandboxed iframe using the standard SDK's `AppBridge`, including
+refresh, theme changes, errors, text safety, and teardown. They do not substitute for testing the
+connection inside ChatGPT itself.
 
 Maintained by [Agimon](https://agimon.ai/about).
 

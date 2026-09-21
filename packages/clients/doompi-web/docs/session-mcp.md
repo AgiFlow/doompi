@@ -1,6 +1,6 @@
 # Session MCP
 
-DoomPi Web can expose one live DoomPi session as a remote MCP server. Remote Control supplies the public HTTPS origin. The endpoint exposes only package capabilities explicitly authored as `tool/[name].mcp.ts` or `skill/[name].mcp.ts`, not the agent's session or Pi tools and resources.
+DoomPi Web can expose one live DoomPi session as a remote MCP server. Remote Control supplies the public HTTPS origin. The endpoint exposes only package capabilities explicitly authored as `tool/[name].mcp.ts`, `skill/[name].mcp.ts`, or static UI `resource/[name].mcp.ts` declarations, not the agent's local Pi tools and resources.
 
 This is an inbound connection. It is separate from outbound MCP servers, remote pairing, and Remote Control.
 
@@ -55,9 +55,10 @@ way to discover and load current guidance. No companion plugin or widget is requ
 Repository instructions reflect the files loaded at session startup; reloading
 context is not proof that newly edited instruction files were reloaded.
 
-The remote bridge preserves declared tool annotations, output schemas, and explicit
-structured results. Internal renderer `details` are not exported. Result-rewriting
-hooks invalidate the original structured payload so it cannot bypass a redaction.
+The remote bridge preserves declared tool annotations, output schemas, explicit
+structured results, and MCP metadata. Internal renderer `details` are not exported.
+Result-rewriting hooks invalidate the original structured payload and component
+metadata so they cannot bypass a redaction.
 Annotations describe side effects; the existing authenticated session remains the
 authority for every call.
 
@@ -72,3 +73,56 @@ A runner handle is not command completion. Use bounded `doom-runner status` and
 Do not assume that background notifications resume a remote conversation, and do
 not launch background delegation without a demonstrated result-delivery path.
 Host paths are not automatically downloadable ChatGPT attachments.
+
+## MCP Apps session widget
+
+The remote-only `show_session` tool renders a read-only session summary in an MCP
+Apps-compatible host. It shows the repository name, session ID, revision, profile,
+domains, layers, and modes. It does not expose absolute repository paths,
+instructions, persona text, credentials, or environment values. `load_context`
+remains separate and does not open a widget. Text-only clients receive a readable
+summary and the same structured data.
+
+To try the widget after a source update:
+
+1. Build the affected packages and relaunch the host and session with the updated
+   composition. Refreshing a tool catalog alone does not reload the server bundle.
+2. Refresh the MCP connection in the agent host. Restricted connections must grant
+   `show_session`; existing grants that exclude it do not gain access automatically.
+3. Invoke `show_session` in a new conversation. Confirm the session ID and selected
+   modes, then click **Refresh** to update the existing component.
+
+The browser component uses the standard MCP Apps SDK and the host's authenticated
+`tools/call` bridge. It does not receive an access token or contact localhost,
+DoomPi REST endpoints, or an external asset server. Other tools are advertised as
+model-only unless their package explicitly permits component access. This UI
+visibility policy does not replace server-side grants or authorization checks.
+
+The HTML is embedded in the published Config MCP facet. Its resource URI is
+`ui://doompi/session/<content-hash>/index.html`, with MIME type
+`text/html;profile=mcp-app`. The tool's `_meta.ui.resourceUri` and optional OpenAI
+compatibility alias identify the same resource. A changed template produces a new
+URI, so the host cannot confuse it with cached bytes from an older build.
+
+Static UI resources may be prefetched through an authorized connection without a
+conversation ID. These reads never create a child session and cannot read skills
+or other session-specific content. A resource is accessible only when an active,
+granted tool references it, and authorization is checked again after loading.
+
+Dynamic tool calls, including component refresh, still require the connection's
+configured conversation correlation. A host that cannot preserve that metadata
+must use a dedicated-session connection. DoomPi never silently redirects a missing
+conversation ID to a shared session. The widget also hides its data if a refresh
+returns a different session ID.
+
+The repository tests cover protocol metadata, grants and revocation, conversation
+isolation, installed-package resources, and a sandboxed browser host using the
+standard SDK's `AppBridge`. Run the component tests with
+`pnpm --filter @agimon-ai/doompi-config test:app` after building Config. Testing in
+ChatGPT itself remains a separate integration check; a passing reference-host test
+is not evidence that ChatGPT preserved conversation metadata.
+
+This implementation serves DoomPi-authored UI resources. Forwarding arbitrary
+upstream MCP Apps, public plugin submission, and configuring a production widget
+origin are separate work. The existing authenticated MCP connection is sufficient
+for developer testing; no companion plugin manifest is required.

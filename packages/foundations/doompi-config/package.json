@@ -145,9 +145,11 @@
   },
   "scripts": {
     "build": "tsdown && pnpm build:mcp",
-    "build:mcp": "tsdown --config tsdown.mcp.config.ts",
+    "build:mcp": "pnpm build:app && tsdown --config tsdown.mcp.config.ts",
+    "build:app": "tsdown --config tsdown.app.config.ts",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit",
+    "test:app": "playwright test --config playwright.app.config.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.app.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -161,6 +163,9 @@
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.86.0",
+    "@modelcontextprotocol/ext-apps": "1.5.0",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@playwright/test": "1.63.0",
     "@types/node": "26.5.1",
     "@vitest/coverage-v8": "5.0.0",
     "tsdown": "0.23.0",

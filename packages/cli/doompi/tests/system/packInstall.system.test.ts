@@ -1604,6 +1604,66 @@ describe('conventional Pi discovery', () => {
     expect(result.stdout).toContain('PACKED_MCP_MARKDOWN_OK');
   });
 
+  it('loads the packed session MCP App without implementation sources or browser runtime dependencies', async () => {
+    assertConsumerInstall();
+    const probe = path.join(consumer.root, 'packed-session-app-probe.mjs');
+    fs.writeFileSync(
+      probe,
+      [
+        "import assert from 'node:assert/strict';",
+        "import { createHash } from 'node:crypto';",
+        "import fs from 'node:fs';",
+        "import path from 'node:path';",
+        "import { pathToFileURL } from 'node:url';",
+        "const directory = fs.realpathSync(path.join('node_modules', '@agimon-ai/doompi-config'));",
+        'assert.ok(directory.startsWith(fs.realpathSync(process.cwd()) + path.sep));',
+        "const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'));",
+        "for (const source of ['generated', 'src/extensions', 'src/services']) assert.equal(fs.existsSync(path.join(directory, source)), false, source);",
+        "assert.equal(manifest.dependencies?.['@modelcontextprotocol/ext-apps'], undefined);",
+        'const { mcp } = await import(pathToFileURL(path.join(directory, manifest.doompiMcp.dist)).href);',
+        'const snapshot = {',
+        "  session: { id: 'packed-session', revision: 1 }, repository: { root: '/private/workspace/doompi', cwd: '/private/workspace/doompi' },",
+        "  selection: { profile: null, majorMode: 'copilot', domains: ['development'], activeLayers: ['team'], minorModes: [] },",
+        "  instructions: [{ path: 'AGENTS.md', content: 'PACKED_PRIVATE_INSTRUCTIONS' }], persona: 'PACKED_PRIVATE_PERSONA',",
+        '};',
+        'const session = await mcp.session({ loadContext: () => snapshot });',
+        "const tool = session.tools.find(({ name }) => name === 'show_session');",
+        'const resource = session.uiResources.find(({ uri }) => uri === tool._meta.ui.resourceUri);',
+        'assert.ok(resource);',
+        "assert.deepEqual(tool._meta.ui.visibility, ['model', 'app']);",
+        "assert.equal(tool._meta['openai/outputTemplate'], resource.uri);",
+        "assert.equal(resource.mimeType, 'text/html;profile=mcp-app');",
+        'assert.deepEqual(resource._meta.ui.csp, { connectDomains: [], resourceDomains: [] });',
+        'const html = await resource.read();',
+        "const digest = createHash('sha256').update(html).digest('hex').slice(0, 24);",
+        'assert.equal(resource.uri, `ui://doompi/session/${digest}/index.html`);',
+        "assert.ok(html.includes('<script>'));",
+        "assert.ok(!html.includes('<!--APP_SCRIPT-->'));",
+        'assert.ok(!/<script[^>]+src=/u.test(html));',
+        'const result = await tool.execute();',
+        "assert.equal(result.structuredContent.sessionId, 'packed-session');",
+        "assert.equal(result.structuredContent.repositoryName, 'doompi');",
+        "assert.ok(result.content[0].text.includes('Doompi session: packed-session'));",
+        "assert.deepEqual(result._meta, { widgetType: 'session' });",
+        "for (const secret of ['/private/workspace', 'PACKED_PRIVATE_INSTRUCTIONS', 'PACKED_PRIVATE_PERSONA']) {",
+        '  assert.ok(!JSON.stringify(result).includes(secret));',
+        '  assert.ok(!html.includes(secret));',
+        '}',
+        'snapshot.session.revision = 2;',
+        'assert.equal((await tool.execute()).structuredContent.revision, 2);',
+        'assert.equal(await resource.read(), html);',
+        "process.stdout.write('PACKED_MCP_APP_OK\\n');",
+        '',
+      ].join('\n'),
+    );
+    const result = await runCommand(process.execPath, [probe], consumer.root, {
+      ...cleanRuntimeEnvironment(path.join(consumer.root, 'session-app-agent')),
+      NODE_PATH: '',
+      NODE_OPTIONS: '',
+    });
+    expect(result.code, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('PACKED_MCP_APP_OK');
+  });
   it('loads Vibe-Lint from npm without adding it to the owned package matrix', async () => {
     assertConsumerInstall();
     expect(PACKAGE_MATRIX.map(({ name }) => name)).not.toContain('@agimon-ai/vibe-lint');

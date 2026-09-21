@@ -14,7 +14,12 @@ import type { SessionToolSurface } from '../../../../../src/types/server/session
 
 const AUDIENCE = 'https://host.example/sessions/alpha/mcp';
 const VERIFIER = 'v'.repeat(43);
-
+const UI_RESOURCE = {
+  uri: 'ui://doompi/test/v1/index.html',
+  name: 'Session view',
+  mimeType: 'text/html;profile=mcp-app' as const,
+  _meta: { ui: { csp: { connectDomains: [], resourceDomains: [] }, prefersBorder: true } },
+};
 function rpcResult(body: unknown) {
   const response = JSONRPCResponseSchema.parse(body);
   if ('error' in response) throw new Error(response.error.message);
@@ -57,6 +62,8 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
     content: [{ type: 'text' as const, text: 'called' }],
   }));
   const readSkill = vi.fn(async () => '# Allowed skill');
+  const readUiResource = vi.fn(async () => '<!doctype html><title>Session</title>');
+  let uiEnabled = false;
   let revision = 12;
   let includeNewCapabilities = false;
   const toolSurface: SessionToolSurface = {
@@ -70,8 +77,22 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
           parameters: Type.Object({}),
           annotations: { readOnlyHint: true, openWorldHint: false },
           outputSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+          ...(uiEnabled
+            ? {
+                _meta: {
+                  ui: { resourceUri: UI_RESOURCE.uri, visibility: ['model' as const, 'app' as const] },
+                  'openai/outputTemplate': UI_RESOURCE.uri,
+                },
+              }
+            : {}),
         },
-        { name: 'hidden_tool', label: 'Hidden tool', description: 'Must not leak', parameters: Type.Object({}) },
+        {
+          name: 'hidden_tool',
+          label: 'Hidden tool',
+          description: 'Must not leak',
+          parameters: Type.Object({}),
+          ...(uiEnabled ? { _meta: { ui: { resourceUri: 'ui://doompi/hidden/v1/index.html' } } } : {}),
+        },
         ...(includeNewCapabilities
           ? [{ name: 'new_tool', label: 'New tool', description: 'Newly enabled', parameters: Type.Object({}) }]
           : []),
@@ -83,9 +104,11 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
           ? [{ name: 'new-skill', description: 'Newly enabled', uri: 'doompi://session/alpha/skills/new-skill' }]
           : []),
       ],
+      uiResources: uiEnabled ? [UI_RESOURCE, { ...UI_RESOURCE, uri: 'ui://doompi/hidden/v1/index.html' }] : [],
     }),
     invokeTool,
     readSkill,
+    readUiResource,
   };
   let generation = 7;
   let resolveCount = 0;
@@ -137,6 +160,8 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
     request,
     invokeTool,
     readSkill,
+    readUiResource,
+    setUiEnabled: (value: boolean) => (uiEnabled = value),
     grantId: tokens.grantId,
     setGeneration: (value: number) => (generation = value),
     enableNewCapabilities: () => {
@@ -169,11 +194,13 @@ describe('session MCP Streamable HTTP handler', () => {
     expect(listing.tools[0]).toMatchObject({
       annotations: { readOnlyHint: true, openWorldHint: false },
       outputSchema: { type: 'object', required: ['status'] },
+      _meta: { ui: { visibility: ['model'] } },
     });
     for (const isError of [false, true]) {
       invokeTool.mockResolvedValueOnce({
         content: [{ type: 'text', text: 'A readable result' }],
         structuredContent: { status: isError ? 'failed' : 'completed' },
+        _meta: { widgetType: 'session', displayLabel: 'Component only' },
         details: { internalToken: 'never-export' },
         isError,
       });
@@ -181,6 +208,7 @@ describe('session MCP Streamable HTTP handler', () => {
       expect(response).toEqual({
         content: [{ type: 'text', text: 'A readable result' }],
         structuredContent: { status: isError ? 'failed' : 'completed' },
+        _meta: { widgetType: 'session', displayLabel: 'Component only' },
         isError,
       });
       expect(JSON.stringify(response)).not.toContain('never-export');
@@ -429,4 +457,51 @@ describe('session MCP Streamable HTTP handler', () => {
     expect(current.authorization.revokeSessionGeneration('alpha', 7)).toBe(1);
     expect((await current.request('tools/list')).status).toBe(401);
   });
+  it('advertises and reads only UI resources associated with granted tools', async () => {
+    const f = fixture();
+    f.setUiEnabled(true);
+    const listing = ListToolsResultSchema.parse(rpcResult(await (await f.request('tools/list')).json()));
+    expect(listing.tools[0]?._meta).toEqual({
+      ui: { resourceUri: UI_RESOURCE.uri, visibility: ['model', 'app'] },
+      'openai/outputTemplate': UI_RESOURCE.uri,
+    });
+    const resources = rpcResult(await (await f.request('resources/list')).json());
+    expect(JSON.stringify(resources)).toContain(UI_RESOURCE.uri);
+    expect(JSON.stringify(resources)).not.toContain('ui://doompi/hidden');
+    const result = rpcResult(await (await f.request('resources/read', { uri: UI_RESOURCE.uri })).json());
+    expect(result).toEqual({ contents: [{ ...UI_RESOURCE, text: '<!doctype html><title>Session</title>' }] });
+    expect(f.readUiResource).toHaveBeenCalledWith(12, UI_RESOURCE.uri);
+    expect(f.readSkill).not.toHaveBeenCalled();
+    expect(f.invokeTool).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'ui://doompi/hidden/v1/index.html',
+    'ui://doompi/test/v1/index.html?session=other',
+    'ui://doompi/test/v1/../index.html',
+    'ui://doompi/missing/v1/index.html',
+  ])('rejects an ungranted or non-exact UI resource: %s', async (uri) => {
+    const f = fixture();
+    f.setUiEnabled(true);
+    expect(await (await f.request('resources/read', { uri })).json()).toMatchObject({ error: { code: -32602 } });
+    expect(f.readUiResource).not.toHaveBeenCalled();
+  });
+
+  it.each(['revoke', 'revision', 'removed', 'generation'] as const)(
+    'rejects UI content if %s changes while its loader is running',
+    async (change) => {
+      const f = fixture();
+      f.setUiEnabled(true);
+      f.readUiResource.mockImplementationOnce(async () => {
+        if (change === 'revoke') f.authorization.revokeGrant(f.grantId);
+        if (change === 'revision') f.enableNewCapabilities();
+        if (change === 'removed') f.setUiEnabled(false);
+        if (change === 'generation') f.setGeneration(8);
+        return 'must-not-leak';
+      });
+      const result = await (await f.request('resources/read', { uri: UI_RESOURCE.uri })).json();
+      expect(result).toHaveProperty('error');
+      expect(JSON.stringify(result)).not.toContain('must-not-leak');
+    },
+  );
 });
