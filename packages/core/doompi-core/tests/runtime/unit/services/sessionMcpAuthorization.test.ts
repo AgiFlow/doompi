@@ -200,6 +200,31 @@ describe('session MCP restricted OAuth', () => {
     });
     expect(authorization.grant).toMatchObject({ scope: 'session', tools: [], skills: [] });
   });
+  it('restores a verified registration with a new runtime generation and no tokens', () => {
+    const { service, client } = fixture();
+    const registration = service.persistentRegistration(client.clientId, 'workspace', 10_000);
+    expect(registration).toBeDefined();
+    expect(JSON.stringify(registration)).not.toContain(client.clientSecret);
+
+    const restored = createSessionMcpAuthorizationService();
+    expect(restored.restorePersistentRegistration(registration!, 9)).toBe(true);
+    const authorization = restored.issueAuthorizationCode({
+      clientId: client.clientId,
+      redirectUri: CALLBACK,
+      codeChallenge: CHALLENGE,
+      codeChallengeMethod: 'S256',
+    });
+    const tokens = restored.exchangeToken({
+      grantType: 'authorization_code',
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      code: authorization.code,
+      redirectUri: CALLBACK,
+      codeVerifier: VERIFIER,
+    });
+    expect(tokens.grant.sessionGeneration).toBe(9);
+  });
+
   it('sweeps expired codes and orphan grants before enforcing the record bound', () => {
     let now = 1_000;
     const service = createSessionMcpAuthorizationService({

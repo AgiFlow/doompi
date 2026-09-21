@@ -24,6 +24,7 @@ export interface SessionMcpHttpHandlerOptions {
   /** Exact HTTPS resource indicator minted into access grants. */
   readonly audience: string;
   readonly authorization: Pick<SessionMcpAuthorizationService, 'authenticateAccessToken'>;
+  readonly onVerified?: (grant: SessionMcpAccessGrant) => void | Promise<void>;
   readonly resourceMetadataUrl?: string;
   readonly resolveSession: (sessionId: string) => SessionMcpTarget | undefined | Promise<SessionMcpTarget | undefined>;
   readonly serverName?: string;
@@ -146,6 +147,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
     });
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       const active = await authorizeOperation();
+      await options.onVerified?.(active.grant);
       const { tools } = grantedSurface(active.grant, active.target.toolSurface);
       return {
         tools: tools.map((tool) => ({

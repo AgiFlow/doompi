@@ -38,9 +38,9 @@ Client creation is host-only. A paired remote browser or connector credential ca
 
 ## Lifetime and revocation
 
-Clients, grants, and tokens are process-local. Ending or restarting the session, restarting the host, disabling Remote Control, changing the public origin, or revoking the client invalidates access. Create a new client after those changes.
+Verified clients are saved for their workspace, session, and exact MCP URL across a DoomPi host restart. Authorization codes, access tokens, and refresh tokens remain process-local. Reconnect with the existing client ID, secret, and MCP URL, then authorize again if requested.
 
-The secret is shown once. Dismissal, navigation, or changing the selected session clears it from the settings component.
+Changing the public origin, revoking the client, or using another workspace or session invalidates the saved registration. The secret is shown once. Dismissal, navigation, or changing the selected session clears it from the settings component.
 
 ## Remote workflow contract
 

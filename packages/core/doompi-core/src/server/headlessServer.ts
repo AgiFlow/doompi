@@ -19,6 +19,7 @@ import {
 import type { TranscriptPage, TranscriptPageRequest } from '../exports/sessionProtocol';
 import type { OpenSessionRecord } from '../services/openSessionRegistry';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
+import { createSessionMcpRegistrationStore } from '../services/sessionMcpRegistrationStore';
 import type { SavedSession } from '../services/sqliteSessionHistory';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createHeadlessProtocol } from './headlessProtocol';
@@ -86,6 +87,8 @@ export interface HeadlessServerOptions {
   reviveSession?: (record: OpenSessionRecord) => Promise<void>;
   /** Trusted HTTPS origin advertised for public session MCP and OAuth endpoints. */
   sessionMcpPublicOrigin?: () => string | undefined;
+  /** Durable state directory for verified Session MCP clients. */
+  sessionMcpStateDir?: string;
   /** Monotonic exposure revision, including disable/re-enable cycles. */
   sessionMcpPublicOriginRevision?: () => number;
 }
@@ -351,6 +354,14 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     headlessHub: options.headlessHub,
     publicOrigin: options.sessionMcpPublicOrigin ?? (() => undefined),
     publicOriginRevision: options.sessionMcpPublicOriginRevision,
+    ...(options.sessionMcpStateDir === undefined
+      ? {}
+      : {
+          registrationStore: createSessionMcpRegistrationStore({
+            stateDir: options.sessionMcpStateDir,
+            onNotice: options.onNotice,
+          }),
+        }),
   });
   const server = createServer((request, response) => {
     void handleRequest(request, response).catch((error: unknown) => {

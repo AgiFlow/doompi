@@ -607,6 +607,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       headlessHub: hub,
       token: attachToken,
       sessionMcpPublicOrigin: () => remoteRuntime?.remote.publicOrigin(),
+      sessionMcpStateDir: serverDirectory,
       sessionMcpPublicOriginRevision: () => remoteRuntime?.remote.publicOriginRevision() ?? 0,
       workspaceHistory: (workspaceId) => {
         const workspaceRoot = hub

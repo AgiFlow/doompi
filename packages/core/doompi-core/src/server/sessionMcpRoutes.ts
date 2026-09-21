@@ -5,6 +5,7 @@ import {
   type SessionMcpAuthorizationService,
   type SessionMcpClient,
 } from '../services/sessionMcpAuthorization';
+import type { SessionMcpRegistrationStore } from '../services/sessionMcpRegistrationStore';
 import type { HeadlessHub, HeadlessHubSession } from './headlessHub';
 import { createSessionMcpHttpHandler, type SessionMcpHttpHandler } from './sessionMcpHandler';
 
@@ -22,6 +23,7 @@ export interface SessionMcpRoutesOptions {
   readonly publicOrigin: () => string | undefined;
   readonly publicOriginRevision?: () => number;
   readonly authorization?: SessionMcpAuthorizationService;
+  readonly registrationStore?: SessionMcpRegistrationStore;
 }
 
 export interface SessionMcpRoutes {
@@ -120,12 +122,16 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       (originObserved && current !== observedOrigin) ||
       (revision !== undefined && observedOriginRevision !== undefined && revision !== observedOriginRevision)
     ) {
-      for (const client of authorization.listClients()) authorization.revokeClient(client.clientId);
+      for (const client of authorization.listClients()) {
+        authorization.revokeClient(client.clientId);
+        options.registrationStore?.remove(client.clientId);
+      }
       for (const incarnation of incarnations.values()) incarnation.handlers.clear();
     }
     observedOrigin = current;
     observedOriginRevision = revision;
     originObserved = true;
+    restorePersistedRegistrations(current);
     return current;
   };
   const target = (workspaceId: string, sessionId: string) => {
@@ -134,6 +140,18 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     return session !== undefined && session.workspaceId === workspaceId && incarnation?.host === session.host
       ? { session, generation: incarnation.generation }
       : undefined;
+  };
+  const restorePersistedRegistrations = (configuredOrigin: string | undefined): void => {
+    if (configuredOrigin === undefined) return;
+    for (const registration of options.registrationStore?.registrations() ?? []) {
+      const audience = `${configuredOrigin}${sessionPath(registration.workspaceId, registration.binding.sessionId)}`;
+      if (registration.binding.audience !== audience) {
+        options.registrationStore?.remove(registration.client.clientId);
+        continue;
+      }
+      const resolved = target(registration.workspaceId, registration.binding.sessionId);
+      if (resolved !== undefined) authorization.restorePersistentRegistration(registration, resolved.generation);
+    }
   };
 
   const publicRoutes = async (request: Request): Promise<Response | undefined> => {
@@ -153,6 +171,17 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         createSessionMcpHttpHandler({
           audience,
           authorization,
+          onVerified: (grant) => {
+            if (options.registrationStore === undefined) return;
+            const active = target(workspaceId, sessionId);
+            if (active === undefined || grant.sessionGeneration !== active.generation || grant.clientId === '') {
+              throw new Error('The session grant is no longer active.');
+            }
+            const registration = authorization.persistentRegistration(grant.clientId, workspaceId, Date.now());
+            if (registration === undefined || !options.registrationStore.save(registration)) {
+              throw new Error('The verified Session MCP client could not be saved.');
+            }
+          },
           resourceMetadataUrl: `${configuredOrigin}/.well-known/oauth-protected-resource${exactPath}`,
           resolveSession: (grantedSessionId) => {
             if (grantedSessionId !== sessionId) return undefined;
@@ -390,6 +419,9 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       if (clientId !== undefined && request.method === 'DELETE') {
         const binding = authorization.readAuthorizationBinding(clientId);
         if (binding?.sessionId !== sessionId) return json(404, { error: 'Client not found.' });
+        if (options.registrationStore !== undefined && !options.registrationStore.remove(clientId)) {
+          return json(500, { error: 'Client revocation could not be saved.' });
+        }
         authorization.revokeClient(clientId);
         return json(200, { ok: true });
       }

@@ -1565,4 +1565,118 @@ describe('canonical scoped routes', () => {
     expect((await fetch(`${server.url}/api/workspaces/missing/settings`)).status).toBe(404);
     await hub.close();
   });
+  it('restores a verified Session MCP client after a fresh server starts from the same state directory', async () => {
+    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-session-mcp-restart-'));
+    temporaryDirectories.push(stateDir);
+    const root = '/api/workspaces/test-workspace/sessions/one/mcp';
+    const origin = 'https://remote.example.com';
+    const headers = { 'x-doompi-token': 'browser-secret' };
+    const first = host();
+    const firstHub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    firstHub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: first.host,
+    });
+    const firstServer = await serveHeadlessServer({
+      headlessHub: firstHub,
+      port: 0,
+      token: 'browser-secret',
+      sessionMcpPublicOrigin: () => origin,
+      sessionMcpStateDir: stateDir,
+    });
+    const created = await fetch(`${firstServer.url}${root}/clients`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: 'ChatGPT',
+        redirectUri: 'https://chatgpt.com/connector/oauth/callback',
+        scope: 'session',
+      }),
+    });
+    const client = (await created.json()) as {
+      client: { clientId: string; clientSecret: string; redirectUri: string };
+    };
+    const verifier = 'v'.repeat(43);
+    const authorize = async (server: HeadlessServer): Promise<string> => {
+      const request = new URL('/oauth/authorize', server.url);
+      request.searchParams.set('response_type', 'code');
+      request.searchParams.set('client_id', client.client.clientId);
+      request.searchParams.set('redirect_uri', client.client.redirectUri);
+      request.searchParams.set('code_challenge', createHash('sha256').update(verifier).digest('base64url'));
+      request.searchParams.set('code_challenge_method', 'S256');
+      request.searchParams.set('resource', `${origin}${root}`);
+      const callback = new URL((await fetch(request, { redirect: 'manual' })).headers.get('location')!);
+      const token = await fetch(`${server.url}/oauth/token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: client.client.clientId,
+          client_secret: client.client.clientSecret,
+          code: callback.searchParams.get('code')!,
+          redirect_uri: client.client.redirectUri,
+          code_verifier: verifier,
+        }),
+      });
+      return ((await token.json()) as { access_token: string }).access_token;
+    };
+    const firstToken = await authorize(firstServer);
+    const firstMcp = await fetch(`${firstServer.url}${root}`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${firstToken}`,
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    expect(firstMcp.status).toBe(200);
+    await firstServer.close();
+
+    const second = host();
+    const secondHub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    secondHub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: second.host,
+    });
+    const secondServer = await serveHeadlessServer({
+      headlessHub: secondHub,
+      port: 0,
+      token: 'browser-secret',
+      sessionMcpPublicOrigin: () => origin,
+      sessionMcpStateDir: stateDir,
+    });
+    servers.push(secondServer);
+    const listed = (await (await fetch(`${secondServer.url}${root}/clients`, { headers })).json()) as {
+      clients: Record<string, unknown>[];
+    };
+    expect(listed.clients).toHaveLength(1);
+    expect(listed.clients[0]).toMatchObject({ clientId: client.client.clientId });
+    expect(listed.clients[0]).not.toHaveProperty('clientSecret');
+    const oldToken = await fetch(`${secondServer.url}${root}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${firstToken}`, 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect(oldToken.status).toBe(401);
+    const secondToken = await authorize(secondServer);
+    const secondMcp = await fetch(`${secondServer.url}${root}`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${secondToken}`,
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    expect(secondMcp.status).toBe(200);
+  });
 });
