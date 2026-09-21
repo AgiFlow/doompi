@@ -354,7 +354,12 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   const activityStops = new Map<DoomHeadlessActivity, () => void | Promise<void>>();
   let activateFacets: (() => Promise<void>) | undefined;
   let activation: Promise<void> | undefined;
-  const selection = { majorMode: 'minimal', activeLayers: ['team', 'task', 'llm'], domains: [], state: {} } as const;
+  const selection = {
+    majorMode: 'copilot',
+    activeLayers: ['team', 'task', 'llm', 'source-control'],
+    domains: [],
+    state: {},
+  } as const;
   const executionContext: DoomHeadlessExecutionContext = {
     cwd,
     repoRoot: options.repoRoot,

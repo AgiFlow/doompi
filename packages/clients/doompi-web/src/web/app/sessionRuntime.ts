@@ -37,6 +37,7 @@ import { bindSessionFileLinkModes } from '../stores/fileLinkModesStore';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore';
 import { createPagedTranscript } from '../stores/pagedTranscriptStore';
 import { applyRemoteState } from '../stores/remoteAccessStore';
+import { dispatchHeldSessionChannel, heldSessionChannels } from '../stores/sessionChannelHoldsStore';
 import {
   applySessionBacklog,
   applySessionRemoved,
@@ -302,6 +303,9 @@ export function startSessionRuntime(): () => void {
     for (const sessionId of pendingCaptureSessions.state) {
       if (sessionId in byId) desired.add(sessionId);
     }
+    for (const sessionId of heldSessionChannels.state.keys()) {
+      if (sessionId in byId && !byId[sessionId].summary.dormant) desired.add(sessionId);
+    }
     if (force) clearSubscriptions();
     for (const sessionId of subscribed) {
       if (desired.has(sessionId)) continue;
@@ -479,6 +483,7 @@ export function startSessionRuntime(): () => void {
           // Any other frame type may be a plugin channel; unclaimed types are
           // dropped silently the way unknown frames always have been.
           dispatchChannelFrame(frame);
+          dispatchHeldSessionChannel(frame);
           if (owner !== undefined) syncSubscription();
           return;
         }
@@ -503,6 +508,7 @@ export function startSessionRuntime(): () => void {
   // subscribe/unsubscribe so features never touch the wire protocol.
   const subscription = sessionsStore.subscribe(() => syncSubscription());
   const captureSubscription = pendingCaptureSessions.subscribe(() => syncSubscription());
+  const heldSubscription = heldSessionChannels.subscribe(() => syncSubscription());
 
   return () => {
     stopBundleWatch();
@@ -510,6 +516,7 @@ export function startSessionRuntime(): () => void {
     toolCompletionTabs.dispose();
     subscription.unsubscribe();
     captureSubscription.unsubscribe();
+    heldSubscription.unsubscribe();
     disposeDormantTranscripts();
     clearSubscriptions();
     void focusSessionWebPlugins(null, undefined);

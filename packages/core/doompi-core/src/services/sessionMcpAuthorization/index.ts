@@ -26,6 +26,13 @@ export class SessionMcpOAuthError extends Error {
 }
 
 export type SessionMcpScope = 'restricted' | 'session';
+export type SessionMcpRouting = 'session' | 'conversation';
+
+export function sessionMcpRouting(value: unknown): SessionMcpRouting {
+  if (value === undefined || value === 'session') return 'session';
+  if (value === 'conversation') return 'conversation';
+  throw new SessionMcpOAuthError('invalid_request', 'Session MCP routing is not supported.');
+}
 
 export interface SessionMcpClient {
   readonly clientId: string;
@@ -46,6 +53,8 @@ export interface SessionMcpAuthorizationBinding {
   readonly sessionGeneration: number;
   readonly audience: string;
   readonly scope: SessionMcpScope;
+  /** Missing in older registrations, which continue to target one session. */
+  readonly routing?: SessionMcpRouting;
   readonly tools: readonly string[];
   readonly skills: readonly string[];
 }
@@ -362,6 +371,7 @@ export function createSessionMcpAuthorizationService(
       if (!Number.isSafeInteger(input.sessionGeneration) || input.sessionGeneration < 0) {
         throw new SessionMcpOAuthError('invalid_request', 'Session generation must be a non-negative safe integer.');
       }
+      const routing = sessionMcpRouting(input.routing);
       const scope = input.scope ?? 'restricted';
       if (scope !== 'session' && scope !== 'restricted') {
         throw new SessionMcpOAuthError('invalid_request', 'Authorization scope is not supported.');
@@ -387,6 +397,7 @@ export function createSessionMcpAuthorizationService(
         sessionGeneration: input.sessionGeneration,
         audience: requireHttpsUrl(input.audience, 'Audience', false),
         scope,
+        routing,
         tools,
         skills,
       });
@@ -411,7 +422,7 @@ export function createSessionMcpAuthorizationService(
     },
     restorePersistentRegistration(registration, sessionGeneration) {
       if (
-        clients.has(registration.client.clientId) ||
+        bindings.has(registration.client.clientId) ||
         !/^[a-f0-9]{64}$/u.test(registration.secretHash) ||
         !Number.isSafeInteger(sessionGeneration) ||
         sessionGeneration < 0 ||
@@ -419,6 +430,14 @@ export function createSessionMcpAuthorizationService(
       )
         return false;
       try {
+        // Restarting a runtime revokes its binding, not its durable client registration.
+        const held = clients.get(registration.client.clientId);
+        if (
+          held &&
+          (held.redirectUri !== registration.client.redirectUri ||
+            !timingSafeEqual(held.secretHash, Buffer.from(registration.secretHash, 'hex')))
+        )
+          return false;
         const client: StoredClient = {
           clientId: requireName(registration.client.clientId, 'Client ID'),
           name: requireName(registration.client.name, 'Client name'),
@@ -427,6 +446,7 @@ export function createSessionMcpAuthorizationService(
           createdAt: registration.client.createdAt,
           secretHash: Buffer.from(registration.secretHash, 'hex'),
         };
+        const routing = sessionMcpRouting(registration.binding.routing);
         const scope = registration.binding.scope;
         const tools =
           scope === 'session' ? Object.freeze([] as string[]) : exactUniqueGrants(registration.binding.tools, 'Tool');
@@ -447,6 +467,7 @@ export function createSessionMcpAuthorizationService(
             sessionGeneration,
             audience: requireHttpsUrl(registration.binding.audience, 'Audience', false),
             scope,
+            routing,
             tools,
             skills,
           }),

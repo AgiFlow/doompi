@@ -43,7 +43,7 @@ export interface WorktreeView {
  * the conversation to get there.
  */
 export type GitWorktreesCommand =
-  | { action: 'create'; branch: string; baseRef?: string }
+  | { action: 'create'; branch: string; baseRef?: string; reservationId?: string }
   | { action: 'close'; id: string; force?: boolean };
 
 export type WorktreeErrorTarget = { action: 'create' } | { action: 'close'; id: string };

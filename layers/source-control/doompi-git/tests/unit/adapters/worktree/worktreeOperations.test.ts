@@ -258,7 +258,7 @@ describe('spawn', () => {
     );
   });
 
-  it('rolls the worktree back when the caller gives up before the session starts', async () => {
+  it('refuses an already cancelled spawn before creating a worktree', async () => {
     const git = fakeGit();
     const createSession = vi.fn();
     const { ops } = operations(git, createSession);
@@ -268,8 +268,9 @@ describe('spawn', () => {
     });
 
     expect(createSession).not.toHaveBeenCalled();
-    expect(git.removeWorktree).toHaveBeenCalledWith(expect.objectContaining({ force: true }));
-    expect(git.deleteBranch).toHaveBeenCalledWith({ repositoryRoot: repository, branch: 'wt/one' });
+    expect(git.addWorktree).not.toHaveBeenCalled();
+    expect(git.removeWorktree).not.toHaveBeenCalled();
+    expect(git.deleteBranch).not.toHaveBeenCalled();
     expect(await ops.list(CONTEXT)).toEqual([]);
   });
 
@@ -539,10 +540,9 @@ describe('registry records', () => {
   });
 });
 
-// A session nothing has a record for is unreachable: it runs, and no id names
-// it. The session goes back with the worktree rather than being left behind.
+// Fail before Git side effects when the repository registry is already unwritable.
 describe('spawn when the registry cannot be written', () => {
-  it('stops the session it started and rolls the worktree back', async () => {
+  it('refuses before starting a session or creating a checkout', async () => {
     const git = fakeGit();
     const stopSession = vi.fn().mockResolvedValue(undefined);
     const createSession = vi.fn().mockResolvedValue({ sessionId: 'session-9', cwd: '/worktree' });
@@ -560,9 +560,11 @@ describe('spawn when the registry cannot be written', () => {
       retryable: true,
     });
 
-    expect(stopSession).toHaveBeenCalledWith('session-9');
-    expect(git.removeWorktree).toHaveBeenCalledWith(expect.objectContaining({ force: true }));
-    expect(git.deleteBranch).toHaveBeenCalledWith({ repositoryRoot: repository, branch: 'wt/one' });
+    expect(createSession).not.toHaveBeenCalled();
+    expect(stopSession).not.toHaveBeenCalled();
+    expect(git.addWorktree).not.toHaveBeenCalled();
+    expect(git.removeWorktree).not.toHaveBeenCalled();
+    expect(git.deleteBranch).not.toHaveBeenCalled();
   });
 });
 
@@ -821,5 +823,68 @@ describe('direct worktree messages', () => {
     await expect(unrelated.send({ cwd: repository, sessionId: 'parent-2' }, record.id, 'nope')).rejects.toMatchObject({
       code: 'worktree_not_owned',
     });
+  });
+});
+
+describe('concurrent and reserved worktree creation', () => {
+  it('keeps both records when independent sessions create worktrees concurrently', async () => {
+    const create = vi.fn(async () => {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      return { sessionId: 'created', cwd: '/worktree' };
+    });
+    const first = operations(fakeGit(), create).ops;
+    const second = operations(fakeGit(), create).ops;
+    await Promise.all([
+      first.spawn(CONTEXT, { branch: 'wt/one' }),
+      second.spawn({ ...CONTEXT, sessionId: 'parent-2' }, { branch: 'wt/two' }),
+    ]);
+    expect((await first.list(CONTEXT)).map((record) => record.branch).sort()).toEqual(['wt/one', 'wt/two']);
+  });
+
+  it('rolls back when cancellation arrives after Git created the checkout', async () => {
+    const controller = new AbortController();
+    const git = fakeGit({
+      addWorktree: vi.fn(async () => {
+        controller.abort();
+      }),
+    });
+    await expect(
+      operations(git).ops.spawn(CONTEXT, { branch: 'wt/one' }, { signal: controller.signal }),
+    ).rejects.toMatchObject({ code: 'spawn_cancelled' });
+    expect(git.removeWorktree).toHaveBeenCalledOnce();
+    expect(git.deleteBranch).toHaveBeenCalledOnce();
+  });
+
+  it('retries binding after a lost completion without another worktree or runtime', async () => {
+    const git = fakeGit();
+    let cwd: string | undefined;
+    const create = vi.fn(async () => ({ sessionId: 'reserved-session', cwd: cwd! }));
+    const complete = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('store unavailable'))
+      .mockResolvedValue({ sessionId: 'reserved-session' });
+    const ops = createWorktreeOperations({
+      git,
+      homeDir: home,
+      sessionService: {
+        ...fakeSessionService(['reserved-session'], create),
+        reservations: {
+          read: () => ({ sessionId: 'reserved-session', cwd }),
+          prepare: async (_id, _parent, directory) => {
+            cwd = directory;
+            return { sessionId: 'reserved-session', cwd };
+          },
+          complete,
+        },
+      },
+    });
+    const request = { branch: 'wt/one', reservationId: 'reserved-session' };
+    await expect(ops.spawn(CONTEXT, request)).rejects.toThrow('store unavailable');
+    const record = await ops.spawn(CONTEXT, request);
+    expect(record.sessionId).toBe('reserved-session');
+    expect(git.addWorktree).toHaveBeenCalledOnce();
+    expect(create).toHaveBeenCalledOnce();
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ reservationId: 'reserved-session' }));
+    expect(complete).toHaveBeenCalledTimes(2);
   });
 });

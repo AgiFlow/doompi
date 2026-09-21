@@ -5,6 +5,14 @@ import { usePluginSlotProps } from '../stores/usePluginSlotProps';
  * this where their layout wants plugin content; a slot nobody filled renders
  * nothing.
  */
-export function PluginSurface({ slot, sessionId }: { slot: string; sessionId: string | null }) {
-  return <>{usePluginSlotProps(sessionId).renderSlot(slot)}</>;
+export function PluginSurface({
+  slot,
+  sessionId,
+  sessionReservationId,
+}: {
+  slot: string;
+  sessionId: string | null;
+  sessionReservationId?: string;
+}) {
+  return <>{usePluginSlotProps(sessionId, undefined, sessionReservationId).renderSlot(slot)}</>;
 }

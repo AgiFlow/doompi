@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -99,5 +101,54 @@ describe('createWorktreeRegistry', () => {
       }),
     );
     expect(createWorktreeRegistry(file).list()).toEqual([good]);
+  });
+});
+
+describe('registry process coordination', () => {
+  it('waits for a foreign process lock before re-reading and committing', async () => {
+    const child = spawn(
+      process.execPath,
+      [
+        '-e',
+        `
+      const fs = require('node:fs');
+      const lock = process.argv[1] + '.lock';
+      fs.mkdirSync(lock);
+      process.send('locked');
+      process.stdin.once('data', () => { fs.rmdirSync(lock); process.exit(0); });
+    `,
+        file,
+      ],
+      { stdio: ['pipe', 'pipe', 'pipe', 'ipc'] },
+    );
+    try {
+      await once(child, 'message', { signal: AbortSignal.timeout(2000) });
+      const registry = createWorktreeRegistry(file);
+      let entered = false;
+      const operation = registry.transaction(() => {
+        entered = true;
+        registry.replace([record()]);
+      });
+      expect(entered).toBe(false);
+      const exited = once(child, 'exit', { signal: AbortSignal.timeout(2000) });
+      child.stdin!.write('release');
+      await exited;
+      await operation;
+      expect(registry.list()).toEqual([record()]);
+      expect(fs.existsSync(`${file}.lock`)).toBe(false);
+    } finally {
+      child.kill();
+    }
+  });
+
+  it('cancels a waiting writer without stealing an existing lock', async () => {
+    fs.mkdirSync(`${file}.lock`);
+    const controller = new AbortController();
+    const operation = createWorktreeRegistry(file).transaction(() => {
+      throw new Error('must not enter');
+    }, controller.signal);
+    controller.abort();
+    await expect(operation).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fs.existsSync(`${file}.lock`)).toBe(true);
   });
 });

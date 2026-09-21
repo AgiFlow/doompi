@@ -6,12 +6,17 @@ import { minorModes } from '../lib/composition';
 import { pluginSlotProps } from '../lib/pluginSlotProps';
 import { submitCapture } from './captureStore';
 import { appendComposerDraft, attachComposerCapture, attachComposerContext } from './composerStore';
+import { holdSessionChannels } from './sessionChannelHoldsStore';
 import { sessionStoreFor } from './sessionStore';
 import { closeTransientTab, openTransientTab } from './transientTabsStore';
 import { useOpenTab } from './useOpenTab';
 import { useWebPluginRegistry } from './useWebPluginRegistry';
 /** The props a plugin component receives for a session, with the host's navigation and facts bound in. */
-export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void): WebPluginSlotProps {
+export function usePluginSlotProps(
+  sessionId: string | null,
+  onOpen?: () => void,
+  sessionReservationId?: string,
+): WebPluginSlotProps {
   const store = sessionStoreFor(sessionId);
   const statuses = useStore(store, (state) => state.statuses);
   const catalog = useStore(store, (state) => state.minorModes);
@@ -75,8 +80,10 @@ export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void
       attachCapture,
       contextInventory,
       capture,
+      sessionReservationId,
     );
     props.activeMinorModes = activeMinorModes;
+    props.holdSessionChannels = holdSessionChannels;
     return props;
   }, [
     activeMinorModes,
@@ -90,6 +97,7 @@ export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void
     openPluginTransientTab,
     registryRevision,
     sessionId,
+    sessionReservationId,
     statuses,
   ]);
 }

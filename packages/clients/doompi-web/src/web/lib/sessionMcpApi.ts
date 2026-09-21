@@ -61,6 +61,7 @@ function isClient(value: unknown): value is SessionMcpClient {
     value.tokenEndpointAuthMethod === 'client_secret_post' &&
     typeof value.createdAt === 'number' &&
     (value.scope === undefined || value.scope === 'restricted' || value.scope === 'session') &&
+    (value.routing === undefined || value.routing === 'session' || value.routing === 'conversation') &&
     isStringArray(value.tools) &&
     isStringArray(value.skills) &&
     typeof value.audience === 'string'
@@ -76,6 +77,7 @@ function clientMetadata(value: unknown): SessionMcpClient | undefined {
     tokenEndpointAuthMethod: value.tokenEndpointAuthMethod,
     createdAt: value.createdAt,
     scope: value.scope === 'session' ? 'session' : 'restricted',
+    ...(value.routing === undefined ? {} : { routing: value.routing }),
     tools: value.tools,
     skills: value.skills,
     audience: value.audience,
@@ -137,11 +139,17 @@ export async function createSessionMcpClient(
   sessionId: string,
   input: CreateSessionMcpClientInput,
 ): Promise<SessionMcpResult<{ client: CreatedSessionMcpClient }>> {
-  return await request(
+  const result = await request(
     `${route(workspaceId, sessionId)}/clients`,
     { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(input) },
     (body) => (isCreatedClient(body.client) ? { client: body.client } : undefined),
   );
+  if ('client' in result && (result.client.routing ?? 'session') !== (input.routing ?? 'session'))
+    return {
+      error:
+        'The host did not enable the requested routing mode. Restart an updated host before creating this connection.',
+    };
+  return result;
 }
 
 export async function revokeSessionMcpClient(
@@ -152,6 +160,41 @@ export async function revokeSessionMcpClient(
   return await request(
     `${route(workspaceId, sessionId)}/clients/${encodeURIComponent(clientId)}`,
     { method: 'DELETE', headers: { 'X-Doompi-Mcp-Csrf': '1' } },
+    (body) => (body.ok === true ? { ok: true } : undefined),
+  );
+}
+
+export async function setupSessionMcpDirectory(
+  workspaceId: string,
+  parentSessionId: string,
+  reservationId: string,
+  cwd: string,
+): Promise<SessionMcpResult<{ sessionId: string }>> {
+  return request(
+    `${route(workspaceId, parentSessionId)}/conversations/${encodeURIComponent(reservationId)}`,
+    {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ cwd }),
+    },
+    (body) =>
+      isRecord(body.session) && typeof body.session.sessionId === 'string' && body.session.sessionId === reservationId
+        ? { sessionId: body.session.sessionId }
+        : undefined,
+  );
+}
+
+export async function removeSessionMcpSetup(
+  workspaceId: string,
+  parentSessionId: string,
+  reservationId: string,
+): Promise<SessionMcpResult<{ ok: true }>> {
+  return request(
+    `${route(workspaceId, parentSessionId)}/conversations/${encodeURIComponent(reservationId)}`,
+    {
+      method: 'DELETE',
+      headers: JSON_HEADERS,
+    },
     (body) => (body.ok === true ? { ok: true } : undefined),
   );
 }

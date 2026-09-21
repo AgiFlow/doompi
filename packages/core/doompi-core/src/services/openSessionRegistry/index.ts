@@ -20,7 +20,8 @@ export interface OpenSessionRecord {
 
 export interface OpenSessionRegistry {
   list(): readonly OpenSessionRecord[];
-  add(record: OpenSessionRecord): void;
+  /** True only after the record is durably published. */
+  add(record: OpenSessionRecord): boolean;
   remove(sessionId: string): void;
 }
 
@@ -108,14 +109,22 @@ export function createOpenSessionRegistry(options: OpenSessionRegistryOptions): 
 
   let current = load();
 
-  const persist = (): void => {
+  const persist = (next: OpenSessionRecord[]): boolean => {
     const temporary = `${filePath}.${String(process.pid)}.tmp`;
     try {
       fs.mkdirSync(options.directory, { recursive: true, mode: DIRECTORY_MODE });
-      fs.writeFileSync(temporary, `${JSON.stringify(current, undefined, 2)}\n`, { mode: FILE_MODE });
+      const descriptor = fs.openSync(temporary, 'w', FILE_MODE);
+      try {
+        fs.writeFileSync(descriptor, `${JSON.stringify(next, undefined, 2)}\n`);
+        fs.fsyncSync(descriptor);
+      } finally {
+        fs.closeSync(descriptor);
+      }
       // Rename rather than write in place, so a crash mid-write leaves the
       // previous contents rather than a truncated file.
       fs.renameSync(temporary, filePath);
+      current = next;
+      return true;
     } catch (error) {
       notice(`${filePath} could not be saved: ${error instanceof Error ? error.message : String(error)}`);
       try {
@@ -123,6 +132,7 @@ export function createOpenSessionRegistry(options: OpenSessionRegistryOptions): 
       } catch {
         // Nothing further to do; the temp file is inert either way.
       }
+      return false;
     }
   };
 
@@ -130,14 +140,12 @@ export function createOpenSessionRegistry(options: OpenSessionRegistryOptions): 
     list: () => current,
     add(record) {
       if (!SESSION_ID_PATTERN.test(record.sessionId)) throw new Error(`Invalid session id '${record.sessionId}'.`);
-      current = [...current.filter((held) => held.sessionId !== record.sessionId), record];
-      persist();
+      return persist([...current.filter((held) => held.sessionId !== record.sessionId), record]);
     },
     remove(sessionId) {
       const next = current.filter((held) => held.sessionId !== sessionId);
       if (next.length === current.length) return;
-      current = next;
-      persist();
+      persist(next);
     },
   };
 }

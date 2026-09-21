@@ -30,7 +30,12 @@ export const WorktreesPayloadSchema = Type.Object({
   errorTarget: O(ErrorTargetSchema),
 });
 export const WorktreesCommandSchema = Type.Union([
-  Type.Object({ action: Type.Literal('create'), branch: S, baseRef: O(S) }),
+  Type.Object({
+    action: Type.Literal('create'),
+    branch: S,
+    baseRef: O(S),
+    reservationId: O(Type.String({ minLength: 1, pattern: '^[A-Za-z0-9_-]+$' })),
+  }),
   Type.Object({ action: Type.Literal('close'), id: S, force: O(B) }),
 ]);
 const query = [

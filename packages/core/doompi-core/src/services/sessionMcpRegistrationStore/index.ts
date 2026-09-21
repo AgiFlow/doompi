@@ -50,6 +50,7 @@ function validRegistration(value: unknown): value is SessionMcpPersistentRegistr
     typeof binding.sessionId === 'string' &&
     typeof binding.audience === 'string' &&
     (binding.scope === 'session' || binding.scope === 'restricted') &&
+    (binding.routing === undefined || binding.routing === 'session' || binding.routing === 'conversation') &&
     Array.isArray(binding.tools) &&
     binding.tools.every((name) => typeof name === 'string') &&
     Array.isArray(binding.skills) &&

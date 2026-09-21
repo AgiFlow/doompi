@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { OpenSessionRecord } from '@agimon-ai/doompi-core/history';
-import type { DoomHubSessionCreateRequest } from '@agimon-ai/doompi-core/hub-channel';
+import { type DoomHubSessionCreateRequest, type DoomPendingSessionSetup } from '@agimon-ai/doompi-core/hub-channel';
 import { type PackageApiServer, serveSessionApis } from '@agimon-ai/doompi-core/package-api-server';
 import { createHeadlessHub, serveHeadlessServer, type HeadlessSessionHost } from '@agimon-ai/doompi-core/server';
 import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/server-facet';
@@ -35,6 +35,8 @@ export interface CockpitFixture {
   teamTemp: string;
   /** Publishes fixture-owned session channel state through the hub event bus. */
   publishSessionEvent(type: string, sessionId: string, payload: unknown): void;
+  publishPendingSetups(sessionId: string, pending: readonly DoomPendingSessionSetup[]): void;
+  channels: readonly string[];
   /** Number of synchronized plugin styles loaded for the focused session. */
   pluginStyleCount: number;
   /** Publishes the current shell bytes as a fresh synchronized generation. */
@@ -215,11 +217,13 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     });
     const source = resolveServerBundleSource({ registration });
     if (source.kind !== 'descriptor') throw new Error('global setup did not publish a synchronized server bundle');
-    const activeLayers = ['team', 'task', 'llm'];
+    // The repository's minimal mode does not own Git. Use its real copilot
+    // composition so browser tests exercise the backend, not only its UI bundle.
+    const activeLayers = ['team', 'task', 'llm', 'source-control'];
     const [globalBundle, workspaceBundle, sessionBundle] = await Promise.all([
-      loadServerBundle('global', { ...source, majorMode: 'minimal', activeLayers }),
-      loadServerBundle('workspace', { ...source, majorMode: 'minimal', activeLayers }),
-      loadServerBundle('session', { ...source, majorMode: 'minimal', activeLayers }),
+      loadServerBundle('global', { ...source, majorMode: 'copilot', activeLayers }),
+      loadServerBundle('workspace', { ...source, majorMode: 'copilot', activeLayers }),
+      loadServerBundle('session', { ...source, majorMode: 'copilot', activeLayers }),
     ]);
     const environment = Object.freeze({
       ...process.env,
@@ -417,6 +421,8 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         agentDir,
         teamTemp,
         publishSessionEvent: (type, sessionId, payload) => hub.directEvents.publish(type, sessionId, payload),
+        publishPendingSetups: (sessionId, pending) => hub.setPendingSessionSetups?.(sessionId, pending),
+        channels,
         pluginStyleCount,
         republishShell,
         url: web.url,

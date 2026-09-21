@@ -8,6 +8,8 @@ import type {
   DoomHubSessionScope,
   DoomHubSessionService,
   DoomSessionCommunicationEndpoint,
+  DoomHubSessionReservations,
+  DoomPendingSessionSetup,
 } from '../exports/hubChannel';
 import type { DoomWebComposition } from '../exports/packageApi';
 import type { DoomApiContext, DoomApiMount } from '../exports/packageApi';
@@ -47,6 +49,7 @@ export interface HeadlessHubSession {
   readonly everPrompted?: boolean;
   readonly awaitingInput?: boolean;
   readonly lastSettledAt?: string;
+  readonly pendingSetups?: readonly DoomPendingSessionSetup[];
   /** Environment admitted for this session, when supplied by the host. */
   readonly environment?: Readonly<Record<string, string | undefined>>;
   readonly host: HeadlessSessionHost;
@@ -72,6 +75,7 @@ export interface HeadlessHubOptions {
   /** Creates a session through the canonical cockpit lifecycle for hub channels. */
   createSession?: (request: DoomHubSessionCreateRequest) => Promise<DoomHubSessionScope>;
   onNotice?: (message: string) => void;
+  sessionReservations?: DoomHubSessionReservations;
   requestSessionApi?: (scope: DoomHubSessionScope, request: DoomHubSessionApiRequest) => Promise<Response>;
   admitWorkspace?: (root: string) => Promise<HeadlessWorkspace>;
   onWorkspaceRemoved?: (workspaceId: string) => void;
@@ -91,6 +95,8 @@ export interface HeadlessHub {
   closeSession(sessionId: string): Promise<void>;
   /** Publishes removal of a persisted session that has no live host. */
   notifySessionRemoved(sessionId: string): void;
+  /** Publishes setup-only children through the parent's normal session updates. */
+  setPendingSessionSetups?(sessionId: string, pending: readonly DoomPendingSessionSetup[]): void;
   /** Dispatches an authenticated package API request inside the owning process. */
   requestSessionApi(scope: DoomHubSessionScope, request: DoomHubSessionApiRequest): Promise<Response>;
   /** Mounts the selected hub facets once, before the headless server accepts clients. */
@@ -131,6 +137,9 @@ function scopeOf(session: HeadlessHubSession): DoomHubSessionScope {
 /** Owns direct, same-process session and channel state for presentation adapters. */
 export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   const sessions = new Map<string, HeadlessHubSession>();
+  const pendingSetups = new Map<string, readonly DoomPendingSessionSetup[]>();
+  const present = (session: HeadlessHubSession): HeadlessHubSession =>
+    pendingSetups.has(session.id) ? { ...session, pendingSetups: pendingSetups.get(session.id) } : session;
   const pluginRegistry = createDoomPluginRegistry();
   const channels = new Map<string, StartedChannel>();
   const listeners = new Set<(event: HeadlessHubEvent) => void>();
@@ -305,7 +314,8 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
 
   const emit = (event: HeadlessHubEvent): void => {
     if (closed) return;
-    for (const listener of listeners) listener(event);
+    const projected = event.kind === 'upsert' ? { ...event, session: present(event.session) } : event;
+    for (const listener of listeners) listener(projected);
   };
   const sessionScopes = (): readonly DoomHubSessionScope[] => [...sessions.values()].map(scopeOf);
   const publish = (frameType: string, sessionId: string, payload: unknown, connectionId?: string): void => {
@@ -327,6 +337,28 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     return { ...request, headers };
   };
 
+  const reservationsFor = (mount: DoomApiMount): DoomHubSessionReservations | undefined => {
+    const reservations = options.sessionReservations;
+    if (!reservations) return undefined;
+    const check = (parentId: string): void => {
+      const parent = sessions.get(parentId);
+      if (!parent || !belongs(mount, parent)) throw new Error('Parent session is outside this mount.');
+    };
+    return {
+      read: (id, parentId) => {
+        check(parentId);
+        return reservations.read(id, parentId);
+      },
+      prepare: (id, parentId, cwd) => {
+        check(parentId);
+        return reservations.prepare(id, parentId, cwd);
+      },
+      complete: (id, parentId) => {
+        check(parentId);
+        return reservations.complete(id, parentId);
+      },
+    };
+  };
   const channelHost = (frameType: string, mount: DoomApiMount): DoomHubChannelHost => ({
     sessions: () =>
       sessionScopes().filter((scope) => {
@@ -334,6 +366,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
         return session !== undefined && serves(mount, frameType, session);
       }),
     sessionService: {
+      reservations: reservationsFor(mount),
       create: async (request) => {
         if (mount.scope !== 'global') {
           const parent = request.parentSessionId === undefined ? undefined : sessions.get(request.parentSessionId);
@@ -576,6 +609,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     },
     close: closeSession,
     isLive: (sessionId) => !closed && sessions.has(sessionId),
+    reservations: options.sessionReservations,
     canCommunicate,
     bindCommunication,
   };
@@ -636,8 +670,17 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   return {
     sessionService,
     directEvents,
-    snapshot: () => [...sessions.values()],
-    session: (sessionId) => sessions.get(sessionId),
+    snapshot: () => [...sessions.values()].map(present),
+    session: (sessionId) => {
+      const session = sessions.get(sessionId);
+      return session === undefined ? undefined : present(session);
+    },
+    setPendingSessionSetups(sessionId, pending) {
+      if (JSON.stringify(pendingSetups.get(sessionId) ?? []) === JSON.stringify(pending)) return;
+      pendingSetups.set(sessionId, Object.freeze([...pending]));
+      const session = sessions.get(sessionId);
+      if (session) emit({ kind: 'upsert', session });
+    },
     runtime: (sessionId) => sessions.get(sessionId)?.host.runtime,
     onEvent(listener) {
       listeners.add(listener);

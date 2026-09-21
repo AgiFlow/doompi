@@ -3,8 +3,9 @@ import { pathToFileURL } from 'node:url';
 
 import type { WebPluginDefinition, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { DropdownMenu, DropdownMenuContent } from '@agimon-ai/doompi-web-components';
 import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
-import type { ComponentType } from 'react';
+import { createElement, type ComponentType } from 'react';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { activityGroups, PACKAGED_MINOR_MODES, PACKAGED_SELECTION_AXES } from '../../src/web/lib/composition';
@@ -174,7 +175,19 @@ describe('the workspace web plugin composition', () => {
           mount(`${definition.id} ${group} ${surface.id}`, surface.component);
       }
       for (const fill of definition.fills ?? []) {
-        if (fill.component) mount(`${definition.id} fill ${fill.slot}/${fill.id}`, fill.component);
+        if (!fill.component) continue;
+        const component = fill.component;
+        // Menu fills require their host context. Portal interaction is covered in the browser suite.
+        const mounted =
+          fill.slot === 'session-menu'
+            ? (props: WebPluginSlotProps) =>
+                createElement(
+                  DropdownMenu,
+                  { open: true },
+                  createElement(DropdownMenuContent, null, createElement(component, props)),
+                )
+            : component;
+        mount(`${definition.id} fill ${fill.slot}/${fill.id}`, mounted);
       }
     }
 

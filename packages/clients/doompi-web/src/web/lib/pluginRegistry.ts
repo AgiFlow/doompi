@@ -93,6 +93,7 @@ export const HOST_SLOTS = {
   activity: 'activity',
   composerActions: 'composer-actions',
   composerMenu: 'composer-menu',
+  sessionMenu: 'session-menu',
 } as const;
 
 const SLOT_SEPARATOR = '.';

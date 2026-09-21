@@ -186,10 +186,14 @@ export interface WebPluginContextInventoryItem {
   active: boolean;
 }
 
-/** Every slot component receives the focused session; null while nothing is focused. */
+/** Slot components receive the target session, which may be an unfocused rail card. */
 export interface WebPluginSlotProps {
   sessionId: string | null;
-  /** Host navigation for the focused session; null returns to the conversation tab. */
+  /** Host-reserved child setup associated with the targeted parent card. */
+  sessionReservationId?: string;
+  /** Retains and optionally observes result channels without loading or focusing the target's composition. */
+  holdSessionChannels?: (sessionId: string, receive?: (frame: Record<string, unknown>) => void) => () => void;
+  /** Host navigation for the target session; null returns to the conversation tab. */
   openTab: (tabId: string | null) => void;
   /** Opens the tab for the focused session, or focuses it when one with the same id is already open. */
   openTransientTab: (tab: TransientTab) => void;

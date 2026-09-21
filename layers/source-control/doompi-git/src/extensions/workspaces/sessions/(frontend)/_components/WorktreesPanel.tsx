@@ -9,8 +9,8 @@ import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/we
  * - Header, form, then cards, the same rhythm the runners and workflows panels
  *   use. A worktree row is a card because it carries three facts and two
  *   actions, which a single line cannot hold without becoming a puzzle.
- * - Local form state is never reset by a data refresh. The hub republishes this
- *   list on a timer, and a half-typed branch name must survive that.
+ * - Local form state is never reset by a data refresh. Direct lifecycle events
+ *   update the list without discarding a half-typed branch name.
  * - Acts through the plugin's own hub channel, so a worktree made here and one
  *   made by the tool take exactly the same path.
  * - Creating waits on the cockpit starting a session, so the hub reports each
@@ -18,8 +18,7 @@ import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/we
  *   idle for two minutes reads as broken.
  *
  * AVOID:
- * - Deriving form state from props or store data. That is what wiped the
- *   fields on every poll.
+ * - Deriving form state from refreshed store data instead of the user's input.
  * - Colour classes outside the token set. `doom-error`, `doom-line` and
  *   `doom-bright` are not tokens: they compile to nothing and the row silently
  *   loses its border.
@@ -37,7 +36,7 @@ export function worktreesTab(): TransientTab {
   return { id: WORKTREES_TAB_ID, label: 'worktrees', panel: WorktreesPanel };
 }
 
-export function WorktreesPanel({ sessionId }: WebPluginSlotProps) {
+export function WorktreesPanel({ sessionId, sessionReservationId }: WebPluginSlotProps) {
   const session = useStore(worktreeActivity.store, (state) => worktreeActivity.select(state, sessionId));
   const [branch, setBranch] = useState('');
   const [baseRef, setBaseRef] = useState('');
@@ -53,9 +52,12 @@ export function WorktreesPanel({ sessionId }: WebPluginSlotProps) {
 
   const create = (): void => {
     if (sessionId === null || !canCreate) return;
-    requestWorktreeCreate(sessionId, branch, baseRef);
-    setBranch('');
-    setBaseRef('');
+    requestWorktreeCreate(sessionId, branch, baseRef, sessionReservationId);
+    // A reserved setup must be retried with the same branch after a partial failure.
+    if (sessionReservationId === undefined) {
+      setBranch('');
+      setBaseRef('');
+    }
   };
 
   return (

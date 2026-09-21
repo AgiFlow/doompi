@@ -16,6 +16,7 @@ vi.mock('../../src/web/components/PluginSurface', () => ({
 
 import type { SessionSummary } from '../../src/types/hub';
 import { SessionRail } from '../../src/web/features/sessions/SessionRail';
+import { MultipleWorkspaces } from '../../src/web/features/sessions/SessionRail.stories';
 import { applySessionsSnapshot, resetSessions } from '../../src/web/stores/sessionsStore';
 import { applyWorkspacesSnapshot, resetWorkspaces } from '../../src/web/stores/workspacesStore';
 
@@ -58,6 +59,12 @@ function render(): string {
 beforeEach(() => {
   resetSessions();
   resetWorkspaces();
+});
+
+it('renders the multiple-workspace story without application providers', () => {
+  const markup = renderToStaticMarkup(MultipleWorkspaces.render());
+
+  expect(markup).toContain('workspace session rail');
 });
 
 describe('SessionRail workspaces', () => {

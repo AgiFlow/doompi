@@ -78,7 +78,9 @@ function isSessionMcpProxyPath(pathname: string): boolean {
 }
 
 function isSessionMcpManagementPath(pathname: string): boolean {
-  return /^\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/mcp\/(?:config|clients(?:\/[^/]+)?)$/u.test(pathname);
+  return /^\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/mcp\/(?:config|(?:clients|conversations)(?:\/[^/]+)?)$/u.test(
+    pathname,
+  );
 }
 
 function requestUrl(request: IncomingMessage): URL {

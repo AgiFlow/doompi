@@ -50,6 +50,16 @@ function sessionView(session: HeadlessHubSession): Record<string, JsonValue> {
     ...(session.lastSettledAt === undefined ? {} : { lastSettledAt: session.lastSettledAt }),
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
+    ...(session.pendingSetups === undefined
+      ? {}
+      : {
+          pendingSetups: session.pendingSetups.map((setup) => ({
+            id: setup.id,
+            name: setup.name,
+            createdAt: setup.createdAt,
+            ...(setup.cwd === undefined ? {} : { cwd: setup.cwd }),
+          })),
+        }),
   };
 }
 

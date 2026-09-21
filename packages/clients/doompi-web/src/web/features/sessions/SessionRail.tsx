@@ -34,6 +34,7 @@ import { renameSession, sessionStoreFor } from '../../stores/sessionStore';
 import { applyWorkspacesSnapshot, selectWorkspace, workspacesStore } from '../../stores/workspacesStore';
 import { AddWorkspaceDialog } from './AddWorkspaceDialog';
 import { NewSessionDialog } from './NewSessionDialog';
+import { PendingSessionCard } from './PendingSessionCard';
 import { ResumeSessionDialog } from './ResumeSessionDialog';
 import { SessionCardView, SessionRailView, WorkspaceGroupView } from './SessionRailView';
 const STATUS_REFRESH_MS = 30_000;
@@ -226,6 +227,7 @@ function SessionCard({
               if (modeRef.current !== 'view') event.preventDefault();
             }}
           >
+            <PluginSurface slot={HOST_SLOTS.sessionMenu} sessionId={summary.id} />
             <DropdownMenuItem data-testid={`session-rename-${summary.id}`} onSelect={beginRename}>
               edit
             </DropdownMenuItem>
@@ -434,7 +436,7 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
     const workspace = workspacesById[workspaceId];
     const ids = order.filter((id) => byId[id]?.summary.workspaceId === workspaceId);
     for (const id of ids) groupedIds.add(id);
-    const cards = ids.map((id) => (
+    const cards = ids.flatMap((id) => [
       <SessionCard
         key={id}
         meta={byId[id]}
@@ -443,8 +445,11 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
         now={now}
         onNavigate={onDismiss}
         nested={resolveParentId(byId, id) !== undefined}
-      />
-    ));
+      />,
+      ...(byId[id].summary.pendingSetups ?? []).map((setup) => (
+        <PendingSessionCard key={`setup:${setup.id}`} parent={byId[id].summary} setup={setup} />
+      )),
+    ]);
     return (
       <WorkspaceSection
         key={workspaceId}

@@ -17,8 +17,10 @@ import {
   type DoomApiMount,
 } from '../exports/packageApi';
 import type { TranscriptPage, TranscriptPageRequest } from '../exports/sessionProtocol';
+import type { DoomHubSessionReservations } from '../schemas/hubChannel';
 import type { OpenSessionRecord } from '../services/openSessionRegistry';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
+import { createSessionMcpConversationStore } from '../services/sessionMcpConversations';
 import { createSessionMcpRegistrationStore } from '../services/sessionMcpRegistrationStore';
 import type { SavedSession } from '../services/sqliteSessionHistory';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
@@ -91,10 +93,12 @@ export interface HeadlessServerOptions {
   sessionMcpStateDir?: string;
   /** Monotonic exposure revision, including disable/re-enable cycles. */
   sessionMcpPublicOriginRevision?: () => number;
+  isSessionPersisted?: (sessionId: string, cwd: string) => boolean;
 }
 
 export interface HeadlessServer {
   readonly url: string;
+  readonly sessionReservations: DoomHubSessionReservations;
   close(): Promise<void>;
 }
 
@@ -119,6 +123,7 @@ function sessionView(session: HeadlessHubSession): Record<string, unknown> {
     ...(session.lastSettledAt === undefined ? {} : { lastSettledAt: session.lastSettledAt }),
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
+    ...(session.pendingSetups === undefined ? {} : { pendingSetups: session.pendingSetups }),
   };
 }
 
@@ -354,9 +359,12 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     headlessHub: options.headlessHub,
     publicOrigin: options.sessionMcpPublicOrigin ?? (() => undefined),
     publicOriginRevision: options.sessionMcpPublicOriginRevision,
+    onNotice: options.onNotice,
+    isSessionPersisted: options.isSessionPersisted,
     ...(options.sessionMcpStateDir === undefined
       ? {}
       : {
+          conversationStore: createSessionMcpConversationStore(options.sessionMcpStateDir),
           registrationStore: createSessionMcpRegistrationStore({
             stateDir: options.sessionMcpStateDir,
             onNotice: options.onNotice,
@@ -789,6 +797,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         (candidate) => candidate.sessionId === sessionId && candidate.workspaceId === workspaceId,
       );
       if (request.method === 'DELETE' && record !== undefined && options.removeDormantSession !== undefined) {
+        sessionMcp.closeSessionBinding(record.sessionId);
         await options.removeDormantSession(record);
         options.headlessHub.notifySessionRemoved(record.sessionId);
         json(response, 200, { ok: true });
@@ -802,6 +811,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       return;
     }
     if (suffix === '' && request.method === 'DELETE') {
+      sessionMcp.closeSessionBinding(sessionId);
       await options.headlessHub.closeSession(sessionId);
       json(response, 200, { ok: true });
       return;
@@ -933,6 +943,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
   const url = `http://${host}:${address.port}`;
   return {
     url,
+    sessionReservations: sessionMcp.reservations,
     async close() {
       if (closed) return;
       closed = true;

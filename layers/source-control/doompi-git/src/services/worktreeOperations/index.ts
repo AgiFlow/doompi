@@ -29,6 +29,8 @@ export interface SpawnWorktreeRequest {
   baseRef?: string;
   name?: string;
   task?: string;
+  /** Host-owned execution setup, exposed by the UI rather than the agent tool. */
+  reservationId?: string;
 }
 
 export interface SpawnOptions {
@@ -171,36 +173,78 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
     }
   };
 
-  return {
+  const operations: WorktreeOperations = {
     async spawn(context, request, options) {
       const { root, store, records } = await resolve(context);
+      const reservations = request.reservationId === undefined ? undefined : requireSessionService().reservations;
+      if (request.reservationId !== undefined && (!reservations || request.task !== undefined))
+        throw new DoomGitExpectedError(
+          'invalid_request',
+          'Reserved worktree sessions require host setup and cannot start a task.',
+          false,
+          'Create the session from its pending setup card.',
+        );
+      const reserved =
+        request.reservationId === undefined ? undefined : reservations!.read(request.reservationId, context.sessionId);
+      const existing =
+        reserved === undefined ? undefined : records.find((record) => record.sessionId === reserved.sessionId);
+      if (existing) {
+        if (
+          existing.parentSessionId !== context.sessionId ||
+          existing.branch !== request.branch ||
+          existing.path !== reserved?.cwd ||
+          (request.baseRef !== undefined && existing.baseRef !== request.baseRef)
+        )
+          throw new DoomGitExpectedError(
+            'invalid_request',
+            'This setup already owns a different worktree.',
+            false,
+            'Recover its existing branch and checkout.',
+          );
+        await reservations!.complete(request.reservationId!, context.sessionId);
+        return existing;
+      }
       const refusal = refuseSpawn({ branch: request.branch, existing: records });
       if (refusal !== undefined) {
         throw new DoomGitExpectedError('worktree_exists', refusal, false, 'Pick another branch name, or close it.');
       }
       const taskDelivery = request.task === undefined ? undefined : requireSessionDelivery();
       const baseRef = request.baseRef ?? (await git.currentBranch(root)) ?? 'HEAD';
-      const id = shortId(randomUUID());
-      const path = worktreeDirectory({
+      const id = shortId(reserved?.sessionId ?? randomUUID());
+      let path = worktreeDirectory({
         worktreesRoot: worktreesRoot(deps.homeDir),
         repositoryLabel: repositoryLabel(root),
         repositoryId: repositoryId(root),
         branch: request.branch,
         shortId: id,
       });
-
+      if (request.reservationId !== undefined) {
+        path = (await reservations!.prepare(request.reservationId, context.sessionId, path)).cwd;
+      }
+      const recovering = reserved?.cwd !== undefined && fs.existsSync(path);
+      if (
+        recovering &&
+        (!(await git.listWorktreePaths(root)).includes(path) || (await git.currentBranch(path)) !== request.branch)
+      )
+        throw new DoomGitExpectedError(
+          'invalid_request',
+          'The reserved checkout no longer matches this setup.',
+          false,
+          'Inspect the existing directory; it will not be replaced.',
+        );
       // The worktree and the branch are made by one command, so they are undone
       // by one too. `worktree remove` leaves the branch behind, and a branch
       // nobody asked for is what a failed spawn used to leave on the floor.
       const cancelled = (): boolean => options?.signal?.aborted === true;
       const rollback = async (): Promise<string> => {
+        if (reserved) return ` The reserved checkout at ${path} was retained for recovery.`;
         await git.removeWorktree({ repositoryRoot: root, path, force: true }).catch(() => undefined);
         const deleted = await git.deleteBranch({ repositoryRoot: root, branch: request.branch }).catch(() => false);
         return deleted ? '' : ` The branch ${request.branch} has work on it and was kept.`;
       };
 
       options?.onProgress?.(`creating branch ${request.branch}\u2026`);
-      await git.addWorktree({ repositoryRoot: root, path, branch: request.branch, baseRef });
+      if (!recovering) await git.addWorktree({ repositoryRoot: root, path, branch: request.branch, baseRef });
 
       // Checked here rather than only inside the session call: this is the
       // point where a checkout exists that nothing has recorded yet, which is
@@ -211,7 +255,9 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           'spawn_cancelled',
           `Cancelled before the session started.${kept}`,
           false,
-          'The worktree was removed; run it again when you are ready.',
+          reserved
+            ? 'Retry setup with the same branch to recover the reserved checkout.'
+            : 'The worktree was removed; run it again when you are ready.',
         );
       }
 
@@ -221,7 +267,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       // cannot resolve. Nothing here can fail the spawn: a repository with no
       // build output to mirror simply has none.
       options?.onProgress?.('mirroring build output\u2026');
-      mirror(root, path);
+      if (!recovering) mirror(root, path);
 
       // The worktree exists from here on, so every later failure has to leave
       // it removed or recorded. An unrecorded directory on disk is the one
@@ -235,8 +281,11 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           parentSessionId: context.sessionId,
           sessionProvenance: 'worktree',
           ...(options?.signal === undefined ? {} : { signal: options.signal }),
+          ...(request.reservationId === undefined ? {} : { reservationId: request.reservationId }),
         });
         sessionId = session.sessionId;
+        if (reserved && sessionId !== reserved.sessionId)
+          throw new Error('The host did not use the reserved session identity.');
       } catch (error) {
         const kept = await rollback();
         if (cancelled()) {
@@ -244,7 +293,9 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
             'spawn_cancelled',
             `Cancelled while the session was starting.${kept}`,
             false,
-            'The worktree was removed; run it again when you are ready.',
+            reserved
+              ? 'Retry setup with the same branch to recover the reserved checkout.'
+              : 'The worktree was removed; run it again when you are ready.',
           );
         }
         if (error instanceof HubUnavailableError) {
@@ -317,6 +368,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           );
         }
       }
+      if (request.reservationId !== undefined) await reservations!.complete(request.reservationId, context.sessionId);
       return record;
     },
 
@@ -492,5 +544,38 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       store.replace(reconciled.records.filter((record) => !dropped.has(record.id)));
       return plan;
     },
+  };
+  const locked = async <T>(context: WorktreeContext, operation: () => Promise<T>, signal?: AbortSignal): Promise<T> => {
+    try {
+      const { store } = await resolve(context);
+      return await store.transaction(operation, signal);
+    } catch (error) {
+      if (signal?.aborted && !(error instanceof DoomGitExpectedError))
+        throw new DoomGitExpectedError(
+          'spawn_cancelled',
+          'The worktree operation was cancelled.',
+          false,
+          'Inspect its recorded state before retrying.',
+        );
+      if (['ENOTDIR', 'EACCES', 'EROFS', 'ENOSPC'].includes(String((error as NodeJS.ErrnoException).code)))
+        throw new DoomGitExpectedError(
+          'registry_write_failed',
+          'The worktree registry is not writable.',
+          true,
+          'Check permissions and free space before retrying.',
+        );
+      throw error;
+    }
+  };
+  // ponytail: serialize Git lifecycle mutations, not session execution. Keeping
+  // the lock across startup avoids a second lease system for partially created trees.
+  return {
+    ...operations,
+    spawn: (context, request, options) =>
+      locked(context, () => operations.spawn(context, request, options), options?.signal),
+    close: (context, id, force) => locked(context, () => operations.close(context, id, force)),
+    list: (context) => locked(context, () => operations.list(context)),
+    merge: (context, id, message) => locked(context, () => operations.merge(context, id, message)),
+    prune: (context, dryRun) => locked(context, () => operations.prune(context, dryRun)),
   };
 }

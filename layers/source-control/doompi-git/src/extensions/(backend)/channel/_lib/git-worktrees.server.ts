@@ -101,10 +101,16 @@ function parseCommand(payload: unknown): GitWorktreesCommand | undefined {
   const value = payload as Record<string, unknown>;
   if (value.action === 'create') {
     if (typeof value.branch !== 'string' || value.branch.trim() === '') return undefined;
+    if (
+      value.reservationId !== undefined &&
+      (typeof value.reservationId !== 'string' || !/^[A-Za-z0-9_-]+$/u.test(value.reservationId))
+    )
+      return undefined;
     return {
       action: 'create',
       branch: value.branch.trim(),
       ...(typeof value.baseRef === 'string' && value.baseRef.trim() !== '' ? { baseRef: value.baseRef.trim() } : {}),
+      ...(typeof value.reservationId === 'string' ? { reservationId: value.reservationId } : {}),
     };
   }
   if (value.action === 'close') {
@@ -222,6 +228,7 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
             {
               branch: command.branch,
               ...(command.baseRef === undefined ? {} : { baseRef: command.baseRef }),
+              ...(command.reservationId === undefined ? {} : { reservationId: command.reservationId }),
             },
             // Each phase replaces the label, so the panel says what is
             // happening instead of holding one line for the whole wait.
