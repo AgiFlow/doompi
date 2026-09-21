@@ -7,7 +7,20 @@ description: Use Doom Pi MCP to inspect domain-scoped servers, authenticate, rel
 
 Use MCP when a task depends on a configured external server, proxy upstream, or tool selected by the active Doom Pi domains.
 
-## Inspect and operate
+## Remote MCP connection
+
+This connection already belongs to one DoomPi session. Use the tools actually
+exposed by its selected domains. Prefer a named upstream tool with its declared
+schema. Use `mcp_use` only when the server name, tool name, and arguments have
+been discovered from a trusted catalog; never guess them.
+
+The commands below are local DoomPi interfaces, not Bash commands or MCP tools.
+If status, authentication, or reload is not exposed, explain which local action
+the user needs to take. Do not read private credentials or create another session
+to work around an unavailable capability. Tool/resource support in a packaged
+ChatGPT plugin does not establish support in this MCP connection.
+
+## Local DoomPi: inspect and operate
 
 - Run `/mcp` for the interactive overlay.
 - Run `/mcp status` to inspect configured servers, connection state, and diagnostics.
@@ -18,7 +31,7 @@ Interactive status and browser-assisted authentication require a TUI. In a headl
 
 ## Measure and reduce what servers cost
 
-Every connected server puts its full tool schema in the system prompt on every request, so a server that is irrelevant to the task still competes for context and still offers the model tools it could pick by mistake.
+In the local Pi runtime, connected servers contribute tool schemas to the model context, so a server that is irrelevant to the task still competes for context and still offers the model tools it could pick by mistake.
 
 - Run `doompi --explain` to see the per-server token cost. Figures are measured from a real handshake and cached, so the first run for a new server descriptor is slower than later ones.
 - Compare selections with `doompi --domains <name[,name...]> --explain` to see what a narrower domain actually saves.

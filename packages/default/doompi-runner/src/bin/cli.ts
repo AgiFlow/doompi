@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { pathToFileURL } from 'node:url';
+import { existsSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 
@@ -69,7 +70,11 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  existsSync(process.argv[1]) &&
+  realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+) {
   main().then(
     (code) => {
       process.exitCode = code;

@@ -15,8 +15,10 @@ describe('createLoadContextTool', () => {
     const context = { loadContext: () => snapshot } as unknown as DoomMcpPluginContext;
 
     const tool = createLoadContextTool(context);
+    expect(tool.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
     await expect(tool.execute('call', {}, undefined, undefined, {} as never)).resolves.toEqual({
       content: [{ type: 'text', text: JSON.stringify(snapshot) }],
+      structuredContent: snapshot,
     });
   });
 });

@@ -16,6 +16,7 @@ export interface DoomMcpContextSnapshot {
     readonly domains: readonly string[];
     readonly majorMode: string;
     readonly activeLayers: readonly string[];
+    readonly minorModes?: readonly string[];
   };
   readonly instructions: readonly { readonly path: string; readonly content: string }[];
   readonly persona: string | null;

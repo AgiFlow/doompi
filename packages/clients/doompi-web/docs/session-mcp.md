@@ -41,3 +41,34 @@ Client creation is host-only. A paired remote browser or connector credential ca
 Clients, grants, and tokens are process-local. Ending or restarting the session, restarting the host, disabling Remote Control, changing the public origin, or revoking the client invalidates access. Create a new client after those changes.
 
 The secret is shown once. Dismissal, navigation, or changing the selected session clears it from the settings component.
+
+## Remote workflow contract
+
+The MCP initialization response includes short operating instructions. Refresh the
+ChatGPT connection after deploying tool-schema, description, or instruction changes.
+Validate the refreshed catalog in a new conversation; a source build does not update
+an already-running session generation.
+
+`load_context` includes active minor modes and returns public structured data along
+with ordinary readable text. `search_skills` and `load_skill` remain the supported
+way to discover and load current guidance. No companion plugin or widget is required.
+Repository instructions reflect the files loaded at session startup; reloading
+context is not proof that newly edited instruction files were reloaded.
+
+The remote bridge preserves declared tool annotations, output schemas, and explicit
+structured results. Internal renderer `details` are not exported. Result-rewriting
+hooks invalidate the original structured payload so it cannot bypass a redaction.
+Annotations describe side effects; the existing authenticated session remains the
+authority for every call.
+
+Remote `write_plan` requires a nonempty `markdown` argument and active Plan mode.
+It saves the supplied text rather than attempting to read ChatGPT's transcript.
+Use the existing `read` tool with the returned path to verify persistence. Saving
+is not implementation approval. `complete_plan` requires the local DoomPi UI;
+headless Fable planning is unavailable. Local transcript-based planning is unchanged.
+
+A runner handle is not command completion. Use bounded `doom-runner status` and
+`doom-runner logs --lines` calls through Bash to retrieve the existing run's result.
+Do not assume that background notifications resume a remote conversation, and do
+not launch background delegation without a demonstrated result-delivery path.
+Host paths are not automatically downloadable ChatGPT attachments.

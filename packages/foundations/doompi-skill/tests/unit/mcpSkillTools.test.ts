@@ -16,14 +16,17 @@ describe('remote skill tools', () => {
     const list = vi.fn(async () => available);
     const read = vi.fn();
     const tool = createSearchSkillsTool();
+    expect(tool.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
 
     await expect(tool.execute('call', {}, undefined, undefined, context({ list, read }))).resolves.toEqual({
       content: [{ type: 'text', text: JSON.stringify(available) }],
+      structuredContent: { skills: available },
     });
     await expect(
       tool.execute('call', { query: 'RELEASE' }, undefined, undefined, context({ list, read })),
     ).resolves.toEqual({
       content: [{ type: 'text', text: JSON.stringify([{ name: 'release', description: 'Prepare a release' }]) }],
+      structuredContent: { skills: [{ name: 'release', description: 'Prepare a release' }] },
     });
     expect(read).not.toHaveBeenCalled();
   });
@@ -31,6 +34,7 @@ describe('remote skill tools', () => {
   it('loads only the exact skill name through the remote capability', async () => {
     const read = vi.fn(async (name: string) => `# ${name}`);
     const tool = createLoadSkillTool();
+    expect(tool.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
 
     await expect(
       tool.execute('call', { name: 'release' }, undefined, undefined, context({ list: async () => [], read })),

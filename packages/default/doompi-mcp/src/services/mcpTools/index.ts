@@ -1,3 +1,4 @@
+import type { DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
 import { definePiTool, type PiToolDeclaration } from '@agimon-ai/doompi-core/pi-extension';
 import type { McpClientManagerService } from '@agimon-ai/mcp-proxy';
 import type { AgentToolResult, ToolDefinition } from '@earendil-works/pi-coding-agent';
@@ -13,7 +14,7 @@ const ANY_OBJECT_SCHEMA = { type: 'object', properties: {} };
 type ContentBlock = CallToolResult['content'][number];
 
 /** The text of a downstream result: its text blocks joined, which is what the model reads. */
-function resultText(result: CallToolResult): string {
+function resultText(result: Pick<CallToolResult, 'content'>): string {
   return (result.content ?? [])
     .flatMap((block) => (block.type === 'text' ? [block.text] : []))
     .join('\n')
@@ -71,11 +72,24 @@ function resultBlocks(result: CallToolResult): McpResultBlock[] {
  * other block kind reaches the cockpit through the details.
  */
 export function toAgentToolResult(tool: CatalogTool, result: CallToolResult): AgentToolResult<McpToolDetails> {
-  const text = resultText(result) || 'No output.';
-  if (result.isError) throw new Error(text);
+  const normalized = toHeadlessToolResult(tool, result);
+  if (normalized.isError) throw new Error(resultText(normalized));
+  return normalized;
+}
+
+/** Remote MCP preserves error flags and public structured results instead of Pi's thrown-error convention. */
+export function toHeadlessToolResult(
+  tool: CatalogTool,
+  result: CallToolResult,
+): DoomHeadlessToolResult & { details: McpToolDetails } {
+  const text =
+    resultText(result) ||
+    (result.structuredContent === undefined ? 'No output.' : JSON.stringify(result.structuredContent));
   const blocks = resultBlocks(result);
   return {
     content: [{ type: 'text', text }, ...resultImages(result)],
+    ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
+    ...(result.isError === undefined ? {} : { isError: result.isError }),
     details: { server: tool.serverName, tool: tool.toolName, ...(blocks.length > 0 ? { blocks } : {}) },
   };
 }

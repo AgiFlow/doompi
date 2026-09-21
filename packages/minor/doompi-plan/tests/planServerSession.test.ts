@@ -150,6 +150,39 @@ describe('server planning model settings', () => {
 });
 
 describe('server planning evidence', () => {
+  it('saves supplied remote Markdown without a local transcript or approval prompt', async () => {
+    const f = fixture();
+    f.selection.state['minor-mode'] = ['plan'];
+    const tool = f.plugin().tools.find((tool) => tool.name === 'write_plan')!;
+    const result = await tool.execute(
+      'external',
+      { markdown: '# Remote plan\n\nInspect, then verify.' },
+      undefined,
+      undefined,
+      f.host.context,
+    );
+    expect(result.isError).not.toBe(true);
+    expect(mocks.writeFile).toHaveBeenCalledWith(
+      expect.stringContaining('remote-plan-'),
+      '# Remote plan\n\nInspect, then verify.\n',
+      expect.objectContaining({ flag: 'wx', mode: 0o600 }),
+    );
+    expect(result.structuredContent).toMatchObject({ written: true, path: expect.any(String) });
+    expect(f.request).not.toHaveBeenCalled();
+    expect(f.selection.state['minor-mode']).toEqual(['plan']);
+    expect(f.entries.some((entry) => entry.customType === 'plan-review')).toBe(false);
+  });
+
+  it('rejects empty supplied Markdown instead of asking the local client for replacement content', async () => {
+    const f = fixture();
+    f.selection.state['minor-mode'] = ['plan'];
+    const tool = f.plugin().tools.find((tool) => tool.name === 'write_plan')!;
+    const result = await tool.execute('external', { markdown: '   ' }, undefined, undefined, f.host.context);
+    expect(result.isError).toBe(true);
+    expect(f.request).not.toHaveBeenCalled();
+    expect(mocks.writeFile).not.toHaveBeenCalled();
+  });
+
   it('saves assistant Markdown from journal text blocks without reading user instructions as a plan', async () => {
     const f = fixture();
     f.selection.state['minor-mode'] = ['plan'];

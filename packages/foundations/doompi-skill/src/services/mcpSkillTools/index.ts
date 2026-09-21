@@ -18,6 +18,7 @@ export function createSearchSkillsTool(): DoomHeadlessTool<typeof searchSkillsPa
     label: 'Search skills',
     description: 'Discover repository and active-domain skills available to this remote connection.',
     parameters: searchSkillsParameters,
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async execute(_toolCallId, { query }, _signal, _onUpdate, context) {
       const needle = query?.trim().toLocaleLowerCase();
       const available = await skills(context).list();
@@ -25,7 +26,7 @@ export function createSearchSkillsTool(): DoomHeadlessTool<typeof searchSkillsPa
         needle === undefined || needle === ''
           ? available
           : available.filter(({ name, description }) => `${name}\n${description}`.toLocaleLowerCase().includes(needle));
-      return text(JSON.stringify(matches));
+      return { ...text(JSON.stringify(matches)), structuredContent: { skills: matches } };
     },
   };
 }
@@ -37,6 +38,7 @@ export function createLoadSkillTool(): DoomHeadlessTool<typeof loadSkillParamete
     label: 'Load skill',
     description: 'Load the full Markdown instructions for an available remote skill by exact name.',
     parameters: loadSkillParameters,
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async execute(_toolCallId, { name }, _signal, _onUpdate, context) {
       return text(await skills(context).read(name));
     },

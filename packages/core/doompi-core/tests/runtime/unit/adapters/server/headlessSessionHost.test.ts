@@ -135,7 +135,7 @@ describe('headless session facet surface', () => {
 
 describe('MCP execution boundary', () => {
   async function remoteFixture(owner = { majorMode: 'test', layer: 'default' }) {
-    const execute = vi.fn(async (..._args: Parameters<DoomHeadlessTool['execute']>) => ({
+    const execute = vi.fn<DoomHeadlessTool['execute']>(async (..._args) => ({
       content: [{ type: 'text' as const, text: 'done' }],
     }));
     const read = vi.fn(async () => '# skill');
@@ -151,7 +151,16 @@ describe('MCP execution boundary', () => {
         plugin: {
           name: 'test',
           session: {
-            tools: [{ name: 'remote', description: 'Remote', parameters: Type.Object({}), execute }],
+            tools: [
+              {
+                name: 'remote',
+                description: 'Remote',
+                parameters: Type.Object({}),
+                annotations: { readOnlyHint: true },
+                outputSchema: { type: 'object', properties: { status: { type: 'string' } } },
+                execute,
+              },
+            ],
             skills: [{ name: 'guide', description: 'Guide', read }],
           },
         },
@@ -168,6 +177,27 @@ describe('MCP execution boundary', () => {
       invocation: { revision: snapshot.revision, name: 'remote', arguments: {} },
     };
   }
+
+  it('preserves explicit MCP contracts and does not bypass a result-redaction hook', async () => {
+    const current = await remoteFixture();
+    expect(current.snapshot.tools[0]).toMatchObject({
+      annotations: { readOnlyHint: true },
+      outputSchema: { type: 'object' },
+    });
+    current.execute.mockResolvedValue({
+      content: [{ type: 'text', text: 'sensitive' }],
+      structuredContent: { status: 'sensitive' },
+    });
+    await expect(current.host.mcpSurface.invokeTool(current.invocation)).resolves.toMatchObject({
+      structuredContent: { status: 'sensitive' },
+    });
+    vi.spyOn(current.host.host!, 'dispatchHook').mockImplementation(async (name) =>
+      name === 'tool_result' ? [{ content: [{ type: 'text', text: 'redacted' }] }] : [],
+    );
+    const result = await current.host.mcpSurface.invokeTool(current.invocation);
+    expect(result.content).toEqual([{ type: 'text', text: 'redacted' }]);
+    expect(result.structuredContent).toBeUndefined();
+  });
 
   it('keeps the remote surface empty without explicit declarations', async () => {
     const current = await fixture();

@@ -19,6 +19,8 @@ export interface CatalogTool {
   serverName: string;
   description?: string;
   inputSchema: Record<string, unknown>;
+  annotations?: McpCatalogToolInput['annotations'];
+  outputSchema?: McpCatalogToolInput['outputSchema'];
 }
 
 export interface CatalogEntry {
@@ -72,6 +74,8 @@ function toCatalogTool(serverName: string, tool: McpCatalogToolInput): CatalogTo
     serverName,
     ...(tool.description ? { description: tool.description } : {}),
     inputSchema: tool.inputSchema,
+    ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
+    ...(tool.outputSchema === undefined ? {} : { outputSchema: tool.outputSchema }),
   };
 }
 

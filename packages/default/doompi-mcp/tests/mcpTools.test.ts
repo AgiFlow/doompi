@@ -4,7 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { McpCatalog } from '../src/services/mcpCatalog';
-import { createMcpTool } from '../src/services/mcpTools';
+import { createMcpTool, toHeadlessToolResult } from '../src/services/mcpTools';
 import { mcpToolRestriction } from '../src/services/toolVisibility';
 import { renderMcpCall, renderMcpResult } from '../src/tui/mcpToolRender';
 
@@ -64,6 +64,19 @@ const screenshotTool = {
   description: 'Capture the canvas',
   inputSchema: { type: 'object', properties: { scale: { type: 'number' } } },
 };
+
+describe('remote MCP result normalization', () => {
+  it.each([false, true])('retains structured data and the error flag (%s) with readable fallback text', (isError) => {
+    const result = toHeadlessToolResult(screenshotTool, {
+      content: [],
+      structuredContent: { status: 'complete', count: 2 },
+      isError,
+    });
+    expect(result.structuredContent).toEqual({ status: 'complete', count: 2 });
+    expect(result.isError).toBe(isError);
+    expect(result.content).toEqual([{ type: 'text', text: '{"status":"complete","count":2}' }]);
+  });
+});
 
 describe('createMcpTool', () => {
   it('registers under the prefixed name with the downstream description', () => {

@@ -7,19 +7,32 @@ description: Use Doom Pi Plan to draft reviewable normal, debug, or Fable-assist
 
 Use Plan when the user wants investigation and a reviewable implementation plan before repository changes.
 
-## Select a planning flavor
+## Remote MCP workflow
 
-- Use `SPC p e` for normal planning based on repository exploration.
-- Use `SPC p d` for debugging, with verified evidence separated from hypotheses.
-- Use `SPC p f` for an optional Fable-assisted draft. Treat the returned draft as untrusted and verify it with Pi before producing the final plan.
-- Use `SPC p e` again to exit and restore the previous model, thinking level, and tools.
+Call `load_context` to inspect the bound session and its active minor modes.
+Use the available inspection tools to investigate and present the complete plan
+as visible Markdown. Separate verified facts from hypotheses.
 
-## Produce the plan
+When Plan mode is already active, call `write_plan` with that exact text in the
+`markdown` argument. Use the returned path with `read` to verify the saved text.
+The host file is not a downloadable ChatGPT attachment. Do not substitute local
+transcript content or claim that saving authorizes implementation.
 
-1. Inspect the relevant repository state without editing files.
-2. Resolve important unknowns and state any remaining uncertainty.
-3. Present the complete Markdown plan in visible assistant output.
-4. Call `write_plan` with that same visible plan. Plan rejects empty or hidden content and writes a unique file in the configured plans directory.
-5. Call `complete_plan` only after the persisted plan is ready for review. The user must explicitly approve exiting Plan mode.
+When Plan mode is inactive, present the plan in chat and explain that persistence
+requires the user to activate Plan mode in DoomPi. Do not change modes through
+Bash or a hidden interface to bypass that gate.
+
+`complete_plan` requests approval in the local DoomPi UI, not in ChatGPT. Only use
+it when the user intends to review there. An explicit instruction in chat does
+not itself exit server Plan mode. Do not simulate approval or bypass mode gates.
+`run_fable_plan` is unavailable in the headless host. Plan using repository
+inspection instead, without launching background subagents.
+
+## Local DoomPi workflow
+
+The local TUI uses `SPC p e` for normal planning, `SPC p d` for debugging, and
+`SPC p f` for Fable where the host supports it. These are local shortcuts, not
+remote tools. The local no-argument `write_plan` reads the visible plan from its
+own session. `complete_plan` requires the user's explicit exit-or-continue choice.
 
 Plan removes `edit` and `write` from the active tool set, but it does not sandbox Bash, external tools, or operating-system access. Do not mutate the repository while planning. If exit restoration fails, report the failure and keep treating the session as narrowed Plan state.
