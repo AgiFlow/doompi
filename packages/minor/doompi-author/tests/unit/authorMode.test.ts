@@ -113,6 +113,19 @@ async function tickMonitor(): Promise<void> {
 afterEach(() => vi.useRealTimers());
 
 describe('Author minor mode', () => {
+  it('keeps regular tools available while gating Author-owned tools', () => {
+    const regularTools = ['task', 'read', 'bash', 'grep', 'edit', 'mcp_style_system_preview'];
+    const tools = [...regularTools, 'open_authoring_file', 'describe_author_tools'];
+
+    expect(authorToolRestriction(false, false)(tools, tools)).toEqual(regularTools);
+    expect(authorToolRestriction(true, false)(tools, tools)).toEqual([...regularTools, 'open_authoring_file']);
+    expect(authorToolRestriction(true, true)(tools, tools)).toEqual([
+      ...regularTools,
+      'open_authoring_file',
+      'describe_author_tools',
+    ]);
+  });
+
   it('exposes no Author tools while off and only the open tool before a viewport is focused', async () => {
     vi.useFakeTimers();
     const value = fixture();

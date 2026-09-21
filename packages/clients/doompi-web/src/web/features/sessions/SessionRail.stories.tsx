@@ -2,7 +2,7 @@
  * Plain CSF objects; the style-system renderer resolves the default export by
  * looking for a bare `const meta`, so the export is not named at definition.
  */
-import { Button, GearIcon, KebabIcon, PlusIcon } from '@agimon-ai/doompi-web-components';
+import { Button, GearIcon, KebabIcon, PlusIcon, TooltipProvider } from '@agimon-ai/doompi-web-components';
 import type { ReactNode } from 'react';
 
 import type { SessionSummary } from '../../../types/hub';
@@ -53,25 +53,27 @@ function card(meta: SessionMeta, ordinal: number, active = false) {
 
 function rail(groups: ReactNode, hasWorkspaces = true) {
   return (
-    <div className="h-screen w-80 bg-doom-rail">
-      <SessionRailView
-        hasWorkspaces={hasWorkspaces}
-        workspaceGroups={groups}
-        remoteAccessButton={
-          <Button variant="outline" size="sm">
-            remote access
-          </Button>
-        }
-        settingsLink={
-          <Button variant="ghost" size="icon" aria-label="settings">
-            <GearIcon className="h-3 w-3" />
-          </Button>
-        }
-        onOpenRemote={noop}
-        onAddWorkspace={noop}
-        onTurnRemoteOff={noop}
-      />
-    </div>
+    <TooltipProvider>
+      <div className="h-screen w-80 bg-doom-rail">
+        <SessionRailView
+          hasWorkspaces={hasWorkspaces}
+          workspaceGroups={groups}
+          remoteAccessButton={
+            <Button variant="outline" size="sm">
+              remote access
+            </Button>
+          }
+          settingsLink={
+            <Button variant="ghost" size="icon" aria-label="settings">
+              <GearIcon className="h-3 w-3" />
+            </Button>
+          }
+          onOpenRemote={noop}
+          onAddWorkspace={noop}
+          onTurnRemoteOff={noop}
+        />
+      </div>
+    </TooltipProvider>
   );
 }
 

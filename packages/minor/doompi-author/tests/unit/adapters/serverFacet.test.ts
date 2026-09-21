@@ -69,7 +69,7 @@ describe('authorServerFacet', () => {
     const agent = {
       context: { selection: { minorModes: [] } },
       registerMinorMode: () => ({ ...registration(), publish() {} }),
-      registerToolRestriction: registration,
+      registerToolRestriction: vi.fn(registration),
       registerResource: registration,
       registerCommand: registration,
       registerHook: registration,
@@ -89,6 +89,7 @@ describe('authorServerFacet', () => {
         client: { notify() {} },
       } as never),
     ).resolves.toMatchObject({ isError: true });
+    expect(agent.registerToolRestriction).not.toHaveBeenCalled();
     await dispose?.();
     await context.fiber.dispose();
   });
