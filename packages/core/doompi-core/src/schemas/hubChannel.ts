@@ -37,6 +37,8 @@ export interface DoomHubSessionCreateRequest {
   readonly parentSessionId?: string;
   readonly sessionProvenance?: string;
   readonly signal?: AbortSignal;
+  /** Host-issued reservation, not a caller-chosen target session id. */
+  readonly reservationId?: string;
 }
 
 /** Host-bound inter-session events. The source identity is attached by the hub, never by payload data. */
@@ -47,11 +49,26 @@ export interface DoomSessionCommunicationEndpoint {
   onPeerReady(listener: (peerSessionId: string) => void): () => void;
   close(): void;
 }
+export interface DoomPendingSessionSetup {
+  readonly id: string;
+  readonly name: string;
+  readonly createdAt: string;
+  readonly cwd?: string;
+}
+
+/** A host-owned setup can be fulfilled by any execution-directory provider. */
+export interface DoomHubSessionReservations {
+  read(id: string, parentSessionId: string): { sessionId: string; cwd?: string };
+  prepare(id: string, parentSessionId: string, cwd: string): Promise<{ sessionId: string; cwd: string }>;
+  complete(id: string, parentSessionId: string): Promise<DoomHubSessionScope>;
+}
+
 /** Direct lifecycle owned by the canonical headless hub, never by a package transport. */
 export interface DoomHubSessionService {
   create(request: DoomHubSessionCreateRequest): Promise<DoomHubSessionScope>;
   close(sessionId: string): Promise<void>;
   isLive(sessionId: string): boolean;
+  readonly reservations?: DoomHubSessionReservations;
   /** True only when both live sessions have a direct parent-child relationship. */
   canCommunicate?(sourceSessionId: string, targetSessionId: string): boolean;
   /** Core host hook. Session API construction removes this method before exposing the service to extensions. */

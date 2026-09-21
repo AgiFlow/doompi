@@ -1,10 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+import type { DoomHubSessionReservations, DoomHubSessionScope } from '../schemas/hubChannel';
 import {
   createSessionMcpAuthorizationService,
   SessionMcpOAuthError,
+  sessionMcpRouting,
   type SessionMcpAuthorizationBinding,
   type SessionMcpAuthorizationService,
   type SessionMcpClient,
 } from '../services/sessionMcpAuthorization';
+import { SessionMcpConversationError, type SessionMcpConversationStore } from '../services/sessionMcpConversations';
 import type { SessionMcpRegistrationStore } from '../services/sessionMcpRegistrationStore';
 import type { HeadlessHub, HeadlessHubSession } from './headlessHub';
 import { createSessionMcpHttpHandler, type SessionMcpHttpHandler } from './sessionMcpHandler';
@@ -15,6 +21,8 @@ const TOKEN_ROUTE = '/oauth/token';
 const SESSION_MCP_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp$/u;
 const SESSION_MCP_CONFIG_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/config$/u;
 const SESSION_MCP_CLIENTS_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/clients(?:\/([^/]+))?$/u;
+const SESSION_MCP_CONVERSATIONS_PATTERN =
+  /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/conversations(?:\/([^/]+))?$/u;
 const PROTECTED_RESOURCE_PATTERN =
   /^\/\.well-known\/oauth-protected-resource(\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/mcp)$/u;
 
@@ -24,11 +32,16 @@ export interface SessionMcpRoutesOptions {
   readonly publicOriginRevision?: () => number;
   readonly authorization?: SessionMcpAuthorizationService;
   readonly registrationStore?: SessionMcpRegistrationStore;
+  readonly conversationStore?: SessionMcpConversationStore;
+  readonly isSessionPersisted?: (sessionId: string, cwd: string) => boolean;
+  readonly onNotice?: (message: string) => void;
 }
 
 export interface SessionMcpRoutes {
   handlePublic(request: Request): Promise<Response | undefined>;
   handleHost(request: Request): Promise<Response | undefined>;
+  readonly reservations: DoomHubSessionReservations;
+  closeSessionBinding(sessionId: string): void;
   close(): void;
 }
 
@@ -78,10 +91,42 @@ function publicClient(client: SessionMcpClient, binding: SessionMcpAuthorization
   return {
     ...client,
     scope: binding.scope,
+    routing: sessionMcpRouting(binding.routing),
     tools: binding.tools,
     skills: binding.skills,
     audience: binding.audience,
   };
+}
+
+/** Canonicalizes an intended directory without creating it or accepting symlink aliases. */
+function executionDirectory(value: string): string {
+  if (!path.isAbsolute(value) || value.includes('\0') || value.length > 4096)
+    throw new SessionMcpConversationError('INVALID_EXECUTION_DIRECTORY', 'Choose an absolute execution directory.');
+  let ancestor = path.resolve(value);
+  const suffix: string[] = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(ancestor), ...suffix);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || path.dirname(ancestor) === ancestor)
+        throw new SessionMcpConversationError(
+          'INVALID_EXECUTION_DIRECTORY',
+          'The execution directory cannot be resolved.',
+        );
+      suffix.unshift(path.basename(ancestor));
+      ancestor = path.dirname(ancestor);
+    }
+  }
+}
+
+function overlappingDirectories(left: string, right: string): boolean {
+  const contained = (root: string, target: string): boolean => {
+    const relative = path.relative(root, target);
+    return (
+      relative === '' || (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`))
+    );
+  };
+  return contained(left, right) || contained(right, left);
 }
 
 /** Routes the process-local session MCP authority and revokes every grant with its live incarnation. */
@@ -92,6 +137,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     { host: HeadlessHubSession['host']; generation: number; handlers: Map<string, SessionMcpHttpHandler> }
   >();
   let nextGeneration = 1;
+  let publishPending = (): void => {};
 
   const revokeIncarnation = (sessionId: string, generation: number): void => {
     authorization.revokeSessionGeneration(sessionId, generation);
@@ -104,7 +150,10 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
   };
   for (const session of options.headlessHub.snapshot()) register(session);
   const unsubscribe = options.headlessHub.onEvent((event) => {
-    if (event.kind === 'upsert') register(event.session);
+    if (event.kind === 'upsert') {
+      register(event.session);
+      publishPending();
+    }
     if (event.kind === 'removed') {
       const current = incarnations.get(event.sessionId);
       if (current !== undefined) revokeIncarnation(event.sessionId, current.generation);
@@ -154,6 +203,149 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     }
   };
 
+  const requireStore = (): SessionMcpConversationStore => {
+    if (!options.conversationStore)
+      throw new SessionMcpConversationError(
+        'CONVERSATION_ROUTING_UNAVAILABLE',
+        'Persistent conversation routing is unavailable.',
+      );
+    return options.conversationStore;
+  };
+  publishPending = () => {
+    if (!options.conversationStore) return;
+    try {
+      const records = options.conversationStore.list();
+      for (const parent of options.headlessHub.snapshot())
+        options.headlessHub.setPendingSessionSetups?.(
+          parent.id,
+          records
+            .filter((record) => record.parentSessionId === parent.id && record.state === 'pending')
+            .map((record) => ({
+              id: record.id,
+              name: `conversation ${record.id.slice(0, 8)}`,
+              createdAt: record.createdAt,
+              ...(record.cwd === undefined ? {} : { cwd: record.cwd }),
+            })),
+        );
+    } catch (error) {
+      options.onNotice?.(error instanceof Error ? error.message : 'Conversation bindings are unavailable.');
+    }
+  };
+  const readReservation = (id: string, parentSessionId: string) => {
+    origin();
+    const record = requireStore().get(id, parentSessionId);
+    const binding = authorization.readAuthorizationBinding(record.clientId);
+    const parent = target(record.parentWorkspaceId, parentSessionId);
+    if (
+      !parent ||
+      binding?.routing !== 'conversation' ||
+      binding.sessionId !== parentSessionId ||
+      binding.sessionGeneration !== parent.generation
+    )
+      throw new SessionMcpConversationError(
+        'SESSION_UNAVAILABLE',
+        'The connection that owns this setup is no longer active.',
+        id,
+      );
+    return { record, parent };
+  };
+  const reservations: DoomHubSessionReservations = {
+    read(id, parentSessionId) {
+      const { record } = readReservation(id, parentSessionId);
+      return { sessionId: record.id, ...(record.cwd === undefined ? {} : { cwd: record.cwd }) };
+    },
+    async prepare(id, parentSessionId, suppliedDirectory) {
+      const { record, parent } = readReservation(id, parentSessionId);
+      const cwd = executionDirectory(suppliedDirectory);
+      const parentRoot =
+        options.headlessHub.workspaces().find((workspace) => workspace.id === parent.session.workspaceId)?.root ??
+        parent.session.cwd;
+      const occupied = [
+        parentRoot,
+        ...options.headlessHub
+          .snapshot()
+          .filter((session) => session.id !== id)
+          .map((session) => session.cwd),
+        ...requireStore()
+          .list()
+          .filter((entry) => entry.id !== id && entry.state !== 'closed' && entry.cwd !== undefined)
+          .map((entry) => entry.cwd!),
+      ];
+      if (occupied.some((directory) => overlappingDirectories(cwd, executionDirectory(directory))))
+        throw new SessionMcpConversationError(
+          'EXECUTION_DIRECTORY_SHARED',
+          'Choose a separate checkout, not a directory shared with another session.',
+          id,
+        );
+      if (record.state === 'bound' && record.cwd !== cwd)
+        throw new SessionMcpConversationError(
+          'SESSION_TARGET_FIXED',
+          'An initialized session cannot change its directory.',
+          id,
+        );
+      requireStore().prepare(id, parentSessionId, cwd);
+      publishPending();
+      return { sessionId: id, cwd };
+    },
+    async complete(id, parentSessionId): Promise<DoomHubSessionScope> {
+      const { record } = readReservation(id, parentSessionId);
+      const child = options.headlessHub.session(id);
+      if (
+        !record.cwd ||
+        !child?.workspaceId ||
+        child.parentSessionId !== parentSessionId ||
+        executionDirectory(child.cwd) !== record.cwd ||
+        options.isSessionPersisted?.(id, child.cwd) === false
+      )
+        throw new SessionMcpConversationError(
+          'SESSION_SETUP_INCOMPLETE',
+          'The reserved session is not durably ready. Recover the existing setup instead of creating another checkout.',
+          id,
+        );
+      requireStore().bind(id, parentSessionId, child.workspaceId);
+      publishPending();
+      return { sessionId: id, workspaceId: child.workspaceId, cwd: child.cwd };
+    },
+  };
+  const provision = new Map<string, Promise<DoomHubSessionScope>>();
+  const setupDirectory = async (
+    id: string,
+    parentSessionId: string,
+    directory: string,
+  ): Promise<DoomHubSessionScope> => {
+    // A mistyped existing-directory choice must not permanently reserve a nonexistent path.
+    const canonical = executionDirectory(directory);
+    if (!fs.statSync(canonical).isDirectory()) throw new Error('The execution directory is not a directory.');
+    const prepared = await reservations.prepare(id, parentSessionId, canonical);
+    const pending = provision.get(id);
+    if (pending) return pending;
+    const setup = (async () => {
+      if (!options.headlessHub.session(id)) {
+        const record = requireStore().get(id, parentSessionId);
+        if (record.state === 'bound' || options.isSessionPersisted?.(id, prepared.cwd))
+          throw new SessionMcpConversationError(
+            'SESSION_UNAVAILABLE',
+            'Resume the existing session in DoomPi. It will not be recreated automatically.',
+            id,
+          );
+        if (!fs.statSync(prepared.cwd).isDirectory()) throw new Error('The execution directory is not a directory.');
+        await options.headlessHub.sessionService.create({
+          cwd: prepared.cwd,
+          name: `conversation ${id.slice(0, 8)}`,
+          parentSessionId,
+          sessionProvenance: 'remote-conversation',
+          reservationId: id,
+        });
+      }
+      return reservations.complete(id, parentSessionId);
+    })();
+    provision.set(id, setup);
+    try {
+      return await setup;
+    } finally {
+      if (provision.get(id) === setup) provision.delete(id);
+    }
+  };
   const publicRoutes = async (request: Request): Promise<Response | undefined> => {
     const url = new URL(request.url);
     const configuredOrigin = origin();
@@ -171,6 +363,39 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         createSessionMcpHttpHandler({
           audience,
           authorization,
+          onNotice: options.onNotice,
+          resolveConversation: (grant, digest, reserve) => {
+            const store = requireStore();
+            const record = reserve
+              ? store.reserve(grant.clientId, sessionId, workspaceId, digest)
+              : store.find(grant.clientId, sessionId, digest);
+            if (!record || record.state === 'closed')
+              throw new SessionMcpConversationError(
+                'SESSION_UNAVAILABLE',
+                'This conversation binding is unavailable. It will not be recreated automatically.',
+              );
+            if (record.state === 'pending') {
+              publishPending();
+              throw new SessionMcpConversationError(
+                'SESSION_SETUP_REQUIRED',
+                'Choose a separate execution directory for this conversation in DoomPi, then retry.',
+                record.id,
+              );
+            }
+            const child = record.workspaceId === undefined ? undefined : target(record.workspaceId, record.id);
+            if (
+              !child ||
+              child.session.parentSessionId !== sessionId ||
+              executionDirectory(child.session.cwd) !== record.cwd ||
+              !fs.existsSync(child.session.cwd)
+            )
+              throw new SessionMcpConversationError(
+                'SESSION_UNAVAILABLE',
+                'The bound session is unavailable. Resume it in DoomPi; no other session will be used.',
+                record.id,
+              );
+            return { sessionId: record.id, generation: child.generation, toolSurface: child.session.host.mcpSurface };
+          },
           onVerified: (grant) => {
             if (options.registrationStore === undefined) return;
             const active = target(workspaceId, sessionId);
@@ -188,7 +413,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
             const resolved = target(workspaceId, sessionId);
             return resolved === undefined
               ? undefined
-              : { generation: resolved.generation, toolSurface: resolved.session.host.mcpSurface };
+              : { sessionId, generation: resolved.generation, toolSurface: resolved.session.host.mcpSurface };
           },
         });
       handlers?.set(audience, handler);
@@ -303,20 +528,62 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     return undefined;
   };
 
+  publishPending();
   return {
+    reservations,
+    closeSessionBinding(sessionId) {
+      options.conversationStore?.closeSession(sessionId);
+      publishPending();
+    },
     handlePublic: publicRoutes,
     async handleHost(request) {
       const url = new URL(request.url);
       origin();
       const configMatch = SESSION_MCP_CONFIG_PATTERN.exec(url.pathname);
       const match = SESSION_MCP_CLIENTS_PATTERN.exec(url.pathname);
-      if (configMatch === null && match === null) return undefined;
-      const routeMatch = configMatch ?? match!;
+      const conversationMatch = SESSION_MCP_CONVERSATIONS_PATTERN.exec(url.pathname);
+      if (configMatch === null && match === null && conversationMatch === null) return undefined;
+      const routeMatch = configMatch ?? match ?? conversationMatch!;
       const workspaceId = decodeURIComponent(routeMatch[1]);
       const sessionId = decodeURIComponent(routeMatch[2]);
       const clientId = match?.[3] === undefined ? undefined : decodeURIComponent(match[3]);
       const resolved = target(workspaceId, sessionId);
       if (resolved === undefined) return json(404, { error: 'Session not found.' });
+      if (conversationMatch !== null) {
+        const id = conversationMatch[3] === undefined ? undefined : decodeURIComponent(conversationMatch[3]);
+        try {
+          if (request.method === 'GET' && id === undefined)
+            return json(200, {
+              conversations: requireStore()
+                .list()
+                .filter((record) => record.parentSessionId === sessionId && record.state !== 'closed')
+                .map(({ conversationDigest: _digest, clientId: _clientId, ...record }) => record),
+            });
+          if (id !== undefined && request.method === 'DELETE') {
+            const record = requireStore().get(id, sessionId);
+            if (record.state !== 'pending' || options.headlessHub.session(id))
+              return json(409, { error: 'Remove the existing session instead.' });
+            requireStore().closeSession(id);
+            publishPending();
+            return json(200, { ok: true });
+          }
+          if (id !== undefined && request.method === 'POST') {
+            const body: unknown = await request.json();
+            if (typeof body !== 'object' || body === null || !('cwd' in body) || typeof body.cwd !== 'string')
+              return json(400, { error: 'An execution directory is required.' });
+            return json(200, { session: await setupDirectory(id, sessionId, body.cwd) });
+          }
+          return json(405, { error: 'Method not allowed.' });
+        } catch (error) {
+          return json(409, {
+            error:
+              error instanceof SessionMcpConversationError
+                ? error.message
+                : 'Session setup failed. Recover the existing setup before retrying.',
+            ...(error instanceof SessionMcpConversationError ? { code: error.code } : {}),
+          });
+        }
+      }
       if (configMatch !== null) {
         if (request.method !== 'GET') return json(405, { error: 'Method not allowed.' });
         const configuredOrigin = origin();
@@ -354,6 +621,20 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         }
         if (typeof body !== 'object' || body === null) return json(400, { error: 'Invalid client request.' });
         const input = body as Record<string, unknown>;
+        let routing;
+        try {
+          routing = sessionMcpRouting(input.routing);
+        } catch (error) {
+          return oauthError(error);
+        }
+        if (
+          routing === 'conversation' &&
+          (input.conversationIdentityVerified !== true || !options.conversationStore || !options.registrationStore)
+        )
+          return json(400, {
+            error:
+              'Verify conversation metadata with two real client conversations before enabling this mode. Persistent host state is required.',
+          });
         const requestedScope = input.scope;
         if (requestedScope !== undefined && requestedScope !== 'session' && requestedScope !== 'restricted') {
           return json(400, { error: 'Authorization scope is not supported.' });
@@ -397,6 +678,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
                     sessionGeneration: resolved.generation,
                     audience,
                     scope: 'session',
+                    routing,
                   })
                 : authorization.createAuthorizationBinding({
                     clientId: client.clientId,
@@ -404,6 +686,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
                     sessionGeneration: resolved.generation,
                     audience,
                     scope: 'restricted',
+                    routing,
                     tools: [...new Set(tools!)],
                     skills: [...new Set(skills!)],
                   });
@@ -423,6 +706,8 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
           return json(500, { error: 'Client revocation could not be saved.' });
         }
         authorization.revokeClient(clientId);
+        options.conversationStore?.closeClient(clientId);
+        publishPending();
         return json(200, { ok: true });
       }
       return json(405, { error: 'Method not allowed.' });
@@ -445,5 +730,9 @@ export function isPublicSessionMcpRoute(method: string, pathname: string): boole
 }
 
 export function isSessionMcpHostRoute(pathname: string): boolean {
-  return SESSION_MCP_CONFIG_PATTERN.test(pathname) || SESSION_MCP_CLIENTS_PATTERN.test(pathname);
+  return (
+    SESSION_MCP_CONFIG_PATTERN.test(pathname) ||
+    SESSION_MCP_CLIENTS_PATTERN.test(pathname) ||
+    SESSION_MCP_CONVERSATIONS_PATTERN.test(pathname)
+  );
 }

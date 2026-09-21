@@ -55,6 +55,7 @@ export const SessionSummarySchema = Type.Object({
   lastSettledAt: Optional(Text),
   parentSessionId: Optional(Text),
   sessionProvenance: Optional(Text),
+  pendingSetups: Optional(Type.Array(Type.Object({ id: Text, name: Text, createdAt: Text, cwd: Optional(Text) }))),
   /** Present and true for a recorded session the server has not reopened yet. */
   dormant: Optional(Flag),
 });

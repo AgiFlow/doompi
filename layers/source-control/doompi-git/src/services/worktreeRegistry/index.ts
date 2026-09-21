@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { setTimeout } from 'node:timers/promises';
+
 import {
   WORKTREE_RECORD_VERSION,
   type WorktreeRecord,
@@ -5,6 +9,10 @@ import {
   type WorktreeRegistryStore,
 } from '../../types/worktreeRegistry';
 import { readJson, writeJsonAtomic } from '../atomicJson';
+import { DoomGitExpectedError } from '../errors';
+
+const LOCK_WAIT_MS = 5000;
+const LOCK_RETRY_MS = 25;
 
 function isRecord(value: unknown): value is WorktreeRecord {
   if (typeof value !== 'object' || value === null) return false;
@@ -20,16 +28,9 @@ function isRecord(value: unknown): value is WorktreeRecord {
 }
 
 /**
- * The worktree registry for one repository, as a single JSON file.
- *
- * One file rather than a file per worktree, and read-modify-write rather than
- * merging: every write comes from a tool call in one session's turn, so there
- * is no concurrent writer to reconcile with. Choosing the simpler shape now
- * means a reader can see the whole registry in one place; if concurrent writers
- * ever appear, that is the point to revisit, not before.
- *
- * A file that does not parse is treated as empty rather than fatal. Losing
- * track of worktrees is recoverable through prune; refusing to run is not.
+ * Repository mutations hold an exclusive directory lock from the read through
+ * the final commit. This works across independently loaded packages and hosts.
+ * A crashed owner leaves a visible lock, never a lease another writer may steal.
  */
 export function createWorktreeRegistry(file: string): WorktreeRegistryStore {
   return {
@@ -40,6 +41,39 @@ export function createWorktreeRegistry(file: string): WorktreeRegistryStore {
     },
     replace(entries) {
       writeJsonAtomic(file, { version: WORKTREE_RECORD_VERSION, entries } satisfies WorktreeRegistryFile);
+    },
+    async transaction(operation, signal) {
+      const lock = `${file}.lock`;
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      const deadline = Date.now() + LOCK_WAIT_MS;
+      for (;;) {
+        signal?.throwIfAborted();
+        try {
+          fs.mkdirSync(lock, { mode: 0o700 });
+          break;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+          if (Date.now() >= deadline)
+            throw new DoomGitExpectedError(
+              'registry_busy',
+              'Another worktree operation holds the repository registry.',
+              true,
+              'Retry after it finishes. After a host crash, inspect and remove the abandoned worktrees.json.lock directory.',
+            );
+          await setTimeout(LOCK_RETRY_MS, undefined, { signal });
+        }
+      }
+      try {
+        fs.writeFileSync(
+          path.join(lock, 'owner.json'),
+          JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }),
+          { mode: 0o600 },
+        );
+        signal?.throwIfAborted();
+        return await operation();
+      } finally {
+        fs.rmSync(lock, { recursive: true });
+      }
     },
   };
 }

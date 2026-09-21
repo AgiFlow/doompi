@@ -34,9 +34,11 @@ export function pluginSlotProps(
   attachComposerCapture: (capture: ComposerCapture) => void = () => undefined,
   contextInventory: readonly WebPluginContextInventoryItem[] = [],
   submitCapture?: (capture: ComposerCapture) => Promise<void>,
+  sessionReservationId?: string,
 ): WebPluginSlotProps {
   const props: WebPluginSlotProps = {
     sessionId,
+    ...(sessionReservationId === undefined ? {} : { sessionReservationId }),
     openTab,
     openTransientTab: tabs.open,
     closeTransientTab: tabs.close,

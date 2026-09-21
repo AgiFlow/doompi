@@ -44,6 +44,8 @@ export const worktreeActivity = defineSessionStore<WorktreesSession>({
   errorTarget: undefined,
 });
 
+/** Captures the clicked card, so a focus change cannot retarget an open dialog. */
+export const worktreeCreateDialog = defineGlobalStore<{ sessionId: string; reservationId?: string } | null>(null);
 /**
  * The page's hub socket sender, held for as long as the plugin runs.
  *
@@ -63,6 +65,7 @@ export function startWorktreeRuntime(runtime: WebPluginRuntime): () => void {
   worktreeSender.update(() => send);
   return () => {
     worktreeSender.update((current) => (current === send ? undefined : current));
+    worktreeCreateDialog.update(() => null);
   };
 }
 
@@ -128,12 +131,18 @@ function command(sessionId: string, payload: GitWorktreesCommand): void {
 }
 
 /** Asks the hub for a worktree. The hub answers on the same channel. */
-export function requestWorktreeCreate(sessionId: string, branch: string, baseRef: string): void {
+export function requestWorktreeCreate(
+  sessionId: string,
+  branch: string,
+  baseRef: string,
+  reservationId?: string,
+): void {
   const trimmedBase = baseRef.trim();
   command(sessionId, {
     action: 'create',
     branch: branch.trim(),
     ...(trimmedBase === '' ? {} : { baseRef: trimmedBase }),
+    ...(reservationId === undefined ? {} : { reservationId }),
   });
 }
 

@@ -129,6 +129,8 @@ export interface SessionSummary {
    * The hub does not interpret it; the rail uses it to pick an affordance.
    */
   sessionProvenance?: string;
+  /** Host reservations awaiting a directory, not initialized runtimes. */
+  pendingSetups?: Array<{ id: string; name: string; createdAt: string; cwd?: string }>;
   /**
    * The hub recorded this session but has not reopened it since its last
    * restart. Its journal is on disk; nothing is running behind the card until

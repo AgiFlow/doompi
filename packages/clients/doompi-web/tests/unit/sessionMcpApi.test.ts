@@ -5,6 +5,8 @@ import {
   listSessionMcpClients,
   readSessionMcpConfig,
   revokeSessionMcpClient,
+  setupSessionMcpDirectory,
+  removeSessionMcpSetup,
 } from '../../src/web/lib/sessionMcpApi';
 
 function respond(status: number, body: unknown): Response {
@@ -96,5 +98,78 @@ describe('session MCP management API', () => {
     await expect(listSessionMcpClients('workspace', 'session')).resolves.toEqual({
       error: 'The cockpit hub is unreachable.',
     });
+  });
+  it('preserves validated routing metadata and refuses unknown routing modes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(respond(200, { clients: [{ ...client, routing: 'conversation' }] })),
+    );
+    await expect(listSessionMcpClients('w', 's')).resolves.toEqual({
+      clients: [{ ...client, routing: 'conversation' }],
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(respond(200, { clients: [{ ...client, routing: 'last-active' }] })),
+    );
+    await expect(listSessionMcpClients('w', 's')).resolves.toEqual({ error: 'The hub answered 200.' });
+  });
+
+  it('sends an explicit routing choice and verification acknowledgment without altering direct clients', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(respond(201, { client: { ...client, routing: 'conversation', clientSecret: 'secret' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const input = {
+      redirectUri: client.redirectUri,
+      scope: 'session' as const,
+      routing: 'conversation' as const,
+      conversationIdentityVerified: true,
+    };
+    await createSessionMcpClient('w', 's', input);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/workspaces/w/sessions/s/mcp/clients',
+      expect.objectContaining({ body: JSON.stringify(input) }),
+    );
+  });
+
+  it('fails closed when an older host silently creates a direct client instead of conversation routing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(respond(201, { client: { ...client, clientSecret: 'not-returned' } })),
+    );
+    const result = await createSessionMcpClient('w', 's', {
+      redirectUri: client.redirectUri,
+      scope: 'session',
+      routing: 'conversation',
+      conversationIdentityVerified: true,
+    });
+    expect(result).toEqual({ error: expect.stringContaining('did not enable the requested routing mode') });
+    expect(result).not.toHaveProperty('client');
+  });
+
+  it('targets the parent and reservation explicitly and validates the returned target identity', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(respond(200, { session: { sessionId: 'child' } }))
+      .mockResolvedValueOnce(respond(200, { session: { sessionId: 'other' } }))
+      .mockResolvedValueOnce(respond(200, { ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(setupSessionMcpDirectory('w/a', 'parent b', 'child', '/checkout')).resolves.toEqual({
+      sessionId: 'child',
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/workspaces/w%2Fa/sessions/parent%20b/mcp/conversations/child', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Doompi-Mcp-Csrf': '1' },
+      body: JSON.stringify({ cwd: '/checkout' }),
+    });
+    await expect(setupSessionMcpDirectory('w', 'parent', 'child', '/checkout')).resolves.toEqual({
+      error: 'The hub answered 200.',
+    });
+    await expect(removeSessionMcpSetup('w', 'parent', 'child')).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/workspaces/w/sessions/parent/mcp/conversations/child',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
   });
 });

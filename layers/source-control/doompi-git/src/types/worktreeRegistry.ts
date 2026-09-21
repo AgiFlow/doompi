@@ -47,8 +47,10 @@ export interface WorktreeRegistryFile {
 /** Reads the registry back, treating anything unusable as an empty registry. */
 export interface WorktreeRegistryStore {
   list(): WorktreeRecord[];
-  /** Replaces the whole file. One writer per repository, so no merge is attempted. */
+  /** Whole-file replacement for initialization or while holding transaction(). */
   replace(entries: readonly WorktreeRecord[]): void;
+  /** Serializes repository-shared read/modify/write operations across processes. */
+  transaction<T>(operation: () => T | Promise<T>, signal?: AbortSignal): Promise<T>;
 }
 
 /** The git operations this package needs, named in its own vocabulary. */

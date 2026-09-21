@@ -199,6 +199,20 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       webCompositions?.remove({ scope: 'workspace', workspaceId });
     },
     createSession: (request) => openSession(request),
+    sessionReservations: {
+      read(id, parentSessionId) {
+        if (!cockpit) throw new Error('Session setup is not ready.');
+        return cockpit.sessionReservations.read(id, parentSessionId);
+      },
+      async prepare(id, parentSessionId, cwd) {
+        if (!cockpit) throw new Error('Session setup is not ready.');
+        return cockpit.sessionReservations.prepare(id, parentSessionId, cwd);
+      },
+      async complete(id, parentSessionId) {
+        if (!cockpit) throw new Error('Session setup is not ready.');
+        return cockpit.sessionReservations.complete(id, parentSessionId);
+      },
+    },
     onNotice: notice,
     hubToken: () => attachToken,
     requestSessionApi: (scope, request) => requestSessionApi(scope, request),
@@ -547,56 +561,91 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         await bounded(harnessTelemetry.flush(), 'initial composition telemetry flush', notice);
       }
 
+      const reservedOpens = new Map<string, Promise<DoomHubSessionScope>>();
       openSession = async (request, sessionId) => {
+        request.signal?.throwIfAborted();
+        if (request.reservationId !== undefined) {
+          if (!request.parentSessionId || !cockpit) throw new Error('A reserved session requires its owning parent.');
+          const prepared = await cockpit.sessionReservations.prepare(
+            request.reservationId,
+            request.parentSessionId,
+            request.cwd,
+          );
+          if (sessionId !== undefined && sessionId !== prepared.sessionId)
+            throw new Error('Reserved session identity cannot change.');
+          sessionId = prepared.sessionId;
+          const existing = hub.session(sessionId);
+          if (existing) {
+            if (existing.cwd !== prepared.cwd || existing.parentSessionId !== request.parentSessionId)
+              throw new Error('Reserved session target does not match.');
+            return { sessionId, cwd: existing.cwd, workspaceId: existing.workspaceId };
+          }
+          if (openSessions.list().some((record) => record.sessionId === sessionId))
+            throw new Error('Resume the recorded session instead of recreating it.');
+          const pending = reservedOpens.get(sessionId);
+          if (pending) return pending;
+          request = { ...request, cwd: prepared.cwd };
+        }
         const identity = {
           sessionId: sessionId ?? crypto.randomUUID(),
           sessionName: request.name,
           parentSessionId: request.parentSessionId,
           sessionProvenance: request.sessionProvenance,
         };
-        const childIdentity = resolveSessionIdentity([], identity);
-        const childEnvironment = { ...baseEnvironment };
-        for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete childEnvironment[key];
-        const childContext = await buildHarnessContext(
-          resolveHarnessOptions({
-            args: ['--cwd', request.cwd, ...childIdentity.agentArgs],
-            cwd: request.cwd,
-            environment: childEnvironment,
-          }),
-          harnessTelemetry,
-        );
-        try {
-          await admitWorkspace(childContext.options.repoRoot);
-          const bundle = await loadComposition(childContext.options.repoRoot, 'session', {
-            root: childContext.options.repoRoot,
-            majorMode: childContext.options.majorMode,
-            activeLayers: childContext.selectedLayers,
-          });
-          const mcpBundle = await loadSessionMcp(childContext.options.repoRoot, {
-            majorMode: childContext.options.majorMode,
-            activeLayers: childContext.selectedLayers,
-          });
-          pendingSessions.set(identity.sessionId, { cleanup: () => childContext.cleanup(), bundle, mcpBundle });
-          const created = await hub.create(sessionHostOptions(childContext, bundle, mcpBundle, identity));
-          // Recorded only once the session is live, and only with a workspace,
-          // because a record the revive route cannot address is a rail card that
-          // never wakes.
-          if (created.workspaceId !== undefined) {
-            openSessions.add({
-              sessionId: created.id,
-              workspaceId: created.workspaceId,
-              cwd: created.cwd,
-              name: created.name,
-              createdAt: created.createdAt,
-              ...(created.parentSessionId === undefined ? {} : { parentSessionId: created.parentSessionId }),
-              ...(created.sessionProvenance === undefined ? {} : { sessionProvenance: created.sessionProvenance }),
+        const start = (async (): Promise<DoomHubSessionScope> => {
+          const childIdentity = resolveSessionIdentity([], identity);
+          const childEnvironment = { ...baseEnvironment };
+          for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete childEnvironment[key];
+          const childContext = await buildHarnessContext(
+            resolveHarnessOptions({
+              args: ['--cwd', request.cwd, ...childIdentity.agentArgs],
+              cwd: request.cwd,
+              environment: childEnvironment,
+            }),
+            harnessTelemetry,
+          );
+          try {
+            await admitWorkspace(childContext.options.repoRoot);
+            const bundle = await loadComposition(childContext.options.repoRoot, 'session', {
+              root: childContext.options.repoRoot,
+              majorMode: childContext.options.majorMode,
+              activeLayers: childContext.selectedLayers,
             });
+            const mcpBundle = await loadSessionMcp(childContext.options.repoRoot, {
+              majorMode: childContext.options.majorMode,
+              activeLayers: childContext.selectedLayers,
+            });
+            request.signal?.throwIfAborted();
+            pendingSessions.set(identity.sessionId, { cleanup: () => childContext.cleanup(), bundle, mcpBundle });
+            const created = await hub.create(sessionHostOptions(childContext, bundle, mcpBundle, identity));
+            request.signal?.throwIfAborted();
+            if (created.workspaceId !== undefined) {
+              const saved = openSessions.add({
+                sessionId: created.id,
+                workspaceId: created.workspaceId,
+                cwd: created.cwd,
+                name: created.name,
+                createdAt: created.createdAt,
+                ...(created.parentSessionId === undefined ? {} : { parentSessionId: created.parentSessionId }),
+                ...(created.sessionProvenance === undefined ? {} : { sessionProvenance: created.sessionProvenance }),
+              });
+              if (saved === false) throw new Error('The new session could not be durably recorded.');
+            }
+            return { sessionId: identity.sessionId, cwd: childContext.options.cwd, workspaceId: created.workspaceId };
+          } catch (error) {
+            if (hub.session(identity.sessionId)) await hub.closeSession(identity.sessionId);
+            else {
+              pendingSessions.delete(identity.sessionId);
+              await childContext.cleanup().catch((cleanupError: unknown) => notice(String(cleanupError)));
+            }
+            throw error;
           }
-          return { sessionId: identity.sessionId, cwd: childContext.options.cwd };
-        } catch (error) {
-          pendingSessions.delete(identity.sessionId);
-          await childContext.cleanup().catch((cleanupError: unknown) => notice(String(cleanupError)));
-          throw error;
+        })();
+        if (request.reservationId !== undefined) reservedOpens.set(identity.sessionId, start);
+        try {
+          return await start;
+        } finally {
+          if (reservedOpens.get(identity.sessionId) === start) reservedOpens.delete(identity.sessionId);
         }
       };
     });
@@ -609,6 +658,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       sessionMcpPublicOrigin: () => remoteRuntime?.remote.publicOrigin(),
       sessionMcpStateDir: serverDirectory,
       sessionMcpPublicOriginRevision: () => remoteRuntime?.remote.publicOriginRevision() ?? 0,
+      isSessionPersisted: (sessionId, cwd) =>
+        openSessions.list().some((record) => record.sessionId === sessionId && record.cwd === cwd),
       workspaceHistory: (workspaceId) => {
         const workspaceRoot = hub
           .workspaces()
@@ -677,7 +728,15 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           throw new Error('Workspace sync failed; the session is still running.', { cause: error });
         }
         await hub.closeSession(session.id);
-        await openSession({ cwd: session.cwd, name: session.name }, session.id);
+        await openSession(
+          {
+            cwd: session.cwd,
+            name: session.name,
+            ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
+            ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
+          },
+          session.id,
+        );
       },
       resumeSession: async (session, targetSessionId) => {
         const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;

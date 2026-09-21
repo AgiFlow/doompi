@@ -86,4 +86,22 @@ describe('createOpenSessionRegistry', () => {
     ).toEqual(['good']);
     expect(onNotice).toHaveBeenCalledTimes(3);
   });
+  it('does not publish an unpersisted session when durable recording fails', () => {
+    const directory = temporary();
+    const onNotice = vi.fn();
+    const registry = createOpenSessionRegistry({ directory, onNotice });
+    const record = { sessionId: 'one', workspaceId: 'w', cwd: '/repo', name: 'One', createdAt: '2026-09-21' };
+    expect(registry.add(record)).toBe(true);
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw new Error('disk unavailable');
+    });
+    try {
+      expect(registry.add({ ...record, sessionId: 'two' })).toBe(false);
+      expect(registry.list()).toEqual([record]);
+      expect(createOpenSessionRegistry({ directory }).list()).toEqual([record]);
+    } finally {
+      rename.mockRestore();
+    }
+    expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('could not be saved'));
+  });
 });

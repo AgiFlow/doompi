@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -68,7 +69,16 @@ export function registryFile(repositoryRoot: string, homeDir: string = os.homedi
       entries.set(entry.id, entry);
     }
   }
-  writeJsonAtomic(canonical, { version: WORKTREE_RECORD_VERSION, entries: [...entries.values()] });
+  const temporary = `${canonical}.${randomUUID()}.migration`;
+  writeJsonAtomic(temporary, { version: WORKTREE_RECORD_VERSION, entries: [...entries.values()] });
+  try {
+    // Publish only if absent. A concurrent writer may already have added records.
+    fs.linkSync(temporary, canonical);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  } finally {
+    fs.rmSync(temporary);
+  }
   return canonical;
 }
 
