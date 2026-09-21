@@ -1,3 +1,13 @@
+## 0.0.1-alpha.76 (2026-09-21)
+
+### 🩹 Fixes
+
+- **doompi-web:** improve remote MCP reliability ([#146](https://github.com/AgiFlow/doompi/pull/146))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.75 (2026-09-20)
 
 This was a version bump only for @agimon-ai/doompi-telemetry to align it with other projects, there were no code changes.

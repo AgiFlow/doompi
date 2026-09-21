@@ -1,3 +1,38 @@
+## 0.0.1-alpha.82 (2026-09-21)
+
+### 🚀 Features
+
+- isolate remote MCP conversations ([#152](https://github.com/AgiFlow/doompi/pull/152))
+- **doompi-core:** persist verified session MCP clients ([#147](https://github.com/AgiFlow/doompi/pull/147))
+
+### 🩹 Fixes
+
+- keep worktree sessions in parent workspace ([#153](https://github.com/AgiFlow/doompi/pull/153))
+- **doompi-web:** improve remote MCP reliability ([#146](https://github.com/AgiFlow/doompi/pull/146))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.56
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.78
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.57
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.79
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.57
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.56
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.57
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.3
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.79
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.57
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.76
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.79
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.39
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.79
+- Updated @agimon-ai/vibe-lint-plugin-doom-cli to 0.0.1-alpha.11
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.81 (2026-09-20)
 
 ### 🧱 Updated Dependencies
