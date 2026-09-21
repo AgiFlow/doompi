@@ -368,8 +368,8 @@ export function SessionMcpSettings() {
       </div>
 
       <p className="text-xs leading-relaxed text-doom-faint">
-        session MCP access is runtime-bound. restarting or ending this session invalidates its active authorization and
-        tokens, so reconnect the client after the runtime changes.
+        verified clients are saved for this session. after a restart, reconnect with the existing client and MCP URL.
+        authorization tokens remain runtime-bound, so authorization may be required again.
       </p>
     </section>
   );

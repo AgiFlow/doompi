@@ -119,6 +119,14 @@ export interface SessionMcpAuthorizationCode {
   readonly expiresAt: number;
 }
 
+export interface SessionMcpPersistentRegistration {
+  readonly client: SessionMcpClient;
+  readonly secretHash: string;
+  readonly workspaceId: string;
+  readonly binding: Omit<SessionMcpAuthorizationBinding, 'sessionGeneration'>;
+  readonly verifiedAt: number;
+}
+
 export interface SessionMcpAuthorizationService {
   createClient(input: CreateSessionMcpClientInput): CreatedSessionMcpClient;
   readClient(clientId: string): SessionMcpClient | undefined;
@@ -126,6 +134,12 @@ export interface SessionMcpAuthorizationService {
   revokeClient(clientId: string): boolean;
   createAuthorizationBinding(input: CreateSessionMcpAuthorizationBindingInput): SessionMcpAuthorizationBinding;
   readAuthorizationBinding(clientId: string): SessionMcpAuthorizationBinding | undefined;
+  persistentRegistration(
+    clientId: string,
+    workspaceId: string,
+    verifiedAt: number,
+  ): SessionMcpPersistentRegistration | undefined;
+  restorePersistentRegistration(registration: SessionMcpPersistentRegistration, sessionGeneration: number): boolean;
   issueAuthorizationCode(input: IssueSessionMcpAuthorizationCodeInput): SessionMcpAuthorizationCode;
   exchangeToken(request: SessionMcpTokenRequest): SessionMcpTokenResponse;
   authenticateAccessToken(token: string, audience: string): SessionMcpAccessGrant | undefined;
@@ -381,6 +395,67 @@ export function createSessionMcpAuthorizationService(
     },
     readAuthorizationBinding(clientId) {
       return bindings.get(clientId);
+    },
+    persistentRegistration(clientId, workspaceId, verifiedAt) {
+      const client = clients.get(clientId);
+      const binding = bindings.get(clientId);
+      if (client === undefined || binding === undefined || !Number.isSafeInteger(verifiedAt)) return undefined;
+      const { sessionGeneration: _sessionGeneration, ...persistentBinding } = binding;
+      return {
+        client: publicClient(client),
+        secretHash: client.secretHash.toString('hex'),
+        workspaceId: requireName(workspaceId, 'Workspace ID'),
+        binding: persistentBinding,
+        verifiedAt,
+      };
+    },
+    restorePersistentRegistration(registration, sessionGeneration) {
+      if (
+        clients.has(registration.client.clientId) ||
+        !/^[a-f0-9]{64}$/u.test(registration.secretHash) ||
+        !Number.isSafeInteger(sessionGeneration) ||
+        sessionGeneration < 0 ||
+        registration.client.clientId !== registration.binding.clientId
+      )
+        return false;
+      try {
+        const client: StoredClient = {
+          clientId: requireName(registration.client.clientId, 'Client ID'),
+          name: requireName(registration.client.name, 'Client name'),
+          redirectUri: requireHttpsUrl(registration.client.redirectUri, 'Redirect URI', true),
+          tokenEndpointAuthMethod: 'client_secret_post',
+          createdAt: registration.client.createdAt,
+          secretHash: Buffer.from(registration.secretHash, 'hex'),
+        };
+        const scope = registration.binding.scope;
+        const tools =
+          scope === 'session' ? Object.freeze([] as string[]) : exactUniqueGrants(registration.binding.tools, 'Tool');
+        const skills =
+          scope === 'session' ? Object.freeze([] as string[]) : exactUniqueGrants(registration.binding.skills, 'Skill');
+        if (
+          (scope !== 'session' && scope !== 'restricted') ||
+          (scope === 'session' && (registration.binding.tools.length !== 0 || registration.binding.skills.length !== 0))
+        ) {
+          throw new SessionMcpOAuthError('invalid_request', 'Stored Session MCP authorization is invalid.');
+        }
+        clients.set(client.clientId, client);
+        bindings.set(
+          client.clientId,
+          Object.freeze({
+            clientId: client.clientId,
+            sessionId: requireName(registration.binding.sessionId, 'Session ID'),
+            sessionGeneration,
+            audience: requireHttpsUrl(registration.binding.audience, 'Audience', false),
+            scope,
+            tools,
+            skills,
+          }),
+        );
+        return true;
+      } catch {
+        clients.delete(registration.client.clientId);
+        return false;
+      }
     },
     issueAuthorizationCode(input) {
       const client = clients.get(input.clientId);
