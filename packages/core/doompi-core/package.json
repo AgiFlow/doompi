@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-core",
-  "version": "0.0.1-alpha.78",
+  "version": "0.0.1-alpha.79",
   "description": "Doompi runtime systems and reusable core services.",
   "keywords": [
     "ai",

@@ -1,3 +1,26 @@
+## 0.0.1-alpha.79 (2026-09-21)
+
+### 🩹 Fixes
+
+- **doompi-web:** improve remote MCP reliability ([#146](https://github.com/AgiFlow/doompi/pull/146))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.8
+- Updated @agimon-ai/doompi-author to 0.0.1-alpha.17
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.78
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.79
+- Updated @agimon-ai/doompi-team to 0.0.1-alpha.79
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.76
+- Updated @agimon-ai/doompi-voice to 0.0.1-alpha.80
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.39
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.79
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.78 (2026-09-20)
 
 ### 🧱 Updated Dependencies

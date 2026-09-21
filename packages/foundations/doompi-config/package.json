@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-config",
-  "version": "0.0.1-alpha.77",
+  "version": "0.0.1-alpha.78",
   "description": "Typed configuration loading, validation, and host services for composing DoomPi sessions.",
   "keywords": [
     "agent-configuration",
