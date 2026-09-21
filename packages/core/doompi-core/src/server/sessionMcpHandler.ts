@@ -129,7 +129,14 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
 
     const server = new Server(
       { name: options.serverName ?? 'doompi-session', version: options.serverVersion ?? '1.0.0' },
-      { capabilities: { tools: {}, resources: {} } },
+      {
+        capabilities: { tools: {}, resources: {} },
+        instructions:
+          'Use only this bound DoomPi session. Call load_context before repository work and after selection changes. ' +
+          'Use search_skills and load_skill for relevant guidance. Inspect before editing and follow repository checks. ' +
+          'Do not assume local UI access, downloadable host files, or background completion notifications. ' +
+          'Read saved command logs instead of relaunching work. Saving a plan does not authorize implementation.',
+      },
     );
     server.setNotificationHandler(CancelledNotificationSchema, async (notification) => {
       const active = await authorizeOperation();
@@ -146,6 +153,8 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           title: tool.label,
           description: tool.description,
           inputSchema: tool.parameters as Tool['inputSchema'],
+          ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
+          ...(tool.outputSchema === undefined ? {} : { outputSchema: tool.outputSchema }),
         })),
       };
     });
@@ -211,7 +220,11 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           },
         });
         await authorizeOperation();
-        return { content: result.content, isError: result.isError ?? false };
+        return {
+          content: result.content,
+          ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
+          isError: result.isError ?? false,
+        };
       } finally {
         skillAccessOpen = false;
         operations.delete(key);

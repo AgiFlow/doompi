@@ -11,7 +11,12 @@ export default defineConfig({
     mangle: { toplevel: true },
     codegen: { removeWhitespace: true },
   },
+  // Retained runner resources copy this dist graph without an npm dependency tree.
+  deps: {
+    alwaysBundle: ['@agimon-ai/log-sink-mcp/telemetry/node'],
+    dts: { neverBundle: ['@agimon-ai/log-sink-mcp/telemetry/node'] },
+  },
   platform: 'node',
   sourcemap: true,
-  unbundle: true,
+  unbundle: false,
 });

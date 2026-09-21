@@ -14,7 +14,7 @@ import { buildMcpConfigGroups } from '../configSources';
 import { readDirectToolFilter } from '../directToolsEnvironment';
 import { type CatalogTool, McpCatalog } from '../mcpCatalog';
 import { type McpRuntimeOwner, readCachedCatalog } from '../mcpRuntime';
-import { toAgentToolResult } from '../mcpTools';
+import { toHeadlessToolResult } from '../mcpTools';
 import { readSessionConfig } from '../sessionConfig';
 import { mcpToolRestriction } from '../toolVisibility';
 
@@ -212,7 +212,11 @@ export class McpSession {
   /** Tools the session currently permits on both local and remote surfaces. */
   activeToolDefinitions(): readonly CatalogTool[] {
     const active = new Set(this.catalog.activeToolNames());
-    return this.toolDefinitions().filter((tool) => active.has(tool.piName));
+    // Retain Pi's declaration identity while publishing current remote metadata.
+    return this.toolDefinitions().flatMap((tool) => {
+      const current = this.catalog.findTool(tool.piName);
+      return active.has(tool.piName) && current !== undefined ? [current] : [];
+    });
   }
 
   toolDefinitions(): readonly CatalogTool[] {
@@ -255,7 +259,7 @@ export class McpSession {
       parameters,
       timeout === undefined ? undefined : { timeout },
     );
-    return toAgentToolResult(tool, result);
+    return toHeadlessToolResult(tool, result);
   }
 
   /**
@@ -548,8 +552,8 @@ export class McpSession {
           this.disconnectedServers.has(change.serverName)
         )
           return;
-        const added = this.catalog.applyStateChange(change, tools);
-        this.trackTools(added);
+        this.catalog.applyStateChange(change, tools);
+        this.trackTools(this.catalog.allTools());
         this.emitChange();
         this.updateToolVisibility();
       });

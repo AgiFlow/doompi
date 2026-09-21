@@ -2,6 +2,8 @@ import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
 import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
 import type { Context } from '@deepseek-ai/cordis';
 
+import { remoteWritePlanParameters } from '../../schemas/mcpTools';
+
 export const PLAN_MCP_TOOLS_SERVICE = 'doom/plan-mcp-tools';
 
 const MODE_ID = 'plan';
@@ -27,13 +29,34 @@ export function bindMcpTool(context: DoomMcpPluginContext, name: string): DoomHe
   const catalog = context.services.get<McpToolCatalog>(PLAN_MCP_TOOLS_SERVICE);
   const tool = catalog?.get(name);
   if (!tool || !catalog) throw new Error(`Plan tool is unavailable: ${name}`);
+  const writesPlan = name === 'write_plan';
   return {
     ...tool,
+    ...(writesPlan
+      ? {
+          description:
+            'Save the supplied Markdown plan in the bound session. Requires active Plan mode. Saving does not approve implementation.',
+          parameters: remoteWritePlanParameters,
+          annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+        }
+      : {}),
     execute(toolCallId, parameters, signal, onUpdate) {
       const activeModes = context.selection.read().state?.['minor-mode'] ?? [];
       if (!activeModes.includes(MODE_ID)) {
         const inactiveTools = [...catalog.names()].sort().join(', ');
         throw new Error(`${MODE_LABEL} minor mode is inactive. Inactive ${MODE_LABEL} tools: ${inactiveTools}.`);
+      }
+      if (
+        writesPlan &&
+        (typeof parameters !== 'object' ||
+          parameters === null ||
+          !('markdown' in parameters) ||
+          typeof parameters.markdown !== 'string' ||
+          !parameters.markdown.trim())
+      ) {
+        throw new Error(
+          'Supply the complete visible plan in the markdown argument. Remote calls cannot read the ChatGPT transcript.',
+        );
       }
       const executionSignal = AbortSignal.any([context.signal, signal ?? context.signal]);
       return tool.execute(toolCallId, parameters, executionSignal, onUpdate, context.execution);

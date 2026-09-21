@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { Static, TSchema } from 'typebox';
 
 import type { DoomNotificationRequest } from './notification';
@@ -37,6 +38,8 @@ export type DoomHeadlessContent = { type: 'text'; text: string } | { type: 'imag
 
 export interface DoomHeadlessToolResult {
   content: DoomHeadlessContent[];
+  /** Public MCP result data. Internal renderer details are not a remote result contract. */
+  structuredContent?: Record<string, unknown>;
   details?: unknown;
   isError?: boolean;
 }
@@ -148,6 +151,8 @@ export interface DoomHeadlessTool<TParameters extends TSchema = TSchema> {
   label?: string;
   description: string;
   parameters: TParameters;
+  annotations?: Tool['annotations'];
+  outputSchema?: Tool['outputSchema'];
   promptSnippet?: string;
   promptGuidelines?: readonly string[];
   executionMode?: 'parallel' | 'serial';

@@ -39,6 +39,32 @@ function fixture() {
 }
 
 describe('plan remote MCP tool gate', () => {
+  it('requires explicit nonempty Markdown and forwards it without reading the local transcript', async () => {
+    const test = fixture();
+    test.setActiveModes(['plan']);
+    expect(test.gated.parameters).toMatchObject({ required: ['markdown'] });
+    for (const args of [{}, { markdown: '' }, { markdown: '   ' }, { markdown: 42 }]) {
+      expect(() =>
+        test.gated.execute('invalid', args, undefined, undefined, {} as DoomHeadlessExecutionContext),
+      ).toThrow('markdown argument');
+    }
+    expect(test.execute).not.toHaveBeenCalled();
+    await test.gated.execute(
+      'remote',
+      { markdown: '# Remote plan' },
+      undefined,
+      undefined,
+      {} as DoomHeadlessExecutionContext,
+    );
+    expect(test.execute).toHaveBeenCalledWith(
+      'remote',
+      { markdown: '# Remote plan' },
+      expect.any(AbortSignal),
+      undefined,
+      expect.any(Object),
+    );
+  });
+
   it('checks live minor mode state for every call without hiding the cached tool or skill', async () => {
     const test = fixture();
 
@@ -49,7 +75,7 @@ describe('plan remote MCP tool gate', () => {
 
     test.setActiveModes(['plan']);
     await expect(
-      test.gated.execute('active', {}, undefined, undefined, {} as DoomHeadlessExecutionContext),
+      test.gated.execute('active', { markdown: '# Plan' }, undefined, undefined, {} as DoomHeadlessExecutionContext),
     ).resolves.toMatchObject({ content: [{ text: 'written' }] });
     expect(test.execute).toHaveBeenCalledOnce();
 

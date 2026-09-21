@@ -788,6 +788,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         domains: [...selection.domains],
         majorMode: selection.majorMode,
         activeLayers: [...selection.activeLayers],
+        minorModes: [...(selection.state?.['minor-mode'] ?? [])],
       },
       instructions,
       persona: persona ?? null,
@@ -1002,6 +1003,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
             label: tool.label ?? tool.name,
             description: tool.description,
             parameters: tool.parameters,
+            ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
+            ...(tool.outputSchema === undefined ? {} : { outputSchema: tool.outputSchema }),
           },
           execute: (toolCallId, parameters, signal, onUpdate, execution) =>
             tool.execute(toolCallId, parameters, signal, onUpdate, execution ?? headlessHost!.context),
@@ -1334,6 +1337,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       );
       const patched = {
         content: patch?.content ?? result.content,
+        // A hook that rewrites a result must not leave the original payload available remotely.
+        ...(patch?.content !== undefined || patch?.isError !== undefined || result.structuredContent === undefined
+          ? {}
+          : { structuredContent: result.structuredContent }),
         ...(patch?.details !== undefined
           ? { details: patch.details }
           : result.details === undefined

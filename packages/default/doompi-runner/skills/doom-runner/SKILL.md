@@ -27,8 +27,8 @@ CLI to manage it without adding another model tool.
 
 ## CLI
 
-Run the CLI directly, without starting it through another supervised runner.
-It inherits `PI_SESSION_ID` from the active Pi session and only accesses that
+Invoke the CLI through the available Bash tool to inspect or control an existing
+runner. Do not relaunch its original command to recover output. The CLI inherits `PI_SESSION_ID` from the active Pi session and only accesses that
 session's runners. A manual shell without `PI_SESSION_ID` fails closed.
 
 Use the unique runner ID returned by `bash`:
@@ -54,9 +54,10 @@ Use the unique runner ID returned by `bash`:
 - **`input` needs `interactive: true`.** A normal runner does not expose stdin.
 - **Stop what you no longer need.** Everything still running is stopped when
   the session ends, but a forgotten dev server holds a port until then.
-- **You are told when a runner exits.** A completion message with the exit
-  status and log path arrives on its own. Never sleep, poll, or pgrep to wait
-  for one. Check a runner when you have a reason to, not on a loop.
+- **Completion delivery depends on the client.** Local DoomPi can notify its
+  agent, but remote MCP callers must not assume that this wakes their chat.
+  Use a bounded status or log read when needed. Do not sleep or poll in a loop,
+  promise automatic continuation, or report a running command as completed.
 - **Do not pipe to head or tail.** Results are already bounded and the full log
   is on disk. A tail pipe also leaves the live log empty until the command
   exits, which blanks the log pane in Runner Space.

@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -389,5 +390,31 @@ describe('doom-runner CLI', () => {
 
     expect(run.output[0]).toContain('Usage: doom-runner');
     expect(run.errors[0]).toContain('Unknown command: unknown');
+  });
+});
+
+describe('installed runner entrypoint', () => {
+  it('prints help through a symlink and rejects an unknown session-scoped run', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runner-bin-'));
+    try {
+      const executable = path.join(root, 'doompi-runner');
+      fs.symlinkSync(new URL('../../dist/bin/cli.mjs', import.meta.url), executable);
+      const options = {
+        cwd: root,
+        encoding: 'utf8' as const,
+        timeout: 10_000,
+        env: { ...process.env, PI_CODING_AGENT_DIR: path.join(root, 'agent'), PI_SESSION_ID: 'runner-entrypoint-test' },
+      };
+      const help = spawnSync(process.execPath, [executable, '--help'], options);
+      expect(help.error).toBeUndefined();
+      expect(help.status).toBe(0);
+      expect(help.stdout).toContain('Usage: doom-runner');
+      const status = spawnSync(process.execPath, [executable, 'status', 'missing-run'], options);
+      expect(status.error).toBeUndefined();
+      expect(status.status).toBe(1);
+      expect(status.stderr).toContain('No runner with id missing-run');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });

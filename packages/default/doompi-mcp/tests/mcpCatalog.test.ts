@@ -27,6 +27,22 @@ describe('toPiToolName', () => {
 });
 
 describe('McpCatalog', () => {
+  it('retains annotations and output schemas from cached and refreshed tool catalogs', () => {
+    const initial = {
+      ...mcpTool('search'),
+      annotations: { readOnlyHint: true },
+      outputSchema: { type: 'object' as const, properties: { count: { type: 'number' } } },
+    };
+    catalog.seed({ servers: [{ name: 'docs', tools: [initial] }] });
+    expect(catalog.findTool('docs_search')).toMatchObject({
+      annotations: initial.annotations,
+      outputSchema: initial.outputSchema,
+    });
+    const refreshed = { ...initial, annotations: { readOnlyHint: false } };
+    catalog.applyStateChange({ serverName: 'docs', state: 'connected' }, [refreshed]);
+    expect(catalog.findTool('docs_search')).toMatchObject({ annotations: { readOnlyHint: false } });
+  });
+
   describe('tool selector resolution', () => {
     beforeEach(() => {
       catalog.applyStateChange({ serverName: 'pencil', state: 'connected' }, [

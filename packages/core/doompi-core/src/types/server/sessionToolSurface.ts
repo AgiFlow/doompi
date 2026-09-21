@@ -1,12 +1,14 @@
 import type { TSchema } from 'typebox';
 
-import type { DoomHeadlessToolResult, DoomMcpSkillAccess } from '../../schemas/headless';
+import type { DoomHeadlessTool, DoomHeadlessToolResult, DoomMcpSkillAccess } from '../../schemas/headless';
 
 export interface SessionToolDescriptor {
   readonly name: string;
   readonly label: string;
   readonly description: string;
   readonly parameters: TSchema;
+  readonly annotations?: DoomHeadlessTool['annotations'];
+  readonly outputSchema?: DoomHeadlessTool['outputSchema'];
 }
 
 export interface SessionSkillDescriptor {

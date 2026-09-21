@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,6 +40,37 @@ afterEach(() => {
 });
 
 describe('doom-runner compatibility shim', () => {
+  it('remains importable when the caller has no file entrypoint', () => {
+    const entry = new URL('../../dist/bin/doomRunner.mjs', import.meta.url).href;
+    const root = makeRepository();
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `process.argv[1] = 'missing-entrypoint'; await import(${JSON.stringify(entry)}); console.log('imported');`,
+      ],
+      { cwd: root, encoding: 'utf8', timeout: 10_000 },
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('imported\n');
+  });
+
+  it('runs the built entrypoint through an installed-style symlink instead of silently exiting', () => {
+    const root = makeRepository();
+    installRunner(root);
+    const executable = path.join(root, 'doom-runner');
+    fs.symlinkSync(new URL('../../dist/bin/doomRunner.mjs', import.meta.url), executable);
+    const result = spawnSync(process.execPath, [executable, 'list', '--json'], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(23);
+  });
+
   it('delegates to Runner from the repository-managed package store', async () => {
     const root = makeRepository();
     installRunner(root);

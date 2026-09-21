@@ -9,7 +9,8 @@
  * which it is not once this shim imports it by absolute path.
  */
 
-import { pathToFileURL } from 'node:url';
+import { existsSync, realpathSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { consumerPackageEntry } from '@agimon-ai/doompi-core/module-resolution';
 
@@ -41,7 +42,11 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
   return (loaded.main as (args: readonly string[]) => Promise<number>)(argv);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  existsSync(process.argv[1]) &&
+  realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+) {
   main().then(
     (exitCode) => {
       process.exitCode = exitCode;

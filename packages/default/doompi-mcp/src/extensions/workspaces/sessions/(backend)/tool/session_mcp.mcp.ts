@@ -7,7 +7,13 @@ import { MCP_SESSION_TOOLS_SERVICE, type McpSessionToolsService } from '../../..
 
 function fingerprint(service: McpSessionToolsService): string {
   return JSON.stringify(
-    service.snapshot().map((tool) => ({ name: tool.piName, description: tool.description, schema: tool.inputSchema })),
+    service.snapshot().map((tool) => ({
+      name: tool.piName,
+      description: tool.description,
+      schema: tool.inputSchema,
+      annotations: tool.annotations,
+      outputSchema: tool.outputSchema,
+    })),
   );
 }
 
@@ -27,6 +33,8 @@ export default defineRoutedContribution(
       name: tool.piName,
       label: `${tool.serverName}: ${tool.toolName}`,
       description: tool.description ?? `${tool.toolName} on the ${tool.serverName} MCP server.`,
+      ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
+      ...(tool.outputSchema === undefined ? {} : { outputSchema: tool.outputSchema }),
       parameters: (Object.keys(tool.inputSchema).length > 0
         ? tool.inputSchema
         : { type: 'object', properties: {} }) as TSchema,

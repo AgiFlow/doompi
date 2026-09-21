@@ -154,6 +154,38 @@ afterEach(async () => {
 });
 
 describe('McpSession', () => {
+  it('refreshes metadata without changing the registered input identity', async () => {
+    const { pi, registered } = fakePi();
+    const active = await session(pi);
+    active.install();
+    await active.start();
+    emitState({ serverName: 'pencil', state: 'connected' });
+    await vi.waitFor(() => expect(active.activeToolDefinitions()).toHaveLength(1));
+    const input = {
+      name: 'get_screenshot',
+      inputSchema: { type: 'object' },
+      annotations: { readOnlyHint: true },
+      outputSchema: { type: 'object', properties: { count: { type: 'number' } } },
+    };
+    listTools.mockResolvedValue([input]);
+    emitState({ serverName: 'pencil', state: 'connected' });
+    await vi.waitFor(() =>
+      expect(active.activeToolDefinitions()[0]).toMatchObject({
+        annotations: input.annotations,
+        outputSchema: input.outputSchema,
+      }),
+    );
+    expect(registered).toEqual(['pencil_get_screenshot']);
+    expect(active.getDiagnostics()).toEqual([]);
+    callTool.mockResolvedValue({ content: [], structuredContent: { count: 1 }, isError: false });
+    await expect(active.invokeTool('pencil_get_screenshot', {})).resolves.toMatchObject({
+      content: [{ type: 'text', text: '{"count":1}' }],
+      structuredContent: { count: 1 },
+      isError: false,
+    });
+    await active.dispose();
+  });
+
   describe('install', () => {
     it('reports the configured servers before anything has connected', async () => {
       const { pi } = fakePi();

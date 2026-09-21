@@ -10,6 +10,7 @@ import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
 
+import { writePlanParameters } from '../../schemas/mcpTools';
 import { loadDoomConfig, resolvePlanningPlansDirectory } from '../../schemas/plan/config';
 import {
   buildFlavorPlanningPrompt,
@@ -381,7 +382,8 @@ export function createPlanServerSession(
         when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
         name: RUN_FABLE_PLAN_TOOL,
         label: 'Run Fable Plan',
-        description: 'Run the configured local Fable planning broker with bounded evidence.',
+        description:
+          'Unavailable in this headless host: no Fable planning broker is configured. Plan using repository inspection instead.',
         parameters: {
           type: 'object',
           properties: {
@@ -403,15 +405,21 @@ export function createPlanServerSession(
         when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
         name: WRITE_PLAN_TOOL,
         label: 'Write Plan',
-        description: 'Save the implementation plan already presented in the session.',
-        parameters: { type: 'object', properties: {}, additionalProperties: false },
+        description: 'Save the supplied Markdown plan, or the plan already presented in the local session.',
+        parameters: writePlanParameters,
         executionMode: 'serial',
-        async execute(toolCallId, _parameters, signal) {
+        async execute(toolCallId, parameters, signal) {
           try {
             signal?.throwIfAborted();
-            // Same extraction the Pi path uses: the text this very tool call was
-            // introduced by, not "the last assistant message that looks like a heading".
-            let content = visiblePlanForToolCall(await host.context.session.entries(), toolCallId);
+            // Remote callers supply their own visible Markdown. Only local calls may use the journal.
+            let content =
+              typeof parameters === 'object' && parameters !== null && 'markdown' in parameters
+                ? parameters.markdown
+                : undefined;
+            if (content !== undefined && typeof content !== 'string')
+              throw new Error('Plan Markdown must be a string.');
+            if (content === undefined)
+              content = visiblePlanForToolCall(await host.context.session.entries(), toolCallId);
             if (content === undefined) {
               const requested = await host.context.client.request(
                 {
@@ -423,7 +431,8 @@ export function createPlanServerSession(
               );
               content = typeof requested === 'string' ? requested : '';
             }
-            if (!content.trim()) throw new Error('No implementation plan content was supplied.');
+            if (typeof content !== 'string' || !content.trim())
+              throw new Error('No implementation plan content was supplied.');
             const directory = plansDirectory();
             await mkdir(directory, { recursive: true, mode: 0o700 });
             const title = planTitleOf(content);
@@ -439,7 +448,8 @@ export function createPlanServerSession(
             });
             announcePlanDocument(filePath, title, writtenAt);
             await selectPlan(true);
-            return output({ path: filePath, written: true });
+            const saved = { path: filePath, written: true };
+            return { ...output(saved), structuredContent: saved };
           } catch (error) {
             return output(error instanceof Error ? error.message : String(error), true);
           }
@@ -449,7 +459,8 @@ export function createPlanServerSession(
         when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
         name: COMPLETE_PLAN_TOOL,
         label: 'Complete Plan',
-        description: 'Ask the user for explicit exit-or-continue approval for the saved implementation plan.',
+        description:
+          'Request exit-or-continue approval in the local DoomPi UI. Requires the user to interact there; this is not a ChatGPT approval dialog.',
         // No decision parameter: this facet has no narrated review to answer, so a model-supplied
         // decision would be the agent approving its own plan instead of the reader approving it.
         parameters: { type: 'object', properties: {}, additionalProperties: false },

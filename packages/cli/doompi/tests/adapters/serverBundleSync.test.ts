@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
@@ -506,9 +506,16 @@ describe('syncServerBundle', () => {
       const env = { HOME: root, PI_CODING_AGENT_DIR: path.join(root, 'agent') };
       fs.writeFileSync(spec, JSON.stringify({ command: 'printf runner-host-executed', cwd: root, env }));
       fs.writeFileSync(gate, '');
-      expect(
-        execFileSync(process.execPath, [executable, spec, gate, exit], { env, encoding: 'utf8', timeout: 5_000 }),
-      ).toBe('runner-host-executed');
+      const result = spawnSync(process.execPath, [executable, spec, gate, exit], {
+        env,
+        encoding: 'utf8',
+        timeout: 5_000,
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe('runner-host-executed');
+      expect(result.stderr).not.toContain('Doom telemetry initialization failed');
+      expect(result.stderr).not.toContain('ERR_MODULE_NOT_FOUND');
       expect(JSON.parse(fs.readFileSync(exit, 'utf8'))).toEqual({ code: 0, signal: null });
       const runnerHost = (await import(pathToFileURL(runnerHostPath).href)) as {
         main?: unknown;

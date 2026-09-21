@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
 
+import {
+  InitializeResultSchema,
+  JSONRPCResponseSchema,
+  ListToolsResultSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +14,12 @@ import type { SessionToolSurface } from '../../../../../src/types/server/session
 
 const AUDIENCE = 'https://host.example/sessions/alpha/mcp';
 const VERIFIER = 'v'.repeat(43);
+
+function rpcResult(body: unknown) {
+  const response = JSONRPCResponseSchema.parse(body);
+  if ('error' in response) throw new Error(response.error.message);
+  return response.result;
+}
 
 function fixture(scope: 'restricted' | 'session' = 'restricted') {
   const authorization = createSessionMcpAuthorizationService();
@@ -42,7 +53,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
     return { ...tokens, grantId: code.grant.id, client };
   };
   const tokens = mint();
-  const invokeTool = vi.fn(async (_invocation: Parameters<SessionToolSurface['invokeTool']>[0]) => ({
+  const invokeTool = vi.fn<SessionToolSurface['invokeTool']>(async (_invocation) => ({
     content: [{ type: 'text' as const, text: 'called' }],
   }));
   const readSkill = vi.fn(async () => '# Allowed skill');
@@ -52,7 +63,14 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
     readSurface: () => ({
       revision,
       tools: [
-        { name: 'allowed_tool', label: 'Allowed tool', description: 'May run', parameters: Type.Object({}) },
+        {
+          name: 'allowed_tool',
+          label: 'Allowed tool',
+          description: 'May run',
+          parameters: Type.Object({}),
+          annotations: { readOnlyHint: true, openWorldHint: false },
+          outputSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+        },
         { name: 'hidden_tool', label: 'Hidden tool', description: 'Must not leak', parameters: Type.Object({}) },
         ...(includeNewCapabilities
           ? [{ name: 'new_tool', label: 'New tool', description: 'Newly enabled', parameters: Type.Object({}) }]
@@ -130,6 +148,45 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
 }
 
 describe('session MCP Streamable HTTP handler', () => {
+  it('advertises a self-contained bootstrap without needing plugin resources', async () => {
+    const { request } = fixture();
+    const response = await request('initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test-client', version: '1' },
+    });
+    const result = InitializeResultSchema.parse(rpcResult(await response.json()));
+    expect(result.instructions?.length).toBeLessThanOrEqual(512);
+    expect(result.instructions).toContain('load_context');
+    expect(result.instructions).toContain('load_skill');
+    expect(result.instructions).toContain('Saving a plan does not authorize implementation');
+  });
+
+  it('preserves public MCP metadata and structured errors without exporting internal details', async () => {
+    const { request, invokeTool } = fixture();
+    const listing = ListToolsResultSchema.parse(rpcResult(await (await request('tools/list')).json()));
+    expect(listing.tools).toHaveLength(1);
+    expect(listing.tools[0]).toMatchObject({
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      outputSchema: { type: 'object', required: ['status'] },
+    });
+    for (const isError of [false, true]) {
+      invokeTool.mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'A readable result' }],
+        structuredContent: { status: isError ? 'failed' : 'completed' },
+        details: { internalToken: 'never-export' },
+        isError,
+      });
+      const response = rpcResult(await (await request('tools/call', { name: 'allowed_tool' })).json());
+      expect(response).toEqual({
+        content: [{ type: 'text', text: 'A readable result' }],
+        structuredContent: { status: isError ? 'failed' : 'completed' },
+        isError,
+      });
+      expect(JSON.stringify(response)).not.toContain('never-export');
+    }
+  });
+
   it('requires an exact Bearer credential and exact audience URL', async () => {
     const { handler } = fixture();
 

@@ -11,8 +11,10 @@ export function createLoadContextTool(context: DoomMcpPluginContext): DoomHeadle
     description:
       'Call at the beginning of a session, and after changing profile or modes, to load repository instructions and current session context.',
     parameters: loadContextParameters,
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async execute() {
-      return { content: [{ type: 'text', text: JSON.stringify(context.loadContext()) }] };
+      const snapshot = context.loadContext();
+      return { content: [{ type: 'text', text: JSON.stringify(snapshot) }], structuredContent: { ...snapshot } };
     },
   };
 }

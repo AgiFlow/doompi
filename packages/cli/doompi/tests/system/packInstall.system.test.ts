@@ -2771,6 +2771,29 @@ startupBenchmarkSuite('packed startup input readiness', () => {
 });
 
 describe('resources, RMUX, and installed text rendering', () => {
+  it.each(['doom-runner', 'doompi-runner'])(
+    'runs installed %s with visible help and missing-run errors',
+    async (name) => {
+      assertConsumerInstall();
+      const home = createTemporaryRoot('runner-install-');
+      runtimeRoots.push(home);
+      writeMinimalDoomRepository(consumer.root);
+      const executable = path.join(consumer.root, 'node_modules', '.bin', name);
+      const env = {
+        ...process.env,
+        HOME: home,
+        PI_CODING_AGENT_DIR: path.join(home, 'agent'),
+        PI_SESSION_ID: 'packed-runner-test',
+      };
+      const help = await runCommand(executable, ['--help'], consumer.root, env, 10_000);
+      expect(help.code, help.stderr).toBe(0);
+      expect(help.stdout).toContain('Usage: doom-runner');
+      const status = await runCommand(executable, ['status', 'missing-run'], consumer.root, env, 10_000);
+      expect(status.code).toBe(1);
+      expect(status.stderr).toContain('No runner with id missing-run');
+    },
+  );
+
   it.each(Object.entries(RESOURCES_BY_PACKAGE))('%s includes its packaged resources', (name, resources) => {
     const result = packed(name);
     for (const resource of resources) {
