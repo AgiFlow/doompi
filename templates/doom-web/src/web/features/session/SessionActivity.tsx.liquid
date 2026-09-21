@@ -1,0 +1,60 @@
+import { Button, Dot } from '@agimon-ai/doompi-web-components';
+import { useStore } from '@tanstack/react-store';
+import type { SessionState, TimelineEntry } from '../../lib/sessionModel.ts';
+import { sessionStoreFor } from '../../stores/sessionStore.ts';
+import type { SessionMeta } from '../../stores/sessionsStore.ts';
+import { sessionsStore } from '../../stores/sessionsStore.ts';
+
+export interface SessionActivityView {
+  status: string;
+  tone: 'yellow' | 'green' | 'red' | 'dim';
+  message: string;
+}
+
+function latestAssistantText(entries: readonly TimelineEntry[]): string | undefined {
+  const entry = entries.findLast((item) => item.kind === 'assistant' && item.text.trim() !== '');
+  return entry?.kind === 'assistant' ? entry.text : undefined;
+}
+
+function status(meta: SessionMeta | undefined, state: SessionState): Pick<SessionActivityView, 'status' | 'tone'> {
+  if (meta === undefined) return { status: 'unavailable', tone: 'dim' };
+  if (meta.attach === 'refused') return { status: 'another cockpit holds this session', tone: 'red' };
+  if (meta.summary.dormant === true || meta.attach === 'closed') return { status: 'stopped', tone: 'dim' };
+  if (meta.attach === 'offline' || meta.attach === 'detached') return { status: 'disconnected', tone: 'red' };
+  if (meta.attach === 'connecting') return { status: 'connecting', tone: 'yellow' };
+  if (meta.summary.awaitingInput) return { status: 'waiting for your input', tone: 'yellow' };
+  if (meta.summary.phase !== 'idle' || (!state.hasNewerHistory && state.streaming)) return { status: 'working', tone: 'yellow' };
+  return { status: 'idle', tone: 'green' };
+}
+
+/** The host's current session state, kept separate from Author request lifecycle. */
+export function sessionActivity(meta: SessionMeta | undefined, state: SessionState): SessionActivityView {
+  return {
+    ...status(meta, state),
+    message: state.hasNewerHistory
+      ? 'Latest message unavailable while viewing older history.'
+      : (latestAssistantText(state.entries) ?? 'No assistant message in loaded history.'),
+  };
+}
+
+export function SessionActivity({ sessionId, onOpenConversation }: { sessionId: string; onOpenConversation: () => void }) {
+  const state = useStore(sessionStoreFor(sessionId), (current) => current);
+  const meta = useStore(sessionsStore, (current) => current.byId[sessionId]);
+  const activity = sessionActivity(meta, state);
+
+  return (
+    <section data-testid="session-activity" aria-label="Session activity" className="space-y-2">
+      <div className="flex items-center justify-between gap-2 text-2xs uppercase tracking-widest">
+        <span className="flex items-center gap-1.5 text-doom-dim">
+          <Dot tone={activity.tone === 'dim' ? 'neutral' : activity.tone} />
+          session activity
+        </span>
+        <span className="truncate text-doom-text">{activity.status}</span>
+      </div>
+      <p className="max-h-[5.5rem] overflow-y-auto text-sm leading-snug break-words text-doom-text">{activity.message}</p>
+      <Button variant="ghost" size="sm" className="h-auto px-0 text-doom-dim hover:text-doom-hi" onClick={onOpenConversation}>
+        open conversation
+      </Button>
+    </section>
+  );
+}

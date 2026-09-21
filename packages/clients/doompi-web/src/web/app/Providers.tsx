@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 
 import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog';
 import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog';
+import { SessionActivity } from '../features/session/SessionActivity';
 import { ThreadView } from '../features/session/ThreadView';
 import { onComposerSubmitted } from '../lib/composerSubmissions';
 import { restoreLivePushRegistration } from '../lib/livePush';
@@ -12,6 +13,7 @@ import { acquireModelContext, disposeModelContextAdapter } from '../lib/modelCon
 import { installWebPlugins, webPluginDiagnostics, webPluginsInstalled } from '../lib/pluginRegistry';
 import { startSessionWebPluginRuntime } from '../lib/pluginRuntime';
 import { restoreSealedSession } from '../lib/sealedSession';
+import { bindSessionActivityRenderer } from '../lib/sessionActivityRenderer';
 import { bindThreadRenderer } from '../lib/threadRenderer';
 import { invokeServerMethod, onHubConnected, sendFrame, sendHubFrame } from '../lib/transport';
 import { routeTree } from '../routes/routeTree';
@@ -33,6 +35,9 @@ for (const diagnostic of webPluginDiagnostics()) {
 // the feature and the props builder can both be seen.
 bindThreadRenderer((sessionId, threadId, options) => (
   <ThreadView sessionId={sessionId} threadId={threadId} options={options} />
+));
+bindSessionActivityRenderer((sessionId, onOpenConversation) => (
+  <SessionActivity sessionId={sessionId} onOpenConversation={onOpenConversation} />
 ));
 
 const router = createRouter({ routeTree });

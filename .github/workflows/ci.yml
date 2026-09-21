@@ -52,7 +52,11 @@ jobs:
           - name: Type-check
             command: pnpm nx run-many -t typecheck --parallel=3
           - name: Tests
-            command: pnpm nx run-many -t test --parallel=3
+            # Compiler tests read other packages' built graphs; finish builds first.
+            # Suites already use worker pools, so do not overlap package test runs.
+            command: |
+              pnpm nx run-many -t build --parallel=3
+              pnpm nx run-many -t test --parallel=1
     steps:
       - name: Check out materialized package snapshot
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

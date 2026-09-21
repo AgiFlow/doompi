@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry';
 import { pluginSlotProps } from '../../src/web/lib/pluginSlotProps';
+import { bindSessionActivityRenderer, releaseSessionActivityRenderer } from '../../src/web/lib/sessionActivityRenderer';
 import { bindThreadRenderer, releaseThreadRenderer } from '../../src/web/lib/threadRenderer';
 import { bindTransport, releaseTransport } from '../../src/web/lib/transport';
 import {
@@ -36,6 +37,7 @@ afterEach(() => {
   resetWebPlugins();
   resetComposerStore();
   releaseThreadRenderer();
+  releaseSessionActivityRenderer();
   releaseTransport();
 });
 
@@ -282,5 +284,18 @@ describe('the runtime tabs and threads a plugin component may open', () => {
     expect(isValidElement(rendered)).toBe(true);
     expect(rendered.key).toBe('s1/run-1');
     expect(pluginSlotProps(null, () => undefined, {}, noTabs, noAppend, noAttach).renderThread('run-1')).toBeNull();
+  });
+
+  it('renders bound session activity only for a focused session', () => {
+    const props = pluginSlotProps('s1', () => undefined, {}, noTabs, noAppend, noAttach);
+    expect(props.renderSessionActivity?.()).toBeNull();
+
+    bindSessionActivityRenderer((sessionId, onOpenConversation) =>
+      createElement('button', { key: sessionId, onClick: onOpenConversation }),
+    );
+    const rendered = props.renderSessionActivity?.() as ReactElement;
+    expect(isValidElement(rendered)).toBe(true);
+    expect(rendered.key).toBe('s1');
+    expect(pluginSlotProps(null, () => undefined, {}, noTabs, noAppend, noAttach).renderSessionActivity?.()).toBeNull();
   });
 });

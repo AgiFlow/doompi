@@ -11,6 +11,7 @@ import { createElement, type ReactNode } from 'react';
 
 import { fileTabForPath } from './composition';
 import { pluginContextActions, slotFills } from './pluginRegistry';
+import { renderSessionActivity } from './sessionActivityRenderer';
 import { renderThread } from './threadRenderer';
 import { sendFrame } from './transport';
 /** The host's hold on the focused session's runtime tabs, bound in by the caller that owns the store. */
@@ -75,6 +76,9 @@ export function pluginSlotProps(
     contextInventory,
     renderThread(threadId, options): ReactNode {
       return sessionId === null ? null : renderThread(sessionId, threadId, options);
+    },
+    renderSessionActivity(): ReactNode {
+      return sessionId === null ? null : renderSessionActivity(sessionId, () => openTab(null));
     },
     renderSlot(slot): ReactNode {
       return slotFills(slot).flatMap((fill) =>

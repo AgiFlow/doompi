@@ -211,6 +211,8 @@ export interface WebPluginSlotProps {
    * The server-owned channel source names the thread's journal.
    */
   renderThread: (threadId: string, options?: ThreadViewOptions) => ReactNode;
+  /** The host's compact live session activity view, or nothing before the host binds it. */
+  renderSessionActivity?: () => ReactNode;
   /** Appends text to the focused session's current composer draft. Bound, so a component may destructure it. */
   appendComposerDraft: (text: string) => void;
   /** Adds browser-safe structured context as a removable chip without changing the visible draft. */
