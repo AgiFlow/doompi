@@ -3,7 +3,6 @@
 - Ask, dont assume. If something's unclear, ask before writing a line and no silent guesses about intent, architecture, or requirements. Verbs like review, audit, check, improve, look at are ambiguous by default: confirm the scope (source code, rendered UI, design-system compliance) before starting.
 - Simplest solution first and implement the minimum thing that works. No abstractions you didn't request.
 - Fix issues in files you are already touching for the current task. For issues elsewhere, report them instead of fixing; don't expand scope silently.
-- Flag uncertainty explicitly or if you're not confident, say so before proceeding as confidence without certainty causes more damage than admitting a gap.
 - Separate verified from inferred in every report. Reading source is not running it and not seeing it rendered. Never state an inference in the voice of an observation: mark it unverified or cut it.
 - When challenged on one part of your work, re-check the whole approach against these rules, not just the point raised.
 - DO NOT automatically checkout new branch if not asked.
@@ -23,7 +22,7 @@
 
 ## Writing Style
 
-- NEVER use em-dashes in any writing you produce: marketing content, articles, captions, scripts, briefs, UI copy, docs, commit messages. Em-dashes are an AI-writing tell. Use a comma, colon, period, or parentheses instead.
+- NEVER use em-dashes in any writing you produce: scripts, briefs, UI copy, docs, commit messages. Use a comma, colon, period, or parentheses instead.
 
 ## Boundaries
 
