@@ -6,6 +6,7 @@ import path from 'node:path';
 import { type DoomHeadlessHostService, type DoomHeadlessModelSettings } from '@agimon-ai/doompi-core/headless';
 import { type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
 import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_VOICE_AUTO_MODE_ID } from '@agimon-ai/doompi-core/voice-tools';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
@@ -67,34 +68,6 @@ export const PLAN_SERVER_CAPABILITIES: PlanHostCapabilities = {
   narratesReview: false,
   fableAvailable: false,
 };
-const PLAN_MODE_ALLOWED_TOOLS = [
-  'add_directory',
-  'ask_user_question',
-  'bash',
-  COMPLETE_PLAN_TOOL,
-  'describe_author_tools',
-  'describe_voice_tools',
-  'find',
-  'grep',
-  'intercom',
-  'ls',
-  'minor_mode',
-  'mcp',
-  'narrate',
-  'open_authoring_file',
-  'read',
-  RECORD_DEBUG_EVIDENCE_TOOL,
-  RUN_FABLE_PLAN_TOOL,
-  'search_external_files',
-  'subagent',
-  'subagent_supervisor',
-  'subagent_wait',
-  'task',
-  'transfer_voice',
-  'use_author_tools',
-  'use_voice_tools',
-  WRITE_PLAN_TOOL,
-] as const;
 const PLAN_SUBAGENT_POLICY_OWNER = '@agimon-ai/doompi-plan';
 const PLAN_SUBAGENT_POLICY: SubagentPolicy = {
   owner: PLAN_SUBAGENT_POLICY_OWNER,
@@ -325,12 +298,6 @@ export function createPlanServerSession(
   }).createOwner(undefined);
   return {
     services: [serverMinorModes([modeOwner]), serverPlanSubagentPolicy(host)],
-    toolRestrictions: [
-      {
-        when: { state: { 'minor-mode': PLAN_MODE_ID } },
-        allowedTools: PLAN_MODE_ALLOWED_TOOLS,
-      },
-    ],
     resources: [
       {
         when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
@@ -421,6 +388,8 @@ export function createPlanServerSession(
             if (content === undefined)
               content = visiblePlanForToolCall(await host.context.session.entries(), toolCallId);
             if (content === undefined) {
+              if (host.context.selection.state?.['minor-mode']?.includes(DOOM_VOICE_AUTO_MODE_ID))
+                throw new Error('Supply Markdown to write_plan during autonomous Voice; UI input is unavailable.');
               const requested = await host.context.client.request(
                 {
                   kind: 'input',
@@ -467,6 +436,10 @@ export function createPlanServerSession(
         executionMode: 'serial',
         async execute(_toolCallId, _parameters, signal) {
           try {
+            if (host.context.selection.state?.['minor-mode']?.includes(DOOM_VOICE_AUTO_MODE_ID))
+              throw new Error(
+                'UI plan review is unavailable during autonomous Voice. Wait for explicit user direction.',
+              );
             // The client answers with the option's `value`, so the decision travels with the
             // question instead of the facet having to recognise the label it rendered.
             const decision = await host.context.client.request(

@@ -1070,9 +1070,20 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     // owns the name either way, so a Pi extension tool never fills a slot a
     // mode-aware facet deliberately left empty.
     const facetNames = headlessHost?.declaredToolNames ?? new Set(facetTools.map((tool) => tool.name));
-    const piTools = (piHost?.tools ?? []).filter((tool) => !facetNames.has(tool.name));
+    const piTools = (piHost?.tools ?? [])
+      .filter((tool) => !facetNames.has(tool.name) && headlessHost?.allowsTool(tool.name) !== false)
+      .map((tool): AgentHarnessTool<object | undefined> => ({
+        ...tool,
+        async execute(...args) {
+          headlessHost!.assertActive();
+          if (!toolSurfaceReady || !headlessHost!.allowsTool(tool.name))
+            throw new Error(`Tool '${tool.name}' is no longer active`);
+          return tool.execute(...args);
+        },
+      }));
+    const piNames = new Set(piTools.map((tool) => tool.name));
     const nextToolGuidance = [
-      ...(piHost?.toolGuidance ?? []).filter((entry) => !facetNames.has(entry.name)),
+      ...(piHost?.toolGuidance ?? []).filter((entry) => piNames.has(entry.name)),
       ...tools.map((tool) => ({
         name: tool.name,
         ...(tool.promptSnippet === undefined ? {} : { promptSnippet: tool.promptSnippet }),

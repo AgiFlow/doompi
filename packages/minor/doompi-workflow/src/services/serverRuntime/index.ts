@@ -159,12 +159,6 @@ export function createWorkflowServerRuntime(
         };
       },
     ],
-    toolRestrictions: [
-      {
-        when: { state: { 'minor-mode': WORKFLOW_MODE_ID } },
-        allowedTools: [LIST_TOOL, LAUNCH_TOOL, RUN_TOOL],
-      },
-    ],
     hooks: [
       {
         event: 'tool_execution_end',

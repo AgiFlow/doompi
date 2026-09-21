@@ -120,6 +120,7 @@ async function fixture() {
   const commands: DoomHeadlessCommand[] = [];
   const hooks: DoomHeadlessHook[] = [];
   const registration = { dispose: vi.fn() };
+  const registerToolRestriction = vi.fn(() => registration);
   let backgroundProvider: BackgroundWorkProvider | undefined;
   const backgroundUpdate = vi.fn();
   const backgroundDispose = vi.fn();
@@ -140,7 +141,7 @@ async function fixture() {
     }),
     assertActive: vi.fn(),
     subscribeSelection: vi.fn(() => () => undefined),
-    registerToolRestriction: () => registration,
+    registerToolRestriction,
     registerActivity: (activity: DoomHeadlessActivity) => {
       activities.push(activity);
       return registration;
@@ -189,6 +190,7 @@ async function fixture() {
     publish,
     modeDispose,
     registration,
+    registerToolRestriction,
     close,
     backgroundProvider: () => backgroundProvider,
     backgroundUpdate,
@@ -206,6 +208,19 @@ function operation(execution: DoomHeadlessExecutionContext) {
 }
 
 describe('workflow headless facet', () => {
+  it('adds workflow tools without restricting other packages', async () => {
+    const test = await fixture();
+    try {
+      await test.modes[0]!.handleAction('activate', {}, operation(test.execution));
+      expect(test.registerToolRestriction).not.toHaveBeenCalled();
+      expect(test.tools.map(({ name }) => name).sort()).toEqual(['launch_workflow', 'list_workflows', 'workflow_run']);
+      for (const tool of test.tools) expect(tool.when?.state).toEqual({ 'minor-mode': 'workflow' });
+      await test.modes[0]!.handleAction('deactivate', {}, operation(test.execution));
+      expect(test.registerToolRestriction).not.toHaveBeenCalled();
+    } finally {
+      await test.close?.();
+    }
+  });
   it('executes mode, resource, workflow, run-control, command, and shutdown boundaries', async () => {
     const test = await fixture();
     const mode = test.modes[0];

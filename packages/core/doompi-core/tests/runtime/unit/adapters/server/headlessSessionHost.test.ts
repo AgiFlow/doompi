@@ -4,13 +4,26 @@ import path from 'node:path';
 
 import { Context } from '@deepseek-ai/cordis';
 import type { Api, Model } from '@earendil-works/pi-ai';
-import { ModelRuntime } from '@earendil-works/pi-coding-agent';
+import {
+  createExtensionRuntime,
+  ModelRuntime,
+  type Extension,
+  type LoadExtensionsResult,
+} from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { DoomHeadlessSession, DoomHeadlessTool } from '../../../../../src/exports/headless';
+import {
+  DOOM_HEADLESS_OWNER,
+  requireDoomHeadlessHost,
+  type DoomHeadlessSession,
+  type DoomHeadlessTool,
+} from '../../../../../src/exports/headless';
 import type { DoomMcpPluginContext } from '../../../../../src/exports/mcpFacet';
 import { DOOM_NOTIFICATION_ENTRY_TYPE } from '../../../../../src/exports/notification';
+import type { DoomServerBundleEntry } from '../../../../../src/exports/serverFacet';
+import * as directHarnessRuntime from '../../../../../src/server/directHarnessRuntime';
+import * as piExtensionHost from '../../../../../src/services/piExtensionHost';
 import { createHeadlessSessionHost } from '../../../../../src/systems/main/adapters/headlessSessionHost';
 
 const model: Model<Api> = {
@@ -28,7 +41,10 @@ const model: Model<Api> = {
 
 const cleanup: Array<() => Promise<void> | void> = [];
 
-async function fixture(mcpPlugins: Parameters<typeof createHeadlessSessionHost>[0]['mcpPlugins'] = []): Promise<{
+async function fixture(
+  mcpPlugins: Parameters<typeof createHeadlessSessionHost>[0]['mcpPlugins'] = [],
+  options: { candidates?: DoomServerBundleEntry[]; modes?: string[] } = {},
+): Promise<{
   host: Awaited<ReturnType<typeof createHeadlessSessionHost>>;
   context: Context;
   session: DoomHeadlessSession;
@@ -59,10 +75,10 @@ async function fixture(mcpPlugins: Parameters<typeof createHeadlessSessionHost>[
     sessionName: 'Headless session mapping',
     agentArgs: [],
     environment: {},
-    candidates: [],
+    candidates: options.candidates ?? [],
     mcpPlugins,
     piExtensions: false,
-    selection: { majorMode: 'test', activeLayers: [], domains: [], state: {} },
+    selection: { majorMode: 'test', activeLayers: [], domains: [], state: { 'minor-mode': options.modes ?? [] } },
   });
   host.prepareFacets(context);
   cleanup.push(async () => {
@@ -80,6 +96,175 @@ afterEach(async () => {
 });
 
 describe('headless session facet surface', () => {
+  it.each([false, true])(
+    'composes additive modes and selective exclusions across both tool surfaces (voice=%s)',
+    async (voice) => {
+      const ordinary = ['read', 'grep', 'edit', 'write', 'bash', 'task', 'subagent', 'intercom', 'ask_user_question'];
+      const piNames = ['read', 'ask_user_question', 'pi_question', 'author_tool'];
+      const piExecute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'pi' }], details: undefined }));
+      const sourceInfo: Extension['sourceInfo'] = {
+        path: '/extensions/test.mjs',
+        source: 'test',
+        scope: 'temporary',
+        origin: 'top-level',
+      };
+      const preload: LoadExtensionsResult = {
+        extensions: [
+          {
+            path: '/extensions/test.mjs',
+            resolvedPath: '/extensions/test.mjs',
+            sourceInfo,
+            tools: new Map(
+              piNames.map((name) => [
+                name,
+                {
+                  definition: {
+                    name,
+                    label: name,
+                    description: name,
+                    parameters: Type.Object({}),
+                    promptGuidelines: [`pi-guidance:${name}`],
+                    execute: piExecute,
+                  },
+                  sourceInfo,
+                },
+              ]),
+            ),
+            handlers: new Map(),
+            commands: new Map(),
+            flags: new Map(),
+            shortcuts: new Map(),
+            messageRenderers: new Map(),
+          },
+        ],
+        errors: [],
+        runtime: createExtensionRuntime(),
+      };
+      vi.spyOn(piExtensionHost, 'preloadPiExtensions').mockResolvedValue(preload);
+      const createRuntime = vi.spyOn(directHarnessRuntime, 'createDirectHarnessRuntime');
+      const candidate: DoomServerBundleEntry = {
+        packageName: '@test/additive-modes',
+        entry: './server.ts',
+        module: './server.mjs',
+        scopes: ['session'],
+        required: true,
+        owners: [{ majorMode: 'test', layer: 'default' }],
+      };
+      const modes = ['workflow', 'computer-use', 'plan'];
+      const current = await fixture([], { candidates: [candidate], modes: voice ? [...modes, 'voice-auto'] : modes });
+      const replaceTools = vi.spyOn(current.runtime, 'replaceTools');
+      const execute = vi.fn<DoomHeadlessTool['execute']>(async () => ({ content: [{ type: 'text', text: 'facet' }] }));
+      const registrations = current.context.extend({ [DOOM_HEADLESS_OWNER]: candidate });
+      await registrations
+        .plugin((context: Context) => {
+          const host = requireDoomHeadlessHost(context);
+          for (const name of ordinary)
+            host.registerTool({
+              name,
+              description: name,
+              parameters: Type.Object({}),
+              promptGuidelines: [`facet-guidance:${name}`],
+              execute,
+            });
+          for (const [mode, name] of [
+            ['workflow', 'list_workflows'],
+            ['computer-use', 'computer_state'],
+            ['plan', 'write_plan'],
+            ['author', 'author_tool'],
+          ]) {
+            host.registerTool({
+              name: name!,
+              description: name!,
+              parameters: Type.Object({}),
+              when: { state: { 'minor-mode': mode! } },
+              execute,
+            });
+          }
+          host.registerToolRestriction({
+            when: { state: { 'minor-mode': 'voice-auto' } },
+            excludedTools: ['ask_user_question', 'pi_question'],
+          });
+        })
+        .await();
+      vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
+      await current.host.activateFacets({
+        root: current.context,
+        installedPackages: [candidate.packageName],
+        dispose: async () => {},
+      });
+      const names = () => current.host.toolSurface.readSurface().tools.map(({ name }) => name);
+      const prompt = createRuntime.mock.calls.at(-1)![0].systemPrompt as () => Promise<string>;
+      const assertSurface = async (voiceActive: boolean, workflowActive = true) => {
+        const expected = [
+          ...ordinary.filter((name) => !voiceActive || name !== 'ask_user_question'),
+          ...(!voiceActive ? ['pi_question'] : []),
+          ...(workflowActive ? ['list_workflows'] : []),
+          'computer_state',
+          'write_plan',
+        ].sort();
+        expect(names().sort()).toEqual(expected);
+        expect(
+          replaceTools.mock.calls
+            .at(-1)![0]
+            .map(({ name }) => name)
+            .sort(),
+        ).toEqual(expected);
+        const text = await prompt();
+        expect(text.includes('facet-guidance:ask_user_question')).toBe(!voiceActive);
+        expect(text.includes('pi-guidance:pi_question')).toBe(!voiceActive);
+        expect(text).not.toContain('pi-guidance:read');
+        expect(text).not.toContain('pi-guidance:author_tool');
+        const inventory = current.host.host!.getContextInventory();
+        expect(
+          inventory.sources.flatMap(({ tools }) => tools).find(({ name }) => name === 'ask_user_question')?.active,
+        ).toBe(!voiceActive);
+      };
+      await assertSurface(voice);
+      await current.host.host!.changeSelection({ axis: 'state', key: 'minor-mode', values: modes });
+      const previous = current.host.toolSurface.readSurface();
+      const stalePiQuestion = replaceTools.mock.calls.at(-1)![0].find(({ name }) => name === 'pi_question')!;
+      await assertSurface(false);
+      await current.host.host!.changeSelection({ axis: 'state', key: 'minor-mode', values: [...modes, 'voice-auto'] });
+      await assertSurface(true);
+      await expect(
+        current.host.toolSurface.invokeTool({ revision: previous.revision, name: 'ask_user_question', arguments: {} }),
+      ).rejects.toThrow('changed');
+      const snapshot = current.host.toolSurface.readSurface();
+      await expect(
+        current.host.toolSurface.invokeTool({ revision: snapshot.revision, name: 'ask_user_question', arguments: {} }),
+      ).rejects.toThrow();
+      await expect(
+        stalePiQuestion.execute('stale', {}, () => {}, undefined as never, {} as never, {} as never),
+      ).rejects.toThrow('no longer active');
+      expect(execute).not.toHaveBeenCalled();
+      expect(piExecute).not.toHaveBeenCalled();
+      await expect(
+        current.host.toolSurface.invokeTool({ revision: snapshot.revision, name: 'read', arguments: {} }),
+      ).resolves.toMatchObject({ content: [{ text: 'facet' }] });
+      const applies = replaceTools.mock.calls.length;
+      preload.runtime.setActiveTools(['read']);
+      preload.runtime.setActiveTools(piNames);
+      await vi.waitFor(() => expect(replaceTools.mock.calls.length).toBeGreaterThan(applies));
+      await assertSurface(true);
+      await current.host.host!.changeSelection({
+        axis: 'state',
+        key: 'minor-mode',
+        values: ['computer-use', 'plan', 'voice-auto'],
+      });
+      await assertSurface(true, false);
+      await current.host.host!.changeSelection({ axis: 'state', key: 'minor-mode', values: ['computer-use', 'plan'] });
+      await assertSurface(false, false);
+      await registrations
+        .plugin((context: Context) => {
+          requireDoomHeadlessHost(context).registerToolRestriction({ allowedTools: ['read', 'ask_user_question'] });
+        })
+        .await();
+      await current.host.host!.select({});
+      expect(names().sort()).toEqual(['ask_user_question', 'read']);
+      await current.host.host!.changeSelection({ axis: 'state', key: 'minor-mode', values: [...modes, 'voice-auto'] });
+      expect(names()).toEqual(['read']);
+    },
+  );
   it('maps prompt and admitPrompt deliveries onto the runtime', async () => {
     const { session, runtime } = await fixture();
     const prompt = vi.spyOn(runtime, 'prompt').mockResolvedValue(undefined);

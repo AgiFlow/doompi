@@ -115,11 +115,9 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       this.restrictions = entries.map((entry) => entry.value).filter((restriction) => this.matches(restriction.when));
     });
     this.kernel.defineSlot<Owned<DoomHeadlessTool>>('tools', async (entries) => {
-      const allowed = this.options.allowedTools?.(this.applying);
       const next = new Map<string, Owned<DoomHeadlessTool>>();
       for (const entry of this.selected(entries)) {
-        if (allowed !== undefined && !allowed.includes(entry.value.name)) continue;
-        if (this.restrictions.some((restriction) => !restriction.allowedTools.includes(entry.value.name))) continue;
+        if (!this.allowsTool(entry.value.name)) continue;
         if (!next.has(entry.value.name)) next.set(entry.value.name, entry);
       }
       const tools = [...next.values()].map((entry): DoomHeadlessTool => ({
@@ -315,6 +313,19 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     return () => {
       this.selectionListeners.delete(listener);
     };
+  }
+
+  /** Shared by facet reconciliation and the final Pi/facet merge. */
+  allowsTool(name: string): boolean {
+    const allowed = this.options.allowedTools?.(this.applying);
+    return (
+      (allowed === undefined || allowed.includes(name)) &&
+      this.restrictions.every(
+        (restriction) =>
+          (restriction.allowedTools === undefined || restriction.allowedTools.includes(name)) &&
+          !restriction.excludedTools?.includes(name),
+      )
+    );
   }
 
   registerToolRestriction(restriction: DoomHeadlessToolRestriction): DoomHeadlessRegistration {

@@ -48,10 +48,13 @@ async function fixture(options: FixtureOptions = {}) {
     for (const listener of selectionListeners) await listener(selection);
   };
   const registration = () => ({ dispose });
+  const registerToolRestriction = vi.fn(registration);
+  const request = vi.fn(async () => 'continue');
   const execution = {
     repoRoot: '/fixture-repository',
     environment: { HOME: '/fixture-home' },
     session: { entries: async () => [], appendCustomEntry: async () => undefined },
+    client: { request, notify: vi.fn(), setStatus: vi.fn() },
     get selection() {
       return selection;
     },
@@ -71,7 +74,7 @@ async function fixture(options: FixtureOptions = {}) {
       selectionListeners.add(listener);
       return () => selectionListeners.delete(listener);
     }),
-    registerToolRestriction: registration,
+    registerToolRestriction,
     registerResource: (value: DoomHeadlessResource) => {
       resources.push(value);
       return registration();
@@ -102,10 +105,48 @@ async function fixture(options: FixtureOptions = {}) {
     selection = { ...selection, state: { ...selection.state, 'minor-mode': minorModes } };
     await notifySelection();
   };
-  return { mode, action, setMinorModes, execution, resources, hooks, tools, publish, dispose, close };
+  return {
+    mode,
+    action,
+    setMinorModes,
+    execution,
+    resources,
+    hooks,
+    tools,
+    publish,
+    dispose,
+    close,
+    registerToolRestriction,
+    request,
+  };
 }
 
 describe('headless planning resources and selection', () => {
+  it('restricts only UI review during autonomous Voice and never falls back to UI input', async () => {
+    const test = await fixture({ minorModes: ['plan', 'workflow', 'voice-auto'] });
+    try {
+      expect(test.registerToolRestriction).toHaveBeenCalledExactlyOnceWith({
+        when: { state: { 'minor-mode': 'voice-auto' } },
+        excludedTools: ['complete_plan'],
+      });
+      for (const name of ['complete_plan', 'write_plan']) {
+        const tool = test.tools.find((tool) => tool.name === name)!;
+        await expect(tool.execute('voice-test', {}, undefined, undefined, test.execution)).resolves.toMatchObject({
+          isError: true,
+        });
+      }
+      expect(test.request).not.toHaveBeenCalled();
+      expect(test.execution.selection.state?.['minor-mode']).toContain('plan');
+      await test.setMinorModes(['plan', 'workflow']);
+      await test.tools
+        .find(({ name }) => name === 'complete_plan')!
+        .execute('review', {}, undefined, undefined, test.execution);
+      expect(test.request).toHaveBeenCalledOnce();
+      expect(test.execution.selection.state?.['minor-mode']).toContain('plan');
+    } finally {
+      await test.close?.();
+    }
+  });
   it('reads the shipped skill and registers only minor-gated tools and hooks', async () => {
     const test = await fixture();
     expect(await test.resources[0]!.read(test.execution)).toBe(

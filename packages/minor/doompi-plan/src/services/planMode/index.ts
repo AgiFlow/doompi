@@ -6,7 +6,6 @@ import path from 'node:path';
 
 import { globalDoomConfigPath } from '@agimon-ai/doompi-config';
 import { setDoomConfigValue, unsetDoomConfigValue } from '@agimon-ai/doompi-config/configWriter';
-import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-core/author-tools';
 import { CONFIG_ACTION, type DoomConfigContributionHandle } from '@agimon-ai/doompi-core/config';
 import type { LeaderBinding, DoomLeaderContributionHandle } from '@agimon-ai/doompi-core/leader';
 import {
@@ -28,12 +27,10 @@ import {
   DOOM_VOICE_SOURCE,
   DOOM_VOICE_TOOLS_SERVICE,
   requireDoomVoiceToolsService,
-  VOICE_MODE_TOOL_NAMES,
   type VoiceToolDefinition,
 } from '@agimon-ai/doompi-core/voice-tools';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
-  MINOR_MODE_TOOL_NAME,
   type MinorModeCatalogService,
   type MinorModeOwnerHandle,
   type MinorModeState,
@@ -106,7 +103,6 @@ const PLAN_MODE_CONTEXT = 'agent-harness-plan-mode-context';
 const PLAN_DOCUMENT_ENTRY = 'agent-harness-plan-document';
 const COMPLETE_PLAN_TOOL = 'complete_plan';
 const WRITE_PLAN_TOOL = 'write_plan';
-const ASK_USER_TOOL = 'ask_user_question';
 const BASH_TOOL = 'bash';
 const FIND_TOOL = 'find';
 const GREP_TOOL = 'grep';
@@ -151,8 +147,7 @@ export const WRITE_PLAN_TIMEOUT_MS = 5_000;
  * What complete_plan tells the model once the reader has answered. Exported because the
  * server facet runs its own copy of this tool and must not word the outcome differently.
  */
-export const PLAN_EXIT_APPROVED_TEXT =
-  'The user approved exiting plan mode. Full tool access is restored. Begin implementing the approved plan.';
+export const PLAN_EXIT_APPROVED_TEXT = 'The user approved exiting plan mode. Begin implementing the approved plan.';
 export const PLAN_CONTINUE_TEXT = 'The user chose to continue planning. Remain read-only and refine the plan.';
 const PLAN_REVIEW_PROMPT = [
   PLAN_REVIEW_TITLE,
@@ -164,28 +159,6 @@ const PLAN_REVIEW_NARRATION = `${PLAN_REVIEW_TITLE} Options: 1, ${EXIT_PLAN_MODE
 const PLAN_REVIEW_NARRATION_REQUEST = createNarrationRequest(PLAN_REVIEW_NARRATION)!;
 const PLAN_REVIEW_WAIT_MESSAGE =
   "The choices were spoken through autonomous voice. Stop now and wait for the user's next message; it will arrive as an ordinary user message.";
-const AUTHOR_MODE_TOOL_NAMES = ['open_authoring_file', ...AUTHOR_FACADE_TOOL_NAMES] as const;
-const PLAN_MODE_PARENT_TOOLS = new Set([
-  'add_directory',
-  ASK_USER_TOOL,
-  BASH_TOOL,
-  COMPLETE_PLAN_TOOL,
-  FIND_TOOL,
-  GREP_TOOL,
-  'intercom',
-  LIST_TOOL,
-  MINOR_MODE_TOOL_NAME,
-  ...AUTHOR_MODE_TOOL_NAMES,
-  ...VOICE_MODE_TOOL_NAMES,
-  READ_TOOL,
-  'search_external_files',
-  SUBAGENT_TOOL,
-  'subagent_supervisor',
-  'subagent_wait',
-  TASK_TOOL,
-  WRITE_PLAN_TOOL,
-]);
-const PLAN_MODE_EXCLUDED_TOOLS = new Set(['edit', 'write', MCP_TOOL]);
 const PLAN_MODE_EXPLORATION_TOOLS = [READ_TOOL, BASH_TOOL, GREP_TOOL, FIND_TOOL, LIST_TOOL] as const;
 const CHILD_EXPLORATION_TOOLS = [...PLAN_MODE_EXPLORATION_TOOLS, MCP_TOOL] as const;
 const PLAN_MODE_TRIGGER_LEADER = 'leader' as const;
@@ -601,23 +574,21 @@ export function parseDebugEvidencePacket(value: unknown): DebugEvidencePacket {
 }
 
 /**
- * The only thing plan mode does to the tool surface: hide what planning must not touch.
+ * Gate only Plan-owned tools; planning instructions do not remove other packages' tools.
  *
  * `flavor` undefined means plan mode is off, which still hides plan's own tools
  * because they are registered for the whole session and only mean something inside it.
  */
 export function planToolRestriction(
   flavor: PlanningFlavor | undefined,
-  diagnosticTools: ReadonlySet<string>,
+  _diagnosticTools: ReadonlySet<string>,
 ): DoomToolRestriction {
   return (incoming) =>
     incoming.filter((name) => {
       if (name === COMPLETE_PLAN_TOOL || name === WRITE_PLAN_TOOL) return flavor !== undefined;
       if (name === RUN_FABLE_PLAN_TOOL) return flavor === 'fable';
       if (name === RECORD_DEBUG_EVIDENCE_TOOL) return flavor === 'debug';
-      if (diagnosticTools.has(name)) return flavor === undefined || flavor === 'debug';
-      if (flavor === undefined) return true;
-      return !PLAN_MODE_EXCLUDED_TOOLS.has(name);
+      return true;
     });
 }
 
@@ -2034,11 +2005,7 @@ export function createPlanModeRuntime(
     events: {
       tool_call: async (event: ToolCallEvent, ctx) => {
         if (!active || !enabled) return undefined;
-        const isFlavorTool =
-          (activeFlavor === 'debug' &&
-            (event.toolName === RECORD_DEBUG_EVIDENCE_TOOL || diagnosticTools.has(event.toolName))) ||
-          (activeFlavor === 'fable' && event.toolName === RUN_FABLE_PLAN_TOOL);
-        if (!PLAN_MODE_PARENT_TOOLS.has(event.toolName) && !isFlavorTool) {
+        if (currentToolRestriction()([event.toolName], [event.toolName]).length === 0) {
           return { block: true, reason: `Plan mode blocks the ${event.toolName} tool. Use SPC p e to restore access.` };
         }
         const model = planningSubagentModel(activePlanningConfig?.subagents, ctx.model);

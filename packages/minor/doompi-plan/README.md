@@ -1,12 +1,13 @@
 # @agimon-ai/doompi-plan
 
-Create and review stored plans in Pi with narrowed tools, explicit completion, and normal, debug, or Fable-assisted flows.
+Create and review stored plans in Pi with additive tools, explicit completion, and normal, debug, or Fable-assisted flows.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
-Plan mode removes `edit` and `write` from the active tool set and directs writes through
-`write_plan`. It does not sandbox Bash, external tools, or the operating system, so treat it as
-tool-level workflow protection rather than a repository permission boundary.
+Plan mode adds its own tools without removing tools supplied by other packages. Planning
+instructions still require read-only exploration until the user approves implementation, except
+for saving the plan through `write_plan`. Tool availability is not approval to modify the repository.
+Plan is not a sandbox or a repository permission boundary.
 
 > **Alpha:** planning flows and tool contracts may change between releases.
 
@@ -43,8 +44,8 @@ When Team provides `doom/fable-plan`, Plan treats returned text as untrusted and
 verify and synthesize the final plan. Its child capability ceiling comes from
 `doom/subagent-policy` and is removed when either provider or Plan unloads.
 
-A model or tool restoration failure leaves the narrowed Plan state active and reports the failure
-rather than pretending the session was restored.
+A model restoration failure leaves Plan active and reports the failure rather than pretending
+the session was restored.
 
 ## Write and complete a plan
 
@@ -56,8 +57,11 @@ After a plan exists, `complete_plan` asks whether to exit or continue planning. 
 explicitly approve exit. If the selected mode already exposes `ask_user_question`, Plan reuses it;
 it does not activate an omitted feedback layer.
 
-In autonomous Voice mode, review choices are narrated, the turn terminates, and the next user
-message carries the decision.
+In the TUI's autonomous Voice mode, review choices are narrated, the turn terminates, and the next
+user message carries the decision. The headless server does not implement narrated plan review,
+so autonomous Voice disables its UI-only `complete_plan` tool. `write_plan` remains available with
+supplied or already presented Markdown and never falls back to a UI input dialog in that mode.
+Stopping autonomous Voice restores UI review when Plan is still active. Neither path auto-approves implementation.
 
 ## Read and edit the plan in the cockpit
 
