@@ -54,6 +54,12 @@ function props(sessionId: string, statuses: Readonly<Record<string, string>> = {
     ...slotPropsFixture({ sessionId, statuses }).props,
     activeMinorModes: ['author'],
     submitCapture: async () => undefined,
+    renderSessionActivity: () => (
+      <div className="space-y-2">
+        <p className="text-2xs uppercase tracking-widest text-doom-dim">session activity · working</p>
+        <p className="text-sm text-doom-text">Updating the focused source and rebuilding the preview.</p>
+      </div>
+    ),
   };
 }
 
@@ -68,27 +74,27 @@ export default meta;
 export const Playground = {
   render: () => (
     <div className="flex flex-col gap-6 bg-doom-bg p-6">
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex h-[600px] w-[300px] flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">markdown · no drafts yet</span>
         <AuthorPanel {...props('panel-idle')} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex h-[600px] w-[300px] flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">two drafts ready to submit</span>
         <AuthorPanel {...props('panel-drafts')} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex h-[600px] w-[300px] flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">video · frame reference notice</span>
         <AuthorPanel {...props('panel-video')} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex h-[600px] w-[300px] flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">submission unavailable</span>
         <AuthorPanel {...{ ...props('panel-locked'), submitCapture: undefined }} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex h-[600px] w-[300px] flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">autonomous voice grid active</span>
         <AuthorPanel {...props('panel-grid', { 'doom-voice': 'voice auto: listening' })} />
       </div>

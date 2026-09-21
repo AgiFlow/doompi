@@ -65,6 +65,24 @@ export async function admitWorkspace(root: string): Promise<WorkspaceResult> {
   }
 }
 
+export type RemoveWorkspaceResult = { ok: true } | { error: string };
+
+/** Unregisters a workspace from DoomPi without touching its files on disk. */
+export async function removeWorkspace(workspaceId: string): Promise<RemoveWorkspaceResult> {
+  try {
+    const response = await sealedHttpSession.fetch(`${WORKSPACES_API_ROUTE}/${encodeURIComponent(workspaceId)}`, {
+      method: 'DELETE',
+    });
+    if (response.ok) return { ok: true };
+    const body: unknown = await response.json().catch(() => undefined);
+    return {
+      error: isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`,
+    };
+  } catch {
+    return { error: 'The cockpit hub is unreachable.' };
+  }
+}
+
 /** Starts a session in an already admitted workspace. */
 export async function createWorkspaceSession(
   workspaceId: string,

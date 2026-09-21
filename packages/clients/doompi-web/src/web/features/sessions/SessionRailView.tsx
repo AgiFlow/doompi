@@ -3,7 +3,6 @@ import {
   BranchIcon,
   Button,
   buttonVariants,
-  ChevronDownIcon,
   CloseIcon,
   cn,
   Dot,
@@ -153,7 +152,7 @@ export interface WorkspaceGroupViewProps {
   menuAction: ReactNode;
 }
 
-/** A flat workspace heading and its indented sessions; separation replaces card chrome. */
+/** A compact workspace heading and its indented sessions use shared framing to establish groups. */
 export function WorkspaceGroupView({
   workspaceId,
   name,
@@ -170,9 +169,8 @@ export function WorkspaceGroupView({
       data-available={available}
       className="border-b border-doom-border/70 py-2 last:border-b-0"
     >
-      <div className="flex min-w-0 items-center gap-1 px-2">
-        <ChevronDownIcon className="h-3 w-3 shrink-0 text-doom-faint" />
-        <div className="min-w-0 flex-1 py-1">
+      <div className="flex min-w-0 items-center gap-1 rounded-md border border-doom-border/70 bg-doom-panel/60 px-2 py-1.5">
+        <div className="min-w-0 flex-1 py-0.5">
           <p className="truncate text-sm font-bold text-doom-hi">{name}</p>
           <p className="truncate text-2xs text-doom-faint" title={path}>
             {path}

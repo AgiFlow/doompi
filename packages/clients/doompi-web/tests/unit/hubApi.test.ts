@@ -11,6 +11,7 @@ import {
   listWorkspaceHistory,
   listWorkspaces,
   readDormantTranscriptPage,
+  removeWorkspace,
   restartSession,
   resumeSession,
   resumeWorkspaceSession,
@@ -45,6 +46,20 @@ describe('workspace sessions', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: '/two' }),
     });
+  });
+
+  it('unregisters a workspace through its workspace route', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(respond(200, { ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(removeWorkspace('one/two')).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/one%2Ftwo', { method: 'DELETE' });
+  });
+
+  it('relays workspace removal errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respond(409, { error: 'Workspace still has sessions.' })));
+
+    await expect(removeWorkspace('one')).resolves.toEqual({ error: 'Workspace still has sessions.' });
   });
 
   it('creates directly in an admitted workspace', async () => {

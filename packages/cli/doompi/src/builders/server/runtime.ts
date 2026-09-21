@@ -425,6 +425,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           parentSessionId?: string;
           sessionProvenance?: string;
         },
+        workspaceId?: string,
       ): HeadlessSessionHostOptions => {
         const policyOptions = context.options;
         const sessionSelection = {
@@ -439,7 +440,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           cwd: policyOptions.cwd,
           repoRoot: policyOptions.repoRoot,
           sessionId: identity.sessionId,
-          workspaceId: resolveSyncLocation(policyOptions.repoRoot, homeDirectory).identity.worktreeId,
+          workspaceId: workspaceId ?? resolveSyncLocation(policyOptions.repoRoot, homeDirectory).identity.worktreeId,
           sessionName: identity.sessionName,
           webComposition: webCompositions?.publish(
             { scope: 'session', sessionId: identity.sessionId },
@@ -592,6 +593,13 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           parentSessionId: request.parentSessionId,
           sessionProvenance: request.sessionProvenance,
         };
+        const inheritedWorkspaceId =
+          request.sessionProvenance === 'worktree' && request.parentSessionId
+            ? (hub.session(request.parentSessionId)?.workspaceId ??
+              openSessions.list().find((record) => record.sessionId === request.parentSessionId)?.workspaceId)
+            : undefined;
+        if (request.sessionProvenance === 'worktree' && inheritedWorkspaceId === undefined)
+          throw new Error('Worktree session requires its parent workspace.');
         const start = (async (): Promise<DoomHubSessionScope> => {
           const childIdentity = resolveSessionIdentity([], identity);
           const childEnvironment = { ...baseEnvironment };
@@ -605,7 +613,21 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             harnessTelemetry,
           );
           try {
-            await admitWorkspace(childContext.options.repoRoot);
+            if (inheritedWorkspaceId === undefined) {
+              await admitWorkspace(childContext.options.repoRoot);
+            } else {
+              const inheritedWorkspace = hub
+                .workspaces()
+                .find((workspace) => workspace.id === inheritedWorkspaceId && workspace.available !== false);
+              if (inheritedWorkspace === undefined) throw new Error('Worktree parent workspace is unavailable.');
+              const syncEnvironment: NodeJS.ProcessEnv = {
+                ...baseEnvironment,
+                DOOMPI_ROOT: childContext.options.repoRoot,
+              };
+              for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)])
+                delete syncEnvironment[key];
+              await syncWorkspace(childContext.options.repoRoot, syncEnvironment);
+            }
             const bundle = await loadComposition(childContext.options.repoRoot, 'session', {
               root: childContext.options.repoRoot,
               majorMode: childContext.options.majorMode,
@@ -617,7 +639,9 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             });
             request.signal?.throwIfAborted();
             pendingSessions.set(identity.sessionId, { cleanup: () => childContext.cleanup(), bundle, mcpBundle });
-            const created = await hub.create(sessionHostOptions(childContext, bundle, mcpBundle, identity));
+            const created = await hub.create(
+              sessionHostOptions(childContext, bundle, mcpBundle, identity, inheritedWorkspaceId),
+            );
             request.signal?.throwIfAborted();
             if (created.workspaceId !== undefined) {
               const saved = openSessions.add({

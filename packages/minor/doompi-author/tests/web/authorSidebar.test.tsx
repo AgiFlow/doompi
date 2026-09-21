@@ -1,5 +1,5 @@
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
-import { isValidElement, type ReactElement, type ReactNode } from 'react';
+import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthorDocumentPanel } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
@@ -191,5 +191,18 @@ describe('Author annotation sidebar', () => {
     expect(submit.props.disabled).toBe(true);
     await submit.props.onClick!();
     expect(multiRegionCaptureProvider).not.toHaveBeenCalled();
+  });
+
+  it('pins host session activity below the scrolling annotations', () => {
+    const props = {
+      ...setup(),
+      renderSessionActivity: () => createElement('div', { 'data-testid': 'host-session-activity' }, 'working'),
+    };
+    const rendered = nodes(AuthorPanel(props));
+    const footer = rendered.find((node) => node.props['data-testid'] === 'author-session-activity');
+
+    expect(footer?.props.className).toContain('shrink-0');
+    expect(footer?.props.className).toContain('border-t');
+    expect(rendered.some((node) => node.props['data-testid'] === 'host-session-activity')).toBe(true);
   });
 });
