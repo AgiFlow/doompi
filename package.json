@@ -58,13 +58,13 @@
     "husky": "9.1.7",
     "lint-staged": "17.5.1",
     "nx": "23.2.1",
-    "oxfmt": "0.67.0",
-    "oxlint": "1.82.0",
-    "oxlint-tsgolint": "7.0.2001",
+    "oxfmt": "0.68.0",
+    "oxlint": "1.83.0",
+    "oxlint-tsgolint": "7.0.2002",
     "tailwindcss": "4.3.3",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
-    "vitest": "5.0.0",
+    "vitest": "5.0.1",
     "zod": "4.6.2"
   },
   "engines": {

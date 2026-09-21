@@ -78,11 +78,11 @@
     "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.86.0",
-    "@types/node": "26.5.1",
-    "@vitest/coverage-v8": "5.0.0",
+    "@types/node": "26.6.1",
+    "@vitest/coverage-v8": "5.0.1",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
-    "vitest": "5.0.0"
+    "vitest": "5.0.1"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "0.86.0"
