@@ -67,11 +67,11 @@ export default defineConfig({
         replacement: source('../../core/doompi-core/src/exports/leader.ts'),
       },
       {
-        find: '@agimon-ai/doompi-voice/voice-tools',
+        find: '@agimon-ai/doompi-voice/voiceTools',
         replacement: source('src/exports/voiceTools.ts'),
       },
       {
-        find: '@agimon-ai/doompi-voice/voice-reload-handoff',
+        find: '@agimon-ai/doompi-voice/voiceReloadHandoff',
         replacement: source('src/exports/voiceReloadHandoff.ts'),
       },
       {

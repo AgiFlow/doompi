@@ -10,7 +10,7 @@ import {
   DOOM_VOICE_TOOLS_SERVICE,
   createDoomVoiceToolsService,
   type DoomVoiceToolsService,
-} from '@agimon-ai/doompi-voice/voice-tools';
+} from '@agimon-ai/doompi-voice/voiceTools';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';

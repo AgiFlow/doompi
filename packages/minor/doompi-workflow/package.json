@@ -36,7 +36,8 @@
   ],
   "type": "module",
   "main": "./dist/index.cjs",
-  "types": "./dist/index.d.mts",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
     ".": {
@@ -57,7 +58,6 @@
     "./extensions/web": {
       "import": "./dist/extensions/web.mjs"
     },
-    "./skills/workflow-recovery/SKILL.md": "./skills/workflow-recovery/SKILL.md",
     "./package.json": "./package.json"
   },
   "publishConfig": {

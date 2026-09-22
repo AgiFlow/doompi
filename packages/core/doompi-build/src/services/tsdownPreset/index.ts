@@ -35,7 +35,7 @@ interface BrowserPresetConfig {
   unbundle: boolean;
 }
 
-interface PresetConfig {
+interface BasePresetConfig {
   entry: Record<string, string>;
   clean: boolean;
   dts: false | { incremental: boolean; parallel: boolean; eager: boolean };
@@ -50,7 +50,10 @@ interface PresetConfig {
     js: string;
     dts: string;
   };
-  hooks: { 'build:done': () => void };
+}
+
+interface PresetConfig extends BasePresetConfig {
+  hooks?: { 'build:done': () => void };
 }
 
 const DEFAULT_EXPORTS_DIR = 'src/exports';
@@ -185,8 +188,7 @@ export function doompiExtension(
         ...options.entry,
       };
 
-  const node: PresetConfig = {
-    entry,
+  const baseNode: Omit<BasePresetConfig, 'entry' | 'unbundle'> = {
     // MCP shares dist/ with the normal build, so neither build may erase the other.
     clean: false,
     dts: emptyMcp ? false : { incremental: true, parallel: false, eager: true },
@@ -216,9 +218,18 @@ export function doompiExtension(
       dts: format === 'es' ? '.d.mts' : '.d.cts',
     }),
     sourcemap: true,
-    // Bundle MCP separately so its generated entry cannot overwrite the normal
-    // build's unbundled internal modules in the shared dist directory.
-    unbundle: !mcpOnly,
+  };
+
+  // Contract bundles are published as a self-contained graph. Normal extension
+  // entries remain unbundled for routed runtime resources, while MCP remains
+  // isolated from the shared dist directory.
+  const node = (entries: Record<string, string>, _unbundle: boolean): PresetConfig => ({
+    ...baseNode,
+    entry: entries,
+    // Public entry facades must remain bundled. Otherwise their relative
+    // imports target unbundled implementation chunks, which Vite treats as
+    // source files when resolving a workspace package.
+    unbundle: false,
     hooks: {
       'build:done': () => {
         if (mcpOnly) {
@@ -237,7 +248,19 @@ export function doompiExtension(
         });
       },
     },
-  };
-
-  return !mcpOnly && result.targets.includes('web') ? [node, browserConfig()] : node;
+  });
+  const unsyncedNode = (entries: Record<string, string>, unbundle: boolean): PresetConfig => ({
+    ...baseNode,
+    entry: entries,
+    unbundle,
+  });
+  const configs =
+    !mcpOnly && 'api-contracts' in entry
+      ? [
+          unsyncedNode({ 'api-contracts': entry['api-contracts'] }, false),
+          node(Object.fromEntries(Object.entries(entry).filter(([name]) => name !== 'api-contracts')), true),
+        ]
+      : [node(entry, !mcpOnly)];
+  if (!mcpOnly && result.targets.includes('web')) return [...configs, browserConfig()];
+  return configs.length === 1 ? configs[0]! : configs;
 }

@@ -1,4 +1,4 @@
-import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
+import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voiceTools';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { QuestionParams } from '../../src/schemas/questionnaire';

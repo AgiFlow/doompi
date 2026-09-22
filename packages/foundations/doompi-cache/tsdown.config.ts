@@ -10,9 +10,12 @@ const routed = doompiExtension({
     env: 'src/exports/env.ts',
   },
 });
-if (Array.isArray(routed)) throw new Error('Cache does not provide a browser extension.');
-const { ['extensions/pi']: piEntry, ...packageEntries } = routed.entry;
+const configs = Array.isArray(routed) ? routed : [routed];
+const packageConfig = configs.find((config) => 'extensions/pi' in config.entry);
+if (!packageConfig) throw new Error('Cache requires its generated Pi extension entry.');
+const { ['extensions/pi']: piEntry, ...packageEntries } = packageConfig.entry;
 if (!piEntry) throw new Error('Cache requires its generated Pi extension entry.');
+const contractConfigs = configs.filter((config) => !('extensions/pi' in config.entry));
 
 const output = {
   exports: false,
@@ -22,8 +25,9 @@ const output = {
 };
 
 export default defineConfig([
+  ...contractConfigs.map((config) => ({ ...config, ...output, exports: false })),
   {
-    ...routed,
+    ...packageConfig,
     ...output,
     name: 'package',
     entry: packageEntries,

@@ -17,6 +17,6 @@ const routed = doompiExtension({
     owner: 'src/services/owner/index.ts',
   },
 });
-if (Array.isArray(routed)) throw new Error('Minor mode does not provide a browser extension.');
-
-export default defineConfig({ ...routed, exports: false });
+export default defineConfig(
+  (Array.isArray(routed) ? routed : [routed]).map((config) => ({ ...config, exports: false })),
+);

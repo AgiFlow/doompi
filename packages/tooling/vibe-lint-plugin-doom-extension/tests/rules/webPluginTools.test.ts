@@ -173,7 +173,7 @@ describe('web-plugin-tool-renderers', () => {
     const file = manifest();
     write(
       'src/tools/tool.ts',
-      `import { NARRATE_TOOL_NAME } from '@agimon-ai/doompi-voice/voice-tools';\n${tool('NARRATE_TOOL_NAME')}`,
+      `import { NARRATE_TOOL_NAME } from '@agimon-ai/doompi-voice/voiceTools';\n${tool('NARRATE_TOOL_NAME')}`,
     );
     write('src/web/index.ts', entry("['narrate']"));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();

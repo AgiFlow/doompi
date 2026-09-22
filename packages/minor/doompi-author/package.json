@@ -38,7 +38,8 @@
   ],
   "type": "module",
   "main": "./dist/index.cjs",
-  "types": "./dist/index.d.mts",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
     ".": {
@@ -46,7 +47,7 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./author-facade": {
+    "./authorFacade": {
       "types": "./dist/authorFacade.d.mts",
       "import": "./dist/authorFacade.mjs",
       "require": "./dist/authorFacade.cjs"

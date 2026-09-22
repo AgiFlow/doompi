@@ -192,7 +192,7 @@ describe('doompiExtension', () => {
     const config = doompiExtension({ packageDir: dir, target: 'mcp' });
     expect(Array.isArray(config)).toBe(false);
     if (Array.isArray(config)) throw new Error('expected MCP config');
-    config.hooks['build:done']();
+    config.hooks?.['build:done']();
     expect(JSON.parse(read(dir, 'package.json')).doompiMcp).toBeDefined();
     // Simulate the artifacts emitted by the first build.
     for (const suffix of ['mjs', 'cjs.map', 'd.mts', 'd.cts.map']) {

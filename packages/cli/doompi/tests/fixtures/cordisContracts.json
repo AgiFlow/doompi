@@ -60,7 +60,7 @@
   },
   {
     "packageName": "@agimon-ai/doompi-voice",
-    "subpath": "./voice-tools",
+    "subpath": "./voiceTools",
     "values": {
       "DOOM_VOICE_TOOLS_SERVICE": "doom/voice-tools"
     },
@@ -68,7 +68,7 @@
   },
   {
     "packageName": "@agimon-ai/doompi-voice",
-    "subpath": "./voice-reload-handoff",
+    "subpath": "./voiceReloadHandoff",
     "values": {
       "VOICE_RELOAD_HANDOFF_REGISTRY_KEY": "@agimon-ai/doompi-core.voice-reload-handoff.v1",
       "VOICE_RELOAD_HANDOFF_TTL_MS": 30000

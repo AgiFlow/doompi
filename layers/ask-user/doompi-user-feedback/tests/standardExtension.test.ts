@@ -2,7 +2,7 @@ import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-
 import { DOOM_NARRATION_SERVICE } from '@agimon-ai/doompi-core/narration';
 import { type DoomToolSurfaceService, requireDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, type MinorModeRecord } from '@agimon-ai/doompi-minor-mode';
-import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
+import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voiceTools';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

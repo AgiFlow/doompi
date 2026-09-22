@@ -144,12 +144,12 @@ describe('doom voice package boundary', () => {
     );
 
     expect(publicEntries.length).toBeGreaterThan(0);
-    expect(exportsMap['./voice-tools']).toEqual({
+    expect(exportsMap['./voiceTools']).toEqual({
       types: './dist/voiceTools.d.mts',
       import: './dist/voiceTools.mjs',
       require: './dist/voiceTools.cjs',
     });
-    expect(exportsMap['./voice-reload-handoff']).toEqual({
+    expect(exportsMap['./voiceReloadHandoff']).toEqual({
       types: './dist/voiceReloadHandoff.d.mts',
       import: './dist/voiceReloadHandoff.mjs',
       require: './dist/voiceReloadHandoff.cjs',
@@ -166,7 +166,7 @@ describe('doom voice package boundary', () => {
     }
   });
 
-  it('builds the voice worker as a private artifact', async () => {
+  it('publishes the voice worker as a generated entry', async () => {
     const manifest = await readManifest();
     const buildConfig = await readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8');
     const client = await readFile(path.join(packageDirectory, 'src/services/voiceWorkerClient/index.ts'), 'utf8');
@@ -174,7 +174,7 @@ describe('doom voice package boundary', () => {
     expect(buildConfig).toContain('src/services/voiceWorker/index.ts');
     expect(client).toContain('findVoiceWorkerUrl(import.meta.url)');
     expect(client).not.toMatch(/new URL\(['"]\.\.\//u);
-    expect(Object.keys(manifest.exports ?? {}).some((subpath) => subpath.includes('voiceWorker'))).toBe(false);
+    expect(manifest.exports?.['./voiceWorker']).toBeDefined();
   });
 
   it('keeps exports closed and resolves every allowlisted package resource', async () => {

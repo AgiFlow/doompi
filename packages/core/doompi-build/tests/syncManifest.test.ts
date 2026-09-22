@@ -40,6 +40,30 @@ describe('syncManifest', () => {
     expect(manifest.doompiWeb).toMatchObject({ channels: ['current_state'] });
   });
 
+  it('preserves resource exports that do not map to a built entry', () => {
+    const packageDir = packageWith({
+      'dist/index.d.mts': 'export {};\n',
+    });
+    const manifest = syncManifest({
+      packageDir,
+      manifest: {
+        exports: {
+          '.': { import: './dist/index.mjs' },
+          './themes/doom-pi-dark.json': './themes/doom-pi-dark.json',
+          './skills/workflow-recovery/SKILL.md': './skills/workflow-recovery/SKILL.md',
+        },
+      },
+      graph: scanExtensions({ packageDir }),
+      targets: [],
+      pluginId: 'demo',
+    });
+
+    expect(manifest.exports).toMatchObject({
+      './themes/doom-pi-dark.json': './themes/doom-pi-dark.json',
+      './skills/workflow-recovery/SKILL.md': './skills/workflow-recovery/SKILL.md',
+    });
+  });
+
   it('publishes the Pi subpath for a CLI-admitted browser-only package', () => {
     const packageDir = packageWith({
       'src/extensions/(frontend)/template/example.web.tsx': 'export default {};\n',

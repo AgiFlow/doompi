@@ -6,7 +6,7 @@ import { HARNESS_STATE_KEYS, readHarnessState } from '@agimon-ai/doompi-config/h
 import { createHarnessSession, getHarnessState, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voiceReloadHandoff';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

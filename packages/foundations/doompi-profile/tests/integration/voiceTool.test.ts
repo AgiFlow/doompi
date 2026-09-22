@@ -1,6 +1,6 @@
 import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
-import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
-import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voiceReloadHandoff';
+import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voiceTools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

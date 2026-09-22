@@ -44,7 +44,8 @@
   ],
   "type": "module",
   "main": "./dist/index.cjs",
-  "types": "./dist/index.d.mts",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
     ".": {
@@ -52,7 +53,7 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./client-media": {
+    "./clientMedia": {
       "types": "./dist/clientMedia.d.mts",
       "import": "./dist/clientMedia.mjs",
       "require": "./dist/clientMedia.cjs"
@@ -70,15 +71,20 @@
     "./extensions/web": {
       "import": "./dist/extensions/web.mjs"
     },
-    "./voice-reload-handoff": {
+    "./voiceReloadHandoff": {
       "types": "./dist/voiceReloadHandoff.d.mts",
       "import": "./dist/voiceReloadHandoff.mjs",
       "require": "./dist/voiceReloadHandoff.cjs"
     },
-    "./voice-tools": {
+    "./voiceTools": {
       "types": "./dist/voiceTools.d.mts",
       "import": "./dist/voiceTools.mjs",
       "require": "./dist/voiceTools.cjs"
+    },
+    "./voiceWorker": {
+      "types": "./dist/voiceWorker.d.mts",
+      "import": "./dist/voiceWorker.mjs",
+      "require": "./dist/voiceWorker.cjs"
     },
     "./package.json": "./package.json"
   },
