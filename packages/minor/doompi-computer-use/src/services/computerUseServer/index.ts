@@ -5,7 +5,6 @@ import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
 
 import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../../constants/computerUse';
-import { COMPUTER_USE_TOOL_NAMES } from '../../constants/computerUse';
 import { modeState } from '../../models/computerUseMode';
 import { ComputerScriptRunner } from '../../services/computerScriptRunner';
 import { DefaultComputerUseExtensionService } from '../../services/extensionService';
@@ -157,12 +156,6 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
   }).createOwner(undefined);
   return {
     services: [serverMinorModes([modeOwner])],
-    toolRestrictions: [
-      {
-        when: { state: { 'minor-mode': COMPUTER_USE_MODE_ID } },
-        allowedTools: [...COMPUTER_USE_TOOL_NAMES],
-      },
-    ],
     activities: [
       {
         when: {

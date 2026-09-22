@@ -658,13 +658,15 @@ describe('direct AgentHarness runtime', () => {
     });
     const originalCreate = JsonlSessionRepo.prototype.create;
     let createdClose: MockInstance<Awaited<ReturnType<JsonlSessionRepo['create']>>['close']> | undefined;
-    const create = vi
-      .spyOn(JsonlSessionRepo.prototype, 'create')
-      .mockImplementation(async function (this: JsonlSessionRepo, options, context) {
-        const created = await originalCreate.call(this, options, context);
-        createdClose = vi.spyOn(created, 'close');
-        return created;
-      });
+    const create = vi.spyOn(JsonlSessionRepo.prototype, 'create').mockImplementation(async function (
+      this: JsonlSessionRepo,
+      options,
+      context,
+    ) {
+      const created = await originalCreate.call(this, options, context);
+      createdClose = vi.spyOn(created, 'close');
+      return created;
+    });
     try {
       await expect(
         createDirectHarnessRuntime({

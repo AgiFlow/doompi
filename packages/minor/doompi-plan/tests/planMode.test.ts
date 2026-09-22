@@ -129,7 +129,7 @@ interface HarnessExtensionFixture {
 }
 
 const PLAN_OWN_TOOL_NAMES = ['complete_plan', 'write_plan', 'record_debug_evidence', 'run_fable_plan'];
-const PLAN_MODE_HIDDEN_TOOL_NAMES = ['edit', 'write', 'mcp', 'record_debug_evidence', 'run_fable_plan'];
+const PLAN_MODE_HIDDEN_TOOL_NAMES = ['record_debug_evidence', 'run_fable_plan'];
 
 /** What the surface answers once plan mode is off: everything except plan's own tools. */
 function restoredTools(fixture: { allToolNames: () => string[] }): string[] {
@@ -584,7 +584,7 @@ describe('plan mode entry', () => {
     const fixture = createExtensionFixture();
     await fixture.handler('session_start')({}, fixture.ctx);
     await fixture.invokeLeaderAction('plan.normal');
-    expect(fixture.activeTools()).not.toContain('edit');
+    expect(fixture.activeTools()).toContain('edit');
 
     await Promise.all([
       fixture.handler('session_shutdown')({}, fixture.ctx),
@@ -947,11 +947,12 @@ describe('plan mode entry', () => {
     const prompt = await fixture.handler('before_agent_start')({ systemPrompt: 'base prompt' }, fixture.ctx);
     expect(JSON.stringify(prompt)).not.toContain('Usage: /plan');
 
-    const blocked = await fixture.handler('tool_call')({ toolName: 'unknown_tool', input: {} }, fixture.ctx);
-    expect(JSON.stringify(blocked)).not.toContain('/plan');
+    await expect(
+      fixture.handler('tool_call')({ toolName: 'unknown_tool', input: {} }, fixture.ctx),
+    ).resolves.toBeUndefined();
   });
 
-  it('hides writes and off-flavor plan tools, and restores them when plan mode ends', () => {
+  it('preserves other packages while gating Plan-owned tools by flavor', () => {
     const available = [
       'read',
       'bash',
@@ -974,14 +975,18 @@ describe('plan mode entry', () => {
     expect(planToolRestriction('normal', diagnostics)([...available, 'playwright'], available)).toEqual([
       'read',
       'bash',
+      'edit',
+      'write',
       'grep',
       'find',
       'ls',
       'subagent',
       'task',
       'ask_user_question',
+      'mcp',
       'complete_plan',
       'write_plan',
+      'playwright',
     ]);
     expect(planToolRestriction('debug', diagnostics)([...available, 'playwright'], available)).toContain(
       'record_debug_evidence',
@@ -1346,7 +1351,7 @@ describe('plan mode entry', () => {
     expect(fixture.activeTools()).toEqual(expect.arrayContaining(facadeToolNames));
   });
 
-  it('toggles plan mode, blocks writes, constrains subagents, and restores tools', async () => {
+  it('toggles additive plan tools, preserves other tools, and constrains planning subagents', async () => {
     const fixture = createExtensionFixture();
     await fixture.handler('session_start')({}, fixture.ctx);
 
@@ -1369,12 +1374,8 @@ describe('plan mode entry', () => {
       fixture.handler('tool_call')({ toolName: 'ask_user_question', input: {} }, fixture.ctx),
     ).resolves.toBeUndefined();
     await expect(fixture.handler('tool_call')({ toolName: 'bash', input: {} }, fixture.ctx)).resolves.toBeUndefined();
-    await expect(fixture.handler('tool_call')({ toolName: 'write', input: {} }, fixture.ctx)).resolves.toMatchObject({
-      block: true,
-    });
-    await expect(fixture.handler('tool_call')({ toolName: 'mcp', input: {} }, fixture.ctx)).resolves.toMatchObject({
-      block: true,
-    });
+    await expect(fixture.handler('tool_call')({ toolName: 'write', input: {} }, fixture.ctx)).resolves.toBeUndefined();
+    await expect(fixture.handler('tool_call')({ toolName: 'mcp', input: {} }, fixture.ctx)).resolves.toBeUndefined();
     await expect(
       fixture.handler('tool_call')({ toolName: 'subagent', input: { action: 'create' } }, fixture.ctx),
     ).resolves.toMatchObject({ block: true });

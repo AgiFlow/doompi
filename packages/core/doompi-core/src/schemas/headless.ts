@@ -144,7 +144,10 @@ export interface DoomHeadlessCondition {
 
 export interface DoomHeadlessToolRestriction {
   when?: DoomHeadlessCondition;
-  allowedTools: readonly string[];
+  /** Optional capability ceiling. An empty list disables every tool. */
+  allowedTools?: readonly string[];
+  /** Narrow exclusions without disabling unrelated tools. */
+  excludedTools?: readonly string[];
 }
 
 export interface DoomHeadlessTool<TParameters extends TSchema = TSchema> {

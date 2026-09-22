@@ -164,6 +164,17 @@ const observation: ComputerUseObservation = {
   screenshot: { data: 'image-data', mimeType: 'image/png' },
 };
 
+it('adds computer-use capabilities without restricting other packages', async () => {
+  const test = await fixture(['computer-use', 'workflow']);
+  try {
+    expect(test.restrictions).toEqual([]);
+    expect(test.tools.map(({ name }) => name)).toEqual(['computer_state', 'computer_action', 'computer_exec']);
+    for (const tool of test.tools) expect(tool.when?.state).toEqual({ 'minor-mode': 'computer-use' });
+  } finally {
+    await test.close?.();
+  }
+});
+
 beforeEach(() => {
   clientState.current = undefined;
   runnerState.options = undefined;

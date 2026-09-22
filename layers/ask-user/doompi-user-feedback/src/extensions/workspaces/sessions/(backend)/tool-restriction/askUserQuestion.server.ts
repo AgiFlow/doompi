@@ -2,7 +2,9 @@ import { defineToolRestriction } from '@agimon-ai/doompi-core/extension-file';
 import type { DoomHeadlessToolRestriction } from '@agimon-ai/doompi-core/headless';
 import { DOOM_VOICE_AUTO_MODE_ID } from '@agimon-ai/doompi-core/voice-tools';
 
+import { ASK_USER_QUESTION_TOOL_NAME } from '../../../../../constants/tool';
+
 export default defineToolRestriction({
   when: { state: { 'minor-mode': DOOM_VOICE_AUTO_MODE_ID } },
-  excludedTools: ['complete_plan'],
+  excludedTools: [ASK_USER_QUESTION_TOOL_NAME],
 } satisfies DoomHeadlessToolRestriction);

@@ -157,8 +157,8 @@
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
-    "typebox": "1.3.30",
-    "yaml": "2.9.0"
+    "typebox": "1.3.34",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
@@ -166,11 +166,11 @@
     "@modelcontextprotocol/ext-apps": "1.5.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@playwright/test": "1.63.0",
-    "@types/node": "26.5.1",
-    "@vitest/coverage-v8": "5.0.0",
+    "@types/node": "26.6.1",
+    "@vitest/coverage-v8": "5.0.1",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
-    "vitest": "5.0.0"
+    "vitest": "5.0.1"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "0.86.0"

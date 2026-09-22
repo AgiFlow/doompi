@@ -25,6 +25,9 @@ Bash or a hidden interface to bypass that gate.
 `complete_plan` requests approval in the local DoomPi UI, not in ChatGPT. Only use
 it when the user intends to review there. An explicit instruction in chat does
 not itself exit server Plan mode. Do not simulate approval or bypass mode gates.
+During autonomous Voice, the headless UI-only `complete_plan` tool is unavailable.
+Supply Markdown to `write_plan`; it will not open a UI input dialog in that mode.
+Present the plan and wait for explicit user direction, never approve it yourself.
 `run_fable_plan` is unavailable in the headless host. Plan using repository
 inspection instead, without launching background subagents.
 
@@ -35,4 +38,4 @@ The local TUI uses `SPC p e` for normal planning, `SPC p d` for debugging, and
 remote tools. The local no-argument `write_plan` reads the visible plan from its
 own session. `complete_plan` requires the user's explicit exit-or-continue choice.
 
-Plan removes `edit` and `write` from the active tool set, but it does not sandbox Bash, external tools, or operating-system access. Do not mutate the repository while planning. If exit restoration fails, report the failure and keep treating the session as narrowed Plan state.
+Plan adds its own tools without removing other packages' tools. Availability is not permission to edit: do not mutate the repository while planning, except to save the plan through `write_plan`. If exit restoration fails, report the failure and continue planning without starting implementation.
