@@ -1,3 +1,4 @@
+import type { WebTemplateContribution } from './template';
 import type {
   ActivityGroupContribution,
   ContextActionContribution,
@@ -42,6 +43,8 @@ export type PaletteCommandFile = PathSupplied<PaletteCommandContribution, 'id'>;
 /** `tab/<Name>.tsx`. The filename becomes the tab id, in kebab case. */
 export type TabFile = PathSupplied<TabContribution, 'id'>;
 
+/** `template/<name>.web.ts`. The filename becomes the stable template id. */
+export type WebTemplateFile = PathSupplied<WebTemplateContribution, 'id'>;
 /** `dock/<Name>.tsx`. The filename becomes the dock face id, in kebab case. */
 export type DockFaceFile = PathSupplied<DockFaceContribution, 'id'>;
 

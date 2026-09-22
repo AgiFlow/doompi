@@ -136,6 +136,7 @@ export const FRONTEND_SURFACES: readonly string[] = [
   'message',
   'overlay',
   'tab',
+  'template',
   'dock',
   'setting',
   'slot',

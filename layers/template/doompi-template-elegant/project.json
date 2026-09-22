@@ -1,0 +1,8 @@
+{
+  "name": "@agimon-ai/doompi-template-elegant",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "layers/template/doompi-template-elegant/src",
+  "projectType": "library",
+  "tags": ["stage:active"],
+  "sourceTemplate": "doom-extension"
+}

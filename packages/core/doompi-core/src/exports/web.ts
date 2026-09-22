@@ -56,6 +56,7 @@ export {
   defineUserMessageAction,
   defineWebLifecycle,
   defineWebPlugin,
+  defineWebTemplate,
 } from '../extensions/webPlugin';
 export type {
   ActivityGroupFile,
@@ -73,6 +74,7 @@ export type {
   TabFile,
   ToolRendererFile,
   UserMessageActionFile,
+  WebTemplateFile,
 } from '../web/types/extensionFile';
 export { defineGlobalStore } from '../web/models/globalStore';
 export { defineSessionStore } from '../web/models/sessionStore';
@@ -158,6 +160,13 @@ export type {
   WorkspaceStore,
 } from '../web/types/webPlugin';
 
+export type {
+  WebTemplateContribution,
+  WebTemplateHeaderOptions,
+  WebTemplateProps,
+  WebTemplateSlots,
+} from '../web/types/template';
+export { parseWebTemplate } from '../web/schemas/template';
 export {
   BUNDLE_ASSET_POLICY_PATH,
   BUNDLE_ASSET_POLICY_VERSION,

@@ -74,10 +74,14 @@ export function TopBar({
   view = 'conversation',
   onShowSessions,
   onShowActivity,
+  navigationToggle = 'mobile',
+  activityToggle = 'mobile',
 }: {
   view?: string;
   onShowSessions?: () => void;
   onShowActivity?: () => void;
+  navigationToggle?: 'mobile' | 'always';
+  activityToggle?: 'mobile' | 'always';
 }) {
   const meta = useActiveSessionMeta();
   const session = useActiveSession((state) => state);
@@ -112,7 +116,7 @@ export function TopBar({
             title="show sessions"
             aria-label="show sessions"
             onClick={onShowSessions}
-            className="shrink-0 text-lg text-doom-dim md:hidden"
+            className={`shrink-0 text-lg text-doom-dim ${navigationToggle === 'mobile' ? 'md:hidden' : ''}`}
           >
             <span aria-hidden>☰</span>
           </Button>
@@ -182,7 +186,7 @@ export function TopBar({
             title={backgroundWorkActive ? 'background work is running' : 'show activity'}
             aria-label="show activity"
             onClick={onShowActivity}
-            className={`shrink-0 lg:hidden ${backgroundWorkActive ? 'text-doom-yellow' : 'text-doom-dim'}`}
+            className={`shrink-0 ${activityToggle === 'mobile' ? 'lg:hidden' : ''} ${backgroundWorkActive ? 'text-doom-yellow' : 'text-doom-dim'}`}
           >
             <ActivityIcon className="h-3 w-3" />
           </Button>

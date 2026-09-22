@@ -1,5 +1,12 @@
 import { createRootRoute, createRoute, Outlet } from '@tanstack/react-router';
+import { useStore } from '@tanstack/react-store';
 
+import { PluginSurface } from '../components/PluginSurface';
+import { RefusedCard } from '../features/connection/RefusedCard';
+import { DialogOverlay } from '../features/dialogs/DialogOverlay';
+import { CommandPalette } from '../features/leader/CommandPalette';
+import { HOST_SLOTS } from '../lib/pluginRegistry';
+import { sessionsStore } from '../stores/sessionsStore';
 import { CockpitPage } from './CockpitPage';
 import { SettingsPage } from './SettingsPage';
 
@@ -7,9 +14,21 @@ function settingsSearch(search: Record<string, unknown>): { workspace?: string }
   return typeof search.workspace === 'string' && search.workspace !== '' ? { workspace: search.workspace } : {};
 }
 
-const rootRoute = createRootRoute({
-  component: () => <Outlet />,
-});
+/** Mandatory surfaces remain outside replaceable template layouts on every route. */
+function RootLayout() {
+  const sessionId = useStore(sessionsStore, (state) => state.activeId);
+  return (
+    <>
+      <Outlet />
+      <DialogOverlay />
+      <RefusedCard />
+      <CommandPalette />
+      <PluginSurface slot={HOST_SLOTS.overlay} sessionId={sessionId} />
+    </>
+  );
+}
+
+const rootRoute = createRootRoute({ component: RootLayout });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,

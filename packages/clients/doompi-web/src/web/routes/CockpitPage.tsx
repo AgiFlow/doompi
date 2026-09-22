@@ -1,26 +1,23 @@
-import { Button } from '@agimon-ai/doompi-web-components';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 
-import { PluginSurface } from '../components/PluginSurface';
+import { TemplateHost } from '../components/TemplateHost';
 import { ActivityDock } from '../features/activity/ActivityDock';
-import { RefusedCard } from '../features/connection/RefusedCard';
-import { DialogOverlay } from '../features/dialogs/DialogOverlay';
-import { CommandPalette } from '../features/leader/CommandPalette';
 import { SelectionBar } from '../features/selection/SelectionBar';
 import { Composer } from '../features/session/Composer';
 import { Timeline } from '../features/session/Timeline';
 import { SessionRail } from '../features/sessions/SessionRail';
 import { WelcomePanel } from '../features/sessions/WelcomePanel';
 import { TopBar } from '../features/status/TopBar';
-import { HOST_SLOTS, pluginActivityGroups, webTabs } from '../lib/pluginRegistry';
+import { pluginActivityGroups, webTabs } from '../lib/pluginRegistry';
 import { sessionsStore, setActiveSession, useActiveSessionMeta, useNoSessions } from '../stores/sessionsStore';
 import { useActiveSession } from '../stores/sessionStore';
 import { findTransientTab, transientTabsStore } from '../stores/transientTabsStore';
 import { setDockOpen, uiStore } from '../stores/uiStore';
 import { usePluginSlotProps } from '../stores/usePluginSlotProps';
 import { useWebPluginRegistry } from '../stores/useWebPluginRegistry';
+import { workspacesStore } from '../stores/workspacesStore';
 
 export function CockpitPage() {
   useWebPluginRegistry();
@@ -32,6 +29,11 @@ export function CockpitPage() {
   const slotProps = usePluginSlotProps(sessionId ?? null);
   const order = useStore(sessionsStore, (state) => state.order);
   const hydrated = useStore(sessionsStore, (state) => state.hydrated);
+  const sessionWorkspaceId = useStore(sessionsStore, (state) =>
+    sessionId === undefined ? undefined : state.byId[sessionId]?.summary.workspaceId,
+  );
+  const selectedWorkspaceId = useStore(workspacesStore, (state) => state.selectedId);
+  const workspaceId = sessionWorkspaceId ?? selectedWorkspaceId ?? undefined;
   const transferLabel = useStore(sessionsStore, (state) => {
     if (state.transferringToId === null) return null;
     return state.byId[state.transferringToId]?.summary.name ?? 'destination session';
@@ -70,7 +72,10 @@ export function CockpitPage() {
   const [lastDialogId, setLastDialogId] = useState(dialogId);
   if (lastDialogId !== dialogId) {
     setLastDialogId(dialogId);
-    if (dialogId !== null) setMobileActivityOpen(false);
+    if (dialogId !== null) {
+      setMobileActivityOpen(false);
+      setRailOpen(false);
+    }
   }
 
   // The route is the source of focus; the store follows it.
@@ -97,101 +102,59 @@ export function CockpitPage() {
     }
   }, [hydrated, sessionId, tabId, tab, order, navigate]);
 
-  const activityDockClass = mobileActivityOpen
-    ? dockOpen
-      ? 'fixed inset-y-0 right-0 z-40 flex lg:static lg:z-auto'
-      : 'fixed inset-y-0 right-0 z-40 flex lg:hidden'
-    : dockOpen
-      ? 'hidden lg:flex'
-      : 'hidden';
-
   const closeActivity = (): void => {
-    if (window.matchMedia('(min-width: 1024px)').matches) setDockOpen(false);
-    else setMobileActivityOpen(false);
+    if (mobileActivityOpen) setMobileActivityOpen(false);
+    else setDockOpen(false);
   };
   return (
-    <div data-testid="cockpit" className="relative flex h-full min-w-0 overflow-hidden">
-      <aside
-        data-testid="session-rail-panel"
-        className={`fixed inset-y-0 left-0 z-40 flex w-[min(300px,calc(100vw-48px))] shrink-0 flex-col overflow-y-auto border-r border-doom-border bg-doom-rail transition-transform md:visible md:static md:z-auto md:w-[300px] md:translate-x-0 ${railOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'}`}
-      >
-        <SessionRail onDismiss={() => setRailOpen(false)} />
-      </aside>
-      {railOpen ? (
-        <Button
-          variant="ghost"
-          data-testid="mobile-drawer-backdrop"
-          aria-label="hide sessions"
-          className="fixed inset-0 z-30 h-auto w-auto rounded-none bg-black/55 p-0 hover:bg-black/55 md:hidden"
-          onClick={() => setRailOpen(false)}
-        />
-      ) : null}
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {transferLabel !== null ? (
-          <output
-            data-testid="voice-transfer-transition"
-            className="border-b border-doom-cyan/30 bg-doom-cyan/10 px-4 py-2 text-center text-sm font-bold tracking-wide text-doom-cyan"
-          >
-            Transferring voice to {transferLabel}...
-          </output>
-        ) : null}
-        <TopBar
-          view={tab?.id ?? 'conversation'}
-          onShowSessions={() => {
-            setMobileActivityOpen(false);
-            setRailOpen(true);
-          }}
-          onShowActivity={() => {
-            setRailOpen(false);
-            setMobileActivityOpen(true);
-          }}
-        />
-        {/* Plugin panels may replace the conversation, but the composer remains
-            responsible for stopped-session wake gating. */}
-        {tab ? (
-          <>
-            <tab.panel {...slotProps} />
-            {tab.retainComposer === true ? <Composer /> : null}
-          </>
-        ) : noSessions ? (
-          <WelcomePanel />
-        ) : (
-          <>
-            <Timeline />
-            <Composer />
-            {dormantMeta === null ? <SelectionBar /> : null}
-          </>
-        )}
-      </main>
-      {dockOpen || mobileActivityOpen ? (
-        <div className={activityDockClass}>
-          <ActivityDock onClose={closeActivity} onOpenContent={() => setMobileActivityOpen(false)} />
-        </div>
-      ) : (
-        <Button
-          variant="ghost"
-          data-testid="activity-show"
-          title="show the activity dock"
-          onClick={() => setDockOpen(true)}
-          className="hidden h-auto shrink-0 rounded-none border-l border-doom-border bg-doom-rail px-2 py-3 text-2xs tracking-widest text-doom-dim hover:bg-doom-rail lg:flex"
-          style={{ writingMode: 'vertical-rl' }}
-        >
-          ACTIVITY
-        </Button>
-      )}
-      {mobileActivityOpen ? (
-        <Button
-          variant="ghost"
-          data-testid="mobile-activity-backdrop"
-          aria-label="hide activity"
-          className="fixed inset-0 z-30 h-auto w-auto rounded-none bg-black/55 p-0 hover:bg-black/55 lg:hidden"
-          onClick={() => setMobileActivityOpen(false)}
-        />
-      ) : null}
-      <DialogOverlay />
-      <RefusedCard />
-      <CommandPalette />
-      <PluginSurface slot={HOST_SLOTS.overlay} sessionId={sessionId ?? null} />
+    <div data-testid="cockpit" className="h-full min-w-0 overflow-hidden">
+      <TemplateHost
+        mount={
+          workspaceId === undefined
+            ? { scope: 'global' }
+            : sessionId === undefined
+              ? { scope: 'workspace', workspaceId }
+              : { scope: 'session', workspaceId, sessionId }
+        }
+        view={tab ? 'panel' : noSessions ? 'welcome' : 'conversation'}
+        navigationOpen={railOpen}
+        desktopActivityOpen={dockOpen}
+        mobileActivityOpen={mobileActivityOpen}
+        onNavigationOpenChange={setRailOpen}
+        onDesktopActivityOpenChange={setDockOpen}
+        onMobileActivityOpenChange={setMobileActivityOpen}
+        slots={{
+          navigation: <SessionRail onDismiss={() => setRailOpen(false)} />,
+          header: (options) => (
+            <TopBar
+              {...options}
+              view={tab?.id ?? 'conversation'}
+              onShowSessions={() => {
+                setMobileActivityOpen(false);
+                setRailOpen(true);
+              }}
+              onShowActivity={() => {
+                setRailOpen(false);
+                setMobileActivityOpen(true);
+              }}
+            />
+          ),
+          notices:
+            transferLabel === null ? null : (
+              <output
+                data-testid="voice-transfer-transition"
+                className="border-b border-doom-cyan/30 bg-doom-cyan/10 px-4 py-2 text-center text-sm font-bold tracking-wide text-doom-cyan"
+              >
+                Transferring voice to {transferLabel}...
+              </output>
+            ),
+          content: tab ? <tab.panel {...slotProps} /> : noSessions ? <WelcomePanel /> : <Timeline />,
+          // A plugin panel may replace the conversation; retained composers still own wake gating.
+          composer: tab ? tab.retainComposer === true ? <Composer /> : null : noSessions ? null : <Composer />,
+          controls: !tab && !noSessions && dormantMeta === null ? <SelectionBar /> : null,
+          activity: <ActivityDock onClose={closeActivity} onOpenContent={() => setMobileActivityOpen(false)} />,
+        }}
+      />
     </div>
   );
 }

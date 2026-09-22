@@ -3673,5 +3673,57 @@
     ],
     "os": [],
     "cpu": []
+  },
+  "@agimon-ai/doompi-template-advanced": {
+    "exports": { ".": "tir", "./extensions/pi": "tir", "./extensions/web": "i", "./package.json": "esm" },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      },
+      "./extensions/pi": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      },
+      "./extensions/web": { "import": "./dist/extensions/web.mjs" },
+      "./package.json": "./package.json"
+    },
+    "main": "./dist/extensions/pi.cjs",
+    "types": "./dist/extensions/pi.d.cts",
+    "jsnextMain": null,
+    "bin": {},
+    "pi": { "extensions": ["./dist/extensions/pi.mjs"] },
+    "assets": ["./llms.txt", "./README.md"],
+    "files": ["dist", "README.md", "LICENSE", "llms.txt"],
+    "os": [],
+    "cpu": []
+  },
+  "@agimon-ai/doompi-template-elegant": {
+    "exports": { ".": "tir", "./extensions/pi": "tir", "./extensions/web": "i", "./package.json": "esm" },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      },
+      "./extensions/pi": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      },
+      "./extensions/web": { "import": "./dist/extensions/web.mjs" },
+      "./package.json": "./package.json"
+    },
+    "main": "./dist/extensions/pi.cjs",
+    "types": "./dist/extensions/pi.d.cts",
+    "jsnextMain": null,
+    "bin": {},
+    "pi": { "extensions": ["./dist/extensions/pi.mjs"] },
+    "assets": ["./llms.txt", "./README.md"],
+    "files": ["dist", "README.md", "LICENSE", "llms.txt"],
+    "os": [],
+    "cpu": []
   }
 }

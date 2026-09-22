@@ -14,6 +14,7 @@ import type {
   TabFile,
   ToolRendererFile,
   UserMessageActionFile,
+  WebTemplateFile,
 } from '../web/types/extensionFile';
 import type {
   FileLinkSource,
@@ -74,6 +75,10 @@ export function defineTab(file: TabFile): TabFile {
   return file;
 }
 
+/** `template/<name>.web.ts`. Declares a selectable browser layout. */
+export function defineWebTemplate(file: WebTemplateFile): WebTemplateFile {
+  return file;
+}
 /** `dock/<Name>.tsx`. */
 export function defineDockFace(file: DockFaceFile): DockFaceFile {
   return file;

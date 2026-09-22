@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/extensions/**/(frontend)/**/*", "generated/web.ts", "tests/web"],
+  "exclude": ["node_modules", "dist", "coverage"]
+}

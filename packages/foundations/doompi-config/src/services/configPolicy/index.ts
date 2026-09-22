@@ -32,7 +32,7 @@ const DEFAULT_VOICE_MODE: VoiceMode = 'legacy';
 const DEFAULT_VOICE_ENGINE: VoiceEngine = 'auto';
 const DEFAULT_VOICE_LANGUAGE = 'auto';
 const DEFAULT_RECORDER_DEVICE = 'none:default';
-const ROOT_KEYS = ['modes', 'computerUse', 'projectTrust', 'editor', 'voice', 'selection'] as const;
+const ROOT_KEYS = ['modes', 'computerUse', 'projectTrust', 'editor', 'voice', 'selection', 'web'] as const;
 const SELECTION_KEYS = ['majorMode', 'domains', 'profile'] as const;
 const MODE_KEYS = ['planning', 'autocompact'] as const;
 const PLANNING_KEYS = ['main', 'subagents', 'plansDirectory'] as const;
@@ -618,6 +618,17 @@ function parseEditor(value: unknown, filePath: string): EditorConfig | undefined
   return { command: optionalString(value.command, 'editor.command', filePath) };
 }
 
+function parseWeb(value: unknown, filePath: string): DoomConfig['web'] {
+  if (value === undefined) return undefined;
+  if (!isObject(value)) throw new Error(`Doom config at ${filePath} requires web to be an object`);
+  assertKeys(value, ['template'], 'web', filePath);
+  if (value.template === undefined) return {};
+  const template = optionalString(value.template, 'web.template', filePath);
+  if (!template || template.length > 160 || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(template)) {
+    throw new Error(`Doom config at ${filePath} requires web.template to be a kebab-case template identifier`);
+  }
+  return { template };
+}
 function parseComputerUse(value: unknown, filePath: string): ComputerUseConfig | undefined {
   if (value === undefined) return undefined;
   if (!isObject(value)) throw new Error(`Doom config at ${filePath} requires computerUse to be an object`);
@@ -684,6 +695,7 @@ function parseStrict(content: string, filePath: string): DoomConfig {
     editor: parseEditor(parsed.editor, filePath),
     voice: parseVoice(parsed.voice, filePath),
     selection: parseSelection(parsed.selection, filePath),
+    web: parseWeb(parsed.web, filePath),
   };
 }
 function mergeAgent(
@@ -736,6 +748,10 @@ export function mergeDoomConfigs(globalConfig: DoomConfig, repositoryConfig: Doo
     projectTrust: repositoryConfig.projectTrust,
     editor: globalConfig.editor,
     voice,
+    web:
+      globalConfig.web || repositoryConfig.web
+        ? { template: repositoryConfig.web?.template ?? globalConfig.web?.template }
+        : undefined,
     // Per key, so a repository can pin one axis and inherit the rest.
     selection:
       globalConfig.selection || repositoryConfig.selection
@@ -885,7 +901,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
  * A settings surface needs to tell "this file set this key" from "this file is
  * silent about it", and the parsed `DoomConfig` cannot answer: an absent file
  * reads as `{ projectTrust: 'ask' }` and `parseDoomConfig` always returns all
- * five root keys, some undefined. So the question is asked of the raw document
+ * known root keys, some undefined. So the question is asked of the raw document
  * instead, before any defaulting has happened.
  *
  * Leaves only. A list is a leaf because it is replaced whole, and an empty

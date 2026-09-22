@@ -76,6 +76,8 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-skill': 'packages/foundations/doompi-skill',
   '@agimon-ai/doompi-task': 'layers/task/doompi-task',
   '@agimon-ai/doompi-team': 'layers/team/doompi-team',
+  '@agimon-ai/doompi-template-advanced': 'layers/template/doompi-template-advanced',
+  '@agimon-ai/doompi-template-elegant': 'layers/template/doompi-template-elegant',
   '@agimon-ai/doompi-telemetry': 'packages/foundations/doompi-telemetry',
   '@agimon-ai/doompi-ui': 'packages/foundations/doompi-ui',
   '@agimon-ai/doompi-user-feedback': 'layers/ask-user/doompi-user-feedback',
@@ -119,12 +121,16 @@ const STANDARD_PI_NAMES = [
   '@agimon-ai/doompi-skill',
   '@agimon-ai/doompi-task',
   '@agimon-ai/doompi-team',
+  '@agimon-ai/doompi-template-advanced',
+  '@agimon-ai/doompi-template-elegant',
   '@agimon-ai/doompi-user-feedback',
   '@agimon-ai/doompi-voice',
   '@agimon-ai/doompi-workflow',
 ] as const;
 
 const PACKAGE_RESOURCES: Readonly<Record<string, readonly string[]>> = {
+  '@agimon-ai/doompi-template-advanced': ['./llms.txt', './README.md'],
+  '@agimon-ai/doompi-template-elegant': ['./llms.txt', './README.md'],
   '@agimon-ai/doompi': [
     './llms.txt',
     './README.md',

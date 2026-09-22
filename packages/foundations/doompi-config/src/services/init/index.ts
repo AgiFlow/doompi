@@ -91,6 +91,8 @@ default:
     - '@agimon-ai/doompi-workflow'
     - '@agimon-ai/doompi-log'
     - '@agimon-ai/doompi-mcp'
+    - '@agimon-ai/doompi-template-advanced'
+    - '@agimon-ai/doompi-template-elegant'
 layers:
   team:
     packages:
@@ -228,6 +230,8 @@ default:
     - '@agimon-ai/doompi-workflow'
     - '@agimon-ai/doompi-log'
     - '@agimon-ai/doompi-mcp'
+    - '@agimon-ai/doompi-template-advanced'
+    - '@agimon-ai/doompi-template-elegant'
 layers:
   team:
     packages:
