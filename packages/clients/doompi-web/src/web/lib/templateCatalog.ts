@@ -1,5 +1,12 @@
-import { parseWebTemplate, type WebPluginDefinition, type WebTemplateContribution } from '@agimon-ai/doompi-core/web';
+import {
+  parseWebTemplate,
+  type WebPluginDefinition,
+  type WebPluginScope,
+  type WebTemplateContribution,
+} from '@agimon-ai/doompi-core/web';
+import { webPlugin as advancedWebPlugin } from '@agimon-ai/doompi-template-advanced/web-client';
 
+import { pluginsAtScope } from './pluginScopes';
 export interface InstalledWebTemplate extends WebTemplateContribution {
   pluginId: string;
 }
@@ -15,8 +22,11 @@ export interface WebTemplateCatalog {
   diagnostics: WebTemplateDiagnostic[];
 }
 
-/** Read the installed plugin set for compatible template contributions. */
-export function collectWebTemplates(plugins: readonly WebPluginDefinition[]): WebTemplateCatalog {
+/** Read scoped plugin templates, then provide Advanced when no composition owns it. */
+export function collectWebTemplates(
+  plugins: readonly WebPluginDefinition[],
+  scope?: WebPluginScope,
+): WebTemplateCatalog {
   const templates = new Map<string, InstalledWebTemplate>();
   const diagnostics: WebTemplateDiagnostic[] = [];
   const collect = (plugin: WebPluginDefinition): void => {
@@ -69,6 +79,8 @@ export function collectWebTemplates(plugins: readonly WebPluginDefinition[]): We
   };
 
   for (const plugin of plugins) collect(plugin);
+  if (scope !== undefined && !templates.has('doompi-template-advanced'))
+    for (const plugin of pluginsAtScope([advancedWebPlugin], scope)) collect(plugin);
   return { templates: [...templates.values()], diagnostics };
 }
 

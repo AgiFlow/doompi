@@ -18,11 +18,17 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
-    "jsx": "react-jsx",
     "rootDir": ".",
     "outDir": "dist",
     "types": ["node"]
   },
   "include": ["src", "generated", "tests", "tsdown.config.ts", "vitest.config.ts"],
-  "exclude": ["node_modules", "dist", "coverage", "tests/web", "src/extensions/**/(frontend)/**/*", "generated/web.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "tests/web",
+    "src/extensions/**/(frontend)/**/*",
+    "generated/web.ts"
+  ]
 }
