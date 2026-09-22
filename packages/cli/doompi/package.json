@@ -329,7 +329,7 @@
     "@earendil-works/pi-client": "0.86.0",
     "@earendil-works/pi-tui": "0.86.0",
     "@types/cross-spawn": "6.0.6",
-    "@types/node": "26.6.1",
+    "@types/node": "26.6.2",
     "@types/ws": "8.18.1",
     "@vitest/coverage-v8": "5.0.1",
     "tsdown": "0.23.0",

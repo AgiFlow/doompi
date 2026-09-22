@@ -93,7 +93,7 @@
     "@deepseek-ai/cordis": "4.0.2",
     "@earendil-works/pi-coding-agent": "0.86.0",
     "@earendil-works/pi-tui": "0.86.0",
-    "@types/node": "26.6.1",
+    "@types/node": "26.6.2",
     "@vitest/coverage-v8": "5.0.1",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",

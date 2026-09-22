@@ -43,7 +43,7 @@
     "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/doompi-web": "workspace:*",
     "@playwright/test": "1.63.0",
-    "@types/node": "26.6.1",
+    "@types/node": "26.6.2",
     "electron": "44.4.3",
     "npm": "12.0.2",
     "tsdown": "0.23.0",

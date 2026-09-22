@@ -93,7 +93,7 @@
   "devDependencies": {
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
-    "@types/node": "26.6.1",
+    "@types/node": "26.6.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitest/coverage-v8": "5.0.1",
