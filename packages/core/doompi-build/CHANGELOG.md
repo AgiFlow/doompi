@@ -1,3 +1,17 @@
+## 0.0.1-alpha.9 (2026-09-22)
+
+### 🚀 Features
+
+- add MCP Apps session UI support ([#155](https://github.com/AgiFlow/doompi/pull/155))
+
+### 🩹 Fixes
+
+- keep minor mode tools additive ([#156](https://github.com/AgiFlow/doompi/pull/156))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.8 (2026-09-21)
 
 This was a version bump only for @agimon-ai/doompi-build to align it with other projects, there were no code changes.

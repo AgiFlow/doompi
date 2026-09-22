@@ -1,3 +1,30 @@
+## 0.0.1-alpha.80 (2026-09-22)
+
+### 🚀 Features
+
+- **doompi-plan:** withhold edit and write while plan mode is active ([#160](https://github.com/AgiFlow/doompi/pull/160))
+
+### 🩹 Fixes
+
+- keep minor mode tools additive ([#156](https://github.com/AgiFlow/doompi/pull/156))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.9
+- Updated @agimon-ai/doompi-author to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.79
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.80
+- Updated @agimon-ai/doompi-team to 0.0.1-alpha.80
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.77
+- Updated @agimon-ai/doompi-voice to 0.0.1-alpha.81
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.38
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.80
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.79 (2026-09-21)
 
 ### 🩹 Fixes

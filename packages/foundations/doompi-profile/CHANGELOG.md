@@ -1,3 +1,24 @@
+## 0.0.1-alpha.58 (2026-09-22)
+
+### 🩹 Fixes
+
+- keep minor mode tools additive ([#156](https://github.com/AgiFlow/doompi/pull/156))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.9
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.79
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.80
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.77
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.80
+- Updated @agimon-ai/doompi-voice to 0.0.1-alpha.81
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.80
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.57 (2026-09-21)
 
 ### 🧱 Updated Dependencies

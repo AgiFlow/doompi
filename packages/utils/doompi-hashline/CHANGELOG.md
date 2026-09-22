@@ -1,3 +1,13 @@
+## 0.0.1-alpha.49 (2026-09-22)
+
+### 🩹 Fixes
+
+- keep minor mode tools additive ([#156](https://github.com/AgiFlow/doompi/pull/156))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.48 (2026-09-21)
 
 This was a version bump only for @agimon-ai/doompi-hashline to align it with other projects, there were no code changes.

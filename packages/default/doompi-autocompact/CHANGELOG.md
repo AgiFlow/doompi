@@ -1,3 +1,20 @@
+## 0.0.1-alpha.79 (2026-09-22)
+
+### 🩹 Fixes
+
+- keep minor mode tools additive ([#156](https://github.com/AgiFlow/doompi/pull/156))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.9
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.79
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.80
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.77
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.78 (2026-09-21)
 
 ### 🧱 Updated Dependencies
