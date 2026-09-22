@@ -29,6 +29,7 @@
     "coverage",
     "tests/web",
     "src/extensions/**/(frontend)/**/*",
+    "src/exports/webClient.ts",
     "generated/web.ts"
   ]
 }
