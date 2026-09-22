@@ -47,7 +47,6 @@ const runtimeEntries = {
   runtimeTransition: 'src/schemas/transition.ts',
 };
 
-
 export default defineConfig([
   {
     entry: ['src/exports/apiContracts.ts'],

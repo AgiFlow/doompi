@@ -1,6 +1,6 @@
 import { readDoomBackgroundWorkService } from '@agimon-ai/doompi-core/backgroundWork';
-import { readDoomChildSessionService } from '@agimon-ai/doompi-core/childSession';
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
+import { readDoomChildSessionService } from '@agimon-ai/doompi-core/childSession';
 import {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
   requireDoomContextContributions,

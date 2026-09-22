@@ -1,7 +1,4 @@
-import type {
-  DoomMcpResolvedToolSelection,
-  DoomMcpToolResolverService,
-} from '@agimon-ai/doompi-core/mcpToolResolver';
+import type { DoomMcpResolvedToolSelection, DoomMcpToolResolverService } from '@agimon-ai/doompi-core/mcpToolResolver';
 
 export type ResolvedMcpDirectToolSelection = DoomMcpResolvedToolSelection;
 export type McpDirectToolResolver = Pick<DoomMcpToolResolverService, 'resolve'>;

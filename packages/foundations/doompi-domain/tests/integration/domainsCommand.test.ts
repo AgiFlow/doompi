@@ -12,10 +12,7 @@ import {
 } from '@agimon-ai/doompi-config/harnessStore';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import type { TransitionOutcome } from '@agimon-ai/doompi-core/transition';
-import {
-  createVoiceReloadHandoffStore,
-  type VoiceReloadHandoffStore,
-} from '@agimon-ai/doompi-core/voiceReloadHandoff';
+import { createVoiceReloadHandoffStore, type VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voiceReloadHandoff';
 import { DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-core/voiceTools';
 import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voiceTools';
 import { Context } from '@deepseek-ai/cordis';

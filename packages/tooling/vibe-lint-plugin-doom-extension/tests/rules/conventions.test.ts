@@ -145,7 +145,9 @@ describe('Doom package convention rules', () => {
       'utf8',
     );
     expect(noManualExportEntries.check?.(config, root, boundaryContext())).toBeNull();
-    expect(noManualExportEntries.check?.(write('src/exports/apiContracts.ts', 'export {};'), root, boundaryContext())).toBeNull();
+    expect(
+      noManualExportEntries.check?.(write('src/exports/apiContracts.ts', 'export {};'), root, boundaryContext()),
+    ).toBeNull();
   });
 
   it('rejects named src/exports entries in raw defineConfig calls', () => {
