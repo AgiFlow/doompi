@@ -33,6 +33,7 @@ interface BrowserPresetConfig {
   plugins: QueryAssetPlugin[];
   sourcemap: boolean;
   unbundle: boolean;
+  tsconfig: string;
 }
 
 interface GeneratedExports {
@@ -186,6 +187,9 @@ function browserConfig(): BrowserPresetConfig {
     // routed source file, which is not published and is .tsx besides. One
     // module with only bare specifiers external is what the cockpit wants.
     unbundle: false,
+    // Browser routes are excluded from the node tsconfig. Every browser-capable
+    // extension owns this focused config for its matching typecheck.
+    tsconfig: 'tsconfig.web.json',
   };
 }
 

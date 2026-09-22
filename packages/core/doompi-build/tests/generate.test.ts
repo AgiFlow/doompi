@@ -278,6 +278,20 @@ describe('doompiExtension', () => {
     });
   });
 
+  it('uses the browser tsconfig when bundling frontend routes', () => {
+    const dir = packageWith({
+      'src/extensions/(frontend)/template/example.web.tsx': 'export default {};\n',
+    });
+    const config = doompiExtension({ packageDir: dir });
+
+    expect(Array.isArray(config)).toBe(true);
+    if (!Array.isArray(config)) throw new Error('expected browser config');
+    expect(config.find((entry) => 'extensions/web' in entry.entry)).toMatchObject({
+      dts: false,
+      tsconfig: 'tsconfig.web.json',
+    });
+  });
+
   it('does not clean outputs or change metadata in check mode', () => {
     const dir = packageWith({ 'dist/extensions/mcp.mjs': EMPTY });
     const manifest = read(dir, 'package.json');

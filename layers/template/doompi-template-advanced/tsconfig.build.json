@@ -4,11 +4,6 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx"
   },
-  "include": [
-    "src/exports/webClient.ts",
-    "src/extensions/**/(frontend)/**/*",
-    "generated/pi.ts",
-    "generated/web.ts"
-  ],
+  "include": ["src/exports/webClient.ts", "src/extensions/**/(frontend)/**/*", "generated/pi.ts", "generated/web.ts"],
   "exclude": ["node_modules", "dist", "coverage"]
 }
