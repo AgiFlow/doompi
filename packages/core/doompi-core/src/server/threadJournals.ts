@@ -102,7 +102,7 @@ export function createThreadJournals(options: {
           tail.retained = [frame];
           for (const listener of listeners) listener({ sessionId: tail.sessionId, threadId: tail.threadId, frame });
         });
-        tail.retained = [{ type: 'transcript_state', state: runtime.state.state }];
+        tail.retained = [{ type: 'transcript_state', state: runtime.state.value }];
       } else tail.retained = [{ type: 'transcript_ready' }];
       return tail.retained;
     }

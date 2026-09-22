@@ -3,6 +3,7 @@ import type {
   DoomHubChannel,
   DoomHubChannelConnection,
   DoomHubChannelHost,
+  DoomHubReservedWorktreeProvisioner,
   DoomHubSessionApiRequest,
   DoomHubSessionCreateRequest,
   DoomHubSessionScope,
@@ -162,6 +163,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   let closed = false;
   const mounts = new Map<string, { host: DoomServerHost; installed: InstalledServerFacets }>();
   const workspaces = new Map<string, HeadlessWorkspace>();
+  let worktreeProvisioner: DoomHubReservedWorktreeProvisioner | undefined;
   let sessionService: DoomHubSessionService;
 
   const mountKey = (mount: DoomApiMount): string =>
@@ -391,6 +393,14 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
         const session = sessions.get(id);
         return session !== undefined && belongs(mount, session);
       },
+      registerReservedWorktreeProvisioner: (provisioner) => {
+        const unregister = sessionService.registerReservedWorktreeProvisioner?.(async (request) => {
+          const parent = sessions.get(request.parentSessionId);
+          if (!parent || !belongs(mount, parent)) throw new Error('Parent session is outside this mount.');
+          return provisioner(request);
+        });
+        return unregister ?? (() => undefined);
+      },
       canCommunicate: (sourceId, targetId) => {
         const source = sessions.get(sourceId);
         return (
@@ -610,6 +620,18 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     close: closeSession,
     isLive: (sessionId) => !closed && sessions.has(sessionId),
     reservations: options.sessionReservations,
+    provisionReservedWorktree: async (request) => {
+      if (worktreeProvisioner === undefined)
+        throw new Error('Automatic conversation worktree provisioning is unavailable.');
+      return worktreeProvisioner(request);
+    },
+    registerReservedWorktreeProvisioner: (provisioner) => {
+      if (worktreeProvisioner !== undefined) throw new Error('A worktree provisioner is already registered.');
+      worktreeProvisioner = provisioner;
+      return () => {
+        if (worktreeProvisioner === provisioner) worktreeProvisioner = undefined;
+      };
+    },
     canCommunicate,
     bindCommunication,
   };

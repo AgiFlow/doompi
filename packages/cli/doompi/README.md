@@ -51,7 +51,7 @@ releases.
 
 - Node.js 22.19.0 or newer
 - Release targets: macOS arm64, Linux x64, and Linux arm64
-- Pi 0.86.0 and Pi TUI 0.86.0 for packages that declare them as peer requirements
+- Pi 0.87.0 and Pi TUI 0.87.0 for packages that declare them as peer requirements
 
 ## Try DoomPi without replacing your Pi setup
 

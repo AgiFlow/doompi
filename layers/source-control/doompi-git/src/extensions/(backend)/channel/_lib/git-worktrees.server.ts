@@ -149,6 +149,21 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
           git: createWorktreeGit(),
           sessionService,
         });
+      const unregisterWorktreeProvisioner = sessionService.registerReservedWorktreeProvisioner?.(
+        async ({ reservationId, parentSessionId, signal }) => {
+          const parent = host.sessions().find((scope) => scope.sessionId === parentSessionId);
+          if (parent === undefined) throw new Error('The conversation parent session is unavailable.');
+          const branch = `doompi/conversation-${reservationId.slice(0, 12)}`;
+          await worktrees.spawn(
+            { cwd: parent.cwd, sessionId: parent.sessionId },
+            { branch, name: `conversation ${reservationId.slice(0, 8)}`, reservationId },
+            { signal },
+          );
+          const reservations = sessionService.reservations;
+          if (reservations === undefined) throw new Error('Conversation reservations are unavailable.');
+          return reservations.complete(reservationId, parentSessionId);
+        },
+      );
       const views: ViewDeps = { homeDir: options.homeDir, sessionService };
       const latest = new Map<string, SessionState>();
       const subscriptions = new Map<string, () => void>();
@@ -273,6 +288,7 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
           busy.delete(sessionId);
         },
         close() {
+          unregisterWorktreeProvisioner?.();
           for (const unsubscribe of subscriptions.values()) unsubscribe();
           subscriptions.clear();
           latest.clear();

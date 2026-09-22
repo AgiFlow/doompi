@@ -180,6 +180,55 @@ describe('what a session is shown', () => {
     expect(published.at(-1)?.payload.worktrees).toEqual([]);
   });
 });
+
+describe('automatic conversation worktrees', () => {
+  it('registers a reservation-bound provider and removes it when the channel closes', async () => {
+    const operations = fakeOperations();
+    const published: Published[] = [];
+    let provision:
+      | ((request: { reservationId: string; parentSessionId: string; signal?: AbortSignal }) => Promise<unknown>)
+      | undefined;
+    const unregister = vi.fn();
+    const complete = vi.fn().mockResolvedValue({ sessionId: 'reserved-child', cwd: '/worktree', workspaceId: 'child' });
+    const base = fakeHost(published, ['parent-1'], directEvents().bus);
+    const host: DoomHubChannelHost = {
+      ...base,
+      sessions: () => [OWNER],
+      sessionService: {
+        ...base.sessionService!,
+        reservations: {
+          read: vi.fn(),
+          prepare: vi.fn(),
+          complete,
+        },
+        registerReservedWorktreeProvisioner: (provider) => {
+          provision = provider;
+          return unregister;
+        },
+      },
+    };
+    const source = createWorktreesChannel({ operations, homeDir: home }).start(host);
+
+    expect(provision).toBeDefined();
+    await expect(provision!({ reservationId: 'reserved-child', parentSessionId: OWNER.sessionId })).resolves.toEqual({
+      sessionId: 'reserved-child',
+      cwd: '/worktree',
+      workspaceId: 'child',
+    });
+    expect(operations.spawn).toHaveBeenCalledWith(
+      { cwd: repository, sessionId: OWNER.sessionId },
+      {
+        branch: 'doompi/conversation-reserved-chi',
+        name: 'conversation reserved',
+        reservationId: 'reserved-child',
+      },
+      expect.objectContaining({ signal: undefined }),
+    );
+    expect(complete).toHaveBeenCalledWith('reserved-child', OWNER.sessionId);
+    source.close();
+    expect(unregister).toHaveBeenCalledOnce();
+  });
+});
 describe('direct lifecycle events', () => {
   it('refreshes durable registry state without polling', () => {
     const published: Published[] = [];

@@ -10,6 +10,32 @@ const ELEGANT = 'doompi-template-elegant';
 
 test.use({ assets: 'synced' });
 
+interface TemplateStartupHistory {
+  templates: string[];
+  diagnostics: string[];
+}
+
+async function recordTemplateStartup(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const history: TemplateStartupHistory = { templates: [], diagnostics: [] };
+    (window as unknown as { templateStartupHistory: TemplateStartupHistory }).templateStartupHistory = history;
+    new MutationObserver(() => {
+      const template = document.querySelector('[data-template]')?.getAttribute('data-template');
+      if (template && template !== 'loading' && history.templates.at(-1) !== template) history.templates.push(template);
+      const diagnostic = document.querySelector('[data-testid="template-diagnostic"]')?.textContent;
+      if (diagnostic && history.diagnostics.at(-1) !== diagnostic) history.diagnostics.push(diagnostic);
+    }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-template'] });
+  });
+}
+
+async function expectFirstTemplate(page: Page, id: string): Promise<void> {
+  await expect(page.locator('[data-template]')).toHaveAttribute('data-template', id);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { templateStartupHistory: TemplateStartupHistory }).templateStartupHistory,
+    ),
+  ).toEqual({ templates: [id], diagnostics: [] });
+}
 async function openAppearance(page: Page): Promise<void> {
   if (!(await page.getByTestId('settings-open').isVisible())) {
     await page.getByTestId('mobile-sessions-open').click();
@@ -148,3 +174,136 @@ test('recovers from a selected template render failure while retaining access to
   await saveChoice(page, ELEGANT);
   await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ELEGANT);
 });
+
+test('uses Advanced for global Settings by default, including a cold appearance reload', async ({
+  context,
+  cockpit,
+}) => {
+  const page = await context.newPage();
+  await recordTemplateStartup(page);
+  await page.goto(`${cockpit.url}/settings/providers`, { waitUntil: 'domcontentloaded' });
+  await expectFirstTemplate(page, ADVANCED);
+  await expect(page.getByTestId('session-rail-panel')).toBeVisible();
+  await page.getByTestId('settings-section-appearance').click();
+  await expect(page.getByTestId(`template-${ADVANCED}`)).toBeVisible();
+  await expectFirstTemplate(page, ADVANCED);
+  await page.reload();
+  await expectFirstTemplate(page, ADVANCED);
+  await expect(page.getByTestId('session-rail-panel')).toBeVisible();
+});
+for (const template of [ADVANCED, ELEGANT]) {
+  test(`first renders ${template} only after composition and configuration are ready`, async ({ context, cockpit }) => {
+    // Use an unwrapped page so the fixture's interaction gate cannot conceal startup rendering.
+    const page = await context.newPage();
+    const file = path.join(path.dirname(cockpit.agentDir), '.pi', '.doom', 'config.yaml');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `web:\n  template: ${template}\n`);
+    await recordTemplateStartup(page);
+    let releaseComposition!: () => void;
+    let releaseConfiguration!: () => void;
+    const compositionGate = new Promise<void>((resolve) => {
+      releaseComposition = resolve;
+    });
+    const configurationGate = new Promise<void>((resolve) => {
+      releaseConfiguration = resolve;
+    });
+    let compositionRequested = false;
+    await page.route('**/api/compositions', async (route) => {
+      compositionRequested = true;
+      await compositionGate;
+      await route.continue();
+    });
+    await page.route(
+      (url) => url.pathname.endsWith('/settings') && url.searchParams.has('key'),
+      async (route) => {
+        await configurationGate;
+        await route.continue();
+      },
+    );
+    try {
+      await page.goto(cockpit.url, { waitUntil: 'domcontentloaded' });
+      await expect.poll(() => compositionRequested).toBe(true);
+      await expect(page.getByTestId('template-loading')).toBeVisible();
+      await expect(page.getByTestId('template-diagnostic')).toHaveCount(0);
+      await expect(page.getByTestId('template-recovery')).toHaveCount(0);
+      releaseComposition();
+      await page
+        .locator('link[data-doompi-plugin-composition][media="all"]')
+        .nth(cockpit.pluginStyleCount - 1)
+        .waitFor({ state: 'attached' });
+      await expect(page.getByTestId('template-loading')).toBeVisible();
+      await expect(page.getByTestId('composer-input')).toHaveCount(0);
+      releaseConfiguration();
+      await expectFirstTemplate(page, template);
+      await expect(page.getByTestId('composer-input')).toBeVisible();
+      await page.reload();
+      await expectFirstTemplate(page, template);
+    } finally {
+      releaseComposition();
+      releaseConfiguration();
+    }
+  });
+}
+
+for (const entry of ['landing', 'deep-link']) {
+  test(`waits for ${entry} session scope before rendering its workspace template`, async ({ context, cockpit }) => {
+    const page = await context.newPage();
+    const configFile = path.join(path.dirname(cockpit.teamTemp), 'workspaces', '.doom', 'config.yaml');
+    fs.mkdirSync(path.dirname(configFile), { recursive: true });
+    fs.writeFileSync(configFile, `web:\n  template: ${ELEGANT}\n`);
+    await recordTemplateStartup(page);
+    const releaseSockets: Array<() => void> = [];
+    await page.routeWebSocket(/.*/, (socket) => {
+      const server = socket.connectToServer();
+      const messages: Array<string | Buffer> = [];
+      let held = true;
+      server.onMessage((message) => {
+        if (held) messages.push(message);
+        else socket.send(message);
+      });
+      releaseSockets.push(() => {
+        held = false;
+        for (const message of messages.splice(0)) socket.send(message);
+      });
+    });
+    try {
+      await page.goto(entry === 'landing' ? cockpit.url : `${cockpit.url}/session/${cockpit.session.id}`);
+      await page.locator('link[data-doompi-plugin-composition][media="all"]').first().waitFor({ state: 'attached' });
+      await expect.poll(() => releaseSockets.length).toBeGreaterThan(0);
+      await expect(page.getByTestId('template-loading')).toBeVisible();
+      await expect(page.getByTestId('template-diagnostic')).toHaveCount(0);
+      for (const release of releaseSockets) release();
+      await expectFirstTemplate(page, ELEGANT);
+      await expect(page.getByTestId('composer-input')).toBeVisible();
+    } finally {
+      for (const release of releaseSockets) release();
+    }
+  });
+}
+
+for (const resource of ['compositions', 'settings']) {
+  test(`reports ${resource} bootstrap failure and retries without a stuck loading screen`, async ({
+    context,
+    cockpit,
+  }) => {
+    const page = await context.newPage();
+    let failing = true;
+    await page.route(
+      (url) => url.pathname === `/api/${resource}`,
+      async (route) => {
+        if (failing) await route.fulfill({ status: 503, json: { error: 'Bootstrap temporarily unavailable' } });
+        else await route.continue();
+      },
+    );
+    await page.goto(`${cockpit.url}/settings/appearance`);
+    await expect(page.getByTestId('template-diagnostic')).toContainText(
+      resource === 'compositions' ? '503' : 'Bootstrap temporarily unavailable',
+    );
+    await expect(page.getByTestId('template-loading')).toHaveCount(0);
+    await expect(page.getByTestId('template-diagnostic')).not.toContainText('No compatible');
+    failing = false;
+    await page.getByRole('button', { name: 'Retry templates' }).click();
+    await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
+    await expect(page.getByTestId('template-diagnostic')).toHaveCount(0);
+  });
+}

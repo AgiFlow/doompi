@@ -85,13 +85,20 @@ interface CompositionsResponse {
 
 export type WebPluginCompositionPhase = 'idle' | 'loading' | 'ready' | 'error';
 
-export interface WebPluginCompositionState {
+export interface WebPluginMountState {
   phase: WebPluginCompositionPhase;
   error?: string;
 }
 
-/** The host's composition bootstrap state, shown when remote delivery fails. */
-export const webPluginCompositionStore = new TanstackStore.Store<WebPluginCompositionState>({ phase: 'idle' });
+export interface WebPluginCompositionState extends WebPluginMountState {
+  mounts: Record<string, WebPluginMountState>;
+}
+
+/** The host's composition bootstrap and per-mount readiness state. */
+export const webPluginCompositionStore = new TanstackStore.Store<WebPluginCompositionState>({
+  phase: 'idle',
+  mounts: {},
+});
 
 const loadedMounts = new Map<string, LoadedComposition>();
 const mountEpochs = new Map<string, number>();
@@ -239,14 +246,23 @@ function reportDiagnostics(): void {
 /** Replace only the requested mount after its new assets have been verified. */
 async function mountComposition(mount: WebPluginMount, composition: SessionWebComposition | undefined): Promise<void> {
   if (!runtime) return;
-  if (!composition) throw new Error(`No synchronized web composition exists for ${mountKey(mount)}.`);
   const owner = mountKey(mount);
-  const key = compositionKey(composition);
   const epoch = runtimeEpoch;
   const ownerEpoch = mountEpochs.get(owner) ?? 0;
   const stale = () => epoch !== runtimeEpoch || ownerEpoch !== (mountEpochs.get(owner) ?? 0);
+  setMountState(owner, { phase: 'loading' });
+  if (!composition) {
+    const error = `No synchronized web composition exists for ${owner}.`;
+    setMountState(owner, { phase: 'error', error });
+    throw new Error(error);
+  }
+  const key = compositionKey(composition);
   const replace = async () => {
-    if (stale() || loadedMounts.get(owner)?.key === key) return;
+    if (stale()) return;
+    if (loadedMounts.get(owner)?.key === key) {
+      setMountState(owner, { phase: 'ready' });
+      return;
+    }
     let releaseAssets = () => {};
     let assetUrl = (assetPath: string) => `${composition.verifiedAssetBaseUrl}${assetPath}`;
     let styles: HTMLLinkElement[] = [];
@@ -301,6 +317,7 @@ async function mountComposition(mount: WebPluginMount, composition: SessionWebCo
       const stop = startPluginDefinitions(plugins, { ...runtime, mount });
       for (const style of styles) style.media = 'all';
       loadedMounts.set(owner, { key, stop, styles, releaseAssets });
+      setMountState(owner, { phase: 'ready' });
       reportDiagnostics();
     } catch (error) {
       for (const style of styles) style.remove();
@@ -312,6 +329,9 @@ async function mountComposition(mount: WebPluginMount, composition: SessionWebCo
   pendingMounts.set(owner, pending);
   try {
     await pending;
+  } catch (error) {
+    if (!stale()) setMountState(owner, { phase: 'error', error: compositionError(error) });
+    throw error;
   } finally {
     if (pendingMounts.get(owner) === pending) pendingMounts.delete(owner);
   }
@@ -321,8 +341,35 @@ function compositionError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function setCompositionState(state: WebPluginCompositionState): void {
-  webPluginCompositionStore.setState(() => state);
+function setCompositionState(state: WebPluginMountState): void {
+  webPluginCompositionStore.setState((current) => ({ ...current, ...state }));
+}
+
+function setMountState(key: string, state: WebPluginMountState): void {
+  webPluginCompositionStore.setState((current) => ({
+    ...current,
+    mounts: { ...current.mounts, [key]: state },
+  }));
+}
+
+/** Returns readiness for the registry layers a template mount can observe. */
+export function webPluginMountState(
+  mount: WebPluginMount,
+  state: WebPluginCompositionState = webPluginCompositionStore.state,
+): WebPluginMountState {
+  const global = state.mounts.global ?? { phase: state.phase, error: state.error };
+  if (mount.scope === 'global') return global;
+  if (global.phase !== 'ready') return global;
+  const workspace = state.mounts[`workspace:${mount.workspaceId}`];
+  if (workspace === undefined) {
+    if (state.phase === 'idle' || state.phase === 'loading') return { phase: 'loading' };
+    return {
+      phase: 'error',
+      error: `No synchronized web composition exists for workspace:${mount.workspaceId}.`,
+    };
+  }
+  if (mount.scope === 'workspace' || workspace.phase !== 'ready') return workspace;
+  return state.mounts[`session:${mount.sessionId}`] ?? { phase: 'loading' };
 }
 
 async function readCompositions(): Promise<CompositionsResponse> {
@@ -333,29 +380,51 @@ async function readCompositions(): Promise<CompositionsResponse> {
 
 export function refreshWebPluginCompositions(): Promise<void> {
   if (pendingCompositionRefresh !== undefined) return pendingCompositionRefresh;
-  setCompositionState({ phase: 'loading' });
+  setCompositionState({ phase: 'loading', error: undefined });
+  setMountState('global', { phase: 'loading' });
   const epoch = runtimeEpoch;
   const refresh = (async () => {
     const metadata = await readCompositions();
+    if (epoch !== runtimeEpoch) return;
     await bootstrapLocalVerifier(metadata.shell);
+    if (epoch !== runtimeEpoch) return;
     await mountComposition({ scope: 'global' }, metadata.global);
+    const errors: string[] = [];
     for (const workspace of metadata.workspaces) {
-      await mountComposition({ scope: 'workspace', workspaceId: workspace.id }, workspace.webComposition);
+      if (epoch !== runtimeEpoch) return;
+      try {
+        await mountComposition({ scope: 'workspace', workspaceId: workspace.id }, workspace.webComposition);
+      } catch (error) {
+        // Each mount owns its error. Finish independent workspaces before reporting the refresh failure.
+        errors.push(compositionError(error));
+      }
     }
+    if (epoch !== runtimeEpoch) return;
     const admitted = new Set(metadata.workspaces.map((workspace) => `workspace:${workspace.id}`));
-    for (const key of loadedMounts.keys())
+    for (const key of Object.keys(webPluginCompositionStore.state.mounts))
       if (key.startsWith('workspace:') && !admitted.has(key)) {
         disposeMount(key);
         removeWorkspaceWebPlugins(key.slice('workspace:'.length));
+        webPluginCompositionStore.setState((current) => {
+          const mounts = { ...current.mounts };
+          delete mounts[key];
+          return { ...current, mounts };
+        });
       }
+    if (errors.length > 0) throw new Error(errors.join('; '));
   })();
   let pending: Promise<void>;
   pending = refresh
     .then(() => {
-      if (epoch === runtimeEpoch) setCompositionState({ phase: 'ready' });
+      if (epoch === runtimeEpoch) setCompositionState({ phase: 'ready', error: undefined });
     })
     .catch((error: unknown) => {
-      if (epoch === runtimeEpoch) setCompositionState({ phase: 'error', error: compositionError(error) });
+      if (epoch === runtimeEpoch) {
+        const failure: WebPluginMountState = { phase: 'error', error: compositionError(error) };
+        // Metadata and shell verification can fail before mountComposition gets to settle this state.
+        if (webPluginCompositionStore.state.mounts.global?.phase === 'loading') setMountState('global', failure);
+        setCompositionState(failure);
+      }
       throw error;
     })
     .finally(() => {
@@ -367,7 +436,14 @@ export function refreshWebPluginCompositions(): Promise<void> {
 
 /** Retries composition delivery and restores the last requested session mount. */
 export async function retryWebPluginCompositions(): Promise<void> {
-  await refreshWebPluginCompositions();
+  try {
+    await refreshWebPluginCompositions();
+  } catch (error) {
+    const workspaceId = focusedSessionComposition?.workspaceId;
+    if (workspaceId === undefined || webPluginMountState({ scope: 'workspace', workspaceId }).phase !== 'ready')
+      throw error;
+    // The focused workspace recovered even though another workspace failed.
+  }
   const focused = focusedSessionComposition;
   if (focused === undefined || runtime === undefined) return;
   await focusSessionWebPlugins(focused.sessionId, focused.composition, focused.workspaceId);
@@ -375,7 +451,17 @@ export async function retryWebPluginCompositions(): Promise<void> {
 
 export async function focusWorkspaceWebPlugins(workspaceId: string | null): Promise<void> {
   activateWebPluginWorkspace(workspaceId);
-  if (workspaceId && !loadedMounts.has(`workspace:${workspaceId}`)) await refreshWebPluginCompositions();
+  if (!workspaceId) return;
+  if (pendingCompositionRefresh !== undefined || !loadedMounts.has(`workspace:${workspaceId}`)) {
+    try {
+      await refreshWebPluginCompositions();
+    } catch (error) {
+      if (webPluginMountState({ scope: 'workspace', workspaceId }).phase !== 'ready') throw error;
+      // A refresh failure in another workspace must not block this workspace's session mount.
+    }
+  }
+  const readiness = webPluginMountState({ scope: 'workspace', workspaceId });
+  if (readiness.phase === 'error') throw new Error(readiness.error);
 }
 
 /** Session focus changes visibility; it does not destroy other mounts. */
@@ -389,14 +475,20 @@ export async function focusSessionWebPlugins(
   focusedSessionComposition = sessionId === null ? undefined : { sessionId, composition, workspaceId };
   activateWebPluginSession(sessionId);
   if (!sessionId || !runtime) return;
+  const owner = `session:${sessionId}`;
+  const ownerEpoch = mountEpochs.get(owner) ?? 0;
+  setMountState(owner, { phase: 'loading' });
   try {
     if (!workspaceId) throw new Error(`Session '${sessionId}' has no workspace identity.`);
     await focusWorkspaceWebPlugins(workspaceId);
+    if (runtimeAtStart !== runtimeEpoch || ownerEpoch !== (mountEpochs.get(owner) ?? 0)) return;
     await mountComposition({ scope: 'session', sessionId, workspaceId }, composition);
     if (epoch === focusEpoch) activateWebPluginSession(sessionId);
   } catch (error) {
-    if (epoch === focusEpoch && runtimeAtStart === runtimeEpoch)
+    if (epoch === focusEpoch && runtimeAtStart === runtimeEpoch) {
+      setMountState(`session:${sessionId}`, { phase: 'error', error: compositionError(error) });
       setCompositionState({ phase: 'error', error: compositionError(error) });
+    }
     throw error;
   }
 }
@@ -405,6 +497,7 @@ export function removeSessionWebPluginRuntime(sessionId: string): void {
   focusEpoch += 1;
   if (focusedSessionComposition?.sessionId === sessionId) focusedSessionComposition = undefined;
   disposeMount(`session:${sessionId}`);
+  setMountState(`session:${sessionId}`, { phase: 'idle' });
   removeSessionWebPlugins(sessionId);
 }
 
@@ -413,7 +506,7 @@ export function startSessionWebPluginRuntime(hostRuntime: WebPluginRuntime): () 
   runtimeEpoch += 1;
   pendingCompositionRefresh = undefined;
   runtime = hostRuntime;
-  setCompositionState({ phase: 'loading' });
+  webPluginCompositionStore.setState(() => ({ phase: 'loading', mounts: {} }));
   const refresh = () => {
     void refreshWebPluginCompositions().catch((error: unknown) => console.error(error));
   };
@@ -434,6 +527,6 @@ export function startSessionWebPluginRuntime(hostRuntime: WebPluginRuntime): () 
     runtime = undefined;
     activateWebPluginSession(null);
     activateWebPluginWorkspace(null);
-    setCompositionState({ phase: 'idle' });
+    webPluginCompositionStore.setState(() => ({ phase: 'idle', mounts: {} }));
   };
 }

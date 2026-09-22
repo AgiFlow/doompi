@@ -346,6 +346,38 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       if (provision.get(id) === setup) provision.delete(id);
     }
   };
+  const provisionConversationWorktree = async (
+    record: ReturnType<SessionMcpConversationStore['reserve']>,
+    signal?: AbortSignal,
+  ): Promise<DoomHubSessionScope> => {
+    const pending = provision.get(record.id);
+    if (pending) return pending;
+    const setup = (async () => {
+      try {
+        const child = await options.headlessHub.sessionService.provisionReservedWorktree?.({
+          reservationId: record.id,
+          parentSessionId: record.parentSessionId,
+          signal,
+        });
+        if (child === undefined || child.sessionId !== record.id)
+          throw new Error('Automatic worktree provisioning did not create the reserved session.');
+        return child;
+      } catch (error) {
+        if (error instanceof SessionMcpConversationError) throw error;
+        throw new SessionMcpConversationError(
+          'SESSION_WORKTREE_PROVISION_FAILED',
+          'An automatic worktree could not be created for this conversation. Resolve the host Git setup, then retry.',
+          record.id,
+        );
+      }
+    })();
+    provision.set(record.id, setup);
+    try {
+      return await setup;
+    } finally {
+      if (provision.get(record.id) === setup) provision.delete(record.id);
+    }
+  };
   const publicRoutes = async (request: Request): Promise<Response | undefined> => {
     const url = new URL(request.url);
     const configuredOrigin = origin();
@@ -364,9 +396,9 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
           audience,
           authorization,
           onNotice: options.onNotice,
-          resolveConversation: (grant, digest, reserve) => {
+          resolveConversation: async (grant, digest, reserve, signal) => {
             const store = requireStore();
-            const record = reserve
+            let record = reserve
               ? store.reserve(grant.clientId, sessionId, workspaceId, digest)
               : store.find(grant.clientId, sessionId, digest);
             if (!record || record.state === 'closed')
@@ -376,11 +408,13 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
               );
             if (record.state === 'pending') {
               publishPending();
-              throw new SessionMcpConversationError(
-                'SESSION_SETUP_REQUIRED',
-                'Choose a separate execution directory for this conversation in DoomPi, then retry.',
-                record.id,
-              );
+              await provisionConversationWorktree(record, signal);
+              record = store.find(grant.clientId, sessionId, digest);
+              if (!record || record.state !== 'bound')
+                throw new SessionMcpConversationError(
+                  'SESSION_WORKTREE_PROVISION_FAILED',
+                  'The automatic worktree setup did not complete. Retry after resolving the host Git setup.',
+                );
             }
             const child = record.workspaceId === undefined ? undefined : target(record.workspaceId, record.id);
             if (
@@ -621,20 +655,11 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         }
         if (typeof body !== 'object' || body === null) return json(400, { error: 'Invalid client request.' });
         const input = body as Record<string, unknown>;
-        let routing;
-        try {
-          routing = sessionMcpRouting(input.routing);
-        } catch (error) {
-          return oauthError(error);
-        }
-        if (
-          routing === 'conversation' &&
-          (input.conversationIdentityVerified !== true || !options.conversationStore || !options.registrationStore)
-        )
-          return json(400, {
-            error:
-              'Verify conversation metadata with two real client conversations before enabling this mode. Persistent host state is required.',
-          });
+        if (!options.conversationStore || !options.registrationStore)
+          return json(503, { error: 'Mandatory conversation routing requires persistent host state.' });
+        if (input.routing !== undefined && input.routing !== 'session' && input.routing !== 'conversation')
+          return json(400, { error: 'Session MCP routing is not supported.' });
+        const routing = sessionMcpRouting(input.routing);
         const requestedScope = input.scope;
         if (requestedScope !== undefined && requestedScope !== 'session' && requestedScope !== 'restricted') {
           return json(400, { error: 'Authorization scope is not supported.' });

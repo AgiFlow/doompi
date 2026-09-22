@@ -26,11 +26,14 @@ export class SessionMcpOAuthError extends Error {
 }
 
 export type SessionMcpScope = 'restricted' | 'session';
-export type SessionMcpRouting = 'session' | 'conversation';
+export type SessionMcpRouting = 'conversation';
 
+/**
+ * Conversation routing is mandatory. Legacy registrations are migrated at read time
+ * so they cannot continue to share their parent runtime.
+ */
 export function sessionMcpRouting(value: unknown): SessionMcpRouting {
-  if (value === undefined || value === 'session') return 'session';
-  if (value === 'conversation') return 'conversation';
+  if (value === undefined || value === 'session' || value === 'conversation') return 'conversation';
   throw new SessionMcpOAuthError('invalid_request', 'Session MCP routing is not supported.');
 }
 
@@ -53,7 +56,7 @@ export interface SessionMcpAuthorizationBinding {
   readonly sessionGeneration: number;
   readonly audience: string;
   readonly scope: SessionMcpScope;
-  /** Missing in older registrations, which continue to target one session. */
+  /** Always conversation. Legacy persisted values are normalized at read time. */
   readonly routing?: SessionMcpRouting;
   readonly tools: readonly string[];
   readonly skills: readonly string[];

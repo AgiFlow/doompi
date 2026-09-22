@@ -163,9 +163,10 @@ function managementHost(
       let released = false;
       const publish = (frame: HubFrame): void => {
         sequence += 1;
-        state.state.events.push({ sequence, frame });
-        if (state.state.events.length > MAX_HUB_EVENTS) state.state.events.shift();
-        state.publish(BACKGROUND_CONTEXT);
+        state.change(BACKGROUND_CONTEXT, (draft) => {
+          draft.events.push({ sequence, frame });
+          if (draft.events.length > MAX_HUB_EVENTS) draft.events.shift();
+        });
       };
       const visible = new Set(
         hub

@@ -63,14 +63,14 @@ describe('doom-task package boundary', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.peerDependencies).toEqual(
       expect.objectContaining({
-        '@earendil-works/pi-coding-agent': '0.86.0',
-        '@earendil-works/pi-tui': '0.86.0',
+        '@earendil-works/pi-coding-agent': '0.87.0',
+        '@earendil-works/pi-tui': '0.87.0',
       }),
     );
     expect(manifest.devDependencies).toEqual(
       expect.objectContaining({
-        '@earendil-works/pi-coding-agent': '0.86.0',
-        '@earendil-works/pi-tui': '0.86.0',
+        '@earendil-works/pi-coding-agent': '0.87.0',
+        '@earendil-works/pi-tui': '0.87.0',
       }),
     );
   });

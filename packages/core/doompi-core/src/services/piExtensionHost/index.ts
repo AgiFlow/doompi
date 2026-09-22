@@ -12,7 +12,7 @@ import type {
   Skill,
   ThinkingLevel,
 } from '@earendil-works/pi-agent-core';
-import type { Api, Model } from '@earendil-works/pi-ai';
+import type { Api, Message, Model } from '@earendil-works/pi-ai';
 import {
   createEventBus,
   discoverAndLoadExtensions,
@@ -23,6 +23,7 @@ import {
   SessionManager,
   sessionEntryToContextMessages,
   type CompactionEntry,
+  type BoundaryContextPreview,
   type CompactionResult,
   type SessionBeforeCompactEvent,
   type Extension,
@@ -715,6 +716,19 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     return converted?.type === 'compaction' ? converted : undefined;
   };
 
+  const turnBoundaryContext = (): BoundaryContextPreview => {
+    const projection = sessionManager?.buildSessionProjection();
+    const contextEntries = projection?.entries ?? [];
+    const contextMessages = projection?.messages ?? [];
+    return {
+      contextEntries,
+      contextMessages,
+      llmMessages: contextMessages.filter((message): message is Message => message.role !== 'bashExecution'),
+      pendingMessages: [],
+      canContinue: contextMessages.at(-1)?.role !== 'assistant',
+    };
+  };
+
   /** Harness events, translated into Pi events in AgentSession order. */
   const handleHarnessEvent = async (event: HarnessEvent): Promise<void> => {
     switch (event.type) {
@@ -783,14 +797,37 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         queuedMessages = event.queues.filter((item) => item.kind !== 'write').length;
         return;
       case 'turn_end': {
-        const index = turnIndex;
-        turnIndex += 1;
-        await runner?.emit({
-          type: 'turn_end',
-          turnIndex: index,
-          message: event.message,
-          toolResults: event.toolResults,
+        const branch = sessionManager?.getBranch() ?? [];
+        const messageEntryId = branch.findLast(
+          (entry) => entry.type === 'message' && entry.message === event.message,
+        )?.id;
+        if (messageEntryId === undefined) {
+          report('turn_end', new Error('The persisted assistant entry was not available for the Pi boundary'));
+          turnIndex += 1;
+          return;
+        }
+        const toolResultEntryIds = event.toolResults.flatMap((result) => {
+          const entryId = branch.findLast((entry) => entry.type === 'message' && entry.message === result)?.id;
+          return entryId === undefined ? [] : [entryId];
         });
+        await runner?.emitBoundary(
+          {
+            type: 'turn_end',
+            turnIndex,
+            message: event.message,
+            toolResults: event.toolResults,
+            messageEntryId,
+            toolResultEntryIds,
+            outcome:
+              event.message.stopReason === 'aborted'
+                ? 'aborted'
+                : event.message.stopReason === 'error'
+                  ? 'error'
+                  : 'completed',
+          },
+          turnBoundaryContext,
+        );
+        turnIndex += 1;
         return;
       }
       case 'run_end':

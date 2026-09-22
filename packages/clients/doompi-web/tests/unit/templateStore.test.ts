@@ -4,6 +4,7 @@ import type { SettingsConfigView } from '../../src/types/settings';
 import { readSettingsConfig, writeSettingsValue } from '../../src/web/lib/settingsApi';
 import {
   configuredTemplate,
+  ensureTemplateConfiguration,
   refreshTemplateConfiguration,
   saveTemplateDefault,
   templateStore,
@@ -31,6 +32,33 @@ beforeEach(() => {
 });
 
 describe('template configuration cache', () => {
+  it('shares initial requests per scope and reuses resolved configuration', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof readSettingsConfig>>) => void;
+    vi.mocked(readSettingsConfig).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const first = ensureTemplateConfiguration('one');
+    expect(ensureTemplateConfiguration('one')).toBe(first);
+    await ensureTemplateConfiguration('two');
+    expect(readSettingsConfig).toHaveBeenCalledTimes(2);
+    finish({ ok: true, config: config('chosen') });
+    await first;
+    await ensureTemplateConfiguration('one');
+    expect(readSettingsConfig).toHaveBeenCalledTimes(2);
+    expect(configuredTemplate(templateStore.state['workspace:one']!)).toBe('chosen');
+  });
+
+  it('settles a rejected initial read and permits retry', async () => {
+    vi.mocked(readSettingsConfig).mockRejectedValueOnce(new Error('settings disconnected'));
+    await ensureTemplateConfiguration();
+    expect(templateStore.state.global).toMatchObject({ loading: false, error: 'settings disconnected' });
+    await ensureTemplateConfiguration();
+    expect(templateStore.state.global).toMatchObject({ loading: false, error: undefined });
+    expect(configuredTemplate(templateStore.state.global!)).toBe('available');
+  });
+
   it('keeps independent workspace responses and ignores an older overlapping read', async () => {
     let finish: ((value: Awaited<ReturnType<typeof readSettingsConfig>>) => void) | undefined;
     vi.mocked(readSettingsConfig).mockImplementationOnce(

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -355,21 +356,16 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     onNotice: options.onNotice,
     dormantSessions: dormant,
   });
+  const sessionMcpStateDir =
+    options.sessionMcpStateDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-session-mcp-'));
   const sessionMcp = createSessionMcpRoutes({
     headlessHub: options.headlessHub,
     publicOrigin: options.sessionMcpPublicOrigin ?? (() => undefined),
     publicOriginRevision: options.sessionMcpPublicOriginRevision,
     onNotice: options.onNotice,
     isSessionPersisted: options.isSessionPersisted,
-    ...(options.sessionMcpStateDir === undefined
-      ? {}
-      : {
-          conversationStore: createSessionMcpConversationStore(options.sessionMcpStateDir),
-          registrationStore: createSessionMcpRegistrationStore({
-            stateDir: options.sessionMcpStateDir,
-            onNotice: options.onNotice,
-          }),
-        }),
+    conversationStore: createSessionMcpConversationStore(sessionMcpStateDir),
+    registrationStore: createSessionMcpRegistrationStore({ stateDir: sessionMcpStateDir, onNotice: options.onNotice }),
   });
   const server = createServer((request, response) => {
     void handleRequest(request, response).catch((error: unknown) => {
@@ -953,6 +949,8 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       for (const client of clients) client.socket.terminate();
       clients.clear();
       sessionMcp.close();
+      if (options.sessionMcpStateDir === undefined)
+        await fs.promises.rm(sessionMcpStateDir, { recursive: true, force: true });
       await Promise.all([protocol.close(), ...[...scopedProtocols].map((selected) => selected.close())]);
       webSockets.close();
       server.closeAllConnections();

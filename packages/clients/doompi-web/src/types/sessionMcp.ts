@@ -1,6 +1,6 @@
 /** Browser-facing contract for one session's host-managed MCP clients. */
 export type SessionMcpScope = 'restricted' | 'session';
-export type SessionMcpRouting = 'session' | 'conversation';
+export type SessionMcpRouting = 'conversation';
 export interface SessionMcpTool {
   name: string;
   label: string;
@@ -28,7 +28,7 @@ export interface SessionMcpClient {
   tokenEndpointAuthMethod: 'client_secret_post';
   createdAt: number;
   scope: SessionMcpScope;
-  routing?: SessionMcpRouting;
+  routing: SessionMcpRouting;
   tools: string[];
   skills: string[];
   audience: string;
@@ -42,6 +42,5 @@ export interface CreatedSessionMcpClient extends SessionMcpClient {
 export interface CreateSessionMcpClientInput {
   redirectUri: string;
   scope: 'session';
-  routing?: SessionMcpRouting;
-  conversationIdentityVerified?: boolean;
+  routing: SessionMcpRouting;
 }

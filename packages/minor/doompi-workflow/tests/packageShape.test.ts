@@ -56,8 +56,8 @@ describe('@agimon-ai/doompi-workflow package shape', () => {
   it('declares the shared Doom UI and exact Cordis runtime without retaining rig packages', () => {
     expect(dependencyNames(PACKAGE_MANIFEST.dependencies)).toContain('@agimon-ai/doompi-ui');
     expect(objectValue(PACKAGE_MANIFEST.dependencies)['@deepseek-ai/cordis']).toBe('4.0.2');
-    expect(objectValue(PACKAGE_MANIFEST.devDependencies)['@earendil-works/pi-coding-agent']).toBe('0.86.0');
-    expect(objectValue(PACKAGE_MANIFEST.peerDependencies)['@earendil-works/pi-coding-agent']).toBe('0.86.0');
+    expect(objectValue(PACKAGE_MANIFEST.devDependencies)['@earendil-works/pi-coding-agent']).toBe('0.87.0');
+    expect(objectValue(PACKAGE_MANIFEST.peerDependencies)['@earendil-works/pi-coding-agent']).toBe('0.87.0');
     expect(dependencyNames(PACKAGE_MANIFEST.dependencies).some((name) => name.startsWith('@agimonai/rig-'))).toBe(
       false,
     );

@@ -18,6 +18,7 @@ const EMPTY: TemplateConfiguration = { loading: true, saving: false };
 const GLOBAL = 'global';
 const KEY = 'web.template';
 const requests = new Map<string, number>();
+const pendingRequests = new Map<string, Promise<void>>();
 
 /** Preferences belong to Doom config; this store caches only scoped API responses. */
 export const templateStore = new Store<Record<string, TemplateConfiguration>>({});
@@ -30,26 +31,46 @@ function patch(key: string, update: Partial<TemplateConfiguration>): void {
   templateStore.setState((state) => ({ ...state, [key]: { ...(state[key] ?? EMPTY), ...update } }));
 }
 
-export async function refreshTemplateConfiguration(workspaceId?: string): Promise<void> {
+export function refreshTemplateConfiguration(workspaceId?: string): Promise<void> {
   const key = scopeKey(workspaceId);
   const request = (requests.get(key) ?? 0) + 1;
   requests.set(key, request);
-  patch(key, { loading: true });
-  const result = await readSettingsConfig('', [KEY], workspaceId);
-  if (requests.get(key) !== request) return;
-  if (result.ok) patch(key, { config: result.config, loading: false, error: undefined });
-  else patch(key, { loading: false, error: result.error });
+  patch(key, { loading: true, error: undefined });
+  const pending = (async () => {
+    try {
+      const result = await readSettingsConfig('', [KEY], workspaceId);
+      if (requests.get(key) !== request) return;
+      if (result.ok) patch(key, { config: result.config, loading: false, error: undefined });
+      else patch(key, { loading: false, error: result.error });
+    } catch (error) {
+      if (requests.get(key) === request)
+        patch(key, { loading: false, error: error instanceof Error ? error.message : String(error) });
+    } finally {
+      if (requests.get(key) === request) pendingRequests.delete(key);
+    }
+  })();
+  pendingRequests.set(key, pending);
+  return pending;
+}
+
+/** Initial consumers share a read and reuse resolved config; explicit refreshes can supersede it. */
+export function ensureTemplateConfiguration(workspaceId?: string): Promise<void> {
+  const key = scopeKey(workspaceId);
+  return (
+    pendingRequests.get(key) ??
+    (templateStore.state[key]?.config === undefined ? refreshTemplateConfiguration(workspaceId) : Promise.resolve())
+  );
 }
 
 export function useTemplateConfiguration(workspaceId?: string): TemplateConfiguration {
   const key = scopeKey(workspaceId);
   const entry = useStore(templateStore, (state) => state[key] ?? EMPTY);
   useEffect(() => {
-    void refreshTemplateConfiguration(workspaceId);
+    void ensureTemplateConfiguration(workspaceId);
     return onHubConnected(() => {
-      void refreshTemplateConfiguration(workspaceId);
+      void (pendingRequests.get(key) ?? refreshTemplateConfiguration(workspaceId));
     });
-  }, [workspaceId]);
+  }, [key, workspaceId]);
   return entry;
 }
 
@@ -85,6 +106,7 @@ export async function saveTemplateDefault(id: string | null, workspaceId?: strin
     return false;
   }
   requests.set(key, (requests.get(key) ?? 0) + 1);
+  pendingRequests.delete(key);
   patch(key, { config: result.config, saving: false, loading: false, error: undefined });
   // Workspace views may inherit a newly saved global value.
   if (workspaceId === undefined) {

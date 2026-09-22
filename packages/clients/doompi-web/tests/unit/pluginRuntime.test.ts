@@ -35,6 +35,7 @@ import {
   removeSessionWebPluginRuntime,
   startSessionWebPluginRuntime,
   webPluginCompositionStore,
+  webPluginMountState,
 } from '../../src/web/lib/pluginRuntime';
 
 interface FakeElement {
@@ -159,10 +160,16 @@ describe('composition bootstrap recovery', () => {
 
     await vi.waitFor(() => expect(webPluginCompositionStore.state.phase).toBe('error'));
     expect(webPluginCompositionStore.state.error).toBe('tunnel closed');
+    expect(webPluginMountState({ scope: 'global' })).toEqual({ phase: 'error', error: 'tunnel closed' });
+    expect(webPluginMountState({ scope: 'workspace', workspaceId: 'workspace-one' })).toEqual({
+      phase: 'error',
+      error: 'tunnel closed',
+    });
 
     await retryWebPluginCompositions();
 
-    expect(webPluginCompositionStore.state).toEqual({ phase: 'ready' });
+    expect(webPluginCompositionStore.state.phase).toBe('ready');
+    expect(webPluginMountState({ scope: 'global' })).toEqual({ phase: 'ready' });
     expect(mocks.installGlobalWebPlugins).toHaveBeenCalled();
   });
 
@@ -274,6 +281,10 @@ describe('three-level web plugin mounts', () => {
 
     await expect(refreshWebPluginCompositions()).rejects.toThrow('Invalid signature');
     expect(mocks.activateVerifiedPluginComposition).not.toHaveBeenCalled();
+    expect(webPluginMountState({ scope: 'global' })).toEqual({
+      phase: 'error',
+      error: expect.stringContaining('Invalid signature'),
+    });
   });
 
   it('mounts global and both workspaces without any live session', async () => {
@@ -287,12 +298,103 @@ describe('three-level web plugin mounts', () => {
     expect(mocks.installSessionWebPlugins).not.toHaveBeenCalled();
   });
 
+  it('finishes healthy workspaces and their session focus when another workspace fails', async () => {
+    mocks.activateVerifiedPluginComposition.mockImplementation(async (entry: SessionWebComposition) => {
+      if (entry.id === composition('e', 1).id) throw new Error('workspace-one unavailable');
+      return { ok: true, revision: entry.revision };
+    });
+    const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);
+    stops.push(stop);
+    const focused = focusSessionWebPlugins('two', composition('b', 1), 'workspace-two');
+
+    await expect(refreshWebPluginCompositions()).rejects.toThrow('workspace-one unavailable');
+    await expect(focused).resolves.toBeUndefined();
+
+    expect(webPluginMountState({ scope: 'global' })).toEqual({ phase: 'ready' });
+    expect(webPluginMountState({ scope: 'workspace', workspaceId: 'workspace-one' })).toEqual({
+      phase: 'error',
+      error: 'workspace-one unavailable',
+    });
+    expect(webPluginMountState({ scope: 'session', workspaceId: 'workspace-two', sessionId: 'two' })).toEqual({
+      phase: 'ready',
+    });
+    await expect(retryWebPluginCompositions()).resolves.toBeUndefined();
+    expect(mocks.installSessionWebPlugins).toHaveBeenCalledWith('two', expect.anything());
+  });
+
+  it('removes readiness for a workspace removed from the composition catalog', async () => {
+    await start();
+    mocks.fetch.mockResolvedValue(Response.json({ global: composition('f', 1), workspaces: [] }));
+    await refreshWebPluginCompositions();
+    expect(mocks.removeWorkspaceWebPlugins).toHaveBeenCalledWith('workspace-one');
+    expect(webPluginMountState({ scope: 'workspace', workspaceId: 'workspace-one' })).toEqual({
+      phase: 'error',
+      error: expect.stringContaining('workspace-one'),
+    });
+  });
+
+  it('does not install metadata returned after its runtime has stopped', async () => {
+    let respond!: (response: Response) => void;
+    mocks.fetch.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        respond = resolve;
+      }),
+    );
+    const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);
+    const pending = refreshWebPluginCompositions();
+    stop();
+    await start();
+    respond(Response.json({ global: composition('a', 9), workspaces: [] }));
+    await pending;
+    expect(mocks.activateVerifiedPluginComposition).not.toHaveBeenCalled();
+    expect(webPluginMountState({ scope: 'global' })).toEqual({ phase: 'ready' });
+  });
+  it('publishes a mount only after its verified composition is installed', async () => {
+    scriptPlugins = [{ id: 'fixture', global: {}, workspace: {}, session: {} }];
+    const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);
+    stops.push(stop);
+
+    await refreshWebPluginCompositions();
+
+    expect(webPluginMountState({ scope: 'global' })).toEqual({ phase: 'ready' });
+    expect(webPluginMountState({ scope: 'workspace', workspaceId: 'workspace-one' })).toEqual({ phase: 'ready' });
+    expect(webPluginMountState({ scope: 'session', workspaceId: 'workspace-one', sessionId: 'one' })).toEqual({
+      phase: 'loading',
+    });
+
+    await focusSessionWebPlugins('one', composition('a', 1), 'workspace-one');
+
+    expect(webPluginMountState({ scope: 'session', workspaceId: 'workspace-one', sessionId: 'one' })).toEqual({
+      phase: 'ready',
+    });
+  });
+
+  it('keeps a session pending until both its script and stylesheet finish loading', async () => {
+    await start();
+    automaticScriptLoad = false;
+    automaticStyleLoad = false;
+    const mount = { scope: 'session' as const, workspaceId: 'workspace-one', sessionId: 'one' };
+    const pending = focusSessionWebPlugins('one', composition('a', 1, ['/style.css']), 'workspace-one');
+    await vi.waitFor(() => expect(appended.some((element) => element.src.includes('a'.repeat(64)))).toBe(true));
+    expect(webPluginMountState(mount)).toEqual({ phase: 'loading' });
+    const script = appended.find((element) => element.src.includes('a'.repeat(64)))!;
+    (globalThis as unknown as Record<string, unknown>).DoomPiWebPluginComposition = [];
+    script.dispatch('load');
+    await vi.waitFor(() => expect(appended.some((element) => element.tag === 'link')).toBe(true));
+    const style = appended.find((element) => element.tag === 'link')!;
+    expect(style.media).toBe('not all');
+    expect(webPluginMountState(mount)).toEqual({ phase: 'loading' });
+    expect(mocks.installSessionWebPlugins).not.toHaveBeenCalled();
+    style.dispatch('load');
+    await pending;
+    expect(style.media).toBe('all');
+    expect(webPluginMountState(mount)).toEqual({ phase: 'ready' });
+  });
   it('does not borrow the shell composition for a missing session descriptor', async () => {
     await start();
     await expect(focusSessionWebPlugins('one', undefined, 'workspace-one')).rejects.toThrow('No synchronized');
     expect(mocks.installSessionWebPlugins).not.toHaveBeenCalled();
   });
-
   it('keeps independent session runtimes mounted across focus changes', async () => {
     await start();
     const stopPlugin = vi.fn();
@@ -356,6 +458,26 @@ describe('three-level web plugin mounts', () => {
     await vi.waitFor(() => expect(mocks.activateVerifiedPluginComposition).toHaveBeenCalled());
     removeSessionWebPluginRuntime('one');
     resolve({ ok: true });
+    await pending;
+    expect(mocks.installSessionWebPlugins).not.toHaveBeenCalled();
+  });
+  it('does not resurrect a session removed while workspace metadata is pending', async () => {
+    let respond!: (response: Response) => void;
+    mocks.fetch.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        respond = resolve;
+      }),
+    );
+    const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);
+    stops.push(stop);
+    const pending = focusSessionWebPlugins('one', composition('a', 1), 'workspace-one');
+    removeSessionWebPluginRuntime('one');
+    respond(
+      Response.json({
+        global: composition('f', 1),
+        workspaces: [{ id: 'workspace-one', webComposition: composition('e', 1) }],
+      }),
+    );
     await pending;
     expect(mocks.installSessionWebPlugins).not.toHaveBeenCalled();
   });

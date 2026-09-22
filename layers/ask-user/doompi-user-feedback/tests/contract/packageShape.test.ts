@@ -74,8 +74,8 @@ describe('doompi-user-feedback package contract', () => {
       typebox: '1.3.34',
     });
     for (const packageName of ['@earendil-works/pi-coding-agent', '@earendil-works/pi-tui']) {
-      expect(manifest.peerDependencies?.[packageName]).toBe('0.86.0');
-      expect(manifest.devDependencies?.[packageName]).toBe('0.86.0');
+      expect(manifest.peerDependencies?.[packageName]).toBe('0.87.0');
+      expect(manifest.devDependencies?.[packageName]).toBe('0.87.0');
     }
   });
 });

@@ -135,7 +135,7 @@ describe('SessionRail nesting', () => {
 
   it('gives the child a fork glyph labelled with its provenance, and the parent none', () => {
     const markup = render();
-    expect(card(markup, 'child')).toContain('aria-label="worktree"');
+    expect(card(markup, 'child')).toContain('aria-label="automatic per-conversation worktree"');
     expect(card(markup, 'parent')).not.toContain('aria-label="worktree"');
   });
 
