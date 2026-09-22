@@ -8,7 +8,7 @@ import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import {
   type MinorModeReloadHandoffHandle,
   prepareMinorModeReloadHandoff,
-} from '@agimon-ai/doompi-minor-mode/reload-handoff';
+} from '@agimon-ai/doompi-minor-mode/reloadHandoff';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import type { DomainsCommandDependencies } from '../../types/domainCommand';

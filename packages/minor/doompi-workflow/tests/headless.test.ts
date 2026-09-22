@@ -10,7 +10,7 @@ vi.mock('@agimon-ai/doompi-ui/leader', () => {
 vi.mock('@agimon-ai/doompi-ui/skills', () => {
   throw new Error(missingUiMessage);
 });
-vi.mock('@agimon-ai/doompi-ui/doom-overlay', () => {
+vi.mock('@agimon-ai/doompi-ui/doomOverlay', () => {
   throw new Error(missingUiMessage);
 });
 vi.mock('@agimon-ai/doompi-ui/footer', () => {

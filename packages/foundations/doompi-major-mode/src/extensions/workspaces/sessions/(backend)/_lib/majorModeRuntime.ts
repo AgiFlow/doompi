@@ -24,12 +24,12 @@ import { registerMajorModeVoiceCapability } from './voiceTool';
 function lazyModules() {
   let config: Promise<typeof import('@agimon-ai/doompi-config/majorModes')> | undefined;
   let journal: Promise<typeof import('@agimon-ai/doompi-config/piContext')> | undefined;
-  let picker: Promise<typeof import('@agimon-ai/doompi-ui/matrix-picker')> | undefined;
+  let picker: Promise<typeof import('@agimon-ai/doompi-ui/matrixPicker')> | undefined;
   let selection: Promise<typeof import('@agimon-ai/doompi-config/selectionSwitch')> | undefined;
   return {
     config: () => (config ??= import('@agimon-ai/doompi-config/majorModes')),
     journal: () => (journal ??= import('@agimon-ai/doompi-config/piContext')),
-    picker: () => (picker ??= import('@agimon-ai/doompi-ui/matrix-picker')),
+    picker: () => (picker ??= import('@agimon-ai/doompi-ui/matrixPicker')),
     selection: () => (selection ??= import('@agimon-ai/doompi-config/selectionSwitch')),
   };
 }

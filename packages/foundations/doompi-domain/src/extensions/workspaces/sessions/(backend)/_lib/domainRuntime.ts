@@ -26,11 +26,11 @@ import { registerDomainVoiceCapabilities } from './voiceTool';
 function lazyModules() {
   let apply: Promise<typeof import('../../../../../services/applyDomains')> | undefined;
   let journal: Promise<typeof import('@agimon-ai/doompi-config/piContext')> | undefined;
-  let picker: Promise<typeof import('@agimon-ai/doompi-ui/matrix-picker')> | undefined;
+  let picker: Promise<typeof import('@agimon-ai/doompi-ui/matrixPicker')> | undefined;
   return {
     apply: () => (apply ??= import('../../../../../services/applyDomains')),
     journal: () => (journal ??= import('@agimon-ai/doompi-config/piContext')),
-    picker: () => (picker ??= import('@agimon-ai/doompi-ui/matrix-picker')),
+    picker: () => (picker ??= import('@agimon-ai/doompi-ui/matrixPicker')),
   };
 }
 

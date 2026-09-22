@@ -23,7 +23,7 @@ import {
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from '@agimon-ai/doompi-ui/doom-overlay';
+} from '@agimon-ai/doompi-ui/doomOverlay';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import { type ExtensionContext, getMarkdownTheme } from '@earendil-works/pi-coding-agent';
 import {

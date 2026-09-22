@@ -71,7 +71,7 @@ capability must also work headlessly.
 
 ## Extension lifecycle
 
-`src/extensions/pi.ts` declares the Pi plugin, and `src/extensions/server.ts` declares the session inventory plugin. The browser entry is `src/extensions/web.ts`. Public modules stay flat under `src/exports`; Component exports use flat kebab-case subpaths such as `@agimon-ai/doompi-ui/doom-overlay` and `@agimon-ai/doompi-ui/matrix-picker`.
+`src/extensions/pi.ts` declares the Pi plugin, and `src/extensions/server.ts` declares the session inventory plugin. The browser entry is `src/extensions/web.ts`. Public modules stay flat under `src/exports`; Component exports use flat kebab-case subpaths such as `@agimon-ai/doompi-ui/doomOverlay` and `@agimon-ai/doompi-ui/matrixPicker`.
 
 The Pi helper installs the UI hub service before commands, native event handlers, and tool declarations. Optional minor-mode catalog bindings follow their provider lifetime. `onStop` clears the shell and shuts down telemetry; idempotent `onDispose` also handles registration failure. The TUI runtime owns presentation callbacks, `models/uiState.ts` owns state, and each service has its own `services/<name>/index.ts` entry.
 

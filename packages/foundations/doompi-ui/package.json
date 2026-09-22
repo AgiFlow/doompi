@@ -45,30 +45,30 @@
       "import": "./dist/config.mjs",
       "require": "./dist/config.cjs"
     },
-    "./config-overlay": {
-      "types": "./dist/config-overlay.d.mts",
-      "import": "./dist/config-overlay.mjs",
-      "require": "./dist/config-overlay.cjs"
+    "./configOverlay": {
+      "types": "./dist/configOverlay.d.mts",
+      "import": "./dist/configOverlay.mjs",
+      "require": "./dist/configOverlay.cjs"
     },
-    "./doom-editor": {
-      "types": "./dist/doom-editor.d.mts",
-      "import": "./dist/doom-editor.mjs",
-      "require": "./dist/doom-editor.cjs"
+    "./doomEditor": {
+      "types": "./dist/doomEditor.d.mts",
+      "import": "./dist/doomEditor.mjs",
+      "require": "./dist/doomEditor.cjs"
     },
-    "./doom-footer": {
-      "types": "./dist/doom-footer.d.mts",
-      "import": "./dist/doom-footer.mjs",
-      "require": "./dist/doom-footer.cjs"
+    "./doomFooter": {
+      "types": "./dist/doomFooter.d.mts",
+      "import": "./dist/doomFooter.mjs",
+      "require": "./dist/doomFooter.cjs"
     },
-    "./doom-header": {
-      "types": "./dist/doom-header.d.mts",
-      "import": "./dist/doom-header.mjs",
-      "require": "./dist/doom-header.cjs"
+    "./doomHeader": {
+      "types": "./dist/doomHeader.d.mts",
+      "import": "./dist/doomHeader.mjs",
+      "require": "./dist/doomHeader.cjs"
     },
-    "./doom-overlay": {
-      "types": "./dist/doom-overlay.d.mts",
-      "import": "./dist/doom-overlay.mjs",
-      "require": "./dist/doom-overlay.cjs"
+    "./doomOverlay": {
+      "types": "./dist/doomOverlay.d.mts",
+      "import": "./dist/doomOverlay.mjs",
+      "require": "./dist/doomOverlay.cjs"
     },
     "./extensionName": {
       "types": "./dist/extensionName.d.mts",
@@ -108,10 +108,10 @@
       "import": "./dist/leader.mjs",
       "require": "./dist/leader.cjs"
     },
-    "./leader-hints": {
-      "types": "./dist/leader-hints.d.mts",
-      "import": "./dist/leader-hints.mjs",
-      "require": "./dist/leader-hints.cjs"
+    "./leaderHints": {
+      "types": "./dist/leaderHints.d.mts",
+      "import": "./dist/leaderHints.mjs",
+      "require": "./dist/leaderHints.cjs"
     },
     "./leaderRegistry": {
       "types": "./dist/leaderRegistry.d.mts",
@@ -123,10 +123,10 @@
       "import": "./dist/logSinkTelemetry.mjs",
       "require": "./dist/logSinkTelemetry.cjs"
     },
-    "./matrix-picker": {
-      "types": "./dist/matrix-picker.d.mts",
-      "import": "./dist/matrix-picker.mjs",
-      "require": "./dist/matrix-picker.cjs"
+    "./matrixPicker": {
+      "types": "./dist/matrixPicker.d.mts",
+      "import": "./dist/matrixPicker.mjs",
+      "require": "./dist/matrixPicker.cjs"
     },
     "./rendering": {
       "types": "./dist/rendering.d.mts",
@@ -154,10 +154,10 @@
       "import": "./dist/toolInventory.mjs",
       "require": "./dist/toolInventory.cjs"
     },
-    "./tools-overlay": {
-      "types": "./dist/tools-overlay.d.mts",
-      "import": "./dist/tools-overlay.mjs",
-      "require": "./dist/tools-overlay.cjs"
+    "./toolsOverlay": {
+      "types": "./dist/toolsOverlay.d.mts",
+      "import": "./dist/toolsOverlay.mjs",
+      "require": "./dist/toolsOverlay.cjs"
     },
     "./uiState": {
       "types": "./dist/uiState.d.mts",

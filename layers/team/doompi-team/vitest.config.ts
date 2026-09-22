@@ -27,7 +27,7 @@ export default defineConfig({
   },
   resolve: {
     alias: [
-      { find: '@agimon-ai/doompi-ui/doom-overlay', replacement: `${doomUiExports}doomOverlay.ts` },
+      { find: '@agimon-ai/doompi-ui/doomOverlay', replacement: `${doomUiExports}doomOverlay.ts` },
       { find: /^@agimon-ai\/doompi-ui\/(.*)$/, replacement: `${doomUiExports}$1.ts` },
     ],
   },

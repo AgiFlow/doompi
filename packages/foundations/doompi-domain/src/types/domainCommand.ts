@@ -21,5 +21,5 @@ export interface DomainsCommandDependencies {
   readonly reloadHandoffs: VoiceReloadHandoffStore;
   readonly applyDomains: (domains: string[], state: DoomHarnessContext) => Promise<HarnessState>;
   readonly loadConfigJournal: () => Promise<typeof import('@agimon-ai/doompi-config/piContext')>;
-  readonly loadPicker: () => Promise<typeof import('@agimon-ai/doompi-ui/matrix-picker')>;
+  readonly loadPicker: () => Promise<typeof import('@agimon-ai/doompi-ui/matrixPicker')>;
 }

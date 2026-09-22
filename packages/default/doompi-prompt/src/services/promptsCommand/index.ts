@@ -21,11 +21,11 @@ import type { PromptExtensionDependencies } from '../../types/prompt';
  * - Replacing a draft the user is in the middle of writing.
  */
 
-type PickerModule = typeof import('@agimon-ai/doompi-ui/matrix-picker');
+type PickerModule = typeof import('@agimon-ai/doompi-ui/matrixPicker');
 
 function lazyPicker(): () => Promise<PickerModule> {
   let picker: Promise<PickerModule> | undefined;
-  return () => (picker ??= import('@agimon-ai/doompi-ui/matrix-picker'));
+  return () => (picker ??= import('@agimon-ai/doompi-ui/matrixPicker'));
 }
 
 /** Opens the picker and resolves the chosen row's value, or undefined. */

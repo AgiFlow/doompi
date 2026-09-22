@@ -1,4 +1,4 @@
-import { isBrowserFile } from '@agimon-ai/doompi-build/browser-file';
+import { isBrowserFile } from '@agimon-ai/doompi-build/browserFile';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
 

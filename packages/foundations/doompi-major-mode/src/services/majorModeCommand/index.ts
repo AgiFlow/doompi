@@ -15,7 +15,7 @@ import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import {
   type MinorModeReloadHandoffHandle,
   prepareMinorModeReloadHandoff,
-} from '@agimon-ai/doompi-minor-mode/reload-handoff';
+} from '@agimon-ai/doompi-minor-mode/reloadHandoff';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 import { MAJOR_MODE_SWITCH_HANDOFF_KIND } from '../../types/majorMode';

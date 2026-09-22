@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { isBrowserFile } from '@agimon-ai/doompi-build/browser-file';
+import { isBrowserFile } from '@agimon-ai/doompi-build/browserFile';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
 

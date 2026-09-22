@@ -11,6 +11,5 @@ export function ownEntry(name: string): string {
     directory = parent;
   }
   const source = import.meta.url.endsWith('.ts');
-  const entryName = source ? name : name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
-  return path.join(directory, source ? 'src' : 'dist', 'extensions', `${entryName}.${source ? 'ts' : 'mjs'}`);
+  return path.join(directory, source ? 'src' : 'dist', 'extensions', `${name}.${source ? 'ts' : 'mjs'}`);
 }

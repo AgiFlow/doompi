@@ -60,7 +60,7 @@ export default defineConfig({
         find: '@agimon-ai/doompi-core/uiHub',
         replacement: `${doomExtensionContractsExports}uiHub.ts`,
       },
-      { find: '@agimon-ai/doompi-ui/doom-overlay', replacement: `${doomUiExports}doomOverlay.ts` },
+      { find: '@agimon-ai/doompi-ui/doomOverlay', replacement: `${doomUiExports}doomOverlay.ts` },
       { find: /^@agimon-ai\/doompi-ui\/(.*)$/, replacement: `${doomUiExports}$1.ts` },
     ],
   },

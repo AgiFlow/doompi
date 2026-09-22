@@ -5,7 +5,7 @@ import {
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from '@agimon-ai/doompi-ui/doom-overlay';
+} from '@agimon-ai/doompi-ui/doomOverlay';
 /**
  * Runner Space: the `SPC r l` overlay.
  *

@@ -36,7 +36,7 @@ vi.mock('@agimon-ai/doompi-config/piContext', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   persistHarnessSelection,
 }));
-vi.mock('@agimon-ai/doompi-ui/matrix-picker', () => ({
+vi.mock('@agimon-ai/doompi-ui/matrixPicker', () => ({
   MatrixPickerComponent: class MatrixPickerComponent {
     constructor(...args: unknown[]) {
       pickerConstructed(...args);
@@ -158,7 +158,7 @@ function setup(
       reloadHandoffs,
       applyDomains,
       loadConfigJournal: () => import('@agimon-ai/doompi-config/piContext'),
-      loadPicker: () => import('@agimon-ai/doompi-ui/matrix-picker'),
+      loadPicker: () => import('@agimon-ai/doompi-ui/matrixPicker'),
     }),
   );
 
