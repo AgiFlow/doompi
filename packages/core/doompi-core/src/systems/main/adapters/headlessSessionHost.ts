@@ -1031,6 +1031,9 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         const resourceUri = tool._meta?.ui?.resourceUri;
         if (resourceUri !== undefined && !resources.some((resource) => resource.uri === resourceUri))
           throw new Error(`MCP tool '${tool.name}' references a UI resource not owned by its plugin`);
+        // Tool restrictions reach the agent surface through `allowsTool`; the remote surface is
+        // composed here and must honour the same withdrawals.
+        if (!headlessHost!.allowsTool(tool.name)) continue;
         nextTools.set(tool.name, {
           descriptor: {
             name: tool.name,

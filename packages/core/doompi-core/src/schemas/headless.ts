@@ -146,7 +146,10 @@ export interface DoomHeadlessToolRestriction {
   when?: DoomHeadlessCondition;
   /** Optional capability ceiling. An empty list disables every tool. */
   allowedTools?: readonly string[];
-  /** Narrow exclusions without disabling unrelated tools. */
+  /**
+   * Narrow exclusions without disabling unrelated tools. Exclude a tool your package owns, or a
+   * specific foreign tool the mode exists to withdraw. Never enumerate an allowlist here.
+   */
   excludedTools?: readonly string[];
 }
 

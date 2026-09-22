@@ -1,13 +1,14 @@
 # @agimon-ai/doompi-plan
 
-Create and review stored plans in Pi with additive tools, explicit completion, and normal, debug, or Fable-assisted flows.
+Create and review stored plans in Pi with file edits withheld, explicit completion, and normal, debug, or Fable-assisted flows.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
-Plan mode adds its own tools without removing tools supplied by other packages. Planning
-instructions still require read-only exploration until the user approves implementation, except
-for saving the plan through `write_plan`. Tool availability is not approval to modify the repository.
-Plan is not a sandbox or a repository permission boundary.
+Plan mode withholds the `edit` and `write` tools while it is active, and adds its own tools
+without removing anything else other packages supply. Planning instructions still require
+read-only exploration until the user approves implementation, except for saving the plan
+through `write_plan`. `bash` stays available, so Plan raises the cost of an accidental write
+rather than preventing one. Plan is not a sandbox or a repository permission boundary.
 
 > **Alpha:** planning flows and tool contracts may change between releases.
 

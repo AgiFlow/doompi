@@ -147,7 +147,8 @@ export const WRITE_PLAN_TIMEOUT_MS = 5_000;
  * What complete_plan tells the model once the reader has answered. Exported because the
  * server facet runs its own copy of this tool and must not word the outcome differently.
  */
-export const PLAN_EXIT_APPROVED_TEXT = 'The user approved exiting plan mode. Begin implementing the approved plan.';
+export const PLAN_EXIT_APPROVED_TEXT =
+  'The user approved exiting plan mode. Full tool access is restored. Begin implementing the approved plan.';
 export const PLAN_CONTINUE_TEXT = 'The user chose to continue planning. Remain read-only and refine the plan.';
 const PLAN_REVIEW_PROMPT = [
   PLAN_REVIEW_TITLE,
@@ -161,6 +162,8 @@ const PLAN_REVIEW_WAIT_MESSAGE =
   "The choices were spoken through autonomous voice. Stop now and wait for the user's next message; it will arrive as an ordinary user message.";
 const PLAN_MODE_EXPLORATION_TOOLS = [READ_TOOL, BASH_TOOL, GREP_TOOL, FIND_TOOL, LIST_TOOL] as const;
 const CHILD_EXPLORATION_TOOLS = [...PLAN_MODE_EXPLORATION_TOOLS, MCP_TOOL] as const;
+/** Withheld while any plan flavor is active. Restored by the surface arbiter on exit. */
+const PLAN_MODE_EXCLUDED_TOOLS = new Set(['edit', 'write']);
 const PLAN_MODE_TRIGGER_LEADER = 'leader' as const;
 const PLAN_MODE_TRIGGER_SESSION_RESTORE = 'session_restore' as const;
 const PLAN_MODE_TRIGGER_PLAN_APPROVED = 'plan_approved' as const;
@@ -574,10 +577,10 @@ export function parseDebugEvidencePacket(value: unknown): DebugEvidencePacket {
 }
 
 /**
- * Gate only Plan-owned tools; planning instructions do not remove other packages' tools.
+ * Gate Plan-owned tools by flavor, and withhold the two file-writing tools.
  *
- * `flavor` undefined means plan mode is off, which still hides plan's own tools
- * because they are registered for the whole session and only mean something inside it.
+ * `flavor` undefined means plan mode is off, which hides plan's own tools
+ * because they are registered for the whole session, and restores edit and write.
  */
 export function planToolRestriction(
   flavor: PlanningFlavor | undefined,
@@ -588,7 +591,8 @@ export function planToolRestriction(
       if (name === COMPLETE_PLAN_TOOL || name === WRITE_PLAN_TOOL) return flavor !== undefined;
       if (name === RUN_FABLE_PLAN_TOOL) return flavor === 'fable';
       if (name === RECORD_DEBUG_EVIDENCE_TOOL) return flavor === 'debug';
-      return true;
+      if (flavor === undefined) return true;
+      return !PLAN_MODE_EXCLUDED_TOOLS.has(name);
     });
 }
 
