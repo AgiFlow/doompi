@@ -29,16 +29,32 @@ describe('Doom package API rules', () => {
   }
 
   describe('package-api-manifest', () => {
-    it('says nothing about a package that declares no legacy API', () => {
+    it('says nothing about a package that declares no extension surface', () => {
       const manifest = writeManifest({ name: 'demo', files: ['dist'] });
       expect(packageApiManifest.check?.(manifest, root)).toBeNull();
     });
 
-    it('rejects the legacy doompiApi declaration', () => {
-      const manifest = writeManifest({ name: 'demo', doompiApi: { basePath: 'runner', session: {} } });
-      expect(packageApiManifest.check?.(manifest, root)).toMatch(
-        /Remove the legacy doompiApi manifest declaration.*DoomServerFacet/,
+    it('rejects a hand-authored browser export map', () => {
+      const manifest = writeManifest({
+        name: 'demo',
+        exports: {
+          './extensions/web': {
+            types: './dist/extensions/web.d.mts',
+            import: './dist/extensions/web.mjs',
+          },
+        },
+      });
+      expect(packageApiManifest.check?.(manifest, root)).toContain(
+        'Do not edit package.json exports ./extensions/web; tsdown must generate its import-only',
       );
+    });
+
+    it("accepts tsdown's import-only browser export", () => {
+      const manifest = writeManifest({
+        name: 'demo',
+        exports: { './extensions/web': { import: './dist/extensions/web.mjs' } },
+      });
+      expect(packageApiManifest.check?.(manifest, root)).toBeNull();
     });
 
     it('allows the native doompiServer declaration when its canonical source and export are present', () => {
@@ -117,68 +133,22 @@ describe('Doom package API rules', () => {
       );
     });
 
-    it('rejects the legacy headless server category while allowing a TUI-only package', () => {
-      write(
-        'src/exports/extensions/headless.ts',
-        'export { headlessFacet as default } from "../../adapters/headless/facet.ts";',
-      );
-      const manifest = writeManifest({
-        name: 'headless-demo',
-        exports: {
-          './extensions/headless': {
-            types: './dist/extensions/headless.d.mts',
-            import: './dist/extensions/headless.mjs',
-            require: './dist/extensions/headless.cjs',
-          },
-        },
-        doompiServer: {
-          entry: './src/exports/extensions/headless.ts',
-          dist: './dist/extensions/headless.mjs',
-          scopes: ['session'],
-        },
-      });
-      const violation = packageApiManifest.check?.(manifest, root) ?? '';
-      expect(violation).toContain(
-        'doompiServer.entry must be one of ./src/extensions/server.ts or ./generated/server.ts',
-      );
-      expect(violation).toContain('Remove legacy package export ./extensions/headless');
-
-      fs.rmSync(path.join(root, 'src'), { recursive: true, force: true });
-      const tuiManifest = writeManifest({ name: 'tui-only-demo' });
-      write('src/tui/status.ts', 'export const status = true;');
-      expect(packageApiManifest.check?.(tuiManifest, root)).toBeNull();
-    });
-
-    it('rejects web-owned hub runtime, legacy loader exports, and executable surface entries', () => {
+    it('rejects an executable public surface entry', () => {
       write('src/extensions/pi.ts', 'export default function extension(): void {}');
       write('src/exports/webClient.ts', 'export const webPlugin = {};');
       const manifest = writeManifest({
-        name: 'legacy-demo',
-        files: ['src/web', 'src/exports/webClient.ts'],
-        exports: {
-          './extensions/pi': './dist/extensions/pi.mjs',
-          './package-api-loader': './dist/packageApiLoader.mjs',
-          './session-api': './dist/sessionApi.mjs',
-          './sessionApi': './dist/sessionApi.mjs',
-          './hub-api': './dist/hubApi.mjs',
-          './api/git': './dist/hubApi.mjs',
-        },
+        name: 'demo',
+        exports: { './extensions/pi': './dist/extensions/pi.mjs' },
         pi: { extensions: ['./dist/extensions/pi.mjs'] },
         doompiWeb: {
-          pluginId: 'legacy-demo',
+          pluginId: 'demo',
           client: './src/exports/webClient.ts',
-          hub: { entry: './src/exports/webHub.ts', dist: './dist/webHub.mjs' },
         },
       });
 
-      const violation = packageApiManifest.check?.(manifest, root) ?? '';
-      expect(violation).toContain('Remove doompiWeb.hub');
-      expect(violation).toContain('Remove legacy package export ./package-api-loader');
-      expect(violation).toContain('Remove legacy package export ./session-api');
-      expect(violation).toContain('Remove legacy package export ./sessionApi');
-      expect(violation).toContain('Remove legacy package export ./hub-api');
-      expect(violation).toContain('Remove legacy package export ./api/git');
-      expect(violation).toContain('Canonical surface entry ./src/exports/webClient.ts');
+      expect(packageApiManifest.check?.(manifest, root)).toContain(
+        'Canonical surface entry ./src/exports/webClient.ts',
+      );
     });
 
     it('requires a default server export and accepts an explicit alias of the named plugin', () => {

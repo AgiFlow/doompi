@@ -181,17 +181,11 @@ function workspaceState(): RegistryState | undefined {
 
 /** Settings requests an explicit scope; the cockpit reads its active session composition. */
 export function webTemplateCatalog(mount?: WebPluginMount): WebTemplateCatalog {
-  if (mount === undefined) {
-    const scope = activeSessionId === null ? (activeWorkspaceId === null ? 'global' : 'workspace') : 'session';
-    return collectWebTemplates(activeState().plugins, scope);
-  }
-  if (mount.scope === 'global') return collectWebTemplates(defaultState.plugins, 'global');
+  if (mount === undefined) return collectWebTemplates(activeState().plugins);
+  if (mount.scope === 'global') return collectWebTemplates(defaultState.plugins);
   const workspace = workspaceStates.get(mount.workspaceId);
   const plugins = mount.scope === 'session' ? sessionStates.get(mount.sessionId)?.plugins : undefined;
-  return collectWebTemplates(
-    plugins ?? mergeScopedPlugins(defaultState.plugins, workspace?.plugins ?? []),
-    mount.scope,
-  );
+  return collectWebTemplates(plugins ?? mergeScopedPlugins(defaultState.plugins, workspace?.plugins ?? []));
 }
 
 function rebuildSession(sessionId: string): RegistryState {

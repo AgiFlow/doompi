@@ -308,3 +308,31 @@ for (const resource of ['compositions', 'settings']) {
     await expect(page.getByTestId('template-diagnostic')).toHaveCount(0);
   });
 }
+
+test('renders Advanced when composition bootstrap fails while template configuration is pending', async ({
+  context,
+  cockpit,
+}) => {
+  const page = await context.newPage();
+  let releaseConfiguration!: () => void;
+  const configurationGate = new Promise<void>((resolve) => {
+    releaseConfiguration = resolve;
+  });
+  await page.route('**/api/compositions', (route) =>
+    route.fulfill({ status: 503, json: { error: 'Composition temporarily unavailable' } }),
+  );
+  await page.route(
+    (url) => url.pathname.endsWith('/settings') && url.searchParams.has('key'),
+    async (route) => {
+      await configurationGate;
+      await route.continue();
+    },
+  );
+  try {
+    await page.goto(`${cockpit.url}/settings/appearance`);
+    await expect(page.getByTestId('template-diagnostic')).toContainText('503');
+    await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
+  } finally {
+    releaseConfiguration();
+  }
+});

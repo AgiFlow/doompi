@@ -146,7 +146,7 @@ export function TemplateHost({
                     <p>
                       {loadError
                         ? 'Retry loading the template or open Settings to review the configuration.'
-                        : 'Install a compatible template package through modes.yaml, then sync the composition.'}
+                        : 'No compatible web template is available. Open Settings to choose a template.'}
                     </p>
                     <Link
                       to="/settings/$section"

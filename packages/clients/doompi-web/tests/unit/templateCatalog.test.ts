@@ -75,17 +75,6 @@ describe('template catalog', () => {
       expect(resolveWebTemplate(templates, elegant.id).template?.id).toBe(elegant.id);
     }
   });
-  it('uses imported Advanced after a composition replacement, but keeps a synchronized owner first', () => {
-    installGlobalWebPlugins([]);
-    expect(webTemplateCatalog({ scope: 'global' }).templates).toEqual([
-      expect.objectContaining({ id: 'doompi-template-advanced', pluginId: 'template-advanced' }),
-    ]);
-
-    installGlobalWebPlugins([{ id: 'remote-advanced', global: { templates: [template('doompi-template-advanced')] } }]);
-    expect(webTemplateCatalog({ scope: 'global' }).templates).toEqual([
-      expect.objectContaining({ id: 'doompi-template-advanced', pluginId: 'remote-advanced' }),
-    ]);
-  });
 
   it('keeps workspace and session contributions out of unrelated Settings catalogs', () => {
     installGlobalWebPlugins([{ id: 'global-layout', global: { templates: [template('global-layout')] } }]);
@@ -96,26 +85,18 @@ describe('template catalog', () => {
     installSessionWebPlugins('s1', [{ id: 'session-layout', session: { templates: [template('session-layout')] } }]);
     activateWebPluginSession('s1');
     const ids = (catalog: ReturnType<typeof webTemplateCatalog>) => catalog.templates.map((entry) => entry.id);
-    expect(ids(webTemplateCatalog({ scope: 'global' }))).toEqual(['global-layout', 'doompi-template-advanced']);
-    expect(ids(webTemplateCatalog({ scope: 'workspace', workspaceId: 'two' }))).toEqual([
-      'global-layout',
-      'doompi-template-advanced',
-    ]);
+    expect(ids(webTemplateCatalog({ scope: 'global' }))).toEqual(['global-layout']);
+    expect(ids(webTemplateCatalog({ scope: 'workspace', workspaceId: 'two' }))).toEqual(['global-layout']);
     expect(ids(webTemplateCatalog({ scope: 'workspace', workspaceId: 'one' }))).toEqual([
       'global-layout',
       'workspace-layout',
-      'doompi-template-advanced',
     ]);
     expect(ids(webTemplateCatalog({ scope: 'session', workspaceId: 'one', sessionId: 's1' }))).toEqual([
       'global-layout',
       'workspace-layout',
       'session-layout',
-      'doompi-template-advanced',
     ]);
     removeWorkspaceWebPlugins('one');
-    expect(ids(webTemplateCatalog({ scope: 'workspace', workspaceId: 'one' }))).toEqual([
-      'global-layout',
-      'doompi-template-advanced',
-    ]);
+    expect(ids(webTemplateCatalog({ scope: 'workspace', workspaceId: 'one' }))).toEqual(['global-layout']);
   });
 });

@@ -60,7 +60,6 @@
   "dependencies": {
     "@agimon-ai/doompi": "workspace:*",
     "@agimon-ai/doompi-core": "workspace:*",
-    "@agimon-ai/doompi-template-advanced": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@codemirror/state": "6.7.5",

@@ -804,9 +804,6 @@ importers:
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../core/doompi-core
-      '@agimon-ai/doompi-template-advanced':
-        specifier: workspace:*
-        version: link:../../../layers/template/doompi-template-advanced
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components

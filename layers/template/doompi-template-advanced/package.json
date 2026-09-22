@@ -32,6 +32,11 @@
   "module": "./dist/extensions/pi.mjs",
   "types": "./dist/extensions/pi.d.cts",
   "exports": {
+    ".": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
@@ -39,11 +44,6 @@
     },
     "./extensions/web": {
       "import": "./dist/extensions/web.mjs"
-    },
-    "./web-client": {
-      "types": "./dist/web-client.d.mts",
-      "import": "./dist/web-client.mjs",
-      "require": "./dist/web-client.cjs"
     },
     "./package.json": "./package.json"
   },
