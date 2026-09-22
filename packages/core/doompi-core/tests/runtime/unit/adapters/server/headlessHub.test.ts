@@ -251,6 +251,55 @@ describe('createHeadlessHub', () => {
     await hub.close();
   });
 
+  it('routes worktree provisioners to the narrowest channel mount', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({ id: 'one', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: host().host });
+    hub.register({ id: 'two', workspaceId: 'two', name: 'Two', cwd: '/two', createdAt: 'now', host: host().host });
+    const global = vi.fn(async () => ({ sessionId: 'global', cwd: '/global' }));
+    const workspace = vi.fn(async () => ({ sessionId: 'workspace', cwd: '/workspace' }));
+    const session = vi.fn(async () => ({ sessionId: 'session', cwd: '/session' }));
+    const channel = (provisioner: typeof global): DoomHubChannel => ({
+      frameType: 'git_worktrees',
+      start(api) {
+        const unregister = api.sessionService?.registerReservedWorktreeProvisioner?.(provisioner);
+        return { payloadFor: () => undefined, close: () => unregister?.() };
+      },
+    });
+
+    hub.registerChannel(channel(global));
+    const releaseWorkspace = hub.registerChannel(channel(workspace), { scope: 'workspace', workspaceId: 'one' });
+    const releaseSession = hub.registerChannel(channel(session), { scope: 'session', sessionId: 'one' });
+
+    await expect(
+      hub.sessionService.provisionReservedWorktree!({ reservationId: 'child', parentSessionId: 'one' }),
+    ).resolves.toEqual({
+      sessionId: 'session',
+      cwd: '/session',
+    });
+    releaseSession();
+    await expect(
+      hub.sessionService.provisionReservedWorktree!({ reservationId: 'child', parentSessionId: 'one' }),
+    ).resolves.toEqual({
+      sessionId: 'workspace',
+      cwd: '/workspace',
+    });
+    await expect(
+      hub.sessionService.provisionReservedWorktree!({ reservationId: 'child', parentSessionId: 'two' }),
+    ).resolves.toEqual({
+      sessionId: 'global',
+      cwd: '/global',
+    });
+    releaseWorkspace();
+    await expect(
+      hub.sessionService.provisionReservedWorktree!({ reservationId: 'child', parentSessionId: 'one' }),
+    ).resolves.toEqual({
+      sessionId: 'global',
+      cwd: '/global',
+    });
+
+    await hub.close();
+  });
+
   it('announces ready communication endpoints after their sessions register', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
     const parentCommunication = hub.sessionService.bindCommunication!('parent');
