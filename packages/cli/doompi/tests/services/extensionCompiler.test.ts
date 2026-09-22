@@ -44,6 +44,19 @@ function readCompiledSource(entry: string): string {
   return [entry, ...chunks].map((target) => fs.readFileSync(target, 'utf8')).join('\n');
 }
 
+/**
+ * The ESM entry the compiler will resolve for log-sink-mcp.
+ *
+ * `createRequire().resolve` would answer with `dist/index.cjs`, so read the package's own import
+ * condition instead. It is resolved from doompi-log because the CLI package does not depend on it.
+ */
+function logSinkEsmEntry(): string {
+  const manifestPath = createRequire(new URL('../../../../default/doompi-log/package.json', import.meta.url)).resolve(
+    '@agimon-ai/log-sink-mcp/package.json',
+  );
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { exports: Record<string, { import: string }> };
+  return fs.realpathSync(path.join(path.dirname(manifestPath), manifest.exports['.'].import));
+}
 afterEach(() => {
   vi.restoreAllMocks();
   for (const directory of temporaryDirectories.splice(0)) {
@@ -141,73 +154,11 @@ describe('compiled direct modules', () => {
     expect(fs.readdirSync(outputDirectory)).toEqual([]);
   });
 
-  it.each(['local', 'shared'])('executes pinned embedding WASM from %s output after source removal', async (cache) => {
-    const directory = temporaryDirectory();
-    const source = path.join(directory, 'source');
-    const logRequire = createRequire(new URL('../../../../default/doompi-log/package.json', import.meta.url));
-    const vectorRoot = path.dirname(
-      createRequire(logRequire.resolve('@agimon-ai/log-sink-mcp')).resolve('ruvector-onnx-embeddings-wasm'),
-    );
-    fs.cpSync(vectorRoot, path.join(source, 'node_modules/ruvector-onnx-embeddings-wasm'), {
-      recursive: true,
-      dereference: true,
-    });
-    const sink = path.join(source, 'node_modules/@agimon-ai/log-sink-mcp');
-    fs.mkdirSync(sink, { recursive: true });
-    fs.writeFileSync(
-      path.join(source, 'package.json'),
-      JSON.stringify({ name: 'fixture', dependencies: { '@agimon-ai/log-sink-mcp': '1' } }),
-    );
-    fs.writeFileSync(
-      path.join(sink, 'package.json'),
-      JSON.stringify({
-        name: '@agimon-ai/log-sink-mcp',
-        main: 'index.mjs',
-        dependencies: { 'ruvector-onnx-embeddings-wasm': '0.1.2' },
-      }),
-    );
-    writeModule(
-      sink,
-      'index',
-      `
-      import { createRequire, Module } from 'node:module';
-      import fs from 'node:fs';
-      import path from 'node:path';
-      export default async function() {
-        const loader = await import('ruvector-onnx-embeddings-wasm/loader.js');
-        const entry = createRequire(import.meta.url).resolve('ruvector-onnx-embeddings-wasm');
-        const module = new Module(entry);
-        module.filename = entry;
-        module.paths = Module._nodeModulePaths(path.dirname(entry));
-        module._compile(fs.readFileSync(entry, 'utf8'), entry);
-        return { loader: typeof loader.createEmbedder, similarity: module.exports.cosineSimilarity(new Float32Array([1,0]), new Float32Array([1,0])) };
-      }
-    `,
-    );
-    const entry = writeModule(source, 'facet', 'export { default } from "@agimon-ai/log-sink-mcp";');
-    const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
-      outputDirectory: path.join(directory, 'generation'),
-      ...(cache === 'shared'
-        ? { repositoryRoot: directory, sharedCacheDirectory: path.join(directory, 'shared') }
-        : {}),
-    });
-    fs.rmSync(source, { recursive: true });
-    const result = execFileSync(
-      process.execPath,
-      [
-        '--input-type=module',
-        '-e',
-        `const compiled = await import(${javascriptStringLiteral(pathToFileURL(output).href)}); console.log(JSON.stringify(await compiled.default()));`,
-      ],
-      {
-        cwd: directory,
-        env: { ...process.env, NODE_PATH: '', NODE_OPTIONS: '' },
-        encoding: 'utf8',
-      },
-    );
-    expect(JSON.parse(result)).toEqual({ loader: 'function', similarity: 1 });
-    expect(fs.existsSync(source)).toBe(false);
-  });
+  // The pinned-embedding-WASM cases that used to live here compiled a stand-in
+  // @agimon-ai/log-sink-mcp, deleted its source, and proved the bundled copy still reached a
+  // pinned ruvector through createRequire. log-sink-mcp is now a DIRECT_EXTERNAL_PACKAGES entry,
+  // so it is never bundled and never rewritten, and no package in the repository depends on
+  // ruvector, sqlite-vec or @tursodatabase/database except through it. The scenario cannot occur.
   it.each(['undeclared', 'missing'])('rejects %s sqlite-vec bindings before publication', async (condition) => {
     const directory = temporaryDirectory();
     const vector = path.join(directory, 'node_modules', 'sqlite-vec');
@@ -1397,10 +1348,14 @@ describe('compiled extension sets', { timeout: 30_000 }, () => {
       manifest.name === '@agimon-ai/doompi'
         ? [fs.realpathSync(fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent')))]
         : [];
+    // log-sink-mcp owns a worker it finds through import.meta.url, so it stays external and the
+    // compiled graph keeps an absolute import into the installed copy, as the Pi set already does.
     const retainedRuntimeImports =
       manifest.name === '@agimon-ai/doompi-style-system'
         ? [fs.realpathSync(fileURLToPath(import.meta.resolve('@agimon-ai/style-system')))]
-        : [];
+        : manifest.name === '@agimon-ai/doompi-log'
+          ? [logSinkEsmEntry()]
+          : [];
     const expectedExternalImports = [...hostedRuntimeImports, ...retainedRuntimeImports];
     const packageImports = externalImports.filter(
       (specifier) => !isBuiltin(specifier) && !specifier.startsWith('${') && !specifier.startsWith('.'),
