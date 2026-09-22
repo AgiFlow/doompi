@@ -76,7 +76,11 @@ function exportEntries(packageDir: string, exportsDir: string): Record<string, s
 }
 
 /** Static resources receive package export entries without becoming tsdown inputs. */
-function resourceEntries(packageDir: string, directory: string, matches: (relative: string) => boolean): Record<string, string> {
+function resourceEntries(
+  packageDir: string,
+  directory: string,
+  matches: (relative: string) => boolean,
+): Record<string, string> {
   const root = path.join(packageDir, directory);
   if (!fs.existsSync(root)) return {};
   const entries: Record<string, string> = {};
@@ -90,7 +94,10 @@ function resourceEntries(packageDir: string, directory: string, matches: (relati
 
 /** Preserves declared resources and discovers default skill and theme resource exports. */
 function staticExports(packageDir: string): Record<string, unknown> {
-  const manifest = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8')) as Record<string, unknown>;
+  const manifest = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8')) as Record<
+    string,
+    unknown
+  >;
   const declared =
     manifest.exports !== null && typeof manifest.exports === 'object' && !Array.isArray(manifest.exports)
       ? Object.fromEntries(Object.entries(manifest.exports).filter(([, target]) => typeof target === 'string'))

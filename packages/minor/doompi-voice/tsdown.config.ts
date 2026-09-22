@@ -15,4 +15,7 @@ const routed = doompiExtension({
 });
 if (!Array.isArray(routed)) throw new Error('voice requires its web bundle.');
 
-export default defineConfig([{ ...routed[0], exports: false }, { ...routed[1], exports: { exclude: ['voiceWorker'] } }]);
+export default defineConfig([
+  { ...routed[0], exports: false },
+  { ...routed[1], exports: { exclude: ['voiceWorker'] } },
+]);

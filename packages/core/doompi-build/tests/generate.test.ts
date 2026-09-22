@@ -18,7 +18,11 @@ afterEach(() => {
 
 const EMPTY = 'export default {};\n';
 
-function packageWith(files: Record<string, string>, name = '@agimon-ai/doompi-plan', manifest: Record<string, unknown> = {}): string {
+function packageWith(
+  files: Record<string, string>,
+  name = '@agimon-ai/doompi-plan',
+  manifest: Record<string, unknown> = {},
+): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-generate-'));
   created.push(dir);
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ ...manifest, name }));
