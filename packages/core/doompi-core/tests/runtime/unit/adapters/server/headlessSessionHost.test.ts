@@ -377,6 +377,30 @@ describe('MCP execution boundary', () => {
     };
   }
 
+  it.each(['success', 'returned-error', 'thrown-error'] as const)(
+    'dispatches one telemetry lifecycle for a remote %s without inventing model usage',
+    async (outcome) => {
+      const current = await remoteFixture();
+      const dispatch = vi.spyOn(current.host.host!, 'dispatchHook');
+      if (outcome === 'returned-error') {
+        current.execute.mockResolvedValue({ content: [{ type: 'text', text: 'failed' }], isError: true });
+      } else if (outcome === 'thrown-error') {
+        current.execute.mockRejectedValue(new Error('failed'));
+      }
+      const result = await current.host.mcpSurface.invokeTool(current.invocation);
+      const lifecycle = dispatch.mock.calls.filter(([name]) => name.startsWith('tool_execution_'));
+      expect(lifecycle.map(([name]) => name)).toEqual(['tool_execution_start', 'tool_execution_end']);
+      const start = lifecycle[0]![1];
+      expect(start).toMatchObject({ toolName: 'remote', toolCallId: expect.stringMatching(/^external-/) });
+      expect(lifecycle[1]![1]).toMatchObject({
+        toolName: 'remote',
+        toolCallId: start.toolCallId,
+        isError: outcome !== 'success',
+        result,
+      });
+      expect(dispatch.mock.calls.some(([name]) => name === 'turn_end')).toBe(false);
+    },
+  );
   it('preserves explicit MCP contracts and does not bypass a result-redaction hook', async () => {
     const current = await remoteFixture();
     expect(current.snapshot.tools[0]).toMatchObject({

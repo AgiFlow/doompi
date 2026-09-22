@@ -151,21 +151,20 @@ describe('the log hub API', () => {
     expect(body.detail).toBe('No recorded usage was found for this period.');
   });
 
-  it('reports both transports declining as absence, not as a fault', async () => {
+  it('reports a broken worker dependency as a query fault, not a missing sink', async () => {
     const source = {
-      query: vi.fn().mockRejectedValue(new Error('sink is not running')),
+      query: vi.fn().mockRejectedValue(new Error('Cannot find module metricsWorker.mjs')),
       lastTransport: () => undefined,
     } as unknown as MetricsSource;
     const app = createLogHubApi({ source });
 
     const response = await app.fetch(new Request('http://hub/metrics'));
 
-    // A machine that has never run the sink is the ordinary case, so the page
-    // gets a state it can name rather than a 500 it has to render as a crash.
+    // The page renders a named error state without disguising a broken install.
     expect(response.status).toBe(200);
     const body = (await response.json()) as MetricsUnavailable;
-    expect(body.unavailable).toBe('no-sink');
-    expect(body.detail).toContain('sink is not running');
+    expect(body.unavailable).toBe('query-error');
+    expect(body.detail).toContain('metricsWorker.mjs');
   });
 
   it('forwards a focus as the filter field that dimension uses', async () => {
@@ -257,7 +256,7 @@ describe('the log hub API', () => {
     expect(issues.query).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'id_10851018' }));
   });
 
-  it('reports a failing issues subprocess as absence, not as a fault', async () => {
+  it('reports a failing issues subprocess as a query fault', async () => {
     const issues = {
       query: vi.fn().mockRejectedValue(new Error('log-sink-mcp is not installed')),
     } as unknown as IssuesSource;
@@ -266,6 +265,6 @@ describe('the log hub API', () => {
     const response = await app.fetch(new Request('http://hub/issues'));
 
     expect(response.status).toBe(200);
-    expect(((await response.json()) as MetricsUnavailable).unavailable).toBe('no-sink');
+    expect(((await response.json()) as MetricsUnavailable).unavailable).toBe('query-error');
   });
 });

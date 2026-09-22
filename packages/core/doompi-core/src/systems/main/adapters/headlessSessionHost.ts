@@ -1341,14 +1341,18 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         throw new Error('Headless capability preparation is not ready.');
       if (invocation.revision !== readRevision() || readTools().get(invocation.name) !== applied)
         throw new Error(`Tool '${invocation.name}' is no longer active`);
-      emitTo(listeners, {
+      const startEvent = {
         type: 'tool_execution_start',
         runId: EXTERNAL_OPERATION,
         turnId: EXTERNAL_OPERATION,
         toolCallId,
         toolName: invocation.name,
         args,
-      });
+      };
+      emitTo(listeners, startEvent);
+      // External calls bypass the harness event stream. Deliver the same lifecycle
+      // to package hooks as native tools, not just to presentation subscribers.
+      await headlessHost.dispatchHook('tool_execution_start', startEvent);
       let result;
       try {
         result = await applied.execute(
@@ -1404,7 +1408,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
             : { details: result.details }),
         isError: patch?.isError ?? result.isError ?? false,
       };
-      emitTo(listeners, {
+      const endEvent = {
         type: 'tool_execution_end',
         runId: EXTERNAL_OPERATION,
         turnId: EXTERNAL_OPERATION,
@@ -1413,7 +1417,9 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         result: patched,
         isError: patched.isError,
         terminate: patch?.terminate ?? false,
-      });
+      };
+      emitTo(listeners, endEvent);
+      await headlessHost.dispatchHook('tool_execution_end', endEvent);
       return patched;
     });
   };
