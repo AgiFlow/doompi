@@ -72,10 +72,10 @@ describe('doom Pi UI package boundary', () => {
     expect(manifest.version).toMatch(SEMVER_PATTERN);
     expect(manifest.private).toBeUndefined();
     expect(manifest.type).toBe('module');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.0');
-    expect(manifest.devDependencies?.['@earendil-works/pi-tui']).toBe('0.87.0');
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.0');
-    expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBe('0.87.0');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
+    expect(manifest.devDependencies?.['@earendil-works/pi-tui']).toBe('0.87.1');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBe('0.87.1');
   });
 
   it('keeps browser UI dependencies optional while preserving the web client entry', async () => {

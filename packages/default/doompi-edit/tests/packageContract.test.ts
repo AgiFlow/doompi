@@ -53,8 +53,8 @@ describe('doompi-edit package contract', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.publishConfig?.access).toBe('public');
     for (const dependency of piPeers) {
-      expect(manifest.peerDependencies?.[dependency]).toBe('0.87.0');
-      expect(manifest.devDependencies?.[dependency]).toBe('0.87.0');
+      expect(manifest.peerDependencies?.[dependency]).toBe('0.87.1');
+      expect(manifest.devDependencies?.[dependency]).toBe('0.87.1');
     }
   });
 

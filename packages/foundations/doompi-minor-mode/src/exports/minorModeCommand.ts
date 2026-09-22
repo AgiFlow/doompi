@@ -1,1 +1,1 @@
-export * from '../services/minorModeCommand';
+export { actionsFor, matchMinorMode, MINOR_MODE_COMMAND } from '../services/command';

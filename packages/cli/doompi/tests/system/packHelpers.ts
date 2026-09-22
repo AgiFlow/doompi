@@ -31,10 +31,10 @@ const NON_SOURCE_FILE_SUFFIXES = ['.map', '.d.mts', '.d.cts'] as const;
 const UTF8_ENCODING = 'utf8';
 const NEWLINE = '\n';
 const PUBLIC_HOST_DEPENDENCIES: Readonly<Record<string, string>> = {
-  '@earendil-works/pi-agent-core': '0.87.0',
-  '@earendil-works/pi-ai': '0.87.0',
-  '@earendil-works/pi-coding-agent': '0.87.0',
-  '@earendil-works/pi-tui': '0.87.0',
+  '@earendil-works/pi-agent-core': '0.87.1',
+  '@earendil-works/pi-ai': '0.87.1',
+  '@earendil-works/pi-coding-agent': '0.87.1',
+  '@earendil-works/pi-tui': '0.87.1',
   '@agimon-ai/vibe-lint': '0.0.1-alpha.26',
 };
 const RUNTIME_SHUTDOWN_TIMEOUT_MS = 10_000;

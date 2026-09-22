@@ -101,8 +101,8 @@ describe('doompi-hook package contract', () => {
   it('pins the Pi peer and development versions and keeps the peer optional', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.0');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.0');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
     expect(manifest.peerDependenciesMeta?.['@earendil-works/pi-coding-agent']).toEqual({ optional: true });
   });
 

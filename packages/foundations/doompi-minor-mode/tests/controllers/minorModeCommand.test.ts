@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { MinorModeActionRequest, MinorModeCatalogService, MinorModeRecord } from '../../src/exports';
 import { registerMinorModeCommand } from '../../src/extensions/workspaces/sessions/(backend)/_lib/minorModeCommand';
-import { actionsFor, matchMinorMode } from '../../src/services/minorModeCommand';
+import { actionsFor, matchMinorMode } from '../../src/services/command';
 
 function record(overrides: {
   id: string;

@@ -131,8 +131,8 @@ describe('doompi-major-mode package contract', () => {
     const manifest = await readManifest();
 
     for (const pi of ['@earendil-works/pi-coding-agent', '@earendil-works/pi-tui']) {
-      expect(manifest.peerDependencies?.[pi]).toBe('0.87.0');
-      expect(manifest.devDependencies?.[pi]).toBe('0.87.0');
+      expect(manifest.peerDependencies?.[pi]).toBe('0.87.1');
+      expect(manifest.devDependencies?.[pi]).toBe('0.87.1');
     }
   });
 });
