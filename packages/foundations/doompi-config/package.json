@@ -1,5 +1,5 @@
 {
-  "name": "@agimon-ai/doompiConfig",
+  "name": "@agimon-ai/doompi-config",
   "version": "0.0.1-alpha.79",
   "description": "Typed configuration loading, validation, and host services for composing DoomPi sessions.",
   "keywords": [
@@ -24,7 +24,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AgiFlow/doompi.git",
-    "directory": "packages/foundations/doompiConfig"
+    "directory": "packages/foundations/doompi-config"
   },
   "files": [
     "dist",

@@ -64,7 +64,7 @@ const ALLOWED_BARE_SPECIFIERS = new Set([
  * alternative, and those drift silently when the slot contract changes.
  */
 const STORY_SUFFIX = '.stories.tsx';
-const CONTRACTS_TESTING_PACKAGE = `${WEB_CONTRACTS_ENTRY}/testing`;
+const CONTRACTS_TESTING_PACKAGE = `${CONTRACTS_PACKAGE}/webTesting`;
 const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const WEB_PLUGIN_EXPORT = 'webPlugin';
 const DEFINE_WEB_PLUGIN = 'defineWebPlugin';

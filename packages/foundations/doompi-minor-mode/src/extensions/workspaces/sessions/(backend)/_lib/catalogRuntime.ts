@@ -18,7 +18,7 @@ import {
 import { createMinorModeCatalogHost } from '../../../../../services/catalog';
 import { projectMinorModes } from '../../../../../services/projection';
 import { consumeMinorModeReloadHandoff, discardMinorModeReloadHandoff } from '../../../../../services/reloadHandoff';
-import { registerMinorModeCommand } from '../../../../../services/minorModeCommand';
+import { registerMinorModeCommand } from './minorModeCommand';
 
 /** Registrations and state flips arrive in bursts; one entry covers a burst. */
 const PROJECTION_SETTLE_MS = 50;
