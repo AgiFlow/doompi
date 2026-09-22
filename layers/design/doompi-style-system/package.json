@@ -60,6 +60,7 @@
     "./extensions/web": {
       "import": "./dist/extensions/web.mjs"
     },
+    "./skills/design-workflow/SKILL.md": "./skills/design-workflow/SKILL.md",
     "./package.json": "./package.json"
   },
   "publishConfig": {

@@ -64,10 +64,14 @@ export function TemplateHost({
     selectedTemplate !== undefined &&
     failures.some((failure) => failure.id === selectedTemplate.id && failure.layout === selectedTemplate.layout);
   const configurationPending = configuration.loading && configuration.config === undefined;
-  const waiting =
-    !scopeReady || configurationPending || mountReadiness.phase === 'idle' || mountReadiness.phase === 'loading';
   const loadError = mountReadiness.error ?? configuration.error;
-  const pending = selectedTemplate === undefined && waiting && loadError === undefined;
+  const hasLoadError = mountReadiness.phase === 'error' || loadError !== undefined;
+  // A verified scope must wait for healthy bootstrap, but an error can immediately
+  // render the bundled fallback while the failed request is retried.
+  const waiting =
+    !scopeReady ||
+    (!hasLoadError && (configurationPending || mountReadiness.phase === 'idle' || mountReadiness.phase === 'loading'));
+  const pending = selectedTemplate === undefined && waiting;
   if (
     !waiting &&
     ((template === undefined && selectedTemplate !== undefined) ||

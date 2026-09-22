@@ -301,6 +301,7 @@ for (const resource of ['compositions', 'settings']) {
     );
     await expect(page.getByTestId('template-loading')).toHaveCount(0);
     await expect(page.getByTestId('template-diagnostic')).not.toContainText('No compatible');
+    await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
     failing = false;
     await page.getByRole('button', { name: 'Retry templates' }).click();
     await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);

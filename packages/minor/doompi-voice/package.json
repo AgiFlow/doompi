@@ -81,11 +81,6 @@
       "import": "./dist/voiceTools.mjs",
       "require": "./dist/voiceTools.cjs"
     },
-    "./voiceWorker": {
-      "types": "./dist/voiceWorker.d.mts",
-      "import": "./dist/voiceWorker.mjs",
-      "require": "./dist/voiceWorker.cjs"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {

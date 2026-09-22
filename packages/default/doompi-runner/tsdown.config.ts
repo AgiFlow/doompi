@@ -13,10 +13,12 @@ const routed = doompiExtension({
 });
 if (!Array.isArray(routed)) throw new Error('Runner requires its web bundle.');
 
-export default defineConfig([
-  {
-    ...routed[0],
-    exports: { exclude: ['services/lifeline/client', 'services/runnerSupervisor/index'] },
-  },
-  routed[1],
-]);
+const configs = Array.isArray(routed) ? routed : [routed];
+
+export default defineConfig(
+  configs.map((config) =>
+    'extensions/pi' in config.entry
+      ? { ...config, exports: { exclude: ['services/lifeline/client', 'services/runnerSupervisor/index'] } }
+      : { ...config, exports: false },
+  ),
+);

@@ -49,7 +49,7 @@ export function TemplateSettings({
     <section data-testid="template-settings" className="flex flex-col gap-3">
       <SettingsSectionHeader
         title="template"
-        detail="Choose the layout provided by your modes.yaml packages. The default is saved in Doom config, separately from the color theme."
+        detail="Choose a bundled or modes.yaml-provided layout. The default is saved in Doom config, separately from the color theme."
       />
       <Select
         value={target}

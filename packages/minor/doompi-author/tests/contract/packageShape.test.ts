@@ -43,7 +43,7 @@ describe('doompi-author package contract', () => {
     );
     expect(Object.keys(value.exports ?? {})).toEqual([
       '.',
-      './author-facade',
+      './authorFacade',
       './extensions/pi',
       './extensions/server',
       './extensions/web',

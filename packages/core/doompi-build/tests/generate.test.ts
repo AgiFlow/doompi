@@ -18,10 +18,10 @@ afterEach(() => {
 
 const EMPTY = 'export default {};\n';
 
-function packageWith(files: Record<string, string>, name = '@agimon-ai/doompi-plan'): string {
+function packageWith(files: Record<string, string>, name = '@agimon-ai/doompi-plan', manifest: Record<string, unknown> = {}): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-generate-'));
   created.push(dir);
-  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name }));
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ ...manifest, name }));
   for (const relative of Object.keys(files)) {
     const absolute = path.join(dir, relative);
     fs.mkdirSync(path.dirname(absolute), { recursive: true });
@@ -256,6 +256,22 @@ describe('doompiExtension', () => {
       'normal.server.mjs',
     ]);
     expect(read(dir, 'dist/index.mjs')).toBe(EMPTY);
+  });
+
+  it('exports root skills and theme resources without treating them as build entries', () => {
+    const dir = packageWith({
+      'src/exports/index.ts': EMPTY,
+      'skills/workflow-recovery/SKILL.md': '# Recovery\n',
+      'themes/doom-pi-dark.json': '{}\n',
+    });
+    const config = doompiExtension({ packageDir: dir });
+    expect(Array.isArray(config)).toBe(false);
+    if (Array.isArray(config) || typeof config.exports === 'boolean') throw new Error('expected generated exports');
+
+    expect(config.exports.customExports({ '.': { import: './dist/index.mjs' } })).toMatchObject({
+      './skills/workflow-recovery/SKILL.md': './skills/workflow-recovery/SKILL.md',
+      './themes/doom-pi-dark.json': './themes/doom-pi-dark.json',
+    });
   });
 
   it('does not clean outputs or change metadata in check mode', () => {

@@ -143,6 +143,7 @@
       "import": "./dist/theme.mjs",
       "require": "./dist/theme.cjs"
     },
+    "./themes/doom-pi-dark.json": "./themes/doom-pi-dark.json",
     "./toolChrome": {
       "types": "./dist/toolChrome.d.mts",
       "import": "./dist/toolChrome.mjs",

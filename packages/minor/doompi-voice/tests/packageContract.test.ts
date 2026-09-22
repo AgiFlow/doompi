@@ -166,7 +166,7 @@ describe('doom voice package boundary', () => {
     }
   });
 
-  it('publishes the voice worker as a generated entry', async () => {
+  it('builds the voice worker as a private artifact', async () => {
     const manifest = await readManifest();
     const buildConfig = await readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8');
     const client = await readFile(path.join(packageDirectory, 'src/services/voiceWorkerClient/index.ts'), 'utf8');
@@ -174,7 +174,7 @@ describe('doom voice package boundary', () => {
     expect(buildConfig).toContain('src/services/voiceWorker/index.ts');
     expect(client).toContain('findVoiceWorkerUrl(import.meta.url)');
     expect(client).not.toMatch(/new URL\(['"]\.\.\//u);
-    expect(manifest.exports?.['./voiceWorker']).toBeDefined();
+    expect(Object.keys(manifest.exports ?? {}).some((subpath) => subpath.includes('voiceWorker'))).toBe(false);
   });
 
   it('keeps exports closed and resolves every allowlisted package resource', async () => {

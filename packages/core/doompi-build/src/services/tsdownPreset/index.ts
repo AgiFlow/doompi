@@ -35,13 +35,17 @@ interface BrowserPresetConfig {
   unbundle: boolean;
 }
 
+interface GeneratedExports {
+  customExports: (exports: Record<string, unknown>) => Record<string, unknown>;
+}
+
 interface BasePresetConfig {
   entry: Record<string, string>;
   clean: boolean;
   dts: false | { incremental: boolean; parallel: boolean; eager: boolean };
   write?: false;
   plugins?: QueryAssetPlugin[];
-  exports: boolean;
+  exports: boolean | GeneratedExports;
   format: ('esm' | 'cjs')[];
   platform: 'node';
   sourcemap: boolean;
@@ -71,6 +75,32 @@ function exportEntries(packageDir: string, exportsDir: string): Record<string, s
   return entries;
 }
 
+/** Static resources receive package export entries without becoming tsdown inputs. */
+function resourceEntries(packageDir: string, directory: string, matches: (relative: string) => boolean): Record<string, string> {
+  const root = path.join(packageDir, directory);
+  if (!fs.existsSync(root)) return {};
+  const entries: Record<string, string> = {};
+  for (const relative of fs.readdirSync(root, { encoding: 'utf8', recursive: true })) {
+    if (!matches(relative)) continue;
+    const normalized = relative.split(path.sep).join('/');
+    entries[`./${directory}/${normalized}`] = `./${directory}/${normalized}`;
+  }
+  return entries;
+}
+
+/** Preserves declared resources and discovers default skill and theme resource exports. */
+function staticExports(packageDir: string): Record<string, unknown> {
+  const manifest = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8')) as Record<string, unknown>;
+  const declared =
+    manifest.exports !== null && typeof manifest.exports === 'object' && !Array.isArray(manifest.exports)
+      ? Object.fromEntries(Object.entries(manifest.exports).filter(([, target]) => typeof target === 'string'))
+      : {};
+  return {
+    ...resourceEntries(packageDir, 'skills', (relative) => path.basename(relative) === 'SKILL.md'),
+    ...resourceEntries(packageDir, 'themes', (relative) => relative.endsWith('.json')),
+    ...declared,
+  };
+}
 /**
  * One tsdown config for a folder-routed extension.
  *
@@ -206,7 +236,11 @@ export function doompiExtension(
           ],
         }
       : {}),
-    exports: !mcpOnly,
+    exports: mcpOnly
+      ? false
+      : {
+          customExports: (generated) => ({ ...staticExports(packageDir), ...generated }),
+        },
     format: ['esm', 'cjs'],
     // No minify. This is a library build, and a mangled stack trace inside a
     // published extension is far more expensive than the bytes it saves.

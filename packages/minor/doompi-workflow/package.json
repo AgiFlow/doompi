@@ -58,6 +58,7 @@
     "./extensions/web": {
       "import": "./dist/extensions/web.mjs"
     },
+    "./skills/workflow-recovery/SKILL.md": "./skills/workflow-recovery/SKILL.md",
     "./package.json": "./package.json"
   },
   "publishConfig": {
