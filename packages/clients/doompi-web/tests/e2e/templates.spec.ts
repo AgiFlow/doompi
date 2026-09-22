@@ -19,10 +19,10 @@ async function openAppearance(page: Page): Promise<void> {
   await expect(page.getByTestId('template-settings')).toBeVisible();
 }
 
-async function saveChoice(page: Page, id: string): Promise<void> {
+async function saveChoice(page: Page, id: string, verifySelection = true): Promise<void> {
   await page.getByTestId(`template-${id}`).click();
   await page.getByTestId('template-save').click();
-  await expect(page.getByTestId('template-origin')).toContainText(id);
+  if (verifySelection) await expect(page.getByTestId('template-origin')).toContainText(id);
   await expect(page.getByTestId('template-save-error')).toBeHidden();
 }
 
@@ -91,13 +91,15 @@ test('saves a workspace override and restores global inheritance', async ({ page
   await saveChoice(page, ELEGANT);
   await workspaceScope(page);
   await expect(page.getByTestId('template-origin')).toContainText(`${ELEGANT} (global)`);
-  await saveChoice(page, ADVANCED);
-  await expect(page.getByTestId('template-origin')).toContainText('(repository)');
+  await saveChoice(page, ADVANCED, false);
+  await workspaceScope(page);
+  await expect(page.getByTestId('template-origin')).toContainText(`${ADVANCED} (repository)`);
   await page.getByTestId('settings-close').click();
   await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
   await openAppearance(page);
   await workspaceScope(page);
   await page.getByTestId('template-inherit').click();
+  await workspaceScope(page);
   await expect(page.getByTestId('template-origin')).toContainText(`${ELEGANT} (global)`);
   await page.getByTestId('settings-close').click();
   await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ELEGANT);

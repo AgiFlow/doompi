@@ -11,6 +11,9 @@
     "template",
     "web"
   ],
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
   "license": "MIT",
   "author": "Vuong Ngo",
   "repository": {
@@ -30,6 +33,11 @@
   "types": "./dist/extensions/pi.d.cts",
   "exports": {
     ".": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"

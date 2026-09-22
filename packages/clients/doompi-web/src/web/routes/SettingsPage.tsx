@@ -175,10 +175,7 @@ export function SettingsPage() {
                     {!current && loadError ? <p role="alert">{loadError}</p> : null}
                     {current?.id === 'providers' ? <ProviderSettings /> : null}
                     {current?.id === 'appearance' ? (
-                      <AppearanceSettings
-                        templateTarget={templateTarget}
-                        onTemplateTargetChange={setTemplateTarget}
-                      />
+                      <AppearanceSettings templateTarget={templateTarget} onTemplateTargetChange={setTemplateTarget} />
                     ) : null}
                     {current?.id === 'notifications' ? <NotificationSettings /> : null}
                     {current?.id === 'images' ? <ImageSettings /> : null}

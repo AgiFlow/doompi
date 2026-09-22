@@ -12,6 +12,10 @@ const SCOPE_ORDER: readonly ExtensionScope[] = ['global', 'workspace', 'session'
 const API_CONTRACTS_SOURCE = 'src/exports/apiContracts.ts';
 const API_CONTRACTS_DIST = './dist/api-contracts.mjs';
 
+const PI_EXPORT = './extensions/pi';
+const PI_TYPES = './dist/extensions/pi.d.mts';
+const PI_IMPORT = './dist/extensions/pi.mjs';
+const PI_REQUIRE = './dist/extensions/pi.cjs';
 const WEB_EXPORT = './extensions/web';
 const WEB_DIST = './dist/extensions/web.mjs';
 const MCP_DIST = './dist/extensions/mcp.mjs';
@@ -108,6 +112,9 @@ export function syncManifest(input: ManifestSync): Record<string, unknown> {
     //
     // Added from the target rather than from the file existing, because this
     // runs on the node build's build:done and the browser build follows it.
+    if (targets.includes('cli')) {
+      exportsMap[PI_EXPORT] = { types: PI_TYPES, import: PI_IMPORT, require: PI_REQUIRE };
+    } else delete exportsMap[PI_EXPORT];
     if (targets.includes('web')) exportsMap[WEB_EXPORT] = { import: WEB_DIST };
     else delete exportsMap[WEB_EXPORT];
     manifest.exports = Object.fromEntries(
