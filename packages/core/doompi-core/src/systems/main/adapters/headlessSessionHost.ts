@@ -217,10 +217,10 @@ const unsupported = (parsed: Args): string | undefined => {
 
 /** Validate the Pi flags that remain after Doom's harness flags are removed. */
 export function validateDirectHeadlessArgs(agentArgs: readonly string[]): Args {
+  if (agentArgs.includes('--mode')) throw new Error('Direct headless mode does not support --mode.');
   const parsed = parseArgs([...agentArgs]);
   const diagnostics = parsed.diagnostics.filter((diagnostic) => diagnostic.type === 'error');
   if (diagnostics.length) throw new Error(diagnostics.map((diagnostic) => diagnostic.message).join('\n'));
-  if (agentArgs.includes('--mode')) throw new Error('Direct headless mode does not support --mode.');
   const error = unsupported(parsed);
   if (error) throw new Error(error);
   return parsed;
