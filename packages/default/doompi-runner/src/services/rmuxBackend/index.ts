@@ -6,6 +6,7 @@ import path from 'node:path';
 import { type Pane, RMUX, type Rmux } from '@rmux/sdk';
 
 import {
+  EXECUTABLE_BITS,
   EXECUTABLE_MODE,
   LOG_DRAIN_POLL_MS,
   LOG_DRAIN_TIMEOUT_MS,
@@ -19,6 +20,7 @@ import {
   SOCKET_HASH_LENGTH,
   STOP_CLOSE_TIMEOUT_MS,
   STOP_GRACE_MS,
+  VENDOR_DIRECTORY,
 } from '../../constants/rmuxBackend';
 import type { RunHandle } from '../../types/launcher';
 import type { PtyRun } from '../../types/ptyHost';
@@ -236,7 +238,7 @@ export class RmuxBackend implements IRmuxBackend {
     const binaries = [bundledBinary(), 'rmux'].filter((value): value is string => value !== undefined);
     for (const binary of binaries) {
       try {
-        if (binary !== 'rmux') fs.chmodSync(binary, EXECUTABLE_MODE);
+        if (binary !== 'rmux') ensureExecutablePayload(binary);
         const client = new RMUX({ binary, socketName: socketName(this.paths.repositoryPath()) });
         await client.capabilities();
         return client;
@@ -373,10 +375,40 @@ export function resolveBundledRmuxBinary(moduleUrl = import.meta.url): string | 
   try {
     const require = createRequire(moduleUrl);
     const manifest = require.resolve(`${packageName}/package.json`);
-    return path.join(path.dirname(manifest), 'vendor', 'bin', 'rmux');
+    return path.join(path.dirname(manifest), VENDOR_DIRECTORY, 'bin', 'rmux');
   } catch (error) {
     process.emitWarning(`Bundled RMUX binary is unavailable for ${packageName}: ${errorMessage(error)}`);
     return undefined;
+  }
+}
+
+/**
+ * Make the bundled payload runnable before the launcher is spawned.
+ *
+ * The prebuilt packages reach npm with plain 0644 files, so the executable bit
+ * the build set is not what lands on a user machine. Restoring it on the one
+ * binary we spawn is not enough: rmux execs two files of its own,
+ * `bin/rmux-daemon` and `libexec/rmux/rmux`, and the launcher fails on that
+ * first exec with a permission error. Every file the payload ships is restored
+ * here instead, which also covers a helper a later rmux release adds.
+ *
+ * A configured override (DOOMPI_RMUX_BINARY) usually points at a stand-alone
+ * binary, so only paths that really sit inside a package vendor tree get the
+ * walk. Files that are already executable are left untouched, since chmod on a
+ * binary owned by someone else would throw and drop an otherwise usable
+ * candidate.
+ */
+export function ensureExecutablePayload(binary: string): void {
+  const vendor = path.resolve(path.dirname(binary), '..');
+  const payload =
+    path.basename(vendor) === VENDOR_DIRECTORY
+      ? fs
+          .readdirSync(vendor, { recursive: true, withFileTypes: true })
+          .filter((entry) => entry.isFile())
+          .map((entry) => path.join(entry.parentPath, entry.name))
+      : [binary];
+  for (const file of payload) {
+    if ((fs.statSync(file).mode & EXECUTABLE_BITS) === 0) fs.chmodSync(file, EXECUTABLE_MODE);
   }
 }
 

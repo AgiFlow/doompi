@@ -11,6 +11,9 @@ export const PANE_PID_FORMAT = '#{pane_pid}';
 export const STOP_GRACE_MS = 3_000;
 export const STOP_CLOSE_TIMEOUT_MS = 1_000;
 export const EXECUTABLE_MODE = 0o755;
+/** The owner, group, and other execute bits, so an already runnable file is left alone. */
+export const EXECUTABLE_BITS = 0o111;
+export const VENDOR_DIRECTORY = 'vendor';
 export const SESSION_PREFIX = 'doom-runner-';
 export const OWNED_TARGET_PATTERN = /^doom-runner-[A-Za-z0-9_-]+$/;
 export const SOCKET_HASH_LENGTH = 12;
