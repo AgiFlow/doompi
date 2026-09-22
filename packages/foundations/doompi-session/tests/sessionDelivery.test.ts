@@ -304,19 +304,53 @@ describe('session delivery', () => {
     );
   });
 
-  it('provides a dynamically readable Cordis service', async () => {
-    const context = new Context();
-    contexts.push(context);
-    const dispose = provideSessionDeliveryService(context, {
-      databasePath: temporaryDatabase('provider'),
-      recipientKey: 'session',
-      communication: createDirectEvents().bind('session'),
-      authorizePeer: () => true,
-      admitPrompt: async () => undefined,
+  it('hands back the service it provides, without a read-back from the providing fiber', async () => {
+    const root = new Context();
+    contexts.push(root);
+    let provided: DoomSessionDeliveryService | undefined;
+    let readBackDuringApply: DoomSessionDeliveryService | undefined;
+
+    const fiber = root.plugin((context: Context) => {
+      const { service } = provideSessionDeliveryService(context, {
+        databasePath: temporaryDatabase('provider'),
+        recipientKey: 'session',
+        communication: createDirectEvents().bind('session'),
+        authorizePeer: () => true,
+        admitPrompt: async () => undefined,
+      });
+      provided = service;
+      // Cordis hides a service while its providing fiber is LOADING, which is every
+      // provider during its own callback. The caller must use the returned instance.
+      readBackDuringApply = readDoomSessionDelivery(context);
+    });
+    await fiber.await();
+
+    expect(provided?.recipientKey).toBe('session');
+    expect(typeof provided?.receive).toBe('function');
+    expect(readBackDuringApply).toBeUndefined();
+    expect(readDoomSessionDelivery(root)?.recipientKey).toBe('session');
+
+    await fiber.dispose();
+    expect(readDoomSessionDelivery(root)).toBeUndefined();
+  });
+
+  it('closes the delivery database when the providing fiber throws after provide', async () => {
+    const root = new Context();
+    contexts.push(root);
+    let provided: DoomSessionDeliveryService | undefined;
+
+    const fiber = root.plugin((context: Context) => {
+      provided = provideSessionDeliveryService(context, {
+        databasePath: temporaryDatabase('failing'),
+        recipientKey: 'session',
+        communication: createDirectEvents().bind('session'),
+        authorizePeer: () => true,
+        admitPrompt: async () => undefined,
+      }).service;
+      throw new Error('facet failed after provide');
     });
 
-    expect(readDoomSessionDelivery(context)?.recipientKey).toBe('session');
-    await dispose();
-    expect(readDoomSessionDelivery(context)).toBeUndefined();
+    await expect(fiber.await()).rejects.toThrow('facet failed after provide');
+    expect(() => provided?.inbox()).toThrow('database is not open');
   });
 });

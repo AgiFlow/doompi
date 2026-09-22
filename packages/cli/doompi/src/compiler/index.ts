@@ -181,8 +181,15 @@ const DIRECT_RESOURCE_PACKAGES = new Set([
   'open',
 ]);
 
-/** Published runtimes that intentionally retain their native dependency graph outside direct artifacts. */
-const DIRECT_EXTERNAL_PACKAGES = new Set(['@agimon-ai/style-system']);
+/**
+ * Published runtimes that intentionally retain their native dependency graph outside direct artifacts.
+ *
+ * log-sink-mcp belongs here for the same reason the Pi set already externalises it: it owns a
+ * worker (`dist/api/metricsWorker.mjs`) that it locates through `import.meta.url`, and a bundled
+ * copy resolves that against the module's own output tree where neither the worker nor the twenty
+ * five bare dependencies it needs (`yaml`, `zod`, `hono`, `inversify` and the rest) exist.
+ */
+const DIRECT_EXTERNAL_PACKAGES = new Set(['@agimon-ai/style-system', '@agimon-ai/log-sink-mcp']);
 
 /**
  * @rmux/sdk only looks up the caller-provided `rmux` executable by name and has
@@ -348,7 +355,9 @@ function nativePackageDirectories(entries: readonly string[]): string[] {
     } catch {
       continue;
     }
-    if (manifest.name === '@agimon-ai/log-sink-mcp') found.push(directory);
+    // log-sink-mcp is kept external for direct modules, so it is never rewritten and never needs
+    // to own a resource binding. Its dependencies are still walked below, because a bundled
+    // caller can still reach them.
     if (
       manifest.name === TURSO_DATABASE_PACKAGE ||
       manifest.name === 'sqlite-vec' ||
@@ -502,13 +511,7 @@ function resourcesWithPinnedNativePlatforms(
   );
   for (const directory of nativePackageDirectories(entries)) {
     const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8')) as { name: string };
-    if (manifest.name === '@agimon-ai/log-sink-mcp') {
-      // Its createRequire lookup must resolve the pinned embedding package, not the source installation.
-      if (!pinned.some((resource) => canonicalPath(resource.ownerDirectory) === canonicalPath(directory))) {
-        pinned.push({ ownerPackageName: manifest.name, ownerDirectory: directory, packages: [] });
-      }
-      continue;
-    }
+    if (manifest.name === '@agimon-ai/log-sink-mcp') continue;
     if (manifest.name === '@napi-rs/keyring') {
       for (const pkg of keyringResources(directory)) {
         const existing = packagesByName.get(pkg.packageName);
