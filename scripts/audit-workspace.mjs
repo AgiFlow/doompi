@@ -44,11 +44,12 @@ const additionalToolingPackageNames = [
 // the resolved `workspace:*` version, so a released package that points at an
 // unreleased one ships a dependency npm cannot install.
 const unreleasedOwnedPackageNames = new Set(['@agimon-ai/doompi-desktop']);
-const vibeLintVersion = '0.0.1-alpha.35';
-
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
+
+const vibeLintVersion = readJson(path.join(root, 'package.json')).devDependencies?.['@agimon-ai/vibe-lint'];
+if (typeof vibeLintVersion !== 'string') fail('Root package must declare @agimon-ai/vibe-lint as a devDependency');
 
 function fail(message) {
   throw new Error(message);
