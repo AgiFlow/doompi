@@ -415,6 +415,66 @@ describe('MCP execution boundary', () => {
     ).rejects.toThrow();
   });
 
+  it('withdraws a restricted tool from the remote surface and restores it when the mode clears', async () => {
+    const execute = vi.fn<DoomHeadlessTool['execute']>(async (..._args) => ({
+      content: [{ type: 'text' as const, text: 'done' }],
+    }));
+    const candidate: DoomServerBundleEntry = {
+      packageName: '@test/mcp-restriction',
+      entry: './server.ts',
+      module: './server.mjs',
+      scopes: ['session'],
+      required: true,
+      owners: [{ majorMode: 'test', layer: 'default' }],
+    };
+    const current = await fixture(
+      [
+        {
+          declaration: {
+            packageName: 'test',
+            entry: './mcp.mjs',
+            module: './mcp.mjs',
+            sha256: '0'.repeat(64),
+            owners: [{ majorMode: 'test', layer: 'default' }],
+          },
+          plugin: {
+            name: 'test',
+            session: {
+              tools: [{ name: 'edit', description: 'Edit', parameters: Type.Object({}), execute }],
+            },
+          },
+        },
+      ],
+      { candidates: [candidate], modes: [] },
+    );
+    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
+    await current.host.activateFacets({
+      root: current.context,
+      installedPackages: [candidate.packageName],
+      dispose: async () => {},
+    });
+    const remoteNames = () => current.host.mcpSurface.readSurface().tools.map(({ name }) => name);
+    expect(remoteNames()).toEqual(['edit']);
+
+    await current.context
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin((context: Context) => {
+        requireDoomHeadlessHost(context).registerToolRestriction({
+          when: { state: { 'minor-mode': 'plan' } },
+          excludedTools: ['edit'],
+        });
+      })
+      .await();
+    await current.host.host!.changeSelection({ axis: 'state', key: 'minor-mode', values: ['plan'] });
+    expect(remoteNames()).toEqual([]);
+    const withdrawn = current.host.mcpSurface.readSurface();
+    await expect(
+      current.host.mcpSurface.invokeTool({ revision: withdrawn.revision, name: 'edit', arguments: {} }),
+    ).rejects.toThrow("Tool 'edit' is not active");
+
+    await current.host.host!.changeSelection({ axis: 'state', key: 'minor-mode', values: [] });
+    expect(remoteNames()).toEqual(['edit']);
+  });
   it.each([
     { majorMode: 'other', layer: 'default' },
     { majorMode: 'test', layer: 'inactive' },

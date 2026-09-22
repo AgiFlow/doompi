@@ -122,12 +122,17 @@ async function fixture(options: FixtureOptions = {}) {
 }
 
 describe('headless planning resources and selection', () => {
-  it('restricts only UI review during autonomous Voice and never falls back to UI input', async () => {
+  it('restricts UI review during autonomous Voice, withholds writes during Plan, and never falls back to UI input', async () => {
     const test = await fixture({ minorModes: ['plan', 'workflow', 'voice-auto'] });
     try {
-      expect(test.registerToolRestriction).toHaveBeenCalledExactlyOnceWith({
+      expect(test.registerToolRestriction).toHaveBeenCalledTimes(2);
+      expect(test.registerToolRestriction).toHaveBeenCalledWith({
         when: { state: { 'minor-mode': 'voice-auto' } },
         excludedTools: ['complete_plan'],
+      });
+      expect(test.registerToolRestriction).toHaveBeenCalledWith({
+        when: { state: { 'minor-mode': 'plan' } },
+        excludedTools: ['edit', 'write'],
       });
       for (const name of ['complete_plan', 'write_plan']) {
         const tool = test.tools.find((tool) => tool.name === name)!;
@@ -163,7 +168,7 @@ describe('headless planning resources and selection', () => {
       });
     }
     await test.close?.();
-    expect(test.dispose).toHaveBeenCalledTimes(9);
+    expect(test.dispose).toHaveBeenCalledTimes(10);
   });
 
   it.each(['normal', 'debug', 'fable'])(

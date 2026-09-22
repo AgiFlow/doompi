@@ -38,4 +38,4 @@ The local TUI uses `SPC p e` for normal planning, `SPC p d` for debugging, and
 remote tools. The local no-argument `write_plan` reads the visible plan from its
 own session. `complete_plan` requires the user's explicit exit-or-continue choice.
 
-Plan adds its own tools without removing other packages' tools. Availability is not permission to edit: do not mutate the repository while planning, except to save the plan through `write_plan`. If exit restoration fails, report the failure and continue planning without starting implementation.
+Plan withholds `edit` and `write` while it is active, and adds its own tools without removing anything else. `bash` is not sandboxed: do not mutate the repository while planning, except to save the plan through `write_plan`. If exit restoration fails, report the failure and continue planning without starting implementation.
