@@ -1,0 +1,5 @@
+# DoomPi Elegant Template
+
+A chat-first, independently installable web layout for the DoomPi client.
+
+- [Package guide](README.md): Installation through modes.yaml, scoped default configuration, and the template contribution contract.

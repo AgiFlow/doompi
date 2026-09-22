@@ -2,6 +2,7 @@ import type { Store } from '@tanstack/store';
 import type { ComponentType, ReactNode } from 'react';
 
 import type { ModelContextBinding } from './modelContext';
+import type { WebTemplateContribution } from './template';
 
 /**
  * The client half of the DoomPi web plugin contract.
@@ -775,6 +776,8 @@ export interface WebPluginDefinition {
   global?: WebPluginContributions;
   workspace?: WebPluginContributions;
   session?: WebPluginContributions;
+  /** Layouts offered by admitted packages; only the selected layout is mounted. */
+  templates?: WebTemplateContribution[];
   tabs?: TabContribution[];
   /** Optional faces placed after the host-owned Activity and Context faces. */
   dockFaces?: DockFaceContribution[];

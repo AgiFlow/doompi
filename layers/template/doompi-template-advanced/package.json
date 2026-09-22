@@ -1,0 +1,105 @@
+{
+  "name": "@agimon-ai/doompi-template-advanced",
+  "version": "0.0.1-alpha.0",
+  "description": "Advanced multi-panel template for the DoomPi web client.",
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "developer-tools",
+    "doompi",
+    "pi-package",
+    "template",
+    "web"
+  ],
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "layers/template/doompi-template-advanced"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "llms.txt"
+  ],
+  "type": "module",
+  "main": "./dist/extensions/pi.cjs",
+  "module": "./dist/extensions/pi.mjs",
+  "types": "./dist/extensions/pi.d.cts",
+  "exports": {
+    ".": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-core": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*"
+  },
+  "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
+    "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
+    "@earendil-works/pi-coding-agent": "0.86.0",
+    "@types/node": "26.6.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tsdown": "0.23.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.86.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "doompiWeb": {
+    "pluginId": "template-advanced",
+    "channels": [],
+    "client": "./dist/extensions/web.mjs",
+    "scopes": [
+      "global",
+      "workspace",
+      "session"
+    ]
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
+  }
+}

@@ -173,6 +173,8 @@ export interface DoomConfig {
   editor?: EditorConfig;
   voice?: VoiceConfig;
   selection?: DoomSelectionConfig;
+  /** Default layout identifier, resolved against the available web template packages. */
+  web?: { template?: string };
 }
 
 export interface PluginHookSource {

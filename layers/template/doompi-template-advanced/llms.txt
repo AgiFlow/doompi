@@ -1,0 +1,5 @@
+# DoomPi Advanced Template
+
+A slot-based, independently installable web layout for the DoomPi client.
+
+- [Package guide](README.md): Installation through modes.yaml, scoped default configuration, and the template contribution contract.

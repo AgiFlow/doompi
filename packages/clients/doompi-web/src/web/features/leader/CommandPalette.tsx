@@ -29,6 +29,7 @@ import { sessionsStore } from '../../stores/sessionsStore';
 import { runCommand, useActiveSession } from '../../stores/sessionStore';
 import { openTransientTab } from '../../stores/transientTabsStore';
 import { useOpenTab } from '../../stores/useOpenTab';
+import { useWebPluginRegistry } from '../../stores/useWebPluginRegistry';
 
 const LEADER_PREFIX = 'SPC';
 const SEARCH_KEY = '/';
@@ -49,6 +50,7 @@ function pathLabel(keys: readonly string[]): string {
  * back to wherever it was (usually the composer) when it closes.
  */
 export function CommandPalette() {
+  useWebPluginRegistry();
   const commands = useActiveSession((state) => state.commands);
   const { open, path } = useStore(paletteStore);
   const activeId = useStore(sessionsStore, (state) => state.activeId);

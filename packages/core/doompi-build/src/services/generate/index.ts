@@ -73,7 +73,18 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
   for (const target of requestedTargets) {
     const resolution = resolveTarget(graph, target);
     notices.push(...resolution.notices);
-    if (resolution.contributions.length === 0 && resolution.escapeHatches.length === 0 && resolution.roots.length === 0)
+    // modes.yaml admits packages through their Pi entry, even when their only feature is a browser layout.
+    const templateAdmission =
+      target === 'cli' &&
+      graph.entries.some(
+        (entry) => entry.side === 'frontend' && entry.surface === 'template' && entry.platform === 'web',
+      );
+    if (
+      resolution.contributions.length === 0 &&
+      resolution.escapeHatches.length === 0 &&
+      resolution.roots.length === 0 &&
+      !templateAdmission
+    )
       continue;
 
     targets.push(target);

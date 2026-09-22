@@ -4,6 +4,7 @@ import { useStore } from '@tanstack/react-store';
 
 import { availableThemes, selectTheme, themeStore } from '../../stores/themeStore';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
+import { TemplateSettings } from './TemplateSettings';
 
 /** The accents a swatch previews, in the order the bar shows them. */
 const SWATCH_ACCENTS = ['blue', 'green', 'yellow', 'red', 'magenta', 'cyan'] as const;
@@ -42,10 +43,17 @@ function ThemeSwatch({ theme }: { theme: ThemeConfig }) {
  * once and is remembered per browser; the token contract the themes fill
  * is documented in the component library.
  */
-export function AppearanceSettings() {
+export function AppearanceSettings({
+  templateTarget,
+  onTemplateTargetChange,
+}: {
+  templateTarget: string;
+  onTemplateTargetChange: (target: string) => void;
+}) {
   const current = useStore(themeStore, (state) => state.name);
   return (
     <div data-testid="appearance-settings" className="flex flex-col gap-4">
+      <TemplateSettings target={templateTarget} onTargetChange={onTemplateTargetChange} />
       <SettingsSectionHeader
         title="appearance"
         detail="pick the theme the cockpit renders with. the choice is remembered in this browser; every colour on the page, including the plugins' tabs, follows it."

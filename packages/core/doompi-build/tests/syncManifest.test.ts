@@ -40,6 +40,34 @@ describe('syncManifest', () => {
     expect(manifest.doompiWeb).toMatchObject({ channels: ['current_state'] });
   });
 
+  it('publishes the Pi subpath for a CLI-admitted browser-only package', () => {
+    const packageDir = packageWith({
+      'src/extensions/(frontend)/template/example.web.tsx': 'export default {};\n',
+    });
+    const manifest = syncManifest({
+      packageDir,
+      manifest: {
+        exports: {
+          '.': {
+            types: './dist/extensions/pi.d.mts',
+            import: './dist/extensions/pi.mjs',
+            require: './dist/extensions/pi.cjs',
+          },
+        },
+      },
+      graph: scanExtensions({ packageDir }),
+      targets: ['cli', 'web'],
+      pluginId: 'template-example',
+    });
+
+    expect(manifest.exports).toMatchObject({
+      './extensions/pi': {
+        types: './dist/extensions/pi.d.mts',
+        import: './dist/extensions/pi.mjs',
+        require: './dist/extensions/pi.cjs',
+      },
+    });
+  });
   it('adds or removes only MCP-owned metadata', () => {
     const existing = {
       doompiServer: { entry: './generated/server.ts' },

@@ -13,6 +13,7 @@ import { pluginPackageRoots } from './pluginRoots';
 
 /** A fixture plugin whose tool renderer throws on demand, so the timeline's fallback can be proved. */
 const crashRoot = fileURLToPath(new URL('../fixtures/crash-plugin', import.meta.url));
+const templateRoot = fileURLToPath(new URL('../fixtures/template-plugin', import.meta.url));
 
 /** Env vars the cockpit fixture reads for the controlled synchronized composition. */
 export const SYNCED_DIST_ENV = 'DOOMPI_E2E_SYNCED_DIST';
@@ -60,6 +61,7 @@ export default async function globalSetup(): Promise<() => void> {
       .filter((entry) => !entry.root.includes(`${path.sep}packages${path.sep}foundations${path.sep}`))
       .map((entry) => entry.root),
     crashRoot,
+    templateRoot,
   ]
     .map((root) => `    - ${JSON.stringify(root)}`)
     .join('\n');
@@ -86,7 +88,7 @@ majorMode:
   const outDir = path.dirname(registration.webDirectory);
   const result = await bundleCockpitWeb({
     hostRoot: fileURLToPath(new URL('../..', import.meta.url)),
-    pluginRoots: [...packages.map((entry) => entry.root), crashRoot],
+    pluginRoots: [...packages.map((entry) => entry.root), crashRoot, templateRoot],
     outDir,
   });
   const workRoot = fs.mkdtempSync(path.join(workspaceRoot, 'node_modules', '.doompi-e2e-'));

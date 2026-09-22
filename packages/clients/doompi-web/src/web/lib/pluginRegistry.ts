@@ -18,6 +18,7 @@ import type {
   ToolRendererContribution,
   UserMessageActionContribution,
   WebPluginDefinition,
+  WebPluginMount,
   WebPluginRuntime,
   WebPluginSlotProps,
 } from '@agimon-ai/doompi-core/web';
@@ -25,6 +26,7 @@ import type { ComponentType } from 'react';
 
 import { leaderConflicts } from './leaderTree';
 import { mergeScopedPlugins, pluginsAtScope } from './pluginScopes';
+import { collectWebTemplates, type WebTemplateCatalog } from './templateCatalog';
 
 /**
  * The installed plugin set.
@@ -58,7 +60,9 @@ export type InstallDiagnosticKind =
   | 'leader-leaf-override'
   | 'leader-group-label'
   | 'orphan-fill'
-  | 'rejected-fill';
+  | 'rejected-fill'
+  | 'invalid-template'
+  | 'duplicate-template';
 
 export interface InstallDiagnostic {
   /** The plugin that lost or misfiled the contribution. */
@@ -173,6 +177,15 @@ function activeState(): RegistryState {
 
 function workspaceState(): RegistryState | undefined {
   return activeWorkspaceId === null ? undefined : workspaceStates.get(activeWorkspaceId);
+}
+
+/** Settings requests an explicit scope; the cockpit reads its active session composition. */
+export function webTemplateCatalog(mount?: WebPluginMount): WebTemplateCatalog {
+  if (mount === undefined) return collectWebTemplates(activeState().plugins);
+  if (mount.scope === 'global') return collectWebTemplates(defaultState.plugins);
+  const workspace = workspaceStates.get(mount.workspaceId);
+  const plugins = mount.scope === 'session' ? sessionStates.get(mount.sessionId)?.plugins : undefined;
+  return collectWebTemplates(plugins ?? mergeScopedPlugins(defaultState.plugins, workspace?.plugins ?? []));
 }
 
 function rebuildSession(sessionId: string): RegistryState {
@@ -542,6 +555,8 @@ function buildWebPluginState(plugins: readonly WebPluginDefinition[]): RegistryS
       for (const section of plugin.activitySections ?? []) pendingSections.push({ pluginId: plugin.id, section });
       if (plugin.fileLinks !== undefined) installingState.fileLinks.push(plugin.fileLinks);
     }
+
+    installingState.diagnostics.push(...collectWebTemplates(installingState.plugins).diagnostics);
 
     // Phase 2: resolve by name, now that every declaration is known.
     for (const slot of Object.values(HOST_SLOTS)) installingState.slots.set(slot, { slot });

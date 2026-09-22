@@ -63,6 +63,7 @@ export const WEB_FIELDS: Readonly<Record<string, string>> = {
   mode: 'minorModes',
   channel: 'channels',
   tab: 'tabs',
+  template: 'templates',
   dock: 'dockFaces',
   setting: 'settingsSections',
   slot: 'slots',

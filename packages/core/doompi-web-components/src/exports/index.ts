@@ -20,6 +20,7 @@ export {
   DialogTrigger,
 } from '../components/Dialog';
 export { Dot, type DotProps, type DotTone, dotVariants } from '../components/Dot';
+export { Drawer, type DrawerProps } from '../components/Drawer';
 export {
   DropdownMenu,
   DropdownMenuCheckboxItem,

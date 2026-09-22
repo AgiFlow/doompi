@@ -1,0 +1,5 @@
+generated/
+dist/
+coverage/
+node_modules/
+.tmp/

@@ -74,6 +74,22 @@ describe('generateExtension', () => {
     expect(exists(dir, 'generated/server.ts')).toBe(false);
   });
 
+  it('admits a template-only package through Pi without adding agent capabilities', () => {
+    const route = 'src/extensions/(frontend)/template/example-layout.web.tsx';
+    const dir = packageWith({ [route]: EMPTY }, '@example/independent-template');
+    const result = generateExtension({ packageDir: dir });
+    expect(result.targets).toEqual(['cli', 'web']);
+    expect(result.notices).toEqual([]);
+    expect(read(dir, 'generated/web.ts')).toContain("get templates(): WebPluginContributions['templates']");
+    expect(read(dir, 'generated/web.ts')).toContain("id: 'example-layout'");
+    const pi = read(dir, 'generated/pi.ts');
+    expect(pi).toContain("definePiExtension('@example/independent-template'");
+    expect(pi).not.toMatch(/tools:|minorModes:|templateExampleLayout/);
+    expect(exists(dir, 'generated/server.ts')).toBe(false);
+    fs.rmSync(path.join(dir, route));
+    generateExtension({ packageDir: dir });
+    expect(exists(dir, 'generated/pi.ts')).toBe(false);
+  });
   it('writes no backend entries for a cockpit-only package', () => {
     const dir = packageWith({ 'src/extensions/(frontend)/tab/Panel.web.tsx': EMPTY });
     const result = generateExtension({ packageDir: dir });

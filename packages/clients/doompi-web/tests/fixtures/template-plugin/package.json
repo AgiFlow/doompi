@@ -1,0 +1,21 @@
+{
+  "name": "@example/independent-doompi-template",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An independent template package and a deliberately failing layout for browser integration tests.",
+  "type": "module",
+  "doompiWeb": {
+    "pluginId": "independent-template",
+    "client": "./client.mjs",
+    "scopes": [
+      "global",
+      "workspace",
+      "session"
+    ]
+  },
+  "pi": {
+    "extensions": [
+      "./pi.mjs"
+    ]
+  }
+}

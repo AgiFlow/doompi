@@ -145,6 +145,7 @@ const FRONTEND_IDENTITY: Readonly<Record<string, (name: string, options: RenderO
   slot: (name, options) => ({ slot: `${options.pluginId}.${toKebab(name)}` }),
   command: (name) => ({ id: toKebab(name) }),
   tab: (name) => ({ id: toKebab(name) }),
+  template: (name) => ({ id: toKebab(name) }),
   dock: (name) => ({ id: toKebab(name) }),
   setting: (name) => ({ id: toKebab(name) }),
   action: (name) => ({ id: toKebab(name) }),
