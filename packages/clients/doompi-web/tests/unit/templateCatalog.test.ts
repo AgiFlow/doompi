@@ -60,6 +60,21 @@ describe('template catalog', () => {
     expect(resolveWebTemplate([], 'missing').template).toBeUndefined();
   });
 
+  it('defaults to Advanced regardless of template order and keeps Elegant opt-in', () => {
+    const advanced = template('doompi-template-advanced');
+    const elegant = template('doompi-template-elegant');
+    for (const entries of [
+      [advanced, elegant],
+      [elegant, advanced],
+    ]) {
+      const { templates } = collectWebTemplates([plugin('layouts', entries)]);
+      expect(resolveWebTemplate(templates, undefined)).toEqual({
+        template: templates.find((entry) => entry.id === advanced.id),
+        warning: undefined,
+      });
+      expect(resolveWebTemplate(templates, elegant.id).template?.id).toBe(elegant.id);
+    }
+  });
   it('keeps workspace and session contributions out of unrelated Settings catalogs', () => {
     installGlobalWebPlugins([{ id: 'global-layout', global: { templates: [template('global-layout')] } }]);
     installWorkspaceWebPlugins('one', [
