@@ -167,8 +167,6 @@ export const webPluginProtocolLayout: RuleDefinition = {
     if (!manifest?.doompiWeb || !fs.existsSync(filePath)) return null;
     const relativePath = projectPath(filePath, configRoot);
     if (relativePath === null || !SOURCE_EXTENSIONS.has(path.extname(filePath))) return null;
-    if (relativePath === 'src/exports/webClient.ts')
-      return 'Remove src/exports/webClient.ts; the browser entry belongs at src/extensions/web.ts.';
     if (
       /^(?:src\/)?(?:protocol|transport|communication|socket)(?:\/|\.)/u.test(relativePath) ||
       /^src\/adapters\/(?:protocol|transport|communication|socket)(?:\/|\.)/u.test(relativePath) ||

@@ -102,6 +102,11 @@ describe('Doom web plugin rules', () => {
       expect(webPluginProtocolLayout.check?.(caller, root)).toBeNull();
     });
 
+    it('allows a typed public facade for the generated browser plugin', () => {
+      writeManifest({ name: '@agimon-ai/doompi-demo', doompiWeb: { pluginId: 'demo' } });
+      const facade = write('src/exports/webClient.ts', "export { webPlugin } from '../../generated/web';");
+      expect(webPluginProtocolLayout.check?.(facade, root)).toBeNull();
+    });
     it('reads the socket name through the platform suffix', () => {
       writeManifest({ name: '@agimon-ai/doompi-demo', doompiWeb: { pluginId: 'demo' } });
       const suffixed = write(`${FRONTEND}/channel/demoSocket.web.ts`, 'export default { connect: () => undefined };');

@@ -74,6 +74,11 @@ function layer(...roots: string[]): string[] {
  * declares, so a package can still replace one of these outright.
  */
 const boundaries: BoundaryConfig[] = [
+  {
+    name: 'browser-export',
+    pattern: 'src/exports/webClient.ts',
+    allowedImports: ['generated/web', 'generated/web.ts'],
+  },
   { name: 'constants', pattern: 'src/constants/**', allowedImports: layer('constants') },
   {
     name: 'exports',
