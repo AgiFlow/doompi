@@ -1,3 +1,24 @@
+## 0.0.1-alpha.80 (2026-09-22)
+
+### 🚀 Features
+
+- **doompi-plan:** withhold edit and write while plan mode is active ([#160](https://github.com/AgiFlow/doompi/pull/160))
+- add MCP Apps session UI support ([#155](https://github.com/AgiFlow/doompi/pull/155))
+
+### 🩹 Fixes
+
+- keep minor mode tools additive ([#156](https://github.com/AgiFlow/doompi/pull/156))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.77
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.40
+- Updated @agimon-ai/vibe-lint-plugin-doom-core to 0.0.1-alpha.11
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.79 (2026-09-21)
 
 ### 🚀 Features
