@@ -178,7 +178,9 @@ for (const { directory, manifest } of packageRecords) auditPublishedMetadata(dir
 auditPublishedMetadata(toolingPackageDirectory, toolingManifest);
 
 function selectableDependencyAllowed(owner, target) {
-  return owner === '@agimon-ai/doompi-runner' && runnerNativePackages.has(target);
+  if (owner === '@agimon-ai/doompi-runner' && runnerNativePackages.has(target)) return true;
+  // The web client bundles Advanced as its synchronous offline-safe default.
+  return owner === '@agimon-ai/doompi-web' && target === '@agimon-ai/doompi-template-advanced';
 }
 
 // Foundation packages under packages/utils are shared utilities and prebuilt
