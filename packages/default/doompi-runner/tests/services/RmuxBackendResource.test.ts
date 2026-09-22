@@ -5,7 +5,14 @@ import { pathToFileURL } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { resolveBundledRmuxBinary, rmuxPackageForTarget } from '../../src/services/rmuxBackend';
+import {
+  ensureExecutablePayload,
+  resolveBundledRmuxBinary,
+  rmuxPackageForTarget,
+} from '../../src/services/rmuxBackend';
+
+const PUBLISHED_MODE = 0o644;
+const EXECUTABLE_BITS = 0o111;
 
 const directories: string[] = [];
 afterEach(() => {
@@ -29,6 +36,40 @@ describe('packaged RMUX resource resolution', () => {
     const moduleUrl = pathToFileURL(path.join(directory, 'module.mjs'));
 
     expect(resolveBundledRmuxBinary(moduleUrl.href)).toBe(fs.realpathSync(binary));
+  });
+
+  it('makes every published payload file runnable, not just the launcher', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-rmux-payload-'));
+    directories.push(directory);
+    const vendor = path.join(directory, 'vendor');
+    // The three files the prebuilt packages ship, at the mode npm publishes them with.
+    const files = [
+      path.join(vendor, 'bin', 'rmux'),
+      path.join(vendor, 'bin', 'rmux-daemon'),
+      path.join(vendor, 'libexec', 'rmux', 'rmux'),
+    ];
+    for (const file of files) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, 'rmux', { mode: PUBLISHED_MODE });
+    }
+
+    ensureExecutablePayload(files[0] as string);
+
+    for (const file of files) expect(fs.statSync(file).mode & EXECUTABLE_BITS).not.toBe(0);
+  });
+
+  it('leaves a stand-alone override alone apart from itself', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-rmux-override-'));
+    directories.push(directory);
+    const binary = path.join(directory, 'rmux');
+    const neighbour = path.join(directory, 'notes.txt');
+    fs.writeFileSync(binary, 'rmux', { mode: PUBLISHED_MODE });
+    fs.writeFileSync(neighbour, 'notes', { mode: PUBLISHED_MODE });
+
+    ensureExecutablePayload(binary);
+
+    expect(fs.statSync(binary).mode & EXECUTABLE_BITS).not.toBe(0);
+    expect(fs.statSync(neighbour).mode & EXECUTABLE_BITS).toBe(0);
   });
 
   it('keeps the configured executable override authoritative', () => {
