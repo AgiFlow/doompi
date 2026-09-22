@@ -91,15 +91,15 @@ export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
       </section>
 
       <section className="flex flex-col gap-1">
-        <span className="text-2xs font-bold text-doom-faint">tool calls</span>
+        <span className="text-2xs font-bold text-doom-faint">tool token samples</span>
         {/*
             The token column is a ranking hint, not a measurement. The sink
             attributes a turn's whole total to every tool that ran in that
             turn, so saying otherwise here would be a lie the chart repeats.
           */}
         <span className="text-2xs text-doom-faint/70">
-          call counts are exact; the token column ranks tools by the turns they ran in, and is not each tool&apos;s own
-          consumption
+          only calls with recorded token attribution appear here; external MCP calls remain in the logs. The token
+          column ranks tools by their turns, not each tool&apos;s own consumption.
         </span>
         <table className="w-full text-xs" data-testid="metrics-tools">
           {/* Without heads the two right columns are just numbers; "1006" and
@@ -107,7 +107,7 @@ export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
           <thead>
             <tr className="text-2xs text-doom-faint/70">
               <th className="py-1 text-left font-normal">tool</th>
-              <th className="w-20 py-1 text-right font-normal">calls</th>
+              <th className="w-20 py-1 text-right font-normal">sampled calls</th>
               <th className="w-20 py-1 text-right font-normal">tokens</th>
             </tr>
           </thead>

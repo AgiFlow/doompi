@@ -65,6 +65,45 @@ afterEach(() => {
 });
 
 describe('compiled direct modules', () => {
+  it.each(['local', 'shared'])('queries the real LogSink worker from a %s cached API module', async (cache) => {
+    const directory = temporaryDirectory();
+    const entry = writeModule(
+      directory,
+      'metrics',
+      `
+      import { createAsyncLogMetricsReader } from ${javascriptStringLiteral(logSinkEsmEntry())};
+      export async function query(dbPath) {
+        const reader = createAsyncLogMetricsReader({ dbPath });
+        try { return await reader.getMetrics(undefined, { groupBy: 'model', period: 'week', limit: 5 }); }
+        finally { await reader.close(); }
+      }
+    `,
+    );
+    const options = {
+      repositoryRoot: directory,
+      ...(cache === 'shared' ? { sharedCacheDirectory: path.join(directory, 'shared') } : {}),
+      outputDirectory: path.join(directory, 'generation'),
+    };
+    await compileExtensionModule(entry, path.join(directory, 'cache'), options);
+    const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+      ...options,
+      ...(cache === 'shared' ? { outputDirectory: path.join(directory, 'restored-generation') } : {}),
+    });
+    const result = execFileSync(
+      process.execPath,
+      [
+        '-e',
+        `
+      import(${javascriptStringLiteral(pathToFileURL(output).href)})
+        .then(async ({query}) => console.log(JSON.stringify((await query(${javascriptStringLiteral(path.join(directory, 'session.db'))})).totals)))
+        .catch(error => { console.error(error); process.exitCode = 1; });
+    `,
+      ],
+      { cwd: directory, env: { ...process.env, NODE_PATH: '', NODE_OPTIONS: '' }, encoding: 'utf8', timeout: 20_000 },
+    );
+    expect(JSON.parse(result)).toMatchObject({ totalTokens: 0, totalRecords: 0 });
+    expect(readCompiledSource(output)).not.toContain('metricsWorker.mjs');
+  });
   it.each([
     ['local', false],
     ['shared', false],

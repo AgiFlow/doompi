@@ -52,7 +52,7 @@ function IssueRow({ group, max, tools }: IssueRowProps) {
           <span className="w-8 shrink-0 text-right font-bold text-doom-red">{group.occurrences}</span>
           <span className="w-24 shrink-0 truncate text-doom-hi">{titleOf(group)}</span>
           <span className="min-w-0 flex-1 truncate text-doom-dim">{group.detail}</span>
-          {calls === undefined ? null : <span className="shrink-0 text-doom-faint">of {calls} calls</span>}
+          {calls === undefined ? null : <span className="shrink-0 text-doom-faint">{calls} token samples</span>}
         </button>
       </div>
 
@@ -89,7 +89,7 @@ function IssueRow({ group, max, tools }: IssueRowProps) {
 
 export interface IssuesDetailProps {
   view: IssuesView;
-  /** Tool call counts from the report, used as the denominator. */
+  /** Token-attributed tool calls provide context, not a failure-rate denominator. */
   tools: readonly MetricsTool[];
 }
 
@@ -124,9 +124,8 @@ export function IssuesDetail({ view, tools }: IssuesDetailProps) {
                   <td className="min-w-0 truncate py-1 text-doom-dim">{name}</td>
                   <td className="w-16 py-1 text-right text-doom-red">{failures}</td>
                   <td className="w-28 py-1 text-right text-doom-faint">
-                    {/* Only tools the report also ranked have a denominator;
-                        the two reports scan on their own limits. */}
-                    {calls === undefined ? 'of unknown calls' : `of ${String(calls)} calls`}
+                    {/* These samples need not cover the calls that failed. */}
+                    {calls === undefined ? 'no token samples' : `${String(calls)} token samples`}
                   </td>
                 </tr>
               );

@@ -10,6 +10,7 @@ import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi-c
 
 import { readStartupBootstrapStatus, readBootstrapStatus } from '../../builders/cli/bootstrapLocator';
 import { inputsAreFresh, parseInputFingerprint } from '../../compiler/inputs';
+import { EXTENSION_COMPILER_VERSION } from '../../compiler/version';
 import {
   computeInputsHash,
   computeMcpSourcesHash,
@@ -51,6 +52,7 @@ export interface ReadSyncDriftOptions {
 
 function artifactReceiptIsIntact(receipt: Record<string, unknown>, inside: (target: string) => boolean): boolean {
   if (
+    receipt.version !== EXTENSION_COMPILER_VERSION ||
     typeof receipt.output !== 'string' ||
     !Array.isArray(receipt.artifacts) ||
     !Array.isArray(receipt.artifactInputs)

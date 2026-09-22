@@ -81,10 +81,10 @@ export interface MetricsGroup {
 /**
  * One tool's activity.
  *
- * `calls` is exact. `p90TotalTokens` is not this tool's consumption: the sink
- * attributes the whole turn's tokens to every tool that ran in that turn, so
- * the figure ranks tools and does not measure them. The page must say so
- * wherever it draws this field.
+ * `calls` counts token-attributed samples, not every execution. External MCP
+ * calls without model usage remain queryable as logs but have no sample here.
+ * `p90TotalTokens` attributes the whole turn's tokens to each tool in that turn,
+ * so it ranks tools rather than measuring their own consumption.
  *
  * There is no failure count here because the sink's tool rows do not carry
  * one. Per-tool failures live in its separate agent-issues report, which the
@@ -156,7 +156,7 @@ export interface MetricsReport {
  * the SPA shell, and a 200 of HTML must read as a feature that is not
  * installed, not as a corrupt response.
  */
-export type MetricsUnavailableReason = 'no-sink' | 'no-data' | 'no-api';
+export type MetricsUnavailableReason = 'no-sink' | 'no-data' | 'no-api' | 'query-error';
 
 export interface MetricsUnavailable {
   unavailable: MetricsUnavailableReason;
