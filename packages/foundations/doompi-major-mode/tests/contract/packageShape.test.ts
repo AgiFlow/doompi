@@ -60,14 +60,14 @@ describe('doompi-major-mode package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
-      './api-contracts',
+      './apiContracts',
       './extensions/pi',
       './extensions/server',
       './package.json',
     ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
-    for (const subpath of ['.', './api-contracts', './extensions/pi', './extensions/server']) {
+    for (const subpath of ['.', './apiContracts', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);

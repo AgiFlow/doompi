@@ -62,7 +62,7 @@ describe('doompi-profile package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
-      './api-contracts',
+      './apiContracts',
       './extensions/persona',
       './extensions/pi',
       './extensions/server',
@@ -71,7 +71,7 @@ describe('doompi-profile package contract', () => {
     ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
-    for (const subpath of ['.', './api-contracts', './extensions/persona', './extensions/pi', './extensions/server']) {
+    for (const subpath of ['.', './apiContracts', './extensions/persona', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(conditions(exportsMap['./extensions/web'])).toEqual(['import']);

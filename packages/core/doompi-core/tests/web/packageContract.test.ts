@@ -47,7 +47,7 @@ describe('core web capability package boundary', () => {
       'react-dom': { optional: true },
     });
     expect(Object.keys(manifest.exports ?? {})).toEqual(
-      expect.arrayContaining(['./web', './web/testing', './package.json']),
+      expect.arrayContaining(['./web', './webTesting', './package.json']),
     );
     expect(manifest.exports).not.toHaveProperty('./*');
     expect(manifest.files).toContain('dist');

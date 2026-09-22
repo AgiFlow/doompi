@@ -95,31 +95,31 @@ describe('doompi core package boundary', () => {
 
     expect(publicEntries.length).toBeGreaterThan(0);
     expect(Object.keys(exportsMap)).not.toContain('./*');
-    expect(exportsMap).not.toHaveProperty('./author-facade');
-    expect(exportsMap['./author-tools']).toEqual({
-      types: './dist/author-tools.d.mts',
-      import: './dist/author-tools.mjs',
-      require: './dist/author-tools.cjs',
+    expect(exportsMap).not.toHaveProperty('./authorFacade');
+    expect(exportsMap['./authorTools']).toEqual({
+      types: './dist/authorTools.d.mts',
+      import: './dist/authorTools.mjs',
+      require: './dist/authorTools.cjs',
     });
-    expect(exportsMap['./voice-tools']).toEqual({
-      types: './dist/voice-tools.d.mts',
-      import: './dist/voice-tools.mjs',
-      require: './dist/voice-tools.cjs',
+    expect(exportsMap['./voiceTools']).toEqual({
+      types: './dist/voiceTools.d.mts',
+      import: './dist/voiceTools.mjs',
+      require: './dist/voiceTools.cjs',
     });
-    expect(exportsMap['./voice-reload-handoff']).toEqual({
-      types: './dist/voice-reload-handoff.d.mts',
-      import: './dist/voice-reload-handoff.mjs',
-      require: './dist/voice-reload-handoff.cjs',
+    expect(exportsMap['./voiceReloadHandoff']).toEqual({
+      types: './dist/voiceReloadHandoff.d.mts',
+      import: './dist/voiceReloadHandoff.mjs',
+      require: './dist/voiceReloadHandoff.cjs',
     });
-    expect(exportsMap['./mcp-projection']).toEqual({
-      types: './dist/mcp-projection.d.mts',
-      import: './dist/mcp-projection.mjs',
-      require: './dist/mcp-projection.cjs',
+    expect(exportsMap['./mcpProjection']).toEqual({
+      types: './dist/mcpProjection.d.mts',
+      import: './dist/mcpProjection.mjs',
+      require: './dist/mcpProjection.cjs',
     });
-    expect(exportsMap['./cordis-host']).toEqual({
-      types: './dist/cordis-host.d.mts',
-      import: './dist/cordis-host.mjs',
-      require: './dist/cordis-host.cjs',
+    expect(exportsMap['./cordisHost']).toEqual({
+      types: './dist/cordisHost.d.mts',
+      import: './dist/cordisHost.mjs',
+      require: './dist/cordisHost.cjs',
     });
     expect(exportsMap['./notification']).toEqual({
       types: './dist/notification.d.mts',

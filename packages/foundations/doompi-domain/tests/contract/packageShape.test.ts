@@ -65,7 +65,7 @@ describe('doompi-domain package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
-      './api-contracts',
+      './apiContracts',
       './apply',
       './extensions/pi',
       './extensions/server',
@@ -78,7 +78,7 @@ describe('doompi-domain package contract', () => {
     expect(Object.keys(exportsMap)).not.toContain('./*');
     for (const subpath of [
       '.',
-      './api-contracts',
+      './apiContracts',
       './apply',
       './extensions/pi',
       './extensions/server',

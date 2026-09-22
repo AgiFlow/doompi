@@ -86,7 +86,7 @@ describe('doompi-prompt package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
-      './api-contracts',
+      './apiContracts',
       './extensions/pi',
       './extensions/server',
       './extensions/web',
@@ -102,7 +102,7 @@ describe('doompi-prompt package contract', () => {
       require: './dist/extensions/server.cjs',
     });
     expect(manifest.doompiServer).toEqual({
-      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/apiContracts.mjs' },
       entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],

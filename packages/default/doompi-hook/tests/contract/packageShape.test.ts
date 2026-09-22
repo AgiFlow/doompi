@@ -59,7 +59,7 @@ describe('doompi-hook package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
-      './api-contracts',
+      './apiContracts',
       './extensions/pi',
       './extensions/server',
       './package.json',

@@ -56,7 +56,7 @@ describe('doompi-author package contract', () => {
     const value = await manifest();
     expect('doompiApi' in value).toBe(false);
     expect(value.doompiServer).toEqual({
-      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/apiContracts.mjs' },
       entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],

@@ -108,7 +108,7 @@ describe('doom voice package boundary', () => {
       entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
-      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/apiContracts.mjs' },
     });
   });
 

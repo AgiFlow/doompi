@@ -45,7 +45,7 @@ describe('doompi-user-feedback package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
-      './api-contracts',
+      './apiContracts',
       './extensions/pi',
       './extensions/server',
       './extensions/web',

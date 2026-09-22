@@ -27,7 +27,7 @@ describe('doom file edit extension boundaries', () => {
   it('keeps child session environment ownership in core', async () => {
     const paths = await readSource('src/services/fileEditPaths/index.ts');
 
-    expect(paths).toMatch(/@agimon-ai\/doompi-core\/child-process/u);
+    expect(paths).toMatch(/@agimon-ai\/doompi-core\/childProcess/u);
     expect(paths).not.toMatch(/@agimon-ai\/doompi-team\/env/u);
   });
 

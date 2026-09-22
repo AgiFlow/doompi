@@ -115,13 +115,13 @@ describe('doom file edit package boundary', () => {
       require: './dist/extensions/server.cjs',
     });
     expect(manifest.doompiServer).toEqual({
-      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/apiContracts.mjs' },
       entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
     });
-    expect(exportsMap['./session-api']).toBeUndefined();
-    expect(exportsMap['./web-hub']).toBeUndefined();
+    expect(exportsMap['./sessionApi']).toBeUndefined();
+    expect(exportsMap['./webHub']).toBeUndefined();
   });
 
   it('keeps exports closed and resolves every allowlisted package resource', async () => {

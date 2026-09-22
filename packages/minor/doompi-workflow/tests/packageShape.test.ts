@@ -94,7 +94,7 @@ describe('@agimon-ai/doompi-workflow package shape', () => {
     const pi = objectValue(PACKAGE_MANIFEST.pi);
     expect(pi.extensions).toEqual([STANDARD_ENTRY]);
     expect(PACKAGE_MANIFEST.doompiServer).toEqual({
-      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/apiContracts.mjs' },
       entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
