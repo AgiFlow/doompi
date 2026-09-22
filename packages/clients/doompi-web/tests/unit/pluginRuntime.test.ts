@@ -416,6 +416,40 @@ describe('three-level web plugin mounts', () => {
     expect(appended.filter((element) => element.tag === 'link').every((element) => element.removed)).toBe(true);
   });
 
+  it('does not rewrite mount state when the focused session is unchanged', async () => {
+    await start();
+    await focusSessionWebPlugins('one', composition('a', 1), 'workspace-one');
+    const writes = vi.fn();
+    const subscription = webPluginCompositionStore.subscribe(writes);
+    try {
+      const first = focusSessionWebPlugins('one', composition('a', 1), 'workspace-one');
+      const second = focusSessionWebPlugins('one', composition('a', 1), 'workspace-one');
+      expect(second).toBe(first);
+      await second;
+    } finally {
+      subscription.unsubscribe();
+    }
+    expect(writes).not.toHaveBeenCalled();
+    expect(mocks.installSessionWebPlugins).toHaveBeenCalledTimes(1);
+    expect(mocks.activateWebPluginSession).toHaveBeenLastCalledWith('one');
+  });
+
+  it('remounts an unchanged focus after a revision change, removal or runtime restart', async () => {
+    await start();
+    await focusSessionWebPlugins('one', composition('a', 1), 'workspace-one');
+    await focusSessionWebPlugins('one', composition('a', 2), 'workspace-one');
+    expect(mocks.installSessionWebPlugins).toHaveBeenCalledTimes(2);
+
+    removeSessionWebPluginRuntime('one');
+    await focusSessionWebPlugins('one', composition('a', 2), 'workspace-one');
+    expect(mocks.installSessionWebPlugins).toHaveBeenCalledTimes(3);
+
+    for (const stop of stops.splice(0)) stop();
+    await start();
+    await focusSessionWebPlugins('one', composition('a', 2), 'workspace-one');
+    expect(mocks.installSessionWebPlugins).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps a mounted generation when replacement verification fails', async () => {
     await start();
     const stopPlugin = vi.fn();

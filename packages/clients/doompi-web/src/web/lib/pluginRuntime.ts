@@ -112,6 +112,17 @@ let pendingCompositionRefresh: Promise<void> | undefined;
 let focusedSessionComposition:
   | { sessionId: string; composition?: SessionWebComposition; workspaceId?: string }
   | undefined;
+/** The last session focus, reused while its session, composition, workspace and mount are unchanged. */
+let lastSessionFocus:
+  | {
+      sessionId: string;
+      key: string | undefined;
+      workspaceId: string | undefined;
+      runtimeEpoch: number;
+      ownerEpoch: number;
+      promise: Promise<void>;
+    }
+  | undefined;
 
 async function bootstrapLocalVerifier(shell: CompositionsResponse['shell']): Promise<void> {
   if (typeof location === 'undefined' || !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return;
@@ -464,8 +475,48 @@ export async function focusWorkspaceWebPlugins(workspaceId: string | null): Prom
   if (readiness.phase === 'error') throw new Error(readiness.error);
 }
 
-/** Session focus changes visibility; it does not destroy other mounts. */
-export async function focusSessionWebPlugins(
+/**
+ * Session focus changes visibility; it does not destroy other mounts. Session store updates call this on every
+ * change, so an unchanged focus reuses the previous request instead of writing mount state again.
+ */
+export function focusSessionWebPlugins(
+  sessionId: string | null,
+  composition: SessionWebComposition | undefined,
+  workspaceId?: string,
+): Promise<void> {
+  const key = composition === undefined ? undefined : compositionKey(composition);
+  const last = lastSessionFocus;
+  if (
+    sessionId !== null &&
+    last?.sessionId === sessionId &&
+    last.key === key &&
+    last.workspaceId === workspaceId &&
+    last.runtimeEpoch === runtimeEpoch &&
+    last.ownerEpoch === (mountEpochs.get(`session:${sessionId}`) ?? 0)
+  ) {
+    activateWebPluginSession(sessionId);
+    return last.promise;
+  }
+  const promise = focusSessionMount(sessionId, composition, workspaceId);
+  lastSessionFocus =
+    sessionId === null
+      ? undefined
+      : {
+          sessionId,
+          key,
+          workspaceId,
+          runtimeEpoch,
+          ownerEpoch: mountEpochs.get(`session:${sessionId}`) ?? 0,
+          promise,
+        };
+  void promise.catch(() => {
+    // A failed focus must run again on the next request so retry and reconnect can remount.
+    if (lastSessionFocus?.promise === promise) lastSessionFocus = undefined;
+  });
+  return promise;
+}
+
+async function focusSessionMount(
   sessionId: string | null,
   composition: SessionWebComposition | undefined,
   workspaceId?: string,
