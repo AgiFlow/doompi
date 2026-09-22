@@ -276,10 +276,11 @@ test('requests browser notification permission from the settings button', async 
   ).toBe(true);
 });
 
-test('lists no plugins for the packaged bundle and nothing to resolve', async ({ page, cockpit }) => {
+test('lists the active global plugin composition and nothing to resolve', async ({ page, cockpit }) => {
   await page.goto(`${cockpit.url}/settings/plugins`);
   await expect(page.getByTestId('settings-section-plugins')).toHaveAttribute('data-active', 'true');
-  await expect(page.getByTestId('settings-plugins-empty')).toBeVisible();
+  await expect(page.getByTestId('settings-plugin-template-advanced')).toBeVisible();
+  await expect(page.getByTestId('settings-plugin-template-elegant')).toBeVisible();
   await expect(page.getByTestId('settings-plugin-diagnostics-empty')).toBeVisible();
 });
 
@@ -336,8 +337,11 @@ test.describe('with the synced bundle', () => {
     await expect(page).toHaveURL(/\/settings\/planning$/);
   });
 
-  test('lists every bundled plugin with its contributions and no diagnostics', async ({ page, cockpit }) => {
-    await page.goto(`${cockpit.url}/settings/plugins`);
+  test('lists every focused session plugin with its contributions and no diagnostics', async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForAttach();
+    await page.getByTestId('settings-open').click();
+    await page.getByTestId('settings-section-plugins').click();
     await expect(page.getByTestId('settings-plugin-subagents')).toContainText('1 activity groups');
     await expect(page.getByTestId('settings-plugin-subagents')).toContainText('1 slots');
     await expect(page.getByTestId('settings-plugin-runner')).toContainText('1 activity groups');
@@ -347,9 +351,8 @@ test.describe('with the synced bundle', () => {
 });
 
 // The metrics page is contributed by doompi-log, so it exists only in the
-// synced-style bundle the Playwright global setup composes from every
-// workspace plugin. The package's own dist ships the shell with an empty
-// plugin registry.
+// synced-style composition the Playwright global setup builds from every
+// workspace plugin.
 test.describe('with the synced bundle, which carries the doompi-log metrics page', () => {
   test.use({ assets: 'synced' });
 
