@@ -462,16 +462,29 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
   });
 }
 
-/** Installs a provider-owned endpoint in the current Cordis context. */
+/**
+ * Installs a provider-owned endpoint in the current Cordis context.
+ *
+ * Returns the instance because a provider cannot read its own service back out:
+ * `ctx.get` is strict and hides an implementation while its providing fiber is
+ * LOADING, which is the whole of that fiber's own callback.
+ */
 export function provideSessionDeliveryService(
   context: Context,
   options: SessionDeliveryServiceOptions,
-): () => Promise<void> {
+): { readonly service: DoomSessionDeliveryService; readonly close: () => Promise<void> } {
   const service = createSessionDeliveryService(options);
   const unprovide = context.provide(DOOM_SESSION_DELIVERY_SERVICE, service);
-  return async () => {
-    unprovide();
-    await service.close();
+  // A caller that throws before returning its disposer would otherwise leave the
+  // database, its WAL files and its retry timer open for the life of the process.
+  // close() is idempotent, so this net never conflicts with the ordered close below.
+  context.effect(() => () => service.close(), 'session delivery database');
+  return {
+    service,
+    close: async () => {
+      unprovide();
+      await service.close();
+    },
   };
 }
 

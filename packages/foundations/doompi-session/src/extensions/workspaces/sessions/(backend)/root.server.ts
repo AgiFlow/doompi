@@ -12,7 +12,7 @@ import {
   peerSessionReference,
   readSessionPeerConfig,
 } from '../../../../services/peerTransport';
-import { provideSessionDeliveryService, readDoomSessionDelivery } from '../../../../services/sessionDelivery';
+import { provideSessionDeliveryService } from '../../../../services/sessionDelivery';
 import { createSessionDirectory } from '../../../../services/sessionDirectory';
 import { createSessionGroupStore } from '../../../../services/sessionGroups';
 import {
@@ -70,15 +70,13 @@ export default defineRoot((pluginContext: DoomServerPluginContext) => ({
               fallback: fallbackAuthorization,
             })
           : undefined;
-      const closeDelivery = provideSessionDeliveryService(context, {
+      const { service, close: closeDelivery } = provideSessionDeliveryService(context, {
         databasePath: path.join(deliveryDirectory, `${agent.context.sessionId}.sqlite`),
         recipientKey: agent.context.sessionId,
         communication: peerCommunication,
         authorizePeer: (peerKey, metadata) => groupAuthorization?.(peerKey, metadata) ?? fallbackAuthorization(peerKey),
         admitPrompt: (prompt, delivery) => session.admitPrompt!(prompt, delivery),
       });
-      const service = readDoomSessionDelivery(context);
-      if (!service?.receive) throw new Error('Session peer delivery receiver was not installed.');
       const unprovide: (() => void)[] = [];
       if (groups && selfReference && peerConfig) {
         const directory = createSessionDirectory({
