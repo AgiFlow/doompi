@@ -3,19 +3,19 @@ import {
   type DoomMcpStatusService,
   McpStatusSnapshotSchema,
   readDoomMcpStatus,
-} from '@agimon-ai/doompi-core/mcp-status';
+} from '@agimon-ai/doompi-core/mcpStatus';
 import {
   DOOM_MCP_TOOL_RESOLVER_SERVICE,
   type DoomMcpToolResolverService,
   readDoomMcpToolResolver,
   requireDoomMcpToolResolver,
-} from '@agimon-ai/doompi-core/mcp-tool-resolver';
+} from '@agimon-ai/doompi-core/mcpToolResolver';
 import {
   DOOM_UI_HUB_SERVICE,
   type DoomUiHubService,
   readDoomUiHub,
   requireDoomUiHub,
-} from '@agimon-ai/doompi-core/ui-hub';
+} from '@agimon-ai/doompi-core/uiHub';
 import { Context } from '@deepseek-ai/cordis';
 import { Check } from 'typebox/value';
 import { describe, expect, it, vi } from 'vitest';

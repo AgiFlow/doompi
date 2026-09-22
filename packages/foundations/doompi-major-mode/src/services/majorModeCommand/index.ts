@@ -7,10 +7,10 @@ import {
   supersedeDoomConfigTransition,
 } from '@agimon-ai/doompi-config/piContext';
 import type { DoomConfigPendingSelection } from '@agimon-ai/doompi-config/types';
-import { alreadyComposed } from '@agimon-ai/doompi-core/child-process';
+import { alreadyComposed } from '@agimon-ai/doompi-core/childProcess';
 import { type DoomTransitionResult, requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
-import type { VoiceReloadHandoff, VoiceReloadHandoffIdentity } from '@agimon-ai/doompi-core/voice-reload-handoff';
-import { readDoomVoiceToolsService } from '@agimon-ai/doompi-core/voice-tools';
+import type { VoiceReloadHandoff, VoiceReloadHandoffIdentity } from '@agimon-ai/doompi-core/voiceReloadHandoff';
+import { readDoomVoiceToolsService } from '@agimon-ai/doompi-core/voiceTools';
 import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import {
   type MinorModeReloadHandoffHandle,

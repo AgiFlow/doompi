@@ -26,33 +26,33 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: '@agimon-ai/doompi-core/runtime-cordis-host',
+        find: '@agimon-ai/doompi-core/runtimeCordisHost',
         replacement: `${doomExtensionContractsExports}../pi/cordisHost.ts`,
       },
-      { find: '@agimon-ai/doompi-core/web/testing', replacement: `${doomExtensionContractsExports}webTesting.ts` },
+      { find: '@agimon-ai/doompi-core/webTesting', replacement: `${doomExtensionContractsExports}webTesting.ts` },
       { find: '@agimon-ai/doompi-core/web', replacement: `${doomExtensionContractsExports}web.ts` },
       {
-        find: '@agimon-ai/doompi-core/pi-extension',
+        find: '@agimon-ai/doompi-core/piExtension',
         replacement: `${doomExtensionContractsExports}piExtension.ts`,
       },
       {
-        find: '@agimon-ai/doompi-core/cordis-host',
+        find: '@agimon-ai/doompi-core/cordisHost',
         replacement: `${doomExtensionContractsExports}cordisHost.ts`,
       },
       {
-        find: '@agimon-ai/doompi-core/background-work',
+        find: '@agimon-ai/doompi-core/backgroundWork',
         replacement: `${doomExtensionContractsExports}backgroundWork.ts`,
       },
       {
-        find: '@agimon-ai/doompi-core/child-process',
+        find: '@agimon-ai/doompi-core/childProcess',
         replacement: `${doomExtensionContractsExports}childProcess.ts`,
       },
       {
-        find: '@agimon-ai/doompi-core/ui-hub',
+        find: '@agimon-ai/doompi-core/uiHub',
         replacement: `${doomExtensionContractsExports}uiHub.ts`,
       },
       {
-        find: '@agimon-ai/doompi-core/server-facet',
+        find: '@agimon-ai/doompi-core/serverFacet',
         replacement: `${doomExtensionContractsExports}serverFacet.ts`,
       },
       { find: '@agimon-ai/doompi-ui/doom-overlay', replacement: `${doomUiExports}doomOverlay.ts` },

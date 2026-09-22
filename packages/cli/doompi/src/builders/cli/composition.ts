@@ -4,7 +4,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { loadMajorModesConfig, type MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { alreadyComposed } from '@agimon-ai/doompi-core/child-process';
+import { alreadyComposed } from '@agimon-ai/doompi-core/childProcess';
 import { withExtensionSource } from '@agimon-ai/doompi-ui/extensionName';
 import { type ExtensionAPI, parseArgs } from '@earendil-works/pi-coding-agent';
 
@@ -30,7 +30,7 @@ import { PERSONA_ENTRY, packageAttribution, resolveExtensionComposition } from '
 import { configurePreset } from './harnessContext';
 
 export { findSyncedRoot } from './bootstrapLocator';
-export { alreadyComposed } from '@agimon-ai/doompi-core/child-process';
+export { alreadyComposed } from '@agimon-ai/doompi-core/childProcess';
 export { COMPOSED_ENV, EXTERNAL_EXTENSIONS_ENV, MUTE_ENV } from './compositionState';
 
 /**

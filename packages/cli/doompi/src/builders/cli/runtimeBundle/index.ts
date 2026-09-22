@@ -1,7 +1,7 @@
 import path from 'node:path';
 
-import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
-import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
+import { writeFileAtomic } from '@agimon-ai/doompi-core/runtimeJson';
+import { resolveSyncLocation } from '@agimon-ai/doompi-core/syncLocation';
 
 import { compileExtensionSet, extensionSetManifestPath } from '../../../compiler';
 import type { HarnessOptions } from '../../../composition/types/harness';

@@ -1,9 +1,9 @@
-import { readDoomBackgroundWorkService, type DoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
+import { readDoomBackgroundWorkService, type DoomBackgroundWorkService } from '@agimon-ai/doompi-core/backgroundWork';
 import {
   DOOM_CORDIS_SESSION_SERVICE,
   requireDoomCordisSession,
   type DoomCordisSessionService,
-} from '@agimon-ai/doompi-core/cordis-host';
+} from '@agimon-ai/doompi-core/cordisHost';
 import {
   type DelegationCancel,
   type DelegationRequest,

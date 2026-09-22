@@ -4,8 +4,8 @@ import path from 'node:path';
 
 import { createDoomConfigContext, provideDoomConfigContext } from '@agimon-ai/doompi-config';
 import { getHarnessState, HARNESS_STATE_POINTER, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordisHost';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import type { Context } from '@deepseek-ai/cordis';
 import type {
   BeforeAgentStartEvent,

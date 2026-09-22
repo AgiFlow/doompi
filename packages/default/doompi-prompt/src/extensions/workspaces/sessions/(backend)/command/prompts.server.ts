@@ -1,4 +1,4 @@
-import { defineServerCommand } from '@agimon-ai/doompi-core/extension-file';
+import { defineServerCommand } from '@agimon-ai/doompi-core/extensionFile';
 
 import { serverPromptCommand } from '../../../../../services/serverPrompts';
 export default defineServerCommand(serverPromptCommand);

@@ -1,6 +1,6 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoutedContribution } from '@agimon-ai/doompi-core/extensionFile';
 import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
-import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 import type { TSchema } from 'typebox';
 
 import { MCP_SESSION_TOOLS_SERVICE, type McpSessionToolsService } from '../../../../../services/mcpSessionTools';

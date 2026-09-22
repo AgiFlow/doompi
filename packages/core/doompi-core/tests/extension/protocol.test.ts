@@ -4,7 +4,7 @@ import {
   readChildProcessContext,
   resolveRootSessionId,
   SUBAGENT_ROOT_SESSION_ENV,
-} from '@agimon-ai/doompi-core/child-process';
+} from '@agimon-ai/doompi-core/childProcess';
 import { FooterStatusItemSchema } from '@agimon-ai/doompi-core/footer';
 import { LeaderBindingSchema, LeaderSourceSchema } from '@agimon-ai/doompi-core/leader';
 import {

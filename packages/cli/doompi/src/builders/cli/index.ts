@@ -3,8 +3,8 @@ import path from 'node:path';
 
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import { filterHookDisabledLayers, loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+import { resolveSyncLocation } from '@agimon-ai/doompi-core/syncLocation';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/syncStateContract';
 
 import { compileExtensionSet, extensionSetManifestPath } from '../../compiler';
 import {

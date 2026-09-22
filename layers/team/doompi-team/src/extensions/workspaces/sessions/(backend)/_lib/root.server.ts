@@ -1,10 +1,10 @@
-import { readDoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
-import { readDoomChildSessionService } from '@agimon-ai/doompi-core/child';
+import { readDoomBackgroundWorkService } from '@agimon-ai/doompi-core/backgroundWork';
+import { readDoomChildSessionService } from '@agimon-ai/doompi-core/childSession';
 import { DOOM_DELEGATION_SERVICE } from '@agimon-ai/doompi-core/delegation';
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 import type { DoomHeadlessActivity } from '@agimon-ai/doompi-core/headless';
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 import { provideBackgroundWorkService } from '@agimon-ai/doompi-session';
 import type { Context } from '@deepseek-ai/cordis';
 

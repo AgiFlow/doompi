@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 
-import type { DoomHubSessionService } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomHubSessionService } from '@agimon-ai/doompi-core/hubChannel';
 import type { DoomSessionDeliveryService } from '@agimon-ai/doompi-session';
 
 import { WORKTREE_RECORD_VERSION } from '../../types/worktreeRegistry';

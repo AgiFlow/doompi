@@ -3,15 +3,15 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { loadMajorModesConfig, resolveLayers, filterHookDisabledLayers } from '@agimon-ai/doompi-config/majorModes';
-import { readContextDetail } from '@agimon-ai/doompi-core/context-detail-store';
+import { readContextDetail } from '@agimon-ai/doompi-core/contextDetailStore';
 import { DOOM_HEADLESS_HOST_SERVICE, requireDoomHeadlessHost } from '@agimon-ai/doompi-core/headless';
 import {
   createHeadlessSessionHost,
   restoreHeadlessSelection as restoreCoreSelection,
   validateDirectHeadlessArgs,
 } from '@agimon-ai/doompi-core/main';
-import { serveSessionApis } from '@agimon-ai/doompi-core/package-api-server';
-import type { LoadedServerFacet } from '@agimon-ai/doompi-core/server-facet';
+import { serveSessionApis } from '@agimon-ai/doompi-core/packageApiServer';
+import type { LoadedServerFacet } from '@agimon-ai/doompi-core/serverFacet';
 import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import minorModeServerFacet from '@agimon-ai/doompi-minor-mode/extensions/server';

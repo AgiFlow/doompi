@@ -1,4 +1,4 @@
-import type { DoomHubChannel, DoomHubChannelSource, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomHubChannel, DoomHubChannelSource, DoomHubSessionScope } from '@agimon-ai/doompi-core/hubChannel';
 import { parseRemoteSessionReference } from '@agimon-ai/doompi-session';
 
 import { VoiceOwnershipCoordinator } from '../../services/voiceOwnershipCoordinator';

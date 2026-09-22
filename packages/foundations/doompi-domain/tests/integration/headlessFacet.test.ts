@@ -8,7 +8,7 @@ import type {
   DoomHeadlessHostService,
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-core/headless';
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/serverFacet';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

@@ -10,7 +10,7 @@ import {
   replaceProfileEnvironment,
   resolveProfile,
 } from '@agimon-ai/doompi-config/profiles';
-import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-core/mcp-session';
+import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-core/mcpSession';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRuntimeExtensionPlan } from '../../src/builders/cli/runtimeBundle';

@@ -3,7 +3,7 @@
  * looking for a bare `const meta`. Props come from the contracts package's own
  * testing fixture rather than a hand-rolled stub.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import { UseAuthorToolsToolCard } from './UseAuthorToolsToolCard';
 

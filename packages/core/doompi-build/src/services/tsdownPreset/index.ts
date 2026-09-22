@@ -4,7 +4,6 @@ import path from 'node:path';
 import { GENERATED_DIR } from '../../constants/layout';
 import { generateExtension } from '../generate';
 import type { GenerateOptions } from '../generate/type';
-import { toKebab } from '../identity';
 import { writeManifest, writeMcpManifest } from '../syncManifest';
 
 interface EmittedFile {
@@ -62,8 +61,9 @@ interface PresetConfig extends BasePresetConfig {
 }
 
 const DEFAULT_EXPORTS_DIR = 'src/exports';
+const API_CONTRACTS_ENTRY = 'apiContracts';
 
-/** `src/exports/apiContracts.ts` becomes the `api-contracts` entry; index keeps its name. */
+/** `src/exports/apiContracts.ts` becomes the `apiContracts` entry; index keeps its name. */
 function exportEntries(packageDir: string, exportsDir: string): Record<string, string> {
   const absolute = path.join(packageDir, exportsDir);
   if (!fs.existsSync(absolute)) return {};
@@ -71,7 +71,7 @@ function exportEntries(packageDir: string, exportsDir: string): Record<string, s
   for (const file of fs.readdirSync(absolute)) {
     if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue;
     const stem = file.slice(0, -'.ts'.length);
-    entries[stem === 'index' ? 'index' : toKebab(stem)] = `${exportsDir}/${file}`;
+    entries[stem] = `${exportsDir}/${file}`;
   }
   return entries;
 }
@@ -300,10 +300,10 @@ export function doompiExtension(
     unbundle,
   });
   const configs =
-    !mcpOnly && 'api-contracts' in entry
+    !mcpOnly && API_CONTRACTS_ENTRY in entry
       ? [
-          unsyncedNode({ 'api-contracts': entry['api-contracts'] }, false),
-          node(Object.fromEntries(Object.entries(entry).filter(([name]) => name !== 'api-contracts')), true),
+          unsyncedNode({ [API_CONTRACTS_ENTRY]: entry[API_CONTRACTS_ENTRY] }, false),
+          node(Object.fromEntries(Object.entries(entry).filter(([name]) => name !== API_CONTRACTS_ENTRY)), true),
         ]
       : [node(entry, !mcpOnly)];
   if (!mcpOnly && result.targets.includes('web')) return [...configs, browserConfig()];

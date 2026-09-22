@@ -1,5 +1,5 @@
 import { loadDoomConfig } from '@agimon-ai/doompi-config';
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 export default defineRoot(() => ({
   value: undefined,

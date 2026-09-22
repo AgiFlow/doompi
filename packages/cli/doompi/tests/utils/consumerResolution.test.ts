@@ -6,7 +6,7 @@ import {
   consumerPackageEntries,
   consumerPackageEntry,
   localPackageName,
-} from '@agimon-ai/doompi-core/module-resolution';
+} from '@agimon-ai/doompi-core/moduleResolution';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**

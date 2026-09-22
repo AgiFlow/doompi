@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { DOOM_RELAUNCH_FILE_ENV, parseRelaunchHandoff } from '@agimon-ai/doompi-core/relaunch-handoff';
+import { DOOM_RELAUNCH_FILE_ENV, parseRelaunchHandoff } from '@agimon-ai/doompi-core/relaunchHandoff';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {

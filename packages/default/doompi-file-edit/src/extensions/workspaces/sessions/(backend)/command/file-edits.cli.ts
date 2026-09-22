@@ -1,5 +1,5 @@
-import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 
 import type { FileEditPiScope } from '../_lib/piRoot';
 export default defineRoutedContribution(

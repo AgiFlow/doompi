@@ -14,21 +14,21 @@ import {
   type DoomNarrationService,
   requireDoomNarrationService,
 } from '@agimon-ai/doompi-core/narration';
-import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
 import {
   DOOM_TOOL_SURFACE_SERVICE,
   type DoomToolRestriction,
   type DoomToolRestrictionHandle,
   readDoomToolSurface,
-} from '@agimon-ai/doompi-core/tool-surface';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+} from '@agimon-ai/doompi-core/toolSurface';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/uiHub';
 import {
   DOOM_VOICE_AUTO_MODE_ID,
   DOOM_VOICE_SOURCE,
   DOOM_VOICE_TOOLS_SERVICE,
   requireDoomVoiceToolsService,
   type VoiceToolDefinition,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeCatalogService,

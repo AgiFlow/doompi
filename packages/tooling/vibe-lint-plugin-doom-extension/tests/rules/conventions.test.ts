@@ -9,6 +9,7 @@ import {
   doomPackageShape,
   noDirectToolActivation,
   noLiveGlobalRegistry,
+  noManualExportEntries,
   noProtocolChannelLiterals,
   noRawPiEvents,
   noSameRunnerProtocol,
@@ -128,6 +129,32 @@ describe('Doom package convention rules', () => {
     writeManifest({ name: '@agimon-ai/unrelated', dependencies: { inversify: '7.10.4' } });
     const source = write('src/container/index.ts', "import { Container } from 'inversify';");
     expect(preferCordisContainer.check?.(source, root, boundaryContext())).toBeNull();
+  });
+
+  it('rejects named tsdown entries for discovered public exports', () => {
+    const config = write(
+      'tsdown.config.ts',
+      `export default { entry: { apiContracts: 'src/exports/apiContracts.ts', runtime: 'src/services/runtime.ts' } };`,
+    );
+
+    expect(noManualExportEntries.check?.(config, root, boundaryContext())).toContain('apiContracts');
+
+    fs.writeFileSync(
+      config,
+      `export default { entry: { '*': 'src/exports/**/*.ts', command: 'src/bin/command.ts', generated: 'generated/client.ts', privateArtifact: 'src/private/runtime.ts' } };`,
+      'utf8',
+    );
+    expect(noManualExportEntries.check?.(config, root, boundaryContext())).toBeNull();
+    expect(noManualExportEntries.check?.(write('src/exports/apiContracts.ts', 'export {};'), root, boundaryContext())).toBeNull();
+  });
+
+  it('rejects named src/exports entries in raw defineConfig calls', () => {
+    const config = write(
+      'tsdown.config.ts',
+      `export default defineConfig({ entry: { apiContracts: 'src/exports/apiContracts.ts' } });`,
+    );
+
+    expect(noManualExportEntries.check?.(config, root, boundaryContext())).toContain('apiContracts');
   });
 
   it('checks only manifest-declared Pi entry modules for thinness', () => {

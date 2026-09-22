@@ -35,6 +35,7 @@ const rules: Record<string, Severity> = {
   'cordis-service-injection': 'error',
   'no-legacy-cordis-access': 'error',
   'no-live-global-registry': 'error',
+  'no-manual-export-entries': 'error',
   'pi-extension-default-factory': 'error',
   'thin-pi-adapter': 'error',
   'no-raw-pi-events': 'error',

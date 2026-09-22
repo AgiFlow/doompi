@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
 

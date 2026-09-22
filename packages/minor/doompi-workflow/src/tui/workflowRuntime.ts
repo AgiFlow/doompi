@@ -5,14 +5,14 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, extname, resolve } from 'node:path';
 
-import { resolveRootSessionId, SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
+import { resolveRootSessionId, SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/childProcess';
 import {
   createNarrationRequest,
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
   requireDoomNarrationService,
 } from '@agimon-ai/doompi-core/narration';
-import type { PiPluginContributions, PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContributions, PiEventHandlers } from '@agimon-ai/doompi-core/piExtension';
 import {
   createDoomReadinessCoordinator,
   type DoomReadinessCoordinator,
@@ -20,7 +20,7 @@ import {
   type DoomReadinessNotification,
   readDoomReadinessCoordinator,
 } from '@agimon-ai/doompi-core/readiness';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/uiHub';
 import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 import {
   defineMinorMode,

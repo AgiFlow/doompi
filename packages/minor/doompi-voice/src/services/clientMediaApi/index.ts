@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
 
 import { globalDoomConfigPath } from '@agimon-ai/doompi-config/config';
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 
 import type { RealtimeHost } from '../../services/realtimeHost';
 import { RealtimeMediaBroker } from '../../services/realtimeMediaBroker';

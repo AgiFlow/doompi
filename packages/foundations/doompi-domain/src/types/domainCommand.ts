@@ -1,5 +1,5 @@
 import type { DoomHarnessContext, HarnessState } from '@agimon-ai/doompi-config/types';
-import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voice-reload-handoff';
+import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voiceReloadHandoff';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 

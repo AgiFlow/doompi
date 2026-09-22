@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-import { DOOM_RELAUNCH_FILE_ENV, serializeRelaunchHandoff } from '@agimon-ai/doompi-core/relaunch-handoff';
+import { DOOM_RELAUNCH_FILE_ENV, serializeRelaunchHandoff } from '@agimon-ai/doompi-core/relaunchHandoff';
 
 /** Whether a process supervisor is listening for relaunch requests. */
 export function supervisedRelaunchAvailable(env: NodeJS.ProcessEnv = process.env): boolean {

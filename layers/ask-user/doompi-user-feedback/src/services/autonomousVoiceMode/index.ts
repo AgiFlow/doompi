@@ -1,4 +1,4 @@
-import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-core/voice-tools';
+import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-core/voiceTools';
 import type { MinorModeRecord } from '@agimon-ai/doompi-minor-mode';
 /**
  * Matches only the Voice package's own autonomous mode, and only while it reports active.

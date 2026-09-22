@@ -312,7 +312,7 @@ boilerplate:
 
       The browser imports shared wire contracts and owns rendering, navigation, and client state. The headless process owns sessions, server facets, APIs, channels, authorization, history, and replay. Keep server access under `src/adapters`; keep browser-only code under `src/web`; never make a browser feature depend on a server module.
 
-      Browser plugins use `doompiWeb.client`. Host-side behavior uses `doompiServer` and is loaded by `doompi-server`, never by this package. `@agimon-ai/doompi/builders/web` owns browser composition and bundling, while Vite's `/api` proxy points at the headless endpoint.
+      Browser plugins use `doompiWeb.client`. Host-side behavior uses `doompiServer` and is loaded by `doompi-server`, never by this package. `@agimon-ai/doompi/webBuilder` owns browser composition and bundling, while Vite's `/api` proxy points at the headless endpoint.
 
 feature:
   - name: scaffold-doom-web-feature

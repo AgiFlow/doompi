@@ -1,4 +1,4 @@
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 
 import { DefaultSandboxExtensionService } from '../../../../../services/extensionService';
 import type { SandboxExtensionDependencies } from '../../../../../types/extension';

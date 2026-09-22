@@ -1,4 +1,4 @@
-import type { DoomMcpProjection } from '@agimon-ai/doompi-core/mcp-projection';
+import type { DoomMcpProjection } from '@agimon-ai/doompi-core/mcpProjection';
 
 import type { McpSessionConfig } from '../../types/mcpConfig';
 

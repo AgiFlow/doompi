@@ -4,7 +4,7 @@ import { constants as osConstants } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { readJson, writeJson } from '@agimon-ai/doompi-core/runtime-json';
+import { readJson, writeJson } from '@agimon-ai/doompi-core/runtimeJson';
 import spawn from 'cross-spawn';
 
 /**

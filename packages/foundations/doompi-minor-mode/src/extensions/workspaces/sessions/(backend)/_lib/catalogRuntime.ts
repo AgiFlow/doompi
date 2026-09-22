@@ -1,6 +1,6 @@
-import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordisHost';
 import { type DoomNotificationLevel, readDoomNotificationService } from '@agimon-ai/doompi-core/notification';
-import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
 import {
   DOOM_TRANSITION_SERVICE,
   requireDoomTransitionCoordinator,
@@ -18,7 +18,7 @@ import {
 import { createMinorModeCatalogHost } from '../../../../../services/catalog';
 import { projectMinorModes } from '../../../../../services/projection';
 import { consumeMinorModeReloadHandoff, discardMinorModeReloadHandoff } from '../../../../../services/reloadHandoff';
-import { registerMinorModeCommand } from './minorModeCommand';
+import { registerMinorModeCommand } from '../../../../../services/minorModeCommand';
 
 /** Registrations and state flips arrive in bursts; one entry covers a burst. */
 const PROJECTION_SETTLE_MS = 50;

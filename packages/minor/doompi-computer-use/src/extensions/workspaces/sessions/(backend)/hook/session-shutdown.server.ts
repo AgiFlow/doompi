@@ -1,4 +1,4 @@
-import { defineHook, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineHook, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
 type Runtime = Awaited<ReturnType<typeof import('../root.server').default>>['value'];
 
 type Context = WithRoot<unknown, Runtime>;

@@ -1,5 +1,5 @@
-import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
-import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-core/sandbox-harness';
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
+import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-core/sandboxHarness';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SandboxLaunchCommand } from '../../src/cli/commands/sandbox';

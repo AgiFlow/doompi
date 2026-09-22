@@ -1,4 +1,4 @@
-import type { DoomDirectEventBus, DoomHubChannelHost as HubChannelHost } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomDirectEventBus, DoomHubChannelHost as HubChannelHost } from '@agimon-ai/doompi-core/hubChannel';
 import { describe, expect, it } from 'vitest';
 
 import { createSubagentCatalogChannel } from '../../src/extensions/(backend)/channel/_lib/subagent-catalog';

@@ -1,4 +1,4 @@
-import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/toolSurface';
 
 import { AUTHOR_FACADE_TOOL_NAMES } from '../../constants/author';
 import { OPEN_AUTHORING_FILE_TOOL_NAME, type AuthorViewportCatalogSnapshot } from '../../types/author';

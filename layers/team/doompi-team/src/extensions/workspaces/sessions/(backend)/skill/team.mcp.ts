@@ -1,4 +1,4 @@
-import { defineMcpSkill } from '@agimon-ai/doompi-core/mcp-facet';
+import { defineMcpSkill } from '@agimon-ai/doompi-core/mcpFacet';
 
 import { REMOTE_TEAM_GUIDANCE } from '../../../../../constants/remoteTeam';
 

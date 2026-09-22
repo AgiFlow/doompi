@@ -1,4 +1,4 @@
-import type { DoomServerPluginDefinition } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerPluginDefinition } from '@agimon-ai/doompi-core/serverFacet';
 
 import { api } from '../../../../../services/computerUseApi';
 import { createComputerUseServer } from '../../../../../services/computerUseServer';

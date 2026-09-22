@@ -8,7 +8,7 @@
  * the dialog is written out here; the options come from the shared contract.
  */
 import type { ToolPromptRenderProps } from '@agimon-ai/doompi-core/web';
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import { PLAN_REVIEW_OPTIONS, PLAN_REVIEW_TITLE } from '../../../../../../types/planApi';
 import { PlanReviewPrompt } from './PlanReviewPrompt';

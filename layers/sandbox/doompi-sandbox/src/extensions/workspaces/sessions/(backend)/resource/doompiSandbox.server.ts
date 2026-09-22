@@ -1,5 +1,5 @@
-import { defineResource, defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import { defineResource, defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 
 import { createSandboxContextResource } from '../_lib/sandboxResources';
 import type { SandboxServerScope } from '../_lib/sandboxScope';

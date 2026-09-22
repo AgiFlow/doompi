@@ -2,12 +2,12 @@ import {
   childProcessContextEnvironment,
   SUBAGENT_PARENT_SESSION_ENV,
   SUBAGENT_ROOT_SESSION_ENV,
-} from '@agimon-ai/doompi-core/child-process';
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+} from '@agimon-ai/doompi-core/childProcess';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordisHost';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
 import type { LeaderContribution } from '@agimon-ai/doompi-core/leader';
 import { createDoomSkillSourcesService, DOOM_SKILL_SOURCES_SERVICE } from '@agimon-ai/doompi-core/skills';
-import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import { DoomLeaderRegistry } from '@agimon-ai/doompi-ui/leaderRegistry';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

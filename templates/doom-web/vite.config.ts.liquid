@@ -4,10 +4,10 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { type Alias, defineConfig, type Plugin } from 'vite';
-import { bundleAssetPolicyPlugin } from '@agimon-ai/doompi/builders/web';
-import { ensureBuiltinWebPluginModules, writeSyncWebPluginModules } from '@agimon-ai/doompi/builders/web';
-import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
-import { readDevPluginRoots, webPluginCssAlias, webPluginOverridePlugin } from '@agimon-ai/doompi/builders/web';
+import { bundleAssetPolicyPlugin } from '@agimon-ai/doompi/webBuilder';
+import { ensureBuiltinWebPluginModules, writeSyncWebPluginModules } from '@agimon-ai/doompi/webBuilder';
+import { scanWebPlugins } from '@agimon-ai/doompi/webBuilder';
+import { readDevPluginRoots, webPluginCssAlias, webPluginOverridePlugin } from '@agimon-ai/doompi/webBuilder';
 
 // Config-load time keeps the committed builtin registry fresh for both build
 // and dev without touching the pinned build script; CI only checks. The full

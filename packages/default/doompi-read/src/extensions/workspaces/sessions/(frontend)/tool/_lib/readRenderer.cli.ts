@@ -1,4 +1,4 @@
-import type { PiToolRenderers } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiToolRenderers } from '@agimon-ai/doompi-core/piExtension';
 import { renderHashlineCall, renderHashlineResult } from '@agimon-ai/doompi-ui/hashlineRendering';
 
 import { ReadParamsSchema, type ReadParams } from '../../../../../../schemas/readTool';

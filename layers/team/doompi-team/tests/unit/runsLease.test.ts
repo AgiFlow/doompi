@@ -1,4 +1,4 @@
-import type { DoomMcpToolResolverService } from '@agimon-ai/doompi-core/mcp-tool-resolver';
+import type { DoomMcpToolResolverService } from '@agimon-ai/doompi-core/mcpToolResolver';
 import { describe, expect, it } from 'vitest';
 
 import {

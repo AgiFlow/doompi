@@ -1,4 +1,4 @@
-import { definePiToolRenderer } from '@agimon-ai/doompi-core/pi-extension';
+import { definePiToolRenderer } from '@agimon-ai/doompi-core/piExtension';
 
 import { readRenderer } from './_lib/readRenderer.cli';
 

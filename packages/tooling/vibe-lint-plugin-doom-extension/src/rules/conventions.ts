@@ -18,6 +18,8 @@ const PI_PACKAGES = [
 ] as const;
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
+const DISCOVERED_EXPORTS_SOURCE_ROOT = 'src/exports/';
+const TSDOWN_CONFIG_PATTERN = /(?:^|\/)tsdown\.config\.(?:cjs|cts|js|mjs|mts|ts)$/;
 /**
  * Superseded by @deepseek-ai/cordis. reflect-metadata exists in these packages
  * only to satisfy inversify's decorators, so it leaves with it.
@@ -613,6 +615,32 @@ export const piPeerVersion: RuleDefinition = {
       return peerMatches && developmentMatches ? [] : [packageName];
     });
     return mismatches.length > 0 ? `Pi dependencies must be pinned to ${PI_VERSION}: ${mismatches.join(', ')}` : null;
+  },
+};
+
+function manualExportEntries(text: string): string[] {
+  const entries = new Set<string>();
+  const entryPattern = /(?:['"]([^'"]+)['"]|([A-Za-z_$][\w$]*))\s*:\s*['"](src\/exports\/[^'"]*)['"]/g;
+  for (const match of text.matchAll(entryPattern)) {
+    const entryName = match[1] ?? match[2];
+    if (entryName && entryName !== '*') entries.add(entryName);
+  }
+  return [...entries];
+}
+
+export const noManualExportEntries: RuleDefinition = {
+  preflight: true,
+  rule: 'tsdown entries must not manually map files under src/exports',
+  rationale:
+    'Public exports are discovered by doompi-build, so named tsdown mappings duplicate the export walker and can drift from the package surface.',
+  check(filePath) {
+    if (!TSDOWN_CONFIG_PATTERN.test(filePath)) return null;
+    const text = readText(filePath);
+    if (!text) return null;
+    const entries = manualExportEntries(text);
+    return entries.length > 0
+      ? `Do not manually map public exports from ${DISCOVERED_EXPORTS_SOURCE_ROOT}: ${entries.join(', ')}. doompi-build discovers them automatically.`
+      : null;
   },
 };
 

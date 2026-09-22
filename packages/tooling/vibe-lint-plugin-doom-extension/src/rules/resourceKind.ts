@@ -72,7 +72,7 @@ function violations(configRoot: string): string[] {
     }
     if (PLACEHOLDER.test(source) || LOCAL_ROOT_WALK.test(source)) {
       problems.push(
-        `${relative}: resolve shipped files with packageResourcePath/readPackageResource from @agimon-ai/doompi-core/server-facet`,
+        `${relative}: resolve shipped files with packageResourcePath/readPackageResource from @agimon-ai/doompi-core/serverFacet`,
       );
     }
   }

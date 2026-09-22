@@ -1,4 +1,4 @@
-import { defineMessageRenderer } from '@agimon-ai/doompi-core/pi-extension';
+import { defineMessageRenderer } from '@agimon-ai/doompi-core/piExtension';
 import { Text } from '@earendil-works/pi-tui';
 
 import { NOTIFY_CUSTOM_TYPE } from '../../../../../services/delegation';

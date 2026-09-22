@@ -5,7 +5,7 @@
  * package's own testing fixture, whose `thread` option stands in for the host's
  * transcript; the runs come from the real session store seeded at module scope.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 import type { ReactNode } from 'react';
 
 import type { SubagentRun } from '../../../../../types/webSubagents';

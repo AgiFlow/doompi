@@ -1,4 +1,4 @@
-import { defineMessageRenderer } from '@agimon-ai/doompi-core/pi-extension';
+import { defineMessageRenderer } from '@agimon-ai/doompi-core/piExtension';
 
 import { LEGACY_WORKFLOW_STEP_MESSAGE, workflowStepRenderer } from './_lib/workflowStepRenderer';
 

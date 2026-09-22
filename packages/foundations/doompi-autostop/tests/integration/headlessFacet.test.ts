@@ -2,14 +2,14 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkItem,
   type DoomBackgroundWorkService,
-} from '@agimon-ai/doompi-core/background-work';
+} from '@agimon-ai/doompi-core/backgroundWork';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHook,
   type DoomHeadlessHostService,
 } from '@agimon-ai/doompi-core/headless';
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/serverFacet';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

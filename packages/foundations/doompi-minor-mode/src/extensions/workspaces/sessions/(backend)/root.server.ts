@@ -1,5 +1,5 @@
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, DOOM_MINOR_MODE_ENTRY_TYPE } from '../../../../schemas/mode';
 import { createMinorModeCatalogHost } from '../../../../services/catalog';

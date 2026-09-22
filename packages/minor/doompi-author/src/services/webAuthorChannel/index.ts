@@ -4,7 +4,7 @@ import type {
   DoomHubChannelSource,
   DoomHubSessionScope,
   DoomHubChannel,
-} from '@agimon-ai/doompi-core/hub-channel';
+} from '@agimon-ai/doompi-core/hubChannel';
 
 import routes from '../../types/apiRoutes';
 import { API_BASE_PATH } from '../../types/authorApi';

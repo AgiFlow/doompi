@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 
 import type { DoomHelpService } from '@agimon-ai/doompi-core/help';
-import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
@@ -1560,7 +1560,7 @@ describe('conventional Pi discovery', () => {
         "import crypto from 'node:crypto';",
         "import fs from 'node:fs';",
         "import path from 'node:path';",
-        "import { DOOM_MCP_BUNDLE_FILE, DOOM_MCP_BUNDLE_VERSION, loadMcpBundle } from '@agimon-ai/doompi-core/mcp-facet';",
+        "import { DOOM_MCP_BUNDLE_FILE, DOOM_MCP_BUNDLE_VERSION, loadMcpBundle } from '@agimon-ai/doompi-core/mcpFacet';",
         "const packageName = '@agimon-ai/doompi-model-guidance';",
         "const directory = fs.realpathSync(path.join('node_modules', packageName));",
         'assert.ok(directory.startsWith(fs.realpathSync(process.cwd()) + path.sep));',

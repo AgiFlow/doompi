@@ -7,17 +7,17 @@ import { loadDomains, resolvePluginEntries } from '@agimon-ai/doompi-config/doma
 import type { LayerResolvers, MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { loadProfiles, PERSONA_FILES } from '@agimon-ai/doompi-config/profiles';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
-import { isDoomMcpProjection, type DoomMcpProjection } from '@agimon-ai/doompi-core/mcp-projection';
-import { isRecord } from '@agimon-ai/doompi-core/runtime-json';
-import type { JsonObject } from '@agimon-ai/doompi-core/runtime-json';
+import { isDoomMcpProjection, type DoomMcpProjection } from '@agimon-ai/doompi-core/mcpProjection';
+import { isRecord } from '@agimon-ai/doompi-core/runtimeJson';
+import type { JsonObject } from '@agimon-ai/doompi-core/runtimeJson';
 import {
   assertSyncLocationSafe,
   resolveSyncLocation,
   type SyncIdentity,
   type SyncLocation,
-} from '@agimon-ai/doompi-core/sync-location';
-import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
-import { PRECOMPILE_STATE_VERSION, SYNC_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+} from '@agimon-ai/doompi-core/syncLocation';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
+import { PRECOMPILE_STATE_VERSION, SYNC_STATE_VERSION } from '@agimon-ai/doompi-core/syncStateContract';
 
 import {
   assembleChildExtensions,
@@ -28,7 +28,7 @@ import {
   PERSONA_ENTRY,
 } from '../../builders/cli/extensionAssembler';
 
-export { SYNC_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+export { SYNC_STATE_VERSION } from '@agimon-ai/doompi-core/syncStateContract';
 
 /**
  * The file `doom-pi sync` writes and the doom-pi Pi extension reads back.

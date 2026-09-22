@@ -1,4 +1,4 @@
-import { connectDoomCordisHost, finalizeDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { connectDoomCordisHost, finalizeDoomCordisHost } from '@agimon-ai/doompi-core/cordisHost';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 const FINALIZER_SOURCE = '@agimon-ai/doompi/cordis-finalizer';

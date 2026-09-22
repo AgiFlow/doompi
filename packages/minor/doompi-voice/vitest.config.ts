@@ -34,7 +34,7 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: '@agimon-ai/doompi-core/pi-extension',
+        find: '@agimon-ai/doompi-core/piExtension',
         replacement: source('../../core/doompi-core/src/exports/piExtension.ts'),
       },
       {
@@ -47,19 +47,19 @@ export default defineConfig({
         replacement: `${source('../../foundations/doompi-ui/src/exports/')}$1.ts`,
       },
       {
-        find: '@agimon-ai/doompi-core/cordis-host',
+        find: '@agimon-ai/doompi-core/cordisHost',
         replacement: source('../../core/doompi-core/src/exports/cordisHost.ts'),
       },
       {
-        find: '@agimon-ai/doompi-core/ask-user',
+        find: '@agimon-ai/doompi-core/askUser',
         replacement: source('../../core/doompi-core/src/exports/askUser.ts'),
       },
       {
-        find: '@agimon-ai/doompi-core/package-api',
+        find: '@agimon-ai/doompi-core/packageApi',
         replacement: source('../../core/doompi-core/src/exports/packageApi.ts'),
       },
       {
-        find: '@agimon-ai/doompi-core/profile-identity',
+        find: '@agimon-ai/doompi-core/profileIdentity',
         replacement: source('../../core/doompi-core/src/exports/profileIdentity.ts'),
       },
       {
@@ -75,15 +75,15 @@ export default defineConfig({
         replacement: source('src/exports/voiceReloadHandoff.ts'),
       },
       {
-        find: '@agimon-ai/doompi-core/server-facet',
+        find: '@agimon-ai/doompi-core/serverFacet',
         replacement: source('../../core/doompi-core/src/exports/serverFacet.ts'),
       },
       {
-        find: '@agimon-ai/doompi-core/tool-surface',
+        find: '@agimon-ai/doompi-core/toolSurface',
         replacement: source('../../core/doompi-core/src/exports/toolSurface.ts'),
       },
       {
-        find: '@agimon-ai/doompi-core/ui-hub',
+        find: '@agimon-ai/doompi-core/uiHub',
         replacement: source('../../core/doompi-core/src/exports/uiHub.ts'),
       },
     ],

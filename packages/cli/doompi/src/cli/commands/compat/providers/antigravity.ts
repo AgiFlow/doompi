@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { isRecord, readJson, writeFileAtomic, writeJson } from '@agimon-ai/doompi-core/runtime-json';
-import type { JsonObject } from '@agimon-ai/doompi-core/runtime-json';
+import { isRecord, readJson, writeFileAtomic, writeJson } from '@agimon-ai/doompi-core/runtimeJson';
+import type { JsonObject } from '@agimon-ai/doompi-core/runtimeJson';
 
 import type { CompatibilityContext } from '../context';
 import { acquireDirectoryLock, pathInside, runInteractive } from './process';

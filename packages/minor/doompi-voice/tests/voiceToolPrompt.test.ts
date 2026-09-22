@@ -2,7 +2,7 @@ import type {
   VoiceToolBatchResult,
   VoiceToolCatalogEntry,
   VoiceToolCatalogSnapshot,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 import { describe, expect, it } from 'vitest';
 
 import { formatBatch, formatCatalog, formatError } from '../src/services/voiceToolPrompt';

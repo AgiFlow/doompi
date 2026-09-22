@@ -9,7 +9,7 @@ import {
   type DoomHeadlessHostService,
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/serverFacet';
 import { Context } from '@deepseek-ai/cordis';
 import { rgPath } from '@vscode/ripgrep';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

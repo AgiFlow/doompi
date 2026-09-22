@@ -1,7 +1,7 @@
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 import { DOOM_NARRATION_SERVICE, requireDoomNarrationService } from '@agimon-ai/doompi-core/narration';
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
-import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/toolSurface';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';

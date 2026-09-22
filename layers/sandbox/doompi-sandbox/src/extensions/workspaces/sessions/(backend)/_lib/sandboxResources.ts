@@ -1,5 +1,5 @@
 import type { DoomHeadlessResource } from '@agimon-ai/doompi-core/headless';
-import { readPackageResource } from '@agimon-ai/doompi-core/server-facet';
+import { readPackageResource } from '@agimon-ai/doompi-core/serverFacet';
 
 import type { SandboxServerScope } from './sandboxScope';
 

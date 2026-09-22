@@ -4,7 +4,7 @@ import {
   type WebPluginScope,
   type WebTemplateContribution,
 } from '@agimon-ai/doompi-core/web';
-import { webPlugin as advancedWebPlugin } from '@agimon-ai/doompi-template-advanced/web-client';
+import { webPlugin as advancedWebPlugin } from '@agimon-ai/doompi-template-advanced/webClient';
 
 import { pluginsAtScope } from './pluginScopes';
 export interface InstalledWebTemplate extends WebTemplateContribution {

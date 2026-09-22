@@ -1,4 +1,4 @@
-import { VOICE_TOOL_MAX_DOMAIN_COUNT, VOICE_TOOL_MAX_IDENTIFIER_LENGTH } from '@agimon-ai/doompi-core/voice-tools';
+import { VOICE_TOOL_MAX_DOMAIN_COUNT, VOICE_TOOL_MAX_IDENTIFIER_LENGTH } from '@agimon-ai/doompi-core/voiceTools';
 import { type Static, Type } from 'typebox';
 
 import { SAFE_DOMAIN_NAME } from '../types/domains';

@@ -1,4 +1,4 @@
-import { DOOM_PROFILE_IDENTITY_ENTRY_TYPE } from '@agimon-ai/doompi-core/profile-identity';
+import { DOOM_PROFILE_IDENTITY_ENTRY_TYPE } from '@agimon-ai/doompi-core/profileIdentity';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 

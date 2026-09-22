@@ -1,5 +1,5 @@
-import { defineServerTool, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import { defineServerTool, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 
 import { createHeadlessSubagentTool } from '../../../../../services/headlessSubagentTool';
 import type { TeamServerScope } from '../_lib/root.server';

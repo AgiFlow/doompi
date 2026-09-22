@@ -1,4 +1,4 @@
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import { createRunnerPiRoot } from './_lib/piRoot';
 

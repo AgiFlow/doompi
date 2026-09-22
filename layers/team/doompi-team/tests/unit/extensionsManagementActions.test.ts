@@ -1,4 +1,4 @@
-import type { DoomChildSessionHandle } from '@agimon-ai/doompi-core/child';
+import type { DoomChildSessionHandle } from '@agimon-ai/doompi-core/childSession';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AsyncJobTracker } from '../../src/services/asyncJobTracker';

@@ -1,7 +1,7 @@
 import {
   DOOM_BACKGROUND_WORK_CHANGED_EVENT,
   readDoomBackgroundWorkService,
-} from '@agimon-ai/doompi-core/background-work';
+} from '@agimon-ai/doompi-core/backgroundWork';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it } from 'vitest';
 

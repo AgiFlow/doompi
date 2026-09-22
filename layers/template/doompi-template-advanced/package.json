@@ -40,10 +40,10 @@
     "./extensions/web": {
       "import": "./dist/extensions/web.mjs"
     },
-    "./web-client": {
-      "types": "./dist/web-client.d.mts",
-      "import": "./dist/web-client.mjs",
-      "require": "./dist/web-client.cjs"
+    "./webClient": {
+      "types": "./dist/webClient.d.mts",
+      "import": "./dist/webClient.mjs",
+      "require": "./dist/webClient.cjs"
     },
     "./package.json": "./package.json"
   },

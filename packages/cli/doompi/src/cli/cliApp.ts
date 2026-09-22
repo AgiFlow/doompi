@@ -1,4 +1,4 @@
-import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
 
 import type { HarnessOptions } from '../composition/types/harness';
 import type { BaseCommand } from './commands/baseCommand';
@@ -42,7 +42,7 @@ function createCliApplication(initialTelemetry?: HarnessTelemetry) {
   let ownsTelemetry = false;
   async function getTelemetry(): Promise<HarnessTelemetry> {
     if (telemetry) return telemetry;
-    const { createHarnessTelemetry } = await import('@agimon-ai/doompi-core/runtime-log-sink-telemetry');
+    const { createHarnessTelemetry } = await import('@agimon-ai/doompi-core/runtimeLogSinkTelemetry');
     // Telemetry's transport graph costs roughly one launcher budget slice by
     // itself. Startup callbacks and lifecycle events buffer until shutdown, so
     // transport initialization cannot compete with the Pi child for input.
@@ -56,7 +56,7 @@ function createCliApplication(initialTelemetry?: HarnessTelemetry) {
     const [{ buildHarnessContext }, { ensureLayerPackages }, { HARNESS_EVENT }] = await Promise.all([
       import('../builders/cli/harnessContext'),
       import('../composition/layerPackageInstaller'),
-      import('@agimon-ai/doompi-core/runtime-log-sink-telemetry'),
+      import('@agimon-ai/doompi-core/runtimeLogSinkTelemetry'),
     ]);
     return telemetry.runInSpan(
       'doom_pi.run',
@@ -137,7 +137,7 @@ function createCliApplication(initialTelemetry?: HarnessTelemetry) {
     const telemetry = await getTelemetry();
     const [{ resolveHarnessOptions }, { toFailureReporter }] = await Promise.all([
       import('./harnessOptions'),
-      import('@agimon-ai/doompi-core/runtime-log-sink-telemetry'),
+      import('@agimon-ai/doompi-core/runtimeLogSinkTelemetry'),
     ]);
     return runHarness(resolveHarnessOptions({ args, report: toFailureReporter(telemetry) }));
   }

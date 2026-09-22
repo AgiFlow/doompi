@@ -4,7 +4,7 @@ import type {
   DoomChildSessionRequest,
   DoomChildSessionService,
   DoomChildSessionServiceProvider,
-} from '@agimon-ai/doompi-core/child';
+} from '@agimon-ai/doompi-core/childSession';
 import { describe, expect, it } from 'vitest';
 
 import { AsyncJobTracker, type NativeAsyncJobProjection } from '../../src/services/asyncJobTracker';

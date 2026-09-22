@@ -3,7 +3,7 @@ import {
   type AskUserPromptEvent,
   DOOM_ASK_USER_BLOCKED_EVENT,
   DOOM_ASK_USER_PROMPT_EVENT,
-} from '@agimon-ai/doompi-core/ask-user';
+} from '@agimon-ai/doompi-core/askUser';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ToolDefinition, ExtensionContext } from '@earendil-works/pi-coding-agent';
 

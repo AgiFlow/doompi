@@ -1,4 +1,4 @@
-import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 type Root = Awaited<ReturnType<typeof import('../root.server').default>>['value'];
 

@@ -1,5 +1,5 @@
-import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
-import { defineMcpTool } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
+import { defineMcpTool } from '@agimon-ai/doompi-core/mcpFacet';
 
 import { getDelegationTimeoutMs, getMaxTasks } from '../../../../../services/config';
 import { DelegationManager } from '../../../../../services/delegation';

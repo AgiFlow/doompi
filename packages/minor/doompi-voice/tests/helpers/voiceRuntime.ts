@@ -1,4 +1,4 @@
-import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/piExtension';
 
 import { createVoiceRuntime, type VoiceExtensionOptions } from '../../src/services/voice';
 import { createVoiceRuntime as createPublicVoiceRuntime } from '../../src/services/voiceController';

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { createHistoryOwnership, historyOwnershipLockPath } from '@agimon-ai/doompi-core/history-ownership';
+import { createHistoryOwnership, historyOwnershipLockPath } from '@agimon-ai/doompi-core/historyOwnership';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CliApp } from '../../src/cli/cliApp';

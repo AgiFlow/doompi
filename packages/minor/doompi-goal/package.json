@@ -117,7 +117,7 @@
     ],
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
-      "dist": "./dist/api-contracts.mjs"
+      "dist": "./dist/apiContracts.mjs"
     }
   },
   "doompiWeb": {

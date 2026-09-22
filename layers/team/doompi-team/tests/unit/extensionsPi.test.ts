@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 
-import { readDoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
-import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
+import { readDoomBackgroundWorkService } from '@agimon-ai/doompi-core/backgroundWork';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordisHost';
 import {
   createDoomReadinessCoordinator,
   DOOM_READINESS_SERVICE,

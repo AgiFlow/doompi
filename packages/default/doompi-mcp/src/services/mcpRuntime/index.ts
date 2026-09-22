@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import type { DoomOAuthRedirect } from '@agimon-ai/doompi-core/package-api';
+import type { DoomOAuthRedirect } from '@agimon-ai/doompi-core/packageApi';
 import type {
   ConfigSource,
   McpServerStateChange,

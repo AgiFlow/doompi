@@ -24,7 +24,7 @@ export {
   type DoomUiHubService,
   readDoomUiHub,
   requireDoomUiHub,
-} from '@agimon-ai/doompi-core/ui-hub';
+} from '@agimon-ai/doompi-core/uiHub';
 export {
   createUiTelemetry,
   UI_EVENT,

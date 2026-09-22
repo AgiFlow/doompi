@@ -2,9 +2,9 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProvider,
   type DoomBackgroundWorkService,
-} from '@agimon-ai/doompi-core/background-work';
-import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+} from '@agimon-ai/doompi-core/backgroundWork';
+import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/childProcess';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,7 +45,7 @@ const extensionMocks = vi.hoisted(() => {
 
 const cordisRoots: Context[] = [];
 
-vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
+vi.mock('@agimon-ai/doompi-core/runtimeCordisHost', () => ({
   connectDoomCordisHost: async () => {
     const root = extensionMocks.createCordisRoot();
     await extensionMocks.prepareCordisRoot(root);

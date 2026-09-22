@@ -1,6 +1,6 @@
-import { SUBAGENT_CHILD_ENV } from '@agimon-ai/doompi-core/child-process';
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import { SUBAGENT_CHILD_ENV } from '@agimon-ai/doompi-core/childProcess';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 
 import { createNotificationRuntime } from '../../../../services/notificationRuntime';
 import type { NotificationExtensionOptions } from '../../../../types/notifications';

@@ -1,9 +1,9 @@
 import path from 'node:path';
 
-import { readDoomMcpStatus } from '@agimon-ai/doompi-core/mcp-status';
+import { readDoomMcpStatus } from '@agimon-ai/doompi-core/mcpStatus';
 import { type DoomNotificationLevel, readDoomNotificationService } from '@agimon-ai/doompi-core/notification';
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
-import { buildToolSources, type McpServerStatus } from '@agimon-ai/doompi-core/tool-inventory';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/piExtension';
+import { buildToolSources, type McpServerStatus } from '@agimon-ai/doompi-core/toolInventory';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ReadonlyFooterDataProvider } from '@earendil-works/pi-coding-agent';
 

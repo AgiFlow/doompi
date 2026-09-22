@@ -11,7 +11,7 @@ import {
   piThemeDirectory,
   readPiSettings,
   writePiSettings,
-} from '@agimon-ai/doompi-core/runtime-pi-settings';
+} from '@agimon-ai/doompi-core/runtimePiSettings';
 import { DEFAULT_THEME_NAME, writeDefaultTheme } from '@agimon-ai/doompi-ui/theme';
 
 import { writePiExtensionAlias } from '../../../builders/cli/piExtensionAlias';

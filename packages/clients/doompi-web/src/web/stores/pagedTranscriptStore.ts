@@ -3,7 +3,7 @@ import type {
   SessionService,
   SessionServiceState,
   TranscriptPage,
-} from '@agimon-ai/doompi-core/session-protocol';
+} from '@agimon-ai/doompi-core/sessionProtocol';
 import { type Context } from '@earendil-works/chord';
 
 import { recordBrowserPerformance } from '../lib/browserTelemetry';

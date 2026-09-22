@@ -1,5 +1,5 @@
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 
 import { domainServerResources } from './_lib/domainServerResources';
 import type { DomainServerScope } from './_lib/serverScope';

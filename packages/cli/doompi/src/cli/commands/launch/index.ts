@@ -1,6 +1,6 @@
-import { piCliPath } from '@agimon-ai/doompi-core/module-resolution';
-import { isRecord } from '@agimon-ai/doompi-core/runtime-json';
-import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+import { piCliPath } from '@agimon-ai/doompi-core/moduleResolution';
+import { isRecord } from '@agimon-ai/doompi-core/runtimeJson';
+import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
 import spawn from 'cross-spawn';
 
 import { LAUNCHER_COMPOSITION_REQUEST_ENV } from '../../../builders/cli/constants';

@@ -1,1 +1,1 @@
-export * from '@agimon-ai/doompi-core/voice-reload-handoff';
+export * from '@agimon-ai/doompi-core/voiceReloadHandoff';

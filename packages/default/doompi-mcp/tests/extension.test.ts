@@ -3,17 +3,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordis-host';
+import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordisHost';
 import {
   createDoomMcpProjectionService,
   DOOM_MCP_PROJECTION_SERVICE,
   type DoomMcpProjection,
   type DoomMcpProjectionService,
-} from '@agimon-ai/doompi-core/mcp-projection';
-import { readDoomMcpStatus } from '@agimon-ai/doompi-core/mcp-status';
-import { readDoomMcpToolResolver } from '@agimon-ai/doompi-core/mcp-tool-resolver';
+} from '@agimon-ai/doompi-core/mcpProjection';
+import { readDoomMcpStatus } from '@agimon-ai/doompi-core/mcpStatus';
+import { readDoomMcpToolResolver } from '@agimon-ai/doompi-core/mcpToolResolver';
 import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import type { McpServerStateChange } from '@agimon-ai/mcp-proxy';
 import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';

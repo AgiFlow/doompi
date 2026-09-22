@@ -1,7 +1,7 @@
-import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordisHost';
 import { createDoomHelpService, DOOM_HELP_SERVICE, type DoomHelpService } from '@agimon-ai/doompi-core/help';
-import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { type PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/uiHub';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
 

@@ -1,4 +1,4 @@
-import { defineMcpTool } from '@agimon-ai/doompi-core/mcp-facet';
+import { defineMcpTool } from '@agimon-ai/doompi-core/mcpFacet';
 
 import { createLoadSkillTool } from '../../../../../services/mcpSkillTools';
 

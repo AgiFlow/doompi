@@ -1,5 +1,5 @@
-import { defineCliHook, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import { defineCliHook, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/piExtension';
 
 type Root = Awaited<ReturnType<typeof import('../root.cli').default>>['value'];
 

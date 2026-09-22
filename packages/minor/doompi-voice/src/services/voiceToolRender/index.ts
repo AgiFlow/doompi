@@ -1,4 +1,4 @@
-import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '@agimon-ai/doompi-core/voice-tools';
+import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '@agimon-ai/doompi-core/voiceTools';
 import { DoomToolCall, DoomToolResult, renderToolHeading } from '@agimon-ai/doompi-ui/toolChrome';
 import type { Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
 

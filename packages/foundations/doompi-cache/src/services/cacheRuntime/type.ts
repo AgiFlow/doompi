@@ -1,4 +1,4 @@
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/piExtension';
 import type { Context } from '@deepseek-ai/cordis';
 export type OptimizerModule = typeof import('#doompi-cache-optimizer-source');
 export interface CacheRuntime {

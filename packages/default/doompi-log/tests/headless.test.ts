@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const cordisRoots: Context[] = [];
 
-vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
+vi.mock('@agimon-ai/doompi-core/runtimeCordisHost', () => ({
   connectDoomCordisHost: async () => {
     const root = new Context();
     cordisRoots.push(root);

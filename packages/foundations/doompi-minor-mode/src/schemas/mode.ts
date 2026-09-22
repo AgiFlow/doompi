@@ -1,4 +1,4 @@
-import type { DoomExtensionContext } from '@agimon-ai/doompi-core/runtime-config';
+import type { DoomExtensionContext } from '@agimon-ai/doompi-core/runtimeConfig';
 import type { Context } from '@deepseek-ai/cordis';
 import { type Static, Type } from 'typebox';
 

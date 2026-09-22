@@ -1,11 +1,11 @@
-import { childProcessContextEnvironment, SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
+import { childProcessContextEnvironment, SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/childProcess';
 import { createPiTestHost, type PiTestHost } from '@agimon-ai/doompi-core/testing';
 import {
   createDoomToolSurface,
   DOOM_TOOL_SURFACE_SERVICE,
   type DoomToolSurfaceService,
-} from '@agimon-ai/doompi-core/tool-surface';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+} from '@agimon-ai/doompi-core/toolSurface';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

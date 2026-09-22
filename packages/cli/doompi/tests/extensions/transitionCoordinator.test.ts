@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { DoomConfigContext } from '@agimon-ai/doompi-config/types';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordisHost';
 import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

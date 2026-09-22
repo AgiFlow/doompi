@@ -1,11 +1,11 @@
 import { resolvePluginEntries } from '@agimon-ai/doompi-config/domains';
 import { getHarnessState, harnessRoot } from '@agimon-ai/doompi-config/harnessStore';
 import type { PackageAttribution } from '@agimon-ai/doompi-config/types';
-import { buildContextDetail } from '@agimon-ai/doompi-core/context-detail';
-import { DOOM_CONTEXT_ENTRY_TYPE, projectContext } from '@agimon-ai/doompi-core/context-projection';
-import { readDoomMcpStatus } from '@agimon-ai/doompi-core/mcp-status';
+import { buildContextDetail } from '@agimon-ai/doompi-core/contextDetail';
+import { DOOM_CONTEXT_ENTRY_TYPE, projectContext } from '@agimon-ai/doompi-core/contextProjection';
+import { readDoomMcpStatus } from '@agimon-ai/doompi-core/mcpStatus';
 import { readDoomSkillSourcesService } from '@agimon-ai/doompi-core/skills';
-import type { ContextItemDetail, ContextPromptStage } from '@agimon-ai/doompi-core/types-context-api';
+import type { ContextItemDetail, ContextPromptStage } from '@agimon-ai/doompi-core/typesContextApi';
 import { buildSkillCatalog, counter, type SkillEntry } from '@agimon-ai/doompi-skill/catalog';
 import { extensionName, extensionPackageName, extensionToolSource } from '@agimon-ai/doompi-ui/extensionName';
 import { buildToolSources } from '@agimon-ai/doompi-ui/toolInventory';

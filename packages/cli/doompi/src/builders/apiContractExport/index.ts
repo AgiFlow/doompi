@@ -10,9 +10,9 @@ import {
   parseCompiledContracts,
   type ApiContractSelection,
   type ApiDocuments,
-} from '@agimon-ai/doompi-core/api-contracts';
-import { parseDoomServerBundle } from '@agimon-ai/doompi-core/server-facet';
-import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
+} from '@agimon-ai/doompi-core/apiContracts';
+import { parseDoomServerBundle } from '@agimon-ai/doompi-core/serverFacet';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
 
 import { resolveDoomConfigurationRoot } from '../../composition/repository';
 import { readSyncDrift } from '../../composition/syncDrift';

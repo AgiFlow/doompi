@@ -15,8 +15,8 @@ import {
   optionalPackageEntry as resolveOptionalPackageEntry,
   packageEntries as resolvePackageEntries,
   packageEntry as resolvePackageEntry,
-} from '@agimon-ai/doompi-core/module-resolution';
-import { canonicalModulePath, sha256 } from '@agimon-ai/doompi-core/runtime-identity';
+} from '@agimon-ai/doompi-core/moduleResolution';
+import { canonicalModulePath, sha256 } from '@agimon-ai/doompi-core/runtimeIdentity';
 import { extensionPackageName } from '@agimon-ai/doompi-ui/extensionName';
 
 import { ownEntry } from '../entryResolution';

@@ -1,5 +1,5 @@
 import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
-import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 import { createFindTool, createLsTool, createWriteTool } from '@earendil-works/pi-coding-agent';
 
 export function createMcpWriteTool(

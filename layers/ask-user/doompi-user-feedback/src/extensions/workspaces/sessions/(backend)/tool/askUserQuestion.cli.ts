@@ -1,5 +1,5 @@
-import { defineCliTool, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import { definePiTool, type PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import { defineCliTool, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import { definePiTool, type PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 
 import { askUserToolRender } from '../../../../../tui/askUserToolRender';
 import type { UserFeedbackPiScope } from '../_lib/root.cli';

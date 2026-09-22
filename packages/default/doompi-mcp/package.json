@@ -44,10 +44,10 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./api-contracts": {
-      "types": "./dist/api-contracts.d.mts",
-      "import": "./dist/api-contracts.mjs",
-      "require": "./dist/api-contracts.cjs"
+    "./apiContracts": {
+      "types": "./dist/apiContracts.d.mts",
+      "import": "./dist/apiContracts.mjs",
+      "require": "./dist/apiContracts.cjs"
     },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
@@ -141,7 +141,7 @@
     ],
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
-      "dist": "./dist/api-contracts.mjs"
+      "dist": "./dist/apiContracts.mjs"
     }
   },
   "doompiWeb": {

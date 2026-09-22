@@ -17,6 +17,7 @@ export {
   noLegacyCordisAccess,
   noDirectToolActivation,
   noLiveGlobalRegistry,
+  noManualExportEntries,
   noProtocolChannelLiterals,
   noRawPiEvents,
   noSameRunnerProtocol,

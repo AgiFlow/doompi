@@ -7,14 +7,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ readSyncRegistration: vi.fn() }));
 
-vi.mock('@agimon-ai/doompi-core/sync-registration', () => ({ readSyncRegistration: mocks.readSyncRegistration }));
+vi.mock('@agimon-ai/doompi-core/syncRegistration', () => ({ readSyncRegistration: mocks.readSyncRegistration }));
 
 import {
   WEB_PLUGIN_RUNTIME_SPECIFIERS,
   readDevPluginRoots,
   webPluginRuntimeAliases,
   webPluginRuntimeGlobal,
-} from '@agimon-ai/doompi/builders/web';
+} from '@agimon-ai/doompi/webBuilder';
 
 const temporaryDirectories: string[] = [];
 

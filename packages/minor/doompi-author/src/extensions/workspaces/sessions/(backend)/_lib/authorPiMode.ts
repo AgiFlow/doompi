@@ -1,4 +1,4 @@
-import type { PiToolRestriction } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiToolRestriction } from '@agimon-ai/doompi-core/piExtension';
 
 import { AUTHOR_PACKAGE_SOURCE } from '../../../../../constants/author';
 import { authorMinorMode } from '../../../../../models/authorMode';

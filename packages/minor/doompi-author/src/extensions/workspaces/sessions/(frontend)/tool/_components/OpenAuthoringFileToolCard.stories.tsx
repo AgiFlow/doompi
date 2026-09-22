@@ -3,7 +3,7 @@
  * looking for a bare `const meta`. The card reads the opened path out of
  * `result.details.path`, so the "ready" state needs details, not just text.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import { OpenAuthoringFileToolCard } from './OpenAuthoringFileToolCard';
 

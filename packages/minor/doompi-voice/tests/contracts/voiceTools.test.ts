@@ -7,7 +7,7 @@ import {
   VOICE_TOOL_MAX_INPUT_BYTES,
   VOICE_TOOL_MAX_JSON_DEPTH,
   VOICE_TOOL_MAX_SCHEMA_BYTES,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 import { Context } from '@deepseek-ai/cordis';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';

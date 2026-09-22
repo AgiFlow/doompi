@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 import { Hono } from 'hono';
 
 import { createAuthorBridgeState, type AuthorBridgeState } from '../../../../../../../models/authorBridgeState';

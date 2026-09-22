@@ -3,14 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
+import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/syncLocation';
 import {
   DOOMPI_API_VERSION,
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '@agimon-ai/doompi-core/sync-registration';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+} from '@agimon-ai/doompi-core/syncRegistration';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/syncStateContract';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { computeWebSourcesHash } from '../../src/composition/syncState';

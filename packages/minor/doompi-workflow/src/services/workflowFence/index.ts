@@ -4,9 +4,9 @@ import {
   readChildProcessContext,
   resolveRootSessionId,
   SUBAGENT_PARENT_SESSION_ENV,
-} from '@agimon-ai/doompi-core/child-process';
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
-import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+} from '@agimon-ai/doompi-core/childProcess';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/piExtension';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/toolSurface';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 
 const DISPATCHER_AGENT_NAME = 'agiflow-dispatcher';

@@ -1,4 +1,4 @@
-import type { DoomApi } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApi } from '@agimon-ai/doompi-core/packageApi';
 
 import { KEY_QUERY_PARAM, KEY_SEPARATOR } from '../../constants/settings';
 import routes from '../../types/apiRoutes';

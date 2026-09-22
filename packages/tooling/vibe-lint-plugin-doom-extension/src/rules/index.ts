@@ -20,6 +20,7 @@ export {
   doomPackageShape,
   noDirectToolActivation,
   noLiveGlobalRegistry,
+  noManualExportEntries,
   noProtocolChannelLiterals,
   noRawPiEvents,
   noSameRunnerProtocol,

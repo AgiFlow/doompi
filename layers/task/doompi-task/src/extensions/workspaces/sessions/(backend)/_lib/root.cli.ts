@@ -2,22 +2,22 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProviderHandle,
   readDoomBackgroundWorkService,
-} from '@agimon-ai/doompi-core/background-work';
+} from '@agimon-ai/doompi-core/backgroundWork';
 import {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
   requireDoomContextContributions,
-} from '@agimon-ai/doompi-core/context-contributions';
+} from '@agimon-ai/doompi-core/contextContributions';
 import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-core/delegation';
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 import {
   createNarrationRequest,
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
   requireDoomNarrationService,
 } from '@agimon-ai/doompi-core/narration';
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 import { readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/uiHub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 

@@ -1,7 +1,7 @@
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-core/help';
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
-import { DOOM_TOOL_SURFACE_SERVICE, requireDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
+import { DOOM_TOOL_SURFACE_SERVICE, requireDoomToolSurface } from '@agimon-ai/doompi-core/toolSurface';
 import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
 

@@ -5,7 +5,7 @@
  * rather than a hand-rolled stub, so a change to the slot contract breaks this
  * story at the type level instead of silently drifting.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import type { RunnerRunView } from '../../../../../types/webRunners';
 import { runners } from '../_lib/runnersStore';

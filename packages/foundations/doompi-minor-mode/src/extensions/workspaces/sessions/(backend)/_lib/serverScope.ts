@@ -1,5 +1,5 @@
 import type { DoomHeadlessCommand, DoomHeadlessHook } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 
 export interface MinorModeServerScope {
   readonly commands: readonly DoomHeadlessCommand[];

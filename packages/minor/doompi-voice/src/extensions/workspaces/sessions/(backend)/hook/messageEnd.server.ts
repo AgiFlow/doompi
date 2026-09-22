@@ -1,4 +1,4 @@
-import { defineHook, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineHook, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import type root from '../root.server';
 

@@ -1,4 +1,4 @@
-import { defineResource, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineResource, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import type root from '../root.cli';
 

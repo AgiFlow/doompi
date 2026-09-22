@@ -1,4 +1,4 @@
-import { DOOM_BACKGROUND_WORK_SERVICE, type BackgroundWorkProvider } from '@agimon-ai/doompi-core/background-work';
+import { DOOM_BACKGROUND_WORK_SERVICE, type BackgroundWorkProvider } from '@agimon-ai/doompi-core/backgroundWork';
 import {
   DOOM_HEADLESS_OWNER as TEST_OWNER,
   DOOM_HEADLESS_HOST_SERVICE as TEST_AGENT,
@@ -13,8 +13,8 @@ import {
   type DoomHeadlessResource,
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
-import { DOOM_SERVER_HOST_SERVICE as TEST_SERVER, type DoomServerFacet } from '@agimon-ai/doompi-core/server-facet';
-import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_SERVER_HOST_SERVICE as TEST_SERVER, type DoomServerFacet } from '@agimon-ai/doompi-core/serverFacet';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/serverFacet';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE as TEST_CATALOG } from '@agimon-ai/doompi-minor-mode';
 import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';

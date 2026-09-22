@@ -12,7 +12,7 @@ import {
   DOOM_MCP_PROJECTION_VERSION,
   type DoomMcpProjection,
   type DoomMcpProjectionSource,
-} from '@agimon-ai/doompi-core/mcp-projection';
+} from '@agimon-ai/doompi-core/mcpProjection';
 import { parse, stringify } from 'yaml';
 
 import type {

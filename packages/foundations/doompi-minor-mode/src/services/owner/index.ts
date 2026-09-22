@@ -1,4 +1,4 @@
-import type { DoomExtensionContext } from '@agimon-ai/doompi-core/runtime-config';
+import type { DoomExtensionContext } from '@agimon-ai/doompi-core/runtimeConfig';
 
 import type { MinorModeCatalogService, MinorModeOwnerDefinition, MinorModeOwnerHandle } from '../../schemas/mode';
 

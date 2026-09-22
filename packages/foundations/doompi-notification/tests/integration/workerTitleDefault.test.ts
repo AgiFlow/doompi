@@ -1,4 +1,4 @@
-import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordisHost';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface FakeWorker {

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { canonicalContractJson } from '@agimon-ai/doompi-core/api-contracts';
+import { canonicalContractJson } from '@agimon-ai/doompi-core/apiContracts';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { exportApiContracts } from '../../src/builders/apiContractExport';
@@ -21,7 +21,7 @@ vi.mock('@agimon-ai/doompi-config/majorModes', async (original) => ({
     majorMode: { default: { layers: [] }, alternate: { layers: ['optional'] } },
   }),
 }));
-vi.mock('@agimon-ai/doompi-core/sync-registration', () => ({
+vi.mock('@agimon-ai/doompi-core/syncRegistration', () => ({
   readSyncRegistration: (root: string) => ({ serverBundle: { path: path.join(root, 'server.bundle.json') } }),
 }));
 vi.mock('../../src/composition/repository', () => ({

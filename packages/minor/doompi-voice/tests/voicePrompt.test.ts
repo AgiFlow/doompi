@@ -1,4 +1,4 @@
-import { readPackageResource } from '@agimon-ai/doompi-core/server-facet';
+import { readPackageResource } from '@agimon-ai/doompi-core/serverFacet';
 import { describe, expect, it } from 'vitest';
 
 describe('Voice prompt resource', () => {

@@ -7,19 +7,19 @@ import {
   defineServerMethod,
   readPackageResource,
   type DoomServerSessionPlugin,
-} from '@agimon-ai/doompi-core/server-facet';
+} from '@agimon-ai/doompi-core/serverFacet';
 import {
   DOOM_VOICE_AUTO_MODE_ID,
   DOOM_VOICE_TOOLS_SERVICE,
   VOICE_TOOL_ERROR_CODE,
   type VoiceToolErrorCode,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 import {
   VoiceToolDescribeInputSchema,
   VoiceToolUseInputSchema,
   type VoiceToolDescribeInput,
   type VoiceToolUseInput,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 import { defineMinorMode, serverMinorModes, type MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { Check } from 'typebox/value';

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
-import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, expect, it } from 'vitest';
 

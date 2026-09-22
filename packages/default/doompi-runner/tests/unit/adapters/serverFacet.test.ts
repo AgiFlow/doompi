@@ -4,8 +4,8 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHostService,
 } from '@agimon-ai/doompi-core/headless';
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
-import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/serverFacet';
 import { Context } from '@deepseek-ai/cordis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

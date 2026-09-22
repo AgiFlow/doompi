@@ -1,5 +1,5 @@
 import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
-import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 
 import { loadContextParameters } from '../../schemas/mcpContextTools';
 import { sessionViewSchema } from '../../schemas/mcpSessionView';

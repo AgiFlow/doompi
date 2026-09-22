@@ -55,7 +55,7 @@ import type {
   DoomChildSessionServiceProvider,
   DoomChildSessionTerminalPiForkSource,
   DoomChildSessionV4ForkSource,
-} from '@agimon-ai/doompi-core/child';
+} from '@agimon-ai/doompi-core/childSession';
 import type { SessionManager } from '@earendil-works/pi-coding-agent';
 
 import type { InlineAgent } from '../../schemas/subagentTool';

@@ -5,7 +5,7 @@ import {
   type DoomHeadlessHostService,
   type DoomHeadlessHook,
 } from '@agimon-ai/doompi-core/headless';
-import { DOOM_PROFILE_IDENTITY_ENTRY_TYPE } from '@agimon-ai/doompi-core/profile-identity';
+import { DOOM_PROFILE_IDENTITY_ENTRY_TYPE } from '@agimon-ai/doompi-core/profileIdentity';
 
 import { PROFILE_COMMAND, profileItems, profileTitle } from '../../../../../services/profileText';
 

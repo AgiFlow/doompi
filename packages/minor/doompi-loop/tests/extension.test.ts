@@ -2,8 +2,8 @@ import {
   DOOM_CORDIS_SESSION_SERVICE,
   installDoomCordisHost,
   type DoomCordisSessionService,
-} from '@agimon-ai/doompi-core/cordis-host';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+} from '@agimon-ai/doompi-core/cordisHost';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeArguments,

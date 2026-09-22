@@ -1,5 +1,5 @@
-import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
-import { type DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+import { type PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
+import { type DoomToolRestriction } from '@agimon-ai/doompi-core/toolSurface';
 import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeOwnerActionContext } from '@agimon-ai/doompi-minor-mode';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';

@@ -6,7 +6,7 @@ import {
   actionsFor,
   matchMinorMode,
   registerMinorModeCommand,
-} from '../../src/extensions/workspaces/sessions/(backend)/_lib/minorModeCommand';
+} from '../../src/services/minorModeCommand';
 
 function record(overrides: {
   id: string;

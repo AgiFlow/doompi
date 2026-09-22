@@ -1,4 +1,4 @@
-import { devPluginRoots } from '@agimon-ai/doompi/builders/web';
+import { devPluginRoots } from '@agimon-ai/doompi/webBuilder';
 import { describe, expect, it } from 'vitest';
 
 describe('devPluginRoots', () => {

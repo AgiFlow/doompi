@@ -44,7 +44,7 @@ Add a separate data entry to the existing server metadata:
 Build the contract as its own entry. Keep its graph free of handlers, lifecycle hooks, environment reads and service initialization. Declare every imported runtime dependency in `dependencies`, including `typebox` when using it. Undeclared imports can be accidentally bundled and behave differently after compilation.
 
 ```ts
-import { defineApiContract } from '@agimon-ai/doompi-core/api-contracts';
+import { defineApiContract } from '@agimon-ai/doompi-core/apiContracts';
 
 export default defineApiContract({
   version: 1,

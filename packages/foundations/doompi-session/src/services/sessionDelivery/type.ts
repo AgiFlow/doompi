@@ -1,4 +1,4 @@
-import type { DoomSessionCommunicationEndpoint } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomSessionCommunicationEndpoint } from '@agimon-ai/doompi-core/hubChannel';
 import type { Context } from '@deepseek-ai/cordis';
 
 export const DOOM_SESSION_DELIVERY_SERVICE = 'doom/session-delivery';

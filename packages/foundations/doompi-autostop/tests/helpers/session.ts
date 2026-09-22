@@ -1,4 +1,4 @@
-import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordis-host';
+import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordisHost';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { vi } from 'vitest';
 

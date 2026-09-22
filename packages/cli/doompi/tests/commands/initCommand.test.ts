@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { AMBIENT_EXTENSION_FILTER, DOOM_EXTENSION, readPiSettings } from '@agimon-ai/doompi-core/runtime-pi-settings';
+import { AMBIENT_EXTENSION_FILTER, DOOM_EXTENSION, readPiSettings } from '@agimon-ai/doompi-core/runtimePiSettings';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { piExtensionAliasPath } from '../../src/builders/cli/piExtensionAlias';

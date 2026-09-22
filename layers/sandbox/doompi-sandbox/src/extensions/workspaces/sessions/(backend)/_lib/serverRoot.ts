@@ -1,5 +1,5 @@
 import type { DoomHeadlessActivity } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 
 import { BROKER_DISABLED_ENV, BROKER_STATUS_SOURCE, DISABLED_VALUE } from '../../../../../constants/sandbox';
 import { startBroker, type RunningBroker } from '../../../../../services/brokerHost';

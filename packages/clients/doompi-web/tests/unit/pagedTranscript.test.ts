@@ -2,7 +2,7 @@ import type {
   SessionServiceState,
   TranscriptPage,
   TranscriptPageRequest,
-} from '@agimon-ai/doompi-core/session-protocol';
+} from '@agimon-ai/doompi-core/sessionProtocol';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { afterEach, expect, it, vi } from 'vitest';
 

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { buildPersonaPrompt, globalDoomConfigDirectory } from '@agimon-ai/doompi-config';
-import { type McpServerCost, priceMcpToolSchemas } from '@agimon-ai/doompi-core/mcp-schema-cost';
+import { type McpServerCost, priceMcpToolSchemas } from '@agimon-ai/doompi-core/mcpSchemaCost';
 import { buildSkillCatalog, counter } from '@agimon-ai/doompi-skill/catalog';
 
 import type { HarnessContext } from '../../../builders/cli/harnessContext';

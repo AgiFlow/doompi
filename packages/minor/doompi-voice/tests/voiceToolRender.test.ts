@@ -1,4 +1,4 @@
-import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '@agimon-ai/doompi-core/voice-tools';
+import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '@agimon-ai/doompi-core/voiceTools';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 

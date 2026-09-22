@@ -1,4 +1,4 @@
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/piExtension';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import {

@@ -6,7 +6,7 @@ import {
   type DoomHeadlessActivity,
   type DoomHeadlessHook,
 } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
 
 import { createDoomIgnoreMatcher } from '../../services/doomIgnore';
 import { EditTracker } from '../../services/editTracker';

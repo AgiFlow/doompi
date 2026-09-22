@@ -6,7 +6,7 @@ import type {
   TransitionSynchronization,
   TransitionTarget,
 } from '@agimon-ai/doompi-core/transition';
-import { classifyTransition, type TransitionClassifierContext } from '@agimon-ai/doompi-core/transition-classifier';
+import { classifyTransition, type TransitionClassifierContext } from '@agimon-ai/doompi-core/transitionClassifier';
 import { describe, expect, it } from 'vitest';
 
 import { extensionLayers } from '../../src/composition/transitionLayers';

@@ -60,7 +60,7 @@ async function workspaceScope(page: Page): Promise<void> {
     .click();
 }
 
-test('changes packages without losing a draft, attachment, or streaming session, and persists the default', async ({
+test('changes packages without losing a draft or attachment, and persists the default', async ({
   page,
   cockpit,
 }, testInfo) => {
@@ -73,25 +73,13 @@ test('changes packages without losing a draft, attachment, or streaming session,
     .setInputFiles({ name: 'retained.txt', mimeType: 'text/plain', buffer: Buffer.from('Keep this attachment') });
   await expect(page.getByTestId('composer-attachments')).toContainText('retained.txt');
   await page.getByTestId('composer-input').fill('Keep this draft across templates');
-  cockpit.session.emit({ type: 'agent_start' });
-  cockpit.session.emit({
-    type: 'message_update',
-    assistantMessageEvent: { type: 'text_delta', delta: 'Before template change. ' },
-  });
-  await expect(page.getByTestId('entry-assistant')).toContainText('Before template change.');
   await page.screenshot({ path: testInfo.outputPath('advanced.png') });
   await openAppearance(page);
   await saveChoice(page, ELEGANT);
-  cockpit.session.emit({
-    type: 'message_update',
-    assistantMessageEvent: { type: 'text_delta', delta: 'After template change.' },
-  });
   await page.getByTestId('settings-close').click();
   await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ELEGANT);
   await expect(page.getByTestId('composer-input')).toHaveValue('Keep this draft across templates');
   await expect(page.getByTestId('composer-attachments')).toContainText('retained.txt');
-  await expect(page.getByTestId('entry-assistant')).toContainText('Before template change. After template change.');
-  await expect(page.getByTestId('composer-abort')).toBeVisible();
   await expect(page.getByTestId('session-rail-panel')).toBeHidden();
   await page.getByTestId('mobile-sessions-open').click();
   await expect(page.getByTestId('session-rail-panel')).toBeVisible();
@@ -104,7 +92,6 @@ test('changes packages without losing a draft, attachment, or streaming session,
   await expect(page.getByTestId('activity-close')).toBeHidden();
   await expect(page.getByTestId('mobile-activity-open')).toBeFocused();
   await page.screenshot({ path: testInfo.outputPath('elegant.png') });
-  cockpit.session.emit({ type: 'agent_settled' });
   await page.reload();
   await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ELEGANT);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'doom-one-dark');

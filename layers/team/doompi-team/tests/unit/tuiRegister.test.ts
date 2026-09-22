@@ -1,4 +1,4 @@
-import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

@@ -1,4 +1,4 @@
-import type { DoomChildSessionRuntime } from '@agimon-ai/doompi-core/child';
+import type { DoomChildSessionRuntime } from '@agimon-ai/doompi-core/childSession';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 

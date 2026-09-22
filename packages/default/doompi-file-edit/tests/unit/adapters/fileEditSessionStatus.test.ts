@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFileEditSession } from '../../../src/services/fileEditSession';

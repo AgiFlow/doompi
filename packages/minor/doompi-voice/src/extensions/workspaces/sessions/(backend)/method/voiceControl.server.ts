@@ -1,4 +1,4 @@
-import { defineMethod, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineMethod, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import type root from '../root.server';
 

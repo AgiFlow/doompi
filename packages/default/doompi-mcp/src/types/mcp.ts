@@ -1,4 +1,4 @@
-import type { McpServerSnapshot, McpStatusSnapshot } from '@agimon-ai/doompi-core/mcp-status';
+import type { McpServerSnapshot, McpStatusSnapshot } from '@agimon-ai/doompi-core/mcpStatus';
 
 /**
  * What the `/mcp` command needs from the session.

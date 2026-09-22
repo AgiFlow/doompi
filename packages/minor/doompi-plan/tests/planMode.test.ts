@@ -14,8 +14,8 @@ import {
   DOOM_TOOL_SURFACE_SERVICE,
   type DoomToolSurfaceService,
   createDoomToolSurface,
-} from '@agimon-ai/doompi-core/tool-surface';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+} from '@agimon-ai/doompi-core/toolSurface';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   MINOR_MODE_TOOL_NAME,
@@ -29,7 +29,7 @@ import {
   type DoomSubagentPolicyService,
   type SubagentPolicy,
   type SubagentPolicyHandle,
-} from '@agimon-ai/doompi-team/subagent-policy';
+} from '@agimon-ai/doompi-team/subagentPolicy';
 import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voiceTools';
 import {
   createDoomVoiceToolsService,

@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
 
-import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/child-process';
+import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/childProcess';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 import { acquireBootstrapClaim } from '../builders/cli/bootstrapClaim';

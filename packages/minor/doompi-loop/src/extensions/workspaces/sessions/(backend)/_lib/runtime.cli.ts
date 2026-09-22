@@ -1,4 +1,4 @@
-import type { PiPluginContext, PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContext, PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
 import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 
 import { PACKAGE_SOURCE } from '../../../../../constants/piLoop';

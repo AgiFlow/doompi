@@ -8,7 +8,7 @@ import {
 } from '@agimon-ai/doompi-core/headless';
 import { HeadlessHost } from '@agimon-ai/doompi-core/main';
 import type { HeadlessHostOptions, ResolvedHeadlessResource } from '@agimon-ai/doompi-core/main';
-import type { DoomServerBundleEntry } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerBundleEntry } from '@agimon-ai/doompi-core/serverFacet';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, type MinorModeCatalogService } from '@agimon-ai/doompi-minor-mode';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';

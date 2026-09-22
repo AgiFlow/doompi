@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { DoomOAuthRedirect, DoomRepositorySyncView } from '@agimon-ai/doompi-core/package-api';
+import type { DoomOAuthRedirect, DoomRepositorySyncView } from '@agimon-ai/doompi-core/packageApi';
 import type { McpServerStateChange, McpToolInfo, TokenStore } from '@agimon-ai/mcp-proxy';
 
 import type { McpConfigGroups, McpConfigSource, McpSessionConfig } from '../../types/mcpConfig';

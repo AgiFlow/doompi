@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { pluginBlocksOf } from '@agimon-ai/doompi/builders/web';
+import { pluginBlocksOf } from '@agimon-ai/doompi/webBuilder';
 
 /**
  * Every workspace package that declares a cockpit plugin, found by walking.

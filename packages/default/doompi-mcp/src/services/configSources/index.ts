@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { normalizeAgentPluginMcpSource } from '@agimon-ai/doompi-config/agentPluginMcp';
-import type { DoomMcpNativeProjectionSource } from '@agimon-ai/doompi-core/mcp-projection';
+import type { DoomMcpNativeProjectionSource } from '@agimon-ai/doompi-core/mcpProjection';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 import type { McpConfigGroups, McpConfigGroupsInput, McpConfigSource } from '../../types/mcpConfig';

@@ -9,7 +9,7 @@ import type {
   DoomHubChannelSource,
   DoomHubSessionScope,
   DoomHubSessionService,
-} from '@agimon-ai/doompi-core/hub-channel';
+} from '@agimon-ai/doompi-core/hubChannel';
 
 import { DoomGitExpectedError, HubUnavailableError } from '../../../../services/errors';
 import { createWorktreeGit } from '../../../../services/gitCli';

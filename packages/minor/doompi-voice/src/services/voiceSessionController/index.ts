@@ -1,6 +1,6 @@
 import { resolveVoiceConfig } from '@agimon-ai/doompi-config/config';
 import { type IDoomConfigLoader, type ResolvedVoiceConfig } from '@agimon-ai/doompi-config/types';
-import { DOOM_VOICE_SOURCE as VOICE_SOURCE } from '@agimon-ai/doompi-core/voice-tools';
+import { DOOM_VOICE_SOURCE as VOICE_SOURCE } from '@agimon-ai/doompi-core/voiceTools';
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 
 import {

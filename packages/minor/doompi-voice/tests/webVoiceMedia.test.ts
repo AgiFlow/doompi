@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/webTesting';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {

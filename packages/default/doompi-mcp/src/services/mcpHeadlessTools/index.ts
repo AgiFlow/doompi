@@ -1,5 +1,5 @@
 import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
-import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 import type { Context } from '@deepseek-ai/cordis';
 
 export const MCP_HEADLESS_TOOLS_SERVICE = 'doom/mcp-headless-tools';

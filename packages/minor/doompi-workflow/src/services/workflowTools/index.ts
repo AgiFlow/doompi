@@ -1,4 +1,4 @@
-import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
 import {
   createEmbeddedWorkflowFeature,
   type WorkflowRunRecord,

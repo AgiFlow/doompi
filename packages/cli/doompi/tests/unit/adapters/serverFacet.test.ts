@@ -4,11 +4,11 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHostService,
 } from '@agimon-ai/doompi-core/headless';
-import { machineApi } from '@agimon-ai/doompi-core/machine-api';
-import { remoteApi } from '@agimon-ai/doompi-core/remote-api';
-import { api } from '@agimon-ai/doompi-core/runtime-context-api';
-import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
-import { sessionFilesApi } from '@agimon-ai/doompi-core/session-files-api';
+import { machineApi } from '@agimon-ai/doompi-core/machineApi';
+import { remoteApi } from '@agimon-ai/doompi-core/remoteApi';
+import { api } from '@agimon-ai/doompi-core/runtimeContextApi';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/serverFacet';
+import { sessionFilesApi } from '@agimon-ai/doompi-core/sessionFilesApi';
 import { headlessMinorModeCommand } from '@agimon-ai/doompi-minor-mode';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,

@@ -1,5 +1,5 @@
 import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
-import { type DoomServerSessionPlugin, readPackageResource } from '@agimon-ai/doompi-core/server-facet';
+import { type DoomServerSessionPlugin, readPackageResource } from '@agimon-ai/doompi-core/serverFacet';
 
 import { mountMcpSkills } from '../../../../../services/mcpSkills';
 import { discoverServerSkills } from '../../../../../services/serverInventory';

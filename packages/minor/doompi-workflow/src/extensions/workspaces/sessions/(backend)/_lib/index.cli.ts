@@ -1,7 +1,7 @@
-import type { PiPluginContext, PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
-import { definePiTool } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContext, PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
+import { definePiTool } from '@agimon-ai/doompi-core/piExtension';
 import { DOOM_SKILL_SOURCES_SERVICE, requireDoomSkillSourcesService } from '@agimon-ai/doompi-core/skills';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/uiHub';
 import type { Context } from '@deepseek-ai/cordis';
 
 import { PACKAGE_SOURCE } from '../../../../../constants/workflow';

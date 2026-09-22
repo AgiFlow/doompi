@@ -1,4 +1,4 @@
-import type { DoomDirectEventBus, DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomDirectEventBus, DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hubChannel';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createVoiceMediaWakeChannel, createVoiceOwnershipChannel } from '../src/services/voiceMediaHubChannel';

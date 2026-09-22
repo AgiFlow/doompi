@@ -1,4 +1,4 @@
-import type { DoomApi, DoomApiContext } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApi, DoomApiContext } from '@agimon-ai/doompi-core/packageApi';
 
 import { McpSettingsManager } from '../../services/mcpSettingsManager';
 import routes from '../../types/apiRoutes';

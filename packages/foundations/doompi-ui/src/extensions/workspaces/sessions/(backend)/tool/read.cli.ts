@@ -1,6 +1,6 @@
-import { defineCliTool } from '@agimon-ai/doompi-core/extension-file';
-import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { PiPluginContext, PiToolDeclaration } from '@agimon-ai/doompi-core/pi-extension';
+import { defineCliTool } from '@agimon-ai/doompi-core/extensionFile';
+import type { WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { PiPluginContext, PiToolDeclaration } from '@agimon-ai/doompi-core/piExtension';
 
 import type { UiPiScope } from '../_lib/piScope';
 export default defineCliTool((context: WithRoot<PiPluginContext<unknown>, UiPiScope>): PiToolDeclaration => {

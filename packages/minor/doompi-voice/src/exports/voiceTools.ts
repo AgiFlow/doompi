@@ -1,2 +1,2 @@
-export * from '@agimon-ai/doompi-core/voice-tools';
+export * from '@agimon-ai/doompi-core/voiceTools';
 export { createDoomVoiceToolsService } from '../services/voiceTools';

@@ -9,20 +9,20 @@ import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { filterHookDisabledLayers, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { loadMajorModesConfig, loadMajorModesConfigLenient } from '@agimon-ai/doompi-config/majorModes';
 import type { ConfigDiagnostic } from '@agimon-ai/doompi-config/types';
-import { DOOM_MCP_BUNDLE_FILE } from '@agimon-ai/doompi-core/mcp-facet';
+import { DOOM_MCP_BUNDLE_FILE } from '@agimon-ai/doompi-core/mcpFacet';
 import {
   mergePiSettings,
   piAgentDirectory,
   piThemeDirectory,
   readPiSettings,
   serializePiSettings,
-} from '@agimon-ai/doompi-core/runtime-pi-settings';
-import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
+} from '@agimon-ai/doompi-core/runtimePiSettings';
+import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/serverFacet';
 import {
   acquireSyncLocationLock,
   resolveSyncLocation,
   syncGenerationDirectory,
-} from '@agimon-ai/doompi-core/sync-location';
+} from '@agimon-ai/doompi-core/syncLocation';
 import {
   DOOMPI_API_VERSION,
   publishSyncRegistration,
@@ -30,7 +30,7 @@ import {
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
   type SyncPackageRegistration,
-} from '@agimon-ai/doompi-core/sync-registration';
+} from '@agimon-ai/doompi-core/syncRegistration';
 import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
 
 import { buildSyncedRuntime } from '../../../builders/cli';

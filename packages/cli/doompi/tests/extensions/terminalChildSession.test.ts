@@ -1,4 +1,4 @@
-import { createTerminalPiChildSessionServiceProvider } from '@agimon-ai/doompi-core/terminal-pi-child-session-service';
+import { createTerminalPiChildSessionServiceProvider } from '@agimon-ai/doompi-core/terminalPiChildSessionService';
 import type { Provider } from '@earendil-works/pi-ai';
 import type {
   ExtensionAPI,
@@ -17,7 +17,7 @@ const createChildSessions = vi.hoisted(() =>
   vi.fn(() => ({ get: () => ({ close: async () => undefined }), close: async () => undefined })),
 );
 
-vi.mock('@agimon-ai/doompi-core/terminal-pi-child-session-service', () => ({
+vi.mock('@agimon-ai/doompi-core/terminalPiChildSessionService', () => ({
   createTerminalPiChildSessionServiceProvider: createChildSessions,
 }));
 

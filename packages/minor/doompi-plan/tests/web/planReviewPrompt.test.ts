@@ -1,5 +1,5 @@
 import type { ToolPromptDialog } from '@agimon-ai/doompi-core/web';
-import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-core/webTesting';
 import { describe, expect, it, vi } from 'vitest';
 
 import { webPlugin as scopedWebPlugin } from '../../generated/web';

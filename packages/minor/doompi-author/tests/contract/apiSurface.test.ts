@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/serverFacet';
 import { assertContractSurface } from '@agimon-ai/doompi-core/testing';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it } from 'vitest';

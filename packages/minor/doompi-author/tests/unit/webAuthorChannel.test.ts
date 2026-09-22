@@ -1,4 +1,4 @@
-import type { DoomHubChannelHost } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomHubChannelHost } from '@agimon-ai/doompi-core/hubChannel';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createAuthorBridgeApi } from '../../src/extensions/workspaces/sessions/(backend)/api/author/_lib/authorBridgeApi';

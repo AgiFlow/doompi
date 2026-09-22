@@ -1,4 +1,4 @@
-import { insideSandbox } from '@agimon-ai/doompi-core/sandbox-harness';
+import { insideSandbox } from '@agimon-ai/doompi-core/sandboxHarness';
 
 import type { SandboxExtensionResult, SandboxExtensionService } from '../../types/extension';
 

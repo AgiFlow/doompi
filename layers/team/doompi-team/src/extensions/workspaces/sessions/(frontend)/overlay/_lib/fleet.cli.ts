@@ -15,7 +15,7 @@
  * - Ctrl+R deliberately clears render caches without changing live run state
  */
 
-import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/sessionProtocol';
 import {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_NAVIGATION_KEYS,

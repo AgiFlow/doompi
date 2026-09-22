@@ -262,6 +262,21 @@ describe('doompiExtension', () => {
     expect(read(dir, 'dist/index.mjs')).toBe(EMPTY);
   });
 
+  it('keeps discovered export entry names in camel case', () => {
+    const dir = packageWith({
+      'src/exports/apiContracts.ts': EMPTY,
+      'src/exports/logSinkTelemetry.ts': EMPTY,
+    });
+    const config = doompiExtension({ packageDir: dir });
+
+    expect(Array.isArray(config)).toBe(true);
+    if (!Array.isArray(config)) throw new Error('expected isolated API contracts config');
+    expect(config.map((entry) => entry.entry)).toEqual([
+      { apiContracts: 'src/exports/apiContracts.ts' },
+      { logSinkTelemetry: 'src/exports/logSinkTelemetry.ts' },
+    ]);
+  });
+
   it('exports root skills and theme resources without treating them as build entries', () => {
     const dir = packageWith({
       'src/exports/index.ts': EMPTY,

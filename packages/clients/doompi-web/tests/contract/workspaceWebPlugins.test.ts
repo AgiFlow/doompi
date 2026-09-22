@@ -2,9 +2,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { WebPluginDefinition, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
-import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/webTesting';
 import { DropdownMenu, DropdownMenuContent } from '@agimon-ai/doompi-web-components';
-import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
+import { scanWebPlugins } from '@agimon-ai/doompi/webBuilder';
 import { createElement, type ComponentType } from 'react';
 import { afterAll, describe, expect, it } from 'vitest';
 

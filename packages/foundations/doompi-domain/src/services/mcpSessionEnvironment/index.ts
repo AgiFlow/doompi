@@ -2,7 +2,7 @@ import {
   type DoomMcpSessionAllowlist,
   type DoomMcpSessionConfig,
   doomMcpSessionEnvironment,
-} from '@agimon-ai/doompi-core/mcp-session';
+} from '@agimon-ai/doompi-core/mcpSession';
 
 export interface McpSessionEnvironmentInput {
   readonly repoRoot: string;

@@ -36,7 +36,7 @@ describe('startup module graph boundaries', () => {
     // happen before anything else is read, so it may not pull in a graph.
     expect(runtimeImports(bootstrap)).toEqual([
       "import { pathToFileURL } from 'node:url';",
-      "import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/child-process';",
+      "import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/childProcess';",
       "import { acquireBootstrapClaim } from '../builders/cli/bootstrapClaim';",
       "import { findSyncedRoot, readStartupBootstrapStatus } from '../builders/cli/bootstrapLocator';",
     ]);

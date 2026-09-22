@@ -1,4 +1,4 @@
-import type { SessionServiceState } from '@agimon-ai/doompi-core/session-protocol';
+import type { SessionServiceState } from '@agimon-ai/doompi-core/sessionProtocol';
 import { replicatedState } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

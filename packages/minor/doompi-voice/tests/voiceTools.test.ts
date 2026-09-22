@@ -1,5 +1,5 @@
-import { definePiExtension, type PiToolCollection } from '@agimon-ai/doompi-core/pi-extension';
-import { VoiceToolDescribeInputSchema } from '@agimon-ai/doompi-core/voice-tools';
+import { definePiExtension, type PiToolCollection } from '@agimon-ai/doompi-core/piExtension';
+import { VoiceToolDescribeInputSchema } from '@agimon-ai/doompi-core/voiceTools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';

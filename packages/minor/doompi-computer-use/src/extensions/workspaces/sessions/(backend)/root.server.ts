@@ -1,4 +1,4 @@
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import { mountMcpTools } from '../../../../services/mcpTools';
 import runtime from './_runtime/index.server';

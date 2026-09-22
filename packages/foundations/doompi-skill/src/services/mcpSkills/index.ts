@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import type { DoomMcpPluginContext, DoomMcpSkill } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpPluginContext, DoomMcpSkill } from '@agimon-ai/doompi-core/mcpFacet';
 import type { Context } from '@deepseek-ai/cordis';
 
 import type { ServerSkillGroup } from '../serverInventory';

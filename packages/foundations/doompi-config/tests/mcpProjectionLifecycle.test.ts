@@ -1,5 +1,5 @@
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
-import { readDoomMcpProjectionService, type DoomMcpProjection } from '@agimon-ai/doompi-core/mcp-projection';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordisHost';
+import { readDoomMcpProjectionService, type DoomMcpProjection } from '@agimon-ai/doompi-core/mcpProjection';
 import { DOOM_NOTIFICATION_SERVICE, type DoomNotificationService } from '@agimon-ai/doompi-core/notification';
 import { readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';

@@ -1,5 +1,5 @@
 import type { DoomHeadlessCommand } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
 
 import { TOOLS_COMMAND } from '../../../../../constants/ui';
 import { toolNames } from '../../../../../services/sessionToolInventory';

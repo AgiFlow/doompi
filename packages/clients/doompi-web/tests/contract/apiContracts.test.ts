@@ -1,9 +1,9 @@
 import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 import { beforeEach as beforeEachApiRoutes } from 'vitest';
 beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
-import { builtinApiContract, canonicalContractJson, createApiDocuments } from '@agimon-ai/doompi-core/api-contracts';
-import { createHeadlessHub } from '@agimon-ai/doompi-core/headless-hub';
-import { serveHeadlessServer } from '@agimon-ai/doompi-core/headless-server';
+import { builtinApiContract, canonicalContractJson, createApiDocuments } from '@agimon-ai/doompi-core/apiContracts';
+import { createHeadlessHub } from '@agimon-ai/doompi-core/headlessHub';
+import { serveHeadlessServer } from '@agimon-ai/doompi-core/headlessServer';
 import Ajv2020 from 'ajv/dist/2020.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

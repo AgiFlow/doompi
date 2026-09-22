@@ -1,7 +1,7 @@
-import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
-import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
-import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
+import type { WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/sessionProtocol';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import { SUBAGENT_FLEET_COMMAND } from '../../../../../../constants/team';

@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
-import { loadServerBundle } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/serverFacet';
+import { loadServerBundle } from '@agimon-ai/doompi-core/serverFacet';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ExtensionComposition } from '../../src/builders/cli/extensionAssembler';

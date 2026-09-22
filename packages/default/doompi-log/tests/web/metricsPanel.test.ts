@@ -1,4 +1,4 @@
-import { renderPlugin } from '@agimon-ai/doompi-core/web/testing';
+import { renderPlugin } from '@agimon-ai/doompi-core/webTesting';
 import { describe, expect, it, vi } from 'vitest';
 
 import { GroupBars } from '../../src/extensions/(frontend)/setting/_components/charts/GroupBars';

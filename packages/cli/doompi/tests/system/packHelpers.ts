@@ -9,8 +9,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { RmuxBackend } from '@agimon-ai/doompi-runner/rmux-backend';
-import type { IRunnerPaths } from '@agimon-ai/doompi-runner/runner-paths';
+import { RmuxBackend } from '@agimon-ai/doompi-runner/rmuxBackend';
+import type { IRunnerPaths } from '@agimon-ai/doompi-runner/runnerPaths';
 
 import {
   FORBIDDEN_PACK_CONTENT,

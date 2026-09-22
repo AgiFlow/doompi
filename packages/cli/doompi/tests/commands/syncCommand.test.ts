@@ -3,10 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { DOOM_MCP_BUNDLE_FILE } from '@agimon-ai/doompi-core/mcp-facet';
-import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '@agimon-ai/doompi-core/pi-settings';
-import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
-import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
+import { DOOM_MCP_BUNDLE_FILE } from '@agimon-ai/doompi-core/mcpFacet';
+import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '@agimon-ai/doompi-core/piSettings';
+import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/serverFacet';
+import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/syncLocation';
 import {
   DOOMPI_API_VERSION,
   LEGACY_SYNC_REGISTRATION_VERSION,
@@ -14,7 +14,7 @@ import {
   readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '@agimon-ai/doompi-core/sync-registration';
+} from '@agimon-ai/doompi-core/syncRegistration';
 import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

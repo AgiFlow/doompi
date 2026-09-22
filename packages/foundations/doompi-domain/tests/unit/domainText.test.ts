@@ -1,5 +1,5 @@
 import type { DoomTransitionResult } from '@agimon-ai/doompi-core/transition';
-import { VOICE_TOOL_MAX_DOMAIN_COUNT } from '@agimon-ai/doompi-core/voice-tools';
+import { VOICE_TOOL_MAX_DOMAIN_COUNT } from '@agimon-ai/doompi-core/voiceTools';
 import { describe, expect, it } from 'vitest';
 
 import {

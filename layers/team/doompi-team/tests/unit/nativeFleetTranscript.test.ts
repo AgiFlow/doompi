@@ -1,4 +1,4 @@
-import type { TranscriptPage } from '@agimon-ai/doompi-core/session-protocol';
+import type { TranscriptPage } from '@agimon-ai/doompi-core/sessionProtocol';
 import { describe, expect, it } from 'vitest';
 
 import { nativeTranscriptTail } from '../../src/services/nativeFleetTranscript';

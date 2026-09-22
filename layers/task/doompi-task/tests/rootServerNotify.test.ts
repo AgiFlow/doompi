@@ -12,7 +12,7 @@
  * cannot see any of this. These tests cover the adapter itself.
  */
 
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 import { describe, expect, it, vi } from 'vitest';
 
 import rootSession from '../src/extensions/workspaces/sessions/(backend)/_lib/root.server';

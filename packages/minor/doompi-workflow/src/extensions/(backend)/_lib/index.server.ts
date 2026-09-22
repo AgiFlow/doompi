@@ -1,4 +1,4 @@
-import type { DoomServerPluginDefinition } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerPluginDefinition } from '@agimon-ai/doompi-core/serverFacet';
 
 import { createWorkflowCatalogChannel } from '../../../services/workflowCatalogChannel';
 import { api } from '../../../services/workflowHubApi';

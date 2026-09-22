@@ -2,8 +2,8 @@ import { restoreHarnessStateSnapshot, snapshotHarnessState } from '@agimon-ai/do
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import { requireDoomTransitionCoordinator, type TransitionSource } from '@agimon-ai/doompi-core/transition';
-import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voice-reload-handoff';
-import { readDoomVoiceToolsService } from '@agimon-ai/doompi-core/voice-tools';
+import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voiceReloadHandoff';
+import { readDoomVoiceToolsService } from '@agimon-ai/doompi-core/voiceTools';
 import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import {
   type MinorModeReloadHandoffHandle,

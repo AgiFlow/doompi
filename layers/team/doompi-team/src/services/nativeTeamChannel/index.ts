@@ -13,7 +13,7 @@ import type {
   DoomChildSessionRuntime,
   DoomChildSessionTool,
   DoomChildSessionToolResult,
-} from '@agimon-ai/doompi-core/child';
+} from '@agimon-ai/doompi-core/childSession';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { TSchema } from 'typebox';

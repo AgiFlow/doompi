@@ -1,4 +1,4 @@
-import { defineCliCommand } from '@agimon-ai/doompi-core/extension-file';
+import { defineCliCommand } from '@agimon-ai/doompi-core/extensionFile';
 
 import { openAgentCatalog } from '../../(frontend)/overlay/_lib/agent-catalog.cli';
 import { buildAgentCatalogEntries } from '../../(frontend)/overlay/_lib/agentResourceProjection';

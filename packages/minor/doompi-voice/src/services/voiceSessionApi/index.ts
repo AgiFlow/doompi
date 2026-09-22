@@ -1,4 +1,4 @@
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 
 import { FfmpegEncodedAudioDecoder } from '../../services/encodedAudio';
 import { ExecutableResolver, NodeProcessSpawner, SystemClock, TemporaryWorkspace } from '../../services/infrastructure';

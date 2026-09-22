@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { createHistoryOwnership } from '@agimon-ai/doompi-core/history-ownership';
-import { openSqliteSessionStorage } from '@agimon-ai/doompi-core/sqlite-session-storage';
+import { createHistoryOwnership } from '@agimon-ai/doompi-core/historyOwnership';
+import { openSqliteSessionStorage } from '@agimon-ai/doompi-core/sqliteSessionStorage';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import { expect, it } from 'vitest';
 

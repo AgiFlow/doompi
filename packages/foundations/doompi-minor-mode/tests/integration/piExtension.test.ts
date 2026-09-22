@@ -1,6 +1,6 @@
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
-import { definePiExtension, type PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
-import { defineCommand, defineTool } from '@agimon-ai/doompi-core/pi-extension';
+import { definePiExtension, type PiEventHandlers } from '@agimon-ai/doompi-core/piExtension';
+import { defineCommand, defineTool } from '@agimon-ai/doompi-core/piExtension';
 import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
 import { Context } from '@deepseek-ai/cordis';
 import type { BeforeAgentStartEvent, ExtensionEvent } from '@earendil-works/pi-coding-agent';

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import type { DoomMcpSkill } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpSkill } from '@agimon-ai/doompi-core/mcpFacet';
 import { describe, expect, it } from 'vitest';
 
 import declaration from '../src/extensions/workspaces/sessions/(backend)/skill/doompi-use-cache.mcp';

@@ -4,7 +4,7 @@ import {
   type DoomContextContributionError,
   type DoomContextContributionsService,
   type DoomContextContributionsSnapshot,
-} from '@agimon-ai/doompi-core/context-contributions';
+} from '@agimon-ai/doompi-core/contextContributions';
 import { Context } from '@deepseek-ai/cordis';
 import {
   buildContextEntries,

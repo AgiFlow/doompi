@@ -1,4 +1,4 @@
-import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/toolSurface';
 
 import type { McpCatalog } from '../mcpCatalog';
 /**

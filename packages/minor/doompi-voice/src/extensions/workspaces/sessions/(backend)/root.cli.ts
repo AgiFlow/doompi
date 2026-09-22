@@ -1,5 +1,5 @@
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 
 import type { VoiceExtensionOptions } from '../../../../services/voiceController';
 import { createVoicePiRuntime } from '../../../../services/voicePlugin';

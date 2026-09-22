@@ -474,7 +474,7 @@ describe('scope roots', () => {
     // starting work that calls back into a contribution is safe.
     const { cli } = raw(TREE);
     expect(cli).toContain('...composeRootHooks(scopeGlobal, scopeSession),');
-    expect(cli).toContain("import { composeRootHooks } from '@agimon-ai/doompi-core/extension-file';");
+    expect(cli).toContain("import { composeRootHooks } from '@agimon-ai/doompi-core/extensionFile';");
   });
 
   it('rebuilds the enclosing roots per server scope, because each is its own mount', () => {

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
 import type { DoomSessionDeliveryService } from '@agimon-ai/doompi-session';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

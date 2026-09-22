@@ -32,6 +32,7 @@ const EXPECTED_RULE_IDS = [
   'no-internal-public-import',
   'no-legacy-cordis-access',
   'no-live-global-registry',
+  'no-manual-export-entries',
   'no-protocol-channel-literals',
   'no-raw-pi-events',
   'no-same-runner-protocol',

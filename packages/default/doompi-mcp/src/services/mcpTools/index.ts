@@ -1,5 +1,5 @@
 import type { DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
-import { definePiTool, type PiToolDeclaration } from '@agimon-ai/doompi-core/pi-extension';
+import { definePiTool, type PiToolDeclaration } from '@agimon-ai/doompi-core/piExtension';
 import type { McpClientManagerService } from '@agimon-ai/mcp-proxy';
 import type { AgentToolResult, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';

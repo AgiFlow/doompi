@@ -1,6 +1,6 @@
-import type { DoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
-import type { PiEventHandlers, PiToolRestriction } from '@agimon-ai/doompi-core/pi-extension';
-import type { DoomToolRestriction, DoomToolSurfaceService } from '@agimon-ai/doompi-core/tool-surface';
+import type { DoomBackgroundWorkService } from '@agimon-ai/doompi-core/backgroundWork';
+import type { PiEventHandlers, PiToolRestriction } from '@agimon-ai/doompi-core/piExtension';
+import type { DoomToolRestriction, DoomToolSurfaceService } from '@agimon-ai/doompi-core/toolSurface';
 import type {
   AgentToolResult,
   ExtensionAPI,

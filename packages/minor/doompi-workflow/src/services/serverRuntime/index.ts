@@ -40,7 +40,7 @@ function callResult(value: unknown): DoomHeadlessToolResult {
 }
 
 import { type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
-import { type DoomServerHostService, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { type DoomServerHostService, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
 export function createWorkflowServerRuntime(
   host: DoomHeadlessHostService,
   serverHost: DoomServerHostService,

@@ -3,13 +3,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordis-host';
+import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordisHost';
 import {
   createDoomMcpProjectionService,
   DOOM_MCP_PROJECTION_SERVICE,
   type DoomMcpProjection,
   type DoomMcpProjectionService,
-} from '@agimon-ai/doompi-core/mcp-projection';
+} from '@agimon-ai/doompi-core/mcpProjection';
 import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
@@ -29,8 +29,8 @@ vi.mock('@agimon-ai/mcp-proxy', async (importOriginal) => ({
   createProxyContainer: (...argumentsValue: unknown[]) => mocks.createProxyContainer(...argumentsValue),
 }));
 
-vi.mock('@agimon-ai/doompi-core/mcp-projection', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agimon-ai/doompi-core/mcp-projection')>();
+vi.mock('@agimon-ai/doompi-core/mcpProjection', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agimon-ai/doompi-core/mcpProjection')>();
   return {
     ...actual,
     readDoomMcpProjectionService: (context: Context) => {

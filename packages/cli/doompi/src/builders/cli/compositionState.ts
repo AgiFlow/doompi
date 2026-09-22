@@ -1,4 +1,4 @@
-import { DOOMPI_COMPOSED_ENV, DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/child-process';
+import { DOOMPI_COMPOSED_ENV, DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/childProcess';
 
 /** Marks a process whose extensions this module composed. */
 export const COMPOSED_ENV = DOOMPI_COMPOSED_ENV;

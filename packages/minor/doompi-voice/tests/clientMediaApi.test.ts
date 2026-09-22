@@ -1,4 +1,4 @@
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
 import { describe, expect, it } from 'vitest';
 
 import type { IVoiceMediaHostConnection } from '../src/types';

@@ -1,4 +1,4 @@
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 import type { Context } from '@deepseek-ai/cordis';
 
 import { createHeadlessBashTool, createHeadlessRunnersCommand } from '../../../../../services/headless';

@@ -4,7 +4,7 @@ import {
   SUBAGENT_ACTIONS,
   SubagentParams,
   subagentActionAcceptsField,
-} from '@agimon-ai/doompi-team/runtime-subagent-tool';
+} from '@agimon-ai/doompi-team/runtimeSubagentTool';
 import { Check } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
 

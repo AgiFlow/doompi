@@ -2,9 +2,9 @@ import { resolveVoiceConfig } from '@agimon-ai/doompi-config/config';
 import type { DoomConfigContributionHandle } from '@agimon-ai/doompi-core/config';
 import type { DoomFooterContributionHandle } from '@agimon-ai/doompi-core/footer';
 import type { DoomLeaderContributionHandle, LeaderBinding } from '@agimon-ai/doompi-core/leader';
-import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import { type PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
 import { type DoomReadinessCoordinator, readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/uiHub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 

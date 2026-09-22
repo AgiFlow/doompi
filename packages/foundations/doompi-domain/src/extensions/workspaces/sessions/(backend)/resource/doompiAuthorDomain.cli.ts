@@ -1,4 +1,4 @@
-import { defineResource } from '@agimon-ai/doompi-core/extension-file';
+import { defineResource } from '@agimon-ai/doompi-core/extensionFile';
 
 import { DOMAIN_SOURCE } from '../../../../../types/domains';
 export default defineResource({

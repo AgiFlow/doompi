@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { HarnessTelemetry } from '@agimon-ai/doompi-core/log-sink-telemetry';
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/logSinkTelemetry';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LAUNCHER_COMPOSITION_ENV } from '../../src/builders/cli/constants';

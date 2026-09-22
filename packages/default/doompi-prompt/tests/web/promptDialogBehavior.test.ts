@@ -1,4 +1,4 @@
-import { renderPlugin } from '@agimon-ai/doompi-core/web/testing';
+import { renderPlugin } from '@agimon-ai/doompi-core/webTesting';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

@@ -1,4 +1,4 @@
-import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { Box, type Component, Text, truncateToWidth } from '@earendil-works/pi-tui';
 

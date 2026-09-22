@@ -1,13 +1,13 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
-import type { MinorModeCatalogService, MinorModeSessionKind } from '../../../../../schemas/mode';
+import type { MinorModeCatalogService, MinorModeSessionKind } from '../../schemas/mode';
 import {
   executeMinorModeCommand,
   MINOR_MODE_COMMAND,
   MINOR_MODE_COMMAND_DESCRIPTION,
-} from '../../../../../services/command';
+} from '../command';
 
-export { actionsFor, matchMinorMode, MINOR_MODE_COMMAND } from '../../../../../services/command';
+export { actionsFor, matchMinorMode, MINOR_MODE_COMMAND } from '../command';
 
 function sessionKindOf(ctx: ExtensionContext): MinorModeSessionKind {
   return ctx.hasUI && ctx.mode === 'tui' ? 'tui' : 'headless';

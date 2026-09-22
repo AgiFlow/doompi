@@ -1,15 +1,7 @@
 import { doompiExtension } from '@agimon-ai/doompi-build/tsdown';
 import { defineConfig } from 'tsdown';
 
-const routed = doompiExtension({
-  packageDir: process.cwd(),
-  exportsDir: 'src/exports/_none',
-  entry: {
-    'api-contracts': 'src/exports/apiContracts.ts',
-    index: 'src/exports/index.ts',
-    env: 'src/exports/env.ts',
-  },
-});
+const routed = doompiExtension({ packageDir: process.cwd() });
 const configs = Array.isArray(routed) ? routed : [routed];
 const packageConfig = configs.find((config) => 'extensions/pi' in config.entry);
 if (!packageConfig) throw new Error('Cache requires its generated Pi extension entry.');

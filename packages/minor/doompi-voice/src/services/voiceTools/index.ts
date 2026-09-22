@@ -7,11 +7,11 @@ import {
   type VoiceToolRegistrationOptions,
   type VoiceToolSessionHandle,
   VoiceToolError,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 import { type TSchema } from 'typebox';
 import { Check, Errors } from 'typebox/value';
 
-export * from '@agimon-ai/doompi-core/voice-tools';
+export * from '@agimon-ai/doompi-core/voiceTools';
 
 import {
   VOICE_TOOL_DEFAULT_TIMEOUT_MS,
@@ -28,7 +28,7 @@ import {
   VOICE_TOOL_MAX_ERROR_MESSAGE_LENGTH,
   SAFE_IDENTIFIER,
   SAFE_NAME,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 import {
   VoiceToolDescriptorSchema,
   type VoiceToolBatchCall,
@@ -40,7 +40,7 @@ import {
   type VoiceToolCatalogSnapshot,
   type VoiceToolBatchItemResult,
   type VoiceToolBatchResult,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 
 interface VoiceToolClaim<Context> {
   readonly descriptor: VoiceToolDescriptor;

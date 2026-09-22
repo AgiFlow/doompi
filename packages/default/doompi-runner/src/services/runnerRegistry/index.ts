@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
 import {
   createProcessRegistryService,
   normalizeRepositoryPath,

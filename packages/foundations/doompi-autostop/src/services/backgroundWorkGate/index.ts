@@ -2,7 +2,7 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   readDoomBackgroundWorkService,
   type DoomBackgroundWorkService,
-} from '@agimon-ai/doompi-core/background-work';
+} from '@agimon-ai/doompi-core/backgroundWork';
 import type { Context } from '@deepseek-ai/cordis';
 
 export interface BackgroundWorkGate {

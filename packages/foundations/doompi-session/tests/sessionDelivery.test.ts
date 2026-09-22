@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import type { DoomSessionCommunicationEndpoint } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomSessionCommunicationEndpoint } from '@agimon-ai/doompi-core/hubChannel';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

@@ -8,7 +8,7 @@ const hostMocks = vi.hoisted(() => ({
   plugin: vi.fn(),
 }));
 
-vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
+vi.mock('@agimon-ai/doompi-core/runtimeCordisHost', () => ({
   connectDoomCordisHost: hostMocks.connect,
 }));
 
