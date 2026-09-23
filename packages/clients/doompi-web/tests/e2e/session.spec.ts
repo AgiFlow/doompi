@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { expect, test } from '../support/cockpit';
+import { writeRunnerRecord } from '../support/runnerRuns';
 
 test('sends a prompt and shows it in the timeline', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
@@ -230,6 +231,49 @@ test('follows the newest reply, and stops following once the reader scrolls back
   await expect.poll(atBottom).toBe(true);
 });
 
+test('opens a finished conversation at its newest line, and returns there from another tab', async ({
+  page,
+  cockpit,
+}) => {
+  // A long final reply is what the virtualizer's 80px estimate gets most wrong:
+  // pinning once against the estimate lands in the middle of the reply.
+  const report = Array.from({ length: 150 }, (_, line) => `- report line ${String(line)}`).join('\n');
+  cockpit.session.replaceEntries([
+    ...Array.from({ length: 20 }, (_, index) => ({
+      type: 'message',
+      id: `q${String(index)}`,
+      message: { role: 'user', content: [{ type: 'text', text: `question ${String(index)}` }] },
+    })),
+    {
+      type: 'message',
+      id: 'final',
+      message: { role: 'assistant', content: [{ type: 'text', text: `${report}\n\nverdict: done` }] },
+    },
+  ]);
+  writeRunnerRecord(cockpit.runnerStore, 's1', { id: 'runner-api', name: 'api', command: 'pnpm dev' });
+
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  const timeline = page.getByTestId('timeline');
+  const atBottom = () =>
+    timeline.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight < 48);
+  await expect(timeline).toContainText('verdict: done');
+  await expect.poll(atBottom).toBe(true);
+
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'st-runners',
+    method: 'setStatus',
+    statusKey: 'doom-runner-runners',
+    statusText: 'Runners 1 ●',
+  });
+  await page.getByTestId('activity-runner-runner-api').click();
+  await expect(page.getByTestId('runner-log-panel')).toBeVisible();
+  await page.getByTestId('tab-conversation').click();
+  await expect(timeline).toContainText('verdict: done');
+  await expect.poll(atBottom).toBe(true);
+});
 test('opens a session that ran before this page with its transcript intact', async ({ page, cockpit }) => {
   cockpit.session.replaceEntries([
     { type: 'message', id: 'e1', message: { role: 'user', content: [{ type: 'text', text: 'widen the gate' }] } },
