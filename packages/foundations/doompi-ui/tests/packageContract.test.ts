@@ -65,7 +65,7 @@ async function sourceFiles(directory: string): Promise<string[]> {
 }
 
 describe('doom Pi UI package boundary', () => {
-  it('retains the publishable package identity and exact Pi peer versions', async () => {
+  it('retains the publishable package identity and installs the Pi TUI used by its runtime imports', async () => {
     const manifest = await readJsonFile<PackageManifest>(manifestPath);
 
     expect(manifest.name).toBe('@agimon-ai/doompi-ui');
@@ -73,9 +73,9 @@ describe('doom Pi UI package boundary', () => {
     expect(manifest.private).toBeUndefined();
     expect(manifest.type).toBe('module');
     expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
-    expect(manifest.devDependencies?.['@earendil-works/pi-tui']).toBe('0.87.1');
     expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
-    expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBe('0.87.1');
+    expect(manifest.dependencies?.['@earendil-works/pi-tui']).toBe('0.87.1');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBeUndefined();
   });
 
   it('keeps browser UI dependencies optional while preserving the web client entry', async () => {

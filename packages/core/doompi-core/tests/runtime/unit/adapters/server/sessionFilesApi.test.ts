@@ -60,6 +60,22 @@ describe('session file completion', () => {
     }
   });
 
+  it('prunes directories ignored by nested .gitignore rules', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-files-'));
+    roots.push(cwd);
+    fs.mkdirSync(path.join(cwd, 'app', 'generated'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, 'app', '.gitignore'), '/generated/\n');
+    fs.writeFileSync(path.join(cwd, 'app', 'generated', 'hidden.ts'), 'hidden');
+    fs.writeFileSync(path.join(cwd, 'app', 'visible.ts'), 'visible');
+    const handler = sessionFilesApi.start({ scope: 'session', sessionId: 'one', cwd, onNotice() {} });
+    try {
+      expect(await (await handler.fetch(new Request('http://files/?q=.ts'))).json()).toEqual({
+        files: ['app/visible.ts'],
+      });
+    } finally {
+      handler.close();
+    }
+  });
   it('lists everything when the project declares no ignore rules', async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-files-'));
     roots.push(cwd);

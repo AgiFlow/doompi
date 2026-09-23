@@ -10,15 +10,7 @@ const IGNORE_FILES = ['.gitignore', '.doomignore'];
 const FILE_QUERY_TIMEOUT_MS = 2000;
 const MAX_FILE_RESULTS = 50;
 
-/**
- * The project's ignore test, or nothing when it declares no rules.
- *
- * Only the session root's files are read. A nested .gitignore would need one
- * matcher per directory, and the cost of skipping it is a suggestion that
- * should not have been offered rather than a file that cannot be opened. An
- * unreadable or malformed file leaves completion listing everything, because
- * hiding the tree is the worse failure.
- */
+/** Read ignore rules for one directory, relative to that directory. */
 function readIgnoreRules(cwd: string): ((relativePath: string) => boolean) | undefined {
   const rules = IGNORE_FILES.map((name) => {
     try {
@@ -37,9 +29,8 @@ function readIgnoreRules(cwd: string): ((relativePath: string) => boolean) | und
 }
 
 async function listSessionFiles(cwd: string, query: string, signal: AbortSignal): Promise<string[]> {
-  const isIgnored = readIgnoreRules(cwd);
+  const pending = [{ directory: '', rules: [] as Array<{ base: string; ignores: (file: string) => boolean }> }];
   const deadline = Date.now() + FILE_QUERY_TIMEOUT_MS;
-  const pending = [''];
   const matches: string[] = [];
 
   while (pending.length > 0) {
@@ -47,24 +38,22 @@ async function listSessionFiles(cwd: string, query: string, signal: AbortSignal)
       throw signal.reason instanceof Error ? signal.reason : new Error('File completion was aborted.');
     }
     if (Date.now() > deadline) throw new Error('File completion timed out.');
-    const relativeDirectory = pending.pop();
-    if (relativeDirectory === undefined) break;
-    const entries = await fs.promises.readdir(path.join(cwd, relativeDirectory), { withFileTypes: true });
+    const next = pending.pop();
+    if (!next) break;
+    const { directory, rules } = next;
+    const nested = readIgnoreRules(path.join(cwd, directory));
+    const activeRules = nested ? [...rules, { base: directory, ignores: nested }] : rules;
+    const entries = await fs.promises.readdir(path.join(cwd, directory), { withFileTypes: true });
     for (const entry of entries) {
       // Ignore rules are written in posix form, and so is every result.
-      const file = relativeDirectory === '' ? entry.name : `${relativeDirectory}/${entry.name}`;
+      const file = directory === '' ? entry.name : `${directory}/${entry.name}`;
+      const ignored = (candidate: string): boolean =>
+        activeRules.some(({ base, ignores }) => ignores(base ? candidate.slice(base.length + 1) : candidate));
       if (entry.isDirectory()) {
-        // An ignored directory is pruned rather than filtered at its leaves:
-        // walking a build cache is what exhausts the completion budget. The
-        // trailing slash is what makes a directory-only rule such as
-        // '.nx-cache/' match.
-        if (EXCLUDED_DIRECTORIES.has(entry.name) || isIgnored?.(`${file}/`) === true) continue;
-        pending.push(file);
-        // A folder is completable too, and the same trailing slash is what
-        // tells the client this is one and keeps a query like 'src/' matching
-        // the folder itself.
+        if (EXCLUDED_DIRECTORIES.has(entry.name) || ignored(`${file}/`)) continue;
+        pending.push({ directory: file, rules: activeRules });
         if (`${file}/`.toLowerCase().includes(query)) matches.push(`${file}/`);
-      } else if (entry.isFile() && isIgnored?.(file) !== true && file.toLowerCase().includes(query)) {
+      } else if (entry.isFile() && !ignored(file) && file.toLowerCase().includes(query)) {
         matches.push(file);
       }
     }

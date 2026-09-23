@@ -183,6 +183,7 @@
     "@agimon-ai/doompi-minor-mode": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
+    "@earendil-works/pi-tui": "0.87.1",
     "yaml": "2.9.1"
   },
   "devDependencies": {
@@ -190,7 +191,6 @@
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.87.1",
-    "@earendil-works/pi-tui": "0.87.1",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
     "@types/node": "26.6.1",
@@ -205,8 +205,7 @@
   "peerDependencies": {
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.87.1",
-    "@earendil-works/pi-tui": "0.87.1"
+    "@earendil-works/pi-coding-agent": "0.87.1"
   },
   "peerDependenciesMeta": {
     "@agimon-ai/doompi-web-components": {
