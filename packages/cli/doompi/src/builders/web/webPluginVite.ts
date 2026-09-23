@@ -79,6 +79,7 @@ export function webPluginOverridePlugin(clientRoot: string, generated: SyncGener
     name: 'doompi-web-plugin-overrides',
     enforce: 'pre',
     async resolveId(source, importer, options) {
+      if (!source.includes('webPlugins.generated') && !source.includes('webPluginSources.generated.css')) return null;
       const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
       if (!resolved) return null;
       return overrides.get(resolved.id) ?? null;

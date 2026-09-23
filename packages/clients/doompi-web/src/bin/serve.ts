@@ -26,15 +26,21 @@ async function main(): Promise<void> {
     headless = await startHeadless({ url: headlessUrl, environment: process.env, onNotice: notice });
   }
 
-  const { serveWeb } = await import('../adapters/httpServer');
-  const server = await serveWeb({
-    port: options.port,
-    host: options.host,
-    assetsDir: options.assetsDir,
-    headlessUrl: headless?.url ?? headlessUrl,
-    headlessToken: options.headlessToken ?? headless?.token,
-    onNotice: notice,
-  });
+  const server = await import('../adapters/httpServer')
+    .then(({ serveWeb }) =>
+      serveWeb({
+        port: options.port,
+        host: options.host,
+        assetsDir: options.assetsDir,
+        headlessUrl: headless?.url ?? headlessUrl,
+        headlessToken: options.headlessToken ?? headless?.token,
+        onNotice: notice,
+      }),
+    )
+    .catch(async (error: unknown) => {
+      await headless?.close();
+      throw error;
+    });
   notice(`serving browser assets at ${server.url}`);
 
   let stopping = false;
