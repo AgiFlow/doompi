@@ -146,9 +146,6 @@ jobs:
       - name: Set up DoomPi workspace
         uses: ./.github/actions/setup-monorepo
 
-      - name: Build the cockpit and the servers it spawns
-        run: pnpm cockpit:build
-
       - name: Build the desktop main and preload
         run: pnpm nx run @agimon-ai/doompi-desktop:build
 
