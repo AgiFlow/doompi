@@ -225,7 +225,7 @@ jobs:
         run: pnpm audit:workspace
 
       - name: Build package matrix
-        run: pnpm build
+        run: pnpm nx run-many -t build --parallel=3
 
       - name: Verify system-test shard coverage
         if: matrix.check
