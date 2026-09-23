@@ -152,7 +152,8 @@ test('previews the files a prompt mentions and renders the reply as markdown', a
   await expect(previews.nth(0)).toHaveAttribute('data-kind', 'image');
   await expect(previews.nth(0).locator('img')).toHaveAttribute('src', /^blob:/u);
   await expect(previews.nth(1)).toHaveAttribute('data-kind', 'file');
-  await expect(previews.nth(1).locator('a')).toHaveAttribute('href', /^blob:/u);
+  // A file plugin that can open the path claims the mention, so it opens in a tab rather than downloading.
+  await expect(previews.nth(1).getByRole('button', { name: 'notes/plan.md' })).toBeVisible();
 
   cockpit.session.emit({ type: 'agent_start' });
   cockpit.session.emit({
