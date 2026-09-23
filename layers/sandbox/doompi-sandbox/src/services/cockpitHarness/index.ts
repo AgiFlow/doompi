@@ -5,7 +5,7 @@ import type {
   CockpitContainerHarnessModule,
   CockpitContainerRequest,
   CockpitContainerStart,
-} from '@agimon-ai/doompi-core/cockpit-container';
+} from '@agimon-ai/doompi-core/cockpitContainer';
 
 import type { EngineProcessRunner, SandboxEngine } from '../../types/sandboxHarness';
 import { buildCockpitPlan, type CockpitGitIdentity } from '../cockpitPlan';

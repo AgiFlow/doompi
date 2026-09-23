@@ -9,7 +9,7 @@
  * diff and edit views are entered by clicking, which a static render cannot do,
  * so what is covered here is the preview the tab opens on.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import type { FileEditsDetailView } from '../../../../../types/fileEditsApi';
 import { FilePanel } from './FilePanel';

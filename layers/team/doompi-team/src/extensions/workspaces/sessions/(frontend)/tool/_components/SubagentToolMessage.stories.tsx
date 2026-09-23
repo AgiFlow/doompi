@@ -9,7 +9,7 @@
  * `subagent` tool hands the model and `details` is what it attaches for this
  * card, so a story cannot drift into wording no code path produces.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import { SubagentToolMessage } from './SubagentToolMessage';
 

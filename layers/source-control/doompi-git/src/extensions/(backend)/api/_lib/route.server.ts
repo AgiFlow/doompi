@@ -1,4 +1,4 @@
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 
 import { DoomGitExpectedError } from '../../../../services/errors';
 import { createWorktreeGit } from '../../../../services/gitCli';

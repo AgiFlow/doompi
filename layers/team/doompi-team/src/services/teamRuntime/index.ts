@@ -6,7 +6,7 @@
  * TypeScript objects with constructor-declared dependencies.
  */
 
-import type { DoomChildSessionServiceProvider } from '@agimon-ai/doompi-core/child';
+import type { DoomChildSessionServiceProvider } from '@agimon-ai/doompi-core/childSession';
 
 import { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';
 import { AdmissionGate } from '../admissionGate';

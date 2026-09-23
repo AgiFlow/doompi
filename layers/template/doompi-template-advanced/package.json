@@ -30,13 +30,8 @@
   "type": "module",
   "main": "./dist/extensions/pi.cjs",
   "module": "./dist/extensions/pi.mjs",
-  "types": "./dist/extensions/pi.d.cts",
+  "types": "./dist/extensions/pi.d.mts",
   "exports": {
-    ".": {
-      "types": "./dist/extensions/pi.d.mts",
-      "import": "./dist/extensions/pi.mjs",
-      "require": "./dist/extensions/pi.cjs"
-    },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
@@ -44,6 +39,11 @@
     },
     "./extensions/web": {
       "import": "./dist/extensions/web.mjs"
+    },
+    "./webClient": {
+      "types": "./dist/webClient.d.mts",
+      "import": "./dist/webClient.mjs",
+      "require": "./dist/webClient.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -64,7 +64,7 @@
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.86.0",
+    "@earendil-works/pi-coding-agent": "0.87.1",
     "@types/node": "26.6.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
@@ -75,7 +75,7 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.86.0",
+    "@earendil-works/pi-coding-agent": "0.87.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

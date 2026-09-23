@@ -1,6 +1,6 @@
-import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import { defineCommand } from '@agimon-ai/doompi-core/pi-extension';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import type { WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import { defineCommand } from '@agimon-ai/doompi-core/piExtension';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 import { COMMAND_DESCRIPTION, COMMAND_NAME } from '../../../../../constants/sandbox';

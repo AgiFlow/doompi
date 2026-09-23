@@ -14,14 +14,14 @@ import {
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { applyProfileEnvironment, buildPersonaPrompt, resolveProfile } from '@agimon-ai/doompi-config/profiles';
 import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
-import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-core/mcp-session';
-import { packageEntry } from '@agimon-ai/doompi-core/module-resolution';
+import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-core/mcpSession';
+import { packageEntry } from '@agimon-ai/doompi-core/moduleResolution';
 import {
   createHarnessTelemetry,
   HARNESS_EVENT,
   type HarnessTelemetry,
-} from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
-import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
+} from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
+import { resolveSyncLocation } from '@agimon-ai/doompi-core/syncLocation';
 import { resolveMcpAllowlist } from '@agimon-ai/doompi-domain/mcp';
 import { materializePluginEntries } from '@agimon-ai/doompi-domain/plugins';
 import { collectResources, type HarnessResources } from '@agimon-ai/doompi-domain/resources';

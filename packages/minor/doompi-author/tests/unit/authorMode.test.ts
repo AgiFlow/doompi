@@ -1,4 +1,4 @@
-import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
+import { createDoomToolSurface } from '@agimon-ai/doompi-core/toolSurface';
 import type { MinorModeOwnerDefinition, MinorModeOwnerHandle } from '@agimon-ai/doompi-minor-mode';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';

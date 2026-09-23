@@ -4,7 +4,7 @@ import {
   type DoomHeadlessTool,
   type DoomHeadlessCommand,
 } from '@agimon-ai/doompi-core/headless';
-import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
 import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';

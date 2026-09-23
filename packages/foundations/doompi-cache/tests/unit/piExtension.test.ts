@@ -25,7 +25,7 @@ vi.mock('#doompi-cache-optimizer-source', () => ({
     return mocks.optimizerExport;
   },
 }));
-vi.mock('@agimon-ai/doompi-core/pi-extension', () => ({
+vi.mock('@agimon-ai/doompi-core/piExtension', () => ({
   definePiExtension: (_name: string, factory: (...args: unknown[]) => unknown) => {
     mocks.factory.mockImplementation(factory);
     return (pi: ExtensionAPI, options?: unknown) => factory({ pi, options });

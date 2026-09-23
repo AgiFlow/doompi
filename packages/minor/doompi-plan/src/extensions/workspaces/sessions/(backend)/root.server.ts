@@ -1,5 +1,5 @@
-import { defineRoot, type RootDeclaration } from '@agimon-ai/doompi-core/extension-file';
-import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { defineRoot, type RootDeclaration } from '@agimon-ai/doompi-core/extensionFile';
+import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
 
 import { mountMcpTools } from '../../../../services/mcpTools';
 import { api } from '../../../../services/planApi';

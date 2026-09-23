@@ -1,5 +1,5 @@
-import { defineMcpSkill } from '@agimon-ai/doompi-core/mcp-facet';
-import { readPackageResource } from '@agimon-ai/doompi-core/server-facet';
+import { defineMcpSkill } from '@agimon-ai/doompi-core/mcpFacet';
+import { readPackageResource } from '@agimon-ai/doompi-core/serverFacet';
 
 export default defineMcpSkill({
   name: 'doompi-use-mcp',

@@ -1,4 +1,4 @@
-import { defineApiContract, jsonApiResponses, type DoomHttpContract } from '@agimon-ai/doompi-core/api-contracts';
+import { defineApiContract, jsonApiResponses, type DoomHttpContract } from '@agimon-ai/doompi-core/apiContracts';
 import { Type } from 'typebox';
 
 /** The endpoint validates its own HMAC peer credential because tunnel device authentication is intentionally bypassed. */

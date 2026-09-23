@@ -64,14 +64,14 @@ describe('doom-mcp package boundary', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.peerDependencies).toEqual(
       expect.objectContaining({
-        '@earendil-works/pi-coding-agent': '0.86.0',
-        '@earendil-works/pi-tui': '0.86.0',
+        '@earendil-works/pi-coding-agent': '0.87.1',
+        '@earendil-works/pi-tui': '0.87.1',
       }),
     );
     expect(manifest.devDependencies).toEqual(
       expect.objectContaining({
-        '@earendil-works/pi-coding-agent': '0.86.0',
-        '@earendil-works/pi-tui': '0.86.0',
+        '@earendil-works/pi-coding-agent': '0.87.1',
+        '@earendil-works/pi-tui': '0.87.1',
       }),
     );
   });
@@ -100,7 +100,7 @@ describe('doom-mcp package boundary', () => {
 
     expect((manifest as unknown as Record<string, unknown>).doompiApi).toBeUndefined();
     expect(manifest.doompiServer).toEqual({
-      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/apiContracts.mjs' },
       entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],

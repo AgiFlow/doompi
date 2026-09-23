@@ -41,11 +41,11 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: '@agimon-ai/doompi-ui/doom-overlay',
+        find: '@agimon-ai/doompi-ui/doomOverlay',
         replacement: source('../../foundations/doompi-ui/src/exports/doomOverlay.ts'),
       },
       {
-        find: '@agimon-ai/doompi-core/child-process',
+        find: '@agimon-ai/doompi-core/childProcess',
         replacement: source('../../core/doompi-core/src/exports/childProcess'),
       },
       {

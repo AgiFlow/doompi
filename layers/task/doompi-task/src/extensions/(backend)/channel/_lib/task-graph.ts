@@ -1,4 +1,4 @@
-import type { DoomHubChannelSource, DoomHubSessionScope, DoomHubChannel } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomHubChannelSource, DoomHubSessionScope, DoomHubChannel } from '@agimon-ai/doompi-core/hubChannel';
 
 import type { TaskDocument } from '../../../../models/task';
 import { resolveStorePath } from '../../../../services/paths';

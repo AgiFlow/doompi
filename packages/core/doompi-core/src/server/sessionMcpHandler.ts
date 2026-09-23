@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -36,6 +36,7 @@ export interface SessionMcpHttpHandlerOptions {
     grant: SessionMcpAccessGrant,
     digest: string,
     reserve: boolean,
+    signal?: AbortSignal,
   ) => SessionMcpTarget | Promise<SessionMcpTarget>;
   /** Only bounded, non-reversible correlation values are reported here. */
   readonly onNotice?: (message: string) => void;
@@ -156,20 +157,16 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
     );
     server.setNotificationHandler(CancelledNotificationSchema, async (notification) => {
       const active = await authorizeOperation();
-      if (notification.params.requestId !== undefined) {
-        const owner = operationOwner(active.grant, notification.params.requestId);
-        const conversation = sessionMcpConversationDigest(notification.params._meta);
-        // A late notification without a conversation ID could name a request ID
-        // since reused by another chat, even when only one operation remains.
-        // HTTP/request cancellation still aborts its own invocation directly.
-        if (active.grant.routing === 'conversation' && conversation === undefined) return;
-        const candidates = [...operations.values()].filter(
-          (operation) =>
-            operation.owner === owner && (conversation === undefined || operation.conversation === conversation),
-        );
-        // A client may omit conversation metadata on notifications. Ambiguity is not authority.
-        if (candidates.length === 1) candidates[0]!.controller.abort();
-      }
+      if (notification.params.requestId === undefined) return;
+      const owner = operationOwner(active.grant, notification.params.requestId);
+      const conversation = sessionMcpConversationDigest(notification.params._meta);
+      // A notification without a conversation identity cannot safely cancel one
+      // of several child runtimes that may reuse its request ID.
+      if (conversation === undefined) return;
+      const candidates = [...operations.values()].filter(
+        (operation) => operation.owner === owner && operation.conversation === conversation,
+      );
+      if (candidates.length === 1) candidates[0]!.controller.abort();
     });
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       const active = await authorizeOperation();
@@ -192,7 +189,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       };
     });
     server.setRequestHandler(CallToolRequestSchema, async (message, extra): Promise<CallToolResult> => {
-      const conversation = sessionMcpConversationDigest(message.params._meta);
+      const conversation = sessionMcpConversationDigest((message.params as { _meta?: unknown })._meta);
       const owner = operationOwner(grant, extra.requestId);
       const key = JSON.stringify([owner, conversation]);
       if (operations.has(key))
@@ -200,6 +197,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       const controller = new AbortController();
       operations.set(key, { controller, owner, conversation });
       const signal = AbortSignal.any([request.signal, extra.signal, controller.signal]);
+      const invocationId = randomUUID();
       let skillAccessOpen = true;
       try {
         const parent = await authorizeOperation();
@@ -209,18 +207,14 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         if (!advertised)
           throw new McpError(ErrorCode.InvalidParams, `Tool '${message.params.name}' is not granted or active.`);
         // A binding must not outlive an unpersisted registration when tools/call precedes tools/list.
-        if (parent.grant.routing === 'conversation') await options.onVerified?.(parent.grant);
-        const diagnostic = (value: string): string => createHash('sha256').update(value).digest('hex').slice(0, 16);
-        options.onNotice?.(
-          `session MCP correlation client=${diagnostic(grant.clientId)} request=${diagnostic(JSON.stringify(extra.requestId))} conversation=${conversation ?? 'missing'}`,
-        );
+        await options.onVerified?.(parent.grant);
+        options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=started`);
         const resolveTarget = async (reserve: boolean) => {
           const active = await authorizeOperation();
-          if (active.grant.routing !== 'conversation') return active;
           if (!conversation)
             throw new SessionMcpConversationError(
               'CONVERSATION_ID_REQUIRED',
-              'This connection requires conversation metadata. Use a dedicated session connection when the client cannot supply it.',
+              'This connection requires conversation metadata. Use a compatible ChatGPT conversation and retry.',
             );
           if (!options.resolveConversation)
             throw new SessionMcpConversationError(
@@ -228,7 +222,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
               'Conversation routing is unavailable in this host.',
             );
           signal.throwIfAborted();
-          const target = await options.resolveConversation(active.grant, conversation, reserve);
+          const target = await options.resolveConversation(active.grant, conversation, reserve, signal);
           await authorizeOperation();
           signal.throwIfAborted();
           return { grant: active.grant, target };
@@ -299,6 +293,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           },
         });
         await recheck();
+        options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
         return {
           content: result.content,
           ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
@@ -306,6 +301,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           isError: result.isError ?? false,
         };
       } catch (error) {
+        options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=failed`);
         if (!(error instanceof SessionMcpConversationError)) throw error;
         return {
           content: [{ type: 'text', text: error.message }],
@@ -323,24 +319,29 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
     });
     server.setRequestHandler(ListResourcesRequestSchema, async () => {
       const active = await authorizeOperation();
-      const { skills, uiResources } = grantedSurface(active.grant, active.target.toolSurface);
+      const { uiResources } = grantedSurface(active.grant, active.target.toolSurface);
       return {
-        resources: [
-          ...uiResources,
-          ...(active.grant.routing === 'conversation'
-            ? []
-            : skills.map((skill) => ({
-                uri: skill.uri,
-                name: skill.name,
-                description: skill.description,
-                mimeType: 'text/markdown',
-              }))),
-        ],
+        resources: [...uiResources],
       };
     });
     server.setRequestHandler(ReadResourceRequestSchema, async (message) => {
+      const conversation = sessionMcpConversationDigest((message.params as { _meta?: unknown })._meta);
       const active = await authorizeOperation();
       const { snapshot, skills, uiResources } = grantedSurface(active.grant, active.target.toolSurface);
+      const skill = skills.find((candidate) => candidate.uri === message.params.uri);
+      if (skill !== undefined) {
+        if (!conversation)
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            'Use load_skill with conversation metadata to read target-session guidance.',
+          );
+        if (!options.resolveConversation)
+          throw new McpError(ErrorCode.InvalidRequest, 'Conversation routing is unavailable in this host.');
+        const target = await options.resolveConversation(active.grant, conversation, false, request.signal);
+        const text = await target.toolSurface.readSkill(snapshot.revision, skill.uri);
+        await authorizeOperation();
+        return { contents: [{ uri: skill.uri, mimeType: 'text/markdown', text }] };
+      }
       const resource = uiResources.find((candidate) => candidate.uri === message.params.uri);
       if (resource !== undefined && active.target.toolSurface.readUiResource !== undefined) {
         // Templates are immutable and session-independent, so hosts may prefetch them without a conversation ID.
@@ -362,25 +363,10 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       }
       if (message.params.uri.startsWith('ui:'))
         throw new McpError(ErrorCode.InvalidParams, 'UI resource is not granted or active.');
-      if (active.grant.routing === 'conversation')
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          'Use load_skill with conversation metadata to read target-session guidance.',
-        );
-      const skill = skills.find((candidate) => candidate.uri === message.params.uri);
-      if (skill === undefined) throw new McpError(ErrorCode.InvalidParams, 'Skill resource is not granted or active.');
-      const text = await active.target.toolSurface.readSkill(snapshot.revision, skill.uri);
-      await authorizeOperation();
-      return {
-        contents: [
-          {
-            uri: skill.uri,
-            name: skill.name,
-            mimeType: 'text/markdown',
-            text,
-          },
-        ],
-      };
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'Use load_skill with conversation metadata to read target-session guidance.',
+      );
     });
 
     const transport = new WebStandardStreamableHTTPServerTransport({

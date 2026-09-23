@@ -1,5 +1,5 @@
-import { defineMethod } from '@agimon-ai/doompi-core/extension-file';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import { defineMethod } from '@agimon-ai/doompi-core/extensionFile';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 
 import { createAuthorBridgeMethod } from '../../../services/authorBridgeMethod';
 

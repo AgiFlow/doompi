@@ -73,6 +73,6 @@ describe('Doom resource kind rule', () => {
       'src/services/packageResources/index.ts',
       `const PACKAGE_ROOT = new URL('../../../', import.meta.url);\nexport async function read(name) {\n  try { return await readFile(new URL(name, PACKAGE_ROOT), 'utf8'); } catch { return \`(resource unavailable: \${name})\`; }\n}`,
     );
-    expect(check()).toContain('@agimon-ai/doompi-core/server-facet');
+    expect(check()).toContain('@agimon-ai/doompi-core/serverFacet');
   });
 });

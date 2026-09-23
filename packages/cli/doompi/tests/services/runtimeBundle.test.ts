@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import type { SyncLocation } from '@agimon-ai/doompi-core/sync-location';
+import type { SyncLocation } from '@agimon-ai/doompi-core/syncLocation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { HarnessContext } from '../../src/exports/harnessContext';
@@ -21,7 +21,7 @@ vi.mock('../../src/compiler', () => ({
   compileExtensionSet: mocks.compileExtensionSet,
   extensionSetManifestPath: mocks.extensionSetManifestPath,
 }));
-vi.mock('@agimon-ai/doompi-core/runtime-json', () => ({ writeFileAtomic: mocks.writeFileAtomic }));
+vi.mock('@agimon-ai/doompi-core/runtimeJson', () => ({ writeFileAtomic: mocks.writeFileAtomic }));
 
 import {
   buildRuntimeBundle,

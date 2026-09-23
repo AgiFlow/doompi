@@ -3,10 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { parseCompiledContracts } from '@agimon-ai/doompi-core/api-contracts';
-import { parseDoomMcpBundle } from '@agimon-ai/doompi-core/mcp-facet';
-import { parseDoomServerBundle } from '@agimon-ai/doompi-core/server-facet';
-import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
+import { parseCompiledContracts } from '@agimon-ai/doompi-core/apiContracts';
+import { parseDoomMcpBundle } from '@agimon-ai/doompi-core/mcpFacet';
+import { parseDoomServerBundle } from '@agimon-ai/doompi-core/serverFacet';
+import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
 
 import { readStartupBootstrapStatus, readBootstrapStatus } from '../../builders/cli/bootstrapLocator';
 import { inputsAreFresh, parseInputFingerprint } from '../../compiler/inputs';

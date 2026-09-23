@@ -4,7 +4,7 @@ import type { DoomTransitionRequest, TransitionTarget } from '@agimon-ai/doompi-
 import {
   createDoomTransitionCoordinator,
   type TransitionCoordinatorOptions,
-} from '@agimon-ai/doompi-core/transition-coordinator';
+} from '@agimon-ai/doompi-core/transitionCoordinator';
 import type { MinorModeActionRequest } from '@agimon-ai/doompi-minor-mode';
 import type { MinorModeCatalogService as MinorModeCatalogHost } from '@agimon-ai/doompi-minor-mode';
 import { describe, expect, it, vi } from 'vitest';

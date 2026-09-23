@@ -1,9 +1,9 @@
-import { defineChannel } from '@agimon-ai/doompi-core/extension-file';
+import { defineChannel } from '@agimon-ai/doompi-core/extensionFile';
 import type {
   DoomHubChannelSource as HubChannelSource,
   DoomHubSessionScope,
   DoomHubChannel as WebHubChannel,
-} from '@agimon-ai/doompi-core/hub-channel';
+} from '@agimon-ai/doompi-core/hubChannel';
 
 import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../../../../types/webSubagents';
 

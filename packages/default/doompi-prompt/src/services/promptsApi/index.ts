@@ -1,4 +1,4 @@
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 import { Hono } from 'hono';
 
 import { NAME_PARAM, MAX_PROMPT_BYTES, STATUS } from '../../constants/promptsApi';

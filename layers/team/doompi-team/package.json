@@ -31,7 +31,7 @@
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.cts",
+  "types": "./dist/index.d.mts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
     ".": {
@@ -39,25 +39,25 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./api-contracts": {
-      "types": "./dist/api-contracts.d.mts",
-      "import": "./dist/api-contracts.mjs",
-      "require": "./dist/api-contracts.cjs"
+    "./apiContracts": {
+      "types": "./dist/apiContracts.d.mts",
+      "import": "./dist/apiContracts.mjs",
+      "require": "./dist/apiContracts.cjs"
     },
-    "./capability-ceiling": {
-      "types": "./dist/capability-ceiling.d.mts",
-      "import": "./dist/capability-ceiling.mjs",
-      "require": "./dist/capability-ceiling.cjs"
+    "./capabilityCeiling": {
+      "types": "./dist/capabilityCeiling.d.mts",
+      "import": "./dist/capabilityCeiling.mjs",
+      "require": "./dist/capabilityCeiling.cjs"
     },
     "./delegation": {
       "types": "./dist/delegation.d.mts",
       "import": "./dist/delegation.mjs",
       "require": "./dist/delegation.cjs"
     },
-    "./delegation-api": {
-      "types": "./dist/delegation-api.d.mts",
-      "import": "./dist/delegation-api.mjs",
-      "require": "./dist/delegation-api.cjs"
+    "./delegationApi": {
+      "types": "./dist/delegationApi.d.mts",
+      "import": "./dist/delegationApi.mjs",
+      "require": "./dist/delegationApi.cjs"
     },
     "./env": {
       "types": "./dist/env.d.mts",
@@ -77,45 +77,45 @@
     "./extensions/web": {
       "import": "./dist/extensions/web.mjs"
     },
-    "./fable-plan": {
-      "types": "./dist/fable-plan.d.mts",
-      "import": "./dist/fable-plan.mjs",
-      "require": "./dist/fable-plan.cjs"
+    "./fablePlan": {
+      "types": "./dist/fablePlan.d.mts",
+      "import": "./dist/fablePlan.mjs",
+      "require": "./dist/fablePlan.cjs"
     },
-    "./fable-plan-api": {
-      "types": "./dist/fable-plan-api.d.mts",
-      "import": "./dist/fable-plan-api.mjs",
-      "require": "./dist/fable-plan-api.cjs"
+    "./fablePlanApi": {
+      "types": "./dist/fablePlanApi.d.mts",
+      "import": "./dist/fablePlanApi.mjs",
+      "require": "./dist/fablePlanApi.cjs"
     },
     "./runs/background/cliRunnerEntry": {
       "types": "./dist/runs/background/cliRunnerEntry.d.mts",
       "import": "./dist/runs/background/cliRunnerEntry.mjs",
       "require": "./dist/runs/background/cliRunnerEntry.cjs"
     },
-    "./runtime-subagent-policy": {
-      "types": "./dist/runtime-subagent-policy.d.mts",
-      "import": "./dist/runtime-subagent-policy.mjs",
-      "require": "./dist/runtime-subagent-policy.cjs"
+    "./runtimeSubagentPolicy": {
+      "types": "./dist/runtimeSubagentPolicy.d.mts",
+      "import": "./dist/runtimeSubagentPolicy.mjs",
+      "require": "./dist/runtimeSubagentPolicy.cjs"
     },
-    "./runtime-subagent-tool": {
-      "types": "./dist/runtime-subagent-tool.d.mts",
-      "import": "./dist/runtime-subagent-tool.mjs",
-      "require": "./dist/runtime-subagent-tool.cjs"
+    "./runtimeSubagentTool": {
+      "types": "./dist/runtimeSubagentTool.d.mts",
+      "import": "./dist/runtimeSubagentTool.mjs",
+      "require": "./dist/runtimeSubagentTool.cjs"
     },
-    "./subagent-policy": {
-      "types": "./dist/subagent-policy.d.mts",
-      "import": "./dist/subagent-policy.mjs",
-      "require": "./dist/subagent-policy.cjs"
+    "./subagentPolicy": {
+      "types": "./dist/subagentPolicy.d.mts",
+      "import": "./dist/subagentPolicy.mjs",
+      "require": "./dist/subagentPolicy.cjs"
     },
-    "./subagent-tool": {
-      "types": "./dist/subagent-tool.d.mts",
-      "import": "./dist/subagent-tool.mjs",
-      "require": "./dist/subagent-tool.cjs"
+    "./subagentTool": {
+      "types": "./dist/subagentTool.d.mts",
+      "import": "./dist/subagentTool.mjs",
+      "require": "./dist/subagentTool.cjs"
     },
-    "./team-snapshot": {
-      "types": "./dist/team-snapshot.d.mts",
-      "import": "./dist/team-snapshot.mjs",
-      "require": "./dist/team-snapshot.cjs"
+    "./teamSnapshot": {
+      "types": "./dist/teamSnapshot.d.mts",
+      "import": "./dist/teamSnapshot.mjs",
+      "require": "./dist/teamSnapshot.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -147,10 +147,10 @@
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
-    "@earendil-works/pi-agent-core": "0.86.0",
-    "@earendil-works/pi-ai": "0.86.0",
-    "@earendil-works/pi-coding-agent": "0.86.0",
-    "@earendil-works/pi-tui": "0.86.0",
+    "@earendil-works/pi-agent-core": "0.87.1",
+    "@earendil-works/pi-ai": "0.87.1",
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-tui": "0.87.1",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
     "@types/node": "26.6.1",
@@ -162,10 +162,10 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-agent-core": "0.86.0",
-    "@earendil-works/pi-ai": "0.86.0",
-    "@earendil-works/pi-coding-agent": "0.86.0",
-    "@earendil-works/pi-tui": "0.86.0"
+    "@earendil-works/pi-agent-core": "0.87.1",
+    "@earendil-works/pi-ai": "0.87.1",
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-tui": "0.87.1"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-agent-core": {
@@ -201,7 +201,7 @@
     ],
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
-      "dist": "./dist/api-contracts.mjs"
+      "dist": "./dist/apiContracts.mjs"
     }
   },
   "doompiWeb": {

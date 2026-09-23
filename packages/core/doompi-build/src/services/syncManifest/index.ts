@@ -9,8 +9,8 @@ import type { ManifestSync } from './type';
 
 const SCOPE_ORDER: readonly ExtensionScope[] = ['global', 'workspace', 'session'];
 
-const API_CONTRACTS_SOURCE = 'src/exports/apiContracts.ts';
-const API_CONTRACTS_DIST = './dist/api-contracts.mjs';
+const API_CONTRACTS_ENTRY = 'apiContracts';
+const API_CONTRACTS_SOURCE = `src/exports/${API_CONTRACTS_ENTRY}.ts`;
 
 const PI_EXPORT = './extensions/pi';
 const PI_TYPES = './dist/extensions/pi.d.mts';
@@ -129,7 +129,12 @@ export function syncManifest(input: ManifestSync): Record<string, unknown> {
 
   if (targets.includes('server')) {
     const contracts = fs.existsSync(path.join(packageDir, API_CONTRACTS_SOURCE))
-      ? { contracts: { entry: `./${API_CONTRACTS_SOURCE}`, dist: API_CONTRACTS_DIST } }
+      ? {
+          contracts: {
+            entry: `./${API_CONTRACTS_SOURCE}`,
+            dist: `./dist/${API_CONTRACTS_ENTRY}.mjs`,
+          },
+        }
       : {};
     manifest.doompiServer = {
       entry: `./${GENERATED_DIR}/server.ts`,

@@ -6,7 +6,7 @@
  * The panel has no store: everything it shows comes from one fetch, so the
  * story answers the preview route and each variant is a different file.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import type { FileEditsPreviewView } from '../../../../../../types/fileEditsApi';
 import { FilePreviewPanel } from './FilePreviewPanel';

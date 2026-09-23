@@ -3,7 +3,7 @@ import {
   renderPlugin,
   slotPropsFixture,
   toolMessagePropsFixture,
-} from '@agimon-ai/doompi-core/web/testing';
+} from '@agimon-ai/doompi-core/webTesting';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { webPlugin as scopedWebPlugin } from '../../generated/web';

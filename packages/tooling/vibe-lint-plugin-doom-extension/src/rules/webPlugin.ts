@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { isBrowserFile } from '@agimon-ai/doompi-build/browser-file';
+import { isBrowserFile } from '@agimon-ai/doompi-build/browserFile';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
 
@@ -64,7 +64,7 @@ const ALLOWED_BARE_SPECIFIERS = new Set([
  * alternative, and those drift silently when the slot contract changes.
  */
 const STORY_SUFFIX = '.stories.tsx';
-const CONTRACTS_TESTING_PACKAGE = `${WEB_CONTRACTS_ENTRY}/testing`;
+const CONTRACTS_TESTING_PACKAGE = `${CONTRACTS_PACKAGE}/webTesting`;
 const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const WEB_PLUGIN_EXPORT = 'webPlugin';
 const DEFINE_WEB_PLUGIN = 'defineWebPlugin';
@@ -167,8 +167,6 @@ export const webPluginProtocolLayout: RuleDefinition = {
     if (!manifest?.doompiWeb || !fs.existsSync(filePath)) return null;
     const relativePath = projectPath(filePath, configRoot);
     if (relativePath === null || !SOURCE_EXTENSIONS.has(path.extname(filePath))) return null;
-    if (relativePath === 'src/exports/webClient.ts')
-      return 'Remove src/exports/webClient.ts; the browser entry belongs at src/extensions/web.ts.';
     if (
       /^(?:src\/)?(?:protocol|transport|communication|socket)(?:\/|\.)/u.test(relativePath) ||
       /^src\/adapters\/(?:protocol|transport|communication|socket)(?:\/|\.)/u.test(relativePath) ||

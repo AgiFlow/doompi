@@ -113,7 +113,11 @@ export function SessionCardView({
           <div className="flex items-center gap-2">
             {nested && summary.sessionProvenance ? (
               <ForkIcon
-                aria-label={summary.sessionProvenance}
+                aria-label={
+                  summary.sessionProvenance === 'worktree'
+                    ? 'automatic per-conversation worktree'
+                    : summary.sessionProvenance
+                }
                 className={`h-[11px] w-[11px] shrink-0 ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}
               />
             ) : null}

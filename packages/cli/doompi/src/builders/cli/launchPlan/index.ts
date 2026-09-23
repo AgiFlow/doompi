@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/child-process';
-import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/childProcess';
+import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
 
 import { updateHarnessState } from '../../../composition/harnessState';
 import { applyProjectTrust, hasProjectTrustOption, loadDoomConfig } from '../../../composition/projectTrust';

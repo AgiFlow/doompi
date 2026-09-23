@@ -1,4 +1,4 @@
-import { defineCliCommand, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineCliCommand, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import { createAuthorCommand } from '../../../../../services/authorCommand';
 import type { AuthorExtensionService } from '../../../../../types/extension';

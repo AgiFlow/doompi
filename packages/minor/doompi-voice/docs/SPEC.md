@@ -44,7 +44,7 @@ When autonomous voice is exactly `active`, the Pi tool set MUST contain the
 two stable façade names `describe_voice_tools` and `use_voice_tools` plus the
 standalone mode-owned `narrate`, while preserving unrelated active tools.
 Contributing extensions register callbacks through
-`@agimon-ai/doompi-voice/voice-tools`; those callbacks MUST NOT
+`@agimon-ai/doompi-voice/voiceTools`; those callbacks MUST NOT
 become direct Pi tools. `narrate` MUST NOT enter the façade capability catalog.
 
 The catalog token is session-scoped and opaque. A batch MUST use a fresh token,

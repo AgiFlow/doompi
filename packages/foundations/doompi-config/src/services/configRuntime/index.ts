@@ -1,10 +1,10 @@
-import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordisHost';
 import {
   createDisabledDoomMcpProjection,
   createDoomMcpProjectionService,
   DOOM_MCP_PROJECTION_SERVICE,
   isDoomMcpProjection,
-} from '@agimon-ai/doompi-core/mcp-projection';
+} from '@agimon-ai/doompi-core/mcpProjection';
 import { type DoomNotificationLevel, readDoomNotificationService } from '@agimon-ai/doompi-core/notification';
 import {
   createDoomReadinessCoordinator,

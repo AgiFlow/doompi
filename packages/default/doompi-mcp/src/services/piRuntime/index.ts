@@ -1,15 +1,15 @@
 import path from 'node:path';
 
-import type { DoomCordisRuntimeService } from '@agimon-ai/doompi-core/cordis-host';
-import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
-import { DOOM_MCP_PROJECTION_SERVICE, readDoomMcpProjectionService } from '@agimon-ai/doompi-core/mcp-projection';
-import { DOOM_MCP_STATUS_SERVICE, type DoomMcpStatusService } from '@agimon-ai/doompi-core/mcp-status';
+import type { DoomCordisRuntimeService } from '@agimon-ai/doompi-core/cordisHost';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordisHost';
+import { DOOM_MCP_PROJECTION_SERVICE, readDoomMcpProjectionService } from '@agimon-ai/doompi-core/mcpProjection';
+import { DOOM_MCP_STATUS_SERVICE, type DoomMcpStatusService } from '@agimon-ai/doompi-core/mcpStatus';
 import {
   DOOM_MCP_TOOL_RESOLVER_SERVICE,
   type DoomMcpToolResolverService,
-} from '@agimon-ai/doompi-core/mcp-tool-resolver';
-import { DOOM_TOOL_SURFACE_SERVICE, requireDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+} from '@agimon-ai/doompi-core/mcpToolResolver';
+import { DOOM_TOOL_SURFACE_SERVICE, requireDoomToolSurface } from '@agimon-ai/doompi-core/toolSurface';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/uiHub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 

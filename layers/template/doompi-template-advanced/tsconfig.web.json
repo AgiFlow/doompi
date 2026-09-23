@@ -6,6 +6,6 @@
     "noEmit": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/extensions/**/(frontend)/**/*", "generated/web.ts", "tests/web"],
+  "include": ["src/extensions/**/(frontend)/**/*", "src/exports/webClient.ts", "generated/web.ts", "tests/web"],
   "exclude": ["node_modules", "dist", "coverage"]
 }

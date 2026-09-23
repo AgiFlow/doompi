@@ -1,5 +1,5 @@
-import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/piExtension';
 
 import runtime from '../_lib/index.cli';
 

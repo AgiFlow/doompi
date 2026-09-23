@@ -5,7 +5,7 @@ import {
   DOOM_MCP_SESSION_ENV_VAR,
   doomMcpSessionEnvironment,
   readDoomMcpSessionConfig,
-} from '@agimon-ai/doompi-core/mcp-session';
+} from '@agimon-ai/doompi-core/mcpSession';
 
 import type { McpAllowlist, McpSessionConfig } from '../../types/mcpConfig';
 

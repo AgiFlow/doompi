@@ -1,4 +1,4 @@
-import type { DoomHubChannelSource, DoomHubSessionScope, DoomHubChannel } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomHubChannelSource, DoomHubSessionScope, DoomHubChannel } from '@agimon-ai/doompi-core/hubChannel';
 
 import { presentWorkflowRuns, runBelongsToSession, type ParsedWorkflowRun } from '../../services/workflowRuns';
 import { readWorkflowRuns, type ReadWorkflowRunsOptions } from '../../services/workflowWatcher';

@@ -1,4 +1,4 @@
-import { definePiToolRenderer } from '@agimon-ai/doompi-core/pi-extension';
+import { definePiToolRenderer } from '@agimon-ai/doompi-core/piExtension';
 
 import type { BashParams } from '../../../../../schemas/bashTool';
 import { renderBashCall, renderBashResult } from './_lib/bashRender.cli';

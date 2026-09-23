@@ -1,5 +1,5 @@
-import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import { definePiToolRenderer, type PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import type { WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import { definePiToolRenderer, type PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 
 import type { TaskStore } from '../../../../../../services/taskStore';
 import { renderTaskCall, renderTaskResult } from '../../_shared/format.cli';

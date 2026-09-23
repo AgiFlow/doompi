@@ -2,7 +2,7 @@ import os from 'node:os';
 
 import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
 
 import { buildPreparedRuntime, type BuildResult } from '../../../builders/cli/prepare';
 import { DUPLICATE_REGISTRATION_DRIFT } from '../../../builders/cli/projectSettings';

@@ -1,5 +1,5 @@
 import type { DoomHelpDiagnostic, DoomHelpSkill } from '@agimon-ai/doompi-core/help';
-import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import type { MinorModeCatalogService } from '@agimon-ai/doompi-minor-mode';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

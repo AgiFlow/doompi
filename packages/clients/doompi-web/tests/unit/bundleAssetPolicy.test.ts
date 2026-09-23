@@ -1,5 +1,5 @@
 import { parseBundleAssetPolicy } from '@agimon-ai/doompi-core/web';
-import { classifyOptionalBundleAssets } from '@agimon-ai/doompi/builders/web';
+import { classifyOptionalBundleAssets } from '@agimon-ai/doompi/webBuilder';
 import { describe, expect, it } from 'vitest';
 
 describe('bundle asset policy', () => {

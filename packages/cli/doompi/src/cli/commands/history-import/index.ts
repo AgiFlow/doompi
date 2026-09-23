@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { protectAndImportHistory, type HistoryOwnership } from '@agimon-ai/doompi-core/history-import';
-import { createHistoryOwnership } from '@agimon-ai/doompi-core/history-ownership';
-import { importV3WithPinnedUpstream } from '@agimon-ai/doompi-core/jsonl-session-repo';
-import { importSqliteHistory, verifySqliteHistory } from '@agimon-ai/doompi-core/sqlite-history-import';
+import { protectAndImportHistory, type HistoryOwnership } from '@agimon-ai/doompi-core/historyImport';
+import { createHistoryOwnership } from '@agimon-ai/doompi-core/historyOwnership';
+import { importV3WithPinnedUpstream } from '@agimon-ai/doompi-core/jsonlSessionRepo';
+import { importSqliteHistory, verifySqliteHistory } from '@agimon-ai/doompi-core/sqliteHistoryImport';
 
 import { wantsHelp } from '../../router';
 import { historyImportHelp } from './help';

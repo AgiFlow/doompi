@@ -1,4 +1,4 @@
-import { definePiToolRenderer } from '@agimon-ai/doompi-core/pi-extension';
+import { definePiToolRenderer } from '@agimon-ai/doompi-core/piExtension';
 import { DoomToolCall, renderToolHeading } from '@agimon-ai/doompi-ui/toolChrome';
 import type { Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
 import { type Component, truncateToWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui';

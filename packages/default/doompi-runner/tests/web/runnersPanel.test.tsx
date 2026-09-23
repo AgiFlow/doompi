@@ -1,4 +1,4 @@
-import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { webPlugin as scopedWebPlugin } from '../../generated/web';

@@ -1,6 +1,6 @@
-import { definePiTool, type PiToolCollection } from '@agimon-ai/doompi-core/pi-extension';
-import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
-import { VoiceToolDescribeInputSchema } from '@agimon-ai/doompi-core/voice-tools';
+import { definePiTool, type PiToolCollection } from '@agimon-ai/doompi-core/piExtension';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/toolSurface';
+import { VoiceToolDescribeInputSchema } from '@agimon-ai/doompi-core/voiceTools';
 import type { AgentToolResult, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 
 import { sessionVoiceOwnership } from '../../services/sessionVoiceOwnership';

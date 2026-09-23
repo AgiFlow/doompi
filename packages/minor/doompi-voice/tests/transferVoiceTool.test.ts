@@ -1,5 +1,5 @@
-import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
-import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
+import { definePiExtension } from '@agimon-ai/doompi-core/piExtension';
+import { createDoomToolSurface } from '@agimon-ai/doompi-core/toolSurface';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';

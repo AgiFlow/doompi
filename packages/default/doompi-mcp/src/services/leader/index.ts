@@ -1,4 +1,4 @@
-import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 
 import { COMMAND_NAME } from '../../constants/mcp';
 import {

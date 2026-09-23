@@ -1,4 +1,4 @@
-import { defineApiContract, jsonApiResponses } from '@agimon-ai/doompi-core/api-contracts';
+import { defineApiContract, jsonApiResponses } from '@agimon-ai/doompi-core/apiContracts';
 import { Type } from 'typebox';
 
 const S = Type.String();

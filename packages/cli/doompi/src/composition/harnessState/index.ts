@@ -17,7 +17,7 @@ import {
   updateHarnessState as updateSharedHarnessState,
 } from '@agimon-ai/doompi-config/harnessStore';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
-import { HARNESS_EVENT, type HarnessFailureReporter } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+import { HARNESS_EVENT, type HarnessFailureReporter } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
 
 export type { HarnessStateTransactionSnapshot } from '@agimon-ai/doompi-config/harnessStore';
 export type { DoomHarnessContext, HarnessState } from '@agimon-ai/doompi-config/types';

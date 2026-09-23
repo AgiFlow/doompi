@@ -30,6 +30,7 @@ function validRegistration(value: unknown): value is SessionMcpPersistentRegistr
   const registration = value as Partial<SessionMcpPersistentRegistration>;
   const client = registration.client;
   const binding = registration.binding;
+  const storedRouting = (binding as { readonly routing?: unknown } | undefined)?.routing;
   return (
     typeof registration.verifiedAt === 'number' &&
     Number.isSafeInteger(registration.verifiedAt) &&
@@ -50,7 +51,7 @@ function validRegistration(value: unknown): value is SessionMcpPersistentRegistr
     typeof binding.sessionId === 'string' &&
     typeof binding.audience === 'string' &&
     (binding.scope === 'session' || binding.scope === 'restricted') &&
-    (binding.routing === undefined || binding.routing === 'session' || binding.routing === 'conversation') &&
+    (storedRouting === undefined || storedRouting === 'session' || storedRouting === 'conversation') &&
     Array.isArray(binding.tools) &&
     binding.tools.every((name) => typeof name === 'string') &&
     Array.isArray(binding.skills) &&

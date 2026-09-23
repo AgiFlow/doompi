@@ -1,4 +1,4 @@
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 import type { ExtensionContext, SessionShutdownEvent } from '@earendil-works/pi-coding-agent';
 
 import { createPiTelemetryRuntime } from '../../../../../services/piTelemetry';

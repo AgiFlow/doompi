@@ -1,4 +1,4 @@
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import { createAgentStatus, registerSubagentLeaderContribution } from '../(frontend)/overlay/_lib/contributions';
 import { createTeamRoot } from './_lib/root.cli';

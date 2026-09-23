@@ -1,4 +1,4 @@
-import type { PiToolRenderers } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiToolRenderers } from '@agimon-ai/doompi-core/piExtension';
 import { renderHashlineCall, renderHashlineEditResult } from '@agimon-ai/doompi-ui/hashlineRendering';
 
 import { EditParamsSchema, type EditParams } from '../../../../../../schemas/editTool';

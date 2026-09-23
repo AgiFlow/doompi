@@ -39,7 +39,7 @@ UI is attached.
 ## Contribute to Leader Space
 
 ```ts
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/uiHub';
 import type { Context } from '@deepseek-ai/cordis';
 
 export function reviewPlugin(ctx: Context): void {
@@ -71,7 +71,7 @@ capability must also work headlessly.
 
 ## Extension lifecycle
 
-`src/extensions/pi.ts` declares the Pi plugin, and `src/extensions/server.ts` declares the session inventory plugin. The browser entry is `src/extensions/web.ts`. Public modules stay flat under `src/exports`; Component exports use flat kebab-case subpaths such as `@agimon-ai/doompi-ui/doom-overlay` and `@agimon-ai/doompi-ui/matrix-picker`.
+`src/extensions/pi.ts` declares the Pi plugin, and `src/extensions/server.ts` declares the session inventory plugin. The browser entry is `src/extensions/web.ts`. Public modules stay flat under `src/exports`; Component exports use flat kebab-case subpaths such as `@agimon-ai/doompi-ui/doomOverlay` and `@agimon-ai/doompi-ui/matrixPicker`.
 
 The Pi helper installs the UI hub service before commands, native event handlers, and tool declarations. Optional minor-mode catalog bindings follow their provider lifetime. `onStop` clears the shell and shuts down telemetry; idempotent `onDispose` also handles registration failure. The TUI runtime owns presentation callbacks, `models/uiState.ts` owns state, and each service has its own `services/<name>/index.ts` entry.
 
@@ -91,7 +91,7 @@ and the direct UI hub service live in extension contracts. Use these exports rat
 generated `dist` paths.
 
 ```ts
-import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-core/uiHub';
 import { DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
 ```
 

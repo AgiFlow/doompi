@@ -14,8 +14,8 @@ import {
   packageEntry,
   piCliPath,
   splitPackageSpecifier,
-} from '@agimon-ai/doompi-core/module-resolution';
-import { toClaudeToolName, toPiToolName } from '@agimon-ai/doompi-core/tool-names';
+} from '@agimon-ai/doompi-core/moduleResolution';
+import { toClaudeToolName, toPiToolName } from '@agimon-ai/doompi-core/toolNames';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ownEntry } from '../../src/builders/cli/entryResolution';

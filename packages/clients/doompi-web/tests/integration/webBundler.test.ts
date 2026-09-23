@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { bundleCockpitWeb } from '@agimon-ai/doompi/builders/web';
+import { bundleCockpitWeb } from '@agimon-ai/doompi/webBuilder';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const workflowRoot = fileURLToPath(new URL('../../../../minor/doompi-workflow', import.meta.url));

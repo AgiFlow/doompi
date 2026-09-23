@@ -1,5 +1,5 @@
 import type { DoomHarnessContext, HarnessState } from '@agimon-ai/doompi-config/types';
-import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voice-reload-handoff';
+import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voiceReloadHandoff';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
@@ -21,5 +21,5 @@ export interface DomainsCommandDependencies {
   readonly reloadHandoffs: VoiceReloadHandoffStore;
   readonly applyDomains: (domains: string[], state: DoomHarnessContext) => Promise<HarnessState>;
   readonly loadConfigJournal: () => Promise<typeof import('@agimon-ai/doompi-config/piContext')>;
-  readonly loadPicker: () => Promise<typeof import('@agimon-ai/doompi-ui/matrix-picker')>;
+  readonly loadPicker: () => Promise<typeof import('@agimon-ai/doompi-ui/matrixPicker')>;
 }

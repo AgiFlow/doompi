@@ -2,11 +2,11 @@ import { getHarnessState } from '@agimon-ai/doompi-config/harnessStore';
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
-import { type PiPluginContributions, type PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import { type PiPluginContributions, type PiEventHandlers } from '@agimon-ai/doompi-core/piExtension';
 import { DOOM_RESOURCE_CATALOG_ENTRY_TYPE, type ResourceCatalogProjection } from '@agimon-ai/doompi-core/skills';
 import { DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-core/transition';
-import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voice-reload-handoff';
-import { DOOM_VOICE_TOOLS_SERVICE, requireDoomVoiceToolsService } from '@agimon-ai/doompi-core/voice-tools';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voiceReloadHandoff';
+import { DOOM_VOICE_TOOLS_SERVICE, requireDoomVoiceToolsService } from '@agimon-ai/doompi-core/voiceTools';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
@@ -26,11 +26,11 @@ import { registerDomainVoiceCapabilities } from './voiceTool';
 function lazyModules() {
   let apply: Promise<typeof import('../../../../../services/applyDomains')> | undefined;
   let journal: Promise<typeof import('@agimon-ai/doompi-config/piContext')> | undefined;
-  let picker: Promise<typeof import('@agimon-ai/doompi-ui/matrix-picker')> | undefined;
+  let picker: Promise<typeof import('@agimon-ai/doompi-ui/matrixPicker')> | undefined;
   return {
     apply: () => (apply ??= import('../../../../../services/applyDomains')),
     journal: () => (journal ??= import('@agimon-ai/doompi-config/piContext')),
-    picker: () => (picker ??= import('@agimon-ai/doompi-ui/matrix-picker')),
+    picker: () => (picker ??= import('@agimon-ai/doompi-ui/matrixPicker')),
   };
 }
 

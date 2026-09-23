@@ -3,13 +3,8 @@ import { defineConfig } from 'tsdown';
 
 const routed = doompiExtension({
   packageDir: process.cwd(),
-  exportsDir: 'src/exports/_none',
-  entry: {
-    'api-contracts': 'src/exports/apiContracts.ts',
-    cli: 'src/services/designCli/index.ts',
-    index: 'src/exports/index.ts',
-  },
+  entry: { cli: 'src/services/designCli/index.ts' },
 });
 if (!Array.isArray(routed)) throw new Error('style-system requires its web bundle.');
 
-export default defineConfig([{ ...routed[0], exports: false }, routed[1]]);
+export default defineConfig(routed.map((config) => ({ ...config, exports: false })));

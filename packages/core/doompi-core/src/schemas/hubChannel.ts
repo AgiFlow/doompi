@@ -31,6 +31,16 @@ export interface DoomHubSessionScope {
   environment?: Readonly<Record<string, string | undefined>>;
 }
 
+export interface DoomHubReservedWorktreeRequest {
+  readonly reservationId: string;
+  readonly parentSessionId: string;
+  readonly signal?: AbortSignal;
+}
+
+export type DoomHubReservedWorktreeProvisioner = (
+  request: DoomHubReservedWorktreeRequest,
+) => Promise<DoomHubSessionScope>;
+
 export interface DoomHubSessionCreateRequest {
   readonly cwd: string;
   readonly name: string;
@@ -69,6 +79,10 @@ export interface DoomHubSessionService {
   close(sessionId: string): Promise<void>;
   isLive(sessionId: string): boolean;
   readonly reservations?: DoomHubSessionReservations;
+  /** Provisions a host-reserved Git worktree child. This is not exposed to remote MCP clients. */
+  provisionReservedWorktree?(request: DoomHubReservedWorktreeRequest): Promise<DoomHubSessionScope>;
+  /** Core host hook. A Git provider registers its implementation while its channel is mounted. */
+  registerReservedWorktreeProvisioner?(provisioner: DoomHubReservedWorktreeProvisioner): () => void;
   /** True only when both live sessions have a direct parent-child relationship. */
   canCommunicate?(sourceSessionId: string, targetSessionId: string): boolean;
   /** Core host hook. Session API construction removes this method before exposing the service to extensions. */

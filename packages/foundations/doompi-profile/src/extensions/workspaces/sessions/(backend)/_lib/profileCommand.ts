@@ -1,13 +1,13 @@
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
 import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
-import type { VoiceReloadHandoff, VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voice-reload-handoff';
-import { readDoomVoiceToolsService } from '@agimon-ai/doompi-core/voice-tools';
+import type { VoiceReloadHandoff, VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voiceReloadHandoff';
+import { readDoomVoiceToolsService } from '@agimon-ai/doompi-core/voiceTools';
 import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import {
   type MinorModeReloadHandoffHandle,
   prepareMinorModeReloadHandoff,
-} from '@agimon-ai/doompi-minor-mode/reload-handoff';
+} from '@agimon-ai/doompi-minor-mode/reloadHandoff';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
@@ -33,13 +33,13 @@ const PROFILE_CONFIG_PATH = '.doom/profiles.yaml';
 function lazyModules() {
   let harnessStore: Promise<typeof import('@agimon-ai/doompi-config/harnessStore')> | undefined;
   let journal: Promise<typeof import('@agimon-ai/doompi-config/piContext')> | undefined;
-  let picker: Promise<typeof import('@agimon-ai/doompi-ui/matrix-picker')> | undefined;
+  let picker: Promise<typeof import('@agimon-ai/doompi-ui/matrixPicker')> | undefined;
   let profiles: Promise<typeof import('@agimon-ai/doompi-config/profiles')> | undefined;
   let selection: Promise<typeof import('@agimon-ai/doompi-config/selectionSwitch')> | undefined;
   return {
     harnessStore: () => (harnessStore ??= import('@agimon-ai/doompi-config/harnessStore')),
     journal: () => (journal ??= import('@agimon-ai/doompi-config/piContext')),
-    picker: () => (picker ??= import('@agimon-ai/doompi-ui/matrix-picker')),
+    picker: () => (picker ??= import('@agimon-ai/doompi-ui/matrixPicker')),
     profiles: () => (profiles ??= import('@agimon-ai/doompi-config/profiles')),
     selection: () => (selection ??= import('@agimon-ai/doompi-config/selectionSwitch')),
   };
@@ -49,7 +49,7 @@ async function pickProfile(
   ctx: ExtensionContext,
   profiles: AgentProfile[],
   current: string | undefined,
-  loadPicker: () => Promise<typeof import('@agimon-ai/doompi-ui/matrix-picker')>,
+  loadPicker: () => Promise<typeof import('@agimon-ai/doompi-ui/matrixPicker')>,
 ): Promise<string | undefined> {
   const title = profileTitle(current);
   if (ctx.mode !== 'tui') {

@@ -5,7 +5,7 @@ import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agim
 const HELP_MODE_ID = 'help';
 
 import { type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
-import { type DoomServerSessionPlugin, readPackageResource } from '@agimon-ai/doompi-core/server-facet';
+import { type DoomServerSessionPlugin, readPackageResource } from '@agimon-ai/doompi-core/serverFacet';
 export function createHelpServerSession(host: DoomHeadlessHostService): DoomServerSessionPlugin {
   let modeOwner: MinorModeOwner | undefined;
   const modeState = (): MinorModeState => {

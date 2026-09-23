@@ -1,4 +1,4 @@
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 
 import { createFileEditSession } from '../../../../../services/fileEditSession';
 export const createFileEditServerRoot = (context: DoomServerPluginContext) => {

@@ -80,7 +80,7 @@ describe('@agimon-ai/doompi-plan package shape', () => {
       require: './dist/extensions/server.cjs',
     });
     expect(packageJson.doompiServer).toEqual({
-      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/apiContracts.mjs' },
       entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['session'],

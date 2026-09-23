@@ -1,4 +1,4 @@
-import type { DoomApi } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApi } from '@agimon-ai/doompi-core/packageApi';
 
 import { VOICE_API_BASE_PATH } from '../../constants/voice';
 import { voiceReadiness } from '../../services/voiceReadiness';

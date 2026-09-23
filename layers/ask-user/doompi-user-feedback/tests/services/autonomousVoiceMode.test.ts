@@ -1,5 +1,5 @@
 import type { MinorModeActivation, MinorModeRecord } from '@agimon-ai/doompi-minor-mode';
-import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
+import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voiceTools';
 import { describe, expect, it } from 'vitest';
 
 import { isAutonomousVoiceActive, isAutonomousVoiceRecord } from '../../src/services/autonomousVoiceMode';

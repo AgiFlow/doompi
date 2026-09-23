@@ -47,10 +47,10 @@
       "import": "./dist/agentPluginMcp.mjs",
       "require": "./dist/agentPluginMcp.cjs"
     },
-    "./api-contracts": {
-      "types": "./dist/api-contracts.d.mts",
-      "import": "./dist/api-contracts.mjs",
-      "require": "./dist/api-contracts.cjs"
+    "./apiContracts": {
+      "types": "./dist/apiContracts.d.mts",
+      "import": "./dist/apiContracts.mjs",
+      "require": "./dist/apiContracts.cjs"
     },
     "./atomicJson": {
       "types": "./dist/atomicJson.d.mts",
@@ -62,7 +62,7 @@
       "import": "./dist/config.mjs",
       "require": "./dist/config.cjs"
     },
-    "./config-schema": {
+    "./configSchema": {
       "types": "./dist/configSchema.d.mts",
       "import": "./dist/configSchema.mjs",
       "require": "./dist/configSchema.cjs"
@@ -112,7 +112,7 @@
       "import": "./dist/majorModes.mjs",
       "require": "./dist/majorModes.cjs"
     },
-    "./pi-config": {
+    "./piConfig": {
       "types": "./dist/piConfig.d.mts",
       "import": "./dist/piConfig.mjs",
       "require": "./dist/piConfig.cjs"
@@ -162,7 +162,7 @@
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.86.0",
+    "@earendil-works/pi-coding-agent": "0.87.1",
     "@modelcontextprotocol/ext-apps": "1.5.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@playwright/test": "1.63.0",
@@ -173,7 +173,7 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.86.0"
+    "@earendil-works/pi-coding-agent": "0.87.1"
   },
   "engines": {
     "node": ">=22.19.0"
@@ -195,7 +195,7 @@
     ],
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
-      "dist": "./dist/api-contracts.mjs"
+      "dist": "./dist/apiContracts.mjs"
     }
   },
   "pi": {

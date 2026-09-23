@@ -1,4 +1,4 @@
-import { DoomProtocolError } from '@agimon-ai/doompi-core/runtime-protocol';
+import { DoomProtocolError } from '@agimon-ai/doompi-core/runtimeProtocol';
 
 import {
   MINOR_MODE_ERROR_CODE,

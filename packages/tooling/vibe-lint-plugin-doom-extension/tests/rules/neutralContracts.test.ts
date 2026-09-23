@@ -38,7 +38,7 @@ describe('neutral extension contracts', () => {
     expect(neutralExtensionContracts.check?.(file, root)).toContain('feature file');
   });
   it('rejects type-only dependencies on feature packages', () => {
-    const { root, file } = fixture("export type { Input } from '@agimon-ai/doompi-author/author-facade';");
+    const { root, file } = fixture("export type { Input } from '@agimon-ai/doompi-author/authorFacade';");
     expect(neutralExtensionContracts.check?.(file, root)).toContain('feature dependency');
   });
   it('rejects feature manifest exports and dependencies', () => {

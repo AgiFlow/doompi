@@ -147,7 +147,10 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
         transcriptCursor: transcriptCursor(options.sessionId, options.runtime.laneName, historyGeneration, entry.seq),
       };
     const next = presentation.record(frame);
-    if (next) state.state.presentation = next;
+    if (next)
+      state.change(BACKGROUND_CONTEXT, (draft) => {
+        draft.presentation = next;
+      });
     return next !== undefined;
   };
   const settlers = new Set<{ resolve(): void; reject(error: Error): void }>();
@@ -233,23 +236,27 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
         }),
       );
     }
-    if (reduction.snapshot) state.state.snapshot = summary(reduction.snapshot);
-    if (updates.length > 0) {
-      const events = state.state.updates ?? [];
-      for (const update of updates) events.push({ sequence: ++updateSequence, update });
-      if (events.length > 128) events.splice(0, events.length - 128);
-      state.state.updates = events;
+    if (reduction.snapshot || updates.length > 0) {
+      state.change(BACKGROUND_CONTEXT, (draft) => {
+        if (reduction.snapshot) draft.snapshot = summary(reduction.snapshot);
+        if (updates.length > 0) {
+          const events = draft.updates ?? [];
+          for (const update of updates) events.push({ sequence: ++updateSequence, update });
+          if (events.length > 128) events.splice(0, events.length - 128);
+          draft.updates = events;
+        }
+      });
     }
     if (reduction.progress) {
       const progress = reduction.progress;
       if (progress.type === 'item_finished') inFlight.delete(progress.item.id);
       else inFlight.set(progress.item.id, progress.item);
     }
-    if (state.state.snapshot.phase === 'idle') inFlight.clear();
+    if (state.value.snapshot.phase === 'idle') inFlight.clear();
     if (frame.type === 'navigation_end') historyGeneration += 1;
     const changed = present(frame);
     const publishStartedAt = performance.now();
-    if (reduction.snapshot || reduction.progress || updates.length > 0 || changed) state.publish(BACKGROUND_CONTEXT);
+    void (reduction.snapshot || reduction.progress || updates.length > 0 || changed);
     const publishDurationMs = performance.now() - publishStartedAt;
     if (options.telemetry && (reductionDurationMs >= 50 || publishDurationMs >= 50 || frame.type === SETTLED))
       observe(
@@ -323,8 +330,9 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     return { message: args.text, ...(args.images === undefined ? {} : { images: args.images }) };
   };
   const hydrate = async (): Promise<void> => {
-    state.state.presentation = presentation.resetCustomEntries();
-    state.publish(BACKGROUND_CONTEXT);
+    state.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.presentation = presentation.resetCustomEntries();
+    });
   };
   let initializing: Promise<void> | undefined;
 
@@ -337,7 +345,7 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
         return options.readThreadTranscript(args.threadId, args, context);
       }
       const generation = historyGeneration;
-      const revision = state.state.presentation?.revision ?? 0;
+      const revision = state.value.presentation?.revision ?? 0;
       const drafts = [...inFlight.values()];
       const started = performance.now();
       const page = await readTranscriptPage(options.runtime, args, generation, context);
@@ -539,7 +547,7 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       if (!options.respondToExtensionUi?.({ ...response, type: 'extension_ui_response' }))
         throw new Error(`No pending extension UI request: ${response.id}`);
       present({ type: 'extension_ui_answered', id: response.id });
-      state.publish(context);
+      state.change(context, () => undefined);
     },
     async getState(context) {
       guardContext(context);

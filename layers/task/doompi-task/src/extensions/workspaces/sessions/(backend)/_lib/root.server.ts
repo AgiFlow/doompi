@@ -1,6 +1,6 @@
 import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-core/delegation';
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 import type { Context } from '@deepseek-ai/cordis';
 
 import { getDelegationTimeoutMs, getMaxTasks, getStoreTtlMs } from '../../../../../services/config';

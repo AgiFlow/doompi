@@ -11,7 +11,7 @@
     "pi-coding-agent",
     "pi-extension",
     "pi-package",
-    "plan-mode",
+    "planMode",
     "tool-restrictions"
   ],
   "homepage": "https://agimon.ai",
@@ -37,6 +37,7 @@
   ],
   "type": "module",
   "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
@@ -63,25 +64,25 @@
     "./extensions/web": {
       "import": "./dist/extensions/web.mjs"
     },
-    "./fable-flow": {
-      "types": "./dist/fable-flow.d.mts",
-      "import": "./dist/fable-flow.mjs",
-      "require": "./dist/fable-flow.cjs"
+    "./fableFlow": {
+      "types": "./dist/fableFlow.d.mts",
+      "import": "./dist/fableFlow.mjs",
+      "require": "./dist/fableFlow.cjs"
     },
-    "./log-sink-telemetry": {
-      "types": "./dist/log-sink-telemetry.d.mts",
-      "import": "./dist/log-sink-telemetry.mjs",
-      "require": "./dist/log-sink-telemetry.cjs"
+    "./logSinkTelemetry": {
+      "types": "./dist/logSinkTelemetry.d.mts",
+      "import": "./dist/logSinkTelemetry.mjs",
+      "require": "./dist/logSinkTelemetry.cjs"
     },
-    "./plan-config": {
-      "types": "./dist/plan-config.d.mts",
-      "import": "./dist/plan-config.mjs",
-      "require": "./dist/plan-config.cjs"
+    "./planConfig": {
+      "types": "./dist/planConfig.d.mts",
+      "import": "./dist/planConfig.mjs",
+      "require": "./dist/planConfig.cjs"
     },
-    "./plan-mode": {
-      "types": "./dist/plan-mode.d.mts",
-      "import": "./dist/plan-mode.mjs",
-      "require": "./dist/plan-mode.cjs"
+    "./planMode": {
+      "types": "./dist/planMode.d.mts",
+      "import": "./dist/planMode.mjs",
+      "require": "./dist/planMode.cjs"
     },
     "./prompts": {
       "types": "./dist/prompts.d.mts",
@@ -115,7 +116,7 @@
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.86.0",
+    "@earendil-works/pi-coding-agent": "0.87.1",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
     "@types/node": "26.6.1",
@@ -128,7 +129,7 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.86.0"
+    "@earendil-works/pi-coding-agent": "0.87.1"
   },
   "engines": {
     "node": ">=22.19.0"
@@ -148,7 +149,7 @@
     ],
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
-      "dist": "./dist/api-contracts.mjs"
+      "dist": "./dist/apiContracts.mjs"
     }
   },
   "doompiWeb": {

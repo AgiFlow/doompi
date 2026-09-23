@@ -1,4 +1,4 @@
-import type { PiPluginContext, PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContext, PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
 
 import { createHelpPiRuntime } from '../../../../../services/helpPiRuntime';
 import type { HelpRuntimeOptions } from '../../../../../services/helpRuntime';

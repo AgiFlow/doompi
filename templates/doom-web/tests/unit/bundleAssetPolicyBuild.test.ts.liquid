@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { build } from 'vite';
 import { describe, expect, it } from 'vitest';
-import { bundleAssetPolicyPlugin } from '@agimon-ai/doompi/builders/web';
+import { bundleAssetPolicyPlugin } from '@agimon-ai/doompi/webBuilder';
 import { parseBundleAssetPolicy } from '@agimon-ai/doompi-core/web';
 
 const requireFromComponents = createRequire(

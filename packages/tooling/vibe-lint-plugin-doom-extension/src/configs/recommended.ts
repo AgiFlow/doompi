@@ -35,6 +35,7 @@ const rules: Record<string, Severity> = {
   'cordis-service-injection': 'error',
   'no-legacy-cordis-access': 'error',
   'no-live-global-registry': 'error',
+  'no-manual-export-entries': 'error',
   'pi-extension-default-factory': 'error',
   'thin-pi-adapter': 'error',
   'no-raw-pi-events': 'error',
@@ -74,6 +75,11 @@ function layer(...roots: string[]): string[] {
  * declares, so a package can still replace one of these outright.
  */
 const boundaries: BoundaryConfig[] = [
+  {
+    name: 'browser-export',
+    pattern: 'src/exports/webClient.ts',
+    allowedImports: ['generated/web', 'generated/web.ts'],
+  },
   { name: 'constants', pattern: 'src/constants/**', allowedImports: layer('constants') },
   {
     name: 'exports',

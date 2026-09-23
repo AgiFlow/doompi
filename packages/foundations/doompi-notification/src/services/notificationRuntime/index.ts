@@ -1,7 +1,7 @@
-import { DOOM_ASK_USER_BLOCKED_EVENT, DOOM_ASK_USER_PROMPT_EVENT } from '@agimon-ai/doompi-core/ask-user';
-import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_ASK_USER_BLOCKED_EVENT, DOOM_ASK_USER_PROMPT_EVENT } from '@agimon-ai/doompi-core/askUser';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordisHost';
 import { DOOM_NOTIFICATION_SERVICE, type DoomNotificationLevel } from '@agimon-ai/doompi-core/notification';
-import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 

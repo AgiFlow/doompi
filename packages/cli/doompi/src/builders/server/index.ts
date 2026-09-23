@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
+import { writeFileAtomic } from '@agimon-ai/doompi-core/runtimeJson';
 import {
   DOOM_SERVER_BUNDLE_FILE,
   DOOM_SERVER_BUNDLE_VERSION,
@@ -13,7 +13,7 @@ import {
   declaredServerFacetsOf,
   orderServerFacets,
   parseDoomServerBundle,
-} from '@agimon-ai/doompi-core/server-facet';
+} from '@agimon-ai/doompi-core/serverFacet';
 
 import {
   compileExtensionModule,

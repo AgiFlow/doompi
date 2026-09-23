@@ -1,4 +1,4 @@
-import { defineMcpTool, type DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
+import { defineMcpTool, type DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 
 import { RUNNER_SERVER_SCOPE_SERVICE, type RunnerServerScope } from '../_lib/serverRoot';
 

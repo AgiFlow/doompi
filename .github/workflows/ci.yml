@@ -27,7 +27,8 @@ jobs:
   quality_checks:
     name: Quality (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Tests builds every package before running them serially; hosted runners vary enough to exceed 15 minutes.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -145,9 +146,6 @@ jobs:
       - name: Set up DoomPi workspace
         uses: ./.github/actions/setup-monorepo
 
-      - name: Build the cockpit and the servers it spawns
-        run: pnpm cockpit:build
-
       - name: Build the desktop main and preload
         run: pnpm nx run @agimon-ai/doompi-desktop:build
 
@@ -224,7 +222,7 @@ jobs:
         run: pnpm audit:workspace
 
       - name: Build package matrix
-        run: pnpm build
+        run: pnpm nx run-many -t build --parallel=3
 
       - name: Verify system-test shard coverage
         if: matrix.check

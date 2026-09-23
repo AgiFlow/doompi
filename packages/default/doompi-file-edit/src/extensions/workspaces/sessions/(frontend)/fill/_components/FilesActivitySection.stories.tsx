@@ -6,7 +6,7 @@
  * The section reads the session store rather than props, so each variant is a
  * different session id seeded before the render runs.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import type { FilesItemView } from '../../../../../../types/webFiles';
 import { files } from '../../_lib/filesStore';

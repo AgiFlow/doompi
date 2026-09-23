@@ -41,7 +41,7 @@ vi.mock('../../src/composition/syncState', () => ({
   writeSyncState: mocks.writeSyncState,
 }));
 
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/syncStateContract';
 
 import { buildSyncedRuntime } from '../../src/builders/cli';
 import { testMcpProjection } from '../helpers/mcpProjection';

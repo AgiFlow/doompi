@@ -1,4 +1,4 @@
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 
 import { createHookHandlers } from '../../../../../services/hookHandlers';
 import { createHookBinding } from '../../../../../services/hookRuntime';

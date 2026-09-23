@@ -40,6 +40,51 @@ describe('syncManifest', () => {
     expect(manifest.doompiWeb).toMatchObject({ channels: ['current_state'] });
   });
 
+  it('uses the camel-case contract entry for server metadata', () => {
+    const packageDir = packageWith({
+      'src/exports/apiContracts.ts': 'export {};\n',
+      'src/extensions/(backend)/root.server.ts': 'export default {};\n',
+    });
+    const manifest = syncManifest({
+      packageDir,
+      manifest: {},
+      graph: scanExtensions({ packageDir }),
+      targets: ['server'],
+      pluginId: 'demo',
+    });
+
+    expect(manifest.doompiServer).toMatchObject({
+      contracts: {
+        entry: './src/exports/apiContracts.ts',
+        dist: './dist/apiContracts.mjs',
+      },
+    });
+  });
+
+  it('preserves resource exports that do not map to a built entry', () => {
+    const packageDir = packageWith({
+      'dist/index.d.mts': 'export {};\n',
+    });
+    const manifest = syncManifest({
+      packageDir,
+      manifest: {
+        exports: {
+          '.': { import: './dist/index.mjs' },
+          './themes/doom-pi-dark.json': './themes/doom-pi-dark.json',
+          './skills/workflow-recovery/SKILL.md': './skills/workflow-recovery/SKILL.md',
+        },
+      },
+      graph: scanExtensions({ packageDir }),
+      targets: [],
+      pluginId: 'demo',
+    });
+
+    expect(manifest.exports).toMatchObject({
+      './themes/doom-pi-dark.json': './themes/doom-pi-dark.json',
+      './skills/workflow-recovery/SKILL.md': './skills/workflow-recovery/SKILL.md',
+    });
+  });
+
   it('publishes the Pi subpath for a CLI-admitted browser-only package', () => {
     const packageDir = packageWith({
       'src/extensions/(frontend)/template/example.web.tsx': 'export default {};\n',

@@ -6,7 +6,7 @@ import {
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
 import { HeadlessHost } from '@agimon-ai/doompi-core/main';
-import type { DoomServerBundleEntry } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerBundleEntry } from '@agimon-ai/doompi-core/serverFacet';
 import { Context } from '@deepseek-ai/cordis';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';

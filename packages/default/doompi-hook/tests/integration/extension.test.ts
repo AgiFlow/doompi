@@ -17,7 +17,7 @@ import { type PiHarness, piHarness, SESSION_ID, stubRunner, TEST_CORDIS_ROOT } f
 const cordisHost = vi.hoisted(() => ({ resolveRoot: (_pi: unknown): unknown => undefined }));
 const cordisRoots: Context[] = [];
 
-vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
+vi.mock('@agimon-ai/doompi-core/runtimeCordisHost', () => ({
   connectDoomCordisHost: async (pi: unknown) => ({
     root: cordisHost.resolveRoot(pi),
     runtime: { abiVersion: 1, generation: 'hook-test', hostId: 'hook-test', mode: 'composed' },

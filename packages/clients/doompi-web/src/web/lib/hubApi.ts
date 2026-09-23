@@ -1,4 +1,4 @@
-import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/sessionProtocol';
 import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 
 import {

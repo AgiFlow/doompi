@@ -5,12 +5,12 @@ import path from 'node:path';
 
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordisHost';
 import {
   createHarnessTelemetry,
   HARNESS_EVENT,
   type HarnessTelemetry,
-} from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+} from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ToolResultEvent } from '@earendil-works/pi-coding-agent';
 

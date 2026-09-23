@@ -18,11 +18,19 @@
       "{workspaceRoot}/configs/oxlint/node.json",
       "{workspaceRoot}/.oxlintrc.json",
       "{workspaceRoot}/.oxfmtrc.json"
-    ]
+    ],
+    "manifest": ["{projectRoot}/package.json"]
   },
   "targetDefaults": {
     "build": {
-      "inputs": ["production", "^production", "{projectRoot}/package.json"],
+      "inputs": [
+        "production",
+        "{projectRoot}/package.json",
+        "^manifest",
+        { "dependentTasksOutputFiles": "**/*.d.mts", "transitive": true },
+        { "dependentTasksOutputFiles": "packages/core/doompi-build/dist/**/*.mjs", "transitive": true },
+        { "dependentTasksOutputFiles": "packages/core/doompi-build/dist/**/*.cjs", "transitive": true }
+      ],
       "outputs": ["{projectRoot}/dist", "{projectRoot}/generated"],
       "dependsOn": ["^build"],
       "cache": true

@@ -4,13 +4,13 @@ import path from 'node:path';
 
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordisHost';
 import { createDoomHelpService, DOOM_HELP_SERVICE, type DoomHelpService } from '@agimon-ai/doompi-core/help';
 import {
   DOOM_VOICE_TOOLS_SERVICE,
   createDoomVoiceToolsService,
   type DoomVoiceToolsService,
-} from '@agimon-ai/doompi-voice/voice-tools';
+} from '@agimon-ai/doompi-voice/voiceTools';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';

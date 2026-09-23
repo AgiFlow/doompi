@@ -12,7 +12,7 @@ import {
   createDoomToolSurface,
   DOOM_TOOL_SURFACE_SERVICE,
   type DoomToolSurfaceService,
-} from '@agimon-ai/doompi-core/tool-surface';
+} from '@agimon-ai/doompi-core/toolSurface';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   MINOR_MODE_TOOL_NAME,

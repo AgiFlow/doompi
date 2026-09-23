@@ -100,7 +100,7 @@ The practical rule is simple: **if the package ships a file, register it as a `s
 
 If a `context` resource must carry a shipped file, such as a Help catalog index, give it a `when` clause so it stays out of the default prompt. The `doom-resource-kind` lint rule checks both requirements.
 
-Resolve shipped files with `packageResourcePath` or `readPackageResource` from `@agimon-ai/doompi-core/server-facet`. These helpers find the nearest ancestor `package.json`, which works from both `src/` and `dist/`. Do not hand-count parent directories with `new URL('../../..', import.meta.url)`. In a built package that can resolve inside `dist/` and quietly replace the intended prompt with fallback text.
+Resolve shipped files with `packageResourcePath` or `readPackageResource` from `@agimon-ai/doompi-core/serverFacet`. These helpers find the nearest ancestor `package.json`, which works from both `src/` and `dist/`. Do not hand-count parent directories with `new URL('../../..', import.meta.url)`. In a built package that can resolve inside `dist/` and quietly replace the intended prompt with fallback text.
 Selectable packages resolve from the consumer repository through normal `node_modules` lookup or Pi's project-local `.pi/npm` store. Fixed host entries may fall back to the root package dependency closure. When a required bare package is missing, DoomPi asks Pi to resolve `npm:<package-name>` and reuses the installed result. Optional packages and local paths are not installed automatically.
 
 ### Cockpit plugin source

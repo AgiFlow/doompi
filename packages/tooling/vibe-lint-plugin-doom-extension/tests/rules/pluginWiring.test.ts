@@ -110,7 +110,7 @@ describe('plugin composition wiring', () => {
     expect(
       check(
         'src/extensions/pi.ts',
-        `import {definePiExtension as define} from '@agimon-ai/doompi-core/pi-extension';
+        `import {definePiExtension as define} from '@agimon-ai/doompi-core/piExtension';
       export default define({name:'demo', tools:[]});`,
       ),
     ).toBeNull();

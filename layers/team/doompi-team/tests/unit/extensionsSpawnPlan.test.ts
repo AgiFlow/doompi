@@ -7,7 +7,7 @@ import type {
   DoomChildSessionRequest,
   DoomChildSessionService,
   DoomChildSessionServiceProvider,
-} from '@agimon-ai/doompi-core/child';
+} from '@agimon-ai/doompi-core/childSession';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 

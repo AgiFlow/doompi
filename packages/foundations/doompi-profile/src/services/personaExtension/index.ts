@@ -1,4 +1,4 @@
-import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/piExtension';
 
 import type { ProfileTelemetry } from '../../types/telemetry';
 import { createProfileTelemetry } from '../logSinkTelemetry';

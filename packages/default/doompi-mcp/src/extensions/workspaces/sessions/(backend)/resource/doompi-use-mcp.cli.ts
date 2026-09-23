@@ -1,4 +1,4 @@
-import { defineResource } from '@agimon-ai/doompi-core/extension-file';
+import { defineResource } from '@agimon-ai/doompi-core/extensionFile';
 
 export default defineResource({
   source: '@agimon-ai/doompi-mcp',

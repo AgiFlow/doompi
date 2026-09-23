@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { ToolSource } from '@agimon-ai/doompi-core/tool-inventory';
+import type { ToolSource } from '@agimon-ai/doompi-core/toolInventory';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildContextDetail } from '../../../src/services/contextDetail';

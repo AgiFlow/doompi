@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/syncStateContract';
 
 import { inputsAreFresh, parseInputFingerprint, type InputFingerprint } from '../../../compiler/inputs';
 import { EXTENSION_COMPILER_VERSION } from '../../../compiler/version';

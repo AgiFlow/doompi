@@ -8,7 +8,7 @@
  * through getUserMedia; the headless renderer has no device to grant, so
  * driving it would be faking the one thing the button reports.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import { VoiceComposerAction } from './VoiceComposerAction';
 

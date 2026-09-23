@@ -1,4 +1,4 @@
-import type { DoomApiContext } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApiContext } from '@agimon-ai/doompi-core/packageApi';
 
 import { KEY_SEPARATOR, SELECTION_KEYS } from '../../constants/settings';
 import type {

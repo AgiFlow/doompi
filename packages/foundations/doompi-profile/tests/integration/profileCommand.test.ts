@@ -9,8 +9,8 @@ import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import {
   createVoiceReloadHandoffStore,
   type VoiceReloadHandoffStore,
-} from '@agimon-ai/doompi-voice/voice-reload-handoff';
-import { DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-voice/voice-tools';
+} from '@agimon-ai/doompi-voice/voiceReloadHandoff';
+import { DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-voice/voiceTools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

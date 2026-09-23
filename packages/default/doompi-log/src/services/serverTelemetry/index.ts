@@ -4,7 +4,7 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHook,
 } from '@agimon-ai/doompi-core/headless';
-import { isRecord } from '@agimon-ai/doompi-core/runtime-json';
+import { isRecord } from '@agimon-ai/doompi-core/runtimeJson';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 
 import { PACKAGE_NAME, SERVICE_NAME } from '../../constants/telemetry';

@@ -65,7 +65,7 @@ describe('doompi-domain package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
-      './api-contracts',
+      './apiContracts',
       './apply',
       './extensions/pi',
       './extensions/server',
@@ -78,7 +78,7 @@ describe('doompi-domain package contract', () => {
     expect(Object.keys(exportsMap)).not.toContain('./*');
     for (const subpath of [
       '.',
-      './api-contracts',
+      './apiContracts',
       './apply',
       './extensions/pi',
       './extensions/server',
@@ -165,8 +165,8 @@ describe('doompi-domain package contract', () => {
     const manifest = await readManifest();
 
     for (const pi of ['@earendil-works/pi-coding-agent', '@earendil-works/pi-tui']) {
-      expect(manifest.peerDependencies?.[pi]).toBe('0.86.0');
-      expect(manifest.devDependencies?.[pi]).toBe('0.86.0');
+      expect(manifest.peerDependencies?.[pi]).toBe('0.87.1');
+      expect(manifest.devDependencies?.[pi]).toBe('0.87.1');
     }
   });
 });

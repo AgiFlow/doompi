@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordisHost';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 

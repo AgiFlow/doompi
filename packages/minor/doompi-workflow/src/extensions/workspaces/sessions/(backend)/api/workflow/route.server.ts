@@ -1,4 +1,4 @@
-import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import runtime from '../../_lib/index.server';
 

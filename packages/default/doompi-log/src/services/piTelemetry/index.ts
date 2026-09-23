@@ -1,4 +1,4 @@
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/piExtension';
 import { type DoomReadinessCoordinator, readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';

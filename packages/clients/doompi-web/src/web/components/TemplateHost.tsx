@@ -5,9 +5,9 @@ import { useStore } from '@tanstack/react-store';
 import { Component, type ReactNode, useState } from 'react';
 
 import { webTemplateCatalog } from '../lib/pluginRegistry';
-import { webPluginCompositionStore } from '../lib/pluginRuntime';
+import { retryWebPluginCompositions, webPluginCompositionStore, webPluginMountState } from '../lib/pluginRuntime';
 import { resolveWebTemplate } from '../lib/templateCatalog';
-import { configuredTemplate, useTemplateConfiguration } from '../stores/templateStore';
+import { configuredTemplate, refreshTemplateConfiguration, useTemplateConfiguration } from '../stores/templateStore';
 import { useWebPluginRegistry } from '../stores/useWebPluginRegistry';
 
 class TemplateBoundary extends Component<{ children: ReactNode; onFailure(): void }, { failed: boolean }> {
@@ -26,37 +26,66 @@ class TemplateBoundary extends Component<{ children: ReactNode; onFailure(): voi
   }
 }
 
+function templateMountKey(mount: WebPluginMount): string {
+  return mount.scope === 'global'
+    ? 'global'
+    : mount.scope === 'workspace'
+      ? `workspace:${mount.workspaceId}`
+      : `session:${mount.sessionId}`;
+}
+
 /** Runtime and mandatory overlays are above this boundary, not owned by a template package. */
-export function TemplateHost({ mount, ...props }: WebTemplateProps & { mount?: WebPluginMount }) {
+export function TemplateHost({
+  mount,
+  scopeReady = true,
+  ...props
+}: WebTemplateProps & { mount?: WebPluginMount; scopeReady?: boolean }) {
   useWebPluginRegistry();
-  const workspaceId = mount?.scope === 'workspace' || mount?.scope === 'session' ? mount.workspaceId : undefined;
+  const requestedMount: WebPluginMount = mount ?? { scope: 'global' };
+  const requestedMountKey = templateMountKey(requestedMount);
+  const workspaceId =
+    requestedMount.scope === 'workspace' || requestedMount.scope === 'session' ? requestedMount.workspaceId : undefined;
   const configuration = useTemplateConfiguration(workspaceId);
-  const compositionPhase = useStore(webPluginCompositionStore, (state) => state.phase);
+  const composition = useStore(webPluginCompositionStore, (state) => state);
+  const mountReadiness = webPluginMountState(requestedMount, composition);
   const [failures, setFailures] = useState<WebTemplateContribution[]>([]);
-  const catalog = webTemplateCatalog(mount);
+  const catalog = webTemplateCatalog(requestedMount);
   // Registry updates are not layout changes. Retry a failed package only after
   // its implementation changes or the user explicitly asks, without remounting healthy content.
   const failed = catalog.templates
     .filter((entry) => failures.some((failure) => failure.id === entry.id && failure.layout === entry.layout))
     .map((entry) => entry.id);
   const { template, warning } = resolveWebTemplate(catalog.templates, configuredTemplate(configuration), failed);
-  const [selected, setSelected] = useState<WebTemplateContribution | undefined>(template);
+  const [selected, setSelected] = useState<{ mountKey: string; template?: WebTemplateContribution }>({
+    mountKey: requestedMountKey,
+  });
+  const selectedTemplate = scopeReady && selected.mountKey === requestedMountKey ? selected.template : undefined;
   const selectedFailed =
-    selected !== undefined &&
-    failures.some((failure) => failure.id === selected.id && failure.layout === selected.layout);
+    selectedTemplate !== undefined &&
+    failures.some((failure) => failure.id === selectedTemplate.id && failure.layout === selectedTemplate.layout);
+  const configurationPending = configuration.loading && configuration.config === undefined;
+  const loadError = mountReadiness.error ?? configuration.error;
+  const hasLoadError = mountReadiness.phase === 'error' || loadError !== undefined;
+  // A verified scope must wait for healthy bootstrap, but an error can immediately
+  // render the bundled fallback while the failed request is retried.
+  const waiting =
+    !scopeReady ||
+    (!hasLoadError && (configurationPending || mountReadiness.phase === 'idle' || mountReadiness.phase === 'loading'));
+  const pending = selectedTemplate === undefined && waiting;
   if (
-    (template === undefined &&
-      selected !== undefined &&
-      compositionPhase !== 'idle' &&
-      compositionPhase !== 'loading') ||
-    (template !== undefined && (selected === undefined || selected.id !== template.id || selectedFailed))
+    !waiting &&
+    ((template === undefined && selectedTemplate !== undefined) ||
+      (template !== undefined &&
+        (selectedTemplate === undefined || selectedTemplate.id !== template.id || selectedFailed)))
   )
-    setSelected(template);
-  const diagnostic = warning ?? catalog.diagnostics[0]?.message ?? configuration.error;
-  const Layout = selected?.layout;
-  const initializing = Layout === undefined && (compositionPhase === 'idle' || compositionPhase === 'loading');
+    setSelected({ mountKey: requestedMountKey, template });
+  const diagnostic = loadError ?? (waiting ? undefined : (warning ?? catalog.diagnostics[0]?.message));
+  const Layout = selectedTemplate?.layout;
   return (
-    <div data-template={selected?.id ?? 'recovery'} className="flex h-full min-w-0 flex-col overflow-hidden">
+    <div
+      data-template={selectedTemplate?.id ?? (pending ? 'loading' : 'recovery')}
+      className="flex h-full min-w-0 flex-col overflow-hidden"
+    >
       {diagnostic ? (
         <div
           role="status"
@@ -67,7 +96,18 @@ export function TemplateHost({ mount, ...props }: WebTemplateProps & { mount?: W
           <Link to="/settings/$section" params={{ section: 'appearance' }} search={{ workspace: workspaceId }}>
             Template settings
           </Link>
-          {failed.length > 0 ? (
+          {loadError ? (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => {
+                if (configuration.error) void refreshTemplateConfiguration(workspaceId);
+                if (mountReadiness.error) void retryWebPluginCompositions().catch(() => undefined);
+              }}
+            >
+              Retry templates
+            </Button>
+          ) : failed.length > 0 ? (
             <Button size="xs" variant="ghost" onClick={() => setFailures([])}>
               Retry
             </Button>
@@ -75,11 +115,14 @@ export function TemplateHost({ mount, ...props }: WebTemplateProps & { mount?: W
         </div>
       ) : null}
       <div className="min-h-0 min-w-0 flex-1">
-        {Layout && selected ? (
-          <TemplateBoundary key={selected.id} onFailure={() => setFailures((state) => [...state, selected])}>
+        {Layout && selectedTemplate ? (
+          <TemplateBoundary
+            key={`${requestedMountKey}:${selectedTemplate.id}`}
+            onFailure={() => setFailures((state) => [...state, selectedTemplate])}
+          >
             <Layout {...props} />
           </TemplateBoundary>
-        ) : initializing ? (
+        ) : pending ? (
           <div
             data-testid="template-loading"
             role="status"
@@ -97,8 +140,14 @@ export function TemplateHost({ mount, ...props }: WebTemplateProps & { mount?: W
                   props.slots.content
                 ) : (
                   <div className="flex flex-col gap-3 p-5 text-base">
-                    <h1 className="font-bold text-doom-hi">Web template unavailable</h1>
-                    <p>Install a compatible template package through modes.yaml, then sync the composition.</p>
+                    <h1 className="font-bold text-doom-hi">
+                      {loadError ? 'Web template failed to load' : 'Web template unavailable'}
+                    </h1>
+                    <p>
+                      {loadError
+                        ? 'Retry loading the template or open Settings to review the configuration.'
+                        : 'No compatible web template is available. Open Settings to choose a template.'}
+                    </p>
                     <Link
                       to="/settings/$section"
                       params={{ section: 'appearance' }}

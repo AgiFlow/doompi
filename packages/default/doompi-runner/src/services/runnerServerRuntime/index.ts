@@ -3,9 +3,9 @@ import {
   readDoomBackgroundWorkService,
   type BackgroundProviderWorkItem,
   type BackgroundWorkProviderHandle,
-} from '@agimon-ai/doompi-core/background-work';
+} from '@agimon-ai/doompi-core/backgroundWork';
 import type { DoomHeadlessActivity, DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerHostService } from '@agimon-ai/doompi-core/serverFacet';
 import type { Context } from '@deepseek-ai/cordis';
 
 import { BACKGROUND_WORK_PROVIDER } from '../../constants/runnerRuntime';

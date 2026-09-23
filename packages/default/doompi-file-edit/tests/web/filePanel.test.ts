@@ -1,7 +1,7 @@
 import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 import { beforeEach as beforeEachApiRoutes } from 'vitest';
 beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
-import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { FilePanel } from '../../src/extensions/workspaces/sessions/(frontend)/_components/FilePanel';

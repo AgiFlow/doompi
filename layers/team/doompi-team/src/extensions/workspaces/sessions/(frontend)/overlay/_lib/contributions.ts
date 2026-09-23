@@ -6,9 +6,9 @@
  *   `fleetStatus.ts`; this file connects those surfaces to host services.
  */
 
-import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
-import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
-import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/sessionProtocol';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import {

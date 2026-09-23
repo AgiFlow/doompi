@@ -1,4 +1,4 @@
-import { defineServerTool, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineServerTool, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import type root from '../root.server';
 

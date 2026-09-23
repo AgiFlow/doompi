@@ -1,4 +1,4 @@
-import { defineDoomPluginMethod } from '@agimon-ai/doompi-core/plugin-protocol';
+import { defineDoomPluginMethod } from '@agimon-ai/doompi-core/pluginProtocol';
 import { Type } from 'typebox';
 
 export const voiceControlMethod = defineDoomPluginMethod({

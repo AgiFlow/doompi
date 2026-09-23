@@ -2,8 +2,8 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkItem,
   type DoomBackgroundWorkService,
-} from '@agimon-ai/doompi-core/background-work';
-import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+} from '@agimon-ai/doompi-core/backgroundWork';
+import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordisHost';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

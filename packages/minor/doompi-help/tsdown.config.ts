@@ -6,4 +6,4 @@ const routed = doompiExtension({
 });
 if (!Array.isArray(routed)) throw new Error('help requires its web bundle.');
 
-export default defineConfig([{ ...routed[0], exports: false }, routed[1]]);
+export default defineConfig(routed.map((config) => ({ ...config, exports: false })));

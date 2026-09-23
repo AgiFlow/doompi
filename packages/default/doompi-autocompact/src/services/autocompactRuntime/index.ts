@@ -11,9 +11,9 @@ import {
   type DoomContextContributionError,
   type DoomContextContributionsService,
   type DoomContextContributionsSnapshot,
-} from '@agimon-ai/doompi-core/context-contributions';
+} from '@agimon-ai/doompi-core/contextContributions';
 import type { DoomFooterContributionHandle } from '@agimon-ai/doompi-core/footer';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/uiHub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ContextEvent, ExtensionAPI, ExtensionContext, SessionEntry } from '@earendil-works/pi-coding-agent';
 import {

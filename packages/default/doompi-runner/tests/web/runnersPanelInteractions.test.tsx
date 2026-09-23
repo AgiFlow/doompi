@@ -1,4 +1,4 @@
-import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 import type { ComponentProps, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

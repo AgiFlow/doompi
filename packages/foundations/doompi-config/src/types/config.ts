@@ -1,5 +1,5 @@
 import type { IDoomConfigService as DoomConfigServiceContract } from '@agimon-ai/doompi-core/config';
-import type { DoomMcpProjection } from '@agimon-ai/doompi-core/mcp-projection';
+import type { DoomMcpProjection } from '@agimon-ai/doompi-core/mcpProjection';
 
 import type { PersonaIdentity, PersonaVoiceOverride } from './profiles';
 
@@ -182,8 +182,8 @@ export interface PluginHookSource {
   configPath: string;
 }
 
-export type { PackageAttribution } from '@agimon-ai/doompi-core/context-projection';
-import type { PackageAttribution } from '@agimon-ai/doompi-core/context-projection';
+export type { PackageAttribution } from '@agimon-ai/doompi-core/contextProjection';
+import type { PackageAttribution } from '@agimon-ai/doompi-core/contextProjection';
 
 export interface HarnessState {
   root?: string;

@@ -98,7 +98,7 @@ test('creates and revokes a host-only session-scoped MCP client with ChatGPT cal
   await page.route('**/api/workspaces/*/sessions/*/mcp/config', (route) => route.fulfill({ json: config }));
   await page.route('**/api/workspaces/*/sessions/*/mcp/clients', async (route) => {
     if (route.request().method() === 'POST') {
-      const input = route.request().postDataJSON() as { redirectUri: string; scope: string };
+      const input = route.request().postDataJSON() as { redirectUri: string; scope: string; routing: 'conversation' };
       const metadata = {
         ...input,
         name: 'ChatGPT · doom.example.com',
@@ -126,6 +126,9 @@ test('creates and revokes a host-only session-scoped MCP client with ChatGPT cal
   await expect(page.getByTestId('session-mcp-settings')).toBeVisible();
   await expect(page.getByTestId('session-mcp-url')).toHaveText(config.audience);
   await expect(page.getByTestId('session-mcp-create-button')).toBeDisabled();
+  await expect(page.getByTestId('session-mcp-routing')).toContainText('automatically routed to its own worktree');
+  await expect(page.getByTestId('session-mcp-routing')).toContainText('provisioning or recovering');
+  await expect(page.getByTestId('session-mcp-routing')).not.toContainText('directly to this session');
   await expect(page.getByTestId('session-mcp-name')).toHaveCount(0);
   await expect(page.getByTestId('session-mcp-tools')).toHaveCount(0);
   await expect(page.getByTestId('session-mcp-skills')).toHaveCount(0);
@@ -141,6 +144,7 @@ test('creates and revokes a host-only session-scoped MCP client with ChatGPT cal
   expect((await createdRequest).postDataJSON()).toEqual({
     redirectUri: 'https://chatgpt.com/callback',
     scope: 'session',
+    routing: 'conversation',
   });
   await expect(page.getByTestId('session-mcp-created-url')).toHaveText(config.audience);
   await expect(page.getByTestId('session-mcp-created-id')).toHaveText('chatgpt-client');
@@ -151,6 +155,7 @@ test('creates and revokes a host-only session-scoped MCP client with ChatGPT cal
   await page.getByTestId('settings-section-remote').click();
   await expect(page.getByTestId('session-mcp-secret')).toHaveCount(0);
   await expect(page.getByTestId('session-mcp-clients')).toContainText('ChatGPT · doom.example.com');
+  await expect(page.getByTestId('session-mcp-clients')).toContainText('automatic worktree per conversation');
   await page.getByRole('button', { name: 'revoke' }).click();
   await expect(page.getByTestId('session-mcp-clients')).toContainText('no clients registered');
 });
@@ -327,6 +332,8 @@ test.describe('with the synced bundle', () => {
     try {
       await page.goto(`${cockpit.url}/settings/planning`);
       await expect(page.getByTestId('settings')).toBeVisible();
+      await expect(page.getByTestId('template-loading')).toBeVisible();
+      await expect(page.getByTestId('template-diagnostic')).toBeHidden();
       await expect(page).toHaveURL(/\/settings\/planning$/);
     } finally {
       release();

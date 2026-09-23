@@ -1,4 +1,4 @@
-import type { SessionService, SessionServiceState } from '@agimon-ai/doompi-core/session-protocol';
+import type { SessionService, SessionServiceState } from '@agimon-ai/doompi-core/sessionProtocol';
 import type { Context } from '@earendil-works/chord';
 
 import { subscribeThreadFrame, unsubscribeThreadFrame } from '../../types/hub';

@@ -1,4 +1,4 @@
-import type { DoomApiCaller } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApiCaller } from '@agimon-ai/doompi-core/packageApi';
 
 export const API_BASE_PATH = 'computer-use';
 export const computerUseChannelType = 'computer_use_state';

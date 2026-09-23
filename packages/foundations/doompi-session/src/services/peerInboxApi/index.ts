@@ -1,4 +1,4 @@
-import type { DoomApi, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApi, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 
 import { deliverSessionPeerEnvelope } from '../peerInbox';
 import {

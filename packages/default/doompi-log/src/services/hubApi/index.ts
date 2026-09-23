@@ -1,4 +1,4 @@
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 import type { LogMetricGroupRow, LogMetricsReport, ToolMetricRow } from '@agimon-ai/log-sink-mcp';
 import { Hono } from 'hono';
 

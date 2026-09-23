@@ -44,6 +44,7 @@
   ],
   "type": "module",
   "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
@@ -52,7 +53,7 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./client-media": {
+    "./clientMedia": {
       "types": "./dist/clientMedia.d.mts",
       "import": "./dist/clientMedia.mjs",
       "require": "./dist/clientMedia.cjs"
@@ -70,12 +71,12 @@
     "./extensions/web": {
       "import": "./dist/extensions/web.mjs"
     },
-    "./voice-reload-handoff": {
+    "./voiceReloadHandoff": {
       "types": "./dist/voiceReloadHandoff.d.mts",
       "import": "./dist/voiceReloadHandoff.mjs",
       "require": "./dist/voiceReloadHandoff.cjs"
     },
-    "./voice-tools": {
+    "./voiceTools": {
       "types": "./dist/voiceTools.d.mts",
       "import": "./dist/voiceTools.mjs",
       "require": "./dist/voiceTools.cjs"
@@ -110,7 +111,7 @@
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.86.0",
+    "@earendil-works/pi-coding-agent": "0.87.1",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
     "@types/node": "26.6.1",
@@ -123,7 +124,7 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.86.0"
+    "@earendil-works/pi-coding-agent": "0.87.1"
   },
   "engines": {
     "node": ">=22.19.0"
@@ -138,7 +139,7 @@
     ],
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
-      "dist": "./dist/api-contracts.mjs"
+      "dist": "./dist/apiContracts.mjs"
     }
   },
   "doompiWeb": {

@@ -9,7 +9,7 @@
  * the header naming the job and step, and the empty terminal body.
  */
 import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import { StepTerminalPanel, type StepTabTarget } from './StepTerminalPanel';
 

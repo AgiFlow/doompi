@@ -1,4 +1,4 @@
-import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerLogMetricsLeaderBinding } from '../src/tui/logRuntime';

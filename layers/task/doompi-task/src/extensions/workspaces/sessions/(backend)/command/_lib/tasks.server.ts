@@ -1,6 +1,6 @@
-import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import type { WithRoot } from '@agimon-ai/doompi-core/extensionFile';
 import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 
 import { COMMAND_NAME } from '../../../../../../constants/task';
 import { reducerAction } from '../../../../../../services/taskTool';

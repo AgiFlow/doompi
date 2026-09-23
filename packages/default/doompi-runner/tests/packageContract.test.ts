@@ -81,15 +81,15 @@ describe('doom runner package boundary', () => {
     expect(manifest.private).toBeUndefined();
     expect(manifest.type).toBe('module');
     expect(manifest.main).toBe('./dist/index.cjs');
-    expect(manifest.types).toBe('./dist/index.d.cts');
+    expect(manifest.types).toBe('./dist/index.d.mts');
     expect(manifest['jsnext:main']).toBe('./dist/index.mjs');
     expect(project.sourceRoot).toBe('packages/default/doompi-runner/src');
     expect(project.sourceTemplate).toBe('doom-extension');
     expect(manifest.dependencies?.['@deepseek-ai/cordis']).toBe('4.0.2');
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.86.0');
-    expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBe('0.86.0');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.86.0');
-    expect(manifest.devDependencies?.['@earendil-works/pi-tui']).toBe('0.86.0');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBe('0.87.1');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
+    expect(manifest.devDependencies?.['@earendil-works/pi-tui']).toBe('0.87.1');
     expect(manifest.dependencies?.['node-pty']).toBeUndefined();
     for (const target of ['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']) {
       expect(manifest.optionalDependencies?.[`@agimon-ai/doompi-runner-rtk-${target}`]).toBe('workspace:*');

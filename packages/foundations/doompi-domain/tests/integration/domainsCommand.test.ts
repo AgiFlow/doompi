@@ -12,12 +12,9 @@ import {
 } from '@agimon-ai/doompi-config/harnessStore';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import type { TransitionOutcome } from '@agimon-ai/doompi-core/transition';
-import {
-  createVoiceReloadHandoffStore,
-  type VoiceReloadHandoffStore,
-} from '@agimon-ai/doompi-core/voice-reload-handoff';
-import { DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-core/voice-tools';
-import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
+import { createVoiceReloadHandoffStore, type VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voiceReloadHandoff';
+import { DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-core/voiceTools';
+import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voiceTools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -36,7 +33,7 @@ vi.mock('@agimon-ai/doompi-config/piContext', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   persistHarnessSelection,
 }));
-vi.mock('@agimon-ai/doompi-ui/matrix-picker', () => ({
+vi.mock('@agimon-ai/doompi-ui/matrixPicker', () => ({
   MatrixPickerComponent: class MatrixPickerComponent {
     constructor(...args: unknown[]) {
       pickerConstructed(...args);
@@ -158,7 +155,7 @@ function setup(
       reloadHandoffs,
       applyDomains,
       loadConfigJournal: () => import('@agimon-ai/doompi-config/piContext'),
-      loadPicker: () => import('@agimon-ai/doompi-ui/matrix-picker'),
+      loadPicker: () => import('@agimon-ai/doompi-ui/matrixPicker'),
     }),
   );
 

@@ -102,8 +102,8 @@ async function loadBuiltNotificationRuntimes(): Promise<{
 async function loadBuiltCordisHosts(): Promise<{ esm: CordisHostModule; cjs: CordisHostModule }> {
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as PackageManifest;
   const exportsMap = manifest.exports ?? {};
-  const esmPath = conditionPath(exportsMap, './cordis-host', 'import');
-  const cjsPath = conditionPath(exportsMap, './cordis-host', 'require');
+  const esmPath = conditionPath(exportsMap, './cordisHost', 'import');
+  const cjsPath = conditionPath(exportsMap, './cordisHost', 'require');
   await access(esmPath);
   await access(cjsPath);
   const esm = (await import(pathToFileURL(esmPath).href)) as unknown as CordisHostModule;

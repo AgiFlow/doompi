@@ -8,8 +8,8 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerBundleEntry,
   type DoomServerHostService,
-} from '@agimon-ai/doompi-core/server-facet';
-import { DOOM_VOICE_AUTO_MODE_ID } from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/serverFacet';
+import { DOOM_VOICE_AUTO_MODE_ID } from '@agimon-ai/doompi-core/voiceTools';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 

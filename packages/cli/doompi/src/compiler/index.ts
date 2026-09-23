@@ -4,7 +4,7 @@ import { builtinModules, createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { optionalPackageEntry } from '@agimon-ai/doompi-core/module-resolution';
+import { optionalPackageEntry } from '@agimon-ai/doompi-core/moduleResolution';
 import type { LogLevel, LogOrStringHandler, OutputAsset, OutputChunk, RolldownLog, RolldownOutput } from 'rolldown';
 
 import {

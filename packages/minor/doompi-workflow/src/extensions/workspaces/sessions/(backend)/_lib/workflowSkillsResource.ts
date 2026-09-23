@@ -1,4 +1,4 @@
-import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
 
 export function workflowSkillsResource(
   resources: PiPluginContributions['resources'],

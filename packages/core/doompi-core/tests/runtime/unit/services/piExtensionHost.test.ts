@@ -372,6 +372,13 @@ describe('Pi lifecycle events in the headless host', () => {
   it('dispatches agent, turn, message and tool events in Pi order without rereading history', async () => {
     const seen: string[] = [];
     const branchAtTurnEnd: string[][] = [];
+    const turnEndBoundaries: Array<{
+      messageEntryId: string;
+      toolResultEntryIds: string[];
+      outcome: string;
+      contextMessages: AgentMessage[];
+      canContinue: boolean;
+    }> = [];
     const handlers = new Map<string, unknown>();
     for (const type of [
       'agent_start',
@@ -386,10 +393,33 @@ describe('Pi lifecycle events in the headless host', () => {
       'agent_settled',
     ]) {
       handlers.set(type, [
-        vi.fn((event: { type: string }, context: { sessionManager: SessionManager }) => {
+        vi.fn((event: { type: string; [key: string]: unknown }, context: { sessionManager: SessionManager }) => {
           seen.push(event.type);
-          if (event.type === 'turn_end')
+          if (event.type === 'turn_end') {
             branchAtTurnEnd.push(context.sessionManager.getBranch().map((entry) => entry.id));
+            if (
+              typeof event.messageEntryId === 'string' &&
+              Array.isArray(event.toolResultEntryIds) &&
+              typeof event.outcome === 'string' &&
+              typeof event.context === 'object' &&
+              event.context !== null &&
+              'contextMessages' in event.context &&
+              'canContinue' in event.context &&
+              Array.isArray(event.context.contextMessages) &&
+              event.context.contextMessages.every((message) => typeof message === 'object' && message !== null) &&
+              typeof event.context.canContinue === 'boolean'
+            ) {
+              turnEndBoundaries.push({
+                messageEntryId: event.messageEntryId,
+                toolResultEntryIds: event.toolResultEntryIds.filter(
+                  (entryId): entryId is string => typeof entryId === 'string',
+                ),
+                outcome: event.outcome,
+                contextMessages: event.context.contextMessages,
+                canContinue: event.context.canContinue,
+              });
+            }
+          }
         }),
       ]);
     }
@@ -491,6 +521,15 @@ describe('Pi lifecycle events in the headless host', () => {
       'agent_settled',
     ]);
     expect(branchAtTurnEnd).toEqual([['user-1', 'assistant-1']]);
+    expect(turnEndBoundaries).toEqual([
+      {
+        messageEntryId: 'assistant-1',
+        toolResultEntryIds: [],
+        outcome: 'completed',
+        contextMessages: [user, assistant],
+        canContinue: false,
+      },
+    ]);
     expect(readEntries).toHaveBeenCalledTimes(1);
   });
 

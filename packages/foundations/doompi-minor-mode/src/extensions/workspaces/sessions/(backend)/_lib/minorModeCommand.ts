@@ -7,8 +7,6 @@ import {
   MINOR_MODE_COMMAND_DESCRIPTION,
 } from '../../../../../services/command';
 
-export { actionsFor, matchMinorMode, MINOR_MODE_COMMAND } from '../../../../../services/command';
-
 function sessionKindOf(ctx: ExtensionContext): MinorModeSessionKind {
   return ctx.hasUI && ctx.mode === 'tui' ? 'tui' : 'headless';
 }

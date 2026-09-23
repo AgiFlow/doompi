@@ -345,7 +345,7 @@ function wrapField(field: string, target: BuildTarget, rendered: string, options
 /** The server entry imports only the types its scopes actually use. */
 function serverImport(scopes: readonly string[]): string {
   const types = scopes.some((line) => line.includes('get ')) ? ['type DoomServerSessionPlugin'] : [];
-  return `import { ${['defineServerPlugin', ...types].join(', ')} } from '@agimon-ai/doompi-core/server-facet';`;
+  return `import { ${['defineServerPlugin', ...types].join(', ')} } from '@agimon-ai/doompi-core/serverFacet';`;
 }
 
 /** The CLI entry imports only what its body and inferred options use. */
@@ -357,7 +357,7 @@ function cliImport(body: readonly string[], infersOptions: boolean): string {
     ...(body.some((line) => line.includes('at(')) || infersOptions ? ['type PiPluginContext'] : []),
     ...(body.some((line) => line.includes(CONTRIBUTIONS_TYPE.cli)) ? [`type ${CONTRIBUTIONS_TYPE.cli}`] : []),
   ];
-  return `import { ${[...named, ...types].join(', ')} } from '@agimon-ai/doompi-core/pi-extension';`;
+  return `import { ${[...named, ...types].join(', ')} } from '@agimon-ai/doompi-core/piExtension';`;
 }
 
 /**
@@ -600,7 +600,7 @@ export function renderCliEntry(resolution: TargetResolution, options: RenderOpti
   return compact([
     HEADER,
     cliImport([...prologue, ...body], infersOptions),
-    ...(roots.length > 0 ? ["import { composeRootHooks } from '@agimon-ai/doompi-core/extension-file';"] : []),
+    ...(roots.length > 0 ? ["import { composeRootHooks } from '@agimon-ai/doompi-core/extensionFile';"] : []),
     '',
     ...importsFor(bindings, hatches, roots, options.entryDir),
     '',
@@ -662,7 +662,7 @@ export function renderServerEntry(resolution: TargetResolution, options: RenderO
   return compact([
     HEADER,
     serverImport(scopes),
-    ...(usesRoots ? ["import { composeRootHooks } from '@agimon-ai/doompi-core/extension-file';"] : []),
+    ...(usesRoots ? ["import { composeRootHooks } from '@agimon-ai/doompi-core/extensionFile';"] : []),
     '',
     ...importsFor(bindings, hatches, allRoots, options.entryDir),
     '',
@@ -683,7 +683,7 @@ export function renderMcpEntry(resolution: TargetResolution, options: RenderOpti
   const body = bodyFor(bindings, '    ', () => 'context', 'mcp', options);
   return compact([
     HEADER,
-    "import { defineMcpPlugin, type DoomMcpSessionPlugin } from '@agimon-ai/doompi-core/mcp-facet';",
+    "import { defineMcpPlugin, type DoomMcpSessionPlugin } from '@agimon-ai/doompi-core/mcpFacet';",
     '',
     ...importsFor(bindings, [], [], options.entryDir),
     '',

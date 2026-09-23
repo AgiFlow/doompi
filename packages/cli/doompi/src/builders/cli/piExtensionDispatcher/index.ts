@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { DOOM_PACKAGE_NAME, manifestName } from '@agimon-ai/doompi-core/doom-package';
-import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
+import { DOOM_PACKAGE_NAME, manifestName } from '@agimon-ai/doompi-core/doomPackage';
+import { writeFileAtomic } from '@agimon-ai/doompi-core/runtimeJson';
 import {
   DOOMPI_API_VERSION,
   LEGACY_SYNC_REGISTRATION_VERSION,
   SYNC_REGISTRATION_VERSION,
-} from '@agimon-ai/doompi-core/sync-registration';
+} from '@agimon-ai/doompi-core/syncRegistration';
 
 /** Protocol marker proving that the user package path is managed by DoomPi init. */
 export const PI_DISPATCHER_VERSION = 1;

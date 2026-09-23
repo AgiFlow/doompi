@@ -2,16 +2,16 @@ import fs from 'node:fs';
 
 import { loadMajorModesConfig, filterHookDisabledLayers, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { readDoomConfigContextGeneration, requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { alreadyComposed } from '@agimon-ai/doompi-core/child-process';
+import { alreadyComposed } from '@agimon-ai/doompi-core/childProcess';
 import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
 import {
   connectDoomCordisHost,
   DOOM_CORDIS_SESSION_SERVICE,
   type DoomCordisSessionService,
-} from '@agimon-ai/doompi-core/cordis-host';
+} from '@agimon-ai/doompi-core/cordisHost';
 import { type DoomTransitionCoordinator, DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-core/transition';
 import type { TransitionSelectionSnapshot, TransitionSynchronization } from '@agimon-ai/doompi-core/transition';
-import { createDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition-coordinator';
+import { createDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transitionCoordinator';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 

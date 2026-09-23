@@ -2,17 +2,17 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type DoomBackgroundWorkService,
   readDoomBackgroundWorkService,
-} from '@agimon-ai/doompi-core/background-work';
+} from '@agimon-ai/doompi-core/backgroundWork';
 import {
   DOOM_DELEGATION_SERVICE,
   type DoomDelegationService,
   readDoomDelegationService,
-} from '@agimon-ai/doompi-team/delegation-api';
+} from '@agimon-ai/doompi-team/delegationApi';
 import {
   DOOM_SUBAGENT_POLICY_SERVICE,
   type DoomSubagentPolicyService,
   readDoomSubagentPolicyService,
-} from '@agimon-ai/doompi-team/runtime-subagent-policy';
+} from '@agimon-ai/doompi-team/runtimeSubagentPolicy';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 

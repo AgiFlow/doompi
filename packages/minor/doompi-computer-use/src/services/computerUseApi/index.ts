@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
 import {
   doomApiCallerFrom,
   type DoomApi,
   type DoomApiContext,
   type DoomApiHandler,
-} from '@agimon-ai/doompi-core/package-api';
+} from '@agimon-ai/doompi-core/packageApi';
 
 import routes from '../../types/apiRoutes';
 import {

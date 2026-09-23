@@ -33,7 +33,7 @@ function numberInput(value: unknown, fallback: number): number {
 }
 
 import { type DoomHeadlessExecutionContext, type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
-import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
 export function createSessionState(host: DoomHeadlessHostService): DoomServerSessionPlugin {
   let launchers: DoomLoopLaunchersService | undefined;
   let defaultRegistration: LoopLauncherRegistration | undefined;

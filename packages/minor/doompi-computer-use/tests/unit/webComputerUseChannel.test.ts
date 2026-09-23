@@ -1,4 +1,4 @@
-import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hubChannel';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createComputerUseChannel } from '../../src/services/webComputerUseChannel';

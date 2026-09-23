@@ -1,4 +1,4 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoutedContribution } from '@agimon-ai/doompi-core/extensionFile';
 
 import legacy from '../../_lib/index.server';
 

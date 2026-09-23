@@ -1,4 +1,4 @@
-import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/toolSurface';
 import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
 
 import { COMPUTER_USE_TOOL_NAMES } from '../constants/computerUse';

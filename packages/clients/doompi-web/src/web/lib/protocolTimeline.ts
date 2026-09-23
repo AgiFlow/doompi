@@ -3,7 +3,7 @@ import type {
   ToolTranscriptItem,
   TranscriptItem,
   UserTranscriptItem,
-} from '@agimon-ai/doompi-core/session-protocol';
+} from '@agimon-ai/doompi-core/sessionProtocol';
 import type { ToolResultView } from '@agimon-ai/doompi-core/web';
 
 import {

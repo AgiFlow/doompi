@@ -4,6 +4,7 @@
   "sourceRoot": "packages/core/doompi-core/src",
   "projectType": "library",
   "tags": ["stage:active"],
+  "implicitDependencies": ["!@agimon-ai/vibe-lint-plugin-doom-core"],
   "sourceTemplate": "doom-core",
   "targets": {
     "test": {

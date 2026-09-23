@@ -1,8 +1,8 @@
 import {
   VOICE_RELOAD_HANDOFF_REGISTRY_KEY,
   VOICE_RELOAD_HANDOFF_TTL_MS,
-} from '@agimon-ai/doompi-core/voice-reload-handoff';
-import { createVoiceReloadHandoffStore, VoiceReloadHandoffError } from '@agimon-ai/doompi-core/voice-reload-handoff';
+} from '@agimon-ai/doompi-core/voiceReloadHandoff';
+import { createVoiceReloadHandoffStore, VoiceReloadHandoffError } from '@agimon-ai/doompi-core/voiceReloadHandoff';
 import { describe, expect, it } from 'vitest';
 
 import { createDoomVoiceToolsService } from '../../src/services/voiceTools';

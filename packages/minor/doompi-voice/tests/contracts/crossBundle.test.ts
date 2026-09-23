@@ -70,8 +70,8 @@ function conditionPath(exportsMap: Record<string, unknown>, subpath: string, con
 async function loadBuiltVoiceRuntimes(): Promise<{ esm: VoiceRuntimeModule; cjs: VoiceRuntimeModule }> {
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as PackageManifest;
   const exportsMap = manifest.exports ?? {};
-  const esmPath = conditionPath(exportsMap, './voice-tools', 'import');
-  const cjsPath = conditionPath(exportsMap, './voice-tools', 'require');
+  const esmPath = conditionPath(exportsMap, './voiceTools', 'import');
+  const cjsPath = conditionPath(exportsMap, './voiceTools', 'require');
   await access(esmPath);
   await access(cjsPath);
   const esm = (await import(pathToFileURL(esmPath).href)) as unknown as VoiceRuntimeModule;
@@ -85,8 +85,8 @@ async function loadBuiltVoiceReloadHandoffRuntimes(): Promise<{
 }> {
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as PackageManifest;
   const exportsMap = manifest.exports ?? {};
-  const esmPath = conditionPath(exportsMap, './voice-reload-handoff', 'import');
-  const cjsPath = conditionPath(exportsMap, './voice-reload-handoff', 'require');
+  const esmPath = conditionPath(exportsMap, './voiceReloadHandoff', 'import');
+  const cjsPath = conditionPath(exportsMap, './voiceReloadHandoff', 'require');
   await access(esmPath);
   await access(cjsPath);
   const esm = (await import(pathToFileURL(esmPath).href)) as unknown as VoiceReloadHandoffModule;

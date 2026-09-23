@@ -126,7 +126,7 @@ The backend scope root owns service injection and startup work. It returns Cordi
 
 Remote MCP is opt-in. Author `tool/[name].mcp.ts`, `skill/[name].mcp.ts`, or `resource/[name].mcp.ts` below a session backend scope and build it with `tsdown.mcp.config.ts`. The generated MCP entry is admitted with package ownership and integrity checks. It has its own session surface, so local tools, server resources, and Pi contributions never become remote MCP capabilities by inference. MCP declarations may read explicitly mounted services from their MCP context, but must not import a generic server registration root.
 
-MCP App resources use `defineMcpUiResource` from `@agimon-ai/doompi-core/mcp-facet` and contribute to `uiResources`. Their MIME type is `text/html;profile=mcp-app`. A tool links to its own package's resource through `_meta.ui.resourceUri`; duplicate resource URIs and cross-package references are rejected. Tools default to model-only UI visibility. A widget-callable tool explicitly declares `_meta.ui.visibility: ['model', 'app']`. Visibility is a host UI policy, not a replacement for the server's grant checks.
+MCP App resources use `defineMcpUiResource` from `@agimon-ai/doompi-core/mcpFacet` and contribute to `uiResources`. Their MIME type is `text/html;profile=mcp-app`. A tool links to its own package's resource through `_meta.ui.resourceUri`; duplicate resource URIs and cross-package references are rejected. Tools default to model-only UI visibility. A widget-callable tool explicitly declares `_meta.ui.visibility: ['model', 'app']`. Visibility is a host UI policy, not a replacement for the server's grant checks.
 
 The resource's `read()` loads immutable, session-independent HTML without an execution context. Use a content-addressed URI and keep all session data in tool results. The host may prefetch the template before a tool runs, without conversation metadata or child-session creation. Resource listing and reads are limited to templates linked to granted, active tools. Conversation-bound refreshes still run through the authenticated tool path, never through a browser-supplied session ID.
 
@@ -308,7 +308,7 @@ Every scanned file directly default-exports exactly one typed `define*` declarat
 
 ```ts
 // (backend)/tool/write-plan.server.ts
-import { defineTool } from '@agimon-ai/doompi-core/extension-file';
+import { defineTool } from '@agimon-ai/doompi-core/extensionFile';
 
 export default defineTool((context) => ({
   description: 'Write the plan',
@@ -319,7 +319,7 @@ export default defineTool((context) => ({
 }));
 ```
 
-Backend helpers come from `@agimon-ai/doompi-core/extension-file`; frontend helpers come from `@agimon-ai/doompi-core/web`. Derived identity keys remain optional because an explicit legacy identity may win. Backend helpers accept either a declaration or a mount-context factory. Frontend declarations remain data because the cockpit starts them separately.
+Backend helpers come from `@agimon-ai/doompi-core/extensionFile`; frontend helpers come from `@agimon-ai/doompi-core/web`. Derived identity keys remain optional because an explicit legacy identity may win. Backend helpers accept either a declaration or a mount-context factory. Frontend declarations remain data because the cockpit starts them separately.
 
 Portable and native tools use different helpers. `defineTool` marks a portable declaration for host adaptation. `defineServerTool` and `defineCliTool` preserve native host contracts.
 

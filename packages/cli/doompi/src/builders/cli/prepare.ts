@@ -1,8 +1,8 @@
 import os from 'node:os';
 
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
-import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
+import { resolveSyncLocation } from '@agimon-ai/doompi-core/syncLocation';
 
 import { ensureLayerPackages } from '../../composition/layerPackageInstaller';
 import {

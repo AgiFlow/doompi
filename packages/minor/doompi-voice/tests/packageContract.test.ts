@@ -85,8 +85,8 @@ describe('doom voice package boundary', () => {
     expect(manifest.private).toBeUndefined();
     expect(manifest.type).toBe('module');
     expect(manifest.publishConfig?.access).toBe('public');
-    expect(manifest.peerDependencies?.[piPackage]).toBe('0.86.0');
-    expect(manifest.devDependencies?.[piPackage]).toBe('0.86.0');
+    expect(manifest.peerDependencies?.[piPackage]).toBe('0.87.1');
+    expect(manifest.devDependencies?.[piPackage]).toBe('0.87.1');
     expect(manifest.dependencies?.['sherpa-onnx-node']).toBe('1.13.8');
   });
 
@@ -108,7 +108,7 @@ describe('doom voice package boundary', () => {
       entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
-      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/apiContracts.mjs' },
     });
   });
 
@@ -144,12 +144,12 @@ describe('doom voice package boundary', () => {
     );
 
     expect(publicEntries.length).toBeGreaterThan(0);
-    expect(exportsMap['./voice-tools']).toEqual({
+    expect(exportsMap['./voiceTools']).toEqual({
       types: './dist/voiceTools.d.mts',
       import: './dist/voiceTools.mjs',
       require: './dist/voiceTools.cjs',
     });
-    expect(exportsMap['./voice-reload-handoff']).toEqual({
+    expect(exportsMap['./voiceReloadHandoff']).toEqual({
       types: './dist/voiceReloadHandoff.d.mts',
       import: './dist/voiceReloadHandoff.mjs',
       require: './dist/voiceReloadHandoff.cjs',

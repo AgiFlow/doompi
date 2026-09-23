@@ -1,4 +1,4 @@
-import { defineMcpUiResource } from '@agimon-ai/doompi-core/mcp-facet';
+import { defineMcpUiResource } from '@agimon-ai/doompi-core/mcpFacet';
 
 import { sessionAppHtml, sessionAppUri } from '../../../../../../generated/mcp-apps/session';
 

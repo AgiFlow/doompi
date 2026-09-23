@@ -1,4 +1,4 @@
-import type { PackageAttribution } from '@agimon-ai/doompi-core/context-projection';
+import type { PackageAttribution } from '@agimon-ai/doompi-core/contextProjection';
 import { describe, expect, it } from 'vitest';
 
 import type { ContextSkillInventory as SkillEntry } from '../../../src/services/contextProjection';

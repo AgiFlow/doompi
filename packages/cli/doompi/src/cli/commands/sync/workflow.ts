@@ -2,8 +2,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
-import { acquireSyncLocationLock, resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
+import { acquireSyncLocationLock, resolveSyncLocation } from '@agimon-ai/doompi-core/syncLocation';
 
 import { ensureLayerPackages, type LayerPackageResult } from '../../../composition/layerPackageInstaller';
 import { readSyncDrift } from '../../../composition/syncDrift';

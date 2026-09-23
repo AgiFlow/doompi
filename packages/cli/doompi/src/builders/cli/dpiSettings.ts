@@ -2,9 +2,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { piCliPath } from '@agimon-ai/doompi-core/module-resolution';
-import { piAgentDirectory } from '@agimon-ai/doompi-core/runtime-pi-settings';
-import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
+import { piCliPath } from '@agimon-ai/doompi-core/moduleResolution';
+import { piAgentDirectory } from '@agimon-ai/doompi-core/runtimePiSettings';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
 import type { SettingsManager, SettingsManagerCreateOptions } from '@earendil-works/pi-coding-agent';
 
 import { findRepositoryRoot } from '../../composition/repository';

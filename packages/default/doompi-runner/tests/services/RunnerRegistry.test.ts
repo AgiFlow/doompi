@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
+import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/childProcess';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { IRunnerPaths } from '../../src/services/runnerPaths/type';

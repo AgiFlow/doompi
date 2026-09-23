@@ -1,4 +1,4 @@
-import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voice-reload-handoff';
+import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voiceReloadHandoff';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
@@ -8,7 +8,7 @@ export interface MajorModeCommandDependencies {
   readonly cordisContext: () => Context;
   readonly currentView: (ctx: ExtensionContext) => Promise<MajorModeView>;
   readonly reloadHandoffs: VoiceReloadHandoffStore;
-  readonly loadPicker: () => Promise<typeof import('@agimon-ai/doompi-ui/matrix-picker')>;
+  readonly loadPicker: () => Promise<typeof import('@agimon-ai/doompi-ui/matrixPicker')>;
   readonly loadSelectionSwitch: () => Promise<typeof import('@agimon-ai/doompi-config/selectionSwitch')>;
   readonly loadConfigJournal: () => Promise<typeof import('@agimon-ai/doompi-config/piContext')>;
   readonly resolveLayers: (config: MajorModeView['config'], majorMode: string) => string[];

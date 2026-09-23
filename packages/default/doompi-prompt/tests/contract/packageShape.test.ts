@@ -86,7 +86,7 @@ describe('doompi-prompt package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
-      './api-contracts',
+      './apiContracts',
       './extensions/pi',
       './extensions/server',
       './extensions/web',
@@ -102,7 +102,7 @@ describe('doompi-prompt package contract', () => {
       require: './dist/extensions/server.cjs',
     });
     expect(manifest.doompiServer).toEqual({
-      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/apiContracts.mjs' },
       entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
@@ -158,7 +158,7 @@ describe('doompi-prompt package contract', () => {
   it('pins matching Pi peer and development versions', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.86.0');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.86.0');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
   });
 });

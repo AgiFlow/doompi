@@ -232,8 +232,10 @@ describe('global remote control', () => {
       method: 'POST',
       headers: { 'x-doompi-token': 'browser-secret', 'content-type': 'application/json' },
       body: JSON.stringify({
-        scope: 'session',
+        name: 'ChatGPT',
         redirectUri: 'https://chatgpt.com/connector/oauth/callback',
+        tools: ['read'],
+        skills: [],
       }),
     });
     expect(created.status).toBe(201);

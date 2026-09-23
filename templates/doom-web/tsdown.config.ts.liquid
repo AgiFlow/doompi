@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'tsdown';
-import { ensureBuiltinWebPluginModules } from '@agimon-ai/doompi/builders/web';
+import { ensureBuiltinWebPluginModules } from '@agimon-ai/doompi/webBuilder';
 
 // Both build halves refresh the committed builtin registry at config load; CI
 // only checks, so a stale committed registry fails the build loudly.
@@ -19,7 +19,7 @@ export default defineConfig({
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },
   exports: false,
-  format: ['esm', 'cjs'],
+  format: { esm: {}, cjs: { dts: false } },
   minify: {
     compress: true,
     mangle: { toplevel: true },

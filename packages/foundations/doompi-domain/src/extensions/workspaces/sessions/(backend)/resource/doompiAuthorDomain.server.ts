@@ -1,5 +1,5 @@
-import { defineResource } from '@agimon-ai/doompi-core/extension-file';
-import { readPackageResource } from '@agimon-ai/doompi-core/server-facet';
+import { defineResource } from '@agimon-ai/doompi-core/extensionFile';
+import { readPackageResource } from '@agimon-ai/doompi-core/serverFacet';
 
 export default defineResource({
   name: 'doompi-author-domain',

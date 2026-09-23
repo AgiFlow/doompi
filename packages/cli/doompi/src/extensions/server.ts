@@ -1,8 +1,8 @@
-import { machineApi } from '@agimon-ai/doompi-core/machine-api';
-import { remoteApi } from '@agimon-ai/doompi-core/remote-api';
-import { api } from '@agimon-ai/doompi-core/runtime-context-api';
-import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
-import { sessionFilesApi } from '@agimon-ai/doompi-core/session-files-api';
+import { machineApi } from '@agimon-ai/doompi-core/machineApi';
+import { remoteApi } from '@agimon-ai/doompi-core/remoteApi';
+import { api } from '@agimon-ai/doompi-core/runtimeContextApi';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/serverFacet';
+import { sessionFilesApi } from '@agimon-ai/doompi-core/sessionFilesApi';
 
 export const doompiServerFacet = defineServerPlugin({
   name: '@agimon-ai/doompi',

@@ -61,7 +61,7 @@ function isClient(value: unknown): value is SessionMcpClient {
     value.tokenEndpointAuthMethod === 'client_secret_post' &&
     typeof value.createdAt === 'number' &&
     (value.scope === undefined || value.scope === 'restricted' || value.scope === 'session') &&
-    (value.routing === undefined || value.routing === 'session' || value.routing === 'conversation') &&
+    (value.routing === undefined || value.routing === 'conversation') &&
     isStringArray(value.tools) &&
     isStringArray(value.skills) &&
     typeof value.audience === 'string'
@@ -77,7 +77,7 @@ function clientMetadata(value: unknown): SessionMcpClient | undefined {
     tokenEndpointAuthMethod: value.tokenEndpointAuthMethod,
     createdAt: value.createdAt,
     scope: value.scope === 'session' ? 'session' : 'restricted',
-    ...(value.routing === undefined ? {} : { routing: value.routing }),
+    routing: 'conversation',
     tools: value.tools,
     skills: value.skills,
     audience: value.audience,
@@ -144,10 +144,10 @@ export async function createSessionMcpClient(
     { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(input) },
     (body) => (isCreatedClient(body.client) ? { client: body.client } : undefined),
   );
-  if ('client' in result && (result.client.routing ?? 'session') !== (input.routing ?? 'session'))
+  if ('client' in result && result.client.routing !== 'conversation')
     return {
       error:
-        'The host did not enable the requested routing mode. Restart an updated host before creating this connection.',
+        'The host did not enable automatic per-conversation worktrees. Restart an updated host before creating this connection.',
     };
   return result;
 }
@@ -161,26 +161,6 @@ export async function revokeSessionMcpClient(
     `${route(workspaceId, sessionId)}/clients/${encodeURIComponent(clientId)}`,
     { method: 'DELETE', headers: { 'X-Doompi-Mcp-Csrf': '1' } },
     (body) => (body.ok === true ? { ok: true } : undefined),
-  );
-}
-
-export async function setupSessionMcpDirectory(
-  workspaceId: string,
-  parentSessionId: string,
-  reservationId: string,
-  cwd: string,
-): Promise<SessionMcpResult<{ sessionId: string }>> {
-  return request(
-    `${route(workspaceId, parentSessionId)}/conversations/${encodeURIComponent(reservationId)}`,
-    {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ cwd }),
-    },
-    (body) =>
-      isRecord(body.session) && typeof body.session.sessionId === 'string' && body.session.sessionId === reservationId
-        ? { sessionId: body.session.sessionId }
-        : undefined,
   );
 }
 

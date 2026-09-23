@@ -9,7 +9,7 @@
  * WorkflowsActivitySection.stories.tsx does.
  */
 import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import type { WorkflowRunView } from '../../../../../types/webWorkflows';
 import { workflows } from '../_lib/workflowsStore';

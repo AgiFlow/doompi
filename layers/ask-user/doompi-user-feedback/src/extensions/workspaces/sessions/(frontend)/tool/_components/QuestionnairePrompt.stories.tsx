@@ -9,7 +9,7 @@
  * time and the arrow keys walk the rest, which a screenshot cannot press.
  */
 import type { ToolPromptDialog } from '@agimon-ai/doompi-core/web';
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import { QuestionnairePrompt } from './QuestionnairePrompt';
 

@@ -2,10 +2,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { bundleAssetPolicyPlugin } from '@agimon-ai/doompi/builders/web';
-import { ensureBuiltinWebPluginModules, writeSyncWebPluginModules } from '@agimon-ai/doompi/builders/web';
-import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
-import { readDevPluginRoots, webPluginCssAlias, webPluginOverridePlugin } from '@agimon-ai/doompi/builders/web';
+import { bundleAssetPolicyPlugin } from '@agimon-ai/doompi/webBuilder';
+import { ensureBuiltinWebPluginModules, writeSyncWebPluginModules } from '@agimon-ai/doompi/webBuilder';
+import { scanWebPlugins } from '@agimon-ai/doompi/webBuilder';
+import { readDevPluginRoots, webPluginCssAlias, webPluginOverridePlugin } from '@agimon-ai/doompi/webBuilder';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { type Alias, defineConfig, type Plugin } from 'vite';

@@ -5,12 +5,12 @@ import {
   consumerPackageEntry,
   localPackageExport,
   splitPackageSpecifier,
-} from '@agimon-ai/doompi-core/module-resolution';
+} from '@agimon-ai/doompi-core/moduleResolution';
 import {
   isSandboxHarnessModule,
   SANDBOX_HARNESS_EXPORT_SUBPATH,
   type SandboxHarnessModule,
-} from '@agimon-ai/doompi-core/sandbox-harness';
+} from '@agimon-ai/doompi-core/sandboxHarness';
 
 export interface SandboxHarnessResolution {
   /** Configured package specifier that answered for the sandbox subpath. */

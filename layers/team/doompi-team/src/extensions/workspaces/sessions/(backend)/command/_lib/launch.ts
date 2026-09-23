@@ -1,6 +1,6 @@
 /** Shared CLI launch and status helpers used by /run, /parallel, and the agent catalog. */
 
-import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import type { SkillDiscoveryContract } from '../../../../../../services/agentSkills';

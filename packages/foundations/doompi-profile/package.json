@@ -36,7 +36,7 @@
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.cts",
+  "types": "./dist/index.d.mts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
     ".": {
@@ -44,10 +44,10 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./api-contracts": {
-      "types": "./dist/api-contracts.d.mts",
-      "import": "./dist/api-contracts.mjs",
-      "require": "./dist/api-contracts.cjs"
+    "./apiContracts": {
+      "types": "./dist/apiContracts.d.mts",
+      "import": "./dist/apiContracts.mjs",
+      "require": "./dist/apiContracts.cjs"
     },
     "./extensions/persona": {
       "types": "./dist/extensions/persona.d.mts",
@@ -95,8 +95,8 @@
     "@agimon-ai/doompi-voice": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
-    "@earendil-works/pi-coding-agent": "0.86.0",
-    "@earendil-works/pi-tui": "0.86.0",
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-tui": "0.87.1",
     "@types/node": "26.6.1",
     "@vitest/coverage-v8": "5.0.1",
     "tsdown": "0.23.0",
@@ -105,8 +105,8 @@
   },
   "peerDependencies": {
     "@agimon-ai/doompi-core": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.86.0",
-    "@earendil-works/pi-tui": "0.86.0"
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-tui": "0.87.1"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
@@ -137,7 +137,7 @@
     ],
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
-      "dist": "./dist/api-contracts.mjs"
+      "dist": "./dist/apiContracts.mjs"
     }
   },
   "doompiWeb": {

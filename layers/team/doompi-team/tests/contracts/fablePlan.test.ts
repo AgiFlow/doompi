@@ -8,7 +8,7 @@ import {
   FablePlanResultSchema,
   FablePlanStartSchema,
   readDoomFablePlanService,
-} from '@agimon-ai/doompi-team/fable-plan-api';
+} from '@agimon-ai/doompi-team/fablePlanApi';
 import { Context } from '@deepseek-ai/cordis';
 import { Check } from 'typebox/value';
 import { describe, expect, it, vi } from 'vitest';

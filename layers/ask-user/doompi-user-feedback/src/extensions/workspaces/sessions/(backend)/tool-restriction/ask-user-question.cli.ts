@@ -1,4 +1,4 @@
-import { defineToolRestriction } from '@agimon-ai/doompi-core/extension-file';
+import { defineToolRestriction } from '@agimon-ai/doompi-core/extensionFile';
 
 import contribution from './_lib/ask-user-question.cli';
 

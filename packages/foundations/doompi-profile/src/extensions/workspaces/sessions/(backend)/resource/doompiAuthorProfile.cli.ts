@@ -1,4 +1,4 @@
-import { defineResource } from '@agimon-ai/doompi-core/extension-file';
+import { defineResource } from '@agimon-ai/doompi-core/extensionFile';
 const PACKAGE_SOURCE = '@agimon-ai/doompi-profile';
 export default defineResource({
   source: PACKAGE_SOURCE,

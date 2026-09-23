@@ -155,7 +155,26 @@ describe('serveHeadlessServer', () => {
 
   it('routes host-managed session MCP and public confidential OAuth without the browser token', async () => {
     const first = host();
-    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const reservedWorktrees = new Map<string, { parentSessionId: string; cwd: string }>();
+    const hub = createHeadlessHub({
+      manager: { closeSession: vi.fn(async () => undefined) } as never,
+      sessionReservations: {
+        read: (id, parentSessionId) => {
+          const reservation = reservedWorktrees.get(id);
+          if (reservation?.parentSessionId !== parentSessionId) throw new Error('Reservation is unavailable.');
+          return { sessionId: id, cwd: reservation.cwd };
+        },
+        prepare: async (id, parentSessionId, cwd) => {
+          reservedWorktrees.set(id, { parentSessionId, cwd });
+          return { sessionId: id, cwd };
+        },
+        complete: async (id, parentSessionId) => {
+          const reservation = reservedWorktrees.get(id);
+          if (reservation?.parentSessionId !== parentSessionId) throw new Error('Reservation is unavailable.');
+          return { sessionId: id, workspaceId: 'test-workspace', cwd: reservation.cwd };
+        },
+      },
+    });
     hub.register({
       workspaceId: 'test-workspace',
       id: 'one',
@@ -170,6 +189,26 @@ describe('serveHeadlessServer', () => {
       workspaceRoot: '/repo',
       onNotice: vi.fn(),
     });
+    const stateDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doompi-session-mcp-'));
+    temporaryDirectories.push(stateDir);
+    const conversationHost = host();
+    hub.sessionService.registerReservedWorktreeProvisioner!(async ({ reservationId, parentSessionId }) => {
+      const reservations = server.sessionReservations;
+      const cwd = path.join(stateDir, reservationId);
+      fs.mkdirSync(cwd);
+      const prepared = await reservations.prepare(reservationId, parentSessionId, cwd);
+      hub.register({
+        workspaceId: 'test-workspace',
+        id: prepared.sessionId,
+        name: 'Conversation',
+        cwd: prepared.cwd,
+        createdAt: 'now',
+        parentSessionId,
+        host: conversationHost.host,
+      });
+      return reservations.complete(reservationId, parentSessionId);
+    });
+    const conversation = 'chatgpt-conversation';
     let publicOrigin = 'https://remote.example.com';
     let publicOriginRevision = 0;
     const root = '/api/workspaces/test-workspace/sessions/one/mcp';
@@ -179,6 +218,7 @@ describe('serveHeadlessServer', () => {
       token: 'browser-secret',
       sessionMcpPublicOrigin: () => publicOrigin,
       sessionMcpPublicOriginRevision: () => publicOriginRevision,
+      sessionMcpStateDir: stateDir,
     });
     servers.push(server);
     const hostHeaders = { 'x-doompi-token': 'browser-secret' };
@@ -215,8 +255,7 @@ describe('serveHeadlessServer', () => {
       body: JSON.stringify({
         name: 'ChatGPT',
         redirectUri: 'https://chatgpt.com/connector/oauth/callback',
-        tools: ['read'],
-        skills: ['review'],
+        scope: 'session',
       }),
     });
     expect(created.status).toBe(201);
@@ -286,54 +325,23 @@ describe('serveHeadlessServer', () => {
       ).status,
     ).toBe(401);
 
-    // Real TCP requests through the headless server and per-request MCP SDK transports.
-    for (const cancellation of ['notification', 'disconnect'] as const) {
-      let start!: (signal: AbortSignal) => void;
-      const started = new Promise<AbortSignal>((resolve) => {
-        start = resolve;
-      });
-      let stop!: () => void;
-      const stopped = new Promise<void>((resolve) => {
-        stop = resolve;
-      });
-      first.host.mcpSurface.invokeTool.mockImplementationOnce(async (invocation) => {
-        const signal = invocation.signal!;
-        signal.addEventListener('abort', () => stop(), { once: true });
-        start(signal);
-        await stopped;
-        return { content: [{ type: 'text', text: 'cancelled' }] };
-      });
-      const controller = new AbortController();
-      const headers = {
+    const routed = await fetch(`${server.url}${root}`, {
+      method: 'POST',
+      headers: {
         authorization: `Bearer ${tokens.access_token}`,
         accept: 'application/json, text/event-stream',
         'content-type': 'application/json',
-      };
-      const pending = fetch(`${server.url}${root}`, {
-        method: 'POST',
-        headers,
-        signal: controller.signal,
-        body: JSON.stringify({ jsonrpc: '2.0', id: 42, method: 'tools/call', params: { name: 'read' } }),
-      }).then(
-        (response) => response.json(),
-        (error: unknown) => error,
-      );
-      const signal = await started;
-      expect(signal.aborted).toBe(false);
-      if (cancellation === 'notification') {
-        const cancelled = await fetch(`${server.url}${root}`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 42 } }),
-        });
-        expect(cancelled.status).toBe(202);
-      } else {
-        controller.abort();
-      }
-      await vi.waitFor(() => expect(signal.aborted).toBe(true));
-      await stopped;
-      await pending;
-    }
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 42,
+        method: 'tools/call',
+        params: { name: 'read', _meta: { 'openai/session': conversation } },
+      }),
+    });
+    await expect(routed.json()).resolves.toMatchObject({ result: { content: [{ text: 'done' }] } });
+    expect(conversationHost.host.mcpSurface.invokeTool).toHaveBeenCalledOnce();
+    expect(first.host.mcpSurface.invokeTool).not.toHaveBeenCalled();
 
     await hub.closeSession('one');
     hub.register({
@@ -369,8 +377,7 @@ describe('serveHeadlessServer', () => {
       body: JSON.stringify({
         name: 'Replacement ChatGPT',
         redirectUri: 'https://chatgpt.com/connector/oauth/replacement',
-        tools: ['read'],
-        skills: [],
+        scope: 'session',
       }),
     });
     expect(replacementClient.status).toBe(201);

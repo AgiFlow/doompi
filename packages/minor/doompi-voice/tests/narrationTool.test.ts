@@ -2,7 +2,7 @@ import {
   VOICE_FACADE_TOOL_NAMES,
   VOICE_MODE_TOOL_NAMES,
   VOICE_NARRATE_TOOL_NAME,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 

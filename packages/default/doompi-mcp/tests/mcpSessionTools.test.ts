@@ -1,4 +1,4 @@
-import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 import { describe, expect, it, vi } from 'vitest';
 
 import projectSessionTools from '../src/extensions/workspaces/sessions/(backend)/tool/session_mcp.mcp';

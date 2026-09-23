@@ -9,8 +9,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { RmuxBackend } from '@agimon-ai/doompi-runner/rmux-backend';
-import type { IRunnerPaths } from '@agimon-ai/doompi-runner/runner-paths';
+import { RmuxBackend } from '@agimon-ai/doompi-runner/rmuxBackend';
+import type { IRunnerPaths } from '@agimon-ai/doompi-runner/runnerPaths';
 
 import {
   FORBIDDEN_PACK_CONTENT,
@@ -31,10 +31,10 @@ const NON_SOURCE_FILE_SUFFIXES = ['.map', '.d.mts', '.d.cts'] as const;
 const UTF8_ENCODING = 'utf8';
 const NEWLINE = '\n';
 const PUBLIC_HOST_DEPENDENCIES: Readonly<Record<string, string>> = {
-  '@earendil-works/pi-agent-core': '0.86.0',
-  '@earendil-works/pi-ai': '0.86.0',
-  '@earendil-works/pi-coding-agent': '0.86.0',
-  '@earendil-works/pi-tui': '0.86.0',
+  '@earendil-works/pi-agent-core': '0.87.1',
+  '@earendil-works/pi-ai': '0.87.1',
+  '@earendil-works/pi-coding-agent': '0.87.1',
+  '@earendil-works/pi-tui': '0.87.1',
   '@agimon-ai/vibe-lint': '0.0.1-alpha.26',
 };
 const RUNTIME_SHUTDOWN_TIMEOUT_MS = 10_000;

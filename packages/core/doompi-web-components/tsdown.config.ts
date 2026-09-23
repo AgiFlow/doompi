@@ -19,7 +19,7 @@ export const tsdownConfig = defineConfig({
    * bundler to code-split.
    */
   external: ['mermaid'],
-  format: ['esm', 'cjs'],
+  format: { esm: {}, cjs: { dts: false } },
   minify: {
     compress: true,
     mangle: { toplevel: true },

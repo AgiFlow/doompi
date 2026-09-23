@@ -3,7 +3,7 @@ import type {
   SessionMessageArgs,
   SessionService,
   ThinkingLevel,
-} from '@agimon-ai/doompi-core/session-protocol';
+} from '@agimon-ai/doompi-core/sessionProtocol';
 import { BACKGROUND_CONTEXT, withCancel } from '@earendil-works/chord/context';
 
 type Frame = Record<string, unknown>;

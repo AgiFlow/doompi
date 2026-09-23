@@ -8,7 +8,7 @@ import type { PromptExtensionDependencies } from '../../../src/types/prompt';
 
 const pickerConstructed = vi.hoisted(() => vi.fn());
 
-vi.mock('@agimon-ai/doompi-ui/matrix-picker', () => ({
+vi.mock('@agimon-ai/doompi-ui/matrixPicker', () => ({
   MatrixPickerComponent: class MatrixPickerComponent {
     constructor(...args: unknown[]) {
       pickerConstructed(...args);

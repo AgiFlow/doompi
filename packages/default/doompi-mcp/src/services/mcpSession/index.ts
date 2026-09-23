@@ -1,10 +1,10 @@
-import type { McpStatusSnapshot } from '@agimon-ai/doompi-core/mcp-status';
-import type { DoomMcpResolvedToolSelection } from '@agimon-ai/doompi-core/mcp-tool-resolver';
+import type { McpStatusSnapshot } from '@agimon-ai/doompi-core/mcpStatus';
+import type { DoomMcpResolvedToolSelection } from '@agimon-ai/doompi-core/mcpToolResolver';
 import type {
   DoomToolRestriction,
   DoomToolRestrictionHandle,
   DoomToolSurfaceService,
-} from '@agimon-ai/doompi-core/tool-surface';
+} from '@agimon-ai/doompi-core/toolSurface';
 import type { McpClientManagerService, McpServerStateChange, TokenStore } from '@agimon-ai/mcp-proxy';
 
 import { PACKAGE_SOURCE } from '../../constants/piMcp';

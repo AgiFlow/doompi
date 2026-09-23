@@ -11,8 +11,8 @@ import {
   parseApiContract,
   type DoomCompiledContracts,
   type DoomPackageContract,
-} from '@agimon-ai/doompi-core/api-contracts';
-import type { DoomServerBundle } from '@agimon-ai/doompi-core/server-facet';
+} from '@agimon-ai/doompi-core/apiContracts';
+import type { DoomServerBundle } from '@agimon-ai/doompi-core/serverFacet';
 
 import { compileExtensionModule, extensionModuleManifestPath } from '../../compiler';
 

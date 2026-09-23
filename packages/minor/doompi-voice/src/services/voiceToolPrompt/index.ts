@@ -20,7 +20,7 @@ import type {
   VoiceToolCatalogSnapshot,
   VoiceToolConflictDiagnostic,
   VoiceToolErrorPayload,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 
 /**
  * The ceiling for one formatted block.

@@ -5,7 +5,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
-import { parseDoomSocketPath } from '@agimon-ai/doompi-core/package-api';
+import { parseDoomSocketPath } from '@agimon-ai/doompi-core/packageApi';
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
 
 import { DEFAULT_HEADLESS_URL } from '../services/headlessLaunch';

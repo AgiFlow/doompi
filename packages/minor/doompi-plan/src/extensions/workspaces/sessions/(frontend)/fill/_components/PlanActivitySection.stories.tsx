@@ -3,7 +3,7 @@
  * mounts the exported `render`, so no Storybook runtime is imported and the
  * default export is a bare `const meta`.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import { formatPlanStatus, PLAN_STATUS_KEY } from '../../../../../../types/planApi';
 import { PlanActivitySection } from './PlanActivitySection';

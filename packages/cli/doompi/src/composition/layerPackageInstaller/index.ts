@@ -4,8 +4,8 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { isLocalPackageSpecifier, type MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { splitPackageSpecifier } from '@agimon-ai/doompi-core/module-resolution';
-import { piAgentDirectory } from '@agimon-ai/doompi-core/runtime-pi-settings';
+import { splitPackageSpecifier } from '@agimon-ai/doompi-core/moduleResolution';
+import { piAgentDirectory } from '@agimon-ai/doompi-core/runtimePiSettings';
 import { DefaultPackageManager, type PackageManager, SettingsManager } from '@earendil-works/pi-coding-agent';
 
 import { createLayerResolvers, type ExtensionLayerResolvers } from '../../builders/cli/extensionAssembler';

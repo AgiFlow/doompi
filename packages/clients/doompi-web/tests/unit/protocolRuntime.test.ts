@@ -1,4 +1,4 @@
-import type { SessionServiceState } from '@agimon-ai/doompi-core/session-protocol';
+import type { SessionServiceState } from '@agimon-ai/doompi-core/sessionProtocol';
 import { replicatedState } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -124,7 +124,7 @@ beforeEach(() => {
         startCursor: null,
         endCursor: null,
         generation: 0,
-        revision: state.state.presentation?.revision ?? 0,
+        revision: state.value.presentation?.revision ?? 0,
       }),
     }),
     ready: async () => {},
@@ -160,8 +160,9 @@ describe('protocol attachment recovery', () => {
       type: 'entry_appended' as const,
       entry: { type: 'message', id: 'new', message: { role: 'user', content: 'live again' } },
     };
-    state.state.presentation = { revision: 1, dropped: 0, events: [{ sequence: 1, frame }], projections: [] };
-    state.publish(BACKGROUND_CONTEXT);
+    state.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.presentation = { revision: 1, dropped: 0, events: [{ sequence: 1, frame }], projections: [] };
+    });
     expect(fake.applyFrame).toHaveBeenLastCalledWith('session-1', frame, { replay: false });
   });
 
@@ -201,7 +202,7 @@ describe('protocol attachment recovery', () => {
           startCursor: null,
           endCursor: null,
           generation: 0,
-          revision: state.state.presentation?.revision ?? 0,
+          revision: state.value.presentation?.revision ?? 0,
         }),
       }),
       ready: () => pending,
@@ -218,25 +219,27 @@ describe('protocol attachment recovery', () => {
   it('reloads history after branch navigation', async () => {
     await start();
     fake.reset.mockClear();
-    state.state.presentation = {
-      revision: 1,
-      dropped: 0,
-      projections: [],
-      events: [{ sequence: 1, frame: { type: 'navigation_end' } }],
-    };
-    state.publish(BACKGROUND_CONTEXT);
+    state.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.presentation = {
+        revision: 1,
+        dropped: 0,
+        projections: [],
+        events: [{ sequence: 1, frame: { type: 'navigation_end' } }],
+      };
+    });
     await vi.advanceTimersByTimeAsync(0);
     expect(fake.reset).toHaveBeenCalledOnce();
   });
   it('delivers changed presentation projections without requiring a replay', async () => {
     await start();
-    state.state.presentation = {
-      revision: 1,
-      dropped: 0,
-      projections: [],
-      events: [{ sequence: 1, frame: { type: 'agent_start' } }],
-    };
-    state.publish(BACKGROUND_CONTEXT);
+    state.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.presentation = {
+        revision: 1,
+        dropped: 0,
+        projections: [],
+        events: [{ sequence: 1, frame: { type: 'agent_start' } }],
+      };
+    });
     fake.order = [];
     fake.applyFrame.mockClear();
     const frame = {
@@ -245,29 +248,32 @@ describe('protocol attachment recovery', () => {
       statusKey: 'doom-profile',
       statusText: 'reviewer',
     };
-    state.state.presentation = {
-      revision: 2,
-      dropped: 0,
-      projections: [{ sequence: 2, frame }],
-      events: [{ sequence: 2, frame }],
-    };
-    state.publish(BACKGROUND_CONTEXT);
+    state.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.presentation = {
+        revision: 2,
+        dropped: 0,
+        projections: [{ sequence: 2, frame }],
+        events: [{ sequence: 2, frame }],
+      };
+    });
     expect(fake.order).toEqual(['frame']);
     expect(fake.applyFrame).toHaveBeenCalledExactlyOnceWith('session-1', frame, { replay: false });
   });
 
   it('replays when the presentation revision regresses even without a ring gap', async () => {
     await start();
-    state.state.presentation = {
-      revision: 2,
-      dropped: 0,
-      projections: [],
-      events: [{ sequence: 2, frame: { type: 'agent_start' } }],
-    };
-    state.publish(BACKGROUND_CONTEXT);
+    state.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.presentation = {
+        revision: 2,
+        dropped: 0,
+        projections: [],
+        events: [{ sequence: 2, frame: { type: 'agent_start' } }],
+      };
+    });
     fake.order = [];
-    state.state.presentation = { revision: 1, dropped: 0, projections: [], events: [] };
-    state.publish(BACKGROUND_CONTEXT);
+    state.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.presentation = { revision: 1, dropped: 0, projections: [], events: [] };
+    });
     await vi.advanceTimersByTimeAsync(0);
     expect(fake.order[0]).toBe('begin');
     expect(fake.order[1]).toBe('reset');

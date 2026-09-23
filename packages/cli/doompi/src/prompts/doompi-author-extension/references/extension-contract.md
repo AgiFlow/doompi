@@ -81,7 +81,7 @@ The routed file exports one contribution. Its path supplies the scope, host side
 
 ```ts
 // src/extensions/workspaces/sessions/(backend)/command/review.ts
-import { defineCommand } from '@agimon-ai/doompi-core/extension-file';
+import { defineCommand } from '@agimon-ai/doompi-core/extensionFile';
 
 import { createReviewCommand } from '../../../../../controllers/reviewCommand';
 import { createReviewService } from '../../../../../services/review';

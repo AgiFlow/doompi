@@ -1,6 +1,6 @@
-import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordisHost';
 import { type DoomNotificationLevel, readDoomNotificationService } from '@agimon-ai/doompi-core/notification';
-import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
 import {
   DOOM_TRANSITION_SERVICE,
   requireDoomTransitionCoordinator,

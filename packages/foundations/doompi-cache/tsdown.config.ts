@@ -1,29 +1,25 @@
 import { doompiExtension } from '@agimon-ai/doompi-build/tsdown';
 import { defineConfig } from 'tsdown';
 
-const routed = doompiExtension({
-  packageDir: process.cwd(),
-  exportsDir: 'src/exports/_none',
-  entry: {
-    'api-contracts': 'src/exports/apiContracts.ts',
-    index: 'src/exports/index.ts',
-    env: 'src/exports/env.ts',
-  },
-});
-if (Array.isArray(routed)) throw new Error('Cache does not provide a browser extension.');
-const { ['extensions/pi']: piEntry, ...packageEntries } = routed.entry;
+const routed = doompiExtension({ packageDir: process.cwd() });
+const configs = Array.isArray(routed) ? routed : [routed];
+const packageConfig = configs.find((config) => 'extensions/pi' in config.entry);
+if (!packageConfig) throw new Error('Cache requires its generated Pi extension entry.');
+const { ['extensions/pi']: piEntry, ...packageEntries } = packageConfig.entry;
 if (!piEntry) throw new Error('Cache requires its generated Pi extension entry.');
+const contractConfigs = configs.filter((config) => !('extensions/pi' in config.entry));
 
 const output = {
   exports: false,
-  format: ['esm', 'cjs'] as ('esm' | 'cjs')[],
+  format: { esm: {}, cjs: { dts: false as const } },
   platform: 'node' as const,
   sourcemap: true,
 };
 
 export default defineConfig([
+  ...contractConfigs.map((config) => ({ ...config, ...output, exports: false })),
   {
-    ...routed,
+    ...packageConfig,
     ...output,
     name: 'package',
     entry: packageEntries,

@@ -1,4 +1,4 @@
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import { createMcpPiRoot } from './_lib/piRoot';
 

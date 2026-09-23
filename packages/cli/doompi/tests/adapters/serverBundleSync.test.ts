@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
-import { loadServerBundle } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/serverFacet';
+import { loadServerBundle } from '@agimon-ai/doompi-core/serverFacet';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ExtensionComposition } from '../../src/builders/cli/extensionAssembler';
@@ -664,7 +664,7 @@ it('compiles every built repository contract graph without TypeBox initializatio
         '--input-type=module',
         '-e',
         'const { compileApiContracts } = await import(process.argv[1]); const options = JSON.parse(process.argv[2]); options.packageRoots = new Map(options.packageRoots); process.stdout.write(JSON.stringify(await compileApiContracts(options)));',
-        new URL('../../dist/builders/apiContracts/index.mjs', import.meta.url).href,
+        new URL('../../dist/src/builders/apiContracts/index.mjs', import.meta.url).href,
         JSON.stringify(options),
       ],
       { encoding: 'utf8', timeout: 110000, maxBuffer: 16 * 1024 * 1024 },

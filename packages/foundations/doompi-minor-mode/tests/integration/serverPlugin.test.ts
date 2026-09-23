@@ -3,14 +3,14 @@ import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessHostService,
 } from '@agimon-ai/doompi-core/headless';
-import { defineTool, defineCommand } from '@agimon-ai/doompi-core/pi-extension';
-import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { defineTool, defineCommand } from '@agimon-ai/doompi-core/piExtension';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/serverFacet';
 import {
   defineServerMethod,
   type DoomServerPluginDefinition,
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerHostService,
-} from '@agimon-ai/doompi-core/server-facet';
+} from '@agimon-ai/doompi-core/serverFacet';
 import { Context } from '@deepseek-ai/cordis';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';

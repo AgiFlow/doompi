@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { buildToolSources, type McpServerStatus, type ToolInfo } from '@agimon-ai/doompi-core/tool-inventory';
+import { buildToolSources, type McpServerStatus, type ToolInfo } from '@agimon-ai/doompi-core/toolInventory';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 

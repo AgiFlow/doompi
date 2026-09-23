@@ -52,15 +52,15 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: '@agimon-ai/doompi-core/runtime-cordis-host',
+        find: '@agimon-ai/doompi-core/runtimeCordisHost',
         replacement: `${doomExtensionContractsExports}../pi/cordisHost.ts`,
       },
       {
-        find: '@agimon-ai/doompi-core/pi-extension',
+        find: '@agimon-ai/doompi-core/piExtension',
         replacement: `${doomExtensionContractsExports}piExtension.ts`,
       },
       {
-        find: '@agimon-ai/doompi-core/cordis-host',
+        find: '@agimon-ai/doompi-core/cordisHost',
         replacement: `${doomExtensionContractsExports}cordisHost.ts`,
       },
       { find: '@agimon-ai/doompi-config/layeredConfig', replacement: `${doomConfigExports}layeredConfig.ts` },

@@ -8,17 +8,11 @@ import {
   SelectTrigger,
   SelectValue,
   Spinner,
-  Switch,
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import type {
-  CreatedSessionMcpClient,
-  SessionMcpClient,
-  SessionMcpConfig,
-  SessionMcpRouting,
-} from '../../../types/sessionMcp';
+import type { CreatedSessionMcpClient, SessionMcpClient, SessionMcpConfig } from '../../../types/sessionMcp';
 import { rememberedHostChannelKey } from '../../lib/sealedSession';
 import {
   createSessionMcpClient,
@@ -108,8 +102,6 @@ export function SessionMcpSettings() {
   const [config, setConfig] = useState<SessionMcpConfig>();
   const [clients, setClients] = useState<SessionMcpClient[]>([]);
   const [redirectUri, setRedirectUri] = useState('');
-  const [routing, setRouting] = useState<SessionMcpRouting>('session');
-  const [identityVerified, setIdentityVerified] = useState(false);
   const [created, setCreated] = useState<{ sessionId: string; client: CreatedSessionMcpClient }>();
   const visibleCreated = created?.sessionId === sessionId ? created.client : undefined;
   const [loading, setLoading] = useState(false);
@@ -130,8 +122,6 @@ export function SessionMcpSettings() {
     // eslint-disable-next-line react/set-state-in-effect -- selection owns and resets this local credential draft.
     setCreated(undefined);
     setRedirectUri('');
-    setRouting('session');
-    setIdentityVerified(false);
     setConfig(undefined);
     setClients([]);
     setError(undefined);
@@ -160,13 +150,7 @@ export function SessionMcpSettings() {
   }, [available, sessionId, workspaceId]);
 
   const invalidCallback = redirectUri !== '' && !exactHttpsUrl(redirectUri);
-  const canCreate =
-    available &&
-    !remoteCaller &&
-    config !== undefined &&
-    exactHttpsUrl(redirectUri) &&
-    !busy &&
-    (routing === 'session' || identityVerified);
+  const canCreate = available && !remoteCaller && config !== undefined && exactHttpsUrl(redirectUri) && !busy;
 
   async function createClient(): Promise<void> {
     if (!canCreate || workspaceId === undefined) return;
@@ -176,7 +160,7 @@ export function SessionMcpSettings() {
     const result = await createSessionMcpClient(workspaceId, sessionId, {
       redirectUri: redirectUri.trim(),
       scope: 'session',
-      ...(routing === 'conversation' ? { routing, conversationIdentityVerified: identityVerified } : {}),
+      routing: 'conversation',
     });
     if (selectionKeyRef.current !== operationSelection) return;
     setBusy(false);
@@ -280,52 +264,19 @@ export function SessionMcpSettings() {
               paste it below.
             </p>
           </div>
-          <label htmlFor="session-mcp-routing" className="flex flex-col gap-1 text-sm text-doom-faint">
-            execution routing
-            <Select
-              value={routing}
-              disabled={busy}
-              onValueChange={(value) => {
-                if (value === 'session' || value === 'conversation') {
-                  setRouting(value);
-                  setIdentityVerified(false);
-                }
-              }}
-            >
-              <SelectTrigger id="session-mcp-routing" data-testid="session-mcp-routing">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="session">this session</SelectItem>
-                <SelectItem value="conversation">separate session per conversation</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
-          {routing === 'conversation' ? (
-            <div className="flex flex-col gap-2 text-xs text-doom-faint">
-              <p>
-                Each conversation waits for its own execution directory before tools can run. Existing connections are
-                unchanged.
-              </p>
-              <p>
-                First use a direct connection to verify stable conversation IDs across repeated calls and reconnects,
-                and different IDs in two real chats, in the server correlation logs.
-              </p>
-              <label className="flex items-center gap-2">
-                <Switch
-                  data-testid="session-mcp-identity-verified"
-                  checked={identityVerified}
-                  onCheckedChange={setIdentityVerified}
-                  disabled={busy}
-                />
-                I verified conversation identity on this client.
-              </label>
-            </div>
-          ) : (
-            <p className="text-xs text-doom-faint">
-              Every chat using this connection targets this same session. Use a dedicated checkout for each workstream.
+          <div
+            className="flex flex-col gap-2 text-xs leading-relaxed text-doom-faint"
+            data-testid="session-mcp-routing"
+          >
+            <p>
+              Every conversation is automatically routed to its own worktree before tools run, never to the checkout
+              this session uses.
             </p>
-          )}
+            <p>
+              While a worktree is provisioning or recovering, tools wait. If recovery cannot finish, the conversation
+              stays unavailable and reports the failure instead of falling back to this session.
+            </p>
+          </div>
           <label htmlFor="session-mcp-callback" className="flex flex-col gap-1 text-sm text-doom-faint">
             Callback URL from ChatGPT
             <Input
@@ -411,9 +362,7 @@ export function SessionMcpSettings() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-bold text-doom-hi">{client.name}</span>
                 <Badge tone="neutral">{client.scope === 'session' ? 'session scope' : 'restricted scope'}</Badge>
-                <Badge tone="neutral">
-                  {client.routing === 'conversation' ? 'per conversation' : 'direct session'}
-                </Badge>
+                <Badge tone="neutral">automatic worktree per conversation</Badge>
                 <Badge tone="neutral">{client.tokenEndpointAuthMethod}</Badge>
               </div>
               <code className="block break-all text-xs text-doom-faint">{client.clientId}</code>

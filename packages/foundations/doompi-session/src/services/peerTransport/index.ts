@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import type { DoomSessionCommunicationEndpoint } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomSessionCommunicationEndpoint } from '@agimon-ai/doompi-core/hubChannel';
 
 const PEER_CONFIG_VERSION = 1;
 const PEER_CONFIG_FILE = 'peers.json';

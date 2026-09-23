@@ -1,4 +1,4 @@
-import type { SessionService } from '@agimon-ai/doompi-core/session-protocol';
+import type { SessionService } from '@agimon-ai/doompi-core/sessionProtocol';
 import type { Context } from '@earendil-works/chord';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

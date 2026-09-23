@@ -1,12 +1,12 @@
-import { definePiTool, type PiToolCollection } from '@agimon-ai/doompi-core/pi-extension';
-import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '@agimon-ai/doompi-core/voice-tools';
+import { definePiTool, type PiToolCollection } from '@agimon-ai/doompi-core/piExtension';
+import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '@agimon-ai/doompi-core/voiceTools';
 import {
   type VoiceToolBatchResult,
   type VoiceToolCatalogSnapshot,
   VoiceToolDescribeInputSchema,
   type VoiceToolErrorPayload,
   VoiceToolUseInputSchema,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,

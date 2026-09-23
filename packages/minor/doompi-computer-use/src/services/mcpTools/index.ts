@@ -1,5 +1,5 @@
 import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
-import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 import type { Context } from '@deepseek-ai/cordis';
 
 import { COMPUTER_USE_MODE_ID } from '../../types/computerUseApi';

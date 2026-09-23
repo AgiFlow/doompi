@@ -21,7 +21,7 @@ test('creates from the clicked session card without retargeting to the focused s
   await expect(dialog.getByTestId('git-worktree-error')).toContainText('not inside a git repository');
 });
 
-test('renders pending setup without runtime actions and uses the reserved target', async ({ page, cockpit }) => {
+test('renders automatic worktree provisioning without parent runtime actions', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
   cockpit.publishPendingSetups('s2', [
@@ -29,17 +29,11 @@ test('renders pending setup without runtime actions and uses the reserved target
   ]);
   const pending = page.getByTestId('pending-session-reserved-child');
   await expect(pending).toBeVisible();
-  await expect(pending).toContainText('awaiting execution directory');
+  await expect(pending).toContainText('automatic worktree provisioning');
   await page.getByTestId('pending-session-menu-reserved-child').click();
   await expect(page.getByRole('menuitem', { name: 'resume', exact: true })).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: 'restart', exact: true })).toHaveCount(0);
-  await expect(page.getByTestId('session-worktree-reserved-child')).toBeVisible();
-  await page.getByRole('menuitem', { name: 'choose existing directory…' }).click();
-  await expect(page.getByTestId('session-directory-dialog-reserved-child')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'create session', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'cancel', exact: true }).click();
-  await page.getByTestId('pending-session-menu-reserved-child').click();
-  await page.getByTestId('session-worktree-reserved-child').click();
-  await expect(page.getByTestId('session-worktree-dialog')).toBeVisible();
-  await expect(page.getByTestId('session-card-s1')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByRole('menuitem', { name: 'choose existing directory…' })).toHaveCount(0);
+  await expect(page.getByTestId('session-worktree-reserved-child')).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'remove setup', exact: true })).toBeVisible();
 });

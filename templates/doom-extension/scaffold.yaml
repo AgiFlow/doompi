@@ -84,7 +84,7 @@ boilerplate:
 
       The filename also names the platform it builds for: cli or server inside (backend), web or cli inside (frontend). Every public routed file carries one of those suffixes and there is no neutral file, so a contribution both backend hosts want is a .cli.ts and a .server.ts pair, not one shared file. A .cli command reaches Pi as a native declaration, so it uses defineCliCommand and carries its own name; the .server half uses defineCommand and takes its name from the path. Files inside a _folder are not routed and carry no suffix.
 
-      A routed file exports one contribution through a define* helper, from @agimon-ai/doompi-core/extension-file on the backend and @agimon-ai/doompi-core/web on the frontend. Export the declaration, or a factory of one when it needs the mount context. The path supplies identity, so omit the name, id, slot or event the filename already carries.
+      A routed file exports one contribution through a define* helper, from @agimon-ai/doompi-core/extensionFile on the backend and @agimon-ai/doompi-core/web on the frontend. Export the declaration, or a factory of one when it needs the mount context. The path supplies identity, so omit the name, id, slot or event the filename already carries.
 
       Split by what varies. A service under src/services/{serviceName}/ is host-neutral and owns the logic, including filesystem and network work. A routed file is only the shape one host expects: Pi tools carry renderCall and renderResult, headless tools carry neither, and both delegate to the same service. Never create a src/tools root, and never put browser code in src/web: colocate it beside the routed file that renders it, in a _components or _lib folder, which nothing scans.
 

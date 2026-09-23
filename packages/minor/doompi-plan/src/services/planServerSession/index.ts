@@ -5,8 +5,8 @@ import path from 'node:path';
 
 import { type DoomHeadlessHostService, type DoomHeadlessModelSettings } from '@agimon-ai/doompi-core/headless';
 import { type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
-import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
-import { DOOM_VOICE_AUTO_MODE_ID } from '@agimon-ai/doompi-core/voice-tools';
+import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
+import { DOOM_VOICE_AUTO_MODE_ID } from '@agimon-ai/doompi-core/voiceTools';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';

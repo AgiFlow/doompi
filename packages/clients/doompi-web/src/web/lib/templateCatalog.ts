@@ -1,5 +1,12 @@
-import { parseWebTemplate, type WebPluginDefinition, type WebTemplateContribution } from '@agimon-ai/doompi-core/web';
+import {
+  parseWebTemplate,
+  type WebPluginDefinition,
+  type WebPluginScope,
+  type WebTemplateContribution,
+} from '@agimon-ai/doompi-core/web';
+import { webPlugin as advancedWebPlugin } from '@agimon-ai/doompi-template-advanced/webClient';
 
+import { pluginsAtScope } from './pluginScopes';
 export interface InstalledWebTemplate extends WebTemplateContribution {
   pluginId: string;
 }
@@ -15,11 +22,14 @@ export interface WebTemplateCatalog {
   diagnostics: WebTemplateDiagnostic[];
 }
 
-/** Read the existing, scoped plugin set. No second loader or mutable registry is needed. */
-export function collectWebTemplates(plugins: readonly WebPluginDefinition[]): WebTemplateCatalog {
+/** Read scoped plugin templates, then provide Advanced when no composition owns it. */
+export function collectWebTemplates(
+  plugins: readonly WebPluginDefinition[],
+  scope?: WebPluginScope,
+): WebTemplateCatalog {
   const templates = new Map<string, InstalledWebTemplate>();
   const diagnostics: WebTemplateDiagnostic[] = [];
-  for (const plugin of plugins) {
+  const collect = (plugin: WebPluginDefinition): void => {
     let entries: unknown;
     try {
       entries = plugin.templates;
@@ -29,16 +39,16 @@ export function collectWebTemplates(plugins: readonly WebPluginDefinition[]): We
         pluginId: plugin.id,
         message: `Template metadata from '${plugin.id}' could not be read.`,
       });
-      continue;
+      return;
     }
-    if (entries === undefined) continue;
+    if (entries === undefined) return;
     if (!Array.isArray(entries)) {
       diagnostics.push({
         kind: 'invalid-template',
         pluginId: plugin.id,
         message: `Plugin '${plugin.id}' must declare templates as an array.`,
       });
-      continue;
+      return;
     }
     for (const entry of entries) {
       let template: WebTemplateContribution | undefined;
@@ -66,7 +76,11 @@ export function collectWebTemplates(plugins: readonly WebPluginDefinition[]): We
       }
       templates.set(template.id, { ...template, pluginId: plugin.id });
     }
-  }
+  };
+
+  for (const plugin of plugins) collect(plugin);
+  if (scope !== undefined && !templates.has('doompi-template-advanced'))
+    for (const plugin of pluginsAtScope([advancedWebPlugin], scope)) collect(plugin);
   return { templates: [...templates.values()], diagnostics };
 }
 

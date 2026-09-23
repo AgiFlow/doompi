@@ -3,6 +3,7 @@ import type {
   DoomHubChannel,
   DoomHubChannelConnection,
   DoomHubChannelHost,
+  DoomHubReservedWorktreeProvisioner,
   DoomHubSessionApiRequest,
   DoomHubSessionCreateRequest,
   DoomHubSessionScope,
@@ -162,6 +163,10 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   let closed = false;
   const mounts = new Map<string, { host: DoomServerHost; installed: InstalledServerFacets }>();
   const workspaces = new Map<string, HeadlessWorkspace>();
+  const worktreeProvisioners = new Map<
+    string,
+    { mount: DoomApiMount; provisioner: DoomHubReservedWorktreeProvisioner }
+  >();
   let sessionService: DoomHubSessionService;
 
   const mountKey = (mount: DoomApiMount): string =>
@@ -184,6 +189,27 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       target !== undefined &&
       (source.parentSessionId === target.id || target.parentSessionId === source.id)
     );
+  };
+  const registerReservedWorktreeProvisioner = (
+    mount: DoomApiMount,
+    provisioner: DoomHubReservedWorktreeProvisioner,
+  ): (() => void) => {
+    const key = mountKey(mount);
+    if (worktreeProvisioners.has(key)) throw new Error('A worktree provisioner is already registered.');
+    worktreeProvisioners.set(key, { mount, provisioner });
+    return () => {
+      if (worktreeProvisioners.get(key)?.provisioner === provisioner) worktreeProvisioners.delete(key);
+    };
+  };
+  const worktreeProvisionerFor = (parent: HeadlessHubSession): DoomHubReservedWorktreeProvisioner | undefined => {
+    let provisioner: DoomHubReservedWorktreeProvisioner | undefined;
+    let priority = -1;
+    for (const { mount, provisioner: candidate } of worktreeProvisioners.values()) {
+      if (!belongs(mount, parent) || CHANNEL_PRIORITY[mount.scope] <= priority) continue;
+      provisioner = candidate;
+      priority = CHANNEL_PRIORITY[mount.scope];
+    }
+    return provisioner;
   };
   const selectedChannels = (session: HeadlessHubSession): StartedChannel[] => {
     const selected = new Map<string, StartedChannel>();
@@ -391,6 +417,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
         const session = sessions.get(id);
         return session !== undefined && belongs(mount, session);
       },
+      registerReservedWorktreeProvisioner: (provisioner) => registerReservedWorktreeProvisioner(mount, provisioner),
       canCommunicate: (sourceId, targetId) => {
         const source = sessions.get(sourceId);
         return (
@@ -610,6 +637,14 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     close: closeSession,
     isLive: (sessionId) => !closed && sessions.has(sessionId),
     reservations: options.sessionReservations,
+    provisionReservedWorktree: async (request) => {
+      const parent = sessions.get(request.parentSessionId);
+      const provisioner = parent === undefined ? undefined : worktreeProvisionerFor(parent);
+      if (provisioner === undefined) throw new Error('Automatic conversation worktree provisioning is unavailable.');
+      return provisioner(request);
+    },
+    registerReservedWorktreeProvisioner: (provisioner) =>
+      registerReservedWorktreeProvisioner({ scope: 'global' }, provisioner),
     canCommunicate,
     bindCommunication,
   };

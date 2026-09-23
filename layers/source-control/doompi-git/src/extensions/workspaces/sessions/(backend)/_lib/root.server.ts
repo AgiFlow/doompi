@@ -1,10 +1,10 @@
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 import {
   type DoomHeadlessResource,
   type DoomHeadlessTool,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
-import { readPackageResource, type DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import { readPackageResource, type DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 import { readDoomSessionDelivery } from '@agimon-ai/doompi-session';
 
 import { RunWorktreeToolSchema, type RunWorktreeToolParams } from '../../../../../schemas/runWorktreeTool';

@@ -1,4 +1,4 @@
-import type { DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 
 import {
   MANUAL_TRANSCRIPTION_DURATION_HEADER,

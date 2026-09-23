@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { TranscriptPage } from '@agimon-ai/doompi-core/session-protocol';
+import type { TranscriptPage } from '@agimon-ai/doompi-core/sessionProtocol';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

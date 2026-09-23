@@ -29,7 +29,6 @@ const defaultPackagePaths = [
   './packages/default/doompi-log',
   './packages/default/doompi-mcp',
   './packages/default/doompi-prompt',
-  './layers/template/doompi-template-advanced',
   './layers/template/doompi-template-elegant',
 ];
 

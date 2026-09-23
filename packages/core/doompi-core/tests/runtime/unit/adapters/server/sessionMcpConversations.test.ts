@@ -26,7 +26,7 @@ afterEach(() => {
 
 const UI_URI = 'ui://doompi/session/v1/index.html';
 
-function fixture(routing: 'session' | 'conversation' = 'conversation', withUi = false) {
+function fixture(_routing: unknown = 'conversation', withUi = false, automatic = false) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doom-mcp-routing-')));
   roots.push(root);
   const parentCwd = path.join(root, 'parent');
@@ -86,12 +86,27 @@ function fixture(routing: 'session' | 'conversation' = 'conversation', withUi = 
     return { sessionId: reserved.sessionId, cwd: request.cwd, workspaceId: `workspace-${reserved.sessionId}` };
   });
   const pending = vi.fn();
+  const provisionReservedWorktree = vi.fn(
+    async ({ reservationId, parentSessionId }: { reservationId: string; parentSessionId: string }) => {
+      const cwd = path.join(root, 'worktrees', reservationId);
+      fs.mkdirSync(cwd, { recursive: true });
+      await routes.reservations.prepare(reservationId, parentSessionId, cwd);
+      await create({
+        cwd,
+        name: `conversation ${reservationId.slice(0, 8)}`,
+        parentSessionId,
+        reservationId,
+        sessionProvenance: 'worktree',
+      });
+      return routes.reservations.complete(reservationId, parentSessionId);
+    },
+  );
   const hub = {
     snapshot: () => [...sessions.values()],
     session: (id: string) => sessions.get(id),
     workspaces: () => [{ id: 'workspace', root: parentCwd }],
     setPendingSessionSetups: pending,
-    sessionService: { create },
+    sessionService: { create, ...(automatic ? { provisionReservedWorktree } : {}) },
     onEvent(listener: (event: HeadlessHubEvent) => void) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -113,7 +128,7 @@ function fixture(routing: 'session' | 'conversation' = 'conversation', withUi = 
     sessionGeneration: 1,
     audience,
     scope: 'session',
-    routing,
+    routing: 'conversation',
   });
   const mint = () => {
     const code = authorization.issueAuthorizationCode({
@@ -279,21 +294,17 @@ describe('conversation-bound Session MCP routing', () => {
     );
     expect(surface.invokeTool).toHaveBeenCalledTimes(1);
   });
-  it('does not create runtimes during discovery, missing identity, or concurrent first calls', async () => {
-    const f = fixture();
-    await f.rpc('initialize', {
-      protocolVersion: '2025-03-26',
-      capabilities: {},
-      clientInfo: { name: 'test', version: '1' },
-    });
+  it('automatically creates one separate worktree runtime per conversation', async () => {
+    const f = fixture('conversation', false, true);
     await f.rpc('tools/list');
     expect(f.store.list()).toHaveLength(0);
     expect((await f.call()).result?.structuredContent?.code).toBe('CONVERSATION_ID_REQUIRED');
     const first = await Promise.all([f.call('a'), f.call('a', 'load_context', {}, 2), f.call('b')]);
-    expect(first.every((result) => result.result?.structuredContent?.code === 'SESSION_SETUP_REQUIRED')).toBe(true);
-    expect(first[0].result?.structuredContent?.bindingId).toBe(first[1].result?.structuredContent?.bindingId);
+    expect(first.every((result) => result.result?.isError === false)).toBe(true);
     expect(f.store.list()).toHaveLength(2);
-    expect(f.create).not.toHaveBeenCalled();
+    expect(f.create).toHaveBeenCalledTimes(2);
+    expect(f.store.list().every((record) => record.state === 'bound')).toBe(true);
+    expect(f.store.list().every((record) => record.cwd?.startsWith(path.join(f.root, 'worktrees')))).toBe(true);
     expect(f.surfaces.get('parent')!.invokeTool).not.toHaveBeenCalled();
   });
 
@@ -374,16 +385,13 @@ describe('conversation-bound Session MCP routing', () => {
     expect(f.store.list()[0].state).toBe('closed');
   });
 
-  it('requires explicit verification to create conversation-mode clients and keeps direct mode unchanged', async () => {
+  it('normalizes legacy registrations to mandatory conversation routing', async () => {
     const f = fixture('session');
-    expect((await f.call()).result?.structuredContent?.sessionId).toBe('parent');
+    expect((await f.call()).result?.structuredContent?.code).toBe('CONVERSATION_ID_REQUIRED');
     expect(f.store.list()).toHaveLength(0);
     const input = { redirectUri: 'https://chatgpt.com/callback', scope: 'session', routing: 'conversation' };
-    expect((await f.host('POST', '/clients', input))!.status).toBe(400);
-    expect((await f.host('POST', '/clients', { ...input, conversationIdentityVerified: true }))!.status).toBe(201);
-    expect(
-      (await f.host('POST', '/clients', { ...input, routing: 'unknown', conversationIdentityVerified: true }))!.status,
-    ).toBe(400);
+    expect((await f.host('POST', '/clients', input))!.status).toBe(201);
+    expect((await f.host('POST', '/clients', { ...input, routing: 'unknown' }))!.status).toBe(400);
   });
   it('preserves the association when the parent restarts and the client reauthorizes', async () => {
     const f = fixture();

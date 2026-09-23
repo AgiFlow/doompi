@@ -1,5 +1,5 @@
-import { DoomPluginService, type DoomPluginCall } from '@agimon-ai/doompi-core/plugin-protocol';
-import { DOOM_COCKPIT_SERVER_ID, DoomHubService, type HubService } from '@agimon-ai/doompi-core/session-protocol';
+import { DoomPluginService, type DoomPluginCall } from '@agimon-ai/doompi-core/pluginProtocol';
+import { DOOM_COCKPIT_SERVER_ID, DoomHubService, type HubService } from '@agimon-ai/doompi-core/sessionProtocol';
 import { createRemoteServiceBinding, type RemoteServiceBinding } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT, withCancel } from '@earendil-works/chord/context';
 import { createClientServiceTransport, type Client } from '@earendil-works/pi-client';

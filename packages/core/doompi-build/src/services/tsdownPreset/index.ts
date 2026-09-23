@@ -4,7 +4,6 @@ import path from 'node:path';
 import { GENERATED_DIR } from '../../constants/layout';
 import { generateExtension } from '../generate';
 import type { GenerateOptions } from '../generate/type';
-import { toKebab } from '../identity';
 import { writeManifest, writeMcpManifest } from '../syncManifest';
 
 interface EmittedFile {
@@ -33,16 +32,21 @@ interface BrowserPresetConfig {
   plugins: QueryAssetPlugin[];
   sourcemap: boolean;
   unbundle: boolean;
+  tsconfig: string;
 }
 
-interface PresetConfig {
+interface GeneratedExports {
+  customExports: (exports: Record<string, unknown>) => Record<string, unknown>;
+}
+
+interface BasePresetConfig {
   entry: Record<string, string>;
   clean: boolean;
   dts: false | { incremental: boolean; parallel: boolean; eager: boolean };
   write?: false;
   plugins?: QueryAssetPlugin[];
-  exports: boolean;
-  format: ('esm' | 'cjs')[];
+  exports: boolean | GeneratedExports;
+  format: { esm: Record<string, never>; cjs: { dts: false } };
   platform: 'node';
   sourcemap: boolean;
   unbundle: boolean;
@@ -50,12 +54,16 @@ interface PresetConfig {
     js: string;
     dts: string;
   };
-  hooks: { 'build:done': () => void };
+}
+
+interface PresetConfig extends BasePresetConfig {
+  hooks?: { 'build:done': () => void };
 }
 
 const DEFAULT_EXPORTS_DIR = 'src/exports';
+const API_CONTRACTS_ENTRY = 'apiContracts';
 
-/** `src/exports/apiContracts.ts` becomes the `api-contracts` entry; index keeps its name. */
+/** `src/exports/apiContracts.ts` becomes the `apiContracts` entry; index keeps its name. */
 function exportEntries(packageDir: string, exportsDir: string): Record<string, string> {
   const absolute = path.join(packageDir, exportsDir);
   if (!fs.existsSync(absolute)) return {};
@@ -63,11 +71,44 @@ function exportEntries(packageDir: string, exportsDir: string): Record<string, s
   for (const file of fs.readdirSync(absolute)) {
     if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue;
     const stem = file.slice(0, -'.ts'.length);
-    entries[stem === 'index' ? 'index' : toKebab(stem)] = `${exportsDir}/${file}`;
+    entries[stem] = `${exportsDir}/${file}`;
   }
   return entries;
 }
 
+/** Static resources receive package export entries without becoming tsdown inputs. */
+function resourceEntries(
+  packageDir: string,
+  directory: string,
+  matches: (relative: string) => boolean,
+): Record<string, string> {
+  const root = path.join(packageDir, directory);
+  if (!fs.existsSync(root)) return {};
+  const entries: Record<string, string> = {};
+  for (const relative of fs.readdirSync(root, { encoding: 'utf8', recursive: true })) {
+    if (!matches(relative)) continue;
+    const normalized = relative.split(path.sep).join('/');
+    entries[`./${directory}/${normalized}`] = `./${directory}/${normalized}`;
+  }
+  return entries;
+}
+
+/** Preserves declared resources and discovers default skill and theme resource exports. */
+function staticExports(packageDir: string): Record<string, unknown> {
+  const manifest = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8')) as Record<
+    string,
+    unknown
+  >;
+  const declared =
+    manifest.exports !== null && typeof manifest.exports === 'object' && !Array.isArray(manifest.exports)
+      ? Object.fromEntries(Object.entries(manifest.exports).filter(([, target]) => typeof target === 'string'))
+      : {};
+  return {
+    ...resourceEntries(packageDir, 'skills', (relative) => path.basename(relative) === 'SKILL.md'),
+    ...resourceEntries(packageDir, 'themes', (relative) => relative.endsWith('.json')),
+    ...declared,
+  };
+}
 /**
  * One tsdown config for a folder-routed extension.
  *
@@ -146,6 +187,9 @@ function browserConfig(): BrowserPresetConfig {
     // routed source file, which is not published and is .tsx besides. One
     // module with only bare specifiers external is what the cockpit wants.
     unbundle: false,
+    // Browser routes are excluded from the node tsconfig. Every browser-capable
+    // extension owns this focused config for its matching typecheck.
+    tsconfig: 'tsconfig.web.json',
   };
 }
 
@@ -185,8 +229,7 @@ export function doompiExtension(
         ...options.entry,
       };
 
-  const node: PresetConfig = {
-    entry,
+  const baseNode: Omit<BasePresetConfig, 'entry' | 'unbundle'> = {
     // MCP shares dist/ with the normal build, so neither build may erase the other.
     clean: false,
     dts: emptyMcp ? false : { incremental: true, parallel: false, eager: true },
@@ -204,8 +247,15 @@ export function doompiExtension(
           ],
         }
       : {}),
-    exports: !mcpOnly,
-    format: ['esm', 'cjs'],
+    exports: mcpOnly
+      ? false
+      : {
+          customExports: (generated) => ({ ...staticExports(packageDir), ...generated }),
+        },
+    // CommonJS keeps its JavaScript but emits no declarations. Every export map
+    // resolves types through .d.mts, and a CJS declaration build would rerun
+    // the same whole-program tsgo emit a second time.
+    format: { esm: {}, cjs: { dts: false } },
     // No minify. This is a library build, and a mangled stack trace inside a
     // published extension is far more expensive than the bytes it saves.
     // Node output uses fixed extensions, so pi.extensions and doompiServer.dist
@@ -216,9 +266,18 @@ export function doompiExtension(
       dts: format === 'es' ? '.d.mts' : '.d.cts',
     }),
     sourcemap: true,
-    // Bundle MCP separately so its generated entry cannot overwrite the normal
-    // build's unbundled internal modules in the shared dist directory.
-    unbundle: !mcpOnly,
+  };
+
+  // Contract bundles are published as a self-contained graph. Normal extension
+  // entries remain unbundled for routed runtime resources, while MCP remains
+  // isolated from the shared dist directory.
+  const node = (entries: Record<string, string>, _unbundle: boolean): PresetConfig => ({
+    ...baseNode,
+    entry: entries,
+    // Public entry facades must remain bundled. Otherwise their relative
+    // imports target unbundled implementation chunks, which Vite treats as
+    // source files when resolving a workspace package.
+    unbundle: false,
     hooks: {
       'build:done': () => {
         if (mcpOnly) {
@@ -237,7 +296,19 @@ export function doompiExtension(
         });
       },
     },
-  };
-
-  return !mcpOnly && result.targets.includes('web') ? [node, browserConfig()] : node;
+  });
+  const unsyncedNode = (entries: Record<string, string>, unbundle: boolean): PresetConfig => ({
+    ...baseNode,
+    entry: entries,
+    unbundle,
+  });
+  const configs =
+    !mcpOnly && API_CONTRACTS_ENTRY in entry
+      ? [
+          unsyncedNode({ [API_CONTRACTS_ENTRY]: entry[API_CONTRACTS_ENTRY] }, false),
+          node(Object.fromEntries(Object.entries(entry).filter(([name]) => name !== API_CONTRACTS_ENTRY)), true),
+        ]
+      : [node(entry, !mcpOnly)];
+  if (!mcpOnly && result.targets.includes('web')) return [...configs, browserConfig()];
+  return configs.length === 1 ? configs[0]! : configs;
 }

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { settingsApi } from '../src/services/settingsApi';

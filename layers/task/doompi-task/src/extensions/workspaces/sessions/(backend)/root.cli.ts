@@ -1,4 +1,4 @@
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import { registerTaskCollapseShortcut, TaskOverlay } from '../(frontend)/overlay/_lib/taskOverlay';
 import { createTaskRoot } from './_lib/root.cli';

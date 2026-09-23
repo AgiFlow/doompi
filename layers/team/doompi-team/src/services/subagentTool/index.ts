@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 

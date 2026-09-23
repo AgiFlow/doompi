@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-author/author-facade';
+import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-author/authorFacade';
 import { resetHarnessStore } from '@agimon-ai/doompi-config';
 import type { LeaderContribution } from '@agimon-ai/doompi-core/leader';
 import {
@@ -14,8 +14,8 @@ import {
   DOOM_TOOL_SURFACE_SERVICE,
   type DoomToolSurfaceService,
   createDoomToolSurface,
-} from '@agimon-ai/doompi-core/tool-surface';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+} from '@agimon-ai/doompi-core/toolSurface';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   MINOR_MODE_TOOL_NAME,
@@ -29,14 +29,14 @@ import {
   type DoomSubagentPolicyService,
   type SubagentPolicy,
   type SubagentPolicyHandle,
-} from '@agimon-ai/doompi-team/subagent-policy';
-import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
+} from '@agimon-ai/doompi-team/subagentPolicy';
+import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voiceTools';
 import {
   createDoomVoiceToolsService,
   DOOM_VOICE_TOOLS_SERVICE,
   type DoomVoiceToolsService,
   VOICE_MODE_TOOL_NAMES,
-} from '@agimon-ai/doompi-voice/voice-tools';
+} from '@agimon-ai/doompi-voice/voiceTools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';

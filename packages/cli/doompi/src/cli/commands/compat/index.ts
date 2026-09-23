@@ -6,7 +6,7 @@ import {
   createHarnessTelemetry,
   HARNESS_EVENT,
   type HarnessTelemetry,
-} from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+} from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
 
 import { findRepositoryRoot } from '../../../composition/repository';
 import { wantsHelp } from '../../router';

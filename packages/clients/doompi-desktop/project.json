@@ -4,9 +4,12 @@
   "sourceRoot": "packages/clients/doompi-desktop/src",
   "projectType": "application",
   "tags": ["stage:active"],
+  "implicitDependencies": ["!@agimon-ai/doompi-web", "!@agimon-ai/doompi"],
   "targets": {
     "build": {
       "executor": "nx:run-commands",
+      "inputs": ["production", "^production", "{projectRoot}/package.json"],
+      "outputs": ["{projectRoot}/dist", "{projectRoot}/build/native"],
       "options": {
         "command": "pnpm run build",
         "cwd": "packages/clients/doompi-desktop",
@@ -15,13 +18,16 @@
     },
     "package": {
       "executor": "nx:run-commands",
-      "dependsOn": ["build", "^build"],
+      "dependsOn": ["build", "^build", { "projects": ["@agimon-ai/doompi-web"], "target": "build" }],
       "cache": false,
       "options": {
         "command": "pnpm run package",
         "cwd": "packages/clients/doompi-desktop",
         "forwardAllArgs": false
       }
+    },
+    "test": {
+      "dependsOn": ["build", "^build", { "projects": ["@agimon-ai/doompi*"], "target": "build" }]
     },
     "test:e2e": {
       "executor": "nx:run-commands",

@@ -85,18 +85,18 @@ describe('doompi-sandbox package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
-      './api-contracts',
-      './cockpit-harness',
+      './apiContracts',
+      './cockpitHarness',
       './extensions/pi',
       './extensions/server',
-      './sandbox-harness',
+      './sandboxHarness',
       './package.json',
     ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);
-    expect(conditions(exportsMap['./api-contracts'])).toEqual(['types', 'import', 'require']);
-    expect(conditions(exportsMap['./cockpit-harness'])).toEqual(['types', 'import', 'require']);
-    expect(conditions(exportsMap['./sandbox-harness'])).toEqual(['types', 'import', 'require']);
+    expect(conditions(exportsMap['./apiContracts'])).toEqual(['types', 'import', 'require']);
+    expect(conditions(exportsMap['./cockpitHarness'])).toEqual(['types', 'import', 'require']);
+    expect(conditions(exportsMap['./sandboxHarness'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/pi'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/server'])).toEqual(['types', 'import', 'require']);
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
@@ -150,7 +150,7 @@ describe('doompi-sandbox package contract', () => {
   it('pins matching Pi peer and development versions', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.86.0');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.86.0');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
   });
 });

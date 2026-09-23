@@ -1,10 +1,10 @@
-import { defineRoot, type RootDeclaration } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot, type RootDeclaration } from '@agimon-ai/doompi-core/extensionFile';
 import {
   definePiTool,
   type PiPluginContext,
   type PiPluginContributions,
   type PiToolDeclaration,
-} from '@agimon-ai/doompi-core/pi-extension';
+} from '@agimon-ai/doompi-core/piExtension';
 
 import { createPlanModeRuntime } from '../../../../services/planMode';
 

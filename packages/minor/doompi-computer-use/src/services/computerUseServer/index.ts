@@ -43,7 +43,7 @@ import {
   type DoomHeadlessTool,
   type DoomHeadlessCommand,
 } from '@agimon-ai/doompi-core/headless';
-import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
 export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
   DoomServerSessionPlugin,
   'tools' | 'commands'

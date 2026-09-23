@@ -12,7 +12,7 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { consumerPackageEntry } from '@agimon-ai/doompi-core/module-resolution';
+import { consumerPackageEntry } from '@agimon-ai/doompi-core/moduleResolution';
 
 import { findRepositoryRoot } from '../composition/repository';
 

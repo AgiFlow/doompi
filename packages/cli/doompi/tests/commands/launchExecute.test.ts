@@ -5,7 +5,7 @@ import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/log-sink-telemetry';
+import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/logSinkTelemetry';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LaunchCommand } from '../../src/cli/commands/launch';

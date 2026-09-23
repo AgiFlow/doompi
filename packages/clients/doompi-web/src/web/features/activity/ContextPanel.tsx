@@ -1,4 +1,4 @@
-import type { ContextItemKind } from '@agimon-ai/doompi-core/context-api';
+import type { ContextItemKind } from '@agimon-ai/doompi-core/contextApi';
 import { Button, EmptyState } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
 

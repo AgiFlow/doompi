@@ -7,7 +7,7 @@ Pi declarations are flat. Server declarations select explicit `global`, `workspa
 ## Simple declarations
 
 ```ts
-import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/piExtension';
 import { tools } from '../tools/documentTools';
 import { command } from '../controllers/documentCommand';
 
@@ -19,7 +19,7 @@ export default definePiExtension({
 ```
 
 ```ts
-import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/serverFacet';
 import { tools } from '../tools/documentTools';
 import { command } from '../controllers/documentCommand';
 import { api } from '../controllers/documentApi';

@@ -63,6 +63,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
   }));
   const readSkill = vi.fn(async () => '# Allowed skill');
   const readUiResource = vi.fn(async () => '<!doctype html><title>Session</title>');
+  const onNotice = vi.fn();
   let uiEnabled = false;
   let revision = 12;
   let includeNewCapabilities = false;
@@ -116,11 +117,13 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
   const handler = createSessionMcpHttpHandler({
     audience: AUDIENCE,
     authorization,
+    onNotice,
     resolveSession: async () => {
       resolveCount += 1;
       if (resolveCount === revokeAtResolve) authorization.revokeGrant(tokens.grantId);
       return { generation, toolSurface };
     },
+    resolveConversation: async () => ({ generation, toolSurface }),
   });
   const request = (
     method: string,
@@ -138,7 +141,19 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
           authorization: `Bearer ${token}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ jsonrpc: '2.0', id, method, ...(params === undefined ? {} : { params }) }),
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id,
+          method,
+          ...(params === undefined
+            ? {}
+            : {
+                params:
+                  method === 'tools/call' || method === 'resources/read'
+                    ? { ...params, _meta: { 'openai/session': 'test' } }
+                    : params,
+              }),
+        }),
       }),
     );
   return {
@@ -153,12 +168,17 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
             accept: 'application/json, text/event-stream',
             'content-type': 'application/json',
           },
-          body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId } }),
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'notifications/cancelled',
+            params: { requestId, _meta: { 'openai/session': 'test' } },
+          }),
         }),
       ),
     handler,
     request,
     invokeTool,
+    onNotice,
     readSkill,
     readUiResource,
     setUiEnabled: (value: boolean) => (uiEnabled = value),
@@ -294,6 +314,35 @@ describe('session MCP Streamable HTTP handler', () => {
     }
   });
 
+  it('emits privacy-safe generated correlation and lifecycle notices for each invocation', async () => {
+    const current = fixture();
+    await expect((await current.request('tools/call', { name: 'allowed_tool' })).json()).resolves.toMatchObject({
+      result: { content: [{ text: 'called' }] },
+    });
+
+    const notices = current.onNotice.mock.calls.map(([notice]) => notice);
+    expect(notices).toHaveLength(2);
+    expect(notices[0]).toMatch(/^session MCP invocation id=[0-9a-f-]{36} lifecycle=started$/u);
+    expect(notices[1]).toMatch(/^session MCP invocation id=[0-9a-f-]{36} lifecycle=succeeded$/u);
+    expect(notices[0]!.match(/id=([^ ]+)/u)?.[1]).toBe(notices[1]!.match(/id=([^ ]+)/u)?.[1]);
+    expect(notices.join('\n')).not.toContain('alpha');
+    expect(notices.join('\n')).not.toContain('allowed_tool');
+  });
+
+  it('emits a failed lifecycle notice with the same correlation ID', async () => {
+    const current = fixture();
+    current.invokeTool.mockRejectedValueOnce(new Error('failed'));
+    await expect((await current.request('tools/call', { name: 'allowed_tool' })).json()).resolves.toMatchObject({
+      error: { code: -32603 },
+    });
+
+    const notices = current.onNotice.mock.calls.map(([notice]) => notice);
+    expect(notices).toHaveLength(2);
+    expect(notices[0]).toMatch(/^session MCP invocation id=[0-9a-f-]{36} lifecycle=started$/u);
+    expect(notices[1]).toMatch(/^session MCP invocation id=[0-9a-f-]{36} lifecycle=failed$/u);
+    expect(notices[0]!.match(/id=([^ ]+)/u)?.[1]).toBe(notices[1]!.match(/id=([^ ]+)/u)?.[1]);
+  });
+
   it('propagates HTTP request cancellation to the tool signal', async () => {
     const current = fixture();
     const controller = new AbortController();
@@ -371,17 +420,13 @@ describe('session MCP Streamable HTTP handler', () => {
     await expect(called.json()).resolves.toMatchObject({ result: { content: [{ type: 'text', text: 'called' }] } });
 
     const resources = await session.request('resources/list');
-    await expect(resources.json()).resolves.toMatchObject({
-      result: { resources: [{ name: 'allowed-skill' }, { name: 'hidden-skill' }, { name: 'new-skill' }] },
-    });
+    await expect(resources.json()).resolves.toMatchObject({ result: { resources: [] } });
   });
   it('lists and reads only granted active skill resources', async () => {
     const { request, readSkill } = fixture();
 
     const listed = await request('resources/list');
-    await expect(listed.json()).resolves.toMatchObject({
-      result: { resources: [{ name: 'allowed-skill', uri: 'doompi://session/alpha/skills/allowed-skill' }] },
-    });
+    await expect(listed.json()).resolves.toMatchObject({ result: { resources: [] } });
 
     const read = await request('resources/read', { uri: 'doompi://session/alpha/skills/allowed-skill' });
     await expect(read.json()).resolves.toMatchObject({

@@ -1,4 +1,4 @@
-import { readDoomTransitionCoordinator } from '@agimon-ai/doompi-core/runtime-transition';
+import { readDoomTransitionCoordinator } from '@agimon-ai/doompi-core/runtimeTransition';
 import type { Context } from '@deepseek-ai/cordis';
 
 import { readMinorModeCatalog } from '../../schemas/mode';

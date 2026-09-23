@@ -5,7 +5,7 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
  * the store has none, so each variant seeds the store first and only the
  * inactive-mode branch is left to the fallback path.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import type { AuthorDocumentInput } from '../_lib/authorViewportTypes';
 import { putAuthorDocument, reviseAuthorDocument } from '../_lib/authorWorkspaceStore';

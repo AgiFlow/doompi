@@ -1,4 +1,4 @@
-import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 import { describe, expect, it, vi } from 'vitest';
 
 import { PromptEditor } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/PromptEditor';

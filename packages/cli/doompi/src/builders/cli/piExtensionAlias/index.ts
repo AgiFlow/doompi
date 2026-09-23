@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { DOOM_PACKAGE_NAME, manifestName } from '@agimon-ai/doompi-core/doom-package';
+import { DOOM_PACKAGE_NAME, manifestName } from '@agimon-ai/doompi-core/doomPackage';
 
 import {
   piExtensionDispatcherIsCurrent,

@@ -18,10 +18,14 @@ afterEach(() => {
 
 const EMPTY = 'export default {};\n';
 
-function packageWith(files: Record<string, string>, name = '@agimon-ai/doompi-plan'): string {
+function packageWith(
+  files: Record<string, string>,
+  name = '@agimon-ai/doompi-plan',
+  manifest: Record<string, unknown> = {},
+): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-generate-'));
   created.push(dir);
-  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name }));
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ ...manifest, name }));
   for (const relative of Object.keys(files)) {
     const absolute = path.join(dir, relative);
     fs.mkdirSync(path.dirname(absolute), { recursive: true });
@@ -192,7 +196,7 @@ describe('doompiExtension', () => {
     const config = doompiExtension({ packageDir: dir, target: 'mcp' });
     expect(Array.isArray(config)).toBe(false);
     if (Array.isArray(config)) throw new Error('expected MCP config');
-    config.hooks['build:done']();
+    config.hooks?.['build:done']();
     expect(JSON.parse(read(dir, 'package.json')).doompiMcp).toBeDefined();
     // Simulate the artifacts emitted by the first build.
     for (const suffix of ['mjs', 'cjs.map', 'd.mts', 'd.cts.map']) {
@@ -256,6 +260,51 @@ describe('doompiExtension', () => {
       'normal.server.mjs',
     ]);
     expect(read(dir, 'dist/index.mjs')).toBe(EMPTY);
+  });
+
+  it('keeps discovered export entry names in camel case', () => {
+    const dir = packageWith({
+      'src/exports/apiContracts.ts': EMPTY,
+      'src/exports/logSinkTelemetry.ts': EMPTY,
+    });
+    const config = doompiExtension({ packageDir: dir });
+
+    expect(Array.isArray(config)).toBe(true);
+    if (!Array.isArray(config)) throw new Error('expected isolated API contracts config');
+    expect(config.map((entry) => entry.entry)).toEqual([
+      { apiContracts: 'src/exports/apiContracts.ts' },
+      { logSinkTelemetry: 'src/exports/logSinkTelemetry.ts' },
+    ]);
+  });
+
+  it('exports root skills and theme resources without treating them as build entries', () => {
+    const dir = packageWith({
+      'src/exports/index.ts': EMPTY,
+      'skills/workflow-recovery/SKILL.md': '# Recovery\n',
+      'themes/doom-pi-dark.json': '{}\n',
+    });
+    const config = doompiExtension({ packageDir: dir });
+    expect(Array.isArray(config)).toBe(false);
+    if (Array.isArray(config) || typeof config.exports === 'boolean') throw new Error('expected generated exports');
+
+    expect(config.exports.customExports({ '.': { import: './dist/index.mjs' } })).toMatchObject({
+      './skills/workflow-recovery/SKILL.md': './skills/workflow-recovery/SKILL.md',
+      './themes/doom-pi-dark.json': './themes/doom-pi-dark.json',
+    });
+  });
+
+  it('uses the browser tsconfig when bundling frontend routes', () => {
+    const dir = packageWith({
+      'src/extensions/(frontend)/template/example.web.tsx': 'export default {};\n',
+    });
+    const config = doompiExtension({ packageDir: dir });
+
+    expect(Array.isArray(config)).toBe(true);
+    if (!Array.isArray(config)) throw new Error('expected browser config');
+    expect(config.find((entry) => 'extensions/web' in entry.entry)).toMatchObject({
+      dts: false,
+      tsconfig: 'tsconfig.web.json',
+    });
   });
 
   it('does not clean outputs or change metadata in check mode', () => {

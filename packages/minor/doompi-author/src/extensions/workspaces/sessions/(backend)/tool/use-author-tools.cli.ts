@@ -1,4 +1,4 @@
-import { defineTool, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineTool, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
 
 import { AUTHOR_TOOL_WHEN, createAuthorTools, type AuthorToolRoot } from '../../../../../services/authorTools';
 

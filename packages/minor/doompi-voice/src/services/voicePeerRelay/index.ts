@@ -5,7 +5,7 @@ import {
   type DoomApi,
   type DoomApiContext,
   type DoomApiHandler,
-} from '@agimon-ai/doompi-core/package-api';
+} from '@agimon-ai/doompi-core/packageApi';
 import {
   createPeerReplayGuard,
   parseRemoteSessionReference,

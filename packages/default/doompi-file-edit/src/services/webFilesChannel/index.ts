@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { DoomHubChannel, DoomHubChannelSource } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomHubChannel, DoomHubChannelSource } from '@agimon-ai/doompi-core/hubChannel';
 
 import { filterDoomIgnoredFiles } from '../../services/doomIgnore';
 import { confirmedChanges, foldEntries, foldVersions, isDiffable, parseTimeline } from '../../services/fileChanges';

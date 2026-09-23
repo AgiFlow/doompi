@@ -7,7 +7,7 @@ import path from 'node:path';
 import {
   AGENT_PLUGIN_MCP_SCHEMA_URL,
   type DoomMcpAgentPluginProjectionSource,
-} from '@agimon-ai/doompi-core/mcp-projection';
+} from '@agimon-ai/doompi-core/mcpProjection';
 
 const PRIVATE_FILE_MODE = 0o600;
 const PRIVATE_DIRECTORY_MODE = 0o700;

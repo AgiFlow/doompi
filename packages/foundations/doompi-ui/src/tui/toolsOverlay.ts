@@ -12,7 +12,7 @@
  * list, which keeps selection a single index and every row assertable as text.
  */
 
-import type { ToolEntry, ToolSource } from '@agimon-ai/doompi-core/tool-inventory';
+import type { ToolEntry, ToolSource } from '@agimon-ai/doompi-core/toolInventory';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 

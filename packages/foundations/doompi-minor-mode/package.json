@@ -63,20 +63,20 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
-    "./minor-mode-command": {
-      "types": "./dist/minor-mode-command.d.mts",
-      "import": "./dist/minor-mode-command.mjs",
-      "require": "./dist/minor-mode-command.cjs"
+    "./minorModeCommand": {
+      "types": "./dist/minorModeCommand.d.mts",
+      "import": "./dist/minorModeCommand.mjs",
+      "require": "./dist/minorModeCommand.cjs"
     },
     "./mode": {
       "types": "./dist/mode.d.mts",
       "import": "./dist/mode.mjs",
       "require": "./dist/mode.cjs"
     },
-    "./mode-definition": {
-      "types": "./dist/mode-definition.d.mts",
-      "import": "./dist/mode-definition.mjs",
-      "require": "./dist/mode-definition.cjs"
+    "./modeDefinition": {
+      "types": "./dist/modeDefinition.d.mts",
+      "import": "./dist/modeDefinition.mjs",
+      "require": "./dist/modeDefinition.cjs"
     },
     "./owner": {
       "types": "./dist/owner.d.mts",
@@ -88,10 +88,10 @@
       "import": "./dist/projection.mjs",
       "require": "./dist/projection.cjs"
     },
-    "./reload-handoff": {
-      "types": "./dist/reload-handoff.d.mts",
-      "import": "./dist/reload-handoff.mjs",
-      "require": "./dist/reload-handoff.cjs"
+    "./reloadHandoff": {
+      "types": "./dist/reloadHandoff.d.mts",
+      "import": "./dist/reloadHandoff.mjs",
+      "require": "./dist/reloadHandoff.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -115,8 +115,8 @@
     "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
-    "@earendil-works/pi-coding-agent": "0.86.0",
-    "@earendil-works/pi-tui": "0.86.0",
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-tui": "0.87.1",
     "@types/node": "26.6.1",
     "@vitest/coverage-v8": "5.0.1",
     "tsdown": "0.23.0",
@@ -124,8 +124,8 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.86.0",
-    "@earendil-works/pi-tui": "0.86.0"
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-tui": "0.87.1"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
@@ -146,7 +146,7 @@
     ],
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
-      "dist": "./dist/api-contracts.mjs"
+      "dist": "./dist/apiContracts.mjs"
     }
   },
   "pi": {

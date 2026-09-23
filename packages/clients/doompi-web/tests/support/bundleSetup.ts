@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config';
-import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
-import { bundleCockpitWeb } from '@agimon-ai/doompi/builders/web';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
+import { bundleCockpitWeb } from '@agimon-ai/doompi/webBuilder';
 
 import { pluginPackageRoots } from './pluginRoots';
 

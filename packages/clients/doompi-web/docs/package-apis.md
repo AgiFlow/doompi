@@ -45,7 +45,7 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   requireDoomServerHost,
   type DoomServerFacet,
-} from '@agimon-ai/doompi-core/server-facet';
+} from '@agimon-ai/doompi-core/serverFacet';
 import { api } from '../exampleApi';
 
 export default {
@@ -66,7 +66,7 @@ The API owns its base path. Eligible registrations compete for paths in determin
 Keep the API implementation reusable, separate from the facet entry:
 
 ```ts
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 
 export const api: DoomApi = {
   basePath: 'example',

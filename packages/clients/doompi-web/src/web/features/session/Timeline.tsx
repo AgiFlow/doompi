@@ -569,6 +569,9 @@ export function Transcript({
     getItemKey: unitKey,
     initialRect: { width: 0, height: 800 },
   });
+  // Rows start at the 80px estimate and grow once measured. The layout effect
+  // watches this so a measured row is followed like a new one.
+  const totalSize = virtualizer.getTotalSize();
   // The transcript's height as of the last entry. Whether to follow the newest
   // line is decided against this rather than against a scroll event, because
   // an event fires after the fact and a fast run can grow the transcript
@@ -677,6 +680,18 @@ export function Transcript({
       setUnread(false);
       return;
     }
+    // Measuring a row the estimate got wrong grows the transcript with nothing
+    // new in it. A reader sitting on the old bottom stays on the bottom, and
+    // nobody else is told there is new activity, because there is none.
+    if (!entriesChanged) {
+      const pinned = element.scrollTop + element.clientHeight >= lastHeight.current - 1;
+      lastHeight.current = element.scrollHeight;
+      if (pinned) {
+        following.current = true;
+        followLatest();
+      }
+      return;
+    }
     const shouldFollow = following.current || atBottom(element, lastHeight.current);
     lastHeight.current = element.scrollHeight;
     if (shouldFollow) {
@@ -686,7 +701,7 @@ export function Transcript({
       return;
     }
     setUnread(true);
-  }, [units, visibleEntries, virtualizer, unitKey]);
+  }, [units, visibleEntries, virtualizer, unitKey, totalSize]);
 
   if (visibleEntries.length === 0) {
     return (
@@ -708,7 +723,7 @@ export function Transcript({
           compact ? 'flex-1 overflow-y-auto px-2.5 py-2' : 'flex-1 overflow-y-auto px-2 py-4 sm:px-[26px] sm:py-[22px]'
         }
       >
-        <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
+        <div style={{ height: totalSize, position: 'relative', width: '100%' }}>
           {virtualizer.getVirtualItems().map((row) => {
             const unit = units[row.index]!;
             return (

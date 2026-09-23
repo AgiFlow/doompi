@@ -1,5 +1,5 @@
 import type { DoomHeadlessExecutionContext, DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
-import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcp-facet';
+import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 import { describe, expect, it, vi } from 'vitest';
 
 import { bindMcpTool, TEAM_MCP_TOOLS_SERVICE, type McpToolCatalog } from '../../src/services/mcpTools';

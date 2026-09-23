@@ -1,4 +1,4 @@
-import { defineRoute } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoute } from '@agimon-ai/doompi-core/extensionFile';
 
 import { api } from '../../../../services/promptsApi';
 

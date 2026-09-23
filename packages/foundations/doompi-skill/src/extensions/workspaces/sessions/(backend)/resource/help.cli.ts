@@ -1,4 +1,4 @@
-import { defineResource } from '@agimon-ai/doompi-core/extension-file';
+import { defineResource } from '@agimon-ai/doompi-core/extensionFile';
 
 import { LEADER_SOURCE } from '../../../../../types/skills';
 export default defineResource({

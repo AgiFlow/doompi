@@ -24,7 +24,7 @@
     "directory": "layers/design/doompi-style-system"
   },
   "bin": {
-    "doompi-design": "./dist/cli.mjs"
+    "doompi-style-system": "./dist/cli.mjs"
   },
   "files": [
     "dist",
@@ -33,6 +33,7 @@
   ],
   "type": "module",
   "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
@@ -40,11 +41,6 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
-    },
-    "./api-contracts": {
-      "types": "./dist/api-contracts.d.mts",
-      "import": "./dist/api-contracts.mjs",
-      "require": "./dist/api-contracts.cjs"
     },
     "./cli": {
       "types": "./dist/cli.d.mts",
@@ -64,6 +60,7 @@
     "./extensions/web": {
       "import": "./dist/extensions/web.mjs"
     },
+    "./skills/design-workflow/SKILL.md": "./skills/design-workflow/SKILL.md",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -86,7 +83,7 @@
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.86.0",
+    "@earendil-works/pi-coding-agent": "0.87.1",
     "@types/node": "26.6.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
@@ -98,7 +95,7 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.86.0"
+    "@earendil-works/pi-coding-agent": "0.87.1"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
@@ -116,7 +113,7 @@
     ],
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
-      "dist": "./dist/api-contracts.mjs"
+      "dist": "./dist/apiContracts.mjs"
     }
   },
   "doompiWeb": {

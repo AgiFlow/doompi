@@ -1,14 +1,14 @@
-import { readDoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
-import { readDoomChildSessionService } from '@agimon-ai/doompi-core/child';
-import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
+import { readDoomBackgroundWorkService } from '@agimon-ai/doompi-core/backgroundWork';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
+import { readDoomChildSessionService } from '@agimon-ai/doompi-core/childSession';
 import {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
   requireDoomContextContributions,
-} from '@agimon-ai/doompi-core/context-contributions';
-import type { DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
-import { DOOM_CORDIS_SESSION_SERVICE, requireDoomCordisSession } from '@agimon-ai/doompi-core/cordis-host';
-import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
-import { DOOM_MCP_TOOL_RESOLVER_SERVICE, requireDoomMcpToolResolver } from '@agimon-ai/doompi-core/mcp-tool-resolver';
+} from '@agimon-ai/doompi-core/contextContributions';
+import type { DoomCordisSessionService } from '@agimon-ai/doompi-core/cordisHost';
+import { DOOM_CORDIS_SESSION_SERVICE, requireDoomCordisSession } from '@agimon-ai/doompi-core/cordisHost';
+import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
+import { DOOM_MCP_TOOL_RESOLVER_SERVICE, requireDoomMcpToolResolver } from '@agimon-ai/doompi-core/mcpToolResolver';
 /**
  * Install the Team feature into one package-local Cordis root.
  *
@@ -18,7 +18,7 @@ import { DOOM_MCP_TOOL_RESOLVER_SERVICE, requireDoomMcpToolResolver } from '@agi
  * in reload. Long-lived services are registered as Cordis effects, and stale
  * asynchronous session-start continuations are fenced by a generation token.
  */
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 import {
   createDoomReadinessCoordinator,
   type DoomReadinessCoordinator,
@@ -26,8 +26,8 @@ import {
   type DoomReadinessNotification,
   readDoomReadinessCoordinator,
 } from '@agimon-ai/doompi-core/readiness';
-import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/sessionProtocol';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService, requireDoomUiHub } from '@agimon-ai/doompi-core/uiHub';
 import { provideBackgroundWorkService } from '@agimon-ai/doompi-session';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context, Fiber } from '@deepseek-ai/cordis';

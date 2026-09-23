@@ -8,9 +8,9 @@ import {
   type DoomMcpBundle,
   type DoomMcpBundleEntry,
   parseDoomMcpBundle,
-} from '@agimon-ai/doompi-core/mcp-facet';
-import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
-import type { DoomServerBundleOwner } from '@agimon-ai/doompi-core/server-facet';
+} from '@agimon-ai/doompi-core/mcpFacet';
+import { writeFileAtomic } from '@agimon-ai/doompi-core/runtimeJson';
+import type { DoomServerBundleOwner } from '@agimon-ai/doompi-core/serverFacet';
 
 import { compileExtensionModule, extensionModuleManifestPath } from '../../compiler';
 import type { ExtensionComposition } from '../cli/extensionAssembler';

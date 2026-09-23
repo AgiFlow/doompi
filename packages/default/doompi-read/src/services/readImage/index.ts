@@ -1,4 +1,4 @@
-import { loadPiImageSettings, type PiImageSettings } from '@agimon-ai/doompi-config/pi-config';
+import { loadPiImageSettings, type PiImageSettings } from '@agimon-ai/doompi-config/piConfig';
 
 const OMITTED_NOTE = '[Image omitted: could not be resized below the inline image size limit.]';
 

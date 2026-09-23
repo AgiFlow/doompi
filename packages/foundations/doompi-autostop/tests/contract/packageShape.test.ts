@@ -59,13 +59,13 @@ describe('doompi-autostop package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
-      './api-contracts',
+      './apiContracts',
       './extensions/pi',
       './extensions/server',
       './package.json',
     ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
-    for (const subpath of ['.', './api-contracts', './extensions/pi', './extensions/server']) {
+    for (const subpath of ['.', './apiContracts', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
@@ -113,7 +113,7 @@ describe('doompi-autostop package contract', () => {
   it('pins matching Pi peer and development versions', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.86.0');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.86.0');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.87.1');
   });
 });

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { parseBundleAssetPolicy } from '@agimon-ai/doompi-core/web';
-import { bundleAssetPolicyPlugin } from '@agimon-ai/doompi/builders/web';
+import { bundleAssetPolicyPlugin } from '@agimon-ai/doompi/webBuilder';
 import { build } from 'vite';
 import { describe, expect, it } from 'vitest';
 

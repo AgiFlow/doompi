@@ -1,7 +1,7 @@
 [
   {
     "packageName": "@agimon-ai/doompi-core",
-    "subpath": "./ask-user",
+    "subpath": "./askUser",
     "values": {
       "DOOM_ASK_USER_PROMPT_EVENT": "doom/ask-user/prompt",
       "DOOM_ASK_USER_BLOCKED_EVENT": "doom/ask-user/blocked"
@@ -9,7 +9,7 @@
   },
   {
     "packageName": "@agimon-ai/doompi-core",
-    "subpath": "./cordis-host",
+    "subpath": "./cordisHost",
     "values": {
       "DOOM_CORDIS_HOST_ABI_VERSION": 1,
       "DOOM_CORDIS_HOST_QUERY_CHANNEL": "doom:cordis:host:v1:query",
@@ -44,7 +44,7 @@
   },
   {
     "packageName": "@agimon-ai/doompi-core",
-    "subpath": "./tool-overrides",
+    "subpath": "./toolOverrides",
     "values": {
       "DOOM_TOOL_OVERRIDES_SERVICE": "doom/tool-overrides"
     },
@@ -52,7 +52,7 @@
   },
   {
     "packageName": "@agimon-ai/doompi-core",
-    "subpath": "./ui-hub",
+    "subpath": "./uiHub",
     "values": {
       "DOOM_UI_HUB_SERVICE": "doom/ui-hub"
     },
@@ -60,7 +60,7 @@
   },
   {
     "packageName": "@agimon-ai/doompi-voice",
-    "subpath": "./voice-tools",
+    "subpath": "./voiceTools",
     "values": {
       "DOOM_VOICE_TOOLS_SERVICE": "doom/voice-tools"
     },
@@ -68,7 +68,7 @@
   },
   {
     "packageName": "@agimon-ai/doompi-voice",
-    "subpath": "./voice-reload-handoff",
+    "subpath": "./voiceReloadHandoff",
     "values": {
       "VOICE_RELOAD_HANDOFF_REGISTRY_KEY": "@agimon-ai/doompi-core.voice-reload-handoff.v1",
       "VOICE_RELOAD_HANDOFF_TTL_MS": 30000
@@ -77,7 +77,7 @@
   },
   {
     "packageName": "@agimon-ai/doompi-core",
-    "subpath": "./background-work",
+    "subpath": "./backgroundWork",
     "values": {
       "DOOM_BACKGROUND_WORK_SERVICE": "doom/background-work",
       "DOOM_BACKGROUND_WORK_CHANGED_EVENT": "doom/background-work/changed"
@@ -100,7 +100,7 @@
   },
   {
     "packageName": "@agimon-ai/doompi-team",
-    "subpath": "./subagent-policy",
+    "subpath": "./subagentPolicy",
     "values": {
       "DOOM_SUBAGENT_POLICY_SERVICE": "doom/subagent-policy"
     },
@@ -108,7 +108,7 @@
   },
   {
     "packageName": "@agimon-ai/doompi-team",
-    "subpath": "./fable-plan",
+    "subpath": "./fablePlan",
     "values": {
       "DOOM_FABLE_PLAN_SERVICE": "doom/fable-plan"
     },

@@ -6,8 +6,8 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProvider,
   type DoomBackgroundWorkService,
-} from '@agimon-ai/doompi-core/background-work';
-import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
+} from '@agimon-ai/doompi-core/backgroundWork';
+import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/childProcess';
 import {
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
@@ -18,8 +18,8 @@ import {
   DOOM_READINESS_SERVICE,
   type DoomReadinessCoordinator,
 } from '@agimon-ai/doompi-core/readiness';
-import { createDoomToolSurface, DOOM_TOOL_SURFACE_SERVICE } from '@agimon-ai/doompi-core/tool-surface';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import { createDoomToolSurface, DOOM_TOOL_SURFACE_SERVICE } from '@agimon-ai/doompi-core/toolSurface';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/uiHub';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeCatalogService,

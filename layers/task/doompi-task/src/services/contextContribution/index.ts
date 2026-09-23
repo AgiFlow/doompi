@@ -1,4 +1,4 @@
-import type { DoomContextContribution } from '@agimon-ai/doompi-core/context-contributions';
+import type { DoomContextContribution } from '@agimon-ai/doompi-core/contextContributions';
 
 import type { Task } from '../../models/task';
 

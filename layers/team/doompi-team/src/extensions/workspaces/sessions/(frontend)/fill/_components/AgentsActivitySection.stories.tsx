@@ -5,7 +5,7 @@
  * package's own testing fixture, and the rows come from the real session store
  * seeded at module scope, which is the only input this component reads.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import type { SubagentRun } from '../../../../../../types/webSubagents';
 import { subagents } from '../../_lib/subagentsStore';

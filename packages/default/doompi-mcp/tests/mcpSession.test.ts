@@ -1,4 +1,4 @@
-import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/piExtension';
 import { Context } from '@deepseek-ai/cordis';
 
 import { createMcpToolCollection } from '../src/services/mcpToolCollection';
@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { createDoomToolSurface, type DoomToolSurfaceService } from '@agimon-ai/doompi-core/tool-surface';
+import { createDoomToolSurface, type DoomToolSurfaceService } from '@agimon-ai/doompi-core/toolSurface';
 import type { McpServerStateChange } from '@agimon-ai/mcp-proxy';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

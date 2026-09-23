@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { SandboxLaunchRequest } from '@agimon-ai/doompi-core/sandbox-harness';
+import type { SandboxLaunchRequest } from '@agimon-ai/doompi-core/sandboxHarness';
 
 import type { EngineProcessRunner, SandboxEngine, SandboxHostFacts } from '../../types/sandboxHarness';
 import { startBroker, type RunningBroker } from '../brokerHost';

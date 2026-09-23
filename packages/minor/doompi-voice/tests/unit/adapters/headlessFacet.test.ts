@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { DoomHeadlessHostService, DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
 import { describe, expect, it, vi } from 'vitest';
 
 import { VoiceMediaBroker } from '../../../src/services/clientMediaApi';

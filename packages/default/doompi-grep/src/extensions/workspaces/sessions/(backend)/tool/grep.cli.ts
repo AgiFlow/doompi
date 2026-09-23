@@ -1,4 +1,4 @@
-import { definePiTool } from '@agimon-ai/doompi-core/pi-extension';
+import { definePiTool } from '@agimon-ai/doompi-core/piExtension';
 
 import { createHashlineGrepTool } from './_lib/grepTool';
 

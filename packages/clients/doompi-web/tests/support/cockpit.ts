@@ -4,13 +4,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { OpenSessionRecord } from '@agimon-ai/doompi-core/history';
-import { type DoomHubSessionCreateRequest, type DoomPendingSessionSetup } from '@agimon-ai/doompi-core/hub-channel';
-import { type PackageApiServer, serveSessionApis } from '@agimon-ai/doompi-core/package-api-server';
+import { type DoomHubSessionCreateRequest, type DoomPendingSessionSetup } from '@agimon-ai/doompi-core/hubChannel';
+import { type PackageApiServer, serveSessionApis } from '@agimon-ai/doompi-core/packageApiServer';
 import { createHeadlessHub, serveHeadlessServer, type HeadlessSessionHost } from '@agimon-ai/doompi-core/server';
-import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/server-facet';
-import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
-import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
-import { createWebCompositions } from '@agimon-ai/doompi-core/web-compositions';
+import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/serverFacet';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/sessionProtocol';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
+import { createWebCompositions } from '@agimon-ai/doompi-core/webCompositions';
 import { test as base } from '@playwright/test';
 
 import { serveWeb } from '../../src/adapters/httpServer';

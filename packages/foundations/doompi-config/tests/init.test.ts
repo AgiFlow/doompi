@@ -38,7 +38,6 @@ const DEFAULT_DISTRIBUTION_PACKAGES = [
   '@agimon-ai/doompi-workflow',
   '@agimon-ai/doompi-log',
   '@agimon-ai/doompi-mcp',
-  '@agimon-ai/doompi-template-advanced',
   '@agimon-ai/doompi-template-elegant',
 ] as const;
 const MINIMAL_DEFAULT_LAYERS = ['team', 'task'] as const;

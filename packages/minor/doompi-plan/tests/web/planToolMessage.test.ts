@@ -1,4 +1,4 @@
-import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-core/webTesting';
 import { describe, expect, it } from 'vitest';
 
 import { webPlugin as scopedWebPlugin } from '../../generated/web';

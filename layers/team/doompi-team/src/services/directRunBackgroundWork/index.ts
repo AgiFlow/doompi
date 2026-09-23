@@ -1,4 +1,4 @@
-import type { BackgroundProviderWorkItem, DoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
+import type { BackgroundProviderWorkItem, DoomBackgroundWorkService } from '@agimon-ai/doompi-core/backgroundWork';
 import type { Context } from '@deepseek-ai/cordis';
 
 import type { AsyncJobTracker } from '../asyncJobTracker';

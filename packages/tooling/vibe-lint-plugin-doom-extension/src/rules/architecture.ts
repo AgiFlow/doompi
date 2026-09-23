@@ -181,7 +181,7 @@ const NATIVE_HEADLESS_HOST_PATH = 'src/controllers/headlessHost.ts';
 /** The server's own host runner: one Context per headless server process. */
 const SERVER_FACET_LOADER_PATH = 'src/controllers/serverFacetLoader.ts';
 const CORDIS_HOST_ADAPTER_PATHS = [CORDIS_HOST_ADAPTER_PATH, SERVER_FACET_LOADER_PATH];
-const CORDIS_HOST_EXPORT = '@agimon-ai/doompi-core/cordis-host';
+const CORDIS_HOST_EXPORT = '@agimon-ai/doompi-core/cordisHost';
 const LEGACY_SESSION_CONTEXT_EXPORT = '@agimon-ai/doompi-core/session-context';
 const LEGACY_SESSION_CONTEXT_PATHS = new Set(['src/exports/sessionContext.ts', 'src/schemas/sessionContext.ts']);
 const DOOM_HOST_CORDIS_FEATURE_PATHS = [

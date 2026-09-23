@@ -5,10 +5,10 @@ import path from 'node:path';
 
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
 import { filterHookDisabledLayers, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
-import { createHeadlessHub, type HeadlessHub } from '@agimon-ai/doompi-core/headless-hub';
-import { serveHeadlessServer } from '@agimon-ai/doompi-core/headless-server';
-import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '@agimon-ai/doompi-core/headless-session-host';
-import { createHeadlessSessionManager } from '@agimon-ai/doompi-core/headless-session-manager';
+import { createHeadlessHub, type HeadlessHub } from '@agimon-ai/doompi-core/headlessHub';
+import { serveHeadlessServer } from '@agimon-ai/doompi-core/headlessServer';
+import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '@agimon-ai/doompi-core/headlessSessionHost';
+import { createHeadlessSessionManager } from '@agimon-ai/doompi-core/headlessSessionManager';
 import {
   createOpenSessionRegistry,
   createWorkspaceRegistry,
@@ -20,18 +20,18 @@ import type {
   DoomHubSessionApiRequest,
   DoomHubSessionCreateRequest,
   DoomHubSessionScope,
-} from '@agimon-ai/doompi-core/hub-channel';
-import { loadMcpBundle, type LoadedMcpBundle } from '@agimon-ai/doompi-core/mcp-facet';
-import { serveSessionApis, type PackageApiServer } from '@agimon-ai/doompi-core/package-api-server';
-import { piAgentDirectory } from '@agimon-ai/doompi-core/pi-settings';
-import { createRemoteRuntime, type RemoteRuntime } from '@agimon-ai/doompi-core/remote-runtime';
-import type { HeadlessSessionManager } from '@agimon-ai/doompi-core/runtime-headless-session-manager';
-import { createHarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
-import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/server-facet';
-import { createServerTelemetry } from '@agimon-ai/doompi-core/server-telemetry';
-import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
-import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
-import { createWebCompositions } from '@agimon-ai/doompi-core/web-compositions';
+} from '@agimon-ai/doompi-core/hubChannel';
+import { loadMcpBundle, type LoadedMcpBundle } from '@agimon-ai/doompi-core/mcpFacet';
+import { serveSessionApis, type PackageApiServer } from '@agimon-ai/doompi-core/packageApiServer';
+import { piAgentDirectory } from '@agimon-ai/doompi-core/piSettings';
+import { createRemoteRuntime, type RemoteRuntime } from '@agimon-ai/doompi-core/remoteRuntime';
+import type { HeadlessSessionManager } from '@agimon-ai/doompi-core/runtimeHeadlessSessionManager';
+import { createHarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
+import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/serverFacet';
+import { createServerTelemetry } from '@agimon-ai/doompi-core/serverTelemetry';
+import { resolveSyncLocation } from '@agimon-ai/doompi-core/syncLocation';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
+import { createWebCompositions } from '@agimon-ai/doompi-core/webCompositions';
 import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import WebSocket from 'ws';
 

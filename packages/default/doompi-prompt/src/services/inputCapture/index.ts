@@ -1,4 +1,4 @@
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/piExtension';
 
 import { EXTENSION_SOURCE, CONTINUE } from '../../constants/inputCapture';
 import type { RecentPrompts } from '../../types/prompt';

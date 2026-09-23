@@ -1,4 +1,4 @@
-import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hubChannel';
 import { describe, expect, it } from 'vitest';
 
 import { createTasksChannel } from '../src/extensions/(backend)/channel/_lib/task-graph';

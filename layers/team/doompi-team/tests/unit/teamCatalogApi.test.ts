@@ -4,7 +4,11 @@ import * as path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createTeamApiHandler } from '../../src/extensions/workspaces/sessions/(backend)/api/_lib/route.server';
+import {
+  createTeamApiHandler,
+  createTeamSessionApi,
+} from '../../src/extensions/workspaces/sessions/(backend)/api/_lib/route.server';
+import { DoomTeamExpectedError } from '../../src/services/errors';
 import type { SubagentCatalogPayload } from '../../src/types/webSubagents';
 
 const pluginAgent = {
@@ -107,6 +111,154 @@ describe('the Team session catalog API', () => {
     const response = await api.fetch(new Request('http://session/catalog'));
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: 'catalog unavailable' });
+  });
+});
+
+describe('the Team session control API', () => {
+  const post = (route: string, body: unknown) =>
+    new Request(`http://session${route}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+  const delivered = {
+    requestId: 'req-1',
+    index: 0,
+    state: 'delivered' as const,
+    message: 'Native child accepted the steer request.',
+  };
+
+  it('steers a run with trimmed input and the request signal', async () => {
+    const steer = vi.fn(async () => delivered);
+    const handler = createTeamApiHandler({ cwd: '/workspace/project', steer });
+
+    const response = await handler.fetch(post('/steer', { runId: ' run-1 ', message: '  focus on tests  ' }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(delivered);
+    expect(steer).toHaveBeenCalledWith({ runId: 'run-1', message: 'focus on tests' }, expect.any(AbortSignal));
+  });
+
+  it('passes a refused or unacknowledged steer through as a result', async () => {
+    for (const state of ['failed', 'pending'] as const) {
+      const result = { requestId: 'req-2', index: 0, state, message: `child said ${state}` };
+      const handler = createTeamApiHandler({ cwd: '/workspace/project', steer: async () => result });
+      const response = await handler.fetch(post('/steer', { runId: 'run-1', message: 'go' }));
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual(result);
+    }
+  });
+
+  it('rejects malformed steer input without steering', async () => {
+    const steer = vi.fn(async () => delivered);
+    const handler = createTeamApiHandler({ cwd: '/workspace/project', steer });
+    for (const body of [
+      '{',
+      [],
+      { runId: 'run-1' },
+      { runId: 'run-1', message: '   ' },
+      { runId: '', message: 'go' },
+      { runId: 1, message: 'go' },
+      { runId: 'run-1', message: 'go', targetIndex: 1 },
+    ]) {
+      const response = await handler.fetch(post('/steer', body));
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({ error: 'Invalid steer request.' });
+    }
+    expect(steer).not.toHaveBeenCalled();
+  });
+
+  it('maps an inactive run to 404 and any other failure to 409', async () => {
+    const cases: Array<[unknown, number, string]> = [
+      [
+        new DoomTeamExpectedError('run_not_found', "No active run matches 'run-1'.", false, 'retry'),
+        404,
+        'This run is not active.',
+      ],
+      [new Error("Child run 'run-1' is no longer active."), 409, "Child run 'run-1' is no longer active."],
+      ['offline', 409, 'offline'],
+    ];
+    for (const [failure, status, error] of cases) {
+      const handler = createTeamApiHandler({
+        cwd: '/workspace/project',
+        steer: async () => {
+          throw failure;
+        },
+      });
+      const response = await handler.fetch(post('/steer', { runId: 'run-1', message: 'go' }));
+      expect(response.status).toBe(status);
+      await expect(response.json()).resolves.toEqual({ error });
+    }
+  });
+
+  it('stops a run, validates the request and reports an inactive run', async () => {
+    const stop = vi.fn(async () => ({ requestId: 'req-stop' }));
+    const handler = createTeamApiHandler({ cwd: '/workspace/project', stop });
+
+    const accepted = await handler.fetch(post('/stop', { runId: ' run-1 ' }));
+    expect(accepted.status).toBe(200);
+    await expect(accepted.json()).resolves.toEqual({ requestId: 'req-stop' });
+    expect(stop).toHaveBeenCalledWith({ runId: 'run-1' });
+
+    for (const body of ['{', { runId: '' }, { runId: 'run-1', reason: 'x' }]) {
+      const response = await handler.fetch(post('/stop', body));
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({ error: 'Invalid stop request.' });
+    }
+    expect(stop).toHaveBeenCalledOnce();
+
+    const gone = createTeamApiHandler({
+      cwd: '/workspace/project',
+      stop: async () => {
+        throw new DoomTeamExpectedError('run_not_found', "Native run 'run-1' is no longer active.", false, 'retry');
+      },
+    });
+    const missing = await gone.fetch(post('/stop', { runId: 'run-1' }));
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toEqual({ error: 'This run is not active.' });
+  });
+
+  it('keeps the control routes closed when unwired or called with the wrong method', async () => {
+    const unwired = createTeamApiHandler({ cwd: '/workspace/project' });
+    const wired = createTeamApiHandler({
+      cwd: '/workspace/project',
+      steer: async () => delivered,
+      stop: async () => ({ requestId: 'req-stop' }),
+    });
+    const cases: Array<[typeof wired, Request]> = [
+      [unwired, post('/steer', { runId: 'run-1', message: 'go' })],
+      [unwired, post('/stop', { runId: 'run-1' })],
+      [wired, new Request('http://session/steer')],
+      [wired, new Request('http://session/stop')],
+    ];
+    for (const [handler, request] of cases) {
+      const response = await handler.fetch(request);
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toEqual({ error: 'Not found.' });
+    }
+  });
+
+  it('wires steer and stop to the session management runtime', async () => {
+    const management = {
+      steer: vi.fn(async () => delivered),
+      stop: vi.fn(async () => ({ requestId: 'req-stop' })),
+    };
+    const runtime = {
+      management,
+      asyncJobTracker: { forSession: () => ({ track: vi.fn() }) },
+    } as unknown as Parameters<typeof createTeamSessionApi>[0];
+    const execution = {
+      sessionId: 'session-1',
+      cwd: '/workspace/project',
+      environment: {},
+    } as unknown as Parameters<typeof createTeamSessionApi>[1];
+    const handler = createTeamSessionApi(runtime, execution).start({} as never);
+
+    expect((await handler.fetch(post('/steer', { runId: 'run-1', message: 'go' }))).status).toBe(200);
+    expect((await handler.fetch(post('/stop', { runId: 'run-1' }))).status).toBe(200);
+
+    expect(management.steer).toHaveBeenCalledWith('run-1', 'go', undefined, expect.any(AbortSignal));
+    expect(management.stop).toHaveBeenCalledWith('run-1');
   });
 });
 

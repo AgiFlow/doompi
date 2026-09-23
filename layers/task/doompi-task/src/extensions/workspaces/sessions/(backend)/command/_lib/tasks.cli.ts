@@ -1,5 +1,5 @@
-import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import type { WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import { COMMAND_NAME, ERR_REQUIRES_INTERACTIVE } from '../../../../../../schemas/task';

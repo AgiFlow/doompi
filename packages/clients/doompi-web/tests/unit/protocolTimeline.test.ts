@@ -1,4 +1,4 @@
-import type { TranscriptItem, UserTranscriptItem } from '@agimon-ai/doompi-core/session-protocol';
+import type { TranscriptItem, UserTranscriptItem } from '@agimon-ai/doompi-core/sessionProtocol';
 import { describe, expect, it } from 'vitest';
 
 import { toQueuedEntries, toTimelineEntries } from '../../src/web/lib/protocolTimeline';

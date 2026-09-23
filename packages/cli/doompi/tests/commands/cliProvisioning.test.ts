@@ -1,4 +1,4 @@
-import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { HarnessContext } from '../../src/builders/cli/harnessContext';

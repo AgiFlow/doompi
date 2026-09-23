@@ -1,4 +1,4 @@
-import { readPackageResource } from '@agimon-ai/doompi-core/server-facet';
+import { readPackageResource } from '@agimon-ai/doompi-core/serverFacet';
 
 export default {
   // The package index is Help-catalog material, not standing instruction, so it

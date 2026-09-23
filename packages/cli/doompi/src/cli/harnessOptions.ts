@@ -6,7 +6,7 @@ import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { HARNESS_STATE_KEYS } from '@agimon-ai/doompi-config/harnessState';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { loadProfileCatalog } from '@agimon-ai/doompi-config/profiles';
-import type { HarnessFailureReporter } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+import type { HarnessFailureReporter } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
 
 import { readHarnessState } from '../composition/harnessState';
 import { findRepositoryRoot } from '../composition/repository';

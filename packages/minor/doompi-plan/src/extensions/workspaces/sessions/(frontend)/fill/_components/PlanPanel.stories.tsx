@@ -12,7 +12,7 @@
  * lookup, and the renderer mounts no sessions store, so one is bound here.
  */
 import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
-import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import routes from '../../../../../../types/apiRoutes';
 import { API_BASE_PATH, type PlanDetailView } from '../../../../../../types/planApi';

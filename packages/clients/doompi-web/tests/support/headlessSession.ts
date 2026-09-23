@@ -16,7 +16,7 @@ import {
   DOOM_COCKPIT_SERVER_ID,
   DoomSessionManagementService,
   DoomSessionService,
-} from '@agimon-ai/doompi-core/session-protocol';
+} from '@agimon-ai/doompi-core/sessionProtocol';
 import { createRemoteServiceBinding } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { Client, createClientServiceTransport, type ByteTransportFactory } from '@earendil-works/pi-client';

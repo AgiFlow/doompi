@@ -1,4 +1,4 @@
-import { connectDoomCordisHost, DOOM_CORDIS_SESSION_SERVICE } from '@agimon-ai/doompi-core/cordis-host';
+import { connectDoomCordisHost, DOOM_CORDIS_SESSION_SERVICE } from '@agimon-ai/doompi-core/cordisHost';
 import type {
   ExtensionAPI,
   ExtensionContext,

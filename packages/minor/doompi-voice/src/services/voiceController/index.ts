@@ -2,24 +2,24 @@ import path from 'node:path';
 
 import { globalDoomConfigPath, resolveVoiceConfig } from '@agimon-ai/doompi-config/config';
 import { getHarnessState } from '@agimon-ai/doompi-config/harnessStore';
-import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-core/ask-user';
-import { DOOM_CORDIS_SESSION_SERVICE, requireDoomCordisSession } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-core/askUser';
+import { DOOM_CORDIS_SESSION_SERVICE, requireDoomCordisSession } from '@agimon-ai/doompi-core/cordisHost';
 import type { LeaderBinding } from '@agimon-ai/doompi-core/leader';
 import {
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
   isNarrationRequest,
 } from '@agimon-ai/doompi-core/narration';
-import { definePiTool, type PiEventHandlers, type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
-import { type DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
-import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voice-reload-handoff';
+import { definePiTool, type PiEventHandlers, type PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
+import { type DoomToolRestriction } from '@agimon-ai/doompi-core/toolSurface';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voiceReloadHandoff';
 import {
   DOOM_VOICE_AUTO_MODE_ID as AUTO_COMMAND_NAME,
   DOOM_VOICE_SOURCE as VOICE_SOURCE,
   DOOM_VOICE_TOOLS_SERVICE,
   VOICE_MODE_TOOL_NAMES,
   VOICE_NARRATE_TOOL_NAME,
-} from '@agimon-ai/doompi-core/voice-tools';
+} from '@agimon-ai/doompi-core/voiceTools';
 import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 import {
   defineMinorMode,

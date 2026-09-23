@@ -1,7 +1,7 @@
 import { DOOM_HEADLESS_HOST_SERVICE, type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
-import { createDoomPluginRegistry } from '@agimon-ai/doompi-core/plugin-protocol';
-import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
-import { createDoomServerHost } from '@agimon-ai/doompi-core/server-facet';
+import { createDoomPluginRegistry } from '@agimon-ai/doompi-core/pluginProtocol';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/serverFacet';
+import { createDoomServerHost } from '@agimon-ai/doompi-core/serverFacet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 

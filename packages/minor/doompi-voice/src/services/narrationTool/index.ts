@@ -3,8 +3,8 @@ import {
   NarrationRequestSchema,
   normalizeNarrationText,
 } from '@agimon-ai/doompi-core/narration';
-import { VOICE_NARRATE_TOOL_NAME } from '@agimon-ai/doompi-core/voice-tools';
-import { type VoiceToolErrorPayload } from '@agimon-ai/doompi-core/voice-tools';
+import { VOICE_NARRATE_TOOL_NAME } from '@agimon-ai/doompi-core/voiceTools';
+import { type VoiceToolErrorPayload } from '@agimon-ai/doompi-core/voiceTools';
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,

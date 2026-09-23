@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { PiEventHandlers, PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import type { PiEventHandlers, PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 import { DOOM_SKILL_SOURCES_SERVICE, requireDoomSkillSourcesService } from '@agimon-ai/doompi-core/skills';
 
 type PiContext = PiPluginContext<unknown>['context'];

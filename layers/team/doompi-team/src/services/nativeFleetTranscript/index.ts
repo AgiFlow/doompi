@@ -1,4 +1,4 @@
-import type { TranscriptItem, TranscriptPage } from '@agimon-ai/doompi-core/session-protocol';
+import type { TranscriptItem, TranscriptPage } from '@agimon-ai/doompi-core/sessionProtocol';
 
 import type { FleetTranscriptEvent, FleetTranscriptTail } from '../fleetTranscript';
 

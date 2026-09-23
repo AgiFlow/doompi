@@ -1,5 +1,5 @@
 import { type DoomHeadlessHook, type DoomHeadlessResource } from '@agimon-ai/doompi-core/headless';
-import { readPackageResource } from '@agimon-ai/doompi-core/server-facet';
+import { readPackageResource } from '@agimon-ai/doompi-core/serverFacet';
 
 function hookEntry(event: Readonly<Record<string, unknown>>): Record<string, unknown> {
   return {

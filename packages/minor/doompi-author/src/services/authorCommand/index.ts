@@ -1,4 +1,4 @@
-import { defineCommand } from '@agimon-ai/doompi-core/pi-extension';
+import { defineCommand } from '@agimon-ai/doompi-core/piExtension';
 
 import {
   AUTHOR_COMMAND_DESCRIPTION as COMMAND_DESCRIPTION,

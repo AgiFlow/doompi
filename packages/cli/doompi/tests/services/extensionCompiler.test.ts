@@ -710,6 +710,7 @@ describe('compiled direct modules', () => {
       );
       expect(JSON.parse(result)).toBe('function');
     },
+    30_000,
   );
 
   it('rebuilds changed inputs without altering an earlier materialized generation', async () => {

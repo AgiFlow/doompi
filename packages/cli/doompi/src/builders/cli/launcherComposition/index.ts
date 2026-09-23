@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
+import { writeFileAtomic } from '@agimon-ai/doompi-core/runtimeJson';
 
 import { getHarnessState } from '../../../composition/harnessState';
 import { LAUNCHER_COMPOSITION_ENV, LAUNCHER_COMPOSITION_VERSION } from '../constants';
