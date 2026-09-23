@@ -269,8 +269,8 @@ export function SessionMcpSettings() {
             data-testid="session-mcp-routing"
           >
             <p>
-              Every conversation is automatically routed to its own worktree before tools run. You cannot route a
-              conversation directly to this session.
+              Every conversation is automatically routed to its own worktree before tools run, never to the checkout
+              this session uses.
             </p>
             <p>
               While a worktree is provisioning or recovering, tools wait. If recovery cannot finish, the conversation
