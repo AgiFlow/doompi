@@ -1,8 +1,6 @@
 import type { DoomBackgroundWorkService } from '@agimon-ai/doompi-core/backgroundWork';
 import type { PiEventHandlers, PiToolRestriction } from '@agimon-ai/doompi-core/piExtension';
-import type { DoomToolRestriction, DoomToolSurfaceService } from '@agimon-ai/doompi-core/toolSurface';
 import type {
-  AgentToolResult,
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
@@ -12,13 +10,17 @@ import { getAgentDir } from '@earendil-works/pi-coding-agent';
 
 import { currentTokenTotal, updateGoalUsage } from '../../models/accounting';
 import { GoalRuntimeModel } from '../../models/runtime';
-import { nextToolFreeRepeatState, resetGoalSafetyEpoch, safetyLimitReached } from '../../models/safety';
+import {
+  classifyGoalRunFailure,
+  nextToolFreeRepeatState,
+  resetGoalSafetyEpoch,
+  safetyLimitReached,
+} from '../../models/safety';
 import { loadGoalStateFromSession } from '../../models/stateCodec';
 import {
   createGoal,
   formatStatus,
   incrementGoal,
-  isContradictoryCompletionSummary,
   isResumableGoalStatus,
   transitionGoal,
 } from '../../models/stateMachine';
@@ -33,44 +35,14 @@ import {
   buildResumePrompt,
 } from '../../services/prompts';
 import { DEFAULT_GOAL_SETTINGS, normalizeGoalSettings } from '../../services/settings';
-import { validateBlockedInput, validateCompletionInput } from '../../services/tools';
 import type { GoalExtensionDependencies, GoalExtensionService } from '../../types/extension';
 import type { ActiveGoal, GoalRuntimeSnapshot, GoalStateData } from '../../types/goal';
 import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../types/goalView';
 import type { GoalHistoryEntry, GoalHistoryPort } from '../../types/history';
-import { goalToolRestriction, goalToolsUsable } from '../toolVisibility';
-
-const GOAL_TOOL_SOURCE = '@agimon-ai/doompi-goal';
-const COMPLETE_TOOL = 'goal_complete';
-const BLOCKED_TOOL = 'goal_blocked';
+import { buildGoalCheckRequest, GOAL_CHECK_ENTRY, GOAL_CHECK_TIMEOUT_MS, parseGoalCheckResult } from '../goalChecker';
 const STATUS_KEY = 'goal';
 const SETTINGS_FILE = 'pi-goal.json';
 
-const COMPLETE_PARAMETERS = {
-  type: 'object',
-  properties: {
-    goal_id: { type: 'string', minLength: 1 },
-    summary: { type: 'string', minLength: 1 },
-  },
-  required: ['goal_id', 'summary'],
-  additionalProperties: false,
-} as const;
-
-const BLOCKED_PARAMETERS = {
-  type: 'object',
-  properties: {
-    goal_id: { type: 'string', minLength: 1 },
-    reason: { type: 'string', minLength: 1 },
-    evidence: { type: 'string', minLength: 1 },
-    repeated_turns: { type: 'integer', minimum: 3 },
-  },
-  required: ['goal_id', 'reason', 'evidence', 'repeated_turns'],
-  additionalProperties: false,
-} as const;
-
-type CompleteInput = { goal_id?: unknown; summary?: unknown };
-type BlockedInput = { goal_id?: unknown; reason?: unknown; evidence?: unknown; repeated_turns?: unknown };
-type ToolResult = AgentToolResult<Record<string, unknown>>;
 type RunOrigin = 'manual' | 'automatic';
 type AgentEndEventLike = { messages?: readonly unknown[] };
 type CompactEventLike = { reason?: string; willRetry?: boolean };
@@ -97,14 +69,6 @@ export interface GoalStateEvent {
   readonly summary?: string;
 }
 
-function messageResult(text: string, isError = false, terminate = false): ToolResult {
-  return {
-    content: [{ type: 'text', text }],
-    details: { error: isError },
-    ...(terminate ? { terminate: true } : {}),
-  };
-}
-
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -114,9 +78,6 @@ export class GoalPiManager {
   private readonly runtime: GoalRuntimeModel;
   private readonly dependencies?: GoalExtensionDependencies;
   private readonly legacyCommandService?: GoalExtensionService;
-  private toolSurface?: DoomToolSurfaceService;
-  private currentRestriction: DoomToolRestriction = goalToolRestriction(undefined);
-  private readonly restrictionListeners = new Set<() => void>();
   private context?: ExtensionContext;
   private sessionId?: string;
   private generation = 0;
@@ -127,16 +88,14 @@ export class GoalPiManager {
   private runOrigin?: RunOrigin;
   private runExecutionGeneration?: number;
   private pendingRunOrigin: RunOrigin = 'manual';
-  private lastToolCallGoalId?: string;
-  private lastToolCallGeneration?: number;
   private executionGeneration = 0;
   private compactState?: CompactState;
-  private budgetWrapUpGoalId?: string;
   private lastGoalId?: string;
   private runToolAttempted = false;
+  private readyForCheck = false;
   private disposed = false;
   private backgroundWork?: BackgroundWorkBinding;
-  private observedBackgroundWork = false;
+  private checkController?: AbortController;
   private continuationGeneration = 0;
   private readonly disposers: Array<() => void> = [];
   private readonly stateListeners = new Set<(event: GoalStateEvent) => void>();
@@ -159,7 +118,6 @@ export class GoalPiManager {
   }
 
   public bindBackgroundWork(service: DoomBackgroundWorkService): () => void {
-    this.observedBackgroundWork = true;
     const binding: BackgroundWorkBinding = {
       token: Symbol(service.generation),
       service,
@@ -175,40 +133,14 @@ export class GoalPiManager {
     };
   }
 
-  /**
-   * Hands Goal's tool visibility to the arbiter for the life of the binding.
-   *
-   * Until this runs, Goal has no way to hide its tools and refuses to activate
-   * them, which is the same answer it used to give a host without the setters.
-   */
-  public bindToolSurface(surface: DoomToolSurfaceService): () => void {
-    this.toolSurface = surface;
-    return () => {
-      if (this.toolSurface === surface) this.toolSurface = undefined;
-    };
-  }
   public toolRestrictions(): readonly PiToolRestriction[] {
-    return [
-      {
-        source: GOAL_TOOL_SOURCE,
-        restrict: (incoming, available) => this.currentRestriction(incoming, available),
-        subscribe: (listener) => {
-          this.restrictionListeners.add(listener);
-          return () => {
-            this.restrictionListeners.delete(listener);
-          };
-        },
-      },
-    ];
-  }
-  private updateRestriction(restrict: DoomToolRestriction): void {
-    this.currentRestriction = restrict;
-    for (const listener of this.restrictionListeners) listener();
+    return [];
   }
 
   public backgroundWorkChanged(service: DoomBackgroundWorkService): void {
     const binding = this.backgroundWork;
     if (!binding || binding.service !== service || binding.serviceGeneration !== service.generation) return;
+    this.invalidateContinuation();
     if (this.context) this.scheduleContinuation(this.context);
   }
 
@@ -229,11 +161,13 @@ export class GoalPiManager {
   }
 
   public async startFromCatalog(objective: string, budget: number | undefined, ctx: ExtensionContext): Promise<void> {
+    this.invalidateContinuation();
     await this.ensureSession(ctx);
     await this.enqueue(() => this.startGoal(objective, budget, ctx as ExtensionCommandContext));
   }
 
   public async endFromLeader(ctx: ExtensionContext): Promise<void> {
+    this.invalidateContinuation();
     await this.ensureSession(ctx);
     await this.enqueue(() => this.clearGoal(ctx));
   }
@@ -249,6 +183,7 @@ export class GoalPiManager {
   }
 
   public async restartFromHistory(id: string, ctx: ExtensionContext): Promise<void> {
+    this.invalidateContinuation();
     await this.ensureSession(ctx);
     if (!this.history) {
       this.notify('Goal history is unavailable.', 'error');
@@ -289,14 +224,29 @@ export class GoalPiManager {
         'goal',
         {
           description: 'Manage persistent goal execution',
-          handler: (args, ctx) => this.enqueue(() => this.executeCommand(args, ctx)),
+          handler: (args, ctx) => {
+            const parsed = parseGoalCommand(args);
+            if (typeof parsed !== 'string' && parsed.kind !== 'show') this.invalidateContinuation();
+            return this.enqueue(() => this.executeCommand(args, ctx));
+          },
         },
       ],
     ];
   }
   events(): PiEventHandlers {
     return {
-      session_start: (_event, ctx) => this.enqueue(() => this.startSession(ctx)),
+      session_start: (_event, ctx) => {
+        this.fenceExecution();
+        return this.enqueue(() => this.startSession(ctx));
+      },
+      session_tree: (_event, ctx) => {
+        this.fenceExecution();
+        return this.enqueue(() => this.startSession(ctx));
+      },
+      model_select: (_event, ctx) => {
+        this.invalidateContinuation();
+        this.scheduleContinuation(ctx);
+      },
       session_shutdown: () => {
         this.fenceExecution();
         this.generation += 1;
@@ -307,25 +257,23 @@ export class GoalPiManager {
         this.runExecutionGeneration = undefined;
         this.runToolAttempted = false;
         this.compactState = undefined;
-        this.deactivateTools();
       },
       input: () => {
         this.invalidateContinuation();
+        this.readyForCheck = false;
       },
       before_agent_start: (event, ctx) => {
         if (!this.isCurrent(ctx)) return undefined;
+        this.invalidateContinuation();
         const goal = this.runtime.snapshot().goal;
         if (!goal || goal.status !== 'active') return undefined;
-        if (!this.canExecuteGoalTools(goal)) {
-          this.pauseForToolPolicyDrift(ctx, goal);
-          return undefined;
-        }
         const prompt = buildGoalSystemPrompt(goal);
         return { systemPrompt: `${event.systemPrompt}\n\n${prompt}` };
       },
       agent_start: (_event, ctx) => {
         if (!this.isCurrent(ctx)) return;
         this.invalidateContinuation();
+        this.readyForCheck = false;
         const goal = this.runtime.snapshot().goal;
         this.runGoalId = goal?.status === 'active' ? goal.id : undefined;
         this.runOrigin = this.runGoalId ? this.pendingRunOrigin : undefined;
@@ -343,7 +291,9 @@ export class GoalPiManager {
         this.noteToolCall(event.toolName);
       },
       agent_end: (event, ctx) => {
-        void this.enqueue(() => this.finishAgentRun(event, ctx));
+        void this.enqueue(() => this.finishAgentRun(event, ctx)).catch((error: unknown) =>
+          this.notify(`Goal settlement failed: ${errorText(error)}`, 'error'),
+        );
       },
       agent_settled: (_event, ctx) => {
         this.scheduleContinuation(ctx);
@@ -355,35 +305,7 @@ export class GoalPiManager {
     };
   }
   tools(): readonly ToolDefinition[] {
-    const complete = {
-      name: COMPLETE_TOOL,
-      label: 'Goal complete',
-      description: 'Mark the active Goal complete after verifying every requirement.',
-      promptSnippet: 'Complete an active Goal after authoritative verification.',
-      parameters: COMPLETE_PARAMETERS,
-      execute: async (
-        _toolCallId: string,
-        params: CompleteInput,
-        _signal: AbortSignal | undefined,
-        _onUpdate: unknown,
-        ctx: ExtensionContext,
-      ): Promise<ToolResult> => this.enqueue(() => this.complete(params, ctx)),
-    } as unknown as ToolDefinition;
-    const blocked = {
-      name: BLOCKED_TOOL,
-      label: 'Goal blocked',
-      description: 'Mark the active Goal blocked after the same external blocker recurs with evidence.',
-      promptSnippet: 'Report a repeated external blocker for the active Goal.',
-      parameters: BLOCKED_PARAMETERS,
-      execute: async (
-        _toolCallId: string,
-        params: BlockedInput,
-        _signal: AbortSignal | undefined,
-        _onUpdate: unknown,
-        ctx: ExtensionContext,
-      ): Promise<ToolResult> => this.enqueue(() => this.blocked(params, ctx)),
-    } as unknown as ToolDefinition;
-    return [complete, blocked];
+    return [];
   }
 
   private async startSession(ctx: ExtensionContext): Promise<void> {
@@ -397,21 +319,18 @@ export class GoalPiManager {
     this.runExecutionGeneration = undefined;
     this.runToolAttempted = false;
     this.pendingRunOrigin = 'manual';
-    this.budgetWrapUpGoalId = undefined;
     this.settings = await this.loadSettings();
     this.history = this.dependencies?.history ?? this.createHistory(ctx.cwd);
     const loaded = loadGoalStateFromSession({ sessionManager: ctx.sessionManager });
     this.runtime.load(loaded.goal);
-    this.deactivateTools();
+    if (activeGeneration !== this.generation) return;
     const goal = this.runtime.snapshot().goal;
     if (goal?.status === 'active') {
-      const activated = this.activateTools(goal);
-      if (!activated) {
-        this.runtime.replaceState(transitionGoal(goal, 'paused'));
-        this.notify('Goal paused because host policy does not expose both Goal tools.', 'warning');
-      }
+      this.runGoalId = goal.id;
+      this.runExecutionGeneration = this.executionGeneration;
+      this.readyForCheck = true;
+      this.scheduleContinuation(ctx);
     }
-    if (activeGeneration !== this.generation) return;
     this.refreshStatus();
     this.emitState();
   }
@@ -448,46 +367,20 @@ export class GoalPiManager {
     return run;
   }
 
-  private activateTools(goal: ActiveGoal): boolean {
-    if (!this.toolSurface) return false;
-    this.updateRestriction(goalToolRestriction(goal));
-    if (!this.canExecuteGoalTools(goal)) {
-      this.updateRestriction(goalToolRestriction(undefined));
-      return false;
-    }
-    this.executionGeneration += 1;
-    this.lastToolCallGoalId = undefined;
-    this.lastToolCallGeneration = undefined;
-    return true;
-  }
-
-  private deactivateTools(): void {
-    this.updateRestriction(goalToolRestriction(undefined));
-    this.executionGeneration += 1;
-    this.lastToolCallGoalId = undefined;
-    this.lastToolCallGeneration = undefined;
-  }
-
-  /** Whether the tools this goal needs actually reached the host. */
-  private canExecuteGoalTools(goal: ActiveGoal | undefined): boolean {
-    return goalToolsUsable(this.toolSurface?.active() ?? [], goal);
-  }
-
   private fenceExecution(): void {
     this.executionGeneration += 1;
     this.invalidateContinuation();
+    this.readyForCheck = false;
     this.runGoalId = undefined;
     this.runOrigin = undefined;
     this.runExecutionGeneration = undefined;
     this.runToolAttempted = false;
-    this.lastToolCallGoalId = undefined;
-    this.lastToolCallGeneration = undefined;
     this.compactState = undefined;
-    this.budgetWrapUpGoalId = undefined;
   }
 
   private invalidateContinuation(): void {
     this.continuationGeneration += 1;
+    this.checkController?.abort();
   }
 
   private scheduleContinuation(ctx: ExtensionContext): void {
@@ -505,29 +398,8 @@ export class GoalPiManager {
     void this.enqueue(() => this.continueAfterSettled(ctx, lease));
   }
 
-  private noteToolCall(toolName: string): void {
-    if (toolName !== COMPLETE_TOOL && toolName !== BLOCKED_TOOL) return;
+  private noteToolCall(_toolName: string): void {
     this.runToolAttempted = true;
-    const goal = this.runtime.snapshot().goal;
-    if (!goal) return;
-    this.lastToolCallGoalId = goal.id;
-    this.lastToolCallGeneration = this.executionGeneration;
-  }
-
-  private pauseForToolPolicyDrift(ctx: ExtensionContext, goal: ActiveGoal): void {
-    if (!this.isCurrent(ctx) || this.runtime.snapshot().goal?.id !== goal.id || goal.status !== 'active') return;
-    updateGoalUsage(goal, ctx, Date.now(), false);
-    this.fenceExecution();
-    const paused = transitionGoal({ ...goal }, 'paused');
-    this.runtime.replaceState(paused);
-    this.deactivateTools();
-    this.abortCurrentTurn(ctx);
-    this.refreshStatus();
-    this.emitState('required Goal tool unavailable');
-    this.notify(
-      'Goal tools are unavailable, so the Goal was paused. Restore the tools and run /goal resume.',
-      'warning',
-    );
   }
 
   private beforeCompact(event: CompactEventLike, ctx: ExtensionContext): undefined {
@@ -543,11 +415,10 @@ export class GoalPiManager {
     // authoritative, while a retry/settled boundary may establish a new lease.
     this.executionGeneration += 1;
     this.invalidateContinuation();
+    this.readyForCheck = false;
     this.runGoalId = undefined;
     this.runOrigin = undefined;
     this.runExecutionGeneration = undefined;
-    this.lastToolCallGoalId = undefined;
-    this.lastToolCallGeneration = undefined;
     return undefined;
   }
 
@@ -562,11 +433,12 @@ export class GoalPiManager {
     this.runToolAttempted = false;
     // Overflow retries belong to Pi's current run and must not receive a duplicate
     // continuation. Manual/threshold compaction keeps one guarded recovery marker.
-    if (!compact.willRetry && compact.hadAutomaticRun && event.willRetry !== true) {
-      this.pendingRunOrigin = 'automatic';
+    if (!compact.willRetry && event.willRetry !== true) {
       this.runGoalId = goal.id;
-      this.runOrigin = 'automatic';
+      this.runOrigin = compact.hadAutomaticRun ? 'automatic' : 'manual';
       this.runExecutionGeneration = this.executionGeneration;
+      this.readyForCheck = true;
+      this.scheduleContinuation(ctx);
     }
   }
 
@@ -683,13 +555,11 @@ export class GoalPiManager {
       }
     }
     const next = createGoal(objective, budget, { id: goalId, baselineTokens: currentTokenTotal(ctx) });
-    if (!this.activateTools(next)) {
-      this.notify('Cannot start /goal: host policy rejected Goal tools.', 'error');
-      return;
-    }
+    this.fenceExecution();
     this.runtime.replaceState(next);
-    this.budgetWrapUpGoalId = undefined;
     this.pendingRunOrigin = 'manual';
+    this.runGoalId = next.id;
+    this.runExecutionGeneration = this.executionGeneration;
     this.refreshStatus();
     this.emitState();
     try {
@@ -697,7 +567,6 @@ export class GoalPiManager {
     } catch (error) {
       this.runtime.replaceState(oldGoal);
       this.fenceExecution();
-      if (!oldGoal) this.deactivateTools();
       this.refreshStatus();
       this.notify(`Goal kickoff failed: ${errorText(error)}`, 'error');
       return;
@@ -719,7 +588,6 @@ export class GoalPiManager {
     this.fenceExecution();
     const next = transitionGoal({ ...goal }, 'paused');
     this.runtime.replaceState(next);
-    this.deactivateTools();
     ctx.abort();
     this.refreshStatus();
     this.emitState('paused');
@@ -736,19 +604,17 @@ export class GoalPiManager {
       this.notify(`Goal is ${goal.status}; it cannot be resumed.`, 'warning');
       return;
     }
-    void ctx;
+    updateGoalUsage(goal, ctx, Date.now(), false);
     if (goal.tokenBudget !== undefined && goal.tokensUsed >= goal.tokenBudget) {
       this.notify('Goal token budget is still reached.', 'warning');
       return;
     }
     const next = resetGoalSafetyEpoch(transitionGoal({ ...goal, updatedAt: Date.now() }, 'active'));
-    if (!this.activateTools(next)) {
-      this.notify('Cannot resume /goal: host policy rejected Goal tools.', 'error');
-      return;
-    }
+    this.fenceExecution();
     this.runtime.replaceState(next);
-    this.budgetWrapUpGoalId = undefined;
     this.pendingRunOrigin = 'manual';
+    this.runGoalId = next.id;
+    this.runExecutionGeneration = this.executionGeneration;
     this.refreshStatus();
     this.emitState();
     try {
@@ -756,7 +622,6 @@ export class GoalPiManager {
     } catch (error) {
       this.fenceExecution();
       this.runtime.replaceState(goal);
-      this.deactivateTools();
       this.refreshStatus();
       this.notify(`Goal resume failed: ${errorText(error)}`, 'error');
     }
@@ -770,8 +635,7 @@ export class GoalPiManager {
     }
     this.fenceExecution();
     this.runtime.clear();
-    this.deactivateTools();
-    ctx.abort();
+    if (snapshot.goal) ctx.abort();
     this.refreshStatus();
     this.emitState('cleared');
     if (snapshot.goal) this.notify(`Goal cleared: ${snapshot.goal.text}`, 'warning');
@@ -789,6 +653,8 @@ export class GoalPiManager {
       this.notify('No active goal. Use /goal <objective> to start one.', 'warning');
       return;
     }
+    this.invalidateContinuation();
+    this.readyForCheck = false;
     const next = {
       ...goal,
       text: objective,
@@ -814,21 +680,19 @@ export class GoalPiManager {
     }
 
     const messages = event.messages ?? [];
-    const failure = classifyAgentFailure(messages);
+    const failure = classifyGoalRunFailure(messages);
     updateGoalUsage(goal, ctx, Date.now(), true);
     if (failure === 'aborted') {
-      // User-initiated aborts and safety aborts are fenced without inventing a
-      // provider failure. A later explicit resume establishes a new execution lease.
       this.fenceExecution();
-      this.runtime.replaceState(goal);
+      this.runtime.replaceState(transitionGoal({ ...goal }, 'paused'));
       this.refreshStatus();
+      this.emitState('cancelled');
       return;
     }
     if (failure === 'usage_limited' || failure === 'blocked') {
       this.fenceExecution();
       const stopped = transitionGoal({ ...goal }, failure);
       this.runtime.replaceState(stopped);
-      this.deactivateTools();
       this.abortCurrentTurn(ctx);
       this.refreshStatus();
       this.emitState(failure === 'usage_limited' ? 'provider usage limit' : 'provider error');
@@ -846,23 +710,20 @@ export class GoalPiManager {
       const progress = nextToolFreeRepeatState(goal, messages, this.runToolAttempted);
       goal.toolFreeRepeatCount = progress.toolFreeRepeatCount;
       goal.lastToolFreeOutputFingerprint = progress.lastToolFreeOutputFingerprint;
-      const cause = safetyLimitReached(goal, this.settings.continuationLimits);
-      if (cause) {
-        this.pauseForSafety(ctx, goal, cause);
-        return;
-      }
     }
 
-    if (goal.tokenBudget !== undefined && goal.tokensUsed >= goal.tokenBudget) {
-      this.limitForBudget(ctx, goal);
-      return;
-    }
-    this.runtime.replaceState(goal);
+    // The final idle check may still prove completion at a limit, but cannot admit more work.
+    this.runtime.replaceState(
+      goal.tokenBudget !== undefined && goal.tokensUsed >= goal.tokenBudget
+        ? transitionGoal({ ...goal }, 'budget_limited')
+        : goal,
+    );
+    this.readyForCheck = true;
     this.refreshStatus();
   }
 
-  private async continueAfterSettled(ctx: ExtensionContext, lease: ContinuationLease): Promise<void> {
-    if (!this.isCurrent(ctx) || !ctx.isIdle() || ctx.hasPendingMessages()) return;
+  private goalForCheck(ctx: ExtensionContext, lease: ContinuationLease): ActiveGoal | undefined {
+    if (!this.readyForCheck || !this.isCurrent(ctx) || !ctx.isIdle() || ctx.hasPendingMessages()) return undefined;
     if (
       lease.managerGeneration !== this.generation ||
       lease.continuationGeneration !== this.continuationGeneration ||
@@ -870,45 +731,119 @@ export class GoalPiManager {
       lease.sessionId !== this.sessionId ||
       lease.runGoalId !== this.runGoalId
     )
-      return;
-    const snapshot = this.runtime.snapshot();
-    const goal = snapshot.goal;
-    if (!goal || goal.id !== lease.goalId || goal.status !== 'active' || !this.runGoalId || this.runGoalId !== goal.id)
-      return;
-    if (this.runExecutionGeneration !== this.executionGeneration) {
-      this.fenceExecution();
-      return;
-    }
-    if (this.backgroundWorkBlocks(lease)) return;
-    if (!this.canExecuteGoalTools(goal)) {
-      this.pauseForToolPolicyDrift(ctx, goal);
-      return;
-    }
-    const cause = safetyLimitReached(goal, this.settings.continuationLimits);
-    if (cause) {
-      this.pauseForSafety(ctx, goal, cause);
-      return;
-    }
-    const next = incrementGoal({ ...goal });
-    this.runtime.replaceState(next);
-    const continuation = buildContinuePrompt(next);
-    this.pendingRunOrigin = 'automatic';
-    try {
-      this.pi.sendUserMessage(continuation, { deliverAs: 'followUp' });
-    } catch (error) {
-      this.pauseForDeliveryFailure(ctx, next, `Goal continuation failed: ${errorText(error)}`);
-      return;
-    }
-    this.invalidateContinuation();
-    this.runGoalId = undefined;
-    this.runOrigin = undefined;
-    this.runExecutionGeneration = undefined;
-    this.runToolAttempted = false;
+      return undefined;
+    const goal = this.runtime.snapshot().goal;
+    if (
+      !goal ||
+      goal.id !== lease.goalId ||
+      !['active', 'budget_limited'].includes(goal.status) ||
+      this.runGoalId !== goal.id ||
+      this.runExecutionGeneration !== this.executionGeneration ||
+      this.backgroundWorkBlocks(lease)
+    )
+      return undefined;
+    return goal;
+  }
+
+  private async continueAfterSettled(ctx: ExtensionContext, lease: ContinuationLease): Promise<void> {
+    const goal = this.goalForCheck(ctx, lease);
+    if (!goal || this.checkController) return;
+    const controller = new AbortController();
+    this.checkController = controller;
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(GOAL_CHECK_TIMEOUT_MS)]);
+    // Inference never owns the operation queue: commands can pause, edit, or clear while it runs.
+    void this.checkWithPi(ctx, goal, signal)
+      .then((result) =>
+        this.enqueue(async () => {
+          if (!this.isCurrent(ctx)) return;
+          const current = this.goalForCheck(ctx, lease);
+          this.pi.appendEntry(GOAL_CHECK_ENTRY, { goalId: goal.id, ...result, discarded: !current });
+          if (!current || signal.aborted) return;
+          updateGoalUsage(current, ctx);
+          const decision = parseGoalCheckResult(current, result);
+          if (decision.tool === 'goal_complete') {
+            const summary = `${decision.summary}\n\nEvidence: ${decision.evidence}`;
+            if (!(await this.archive(current, 'complete', summary))) throw new Error('Goal history archival failed.');
+            if (!this.goalForCheck(ctx, lease) || signal.aborted) return;
+            this.fenceExecution();
+            this.runtime.clear();
+            this.refreshStatus();
+            this.emitState(undefined, summary);
+            this.notify(`Goal complete: ${current.text}`);
+            return;
+          }
+          if (decision.tool === 'goal_blocked') {
+            this.fenceExecution();
+            this.runtime.replaceState(transitionGoal({ ...current }, 'blocked'));
+            this.refreshStatus();
+            this.emitState(decision.reason);
+            this.notify(`Goal blocked: ${decision.reason}`, 'warning');
+            return;
+          }
+          if (current.tokenBudget !== undefined && current.tokensUsed >= current.tokenBudget) {
+            this.limitForBudget(ctx, current);
+            return;
+          }
+          const cause = safetyLimitReached(current, this.settings.continuationLimits);
+          if (cause) {
+            this.pauseForSafety(ctx, current, cause);
+            return;
+          }
+          const next = incrementGoal({ ...current });
+          this.fenceExecution();
+          this.runtime.replaceState(next);
+          this.pendingRunOrigin = 'automatic';
+          try {
+            this.pi.sendUserMessage(buildContinuePrompt(next, decision.instruction), { deliverAs: 'followUp' });
+          } catch (error) {
+            this.pauseForDeliveryFailure(ctx, current, `Goal continuation failed: ${errorText(error)}`);
+          }
+        }),
+      )
+      .catch((error: unknown) =>
+        this.enqueue(async () => {
+          const current = this.goalForCheck(ctx, lease);
+          if (current && !controller.signal.aborted)
+            this.pauseForDeliveryFailure(
+              ctx,
+              current,
+              `Goal check failed: ${errorText(error)} Run /goal resume to retry.`,
+            );
+        }),
+      )
+      .finally(() => {
+        if (this.checkController !== controller) return;
+        this.checkController = undefined;
+        if (controller.signal.aborted && this.isCurrent(ctx)) this.scheduleContinuation(ctx);
+      })
+      .catch((error: unknown) => this.notify(`Goal check cleanup failed: ${errorText(error)}`, 'error'));
+  }
+
+  private async checkWithPi(ctx: ExtensionContext, goal: ActiveGoal, signal: AbortSignal) {
+    const request = buildGoalCheckRequest(goal, ctx.sessionManager.getBranch(), signal);
+    const model = ctx.model;
+    if (!model) throw new Error('No active model is available for the Goal check.');
+    signal.throwIfAborted();
+    const response = await ctx.modelRegistry
+      .streamSimple(
+        model,
+        {
+          systemPrompt: request.systemPrompt,
+          messages: [{ role: 'user', content: request.input, timestamp: Date.now() }],
+          tools: [...request.tools],
+        },
+        { signal, maxTokens: request.maxTokens, cacheRetention: request.cacheRetention, maxRetries: 0 },
+      )
+      .result();
+    signal.throwIfAborted();
+    if (response.stopReason === 'error' || response.stopReason === 'aborted' || response.stopReason === 'length')
+      throw new Error(response.errorMessage ?? `Goal checker stopped: ${response.stopReason}`);
+    return { toolCalls: response.content.filter((part) => part.type === 'toolCall'), usage: response.usage };
   }
 
   private backgroundWorkBlocks(lease: ContinuationLease): boolean {
     const binding = this.backgroundWork;
-    if (!binding) return this.observedBackgroundWork;
+    if (!binding) return true;
     if (
       binding.token !== lease.backgroundToken ||
       binding.serviceGeneration !== lease.backgroundServiceGeneration ||
@@ -929,7 +864,6 @@ export class GoalPiManager {
     this.fenceExecution();
     const paused = transitionGoal({ ...goal, safetyPauseCause: cause }, 'paused');
     this.runtime.replaceState(paused);
-    this.deactivateTools();
     this.abortCurrentTurn(ctx);
     this.refreshStatus();
     this.emitState(cause === 'continuation_limit' ? 'automatic response limit' : 'no progress');
@@ -937,102 +871,22 @@ export class GoalPiManager {
     this.notify(`Goal paused by safety limit: ${detail}. Run /goal resume to continue.`, 'warning');
   }
 
-  private limitForBudget(ctx: ExtensionContext, goal: ActiveGoal): void {
+  private limitForBudget(_ctx: ExtensionContext, goal: ActiveGoal): void {
     this.fenceExecution();
-    const limited = transitionGoal({ ...goal }, 'budget_limited');
-    this.runtime.replaceState(limited);
-    this.deactivateTools();
-    const canWrap = this.activateTools(limited);
-    if (canWrap && this.budgetWrapUpGoalId !== limited.id) {
-      this.budgetWrapUpGoalId = limited.id;
-      try {
-        this.pi.sendMessage(
-          {
-            customType: 'goal-budget-wrap-up',
-            content:
-              'The Goal token budget is exhausted. Stop substantive work, summarize verified progress and blockers, and call goal_complete only if every requirement is already proven.',
-            display: true,
-            details: { goalId: limited.id },
-          },
-          { deliverAs: 'steer' },
-        );
-      } catch (error) {
-        this.budgetWrapUpGoalId = undefined;
-        this.notify(`Goal budget wrap-up failed: ${errorText(error)}`, 'error');
-      }
-    }
-    if (!canWrap) this.notify('Goal budget reached, but host policy rejected goal_complete.', 'warning');
-    this.abortCurrentTurn(ctx);
+    this.runtime.replaceState(transitionGoal({ ...goal }, 'budget_limited'));
     this.refreshStatus();
     this.emitState('token budget reached');
+    this.notify('Goal token budget reached. The unfinished goal has been retained.', 'warning');
   }
 
   private pauseForDeliveryFailure(ctx: ExtensionContext, goal: ActiveGoal, message: string): void {
     this.fenceExecution();
     const paused = transitionGoal({ ...goal }, 'paused');
     this.runtime.replaceState(paused);
-    this.deactivateTools();
     this.abortCurrentTurn(ctx);
     this.refreshStatus();
     this.emitState('delivery failed');
     this.notify(message, 'error');
-  }
-
-  private async complete(params: CompleteInput, ctx: ExtensionContext): Promise<ToolResult> {
-    const snapshot = this.runtime.snapshot();
-    const goal = snapshot.goal;
-    if (!goal || !this.acceptsToolCall(ctx, goal))
-      return messageResult('Goal completion rejected because this tool call belongs to a stale Goal execution.', true);
-    const validation = validateCompletionInput(goal, params as { goal_id?: string; summary?: string });
-    if (!goal || (goal.status !== 'active' && goal.status !== 'budget_limited'))
-      return messageResult('Goal completion is not available in the current state.', true);
-    if (!validation.ok) return messageResult(validation.reason ?? 'Goal completion rejected.', true);
-    const summary = typeof params.summary === 'string' ? params.summary.trim() : '';
-    if (isContradictoryCompletionSummary(summary))
-      return messageResult('Completion evidence contradicts completion.', true);
-    if (!(await this.archive(goal, 'complete', summary)))
-      return messageResult('Completion aborted because history archival failed.', true);
-    this.fenceExecution();
-    this.runtime.clear();
-    this.deactivateTools();
-    this.refreshStatus();
-    this.emitState(undefined, summary);
-    return messageResult(`Goal complete: ${goal.text}`, false, true);
-  }
-
-  private async blocked(params: BlockedInput, ctx: ExtensionContext): Promise<ToolResult> {
-    const snapshot = this.runtime.snapshot();
-    const goal = snapshot.goal;
-    if (!goal || !this.acceptsToolCall(ctx, goal))
-      return messageResult('Goal blocker rejected because this tool call belongs to a stale Goal execution.', true);
-    const validation = validateBlockedInput(
-      goal,
-      params as { goal_id?: string; reason?: string; evidence?: string; repeated_turns?: number },
-    );
-    if (!goal || goal.status !== 'active')
-      return messageResult('Goal blocking is not available in the current state.', true);
-    if (!validation.ok) return messageResult(validation.reason ?? 'Goal blocker rejected.', true);
-    const reason = typeof params.reason === 'string' ? params.reason.trim() : 'blocked';
-    this.fenceExecution();
-    const blocked = transitionGoal({ ...goal }, 'blocked');
-    this.runtime.replaceState(blocked);
-    this.deactivateTools();
-    ctx.abort();
-    this.refreshStatus();
-    this.emitState(reason);
-    return messageResult(`Goal blocked: ${reason}`);
-  }
-
-  private acceptsToolCall(ctx: ExtensionContext, goal: ActiveGoal): boolean {
-    if (!this.isCurrent(ctx)) return false;
-    if (this.runGoalId && (this.runGoalId !== goal.id || this.runExecutionGeneration !== this.executionGeneration))
-      return false;
-    if (
-      this.lastToolCallGoalId &&
-      (this.lastToolCallGoalId !== goal.id || this.lastToolCallGeneration !== this.executionGeneration)
-    )
-      return false;
-    return this.canExecuteGoalTools(goal);
   }
 
   private async archiveAll(goals: readonly ActiveGoal[], reason: string): Promise<boolean> {
@@ -1046,7 +900,10 @@ export class GoalPiManager {
   }
 
   private async archive(goal: ActiveGoal, reason: string, summary?: string): Promise<boolean> {
-    if (!this.history) return true;
+    if (!this.history) {
+      this.notify('Goal history is unavailable; the goal has been retained.', 'error');
+      return false;
+    }
     try {
       await this.history.archive({
         id: goal.id,
@@ -1068,46 +925,10 @@ export class GoalPiManager {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.fenceExecution();
     this.generation += 1;
     for (const dispose of this.disposers.splice(0)) dispose();
     this.stateListeners.clear();
-    this.deactivateTools();
     this.context = undefined;
   }
-}
-
-function classifyAgentFailure(messages: readonly unknown[]): 'usage_limited' | 'blocked' | 'aborted' | undefined {
-  const assistant = [...messages].reverse().find((message) => isAssistantMessage(message));
-  if (!assistant || typeof assistant !== 'object') return undefined;
-  const candidate = assistant as { stopReason?: unknown; errorMessage?: unknown; content?: unknown; text?: unknown };
-  if (candidate.stopReason === 'aborted') return 'aborted';
-  if (candidate.stopReason !== 'error' && candidate.stopReason !== 'length' && candidate.errorMessage === undefined)
-    return undefined;
-  const details = [candidate.errorMessage, extractMessageText(candidate)]
-    .filter((value): value is string => typeof value === 'string')
-    .join(' ')
-    .toLowerCase();
-  if (
-    candidate.stopReason === 'length' ||
-    /(?:rate|quota|usage|token|context|capacity|limit|429|too many|billing|exhaust)/u.test(details)
-  )
-    return 'usage_limited';
-  return 'blocked';
-}
-
-function isAssistantMessage(value: unknown): boolean {
-  return Boolean(value && typeof value === 'object' && (value as { role?: unknown }).role === 'assistant');
-}
-
-function extractMessageText(value: { content?: unknown; text?: unknown }): string {
-  if (typeof value.text === 'string') return value.text;
-  if (typeof value.content === 'string') return value.content;
-  if (!Array.isArray(value.content)) return '';
-  return value.content
-    .map((part) => {
-      if (!part || typeof part !== 'object') return '';
-      const text = (part as { text?: unknown }).text;
-      return typeof text === 'string' ? text : '';
-    })
-    .join(' ');
 }

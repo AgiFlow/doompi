@@ -11,16 +11,52 @@ interface HandlerRecord {
   handler: (event: never, context: ExtensionContext) => unknown;
 }
 
+type CheckRequest = {
+  systemPrompt: string;
+  messages: Array<{ content: string }>;
+  tools: Array<{ name: string }>;
+};
+type CheckResponse = {
+  content: Array<{ type: 'toolCall'; id: string; name: string; arguments: Record<string, unknown> }>;
+  usage: { totalTokens: number };
+  stopReason: string;
+  errorMessage?: string;
+};
+function verdict(request: CheckRequest, name = 'goal_continue', args: Record<string, unknown> = {}): CheckResponse {
+  const goal = JSON.parse(request.messages[0]!.content) as { goal_id: string };
+  return {
+    content: [
+      {
+        type: 'toolCall',
+        id: 'check-call',
+        name,
+        arguments: {
+          goal_id: goal.goal_id,
+          ...(name === 'goal_continue' ? { instruction: 'Run the remaining integration checks.' } : {}),
+          ...args,
+        },
+      },
+    ],
+    usage: { totalTokens: 10 },
+    stopReason: 'toolUse',
+  };
+}
 function createFixture() {
   const handlers: HandlerRecord[] = [];
   const commands = new Map<string, { handler: (args: string, context: ExtensionContext) => Promise<void> }>();
   const tools: ToolDefinition[] = [];
+  const entries: Array<Record<string, unknown>> = [];
   let activeTools = ['read'];
   let idle = true;
   let pendingMessages = false;
-  const appendEntry = vi.fn();
+  const appendEntry = vi.fn((customType: string, data: unknown) => {
+    entries.push({ type: 'custom', customType, data: structuredClone(data) });
+  });
   const sendUserMessage = vi.fn();
-  const abort = vi.fn();
+  const check = vi.fn(async (request: CheckRequest, _signal: AbortSignal): Promise<CheckResponse> => verdict(request));
+  const streamSimple = vi.fn((_model: unknown, request: CheckRequest, options: { signal: AbortSignal }) => ({
+    result: () => check(request, options.signal),
+  }));
   const context = {
     ui: {
       confirm: vi.fn().mockResolvedValue(true),
@@ -35,14 +71,16 @@ function createFixture() {
     mode: 'tui',
     hasUI: true,
     cwd: process.cwd(),
+    model: { provider: 'test', id: 'checker' },
+    modelRegistry: { streamSimple },
     sessionManager: {
       getSessionId: () => 'manager-session',
-      getBranch: () => [],
-      getEntries: () => [],
+      getBranch: () => entries,
+      getEntries: () => entries,
     },
     isIdle: () => idle,
     hasPendingMessages: () => pendingMessages,
-    abort,
+    abort: vi.fn(),
   } as unknown as ExtensionContext;
   const history: GoalHistoryPort = {
     list: async () => [],
@@ -59,8 +97,6 @@ function createFixture() {
     },
     registerTool(tool: ToolDefinition) {
       tools.push(tool);
-      activeTools = [...new Set([...activeTools, tool.name])];
-      surface.refresh();
     },
     getActiveTools: () => [...activeTools],
     setActiveTools: (names: string[]) => {
@@ -71,7 +107,7 @@ function createFixture() {
   } as unknown as ExtensionAPI;
   const surface = createDoomToolSurface({
     generation: 'goal-test',
-    allTools: () => [...new Set(['read', ...tools.map((tool) => tool.name)])],
+    allTools: () => ['read'],
     activeTools: () => activeTools,
     setActiveTools: (names) => {
       activeTools = [...names];
@@ -80,7 +116,9 @@ function createFixture() {
   return {
     pi,
     surface,
-    /** Activates the runtime the way the plugin does: runtime first, then the arbiter binding. */
+    entries,
+    check,
+    streamSimple,
     activateRuntime() {
       const activation = createGoalRuntime(pi, {
         service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
@@ -90,20 +128,12 @@ function createFixture() {
       for (const command of activation.manager.commands()) pi.registerCommand(...command);
       for (const [event, handler] of Object.entries(activation.manager.events()))
         (pi.on as (event: string, handler: unknown) => void)(event, handler);
-      const restriction = activation.manager.toolRestrictions()[0]!;
-      const registration = surface.register(restriction);
-      const unsubscribe = restriction.subscribe?.(() => registration.update(restriction.restrict));
-      const unbind = activation.manager.bindToolSurface(surface);
-      const unbindSurface = () => {
-        unsubscribe?.();
-        registration.dispose();
-        unbind();
-      };
+      const unbindBackground = activation.manager.bindBackgroundWork(createBackgroundWorkService().service);
       return {
         manager: activation.manager,
-        unbindSurface,
-        dispose() {
-          unbindSurface();
+        unbindBackground,
+        dispose: () => {
+          unbindBackground();
           activation.dispose();
         },
       };
@@ -114,6 +144,7 @@ function createFixture() {
     tools,
     appendEntry,
     sendUserMessage,
+    history,
     activeTools: () => activeTools,
     setIdle: (value: boolean) => {
       idle = value;
@@ -121,7 +152,6 @@ function createFixture() {
     setPendingMessages: (value: boolean) => {
       pendingMessages = value;
     },
-    history,
   };
 }
 
@@ -134,6 +164,10 @@ async function dispatchEvent(
   event: string,
   payload: unknown,
 ): Promise<void> {
+  if (event === 'agent_end') {
+    for (const message of (payload as { messages?: unknown[] }).messages ?? [])
+      fixture.entries.push({ type: 'message', message });
+  }
   for (const item of fixture.handlers.filter((candidate) => candidate.event === event)) {
     await item.handler(payload as never, fixture.context);
   }
@@ -191,7 +225,8 @@ describe('Goal Pi manager activation', () => {
     expect(fixture.context.ui.setStatus).not.toHaveBeenCalledWith('goal', expect.any(String));
 
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
-    expect(fixture.activeTools()).toEqual(['read', 'goal_complete', 'goal_blocked']);
+    expect(fixture.activeTools()).toEqual(['read']);
+    expect(fixture.tools).toEqual([]);
     expect(fixture.appendEntry).toHaveBeenCalledWith(
       'goal-state',
       expect.objectContaining({ goal: expect.objectContaining({ text: 'ship it', status: 'active' }) }),
@@ -213,47 +248,43 @@ describe('Goal Pi manager activation', () => {
     });
     await dispatch(fixture, 'agent_settled');
     await vi.waitFor(() => expect(fixture.sendUserMessage).toHaveBeenCalledTimes(2));
-    expect(fixture.sendUserMessage).toHaveBeenLastCalledWith('[goal]\nContinue.', { deliverAs: 'followUp' });
+    expect(fixture.sendUserMessage).toHaveBeenLastCalledWith('[goal]\nRun the remaining integration checks.', {
+      deliverAs: 'followUp',
+    });
+    expect(fixture.check).toHaveBeenCalledOnce();
+    expect(fixture.check.mock.calls[0]?.[0].tools.map((tool) => tool.name)).toEqual([
+      'goal_complete',
+      'goal_continue',
+      'goal_blocked',
+    ]);
     activation.dispose();
   });
 
-  it('rejects stale completion ids and fully deactivates only after valid completion', async () => {
+  it('archives and clears only a private checker completion with authoritative evidence', async () => {
     const fixture = createFixture();
     const archive = vi.spyOn(fixture.history, 'archive');
-    fixture.activateRuntime();
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
-    const tool = fixture.tools.find((candidate) => candidate.name === 'goal_complete');
-    expect(tool).toBeDefined();
-    const execute = tool?.execute as unknown as (
-      id: string,
-      params: Record<string, unknown>,
-      signal: AbortSignal | undefined,
-      update: undefined,
-      context: ExtensionContext,
-    ) => Promise<{ content: Array<{ text: string }>; details: Record<string, unknown> }>;
-    const stale = await execute('call-1', { goal_id: 'stale', summary: 'done' }, undefined, undefined, fixture.context);
-    expect(stale.details.error).toBe(true);
-    const entry = fixture.appendEntry.mock.calls.at(-1)?.[1] as { goal?: { id?: string } } | undefined;
-    const goalId = entry?.goal?.id;
-    expect(goalId).toBeTypeOf('string');
-    const completed = await execute(
-      'call-2',
-      { goal_id: goalId, summary: 'all requirements are verified' },
-      undefined,
-      undefined,
-      fixture.context,
+    fixture.check.mockImplementationOnce(async (request) =>
+      verdict(request, 'goal_complete', {
+        summary: 'All requirements verified.',
+        evidence: 'The integration test and build both passed.',
+      }),
     );
-    expect(completed.details.error).toBe(false);
-    expect(completed).toMatchObject({ terminate: true });
-    expect(archive).toHaveBeenCalledWith(expect.objectContaining({ status: 'complete' }));
-    expect(fixture.activeTools()).toEqual(['read']);
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+    expect(activation.manager.snapshot().goal).toBeUndefined();
+    expect(archive).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'complete', reason: expect.stringContaining('Evidence:') }),
+    );
+    expect(fixture.tools).toEqual([]);
+    expect(fixture.sendUserMessage).toHaveBeenCalledOnce();
     expect(fixture.context.ui.setStatus).toHaveBeenLastCalledWith('goal', undefined);
     expect(fixture.context.abort).not.toHaveBeenCalled();
-
-    const beforeStart = fixture.handlers.find((candidate) => candidate.event === 'before_agent_start');
-    const promptAfterCompletion = await beforeStart?.handler({ systemPrompt: 'base' } as never, fixture.context);
-    expect(promptAfterCompletion).toBeUndefined();
+    const hook = fixture.handlers.find((candidate) => candidate.event === 'before_agent_start');
+    expect(await hook?.handler({ systemPrompt: 'base' } as never, fixture.context)).toBeUndefined();
+    activation.dispose();
   });
 });
 
@@ -326,7 +357,7 @@ describe('Goal lifecycle safety and fencing', () => {
     await dispatchEvent(fixture, 'agent_end', {
       messages: [{ role: 'assistant', content: [{ type: 'text', text: 'progress' }], stopReason: 'stop' }],
     });
-
+    await dispatch(fixture, 'agent_settled');
     expect(activation.manager.snapshot().goal).toMatchObject({
       status: 'paused',
       safetyPauseCause: 'continuation_limit',
@@ -351,7 +382,7 @@ describe('Goal lifecycle safety and fencing', () => {
     await dispatchEvent(fixture, 'agent_end', {
       messages: [{ role: 'assistant', content: [{ type: 'text', text: 'same answer' }], stopReason: 'stop' }],
     });
-
+    await dispatch(fixture, 'agent_settled');
     expect(activation.manager.snapshot().goal).toMatchObject({
       status: 'paused',
       safetyPauseCause: 'no_progress',
@@ -420,23 +451,18 @@ describe('Goal lifecycle safety and fencing', () => {
     activation.dispose();
   });
 
-  it('pauses instead of injecting a prompt after external tool-policy drift', async () => {
+  it('does not require lifecycle tools on the main agent surface', async () => {
     const fixture = createFixture();
     const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
+    const rival = fixture.surface.register({ source: 'rival', restrict: () => [] });
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
-    const rival = fixture.surface.register({
-      source: 'rival',
-      restrict: (incoming) => incoming.filter((name) => !name.startsWith('goal_')),
-    });
-    const beforeStart = fixture.handlers.find((candidate) => candidate.event === 'before_agent_start');
-    const result = (await beforeStart?.handler({ systemPrompt: 'base' } as never, fixture.context)) as
-      | { systemPrompt?: string }
-      | undefined;
-
-    expect(result).toBeUndefined();
-    expect(activation.manager.snapshot().goal?.status).toBe('paused');
-    expect(fixture.activeTools()).toEqual(['read']);
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+    expect(activation.manager.snapshot().goal?.status).toBe('active');
+    expect(fixture.check).toHaveBeenCalledOnce();
+    expect(fixture.tools).toEqual([]);
+    expect(fixture.activeTools()).toEqual([]);
     rival.dispose();
     activation.dispose();
   });
@@ -464,7 +490,9 @@ describe('Goal background-work coordination', () => {
     background.setItems([]);
     activation.manager.backgroundWorkChanged(background.service);
     await vi.waitFor(() => expect(fixture.sendUserMessage).toHaveBeenCalledTimes(2));
-    expect(fixture.sendUserMessage).toHaveBeenLastCalledWith('[goal]\nContinue.', { deliverAs: 'followUp' });
+    expect(fixture.sendUserMessage).toHaveBeenLastCalledWith('[goal]\nRun the remaining integration checks.', {
+      deliverAs: 'followUp',
+    });
     activation.dispose();
   });
 
@@ -577,7 +605,6 @@ describe('Goal manager command and restore branches', () => {
   async function activate(fixture: ReturnType<typeof createFixture>) {
     const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
-    await new Promise((resolve) => setTimeout(resolve, 50));
     return activation;
   }
 
@@ -594,14 +621,15 @@ describe('Goal manager command and restore branches', () => {
     activation.dispose();
   });
 
-  it('rejects invalid objectives and restrictive tool policies atomically', async () => {
+  it('rejects invalid objectives without requiring a tool-surface binding', async () => {
     const fixture = createFixture();
     const activation = await activate(fixture);
-    await fixture.commands.get('goal')?.handler('', fixture.context);
-    activation.unbindSurface();
-    await fixture.commands.get('goal')?.handler('cannot start', fixture.context);
+    await activation.manager.startFromCatalog('', undefined, fixture.context);
     expect(activation.manager.snapshot().goal).toBeUndefined();
-    expect(fixture.activeTools()).toEqual(['read', 'goal_complete', 'goal_blocked']);
+    await fixture.commands.get('goal')?.handler('can start', fixture.context);
+    expect(activation.manager.snapshot().goal?.status).toBe('active');
+    expect(fixture.activeTools()).toEqual(['read']);
+    expect(fixture.tools).toEqual([]);
     activation.dispose();
   });
 
@@ -647,7 +675,7 @@ describe('Goal manager command and restore branches', () => {
     activation.dispose();
   });
 
-  it('limits budget and exposes only completion during wrap-up', async () => {
+  it('retains an incomplete budget-limited goal without exposing tools or admitting more work', async () => {
     const fixture = createFixture();
     const activation = await activate(fixture);
     await fixture.commands.get('goal')?.handler('--tokens 1 budget', fixture.context);
@@ -661,35 +689,34 @@ describe('Goal manager command and restore branches', () => {
       messages: [{ role: 'assistant', content: [{ type: 'text', text: 'done' }], stopReason: 'stop' }],
     });
     expect(activation.manager.snapshot().goal?.status).toBe('budget_limited');
-    expect(fixture.activeTools()).toEqual(['read', 'goal_complete']);
+    await dispatch(fixture, 'agent_settled');
+    expect(fixture.check).toHaveBeenCalledOnce();
+    expect(fixture.sendUserMessage).toHaveBeenCalledOnce();
+    expect(fixture.activeTools()).toEqual(['read']);
+    expect(fixture.tools).toEqual([]);
     activation.dispose();
   });
 
-  it('rejects invalid tool payloads and blocks a valid active goal', async () => {
+  it('lets the checker retain a genuinely repeated external blocker', async () => {
     const fixture = createFixture();
     const activation = await activate(fixture);
     await fixture.commands.get('goal')?.handler('first', fixture.context);
-    const complete = fixture.tools.find((tool) => tool.name === 'goal_complete')?.execute as unknown as (
-      ...args: unknown[]
-    ) => Promise<{ details: { error: boolean } }>;
-    const blocked = fixture.tools.find((tool) => tool.name === 'goal_blocked')?.execute as unknown as (
-      ...args: unknown[]
-    ) => Promise<{ details: { error: boolean } }>;
-    await expect(
-      complete('id', { goal_id: 'id', summary: '' }, undefined, undefined, fixture.context),
-    ).resolves.toMatchObject({ details: { error: true } });
-    const id = activation.manager.snapshot().goal?.id;
-    expect(id).toBeDefined();
-    await expect(
-      blocked(
-        'id',
-        { goal_id: id, reason: 'external', evidence: 'same blocker', repeated_turns: 3 },
-        undefined,
-        undefined,
-        fixture.context,
-      ),
-    ).resolves.toMatchObject({ details: { error: false } });
+    for (let turn = 0; turn < 2; turn += 1) {
+      await finishGoalTurn(fixture);
+      await dispatch(fixture, 'agent_settled');
+    }
+    fixture.check.mockImplementationOnce(async (request) =>
+      verdict(request, 'goal_blocked', {
+        reason: 'Deployment approval required',
+        evidence: 'The deployment gate refused the last three attempts.',
+        repeated_turns: 3,
+      }),
+    );
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
     expect(activation.manager.snapshot().goal?.status).toBe('blocked');
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(3);
+    expect(fixture.tools).toEqual([]);
     activation.dispose();
   });
 
@@ -706,9 +733,11 @@ describe('Goal manager command and restore branches', () => {
     session.getEntries = session.getBranch;
     const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
-    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(activation.manager.snapshot().goal?.text).toBe('restored');
-    expect(fixture.sendUserMessage).not.toHaveBeenCalled();
+    expect(fixture.check).toHaveBeenCalledOnce();
+    expect(fixture.sendUserMessage).toHaveBeenCalledExactlyOnceWith('[goal]\nRun the remaining integration checks.', {
+      deliverAs: 'followUp',
+    });
     fixture.sendUserMessage.mockClear();
     session.getBranch = () => [
       {
@@ -719,7 +748,7 @@ describe('Goal manager command and restore branches', () => {
     ];
     session.getEntries = session.getBranch;
     await dispatch(fixture, 'session_start');
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fixture.sendUserMessage).not.toHaveBeenCalled();
     expect(fixture.activeTools()).toEqual(['read']);
     activation.dispose();
   });
@@ -755,11 +784,151 @@ describe('Goal manager command and restore branches', () => {
   });
 });
 
+describe('Goal checker concurrency', () => {
+  it.each([
+    'pause',
+    'clear',
+    'edit revised',
+    'input',
+    'session_shutdown',
+    'session_tree',
+    'leader-end',
+    'catalog-start',
+  ])('discards an in-flight completion after %s', async (action) => {
+    const fixture = createFixture();
+    const archive = vi.spyOn(fixture.history, 'archive');
+    const activation = fixture.activateRuntime();
+    await dispatch(fixture, 'session_start');
+    await fixture.commands.get('goal')?.handler('original', fixture.context);
+    let resolve!: (response: CheckResponse) => void;
+    fixture.check.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+    const [request, signal] = fixture.check.mock.calls[0]!;
+    if (action === 'input' || action === 'session_tree') fixture.setPendingMessages(true);
+    if (action === 'input' || action.startsWith('session_')) await dispatch(fixture, action);
+    else if (action === 'leader-end') await activation.manager.endFromLeader(fixture.context);
+    else if (action === 'catalog-start')
+      await activation.manager.startFromCatalog('catalog replacement', undefined, fixture.context);
+    else await fixture.commands.get('goal')?.handler(action, fixture.context);
+    expect(signal.aborted).toBe(true);
+    const delivered = fixture.sendUserMessage.mock.calls.length;
+    resolve(verdict(request, 'goal_complete', { summary: 'Done.', evidence: 'Tests passed.' }));
+    await new Promise((done) => setImmediate(done));
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(delivered);
+    expect(archive.mock.calls.some(([entry]) => entry.status === 'complete')).toBe(false);
+    if (action === 'clear' || action === 'leader-end') expect(activation.manager.snapshot().goal).toBeUndefined();
+    else expect(activation.manager.snapshot().goal).toBeDefined();
+    if (action === 'edit revised') expect(activation.manager.snapshot().goal?.text).toBe('revised');
+    if (action === 'catalog-start') expect(activation.manager.snapshot().goal?.text).toBe('catalog replacement');
+    activation.dispose();
+  });
+
+  it('aborts a check when work appears and makes one fresh check after its handoff', async () => {
+    const fixture = createFixture();
+    const activation = fixture.activateRuntime();
+    await dispatch(fixture, 'session_start');
+    await fixture.commands.get('goal')?.handler('original', fixture.context);
+    const background = createBackgroundWorkService();
+    activation.manager.bindBackgroundWork(background.service);
+    let resolve!: (response: CheckResponse) => void;
+    fixture.check.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+    const [request, signal] = fixture.check.mock.calls[0]!;
+    background.setItems([{ id: 'new-runner', sessionId: 'manager-session' }]);
+    activation.manager.backgroundWorkChanged(background.service);
+    expect(signal.aborted).toBe(true);
+    resolve(verdict(request, 'goal_complete', { summary: 'Done.', evidence: 'Old test result.' }));
+    await new Promise((done) => setImmediate(done));
+    expect(activation.manager.snapshot().goal).toBeDefined();
+    expect(fixture.sendUserMessage).toHaveBeenCalledOnce();
+    background.setItems([]);
+    activation.manager.backgroundWorkChanged(background.service);
+    activation.manager.backgroundWorkChanged(background.service);
+    await dispatch(fixture, 'agent_settled');
+    expect(fixture.check).toHaveBeenCalledTimes(2);
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(2);
+    activation.dispose();
+  });
+
+  it('retains the goal and pauses without hot retries after checker failure', async () => {
+    const fixture = createFixture();
+    const activation = fixture.activateRuntime();
+    await dispatch(fixture, 'session_start');
+    await fixture.commands.get('goal')?.handler('original', fixture.context);
+    fixture.check.mockRejectedValueOnce(new Error('provider unavailable'));
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+    await dispatch(fixture, 'agent_settled');
+    expect(activation.manager.snapshot().goal?.status).toBe('paused');
+    expect(fixture.check).toHaveBeenCalledOnce();
+    expect(fixture.sendUserMessage).toHaveBeenCalledOnce();
+    await fixture.commands.get('goal')?.handler('resume', fixture.context);
+    expect(activation.manager.snapshot().goal?.status).toBe('active');
+    activation.dispose();
+  });
+
+  it('does not remove a verified goal when archival fails', async () => {
+    const fixture = createFixture();
+    const activation = fixture.activateRuntime();
+    await dispatch(fixture, 'session_start');
+    await fixture.commands.get('goal')?.handler('original', fixture.context);
+    vi.spyOn(fixture.history, 'archive').mockRejectedValueOnce(new Error('disk full'));
+    fixture.check.mockImplementationOnce(async (request) =>
+      verdict(request, 'goal_complete', { summary: 'Done.', evidence: 'Tests passed.' }),
+    );
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+    expect(activation.manager.snapshot().goal).toMatchObject({ text: 'original', status: 'paused' });
+    expect(fixture.sendUserMessage).toHaveBeenCalledOnce();
+    activation.dispose();
+  });
+
+  it('does not consume an iteration when continuation delivery fails', async () => {
+    const fixture = createFixture();
+    const activation = fixture.activateRuntime();
+    await dispatch(fixture, 'session_start');
+    await fixture.commands.get('goal')?.handler('original', fixture.context);
+    fixture.sendUserMessage.mockImplementationOnce(() => {
+      throw new Error('admission failed');
+    });
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+    expect(activation.manager.snapshot().goal).toMatchObject({ status: 'paused', iteration: 0 });
+    activation.dispose();
+  });
+
+  it('keeps user cancellation resumable rather than automatically restarting it', async () => {
+    const fixture = createFixture();
+    const activation = fixture.activateRuntime();
+    await dispatch(fixture, 'session_start');
+    await fixture.commands.get('goal')?.handler('original', fixture.context);
+    await dispatch(fixture, 'agent_start');
+    await dispatchEvent(fixture, 'agent_end', { messages: [{ role: 'assistant', stopReason: 'aborted' }] });
+    await dispatch(fixture, 'agent_settled');
+    expect(activation.manager.snapshot().goal?.status).toBe('paused');
+    expect(fixture.check).not.toHaveBeenCalled();
+    await fixture.commands.get('goal')?.handler('resume', fixture.context);
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(2);
+    activation.dispose();
+  });
+});
+
 describe('Goal manager completion and archive branches', () => {
   async function activate(fixture: ReturnType<typeof createFixture>) {
     const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
-    await new Promise((resolve) => setTimeout(resolve, 50));
     return activation;
   }
 
@@ -768,22 +937,15 @@ describe('Goal manager completion and archive branches', () => {
     const archive = vi.spyOn(fixture.history, 'archive');
     const activation = await activate(fixture);
     await fixture.commands.get('goal')?.handler('first', fixture.context);
-    const id = activation.manager.snapshot().goal?.id;
-    expect(id).toBeDefined();
     fixture.sendUserMessage.mockClear();
-    const tool = fixture.tools.find((candidate) => candidate.name === 'goal_complete')?.execute as unknown as (
-      ...args: unknown[]
-    ) => Promise<unknown>;
-
-    const result = await tool(
-      'call',
-      { goal_id: id, summary: 'all requirements are verified' },
-      undefined,
-      undefined,
-      fixture.context,
+    fixture.check.mockImplementationOnce(async (request) =>
+      verdict(request, 'goal_complete', {
+        summary: 'All requirements verified.',
+        evidence: 'Build and integration verification passed.',
+      }),
     );
-
-    expect(result).toMatchObject({ terminate: true, details: { error: false } });
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
     expect(activation.manager.snapshot()).toMatchObject({ goal: undefined, execution: 'dormant' });
     expect(archive).toHaveBeenCalledWith(expect.objectContaining({ objective: 'first', status: 'complete' }));
     expect(fixture.sendUserMessage).not.toHaveBeenCalled();
@@ -792,18 +954,18 @@ describe('Goal manager completion and archive branches', () => {
     activation.dispose();
   });
 
-  it('rejects contradictory and stale completion calls', async () => {
+  it.each([
+    { summary: 'tests still fail', evidence: 'integration test failed' },
+    { goal_id: 'stale', summary: 'Done.', evidence: 'Tests passed.' },
+  ])('retains the goal after an invalid checker completion: %j', async (args) => {
     const fixture = createFixture();
     const activation = await activate(fixture);
     await fixture.commands.get('goal')?.handler('first', fixture.context);
-    const complete = fixture.tools.find((tool) => tool.name === 'goal_complete')?.execute as unknown as (
-      ...args: unknown[]
-    ) => Promise<{ details: { error: boolean } }>;
-    const id = activation.manager.snapshot().goal?.id;
-    await expect(
-      complete('call', { goal_id: id, summary: 'tests still fail' }, undefined, undefined, fixture.context),
-    ).resolves.toMatchObject({ details: { error: true } });
-    expect(activation.manager.snapshot().goal?.status).toBe('active');
+    fixture.check.mockImplementationOnce(async (request) => verdict(request, 'goal_complete', args));
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+    expect(activation.manager.snapshot().goal?.status).toBe('paused');
+    expect(fixture.sendUserMessage).toHaveBeenCalledOnce();
     activation.dispose();
   });
 });

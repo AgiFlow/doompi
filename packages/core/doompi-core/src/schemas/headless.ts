@@ -106,6 +106,21 @@ export interface DoomMcpSkillAccess {
   read(name: string): Promise<string>;
 }
 
+/** A stateless auxiliary request. These tools are private to this request, never registered on the agent. */
+export interface DoomHeadlessToolCompletionRequest {
+  systemPrompt: string;
+  input: string;
+  maxTokens: number;
+  cacheRetention?: 'none' | 'short' | 'long';
+  signal?: AbortSignal;
+  tools: readonly Pick<DoomHeadlessTool, 'name' | 'description' | 'parameters'>[];
+}
+
+export interface DoomHeadlessToolCompletionResult {
+  toolCalls: readonly { id: string; name: string; arguments: unknown }[];
+  usage: { totalTokens: number };
+}
+
 export interface DoomHeadlessExecutionContext {
   readonly cwd: string;
   /** Admitted configuration root, distinct from the tool execution directory. */
@@ -128,6 +143,9 @@ export interface DoomHeadlessExecutionContext {
         signal?: AbortSignal;
       },
     ): Promise<string>;
+  };
+  readonly toolCompletion?: {
+    complete(reference: string, request: DoomHeadlessToolCompletionRequest): Promise<DoomHeadlessToolCompletionResult>;
   };
   readonly selection: DoomHeadlessSelection;
   /** Present only while an authenticated remote MCP tool is running. */

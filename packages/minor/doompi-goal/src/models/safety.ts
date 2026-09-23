@@ -56,6 +56,38 @@ export function outputFingerprint(messages: readonly unknown[]): string | undefi
   }
   return `${(hash >>> 0).toString(16).padStart(8, '0')}`.repeat(8);
 }
+export function classifyGoalRunFailure(
+  messages: readonly unknown[],
+  status?: unknown,
+  error?: unknown,
+): 'usage_limited' | 'blocked' | 'aborted' | undefined {
+  if (status === 'aborted' || status === 'cancelled' || status === 'canceled') return 'aborted';
+  const assistant = [...messages]
+    .reverse()
+    .find(
+      (message) =>
+        message !== null && typeof message === 'object' && (message as { role?: unknown }).role === 'assistant',
+    ) as { stopReason?: unknown; errorMessage?: unknown } | undefined;
+  if (assistant?.stopReason === 'aborted') return 'aborted';
+  if (
+    status !== 'failed' &&
+    status !== 'error' &&
+    error === undefined &&
+    assistant?.stopReason !== 'error' &&
+    assistant?.stopReason !== 'length' &&
+    assistant?.errorMessage === undefined
+  )
+    return undefined;
+  const details = [error instanceof Error ? error.message : error, assistant?.errorMessage, messageText(assistant)]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+    .toLowerCase();
+  return assistant?.stopReason === 'length' ||
+    /(?:rate|quota|usage|token|context|capacity|limit|429|too many|billing|exhaust)/u.test(details)
+    ? 'usage_limited'
+    : 'blocked';
+}
+
 function messageText(message: unknown): string {
   if (!message || typeof message !== 'object') return '';
   const candidate = message as { role?: unknown; content?: unknown; text?: unknown };

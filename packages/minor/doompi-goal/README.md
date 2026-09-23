@@ -1,18 +1,19 @@
 # @agimon-ai/doompi-goal
 
-Keep one objective, an optional token budget, and completion tools active across Pi turns.
+Keep one objective and an optional token budget active across agent turns, with independent idle-time completion checking.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
-Completed, cleared, or blocked goals no longer contribute active instructions or tools. Goal history
-is scoped to the repository.
+Completed, cleared, or blocked goals no longer contribute active work instructions. Goal history
+is scoped to the repository. Lifecycle tools are private to the checker, never added to the working agent.
 
 > **Alpha:** Goal behavior may change between releases.
 
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.85.0 and Pi TUI 0.85.0
+- Pi 0.87.1 and Pi TUI 0.87.1
+- The DoomPi background-work coordination service for automatic completion checks. If coordination is missing or unavailable, Goal does not assume the session is idle.
 
 ## Install
 
@@ -35,13 +36,22 @@ pi install npm:@agimon-ai/doompi-goal
 /goal clear
 ```
 
-Budgets accept compact values such as `100k` and `1.5m`. Goal adds `goal_complete` and
-`goal_blocked` only while host policy permits and the objective is operational. An active Goal
-continues after genuinely idle turns. In a composed DoomPi session it waits for same-session
-subagents, tasks, runners, workflows, and their completion turns before continuing. Only a
-successful `goal_complete` call marks the objective complete.
+Budgets accept compact values such as `100k` and `1.5m`. Starting or resuming a goal wakes the
+agent in both the CLI and server. After a turn settles, Goal waits for same-session subagents,
+runners, workflows, and their result handoffs, and for all pending messages to be processed.
 
-In DoomPi, `SPC g e` starts a goal. If another goal is active, it ends and archives that goal first. `SPC g g` shows status, and `SPC g l` opens history. These views require a TUI; slash commands and tools support headless operation.
+One bounded LLM check then evaluates the objective against the transcript and verification evidence.
+The checker alone receives `goal_complete`, `goal_continue`, and `goal_blocked`. Completion archives
+the evidence and removes the active goal. Incomplete work produces a targeted next-action prompt,
+not a generic completion claim. Genuine repeated external blockers retain the unfinished goal.
+
+New work, user input, edits, pause, session changes, or cancellation invalidate an in-flight verdict.
+Provider failures and invalid verdicts pause the goal without automatic retry loops. Use `/goal resume`
+after resolving the problem. Token and no-progress limits prevent further substantive continuation;
+a final idle check may still establish that the already-finished work is complete.
+
+In DoomPi, `SPC g e` starts a goal or ends and archives the current goal. `SPC g g` shows status,
+and `SPC g l` opens history. These leader views require a TUI; slash commands support headless operation.
 
 ## In the cockpit
 
@@ -52,13 +62,15 @@ operation. Removing archives to goal history and stops the turn in flight, so it
 
 ## Settings
 
-Settings live in `$PI_CODING_AGENT_DIR/pi-goal.json` (default `~/.pi/agent/pi-goal.json`). The
-defaults use operational tool visibility, allow unlimited automatic turns, and pause after three
-no-progress turns. Hosts can decode and normalize custom settings through the public settings API.
+The CLI reads settings from `$PI_CODING_AGENT_DIR/pi-goal.json` (default
+`~/.pi/agent/pi-goal.json`). The defaults allow unlimited automatic turns and pause after three
+repeated tool-free outputs. The server uses those default continuation limits. The legacy
+`toolVisibility` setting is still decoded for compatibility but no longer exposes lifecycle tools.
 
 ## State and history
 
-Live Goal state is stored in Pi session entries. History is repository-scoped under:
+Live Goal state and `goal-check` audit records are stored in session entries. Checker token usage
+is included in Goal budget accounting. History is repository-scoped under:
 
 ```text
 $PI_CODING_AGENT_DIR/goal-history/
@@ -66,8 +78,8 @@ $PI_CODING_AGENT_DIR/goal-history/
 
 The default history path is `~/.pi/agent/goal-history/`. History retains up to 100 entries and
 1 MiB. Corrupt history files are quarantined instead of being interpreted as valid goals. Clearing
-or completing removes active instructions and tools; archived history remains until retention or
-explicit deletion removes it.
+or completing removes the active objective and status. Archived history remains until retention
+or explicit deletion removes it. Failed archival retains the goal instead of discarding it.
 
 ## Public API
 
@@ -100,4 +112,7 @@ MIT
 
 Plugin entries live in `src/extensions`, with host-neutral runtime logic in `src/services` and host registrations in routed `src/extensions` surfaces. `src/models` owns goal state, accounting, transitions, and serialization. Named `src/services` folders handle history, persistence, prompts, and validation. Public helpers and types are exposed through flat `src/exports`.
 
-Both hosts declare minor-mode owners and reactive tool restrictions. The helper owns registrations and subscriptions. Pi stops the Goal manager before releasing its service bindings, and final disposal also handles failed startup. Server restriction snapshots follow changes to persisted goal state.
+Both hosts declare minor-mode owners and use the shared background-work contract. Request-private
+checker tools are validated before their effects are applied, with session and goal revision guards.
+Provider calls do not hold the command queue, so pause and clear remain responsive during inference.
+The main agent's ordinary tool policy is unchanged.

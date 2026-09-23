@@ -80,7 +80,9 @@ describe('prompts settings safety and tools', () => {
     const prompt = buildGoalPrompt(goal);
     expect(prompt).toBe('[goal]\n<task>');
     expect(prompt).not.toContain('<goal_id>');
-    expect(buildGoalSystemPrompt(goal)).toContain('<goal_id>');
+    expect(buildGoalSystemPrompt(goal)).not.toContain('<goal_id>');
+    expect(buildGoalSystemPrompt(goal)).not.toMatch(/goal_complete|goal_blocked/);
+    expect(buildGoalSystemPrompt(goal)).toContain('independent idle checker');
     expect(buildGoalSystemPrompt(goal)).toContain('&lt;task&gt;');
     expect(normalizeGoalSettings({ toolVisibility: 'always' })?.toolVisibility).toBe('operational');
     expect(normalizeGoalSettings({ toolVisibility: 'after-first-goal' })?.toolVisibility).toBe('operational');

@@ -1,6 +1,6 @@
 ---
 name: doompi-use-goal
-description: Use Doom Pi Goal to start, budget, pause, resume, complete, block, and inspect persistent repository goals.
+description: Use Doom Pi Goal to start, budget, pause, resume, and inspect persistent repository goals with automatic completion checking.
 ---
 
 # Use Doom Pi Goal
@@ -18,8 +18,10 @@ Use Goal when work must persist across turns with an explicit objective, optiona
 
 ## Finish accurately
 
-Call `goal_complete` only when authoritative evidence proves the objective is genuinely achieved and no required work remains. A prose claim, passing test, created file, or ordinary agent turn does not complete the Goal. If any requirement remains, continue concrete work. Pending subagents, tasks, runners, and workflows are work in progress, so wait for and incorporate their results before completion.
+Perform the work and leave concrete verification evidence. A prose claim, passing unrelated test, created file, or ordinary agent turn does not complete the Goal. Pending subagents, tasks, runners, workflows, and undelivered results are still work in progress. Incorporate their results before concluding the work.
 
-Call `goal_blocked` only when the runtime's repeated-blocker threshold is met and progress requires user input or an external state change. Keep the active goal identifier and final summary consistent with the current goal.
+An independent LLM checker runs only after the main agent and all registered background work have settled, with no pending messages. It calls private lifecycle tools to complete the goal, give the working agent a concrete next action, or retain a genuine repeated external blocker. Those tools are not available to the working agent. Report blockers and the intervention needed in the normal work transcript; do not invent a lifecycle tool call.
 
-Goal state persists in Pi session entries, while history is scoped to the repository. Completed, cleared, or blocked goals no longer contribute active instructions or tools. A session holds one goal at a time; starting another replaces and archives the one being worked.
+A successful completion check archives the evidence and removes the active goal. Pause, cancellation, budgets, and safety limits override continuation. A failed check or failed archive retains the goal and reports the problem; resolve it and use `/goal resume` when appropriate.
+
+Goal state and checker decisions persist in session entries, while history is scoped to the repository. Completed, cleared, or blocked goals no longer contribute active work instructions. A session holds one goal at a time; starting another requires confirmation before replacing and archiving the current goal.

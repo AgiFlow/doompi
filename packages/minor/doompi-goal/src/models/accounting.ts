@@ -48,7 +48,19 @@ export function cumulativeAssistantTokens(entries: readonly unknown[]): number {
   let total = 0;
   for (const entry of entries) {
     if (!entry || typeof entry !== 'object') continue;
-    const candidate = entry as { type?: unknown; message?: unknown };
+    const candidate = entry as { type?: unknown; message?: unknown; customType?: unknown; data?: unknown };
+    if (
+      candidate.type === 'custom' &&
+      candidate.customType === 'goal-check' &&
+      candidate.data &&
+      typeof candidate.data === 'object'
+    ) {
+      total = Math.min(
+        Number.MAX_SAFE_INTEGER,
+        total + assistantUsageTokens((candidate.data as { usage?: unknown }).usage),
+      );
+      continue;
+    }
     if (candidate.type !== 'message' || !candidate.message || typeof candidate.message !== 'object') continue;
     const message = candidate.message as { role?: unknown; usage?: unknown };
     if (message.role === 'assistant')

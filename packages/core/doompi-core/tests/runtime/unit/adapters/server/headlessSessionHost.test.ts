@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { Context } from '@deepseek-ai/cordis';
-import type { Api, Model } from '@earendil-works/pi-ai';
+import { createAssistantMessageEventStream, type Api, type AssistantMessage, type Model } from '@earendil-works/pi-ai';
 import {
   createExtensionRuntime,
   ModelRuntime,
@@ -47,6 +47,7 @@ async function fixture(
     candidates?: DoomServerBundleEntry[];
     modes?: string[];
     inheritedSelection?: Parameters<typeof createHeadlessSessionHost>[0]['inheritedSelection'];
+    streamSimple?: ModelRuntime['streamSimple'];
   } = {},
 ): Promise<{
   host: Awaited<ReturnType<typeof createHeadlessSessionHost>>;
@@ -70,6 +71,9 @@ async function fixture(
     getModel: (provider: string, id: string) => (provider === model.provider && id === model.id ? model : undefined),
     getModels: () => [model],
     getAvailable: async () => [model],
+    hasConfiguredAuth: (provider: string) => provider === model.provider,
+    complete: vi.fn(),
+    streamSimple: options.streamSimple,
   } as unknown as ModelRuntime);
   const context = new Context();
   const host = await createHeadlessSessionHost({
@@ -98,6 +102,163 @@ afterEach(async () => {
   for (const dispose of cleanup.splice(0)) await dispose();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
+});
+
+describe('request-private auxiliary model tools', () => {
+  const tools = [
+    {
+      name: 'private_decision',
+      description: 'Decide the private request.',
+      parameters: Type.Object({ evidence: Type.String() }),
+    },
+  ];
+  function response(stopReason: AssistantMessage['stopReason'] = 'toolUse'): AssistantMessage {
+    return {
+      role: 'assistant',
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      timestamp: Date.now(),
+      stopReason,
+      content: [
+        { type: 'text', text: 'Private response' },
+        { type: 'toolCall', id: 'private-call', name: 'private_decision', arguments: { evidence: 'verified' } },
+      ],
+      usage: {
+        input: 1,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 2,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    };
+  }
+  it('performs an auxiliary decision and wakes a second turn at the real native settled boundary', async () => {
+    const streamSimple = vi.fn<ModelRuntime['streamSimple']>(() => {
+      const stream = createAssistantMessageEventStream();
+      const message: AssistantMessage = {
+        ...response('stop'),
+        content: [{ type: 'text', text: 'Work evidence recorded.' }],
+      };
+      stream.push({ type: 'start', partial: message });
+      stream.push({ type: 'done', reason: 'stop', message });
+      stream.end();
+      return stream;
+    });
+    const candidate: DoomServerBundleEntry = {
+      packageName: '@test/idle-checker',
+      entry: './server.ts',
+      module: './server.mjs',
+      scopes: ['session'],
+      required: true,
+      owners: [{ majorMode: 'test', layer: 'default' }],
+    };
+    const current = await fixture([], { candidates: [candidate], streamSimple });
+    const observations: Array<{ isIdle: boolean; hasPendingMessages: boolean }> = [];
+    const registrations = current.context.extend({ [DOOM_HEADLESS_OWNER]: candidate });
+    await registrations
+      .plugin((context: Context) => {
+        requireDoomHeadlessHost(context).registerHook({
+          event: 'agent_settled',
+          async handle(_event, execution) {
+            observations.push(await execution.session.activity());
+            const decision = await execution.toolCompletion!.complete(`${model.provider}/${model.id}`, {
+              systemPrompt: 'Evaluate recorded evidence.',
+              input: JSON.stringify(await execution.session.entries()),
+              maxTokens: 128,
+              tools,
+            });
+            await execution.session.appendCustomEntry('test-private-decision', decision);
+            if (observations.length === 1) await execution.session.admitPrompt!('Continue verification.', 'prompt');
+          },
+        });
+      })
+      .await();
+    await current.host.activateFacets({
+      root: current.context,
+      installedPackages: [candidate.packageName],
+      dispose: async () => {},
+    });
+    const complete = vi.spyOn(current.runtime, 'completeModel').mockResolvedValue(response());
+    await current.session.prompt('Start work.');
+    await vi.waitFor(() => expect(complete).toHaveBeenCalledTimes(2));
+    expect(streamSimple).toHaveBeenCalledTimes(2);
+    expect(observations).toEqual([
+      { isIdle: true, hasPendingMessages: false },
+      { isIdle: true, hasPendingMessages: false },
+    ]);
+    expect(current.host.toolSurface.readSurface().tools.some((tool) => tool.name === 'private_decision')).toBe(false);
+    await vi.waitFor(async () =>
+      expect(await current.session.activity()).toEqual({ isIdle: true, hasPendingMessages: false }),
+    );
+  });
+
+  it('passes private tools through the auxiliary model request without registering them on either agent surface', async () => {
+    const current = await fixture();
+    const auxiliary = current.host.host!.context.toolCompletion!;
+    const signal = new AbortController().signal;
+    const request = { systemPrompt: 'Private checker', input: 'Execution evidence', maxTokens: 128, tools, signal };
+    await expect(auxiliary.complete(`${model.provider}/${model.id}`, request)).rejects.toThrow('not ready');
+    await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
+    const complete = vi.spyOn(current.runtime, 'completeModel').mockResolvedValue(response());
+    await expect(auxiliary.complete(`${model.provider}/${model.id}`, request)).resolves.toEqual({
+      toolCalls: [
+        { type: 'toolCall', id: 'private-call', name: 'private_decision', arguments: { evidence: 'verified' } },
+      ],
+      usage: response().usage,
+    });
+    expect(complete).toHaveBeenCalledWith(
+      model,
+      {
+        systemPrompt: 'Private checker',
+        messages: [{ role: 'user', content: 'Execution evidence', timestamp: expect.any(Number) }],
+        tools,
+      },
+      expect.objectContaining({ signal, maxTokens: 128, maxRetries: 0 }),
+    );
+    expect(current.host.toolSurface.readSurface().tools.some((tool) => tool.name === 'private_decision')).toBe(false);
+    expect(current.host.mcpSurface.readSurface().tools.some((tool) => tool.name === 'private_decision')).toBe(false);
+    await expect(
+      current.host.host!.context.textCompletion!.complete(`${model.provider}/${model.id}`, request),
+    ).resolves.toBe('Private response');
+    expect(complete.mock.calls.at(-1)?.[1].tools).toBeUndefined();
+  });
+
+  it.each(['error', 'aborted', 'length'] as const)(
+    'rejects an auxiliary %s outcome instead of treating it as a decision',
+    async (stopReason) => {
+      const current = await fixture();
+      await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
+      vi.spyOn(current.runtime, 'completeModel').mockResolvedValue(response(stopReason));
+      await expect(
+        current.host.host!.context.toolCompletion!.complete(`${model.provider}/${model.id}`, {
+          systemPrompt: 'Private checker',
+          input: 'Execution evidence',
+          maxTokens: 128,
+          tools,
+        }),
+      ).rejects.toThrow();
+    },
+  );
+
+  it('honors cancellation before a private request reaches the model', async () => {
+    const current = await fixture();
+    await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
+    const complete = vi.spyOn(current.runtime, 'completeModel').mockResolvedValue(response());
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      current.host.host!.context.toolCompletion!.complete(`${model.provider}/${model.id}`, {
+        systemPrompt: 'Private checker',
+        input: 'Execution evidence',
+        maxTokens: 128,
+        tools,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow();
+    expect(complete).not.toHaveBeenCalled();
+  });
 });
 
 describe('headless session facet surface', () => {

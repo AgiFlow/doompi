@@ -5,7 +5,6 @@ import {
 } from '@agimon-ai/doompi-core/backgroundWork';
 import { type LeaderBinding } from '@agimon-ai/doompi-core/leader';
 import { type PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
-import { DOOM_TOOL_SURFACE_SERVICE, requireDoomToolSurface } from '@agimon-ai/doompi-core/toolSurface';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/uiHub';
 import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
@@ -74,9 +73,6 @@ export function createGoalPlugin(
   const manager = activation.manager;
   const mode = createGoalMinorMode(manager);
   const bindServices = (cordis: Context) => {
-    cordis.inject([DOOM_TOOL_SURFACE_SERVICE], (surfaceContext) =>
-      manager.bindToolSurface(requireDoomToolSurface(surfaceContext)),
-    );
     cordis.inject([DOOM_BACKGROUND_WORK_SERVICE], (backgroundContext) => {
       const service = readDoomBackgroundWorkService(backgroundContext);
       if (!service) return undefined;
