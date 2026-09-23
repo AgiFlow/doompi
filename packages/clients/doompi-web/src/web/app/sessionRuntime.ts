@@ -266,7 +266,7 @@ export function startSessionRuntime(): () => void {
     const dormantTarget = target !== null && byId[target].summary.dormant === true;
     const focused = focusSessionWebPlugins(
       target,
-      target === null ? undefined : byId[target].summary.webComposition,
+      target === null ? undefined : dormantTarget ? null : byId[target].summary.webComposition,
       target === null ? undefined : byId[target].summary.workspaceId,
     );
     for (const sessionId of dormantTranscripts.keys()) {

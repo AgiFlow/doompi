@@ -1,6 +1,6 @@
-import type { DoomServerPluginDefinition, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
+import type { DoomServerPluginDefinition } from '@agimon-ai/doompi-core/serverFacet';
 
-import { createSessionState } from '../../../../../services/serverRuntime';
+import { createSessionState, type LoopServerState } from '../../../../../services/serverRuntime';
 
-export default (({ agent }): Partial<DoomServerSessionPlugin> =>
-  agent ? createSessionState(agent) : {}) satisfies NonNullable<DoomServerPluginDefinition['session']>;
+export default (({ agent }): LoopServerState =>
+  agent ? createSessionState(agent) : { loopTools: [] }) satisfies NonNullable<DoomServerPluginDefinition['session']>;

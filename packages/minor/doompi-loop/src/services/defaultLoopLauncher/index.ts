@@ -1,57 +1,59 @@
 import type { ExtensionAPI, ExtensionContext, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
+import { Cron } from 'croner';
 
 import { NOTIFY_WARNING_LEVEL, PACKAGE_SOURCE } from '../../constants/piLoop';
-import type { DoomLoopLaunchersService, LoopLauncherRegistration, StoppableLoop } from '../../schemas/loopLaunchers';
+import type {
+  DoomLoopLaunchersService,
+  LoopLaunchRequest,
+  LoopLauncherRegistration,
+} from '../../schemas/loopLaunchers';
+import { CronLoopSchema, IntervalLoopSchema, parseCronLoop, parseIntervalLoop } from '../../schemas/loopTools';
 
-const DEFAULT_LAUNCHER_ID = 'doompi.default';
 const DEFAULT_INTERVAL_SECONDS = 300;
 const MIN_INTERVAL_SECONDS = 30;
 const MAX_INTERVAL_SECONDS = 3600;
 const MILLISECONDS_PER_SECOND = 1000;
 const PROMPT_PREVIEW_LENGTH = 80;
 
-interface PreparedDefaultLoop {
+interface ActiveDefaultLoop {
   readonly prompt: string;
-  readonly intervalSeconds: number;
-}
-
-interface ActiveDefaultLoop extends PreparedDefaultLoop {
   readonly context: ExtensionContext;
-  timer?: ReturnType<typeof setInterval>;
   stopped: boolean;
 }
 
 export interface DefaultLoopLauncher {
   onAgentSettled(this: void): void;
   register(ctx: ExtensionContext, launchers: DoomLoopLaunchersService): LoopLauncherRegistration;
+  registerCron(ctx: ExtensionContext, launchers: DoomLoopLaunchersService): LoopLauncherRegistration;
 }
 
-function intervalError(raw: string): string | undefined {
-  const seconds = Number(raw);
-  if (!Number.isInteger(seconds)) return `Interval must be a whole number of seconds, got ${raw}.`;
-  if (seconds < MIN_INTERVAL_SECONDS || seconds > MAX_INTERVAL_SECONDS) {
-    return `Interval must be between ${MIN_INTERVAL_SECONDS} and ${MAX_INTERVAL_SECONDS} seconds.`;
-  }
-  return undefined;
-}
-
-async function prepareDefaultLoop(
-  ui: ExtensionUIContext,
-  signal: AbortSignal,
-): Promise<PreparedDefaultLoop | undefined> {
+async function prepareLoop(ui: ExtensionUIContext, request: LoopLaunchRequest, cron: boolean) {
+  if (request.input !== undefined) return cron ? parseCronLoop(request.input) : parseIntervalLoop(request.input);
+  if (request.interactive === false) throw new Error('Loop configuration is required for agent launches.');
   const prompt = (await ui.editor('Loop prompt', ''))?.trim();
-  if (!prompt || signal.aborted) return undefined;
-
-  const rawInterval = await ui.input('Loop interval in seconds', `Default: ${DEFAULT_INTERVAL_SECONDS}s`);
-  if (rawInterval === undefined || signal.aborted) return undefined;
-  const normalizedInterval = rawInterval.trim() || String(DEFAULT_INTERVAL_SECONDS);
-  const error = intervalError(normalizedInterval);
-  if (error) {
-    ui.notify(error, NOTIFY_WARNING_LEVEL);
+  if (!prompt || request.signal.aborted) return undefined;
+  if (cron) {
+    const expression = await ui.input('Cron expression (five fields)', '0 * * * *');
+    if (expression === undefined || request.signal.aborted) return undefined;
+    const timezone = await ui.input('Loop timezone', 'UTC');
+    if (timezone === undefined || request.signal.aborted) return undefined;
+    return parseCronLoop({ prompt, cron: expression, timezone: timezone.trim() || 'UTC' });
+  }
+  const raw = await ui.input('Loop interval in seconds', `Default: ${DEFAULT_INTERVAL_SECONDS}s`);
+  if (raw === undefined || request.signal.aborted) return undefined;
+  const intervalSeconds = Number(raw.trim() || DEFAULT_INTERVAL_SECONDS);
+  if (
+    !Number.isInteger(intervalSeconds) ||
+    intervalSeconds < MIN_INTERVAL_SECONDS ||
+    intervalSeconds > MAX_INTERVAL_SECONDS
+  ) {
+    ui.notify(
+      `Interval must be between ${MIN_INTERVAL_SECONDS} and ${MAX_INTERVAL_SECONDS} seconds.`,
+      NOTIFY_WARNING_LEVEL,
+    );
     return undefined;
   }
-
-  return { prompt, intervalSeconds: Number(normalizedInterval) };
+  return parseIntervalLoop({ prompt, intervalSeconds });
 }
 
 function promptPreview(prompt: string): string {
@@ -61,14 +63,12 @@ function promptPreview(prompt: string): string {
 
 export function createDefaultLoopLauncher(pi: Pick<ExtensionAPI, 'sendUserMessage'>): DefaultLoopLauncher {
   const pending = new Set<ActiveDefaultLoop>();
-
   const requestPass = (loop: ActiveDefaultLoop): void => {
     if (loop.stopped) return;
     if (!loop.context.isIdle()) {
       pending.add(loop);
       return;
     }
-
     pending.delete(loop);
     try {
       pi.sendUserMessage(loop.prompt);
@@ -79,44 +79,57 @@ export function createDefaultLoopLauncher(pi: Pick<ExtensionAPI, 'sendUserMessag
       );
     }
   };
-
-  const onAgentSettled = (): void => {
-    const next = pending.values().next().value;
-    if (next) requestPass(next);
-  };
-
-  return {
-    onAgentSettled,
-    register(ctx, launchers) {
-      return launchers.register({
-        id: DEFAULT_LAUNCHER_ID,
-        source: PACKAGE_SOURCE,
-        label: 'Default loop',
-        description: 'Run your own prompt in this session on an interval',
-        async launch({ instanceId, signal }) {
-          const prepared = await prepareDefaultLoop(ctx.ui, signal);
-          if (!prepared || signal.aborted) return undefined;
-
-          const loop: ActiveDefaultLoop = { ...prepared, context: ctx, stopped: false };
-          loop.timer = setInterval(() => requestPass(loop), loop.intervalSeconds * MILLISECONDS_PER_SECOND);
-          loop.timer.unref?.();
-          requestPass(loop);
-
-          const handle: StoppableLoop = {
-            instanceId,
-            label: 'Default loop',
-            detail: `every ${loop.intervalSeconds}s · ${promptPreview(loop.prompt)}`,
-            stop() {
-              if (loop.stopped) return;
-              loop.stopped = true;
-              if (loop.timer) clearInterval(loop.timer);
-              loop.timer = undefined;
-              pending.delete(loop);
-            },
+  const register = (ctx: ExtensionContext, launchers: DoomLoopLaunchersService, cron: boolean) =>
+    launchers.register({
+      id: cron ? 'doompi.cron' : 'doompi.default',
+      source: PACKAGE_SOURCE,
+      label: cron ? 'Cron loop' : 'Default loop',
+      description: cron
+        ? 'Run a prompt on a five-field cron schedule.'
+        : 'Run your own prompt in this session on an interval',
+      inputSchema: { ...(cron ? CronLoopSchema : IntervalLoopSchema) },
+      async launch(request) {
+        const prepared = await prepareLoop(ctx.ui, request, cron);
+        if (!prepared || request.signal.aborted) return undefined;
+        const loop: ActiveDefaultLoop = { prompt: prepared.prompt, context: ctx, stopped: false };
+        let stopTimer: () => void;
+        let schedule: string;
+        if ('cron' in prepared) {
+          const job = new Cron(prepared.cron, { timezone: prepared.timezone, unref: true }, () => requestPass(loop));
+          if (job.nextRun() === null) {
+            job.stop();
+            throw new Error('Cron expression has no future run.');
+          }
+          stopTimer = () => {
+            job.stop();
           };
-          return handle;
-        },
-      });
+          schedule = `${prepared.cron} (${prepared.timezone})`;
+        } else {
+          const timer = setInterval(() => requestPass(loop), prepared.intervalSeconds * MILLISECONDS_PER_SECOND);
+          timer.unref?.();
+          stopTimer = () => clearInterval(timer);
+          schedule = `every ${prepared.intervalSeconds}s`;
+          requestPass(loop);
+        }
+        return {
+          instanceId: request.instanceId,
+          label: cron ? 'Cron loop' : 'Default loop',
+          detail: `${schedule} · ${promptPreview(loop.prompt)}`,
+          stop() {
+            if (loop.stopped) return;
+            loop.stopped = true;
+            stopTimer();
+            pending.delete(loop);
+          },
+        };
+      },
+    });
+  return {
+    onAgentSettled() {
+      const next = pending.values().next().value;
+      if (next) requestPass(next);
     },
+    register: (ctx, launchers) => register(ctx, launchers, false),
+    registerCron: (ctx, launchers) => register(ctx, launchers, true),
   };
 }

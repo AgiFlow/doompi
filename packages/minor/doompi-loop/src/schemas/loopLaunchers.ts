@@ -6,6 +6,9 @@ export const DOOM_LOOP_LAUNCHERS_SERVICE = 'doom/loop-launchers';
 export interface LoopLaunchRequest {
   readonly instanceId: string;
   readonly signal: AbortSignal;
+  readonly input?: Readonly<Record<string, unknown>>;
+  /** False for agent calls: a launcher must never open an operator dialog. */
+  readonly interactive?: boolean;
 }
 
 export interface StoppableLoop {
@@ -20,6 +23,8 @@ export interface LoopLauncherSummary {
   readonly source: string;
   readonly label: string;
   readonly description?: string;
+  /** JSON Schema for non-interactive launch configuration, validated by the launcher. */
+  readonly inputSchema?: Readonly<Record<string, unknown>>;
 }
 
 export interface LoopInstanceSnapshot {
@@ -49,7 +54,15 @@ export interface DoomLoopLaunchersService {
   listLaunchers(): readonly LoopLauncherSummary[];
   listInstances(): readonly LoopInstanceSnapshot[];
   subscribe(listener: () => void): () => void;
-  launch(launcherId: string, options?: { instanceId?: string }): Promise<LoopInstanceSnapshot | undefined>;
+  launch(
+    launcherId: string,
+    options?: {
+      instanceId?: string;
+      input?: Readonly<Record<string, unknown>>;
+      interactive?: boolean;
+      signal?: AbortSignal;
+    },
+  ): Promise<LoopInstanceSnapshot | undefined>;
   stop(instanceId: string, reason?: string): Promise<boolean>;
   stopAll(reason?: string): Promise<void>;
   dispose(reason?: string): Promise<void>;

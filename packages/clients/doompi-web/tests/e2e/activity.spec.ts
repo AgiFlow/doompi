@@ -145,10 +145,7 @@ test('shows Loop lifecycle rows and routes the single manage action through /loo
   await expect(page.getByTestId('activity-loops-manage')).toHaveCount(1);
 });
 
-test('clicking Loop focuses idle Activity loops instead of opening a generic launcher dialog', async ({
-  page,
-  cockpit,
-}) => {
+test('toggles Loop agent tools while leaving manual Activity launchers available', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
@@ -168,7 +165,7 @@ test('clicking Loop focuses idle Activity loops instead of opening a generic lau
             order: 30,
             activation: 'inactive',
             condition: 'ready',
-            actions: [{ id: 'start', label: 'Start', description: '', needsInput: false, enabled: true }],
+            actions: [{ id: 'activate', label: 'Activate', description: '', needsInput: false, enabled: true }],
           },
         ],
       },
@@ -183,9 +180,13 @@ test('clicking Loop focuses idle Activity loops instead of opening a generic lau
 
   await expect(page.getByTestId('dock-tab-activity')).toHaveAttribute('data-active', 'true');
   await expect(page.getByTestId('activity-loops')).toBeVisible();
-  expect(
-    cockpit.session.received.filter((frame) => frame.type === 'prompt' && frame.message === '/minor loop.active'),
-  ).toHaveLength(0);
+  const sent = await cockpit.session.waitForCommand('prompt');
+  expect(sent.message).toBe('/minor loop.active');
+  await expect(page.getByTestId('activity-loop-cron-launch')).toBeVisible();
+  await page.getByTestId('activity-loop-cron-launch').click();
+  await expect
+    .poll(() => cockpit.session.received.filter((frame) => frame.type === 'prompt').map((frame) => frame.message))
+    .toContain('/loop doompi.cron');
 });
 test('keeps bottom-pinned groups visible while ordinary groups scroll', async ({ page, cockpit }) => {
   await page.setViewportSize({ width: 1280, height: 280 });

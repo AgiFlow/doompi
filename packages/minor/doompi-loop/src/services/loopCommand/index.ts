@@ -18,7 +18,7 @@ export function createLoopCommands(
       LIST_COMMAND_NAME,
       {
         description: LIST_COMMAND_DESCRIPTION,
-        handler: async (_args, ctx) => handlers.list(ctx),
+        handler: async (args, ctx) => handlers.list(ctx, args),
       },
     ],
   ];

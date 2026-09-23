@@ -23,9 +23,7 @@ if (!loopsActivityFill) throw new Error('Expected the Loop activity fill.');
 
 describe('Loop web surfaces', () => {
   it('declares the Loop mode, idle activity group, slots, and command bindings', () => {
-    expect(webPlugin.minorModes).toEqual([
-      { name: 'loop', keys: 'l l', statusKey: 'doom-loop', activityGroup: 'loops', order: 30 },
-    ]);
+    expect(webPlugin.minorModes).toEqual([{ name: 'loop', keys: 'l l', statusKey: 'doom-loop', order: 30 }]);
     expect(webPlugin.activityGroups).toEqual([
       expect.objectContaining({ name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, order: 40 }),
     ]);
@@ -84,6 +82,8 @@ describe('Loop web surfaces', () => {
     expect(rendered.html).toContain('data-testid="activity-loops-manage"');
     expect(rendered.html).toContain('data-testid="activity-loop-default-launch"');
     expect(rendered.html).toContain('Agiflow loop');
+    expect(rendered.html).toContain('activity-loop-cron-launch');
+    expect(rendered.html).toContain('choose loop type');
 
     const withoutSession = renderPlugin(
       loopsActivityFill,

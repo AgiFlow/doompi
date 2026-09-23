@@ -116,8 +116,9 @@ describe('minorModes', () => {
       availability: 'off',
       detail: 'activating',
       keys: 'l l',
-      activityGroup: 'loops',
     });
+    // Loop activation must run /minor, not merely open an already visible Activity dock.
+    expect(byName.loop.activityGroup).toBeUndefined();
     // Declared modes the catalog lacks stay listed as unavailable.
     expect(byName.goal.availability).toBe('unavailable');
     expect(byName.workflow.availability).toBe('unavailable');
@@ -336,6 +337,20 @@ describe('activityGroups', () => {
       activeWorkflowSession = 's1';
       expect(activityGroups({}, [], 's1')[0]).toMatchObject({ transientTab: workflowsTab, active: true });
       expect(activityGroups({}, [], 's2')[0]).toMatchObject({ transientTab: workflowsTab, active: false });
+    } finally {
+      resetWebPlugins();
+    }
+  });
+
+  it('keeps an idle Loops launcher visible with the mode off', () => {
+    installWebPlugins([
+      defineWebPlugin({ id: 'loop', activityGroups: [{ name: 'loops', keys: 'l l', statusKey: 'doom-loop-view' }] }),
+    ]);
+    try {
+      expect(activityGroups({ 'doom-loop-view': '' }, [])).toEqual([
+        { name: 'loops', keys: 'l l', summary: '', active: false },
+      ]);
+      expect(activityGroups({}, [])).toEqual([]);
     } finally {
       resetWebPlugins();
     }

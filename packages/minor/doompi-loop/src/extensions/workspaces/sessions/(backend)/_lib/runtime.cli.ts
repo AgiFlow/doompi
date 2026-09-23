@@ -9,6 +9,8 @@ export default (({ pi }) => {
   const runtime = createLoopPiRuntime(pi);
   return {
     services: [...(runtime.services ?? []), piMinorModes(runtime.minorModes)],
+    loopTools: runtime.loopTools,
+    toolRestrictions: runtime.toolRestrictions,
     events: { agent_settled: runtime.onAgentSettled },
     commands: createLoopCommands(runtime.handlers),
 

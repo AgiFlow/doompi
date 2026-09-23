@@ -34,6 +34,7 @@ function fixture(sessionId: string) {
     settled: launcher.onAgentSettled,
     notify,
     registration,
+    registerCron: () => launcher.registerCron(context, client),
     sendUserMessage,
     setIdle(next: boolean) {
       idle = next;
@@ -172,5 +173,51 @@ describe('default loop launcher', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(current.sendUserMessage).toHaveBeenCalledTimes(2);
     await current.registration.dispose();
+  });
+  it('accepts explicit interval configuration without opening dialogs', async () => {
+    const current = fixture('agent-interval');
+    await current.client.launch('doompi.default', {
+      interactive: false,
+      input: { prompt: 'Check status', intervalSeconds: 30 },
+    });
+    expect(current.editor).not.toHaveBeenCalled();
+    expect(current.input).not.toHaveBeenCalled();
+    expect(current.sendUserMessage).toHaveBeenCalledWith('Check status');
+    await current.client.dispose();
+  });
+
+  it('runs cron at its scheduled minute and stops future runs on disposal', async () => {
+    vi.setSystemTime(new Date('2026-09-23T10:00:00Z'));
+    const current = fixture('cron');
+    current.registerCron();
+    await current.client.launch('doompi.cron', {
+      interactive: false,
+      input: { prompt: 'Check cron', cron: '*/2 * * * *', timezone: 'UTC' },
+    });
+    expect(current.editor).not.toHaveBeenCalled();
+    expect(current.sendUserMessage).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(119999);
+    expect(current.sendUserMessage).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(current.sendUserMessage).toHaveBeenCalledExactlyOnceWith('Check cron');
+    await current.client.dispose();
+    await vi.advanceTimersByTimeAsync(240000);
+    expect(current.sendUserMessage).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { cron: 'invalid' },
+    { cron: '0 0 0 * * *' },
+    { cron: '90 * * * *' },
+    { cron: '* * * * *', timezone: 'not/a-zone' },
+  ])('rejects invalid cron input %j without leaving an instance', async (input) => {
+    const current = fixture('invalid-cron');
+    current.registerCron();
+    await expect(
+      current.client.launch('doompi.cron', { interactive: false, input: { prompt: 'Check', ...input } }),
+    ).rejects.toThrow();
+    expect(current.client.listInstances()).toEqual([]);
+    expect(current.sendUserMessage).not.toHaveBeenCalled();
+    await current.client.dispose();
   });
 });

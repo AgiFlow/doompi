@@ -50,7 +50,7 @@ describe('the loop activity status', () => {
   });
 
   it('returns no status for empty, malformed, or shape-invalid data', () => {
-    expect(formatLoopStatusView([])).toBeUndefined();
+    expect(formatLoopStatusView([])).toBe('');
     expect(parseLoopStatusView(undefined)).toBeUndefined();
     expect(parseLoopStatusView('')).toBeUndefined();
     expect(parseLoopStatusView('not json')).toBeUndefined();

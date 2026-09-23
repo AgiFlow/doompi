@@ -198,12 +198,84 @@ describe('composition bootstrap recovery', () => {
     await expect(focusSessionWebPlugins('one', composition('a', 1), 'workspace-one')).rejects.toThrow(
       'asset unavailable',
     );
-    expect(webPluginCompositionStore.state.phase).toBe('error');
+    expect(webPluginMountState({ scope: 'session', workspaceId: 'workspace-one', sessionId: 'one' }).phase).toBe(
+      'error',
+    );
 
     await retryWebPluginCompositions();
 
     expect(webPluginCompositionStore.state.phase).toBe('ready');
     expect(mocks.installSessionWebPlugins).toHaveBeenCalledWith('one', expect.anything());
+  });
+});
+
+describe('stopped session compositions', () => {
+  it('uses the verified workspace without loading live session plugins', async () => {
+    await start();
+    await focusSessionWebPlugins('stopped', null, 'workspace-one');
+    expect(mocks.activateVerifiedPluginComposition).not.toHaveBeenCalled();
+    expect(mocks.startPluginDefinitions).not.toHaveBeenCalled();
+    expect(mocks.bindSessionWebWorkspace).toHaveBeenCalledWith('stopped', 'workspace-one');
+    expect(mocks.installSessionWebPlugins).toHaveBeenCalledWith('stopped', []);
+    expect(webPluginMountState({ scope: 'session', workspaceId: 'workspace-one', sessionId: 'stopped' })).toEqual({
+      phase: 'ready',
+    });
+    await retryWebPluginCompositions();
+    expect(webPluginMountState({ scope: 'session', workspaceId: 'workspace-one', sessionId: 'stopped' })).toEqual({
+      phase: 'ready',
+    });
+  });
+
+  it('unmounts a stopped session and verifies its composition again on wake', async () => {
+    await start();
+    const stop = vi.fn();
+    mocks.startPluginDefinitions.mockReturnValue(stop);
+    await focusSessionWebPlugins('one', composition('a', 1, ['/style.css']), 'workspace-one');
+    await focusSessionWebPlugins('one', null, 'workspace-one');
+    expect(stop).toHaveBeenCalledOnce();
+    expect(appended.filter((element) => element.tag === 'link').every((element) => element.removed)).toBe(true);
+    const writes = vi.fn();
+    const subscription = webPluginCompositionStore.subscribe(writes);
+    await focusSessionWebPlugins('one', null, 'workspace-one');
+    expect(writes).not.toHaveBeenCalled();
+    subscription.unsubscribe();
+    await focusSessionWebPlugins('one', composition('a', 1), 'workspace-one');
+    expect(mocks.activateVerifiedPluginComposition).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not resurrect a live plugin after the session stops during verification', async () => {
+    await start();
+    let finish!: () => void;
+    mocks.activateVerifiedPluginComposition.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = () => resolve({ ok: true, revision: 1 });
+      }),
+    );
+    const pending = focusSessionWebPlugins('one', composition('a', 1), 'workspace-one');
+    await vi.waitFor(() => expect(mocks.activateVerifiedPluginComposition).toHaveBeenCalledOnce());
+    await focusSessionWebPlugins('one', null, 'workspace-one');
+    finish();
+    await pending;
+    expect(mocks.startPluginDefinitions).not.toHaveBeenCalled();
+    expect(mocks.installSessionWebPlugins).toHaveBeenCalledExactlyOnceWith('one', []);
+    expect(webPluginMountState({ scope: 'session', workspaceId: 'workspace-one', sessionId: 'one' })).toEqual({
+      phase: 'ready',
+    });
+  });
+
+  it('keeps missing live compositions as session errors without poisoning bootstrap state', async () => {
+    await start();
+    await expect(focusSessionWebPlugins('broken', undefined, 'workspace-one')).rejects.toThrow(
+      'No synchronized web composition',
+    );
+    expect(webPluginCompositionStore.state.phase).toBe('ready');
+    expect(webPluginMountState({ scope: 'session', workspaceId: 'workspace-one', sessionId: 'broken' }).phase).toBe(
+      'error',
+    );
+    await focusSessionWebPlugins('healthy', composition('b', 1), 'workspace-two');
+    expect(webPluginMountState({ scope: 'session', workspaceId: 'workspace-two', sessionId: 'healthy' })).toEqual({
+      phase: 'ready',
+    });
   });
 });
 

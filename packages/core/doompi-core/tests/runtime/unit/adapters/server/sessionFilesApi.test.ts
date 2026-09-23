@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { sessionFilesApi } from '../../../../../src/server/sessionFilesApi';
 
@@ -68,6 +68,33 @@ describe('session file completion', () => {
     try {
       expect(await (await handler.fetch(new Request('http://files/?q='))).json()).toEqual({ files: ['debug.log'] });
     } finally {
+      handler.close();
+    }
+  });
+
+  it('returns matching paths before walking an unrelated deep tree', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-files-'));
+    roots.push(cwd);
+    fs.mkdirSync(path.join(cwd, 'apps', 'boomlink-app'), { recursive: true });
+    fs.mkdirSync(path.join(cwd, 'zzz', 'unrelated'), { recursive: true });
+    const readdir = fs.promises.readdir.bind(fs.promises);
+    const read = vi.spyOn(fs.promises, 'readdir').mockImplementation(((directory: string, options: unknown) => {
+      if (directory === path.join(cwd, 'zzz')) throw new Error('Unrelated subtree should not be scanned.');
+      return readdir(directory, options as { withFileTypes: true });
+    }) as typeof fs.promises.readdir);
+    for (let index = 0; index < 60; index++) {
+      fs.writeFileSync(path.join(cwd, 'apps', 'boomlink-app', `file-${index}.ts`), '');
+    }
+    const handler = sessionFilesApi.start({ scope: 'session', sessionId: 'one', cwd, onNotice() {} });
+    try {
+      const response = await handler.fetch(new Request('http://files/?q=boomli'));
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { files: string[] };
+      expect(body.files).toHaveLength(50);
+      expect(body.files[0]).toBe('apps/boomlink-app/');
+      expect(body.files[1]).toMatch(/^apps\/boomlink-app\/file-/u);
+    } finally {
+      read.mockRestore();
       handler.close();
     }
   });
