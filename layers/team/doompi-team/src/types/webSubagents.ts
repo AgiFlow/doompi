@@ -52,6 +52,11 @@ export interface SubagentRun {
 
 export const SUBAGENT_RUNS_TYPE = 'subagent_runs';
 
+/** How the runtime answered one steer: delivered, refused by the run, or not yet acknowledged. */
+export interface SubagentSteerResult {
+  state: 'delivered' | 'failed' | 'pending';
+  message: string;
+}
 /** Where an agent definition came from; the catalog groups by it, nearest first. */
 export type SubagentCatalogSource = 'project' | 'user' | 'plugin';
 

@@ -1,4 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@agimon-ai/doompi-web-security/browser', () => ({
+  sealedTransport: { fetch: vi.fn() },
+}));
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  bindSessionApiWorkspace(() => 'test-workspace');
+});
 
 const run = (runId: string, state: string) => ({ runId, agent: 'reviewer', state });
 
@@ -77,18 +88,20 @@ describe('subagents plugin channel', () => {
     subagents.reset();
   });
 
-  it('asks the runtime to stop through the slash verb and remembers it until the run settles', async () => {
+  it('asks the session host to stop and remembers it until the run settles', async () => {
     const { subagentRunsChannel, subagents, requestRunStop } =
       await import('../../src/extensions/workspaces/sessions/(frontend)/_lib/subagentsStore');
     const session = (sessionId: string) => subagents.select(subagents.store.state, sessionId);
     subagents.reset();
-    const sent: Array<{ sessionId: string; frame: Record<string, unknown> }> = [];
-    const send = (sessionId: string, frame: Record<string, unknown>) => sent.push({ sessionId, frame });
     const feed = (runs: unknown[]) => subagentRunsChannel.apply('s1', subagentRunsChannel.parse({ runs })!);
     feed([run('r1', 'running')]);
+    vi.mocked(sealedTransport.fetch).mockResolvedValueOnce(Response.json({ requestId: 'req-stop' }));
 
-    requestRunStop(send, 's1', 'r1');
-    expect(sent).toEqual([{ sessionId: 's1', frame: { type: 'prompt', message: '/subagents-stop r1' } }]);
+    await requestRunStop('s1', 'r1');
+    expect(sealedTransport.fetch).toHaveBeenCalledWith(
+      '/api/workspaces/test-workspace/sessions/s1/plugins/team/stop',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ runId: 'r1' }) }),
+    );
     expect(session('s1').stopRequested).toEqual(['r1']);
     // The request stands while the run is still winding down...
     feed([run('r1', 'running')]);
@@ -99,15 +112,21 @@ describe('subagents plugin channel', () => {
     subagents.reset();
   });
 
-  it('sends steering guidance through the dedicated session slash command', async () => {
-    const { requestRunSteer } = await import('../../src/extensions/workspaces/sessions/(frontend)/_lib/subagentsStore');
-    const sent: Array<{ sessionId: string; frame: Record<string, unknown> }> = [];
+  it('marks a stop at once and rolls it back when the session host refuses', async () => {
+    const { subagentRunsChannel, subagents, requestRunStop } =
+      await import('../../src/extensions/workspaces/sessions/(frontend)/_lib/subagentsStore');
+    const session = (sessionId: string) => subagents.select(subagents.store.state, sessionId);
+    subagents.reset();
+    subagentRunsChannel.apply('s1', subagentRunsChannel.parse({ runs: [run('r1', 'running')] })!);
+    vi.mocked(sealedTransport.fetch).mockResolvedValueOnce(
+      Response.json({ error: 'This run is not active.' }, { status: 404 }),
+    );
 
-    requestRunSteer((sessionId, frame) => sent.push({ sessionId, frame }), 's1', 'r1', 'check the edge case');
-
-    expect(sent).toEqual([
-      { sessionId: 's1', frame: { type: 'prompt', message: '/subagents-steer r1 check the edge case' } },
-    ]);
+    const pending = requestRunStop('s1', 'r1');
+    expect(session('s1').stopRequested).toEqual(['r1']);
+    await expect(pending).rejects.toThrow('This run is not active.');
+    expect(session('s1').stopRequested).toEqual([]);
+    subagents.reset();
   });
 
   it('remembers a launch until a new run of that agent arrives, then flags it to open once', async () => {

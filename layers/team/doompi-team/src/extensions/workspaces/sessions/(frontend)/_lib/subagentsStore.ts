@@ -1,11 +1,7 @@
-import { defineSessionStore, type SessionFrameSender } from '@agimon-ai/doompi-core/web';
+import { defineSessionStore } from '@agimon-ai/doompi-core/web';
 
 import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../../../../../types/webSubagents';
-
-/** Session slash verbs used by the browser controls. */
-const STOP_COMMAND = '/subagents-stop';
-const STEER_COMMAND = '/subagents-steer';
-
+import { stopRun } from './catalog';
 const TERMINAL_STATES: ReadonlySet<SubagentRun['state']> = new Set(['done', 'failed', 'stopped']);
 
 export function isTerminalRun(run: SubagentRun): boolean {
@@ -58,23 +54,23 @@ export function activityRuns(session: SubagentsSession): SubagentRun[] {
 }
 
 /**
- * Asks the runtime to stop a run, through the same slash verb the TUI uses.
- * Pi executes extension commands at once even mid-turn, so this works whether
- * the main agent is idle or blocked on the run. The request is remembered
- * until the run reports a final state; the runtime, not this click, decides
- * when that is.
+ * Asks the session host to stop a run over the Team API, never as a parent
+ * prompt: the web host does not know Team's slash commands and refuses
+ * prompts mid-turn. Marked at once so the control reads "stopping"; rolled
+ * back and rethrown if the host refuses. Once accepted, the request stands
+ * until the run reports a final state.
  */
-export function requestRunStop(send: SessionFrameSender, sessionId: string, runId: string): void {
-  send(sessionId, { type: 'prompt', message: `${STOP_COMMAND} ${runId}` });
+export async function requestRunStop(sessionId: string, runId: string): Promise<void> {
   subagents.update(sessionId, (current) => ({
     ...current,
     stopRequested: [...without(current.stopRequested, runId), runId],
   }));
-}
-
-/** Sends guidance to a running agent through the runtime's acknowledged steering command. */
-export function requestRunSteer(send: SessionFrameSender, sessionId: string, runId: string, message: string): void {
-  send(sessionId, { type: 'prompt', message: `${STEER_COMMAND} ${runId} ${message}` });
+  try {
+    await stopRun(sessionId, runId);
+  } catch (error) {
+    subagents.update(sessionId, (current) => ({ ...current, stopRequested: without(current.stopRequested, runId) }));
+    throw error;
+  }
 }
 
 /** Hides a finished run from this page; nothing is deleted. */

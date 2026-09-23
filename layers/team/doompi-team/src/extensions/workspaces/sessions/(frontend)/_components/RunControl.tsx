@@ -1,6 +1,5 @@
-import type { SessionFrameSender } from '@agimon-ai/doompi-core/web';
 import { Button, type StatusTone } from '@agimon-ai/doompi-web-components';
-import type { MouseEvent as ReactMouseEvent } from 'react';
+import { type MouseEvent as ReactMouseEvent, useState } from 'react';
 
 import type { SubagentRun, SubagentRunState } from '../../../../../types/webSubagents';
 import { formatRunDuration } from '../_lib/format';
@@ -24,22 +23,20 @@ export function elapsedRun(run: SubagentRun, now: number): string {
 /**
  * The one control a run offers: stop while it is active, clear once it is
  * not. Stop is a request the runtime acknowledges in its own time, so the
- * button reads "stopping" until the run's own status says otherwise.
+ * button reads "stopping" until the run's own status says otherwise; a
+ * refused request says why next to the button.
  */
-export function RunControl({
-  sessionId,
-  run,
-  stopping,
-  send,
-}: {
-  sessionId: string;
-  run: SubagentRun;
-  stopping: boolean;
-  send: SessionFrameSender;
-}) {
+export function RunControl({ sessionId, run, stopping }: { sessionId: string; run: SubagentRun; stopping: boolean }) {
+  const [error, setError] = useState<string | undefined>();
   const act = (event: ReactMouseEvent, action: () => void): void => {
     event.stopPropagation();
     action();
+  };
+  const stop = (): void => {
+    setError(undefined);
+    requestRunStop(sessionId, run.runId).catch((cause: unknown) =>
+      setError(cause instanceof Error ? cause.message : String(cause)),
+    );
   };
   if (isTerminalRun(run)) {
     return (
@@ -55,16 +52,28 @@ export function RunControl({
     );
   }
   return (
-    <Button
-      variant={stopping ? 'outline' : 'danger-outline'}
-      size="xs"
-      data-testid={`run-stop-${run.runId}`}
-      data-stopping={stopping}
-      disabled={stopping}
-      title={stopping ? 'stop requested; the run reports its own final state' : 'ask the runtime to stop this run'}
-      onClick={(event) => act(event, () => requestRunStop(send, sessionId, run.runId))}
-    >
-      {stopping ? 'stopping…' : 'stop'}
-    </Button>
+    <>
+      {error ? (
+        <span
+          role="alert"
+          data-testid={`run-stop-error-${run.runId}`}
+          title={error}
+          className="min-w-0 truncate text-2xs text-doom-red"
+        >
+          {error}
+        </span>
+      ) : null}
+      <Button
+        variant={stopping ? 'outline' : 'danger-outline'}
+        size="xs"
+        data-testid={`run-stop-${run.runId}`}
+        data-stopping={stopping}
+        disabled={stopping}
+        title={stopping ? 'stop requested; the run reports its own final state' : 'ask the runtime to stop this run'}
+        onClick={(event) => act(event, stop)}
+      >
+        {stopping ? 'stopping…' : 'stop'}
+      </Button>
+    </>
   );
 }

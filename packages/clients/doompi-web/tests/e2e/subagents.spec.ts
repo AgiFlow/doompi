@@ -193,10 +193,31 @@ test('stop asks the runtime and clear hides a finished run', async ({ page, cock
   publishRunStatuses('s1');
   await page.getByTestId('activity-open-agents').click();
 
+  let stopReply: { status: number; body: unknown } = { status: 404, body: { error: 'This run is not active.' } };
+  await page.route('**/api/workspaces/*/sessions/s1/plugins/team/stop', (route) =>
+    route.fulfill({ status: stopReply.status, contentType: 'application/json', body: JSON.stringify(stopReply.body) }),
+  );
+  const stopRequest = () =>
+    page.waitForRequest(
+      (request) => request.method() === 'POST' && request.url().endsWith('/sessions/s1/plugins/team/stop'),
+    );
+
+  // A refused stop rolls back and says why, so the control is usable again.
+  let requested = stopRequest();
   await page.getByTestId('run-menu-run-stop').click();
   await page.getByTestId('run-stop-run-stop').click();
-  const sent = await cockpit.session.waitForCommand('prompt');
-  expect(sent.message).toBe('/subagents-stop run-stop');
+  expect((await requested).postDataJSON()).toEqual({ runId: 'run-stop' });
+  await expect(page.getByTestId('run-menu-stop-error-run-stop')).toHaveText('This run is not active.');
+  await page.getByTestId('run-menu-run-stop').click();
+  await expect(page.getByTestId('run-stop-run-stop')).toHaveText('stop');
+  await expect(page.getByTestId('run-stop-run-stop')).toBeEnabled();
+
+  // An accepted stop goes straight to the session host, never as a parent prompt.
+  stopReply = { status: 200, body: { requestId: 'stop-1' } };
+  requested = stopRequest();
+  await page.getByTestId('run-stop-run-stop').click();
+  expect((await requested).postDataJSON()).toEqual({ runId: 'run-stop' });
+  await expect(page.getByTestId('run-menu-stop-error-run-stop')).toHaveCount(0);
   // The click is a request; the card waits for the run's own word.
   await page.getByTestId('run-menu-run-stop').click();
   await expect(page.getByTestId('run-stop-run-stop')).toHaveText('stopping…');
@@ -222,6 +243,77 @@ test('stop asks the runtime and clear hides a finished run', async ({ page, cock
   await page.getByTestId('run-clear-run-stop').click();
   await expect(page.getByTestId('run-card-run-stop')).toBeHidden();
   await expect(page.getByTestId('subagents-empty')).toBeVisible();
+  expect(cockpit.session.received.filter((frame) => frame.type === 'prompt')).toEqual([]);
+});
+
+test('guidance from the agent tab goes straight to the run, never to the parent prompt', async ({ page, cockpit }) => {
+  const now = Date.now();
+  writeRunStatus('s1', {
+    version: 1,
+    runId: 'run-steer',
+    agent: 'reviewer',
+    state: 'running',
+    startedAt: now - 60_000,
+    lastUpdate: now,
+    task: 'Review the diff.',
+    cwd: '/workspace/doompi',
+  });
+
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  publishRunStatuses('s1');
+  await page.getByTestId('activity-open-agents').click();
+  await page.getByTestId('run-open-card-run-steer').click();
+  await expect(page).toHaveURL(/\/session\/s1\/subagents-run-run-steer$/);
+
+  let reply: { status: number; body: unknown } = { status: 200, body: {} };
+  await page.route('**/api/workspaces/*/sessions/s1/plugins/team/steer', (route) =>
+    route.fulfill({ status: reply.status, contentType: 'application/json', body: JSON.stringify(reply.body) }),
+  );
+  const input = page.getByTestId('agent-steer-input');
+  const send = async (message: string): Promise<void> => {
+    const requested = page.waitForRequest(
+      (request) => request.method() === 'POST' && request.url().endsWith('/sessions/s1/plugins/team/steer'),
+    );
+    await input.fill(message);
+    await page.getByTestId('agent-steer-submit').click();
+    expect((await requested).postDataJSON()).toEqual({ runId: 'run-steer', message });
+  };
+
+  reply = {
+    status: 200,
+    body: { requestId: 'q1', index: 0, state: 'delivered', message: 'Native child accepted the steer request.' },
+  };
+  await send('check the edge case first');
+  await expect(input).toHaveValue('');
+  await expect(page.getByTestId('agent-steer-error')).toHaveCount(0);
+
+  // A refusal, from the run or from the host, keeps the guidance and says why.
+  reply = {
+    status: 200,
+    body: { requestId: 'q2', index: 0, state: 'failed', message: 'The child rejected the steer.' },
+  };
+  await send('try the other branch');
+  await expect(page.getByTestId('agent-steer-error')).toHaveText('The child rejected the steer.');
+  await expect(input).toHaveValue('try the other branch');
+
+  reply = { status: 404, body: { error: 'This run is not active.' } };
+  await send('try the other branch');
+  await expect(page.getByTestId('agent-steer-error')).toHaveText('This run is not active.');
+  await expect(input).toHaveValue('try the other branch');
+
+  // Sent but not yet acknowledged: cleared, since resending would risk a duplicate.
+  reply = {
+    status: 200,
+    body: { requestId: 'q3', index: 0, state: 'pending', message: 'No child acknowledgment arrived within 3 seconds.' },
+  };
+  await send('wrap up soon');
+  await expect(input).toHaveValue('');
+  await expect(page.getByTestId('agent-steer-hint')).toHaveText('No child acknowledgment arrived within 3 seconds.');
+  await expect(page.getByTestId('agent-steer-error')).toHaveCount(0);
+
+  // The regression this test exists for: guidance never becomes a parent prompt.
+  expect(cockpit.session.received.filter((frame) => frame.type === 'prompt')).toEqual([]);
 });
 
 test('the activity dock lists the runs and opens one in a temporary agent tab', async ({ page, cockpit }) => {

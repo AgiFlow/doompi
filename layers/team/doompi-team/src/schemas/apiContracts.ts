@@ -84,6 +84,38 @@ export const apiContracts = defineApiContract({
       },
       responses: jsonApiResponses(Type.Object({ runId: S }), 201),
     },
+    {
+      id: 'team.steer',
+      scope: 'session',
+      basePath: 'team',
+      path: '/steer',
+      method: 'POST',
+      authentication: 'owner',
+      description: 'Send guidance straight to one running agent, without a parent prompt.',
+      body: {
+        required: true,
+        contentType: 'application/json',
+        schema: Type.Object({ runId: Type.String({ minLength: 1 }), message: Type.String({ minLength: 1 }) }),
+      },
+      responses: jsonApiResponses(
+        Type.Object({ requestId: S, index: N, state: literals(['delivered', 'failed', 'pending']), message: S }),
+      ),
+    },
+    {
+      id: 'team.stop',
+      scope: 'session',
+      basePath: 'team',
+      path: '/stop',
+      method: 'POST',
+      authentication: 'owner',
+      description: 'Ask the runtime to stop one running agent, without a parent prompt.',
+      body: {
+        required: true,
+        contentType: 'application/json',
+        schema: Type.Object({ runId: Type.String({ minLength: 1 }) }),
+      },
+      responses: jsonApiResponses(Type.Object({ requestId: S })),
+    },
   ],
   sockets: (['global', 'workspace'] as const).flatMap((scope) => [
     {

@@ -1,4 +1,4 @@
-import type { SessionFrameSender, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   Badge,
   Button,
@@ -89,56 +89,73 @@ function RunMenu({
   sessionId,
   run,
   stopping,
-  send,
   onOpenThread,
   onOpenDetail,
 }: {
   sessionId: string;
   run: SubagentRun;
   stopping: boolean;
-  send: SessionFrameSender;
   onOpenThread: () => void;
   onOpenDetail: () => void;
 }) {
+  const [error, setError] = useState<string | undefined>();
+  const stop = (): void => {
+    setError(undefined);
+    requestRunStop(sessionId, run.runId).catch((cause: unknown) =>
+      setError(cause instanceof Error ? cause.message : String(cause)),
+    );
+  };
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          data-testid={`run-menu-${run.runId}`}
-          title="what this run can do"
-          aria-label="run actions"
-          onClick={(event) => event.stopPropagation()}
+    <>
+      {error ? (
+        <span
+          role="alert"
+          data-testid={`run-menu-stop-error-${run.runId}`}
+          title={error}
+          className="min-w-0 truncate text-2xs text-doom-red"
         >
-          <KebabIcon className="h-3 w-3" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent data-testid={`run-menu-content-${run.runId}`}>
-        <DropdownMenuItem data-testid={`run-open-${run.runId}`} onSelect={onOpenThread}>
-          open thread
-        </DropdownMenuItem>
-        <DropdownMenuItem data-testid={`run-detail-${run.runId}`} onSelect={onOpenDetail}>
-          details
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {isTerminalRun(run) ? (
-          <DropdownMenuItem data-testid={`run-clear-${run.runId}`} onSelect={() => dismissRun(sessionId, run.runId)}>
-            clear from the grid
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem
-            variant="destructive"
-            data-testid={`run-stop-${run.runId}`}
-            data-stopping={stopping}
-            disabled={stopping}
-            onSelect={() => requestRunStop(send, sessionId, run.runId)}
+          {error}
+        </span>
+      ) : null}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            data-testid={`run-menu-${run.runId}`}
+            title="what this run can do"
+            aria-label="run actions"
+            onClick={(event) => event.stopPropagation()}
           >
-            {stopping ? 'stopping…' : 'stop'}
+            <KebabIcon className="h-3 w-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent data-testid={`run-menu-content-${run.runId}`}>
+          <DropdownMenuItem data-testid={`run-open-${run.runId}`} onSelect={onOpenThread}>
+            open thread
           </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuItem data-testid={`run-detail-${run.runId}`} onSelect={onOpenDetail}>
+            details
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {isTerminalRun(run) ? (
+            <DropdownMenuItem data-testid={`run-clear-${run.runId}`} onSelect={() => dismissRun(sessionId, run.runId)}>
+              clear from the grid
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              variant="destructive"
+              data-testid={`run-stop-${run.runId}`}
+              data-stopping={stopping}
+              disabled={stopping}
+              onSelect={stop}
+            >
+              {stopping ? 'stopping…' : 'stop'}
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 
@@ -154,7 +171,6 @@ function RunCard({
   run,
   now,
   stopping,
-  send,
   renderThread,
   onOpenThread,
   onOpenDetail,
@@ -163,7 +179,6 @@ function RunCard({
   run: SubagentRun;
   now: number;
   stopping: boolean;
-  send: SessionFrameSender;
   renderThread: WebPluginSlotProps['renderThread'];
   onOpenThread: () => void;
   onOpenDetail: () => void;
@@ -235,7 +250,6 @@ function RunCard({
             sessionId={sessionId}
             run={run}
             stopping={stopping}
-            send={send}
             onOpenThread={onOpenThread}
             onOpenDetail={onOpenDetail}
           />
@@ -278,7 +292,6 @@ function RunDetailSheet({
   run,
   now,
   stopping,
-  send,
   renderSlot,
   onClose,
 }: {
@@ -286,7 +299,6 @@ function RunDetailSheet({
   run: SubagentRun;
   now: number;
   stopping: boolean;
-  send: SessionFrameSender;
   renderSlot: WebPluginSlotProps['renderSlot'];
   onClose: () => void;
 }) {
@@ -305,7 +317,7 @@ function RunDetailSheet({
           <span className="min-w-0 flex-1" />
           <span className="text-xs text-doom-faint">{elapsedRun(run, now)}</span>
           {renderSlot(RUN_ACTIONS_SLOT.slot)}
-          <RunControl sessionId={sessionId} run={run} stopping={stopping} send={send} />
+          <RunControl sessionId={sessionId} run={run} stopping={stopping} />
         </SheetHeader>
         <SheetBody>
           <div className="flex flex-col gap-1.5">
@@ -343,13 +355,7 @@ function RunDetailSheet({
  * The catalog to launch from still takes the right rail, because picking an
  * agent is a list beside the fleet rather than a thing about one run.
  */
-export function SubagentsPanel({
-  sessionId,
-  sendSessionFrame,
-  renderSlot,
-  renderThread,
-  openTransientTab,
-}: WebPluginSlotProps) {
+export function SubagentsPanel({ sessionId, renderSlot, renderThread, openTransientTab }: WebPluginSlotProps) {
   const runs = useStore(subagents.store, (state) => visibleRuns(subagents.select(state, sessionId)));
   const { openRunId, stopRequested, autoOpenRunId } = useStore(subagents.store, (state) =>
     subagents.select(state, sessionId),
@@ -432,7 +438,6 @@ export function SubagentsPanel({
                       run={run}
                       now={now}
                       stopping={stopping(run)}
-                      send={sendSessionFrame}
                       renderThread={renderThread}
                       onOpenThread={() => {
                         closeCatalog(sessionId);
@@ -465,7 +470,6 @@ export function SubagentsPanel({
           run={shownRun}
           now={now}
           stopping={stopping(shownRun)}
-          send={sendSessionFrame}
           renderSlot={renderSlot}
           onClose={() => openRun(sessionId, undefined)}
         />

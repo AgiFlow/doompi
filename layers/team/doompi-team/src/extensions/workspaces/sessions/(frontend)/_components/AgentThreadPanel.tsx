@@ -4,8 +4,9 @@ import { useStore } from '@tanstack/react-store';
 import { type FormEvent, useEffect, useState } from 'react';
 
 import type { SubagentRun } from '../../../../../types/webSubagents';
+import { steerRun } from '../_lib/catalog';
 import { agentRunLabel } from '../_lib/format';
-import { isTerminalRun, requestRunSteer, subagents } from '../_lib/subagentsStore';
+import { isTerminalRun, subagents } from '../_lib/subagentsStore';
 import { elapsedRun, RUN_BADGE, RunControl } from './RunControl';
 
 const TICK_MS = 10_000;
@@ -28,16 +29,14 @@ export function agentThreadTab(run: SubagentRun): TransientTab {
  * and stop while the run is going. The run can leave the fleet feed before
  * the reader is done; the thread stays, and the header says so.
  */
-export function AgentThreadPanel({
-  sessionId,
-  runId,
-  sendSessionFrame,
-  renderThread,
-}: WebPluginSlotProps & { runId: string }) {
+export function AgentThreadPanel({ sessionId, runId, renderThread }: WebPluginSlotProps & { runId: string }) {
   const { runs, stopRequested } = useStore(subagents.store, (state) => subagents.select(state, sessionId));
   const run = runs.find((candidate) => candidate.runId === runId);
   const [now, setNow] = useState(() => Date.now());
   const [guidance, setGuidance] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const [notice, setNotice] = useState<string | undefined>();
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);
@@ -46,12 +45,27 @@ export function AgentThreadPanel({
 
   const firstLine = run?.task.split('\n').find((line) => line.trim() !== '') ?? '';
   const canSteer = sessionId !== null && run !== undefined && !isTerminalRun(run);
-  const submitGuidance = (event: FormEvent<HTMLFormElement>): void => {
+  // Not a prompt frame: the web host does not know Team's slash commands and refuses prompts mid-turn.
+  const submitGuidance = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     const message = guidance.trim();
-    if (!canSteer || !message) return;
-    requestRunSteer(sendSessionFrame, sessionId, runId, message);
-    setGuidance('');
+    if (!canSteer || !message || sending) return;
+    setSending(true);
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      const result = await steerRun(sessionId, runId, message);
+      if (result.state === 'failed') {
+        setError(result.message);
+        return;
+      }
+      setGuidance('');
+      if (result.state === 'pending') setNotice(result.message);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -76,12 +90,7 @@ export function AgentThreadPanel({
               {firstLine}
             </span>
             {sessionId !== null && !isTerminalRun(run) ? (
-              <RunControl
-                sessionId={sessionId}
-                run={run}
-                stopping={stopRequested.includes(run.runId)}
-                send={sendSessionFrame}
-              />
+              <RunControl sessionId={sessionId} run={run} stopping={stopRequested.includes(run.runId)} />
             ) : null}
           </>
         ) : (
@@ -95,7 +104,7 @@ export function AgentThreadPanel({
         <form
           data-testid="agent-steer-composer"
           className="shrink-0 border-t border-doom-border-soft bg-doom-rail px-[26px] pt-3 pb-2.5"
-          onSubmit={submitGuidance}
+          onSubmit={(event) => void submitGuidance(event)}
         >
           <div className="rounded-lg border border-doom-border bg-doom-deep transition-colors focus-within:border-doom-blue/60">
             <div className="flex min-w-0 items-start gap-2.5 px-3.5 pt-3">
@@ -106,14 +115,20 @@ export function AgentThreadPanel({
                 aria-label="Steering guidance"
                 rows={2}
                 value={guidance}
+                readOnly={sending}
                 placeholder="Guide this agent…"
                 className="min-w-0 flex-1 text-base leading-relaxed"
                 onChange={(event) => setGuidance(event.target.value)}
               />
             </div>
+            {error ? (
+              <p role="alert" data-testid="agent-steer-error" className="px-3.5 pt-2 text-xs text-doom-red">
+                {error}
+              </p>
+            ) : null}
             <div className="flex items-center gap-2 px-3.5 pt-2 pb-2.5">
-              <span data-testid="agent-steer-hint" className="text-xs text-doom-faint">
-                guidance reaches this run while it is still working
+              <span role="status" data-testid="agent-steer-hint" className="min-w-0 truncate text-xs text-doom-faint">
+                {notice ?? 'guidance reaches this run while it is still working'}
               </span>
               <span className="min-w-0 flex-1" />
               <Button
@@ -122,9 +137,9 @@ export function AgentThreadPanel({
                 variant="primary"
                 size="md"
                 className="px-3.5"
-                disabled={guidance.trim() === ''}
+                disabled={sending || guidance.trim() === ''}
               >
-                send
+                {sending ? 'sending…' : 'send'}
               </Button>
             </div>
           </div>
