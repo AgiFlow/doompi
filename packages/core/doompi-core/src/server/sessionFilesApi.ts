@@ -40,16 +40,23 @@ async function listSessionFiles(cwd: string, query: string, signal: AbortSignal)
   const isIgnored = readIgnoreRules(cwd);
   const deadline = Date.now() + FILE_QUERY_TIMEOUT_MS;
   const pending = [''];
+  let next = 0;
   const matches: string[] = [];
 
-  while (pending.length > 0) {
+  while (next < pending.length && matches.length < MAX_FILE_RESULTS) {
     if (signal.aborted) {
       throw signal.reason instanceof Error ? signal.reason : new Error('File completion was aborted.');
     }
-    if (Date.now() > deadline) throw new Error('File completion timed out.');
-    const relativeDirectory = pending.pop();
+    // ponytail: Return matches found so far on huge trees; a search index is the upgrade path.
+    if (Date.now() > deadline && next > 0) break;
+    const relativeDirectory = pending[next++];
     if (relativeDirectory === undefined) break;
+    if (relativeDirectory !== '' && `${relativeDirectory}/`.toLowerCase().includes(query)) {
+      matches.push(`${relativeDirectory}/`);
+    }
+    if (matches.length === MAX_FILE_RESULTS) break;
     const entries = await fs.promises.readdir(path.join(cwd, relativeDirectory), { withFileTypes: true });
+    const matchingDirectories: string[] = [];
     for (const entry of entries) {
       // Ignore rules are written in posix form, and so is every result.
       const file = relativeDirectory === '' ? entry.name : `${relativeDirectory}/${entry.name}`;
@@ -59,15 +66,15 @@ async function listSessionFiles(cwd: string, query: string, signal: AbortSignal)
         // trailing slash is what makes a directory-only rule such as
         // '.nx-cache/' match.
         if (EXCLUDED_DIRECTORIES.has(entry.name) || isIgnored?.(`${file}/`) === true) continue;
-        pending.push(file);
-        // A folder is completable too, and the same trailing slash is what
-        // tells the client this is one and keeps a query like 'src/' matching
-        // the folder itself.
-        if (`${file}/`.toLowerCase().includes(query)) matches.push(`${file}/`);
+        // Explore a matching folder before its siblings so its files follow it.
+        if (query && entry.name.toLowerCase().includes(query)) matchingDirectories.push(file);
+        else pending.push(file);
       } else if (entry.isFile() && isIgnored?.(file) !== true && file.toLowerCase().includes(query)) {
         matches.push(file);
       }
+      if (matches.length === MAX_FILE_RESULTS) break;
     }
+    pending.splice(next, 0, ...matchingDirectories);
   }
 
   return matches.sort().slice(0, MAX_FILE_RESULTS);

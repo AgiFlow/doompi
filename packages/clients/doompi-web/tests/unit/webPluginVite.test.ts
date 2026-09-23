@@ -12,6 +12,7 @@ vi.mock('@agimon-ai/doompi-core/syncRegistration', () => ({ readSyncRegistration
 import {
   WEB_PLUGIN_RUNTIME_SPECIFIERS,
   readDevPluginRoots,
+  webPluginOverridePlugin,
   webPluginRuntimeAliases,
   webPluginRuntimeGlobal,
 } from '@agimon-ai/doompi/webBuilder';
@@ -63,6 +64,37 @@ describe('the standalone plugin runtime facade', () => {
     }
     expect(alias.find.test('react/jsx-dev-runtime/extra')).toBe(false);
     expect(fs.existsSync(alias.replacement)).toBe(true);
+  });
+  it('only delegates resolution for generated registry imports', async () => {
+    const root = '/host/web';
+    const generated = {
+      clientModulePath: '/generated/client.ts',
+      cssModulePath: '/generated/styles.css',
+      compositionModulePath: '/generated/composition.ts',
+    };
+    const hook = webPluginOverridePlugin(root, generated).resolveId;
+    if (typeof hook !== 'function') throw new Error('Expected a resolveId hook.');
+    const resolve = vi.fn(async (source: string) => ({
+      id:
+        source === './webPlugins.generated'
+          ? path.join(root, 'app/webPlugins.generated.ts')
+          : source === './webPluginSources.generated.css'
+            ? path.join(root, 'styles/webPluginSources.generated.css')
+            : source,
+    }));
+    const context = { resolve } as never;
+    for (const source of ['react', './unrelated.ts', '\0virtual-module']) {
+      expect(await hook.call(context, source, undefined, { isEntry: false })).toBeNull();
+    }
+    expect(resolve).not.toHaveBeenCalled();
+    expect(await hook.call(context, './webPlugins.generated', undefined, { isEntry: false })).toBe(
+      generated.clientModulePath,
+    );
+    expect(await hook.call(context, './webPluginSources.generated.css', undefined, { isEntry: false })).toBe(
+      generated.cssModulePath,
+    );
+    expect(await hook.call(context, '/elsewhere/webPlugins.generated.ts', undefined, { isEntry: false })).toBeNull();
+    expect(resolve).toHaveBeenCalledTimes(3);
   });
 });
 describe('readDevPluginRoots', () => {

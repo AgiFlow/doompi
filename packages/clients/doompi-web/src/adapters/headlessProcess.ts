@@ -10,7 +10,7 @@ import { HEADLESS_COMMAND_ENV, headlessArguments, headlessEndpoint } from '../se
 
 const PROBE_TIMEOUT_MS = 500;
 const PROBE_INTERVAL_MS = 250;
-const READY_TIMEOUT_MS = 120_000;
+const READY_TIMEOUT_MS = 10 * 60_000;
 
 /** A headless process this presentation server started and therefore shuts down. */
 export interface HeadlessProcess {
@@ -82,12 +82,24 @@ async function availablePort(host: string): Promise<number> {
   return address.port;
 }
 
-async function waitUntilReady(child: ChildProcess, host: string, port: number): Promise<boolean> {
+async function waitUntilReady(child: ChildProcess, url: string, spawnFailure: () => Error | undefined): Promise<void> {
   const deadline = Date.now() + READY_TIMEOUT_MS;
   for (;;) {
-    if (child.exitCode !== null || child.signalCode !== null) return false;
-    if (await listening(host, port)) return true;
-    if (Date.now() >= deadline) return false;
+    const failure = spawnFailure();
+    if (failure) throw failure;
+    if (child.exitCode !== null || child.signalCode !== null)
+      throw new Error(`The headless server exited before it was ready (code ${String(child.exitCode)}).`);
+    try {
+      const response = await fetch(new URL('/api/health', url), { signal: AbortSignal.timeout(1_000) });
+      if (response.ok) {
+        const health = (await response.json()) as { ok?: unknown; role?: unknown };
+        if (health.ok === true && health.role === 'hub') return;
+      }
+    } catch {
+      // The child may still be syncing or binding its listener.
+    }
+    if (Date.now() >= deadline)
+      throw new Error(`The headless server did not become healthy on ${url} within ${String(READY_TIMEOUT_MS)}ms.`);
     await new Promise<void>((resolve) => setTimeout(resolve, PROBE_INTERVAL_MS));
   }
 }
@@ -99,7 +111,7 @@ async function waitUntilReady(child: ChildProcess, host: string, port: number): 
  * An occupied default endpoint belongs to someone else. Start an authenticated
  * child on an available port instead of attaching without its credential.
  */
-export async function startHeadless(options: HeadlessProcessOptions): Promise<HeadlessProcess | undefined> {
+export async function startHeadless(options: HeadlessProcessOptions): Promise<HeadlessProcess> {
   const { host } = headlessEndpoint(options.url);
   let { port } = headlessEndpoint(options.url);
   const endpoint = new URL(options.url);
@@ -111,26 +123,35 @@ export async function startHeadless(options: HeadlessProcessOptions): Promise<He
   const url = endpoint.origin;
 
   const entry = resolveHeadlessEntry(options.environment, import.meta.url);
-  if (entry === undefined) {
-    options.onNotice(`headless server not found; start one on ${options.url} or pass --headless-url`);
-    return undefined;
-  }
+  if (entry === undefined)
+    throw new Error(`Headless server not found; start one on ${options.url} or pass --headless-url.`);
 
   const token = crypto.randomBytes(32).toString('hex');
   const { directory, file } = writeTokenFile(token);
-  const child = spawn(process.execPath, headlessArguments({ entry, port, tokenFile: file }), {
-    env: options.environment,
-    stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
-  });
-
   const discard = (): void => fs.rmSync(directory, { force: true, recursive: true });
-  const ready = await waitUntilReady(child, host, port);
-  if (!ready) {
-    child.kill('SIGTERM');
-    await waitForExit(child);
+  let child: ChildProcess;
+  try {
+    child = spawn(process.execPath, headlessArguments({ entry, port, tokenFile: file }), {
+      env: options.environment,
+      stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+    });
+  } catch (error) {
     discard();
-    options.onNotice(`the headless server did not start on ${url}`);
-    return undefined;
+    throw error;
+  }
+  let spawnFailure: Error | undefined;
+  child.on('error', (error) => {
+    spawnFailure = error;
+  });
+  try {
+    await waitUntilReady(child, url, () => spawnFailure);
+  } catch (error) {
+    if (child.pid !== undefined) {
+      child.kill('SIGTERM');
+      await waitForExit(child);
+    }
+    discard();
+    throw error;
   }
 
   options.onNotice(`headless server on ${url}`);

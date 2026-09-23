@@ -61,7 +61,7 @@ const MAX_COMPLETION_ITEMS = 20;
 const SKILL_PREFIX = 'skill:';
 type CompletionKind = 'command' | 'skill' | 'file';
 const TRIGGER_CHARS: Record<CompletionKind, string> = { command: '/', skill: '$', file: '@' };
-const FILE_SEARCH_DEBOUNCE_MS = 150;
+const FILE_SEARCH_DEBOUNCE_MS = 50;
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const TEXT_EXTENSIONS = new Set([
   'c',
