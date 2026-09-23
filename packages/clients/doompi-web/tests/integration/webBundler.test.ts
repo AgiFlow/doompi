@@ -161,6 +161,7 @@ describe('the sync-time cockpit bundler', () => {
     // Tailwind scanned the plugin sources too: the subagents grid uses an
     // auto-fill column template the host shell never does.
     expect(bundledCssHas(result.assetsDir, 'auto-fill')).toBe(true);
+    expect(bundledCssHas(result.pluginsDir, 'auto-fill')).toBe(true);
   });
 
   it('resolves an installed plugin to the host sealed transport singleton', { timeout: 120_000 }, async () => {

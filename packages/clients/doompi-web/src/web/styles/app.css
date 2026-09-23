@@ -1,4 +1,5 @@
-@import 'tailwindcss';
+@import 'tailwindcss' source(none);
+@source '../';
 /*
  * The Doom palette, the Tailwind token mapping, the shadcn aliases, and the
  * base styles all come from the shared component library, which also
