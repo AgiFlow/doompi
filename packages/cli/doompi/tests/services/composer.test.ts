@@ -22,6 +22,7 @@ import {
   PERSONA_ENTRY,
   resolveExtensionComposition,
 } from '../../src/builders/cli/extensionAssembler';
+import { EXTENSION_COMPILER_VERSION } from '../../src/compiler/version';
 import {
   alreadyComposed,
   applyStartupFlags,
@@ -172,6 +173,7 @@ function writeCompiledBundle(
   fs.writeFileSync(
     manifest,
     JSON.stringify({
+      version: EXTENSION_COMPILER_VERSION,
       output: bundle,
       artifacts: [bundle],
       entries: [input],

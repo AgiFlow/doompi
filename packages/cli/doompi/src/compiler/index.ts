@@ -18,6 +18,7 @@ import {
   withSharedBuildLock,
 } from './cache';
 import { fingerprintInput, inputsAreFresh, type InputFingerprint } from './inputs';
+import { EXTENSION_COMPILER_VERSION } from './version';
 
 /**
  * Compiles TypeScript extensions into plain ESM ahead of the session.
@@ -40,9 +41,7 @@ import { fingerprintInput, inputsAreFresh, type InputFingerprint } from './input
 
 const TYPESCRIPT_SUFFIXES = ['.ts', '.mts', '.cts'] as const;
 const COMPILED_SUFFIX = '.mjs';
-// v15 records a content digest per input; a v14 manifest cannot be confirmed
-// by content and is discarded rather than trusted on timestamps alone.
-const SET_CACHE_VERSION = 'v15';
+const SET_CACHE_VERSION = EXTENSION_COMPILER_VERSION;
 const HASH_LENGTH = 16;
 const SET_DIRECTORY = 'sets';
 const MANIFEST_SUFFIX = '.json';
@@ -832,6 +831,7 @@ function resourceModuleUrl(
 function sharedLookupKey(entries: readonly LogicalInput[], outputName: string): string {
   return createHash('sha256')
     .update(SHARED_BUILD_VERSION)
+    .update(SET_CACHE_VERSION)
     .update(process.version)
     .update(process.platform)
     .update(process.arch)

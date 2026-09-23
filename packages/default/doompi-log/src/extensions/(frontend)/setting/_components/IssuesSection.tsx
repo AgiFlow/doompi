@@ -18,7 +18,7 @@ import { IssuesDetail } from './IssuesDetail';
  */
 
 interface IssuesSectionProps {
-  /** Tool call counts from the report, used as the denominator. */
+  /** Token-attributed tool calls shown as context alongside the failures. */
   tools: readonly MetricsTool[];
   /** The dimension value the page is narrowed to, forwarded as a session filter. */
   focus?: string;

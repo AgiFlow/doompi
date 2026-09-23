@@ -23,6 +23,7 @@ import {
   readBundleStatus,
   readStartupBootstrapStatus,
 } from '../../src/builders/cli/bootstrapLocator';
+import { EXTENSION_COMPILER_VERSION } from '../../src/compiler/version';
 import { testMcpProjection } from '../helpers/mcpProjection';
 
 /** Digest a compiler manifest must now record so freshness is judged by content. */
@@ -183,6 +184,7 @@ describe('readBootstrapStatus freshness', () => {
       return { path: file, size: stat.size, mtimeMs: stat.mtimeMs, sha256: sha256Of(file) };
     };
     return {
+      version: EXTENSION_COMPILER_VERSION,
       output,
       artifacts,
       entries,
@@ -230,6 +232,15 @@ describe('readBootstrapStatus freshness', () => {
     expect(readBootstrapStatus(root, entry, homeFor(root))).toEqual({ bootstrap, fresh: true });
   });
 
+  it('rejects an intact bootstrap produced under an obsolete compiler policy', () => {
+    const root = temporaryRoot();
+    const { bootstrapManifest } = bundledState(root);
+    const manifest = JSON.parse(fs.readFileSync(bootstrapManifest, 'utf8')) as Record<string, unknown>;
+    manifest.version = 'v15';
+    fs.writeFileSync(bootstrapManifest, JSON.stringify(manifest));
+    expect(readBootstrapStatus(root, entry, homeFor(root)).fresh).toBe(false);
+    expect(readStartupBootstrapStatus(root, entry, homeFor(root)).fresh).toBe(false);
+  });
   it('resolves the installed composed entry without an explicit override', () => {
     vi.stubEnv('DOOMPI_BOOTSTRAP_ENTRY', '');
     const root = temporaryRoot();

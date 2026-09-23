@@ -192,12 +192,11 @@ export function createLogHubApi(options: HubApiOptions = {}): Hono {
         ...(filter === undefined ? {} : { filter }),
       });
     } catch (error) {
-      // Both transports declined. That is the ordinary state on a machine
-      // where the sink has never run, so it is reported as absence rather
-      // than raised as a fault the page has to render as a crash.
+      // A missing daemon can still be read through its database. Failure of both
+      // transports is a query fault, including a broken worker dependency graph.
       const unavailable: MetricsUnavailable = {
-        unavailable: 'no-sink',
-        detail: error instanceof Error ? error.message : 'The log sink did not answer.',
+        unavailable: 'query-error',
+        detail: error instanceof Error ? error.message : 'The metrics query failed.',
       };
       return context.json(unavailable);
     }
@@ -229,8 +228,8 @@ export function createLogHubApi(options: HubApiOptions = {}): Hono {
       return context.json(report satisfies IssuesView);
     } catch (error) {
       const unavailable: MetricsUnavailable = {
-        unavailable: 'no-sink',
-        detail: error instanceof Error ? error.message : 'The log sink did not answer.',
+        unavailable: 'query-error',
+        detail: error instanceof Error ? error.message : 'The issues query failed.',
       };
       return context.json(unavailable);
     }
@@ -243,12 +242,11 @@ export function createLogHubApi(options: HubApiOptions = {}): Hono {
 export const api: DoomApi = {
   basePath: LOG_API_BASE_PATH,
   start(_context: DoomApiContext): DoomApiHandler {
-    const app = createLogHubApi();
+    const source = createMetricsSource({ packageName: PACKAGE_NAME, serviceName: SERVICE_NAME });
+    const app = createLogHubApi({ source });
     return {
       fetch: (request) => app.fetch(request),
-      // The source holds no handle of its own: the HTTP transport is a fetch
-      // per query and the CLI transport is a subprocess bounded by its timeout.
-      close: () => undefined,
+      close: () => source.close?.(),
     };
   },
 };

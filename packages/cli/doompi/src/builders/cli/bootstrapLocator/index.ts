@@ -7,6 +7,7 @@ import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/syncStateContract';
 
 import { inputsAreFresh, parseInputFingerprint, type InputFingerprint } from '../../../compiler/inputs';
+import { EXTENSION_COMPILER_VERSION } from '../../../compiler/version';
 import { resolveDoomConfigurationRoot } from '../../../composition/repository';
 import { readSyncState } from '../../../composition/syncState';
 import { ownEntry } from '../entryResolution';
@@ -146,6 +147,7 @@ function readCompilerManifest(manifestPath: string, generatedDirectory: string):
     const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as unknown;
     if (
       !isRecord(parsed) ||
+      parsed.version !== EXTENSION_COMPILER_VERSION ||
       typeof parsed.output !== 'string' ||
       !Array.isArray(parsed.artifacts) ||
       parsed.artifacts.some((artifact) => typeof artifact !== 'string') ||

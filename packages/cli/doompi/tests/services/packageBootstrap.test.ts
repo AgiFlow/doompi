@@ -18,6 +18,7 @@ import {
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { findSyncedRoot, readBootstrapPointer, readBootstrapStatus } from '../../src/builders/cli/bootstrapLocator';
+import { EXTENSION_COMPILER_VERSION } from '../../src/compiler/version';
 import { testMcpProjection } from '../helpers/mcpProjection';
 
 /** Digest a compiler manifest must now record so freshness is judged by content. */
@@ -119,7 +120,7 @@ function writeFreshBuild(root: string): { artifact: string; input: string; manif
   fs.writeFileSync(
     manifest,
     JSON.stringify({
-      version: 'compiler-v1',
+      version: EXTENSION_COMPILER_VERSION,
       entries: [input],
       output: artifact,
       artifacts: [artifact],

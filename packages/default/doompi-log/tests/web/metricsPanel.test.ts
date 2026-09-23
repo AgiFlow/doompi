@@ -179,7 +179,8 @@ describe('the report view', () => {
   it('labels the tool token column as a ranking hint, not a measurement', () => {
     const rendered = renderPlugin(MetricsReportView, { report, onFocus: () => undefined });
 
-    expect(rendered.includes('call counts are exact')).toBe(true);
+    expect(rendered.includes('only calls with recorded token attribution')).toBe(true);
+    expect(rendered.includes('external MCP calls remain in the logs')).toBe(true);
   });
 
   it('renders a field an older hub omitted as unknown rather than zero', () => {
@@ -230,18 +231,19 @@ describe('the issues detail', () => {
     expect(rendered.includes('2 distinct problems')).toBe(true);
   });
 
-  it('pairs each tool failure count with its call count from the report', () => {
+  it('shows token samples as context rather than a tool failure denominator', () => {
     const rendered = renderPlugin(IssuesDetail, { view, tools: TOOLS });
 
-    expect(rendered.includes('of 929 calls')).toBe(true);
+    expect(rendered.includes('929 token samples')).toBe(true);
+    expect(rendered.includes('of 929 calls')).toBe(false);
   });
 
-  it('admits when a failing tool has no call count to divide by', () => {
+  it('admits when a failing tool has no token samples', () => {
     // The two reports scan on their own limits, so a tool can appear in the
     // issues report and not in the ranked tool rows.
     const rendered = renderPlugin(IssuesDetail, { view, tools: [] });
 
-    expect(rendered.includes('of unknown calls')).toBe(true);
+    expect(rendered.includes('no token samples')).toBe(true);
   });
 
   it('lists the category breakdown beside the ranked problems', () => {
@@ -258,6 +260,7 @@ describe('the page notices', () => {
       ['no-sink', 'no log sink'],
       ['no-data', 'nothing recorded yet'],
       ['no-api', 'metrics not installed'],
+      ['query-error', 'metrics could not be loaded'],
     ] as const;
 
     for (const [reason, title] of cases) {

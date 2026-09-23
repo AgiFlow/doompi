@@ -16,6 +16,7 @@ const EMPTY_TITLES: Record<MetricsUnavailableReason, string> = {
   'no-sink': 'no log sink',
   'no-data': 'nothing recorded yet',
   'no-api': 'metrics not installed',
+  'query-error': 'metrics could not be loaded',
 };
 
 export function EmptyForReason({ response }: { response: MetricsUnavailable }) {
