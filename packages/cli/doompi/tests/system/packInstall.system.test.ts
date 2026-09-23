@@ -403,7 +403,7 @@ async function importInstalledExtension(name: string, subpath: string): Promise<
 }
 
 /** The composition boot sequence owns these private artifacts, not public package exports. */
-async function importInstalledHostEntry(name: 'cordis-host' | 'cordis-finalizer'): Promise<Record<string, unknown>> {
+async function importInstalledHostEntry(name: 'cordisHost' | 'cordisFinalizer'): Promise<Record<string, unknown>> {
   const entry = path.join(installedPackageRoot(consumer.root, '@agimon-ai/doompi'), 'dist/extensions', `${name}.mjs`);
   return (await import(pathToFileURL(entry).href)) as Record<string, unknown>;
 }
@@ -1101,8 +1101,8 @@ function summarizeStartup(
 }
 
 function writeContractProbe(fixture: RuntimeFixture): void {
-  const cordisHostEntry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-core', './cordis-host');
-  const uiHubEntry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-core', './ui-hub');
+  const cordisHostEntry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-core', './cordisHost');
+  const uiHubEntry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-core', './uiHub');
   if (!cordisHostEntry || !uiHubEntry) throw new Error('Installed Doom Cordis contract entries are missing');
   const probeRoot = path.join(fixture.agentDirectory, 'extensions', 'packed-contract-probe');
   fs.mkdirSync(probeRoot, { recursive: true });
@@ -1372,7 +1372,7 @@ describe('packed package identity and closure', () => {
   it('keeps packed Voice registries service-local and reload continuity explicit', async () => {
     assertConsumerInstall();
     const contracts = (await import(
-      pathToFileURL(installedConditionalTarget('@agimon-ai/doompi-voice', './voice-tools', 'import')).href
+      pathToFileURL(installedConditionalTarget('@agimon-ai/doompi-voice', './voiceTools', 'import')).href
     )) as {
       createDoomVoiceToolsService(generation: string): {
         register(definition: { descriptor: Record<string, unknown>; execute(input: unknown): unknown }): {
@@ -1507,8 +1507,8 @@ describe('conventional Pi discovery', () => {
     };
 
     try {
-      const hostModule = await importInstalledHostEntry('cordis-host');
-      const finalizerModule = await importInstalledHostEntry('cordis-finalizer');
+      const hostModule = await importInstalledHostEntry('cordisHost');
+      const finalizerModule = await importInstalledHostEntry('cordisFinalizer');
       await (hostModule.default as (pi: unknown) => unknown)(probe.api);
       for (const [packageName, toolName] of packages) {
         const before = registered.length;
@@ -1677,9 +1677,9 @@ describe('conventional Pi discovery', () => {
 
   it.each(STANDARD_PI_ENTRIES)('$name activates through its public extension entry', async (entry) => {
     assertConsumerInstall();
-    const hostModule = await importInstalledHostEntry('cordis-host');
+    const hostModule = await importInstalledHostEntry('cordisHost');
     const module = await importInstalledExtension(entry.name, entry.piExport);
-    const finalizerModule = await importInstalledHostEntry('cordis-finalizer');
+    const finalizerModule = await importInstalledHostEntry('cordisFinalizer');
     const hostExtension = hostModule.default as ((api: unknown) => unknown) | undefined;
     const extension = module.default as ((api: unknown) => unknown) | undefined;
     const finalizerExtension = finalizerModule.default as ((api: unknown) => unknown) | undefined;
@@ -1700,9 +1700,9 @@ describe('conventional Pi discovery', () => {
 
   it('registers packed package-owned Help descriptors through the shared Cordis host', async () => {
     assertConsumerInstall();
-    const hostModule = await importInstalledHostEntry('cordis-host');
+    const hostModule = await importInstalledHostEntry('cordisHost');
     const helpEntry = installedConditionalTarget('@agimon-ai/doompi-core', './help', 'import');
-    const hostEntry = installedConditionalTarget('@agimon-ai/doompi-core', './cordis-host', 'import');
+    const hostEntry = installedConditionalTarget('@agimon-ai/doompi-core', './cordisHost', 'import');
     const helpContracts = (await import(pathToFileURL(helpEntry).href)) as {
       readonly DOOM_HELP_SERVICE: 'doom/help';
       createDoomHelpService(generation: string): DoomHelpService;
@@ -1714,7 +1714,7 @@ describe('conventional Pi discovery', () => {
       ): Promise<{ readonly root: Context; dispose(): Promise<void> }>;
     };
     const contributionEntries = [
-      ['@agimon-ai/doompi', './extensions/context-catalog'],
+      ['@agimon-ai/doompi', './extensions/contextCatalog'],
       ['@agimon-ai/doompi-config', './extensions/pi'],
       ['@agimon-ai/doompi-domain', './extensions/pi'],
       ['@agimon-ai/doompi-goal', './extensions/pi'],
@@ -2657,7 +2657,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
         await waitForFile(fixture.contractMarker);
         expect(JSON.parse(fs.readFileSync(fixture.contractMarker, 'utf8'))).toEqual({
           registered: true,
-          service: packedCordisContractValue('./ui-hub', 'DOOM_UI_HUB_SERVICE'),
+          service: packedCordisContractValue('./uiHub', 'DOOM_UI_HUB_SERVICE'),
         });
         await waitForFile(fixture.lifecycleMarker);
         const evidence = readLifecycleEvidence(fixture.lifecycleMarker);
@@ -2877,7 +2877,7 @@ describe('resources, RMUX, and installed text rendering', () => {
 
   it('maps supported RMUX targets from the installed Doom Runner package', async () => {
     assertConsumerInstall();
-    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-runner', './rmux-backend');
+    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-runner', './rmuxBackend');
     if (!entry) throw new Error('Installed Doom Runner RMUX backend export is missing');
     const module = (await import(pathToFileURL(entry).href)) as {
       rmuxPackageForTarget: (platform: string, architecture: string) => string | undefined;
@@ -2891,7 +2891,7 @@ describe('resources, RMUX, and installed text rendering', () => {
 
   it('maps supported RTK targets from the installed Doom Runner package', async () => {
     assertConsumerInstall();
-    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-runner', './rtk-processor');
+    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-runner', './rtkProcessor');
     if (!entry) throw new Error('Installed Doom Runner RTK processor export is missing');
     const module = (await import(pathToFileURL(entry).href)) as {
       rtkPackageForTarget: (platform: string, architecture: string) => string | undefined;
@@ -2905,7 +2905,7 @@ describe('resources, RMUX, and installed text rendering', () => {
 
   it('renders the installed Doom Pi UI at the supported terminal widths', async () => {
     assertConsumerInstall();
-    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-ui', './doom-header');
+    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-ui', './doomHeader');
     if (!entry) throw new Error('Installed Doom Pi UI header export is missing');
     const module = (await import(pathToFileURL(entry).href)) as {
       DoomHeader: new (
