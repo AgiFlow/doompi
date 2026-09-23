@@ -53,7 +53,7 @@ export default defineConfig([
     clean: true,
     dts: { incremental: true, parallel: false, eager: true },
     exports: false,
-    format: ['esm', 'cjs'],
+    format: { esm: {}, cjs: { dts: false } },
     platform: 'node',
     sourcemap: true,
     // Contract graphs consume only this public entry, so it must carry its
@@ -65,7 +65,7 @@ export default defineConfig([
     clean: false,
     dts: { incremental: true, parallel: false, eager: true },
     exports: false,
-    format: ['esm', 'cjs'],
+    format: { esm: {}, cjs: { dts: false } },
     platform: 'node',
     sourcemap: true,
     unbundle: true,

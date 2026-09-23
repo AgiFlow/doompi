@@ -30,7 +30,7 @@
   "type": "module",
   "main": "./dist/extensions/pi.cjs",
   "module": "./dist/extensions/pi.mjs",
-  "types": "./dist/extensions/pi.d.cts",
+  "types": "./dist/extensions/pi.d.mts",
   "exports": {
     ".": {
       "types": "./dist/extensions/pi.d.mts",

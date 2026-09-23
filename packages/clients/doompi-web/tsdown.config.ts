@@ -20,7 +20,7 @@ export default defineConfig({
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },
   exports: false,
-  format: ['esm', 'cjs'],
+  format: { esm: {}, cjs: { dts: false } },
   minify: {
     compress: true,
     mangle: { toplevel: true },

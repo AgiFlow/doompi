@@ -81,7 +81,7 @@ describe('doom runner package boundary', () => {
     expect(manifest.private).toBeUndefined();
     expect(manifest.type).toBe('module');
     expect(manifest.main).toBe('./dist/index.cjs');
-    expect(manifest.types).toBe('./dist/index.d.cts');
+    expect(manifest.types).toBe('./dist/index.d.mts');
     expect(manifest['jsnext:main']).toBe('./dist/index.mjs');
     expect(project.sourceRoot).toBe('packages/default/doompi-runner/src');
     expect(project.sourceTemplate).toBe('doom-extension');

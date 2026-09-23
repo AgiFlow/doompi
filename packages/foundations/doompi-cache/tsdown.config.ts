@@ -11,7 +11,7 @@ const contractConfigs = configs.filter((config) => !('extensions/pi' in config.e
 
 const output = {
   exports: false,
-  format: ['esm', 'cjs'] as ('esm' | 'cjs')[],
+  format: { esm: {}, cjs: { dts: false as const } },
   platform: 'node' as const,
   sourcemap: true,
 };

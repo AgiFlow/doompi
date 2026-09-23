@@ -46,7 +46,7 @@ interface BasePresetConfig {
   write?: false;
   plugins?: QueryAssetPlugin[];
   exports: boolean | GeneratedExports;
-  format: ('esm' | 'cjs')[];
+  format: { esm: Record<string, never>; cjs: { dts: false } };
   platform: 'node';
   sourcemap: boolean;
   unbundle: boolean;
@@ -252,7 +252,10 @@ export function doompiExtension(
       : {
           customExports: (generated) => ({ ...staticExports(packageDir), ...generated }),
         },
-    format: ['esm', 'cjs'],
+    // CommonJS keeps its JavaScript but emits no declarations. Every export map
+    // resolves types through .d.mts, and a CJS declaration build would rerun
+    // the same whole-program tsgo emit a second time.
+    format: { esm: {}, cjs: { dts: false } },
     // No minify. This is a library build, and a mangled stack trace inside a
     // published extension is far more expensive than the bytes it saves.
     // Node output uses fixed extensions, so pi.extensions and doompiServer.dist

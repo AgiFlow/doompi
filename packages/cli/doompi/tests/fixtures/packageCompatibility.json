@@ -340,7 +340,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -398,7 +398,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -441,7 +441,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -525,7 +525,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1367,7 +1367,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1419,7 +1419,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1466,7 +1466,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1513,7 +1513,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1554,7 +1554,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1610,7 +1610,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1680,7 +1680,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1723,7 +1723,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1788,7 +1788,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1835,7 +1835,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1878,7 +1878,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -1936,7 +1936,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -2064,7 +2064,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -2107,7 +2107,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -2184,7 +2184,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -2246,7 +2246,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -2298,7 +2298,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -2345,7 +2345,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -2578,7 +2578,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {
       "doompi-runner": "./dist/bin/cli.mjs"
@@ -2776,7 +2776,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -2819,7 +2819,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -2868,7 +2868,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -2922,7 +2922,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {
       "doompi-style-system": "./dist/cli.mjs"
@@ -3085,7 +3085,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -3204,7 +3204,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -3408,7 +3408,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -3455,7 +3455,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -3514,7 +3514,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -3641,7 +3641,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
+    "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
     "pi": {
@@ -3690,7 +3690,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/extensions/pi.cjs",
-    "types": "./dist/extensions/pi.d.cts",
+    "types": "./dist/extensions/pi.d.mts",
     "jsnextMain": null,
     "bin": {},
     "pi": {
@@ -3725,7 +3725,7 @@
       "./package.json": "./package.json"
     },
     "main": "./dist/extensions/pi.cjs",
-    "types": "./dist/extensions/pi.d.cts",
+    "types": "./dist/extensions/pi.d.mts",
     "jsnextMain": null,
     "bin": {},
     "pi": {
