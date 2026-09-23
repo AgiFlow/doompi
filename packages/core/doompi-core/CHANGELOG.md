@@ -1,3 +1,13 @@
+## 0.0.1-alpha.83 (2026-09-23)
+
+### 🚀 Features
+
+- **doompi-core:** support host-managed session MCP API keys ([#168](https://github.com/AgiFlow/doompi/pull/168))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.82 (2026-09-23)
 
 ### 🧱 Updated Dependencies
