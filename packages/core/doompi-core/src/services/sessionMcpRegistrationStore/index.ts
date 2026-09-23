@@ -43,7 +43,8 @@ function validRegistration(value: unknown): value is SessionMcpPersistentRegistr
     typeof client.clientId === 'string' &&
     typeof client.name === 'string' &&
     typeof client.redirectUri === 'string' &&
-    client.tokenEndpointAuthMethod === 'client_secret_post' &&
+    (client.tokenEndpointAuthMethod === 'client_secret_post' ||
+      (client.tokenEndpointAuthMethod === 'api_key' && client.redirectUri === '' && binding?.scope === 'session')) &&
     typeof client.createdAt === 'number' &&
     typeof binding === 'object' &&
     binding !== null &&
@@ -59,7 +60,7 @@ function validRegistration(value: unknown): value is SessionMcpPersistentRegistr
   );
 }
 
-/** Private, machine-local records for OAuth clients that proved they can use Session MCP. */
+/** Private, machine-local records for host-approved Session MCP credentials. */
 export function createSessionMcpRegistrationStore(
   options: SessionMcpRegistrationStoreOptions,
 ): SessionMcpRegistrationStore {

@@ -4,23 +4,24 @@ DoomPi Web can expose one live DoomPi session as a remote MCP server. Remote Con
 
 This is an inbound connection. It is separate from outbound MCP servers, remote pairing, and Remote Control.
 
-## Connect ChatGPT
+## Connect ChatGPT with an API key
 
 1. Start the session and enable Remote Control with a public HTTPS origin.
-2. Open **Settings → Remote control → session MCP**.
-3. Copy the displayed **MCP URL**.
-4. In ChatGPT, add a custom connector and choose **User-Defined OAuth Client**.
-5. Copy ChatGPT's exact **Callback URL** and paste it into DoomPi Web. DoomPi cannot generate this callback URL.
-6. Create the OAuth client, then copy the MCP URL, client ID, and one-time client secret into ChatGPT.
-7. In ChatGPT, select **`client_secret_post`** as the token endpoint authentication method, not `none`.
-8. Complete the OAuth connection and verify the available tools and skill resources.
+2. Open **Settings → Remote control → session MCP** and copy the **MCP URL**.
+3. In ChatGPT, create an MCP app using **Server URL** and **API key** authentication with the **Bearer** header.
+4. In DoomPi Web, select **API key (Bearer)** and create a key. Paste the one-time key into ChatGPT as the API key value.
+5. Keep the key private. Revoke it in DoomPi Web when the connection is no longer needed.
+
+## OAuth with a known redirect URL
+
+DoomPi also supports a host-created OAuth client with an exact HTTPS redirect URL supplied by the connecting client. Select **OAuth (callback required)** and register that URL, then paste the client ID and one-time secret into the client. Use `client_secret_post` with S256 PKCE. The new ChatGPT MCP App form does not show a callback URL, so do not guess one or use the DoomPi MCP URL as a redirect. This manual OAuth registration flow is not currently usable from that form without an independently confirmed redirect URL.
 
 ## Skills
 
 Remote clients can use `search_skills` to discover repository and active-domain skills, then `load_skill` with an exact skill name to retrieve its Markdown. Both tools see only skills granted to the connection. Existing skill resources remain available for clients that support MCP resources.
-The client name is generated from the trusted Remote Control domain. The callback must be the exact absolute HTTPS URL supplied by ChatGPT. It is not safe to derive one from the DoomPi domain.
+The client name is generated from the trusted Remote Control domain. OAuth callbacks must be exact absolute HTTPS URLs supplied by the client. They are not derived from the DoomPi domain.
 
-Access follows the active major mode, minor modes, domains, and profile, including later changes. Session tools run with the session process's permissions. Granting shell access can reach the filesystem, environment, network, and operating system privileges available to that session. OAuth is not a sandbox. Third-party packages must ship their own explicit MCP declarations to expose capabilities remotely.
+Access follows the active major mode, minor modes, domains, and profile, including later changes. Session tools run with the session process's permissions. Granting shell access can reach the filesystem, environment, network, and operating system privileges available to that session. Authentication is not a sandbox. Third-party packages must ship their own explicit MCP declarations to expose capabilities remotely.
 
 ## Context
 
@@ -38,9 +39,9 @@ Client creation is host-only. A paired remote browser or connector credential ca
 
 ## Lifetime and revocation
 
-Verified clients are saved for their workspace, session, and exact MCP URL across a DoomPi host restart. Authorization codes, access tokens, and refresh tokens remain process-local. Reconnect with the existing client ID, secret, and MCP URL, then authorize again if requested.
+API keys are saved for the workspace, session, and exact MCP URL across a DoomPi host restart. OAuth clients are saved after verification; their authorization codes, access tokens, and refresh tokens remain process-local. Reconnect with the existing client credentials and MCP URL, then authorize again if requested.
 
-Changing the public origin, revoking the client, or using another workspace or session invalidates the saved registration. The secret is shown once. Dismissal, navigation, or changing the selected session clears it from the settings component.
+Changing the public origin, revoking the client or key, or using another workspace or session invalidates the saved registration. Secrets are shown once. Dismissal, navigation, or changing the selected session clears them from the settings component.
 
 ## Remote workflow contract
 

@@ -25,7 +25,7 @@ export interface SessionMcpClient {
   clientId: string;
   name: string;
   redirectUri: string;
-  tokenEndpointAuthMethod: 'client_secret_post';
+  tokenEndpointAuthMethod: 'client_secret_post' | 'api_key';
   createdAt: number;
   scope: SessionMcpScope;
   routing: SessionMcpRouting;
@@ -39,8 +39,6 @@ export interface CreatedSessionMcpClient extends SessionMcpClient {
   clientSecret: string;
 }
 
-export interface CreateSessionMcpClientInput {
-  redirectUri: string;
-  scope: 'session';
-  routing: SessionMcpRouting;
-}
+export type CreateSessionMcpClientInput =
+  | { redirectUri: string; scope: 'session'; routing: SessionMcpRouting }
+  | { authMethod: 'api_key'; scope: 'session'; routing: SessionMcpRouting };

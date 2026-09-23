@@ -98,12 +98,18 @@ test('creates and revokes a host-only session-scoped MCP client with ChatGPT cal
   await page.route('**/api/workspaces/*/sessions/*/mcp/config', (route) => route.fulfill({ json: config }));
   await page.route('**/api/workspaces/*/sessions/*/mcp/clients', async (route) => {
     if (route.request().method() === 'POST') {
-      const input = route.request().postDataJSON() as { redirectUri: string; scope: string; routing: 'conversation' };
+      const input = route.request().postDataJSON() as {
+        redirectUri?: string;
+        authMethod?: 'api_key';
+        scope: string;
+        routing: 'conversation';
+      };
       const metadata = {
         ...input,
+        redirectUri: input.redirectUri ?? '',
         name: 'ChatGPT · doom.example.com',
         clientId: 'chatgpt-client',
-        tokenEndpointAuthMethod: 'client_secret_post',
+        tokenEndpointAuthMethod: input.authMethod === 'api_key' ? 'api_key' : 'client_secret_post',
         createdAt: Date.now(),
         tools: [],
         skills: [],
@@ -125,6 +131,22 @@ test('creates and revokes a host-only session-scoped MCP client with ChatGPT cal
   await page.goto(`${cockpit.url}/settings/remote`);
   await expect(page.getByTestId('session-mcp-settings')).toBeVisible();
   await expect(page.getByTestId('session-mcp-url')).toHaveText(config.audience);
+  await expect(page.getByTestId('session-mcp-create-button')).toBeEnabled();
+  const keyRequest = page.waitForRequest(
+    (request) => request.method() === 'POST' && request.url().endsWith('/mcp/clients'),
+  );
+  await page.getByTestId('session-mcp-create-button').click();
+  expect((await keyRequest).postDataJSON()).toEqual({
+    authMethod: 'api_key',
+    scope: 'session',
+    routing: 'conversation',
+  });
+  await expect(page.getByTestId('session-mcp-created-secret')).toHaveText('one-time-secret');
+  await expect(page.getByTestId('session-mcp-secret')).toContainText('Bearer');
+  await page.getByRole('button', { name: 'revoke' }).click();
+  await expect(page.getByTestId('session-mcp-secret')).toHaveCount(0);
+  await page.getByTestId('session-mcp-auth-method').click();
+  await page.getByRole('option', { name: 'OAuth (callback required)' }).click();
   await expect(page.getByTestId('session-mcp-create-button')).toBeDisabled();
   await expect(page.getByTestId('session-mcp-routing')).toContainText('automatically routed to its own worktree');
   await expect(page.getByTestId('session-mcp-routing')).toContainText('provisioning or recovering');

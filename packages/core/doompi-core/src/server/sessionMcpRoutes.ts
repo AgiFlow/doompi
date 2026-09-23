@@ -436,6 +436,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
             if (active === undefined || grant.sessionGeneration !== active.generation || grant.clientId === '') {
               throw new Error('The session grant is no longer active.');
             }
+            if (authorization.readClient(grant.clientId)?.tokenEndpointAuthMethod === 'api_key') return;
             const registration = authorization.persistentRegistration(grant.clientId, workspaceId, Date.now());
             if (registration === undefined || !options.registrationStore.save(registration)) {
               throw new Error('The verified Session MCP client could not be saved.');
@@ -481,7 +482,12 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       const client = authorization.readClient(clientId);
       const binding = authorization.readAuthorizationBinding(clientId);
       const redirectUri = url.searchParams.get('redirect_uri') ?? '';
-      if (client === undefined || binding === undefined || redirectUri !== client.redirectUri) {
+      if (
+        client === undefined ||
+        client.tokenEndpointAuthMethod !== 'client_secret_post' ||
+        binding === undefined ||
+        redirectUri !== client.redirectUri
+      ) {
         return oauthError(new SessionMcpOAuthError('invalid_client', 'Unknown client or callback.'));
       }
       const callback = new URL(client.redirectUri);
@@ -669,7 +675,12 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         const hasSkills = Object.hasOwn(input, 'skills');
         const tools = parseStringArray(input.tools);
         const skills = parseStringArray(input.skills);
-        if (typeof input.redirectUri !== 'string') return json(400, { error: 'A redirectUri is required.' });
+        const apiKey = input.authMethod === 'api_key';
+        if (input.authMethod !== undefined && input.authMethod !== 'oauth' && !apiKey)
+          return json(400, { error: 'Authentication method is not supported.' });
+        if (apiKey && (scope !== 'session' || Object.hasOwn(input, 'redirectUri')))
+          return json(400, { error: 'API keys require session scope and no redirectUri.' });
+        if (!apiKey && typeof input.redirectUri !== 'string') return json(400, { error: 'A redirectUri is required.' });
         if (scope === 'session' && (hasTools || hasSkills)) {
           return json(400, { error: 'Session scope cannot include capability grants.' });
         }
@@ -689,10 +700,14 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
             return json(400, { error: 'Every requested grant must be active in the session.' });
         }
         try {
-          const client = authorization.createClient({
-            name: scope === 'session' ? defaultClientName(configuredOrigin) : (input.name as string),
-            redirectUri: input.redirectUri,
-          });
+          const client = authorization.createClient(
+            apiKey
+              ? { name: typeof input.name === 'string' ? input.name : 'API key', authMethod: 'api_key' }
+              : {
+                  name: scope === 'session' ? defaultClientName(configuredOrigin) : (input.name as string),
+                  redirectUri: input.redirectUri as string,
+                },
+          );
           const audience = `${configuredOrigin}${sessionPath(workspaceId, sessionId)}`;
           try {
             const binding =
@@ -715,7 +730,14 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
                     tools: [...new Set(tools!)],
                     skills: [...new Set(skills!)],
                   });
-            return json(201, { client: publicClient(client, binding) });
+            if (apiKey) {
+              const registration = authorization.persistentRegistration(client.clientId, workspaceId, Date.now());
+              if (registration === undefined || !options.registrationStore.save(registration)) {
+                authorization.revokeClient(client.clientId);
+                return json(500, { error: 'API key could not be saved.' });
+              }
+            }
+            return json(201, { client: { ...publicClient(client, binding), clientSecret: client.clientSecret } });
           } catch (error) {
             authorization.revokeClient(client.clientId);
             throw error;

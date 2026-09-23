@@ -75,6 +75,27 @@ describe('session MCP management API', () => {
     });
   });
 
+  it('creates an API key without a callback and strips secrets from later lists', async () => {
+    const apiKey = { ...client, redirectUri: '', tokenEndpointAuthMethod: 'api_key', clientSecret: 'once' };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(respond(201, { client: apiKey }))
+      .mockResolvedValueOnce(respond(200, { clients: [apiKey] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      createSessionMcpClient('w', 's', { authMethod: 'api_key', scope: 'session', routing: 'conversation' }),
+    ).resolves.toEqual({ client: apiKey });
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      authMethod: 'api_key',
+      scope: 'session',
+      routing: 'conversation',
+    });
+    await expect(listSessionMcpClients('w', 's')).resolves.toEqual({
+      clients: [{ ...client, redirectUri: '', tokenEndpointAuthMethod: 'api_key' }],
+    });
+  });
+
   it('revokes an encoded client id and reports host errors', async () => {
     const fetchMock = vi
       .fn()
