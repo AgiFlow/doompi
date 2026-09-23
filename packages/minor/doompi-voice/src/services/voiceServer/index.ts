@@ -107,7 +107,9 @@ export function createVoiceServer(
   let closed = false;
   let owner: MinorModeOwner | undefined;
   let toolRegistrations: Array<{ dispose(): void }> = [];
+  const activationWaiters = new Set<() => void>();
   const changed = () => {
+    for (const wake of activationWaiters) wake();
     owner?.publish();
     if (
       !closed &&
@@ -163,6 +165,23 @@ export function createVoiceServer(
     onActivationStateChange: changed,
   });
   const mode = new VoiceModeController({ legacy, live, getMode: () => load().voice?.mode ?? 'legacy' });
+  const waitForCapture = (): Promise<void> => {
+    if (mode.state !== 'starting') return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        activationWaiters.delete(wake);
+        reject(new Error('Autonomous voice did not become ready within 60 seconds.'));
+      }, 60_000);
+      const wake = () => {
+        if (mode.state === 'starting') return;
+        clearTimeout(timer);
+        activationWaiters.delete(wake);
+        resolve();
+      };
+      activationWaiters.add(wake);
+      wake();
+    });
+  };
   const registry = createDoomVoiceToolsService(randomUUID());
   const tools = registry.bindSession(execution.sessionId);
   const select = async (enabled: boolean) => {
@@ -185,7 +204,13 @@ export function createVoiceServer(
       },
       async activateVoice() {
         await mode.activate(autoUi);
-        if (mode.state === 'starting' || mode.state === 'active') await select(true);
+        try {
+          if (mode.state === 'starting' || mode.state === 'active') await select(true);
+          await waitForCapture();
+        } catch (error) {
+          await mode.deactivate(autoUi).catch(() => undefined);
+          throw error;
+        }
         tools.setActive(mode.state === 'active');
       },
       async deactivateVoice() {

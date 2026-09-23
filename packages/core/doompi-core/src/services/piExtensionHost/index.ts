@@ -798,8 +798,11 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         return;
       case 'turn_end': {
         const branch = sessionManager?.getBranch() ?? [];
+        // The harness commits a fresh entry after message_end (and may normalize the message
+        // during settlement), so its entry_added payload need not share the event's identity.
+        // A turn ends at the latest persisted assistant on this branch.
         const messageEntryId = branch.findLast(
-          (entry) => entry.type === 'message' && entry.message === event.message,
+          (entry) => entry.type === 'message' && entry.message.role === 'assistant',
         )?.id;
         if (messageEntryId === undefined) {
           report('turn_end', new Error('The persisted assistant entry was not available for the Pi boundary'));
@@ -807,7 +810,12 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
           return;
         }
         const toolResultEntryIds = event.toolResults.flatMap((result) => {
-          const entryId = branch.findLast((entry) => entry.type === 'message' && entry.message === result)?.id;
+          const entryId = branch.findLast(
+            (entry) =>
+              entry.type === 'message' &&
+              entry.message.role === 'toolResult' &&
+              entry.message.toolCallId === result.toolCallId,
+          )?.id;
           return entryId === undefined ? [] : [entryId];
         });
         await runner?.emitBoundary(

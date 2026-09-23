@@ -191,22 +191,21 @@ it('activates live voice through the native ownership broker and exposes tools o
         })
       ).status,
     ).toBe(200);
-    expect(
-      (
-        await post(VOICE_OWNERSHIP_ROUTES.command, {
-          version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
-          commandId: 'activate',
-          action: 'activate',
-        })
-      ).status,
-    ).toBe(200);
+    const activating = post(VOICE_OWNERSHIP_ROUTES.command, {
+      version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+      commandId: 'activate',
+      action: 'activate',
+    });
     expect(registerTool).not.toHaveBeenCalled();
-    const eventResponse = await broker.fetch(
-      new Request(
-        `http://voice${VOICE_MEDIA_ROUTES.clientEvents}?clientId=browser&connectionId=live-tab&after=0&wait=${VOICE_MEDIA_EVENT_WAIT_NONE}`,
-      ),
-    );
-    const event = (await eventResponse.json()) as { activationId: string };
+    const event = await vi.waitFor(async () => {
+      const response = await broker.fetch(
+        new Request(
+          `http://voice${VOICE_MEDIA_ROUTES.clientEvents}?clientId=browser&connectionId=live-tab&after=0&wait=${VOICE_MEDIA_EVENT_WAIT_NONE}`,
+        ),
+      );
+      expect(response.status).toBe(200);
+      return (await response.json()) as { activationId: string };
+    });
     const browser = { ...lease, activationId: event.activationId };
     expect((await post(REALTIME_ROUTES.clientNegotiate, { ...browser, sdp: 'offer' })).status).toBe(200);
     await post(REALTIME_ROUTES.clientState, {
@@ -217,6 +216,9 @@ it('activates live voice through the native ownership broker and exposes tools o
       ...browser,
       event: JSON.stringify({ type: 'session.started', session: { id: 'provider' } }),
     });
+    const acknowledgement = await activating;
+    expect(acknowledgement.status).toBe(200);
+    expect(await acknowledgement.json()).toMatchObject({ ok: true, active: true });
     await vi.waitFor(() => expect(registerTool).toHaveBeenCalledTimes(4));
     expect(await (await api.fetch(new Request('http://voice/status'))).json()).toMatchObject({
       state: 'active',

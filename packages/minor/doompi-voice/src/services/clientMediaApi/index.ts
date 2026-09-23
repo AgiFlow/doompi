@@ -55,7 +55,7 @@ import {
 } from '../../types/voiceOwnership';
 
 const CLIENT_LEASE_MS = 15_000;
-const CLIENT_CONNECT_WAIT_MS = 3_000;
+const CLIENT_CONNECT_WAIT_MS = 10_000;
 const EVENT_WAIT_MS = 5_000;
 const AUDIO_WAIT_MS = 500;
 const MAX_AUDIO_CHUNK_BYTES = 64 * 1024;

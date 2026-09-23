@@ -533,6 +533,77 @@ describe('Pi lifecycle events in the headless host', () => {
     expect(readEntries).toHaveBeenCalledTimes(1);
   });
 
+  it('resolves turn boundaries against persisted entries when event messages are different objects', async () => {
+    const turnEnd = vi.fn();
+    const notices = vi.fn();
+    const stub = stubRuntime([]);
+    const preload: LoadExtensionsResult = {
+      extensions: [stubExtension([], new Map([['turn_end', [turnEnd]]]))],
+      errors: [],
+      runtime: createExtensionRuntime(),
+    };
+    initTheme(undefined, false);
+    const host = createPiExtensionHost({
+      cwd: '/workspace/project',
+      agentDir: '/workspace/project/.pi',
+      models: {} as unknown as ConstructorParameters<typeof ModelRegistry>[0],
+      runtime: stub.runtime,
+      preload,
+      getModel: () => undefined,
+      getThinkingLevel: () => 'off',
+      client: () => undefined,
+      onNotice: notices,
+    });
+    await host.load();
+    const assistant: Extract<AgentMessage, { role: 'assistant' }> = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'done' }],
+      api: 'anthropic-messages',
+      provider: 'anthropic',
+      model: 'claude',
+      usage: {
+        input: 1,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 2,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: 'stop',
+      timestamp: CREATED_AT,
+    };
+    const toolResult: Extract<AgentMessage, { role: 'toolResult' }> = {
+      role: 'toolResult',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      content: [{ type: 'text', text: 'ok' }],
+      isError: false,
+      timestamp: CREATED_AT,
+    };
+    await stub.emit({ type: 'entry_added', lane: 'main', entry: messageEntry('assistant-1', { ...assistant }) });
+    await stub.emit({
+      type: 'entry_added',
+      lane: 'main',
+      entry: messageEntry('tool-1', { ...toolResult }, 'assistant-1'),
+    });
+    await stub.emit({
+      type: 'turn_end',
+      lane: 'main',
+      runId: 'run-1',
+      turnId: 'turn-1',
+      message: assistant,
+      toolResults: [toolResult],
+    });
+
+    expect(turnEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ messageEntryId: 'assistant-1', toolResultEntryIds: ['tool-1'] }),
+      expect.anything(),
+    );
+    expect(notices).not.toHaveBeenCalled();
+    expect(stub.readEntries).toHaveBeenCalledTimes(1);
+    await host.shutdown();
+  });
+
   it('dispatches navigation, session metadata and compaction lifecycle events', async () => {
     const tree = vi.fn();
     const info = vi.fn();
