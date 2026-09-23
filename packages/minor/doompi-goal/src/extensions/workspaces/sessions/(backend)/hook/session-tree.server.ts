@@ -2,6 +2,7 @@ import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/
 import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
 
 export default defineRoutedContribution(
-  (context: WithRoot<DoomServerPluginContext, Partial<DoomServerSessionPlugin>>) => context.root.tools?.[0],
+  (context: WithRoot<DoomServerPluginContext, Partial<DoomServerSessionPlugin>>) =>
+    context.root.hooks?.find((hook) => hook.event === 'session_tree'),
   { cardinality: 'optional' },
 );

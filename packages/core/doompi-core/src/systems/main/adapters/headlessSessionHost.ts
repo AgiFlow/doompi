@@ -26,6 +26,7 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessSelection,
   DoomHeadlessTool,
+  DoomHeadlessToolCompletionRequest,
 } from '../../../exports/headless';
 import type { DoomMcpContextSnapshot, DoomMcpSkill, DoomMcpUiResource } from '../../../exports/mcpFacet';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
@@ -807,6 +808,40 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     defaultModel: () => currentModel,
   });
 
+  const completeAuxiliaryModel = async (
+    reference: string,
+    request: Omit<DoomHeadlessToolCompletionRequest, 'tools'> & { tools?: DoomHeadlessToolCompletionRequest['tools'] },
+  ) => {
+    if (disposed || !headlessReady || promptPreparationFailed || !headlessHost?.status.ready)
+      throw new Error('Headless capability preparation is not ready.');
+    request.signal?.throwIfAborted();
+    const separator = reference.indexOf('/');
+    const model =
+      separator > 0 ? modelRuntime.getModel(reference.slice(0, separator), reference.slice(separator + 1)) : undefined;
+    if (!model || !modelRuntime.hasConfiguredAuth(model.provider))
+      throw new Error(`Model is not configured: ${reference}`);
+    if (!runtime.completeModel) throw new Error('The runtime does not support auxiliary model requests.');
+    const response = await runtime.completeModel(
+      model,
+      {
+        systemPrompt: request.systemPrompt,
+        messages: [{ role: 'user', content: request.input, timestamp: Date.now() }],
+        ...(request.tools ? { tools: [...request.tools] } : {}),
+      },
+      {
+        signal: request.signal,
+        maxTokens: request.maxTokens,
+        cacheRetention: request.cacheRetention,
+        reasoningEffort: 'none',
+        maxRetries: 0,
+      },
+    );
+    request.signal?.throwIfAborted();
+    if (response.stopReason === 'error' || response.stopReason === 'aborted')
+      throw new Error(response.errorMessage ?? `Model stopped: ${response.stopReason}`);
+    return response;
+  };
+
   const executionContext = (selection: DoomHeadlessSelection): DoomHeadlessExecutionContext => ({
     cwd: options.cwd,
     repoRoot: options.repoRoot,
@@ -825,37 +860,22 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         );
       },
       async complete(reference, request) {
-        if (disposed || !headlessReady || promptPreparationFailed || !headlessHost?.status.ready)
-          throw new Error('Headless capability preparation is not ready.');
-        const separator = reference.indexOf('/');
-        const model =
-          separator > 0
-            ? modelRuntime.getModel(reference.slice(0, separator), reference.slice(separator + 1))
-            : undefined;
-        if (!model || !modelRuntime.hasConfiguredAuth(model.provider))
-          throw new Error(`Model is not configured: ${reference}`);
-        if (!runtime.completeModel) throw new Error('The runtime does not support auxiliary model requests.');
-        const response = await runtime.completeModel(
-          model,
-          {
-            systemPrompt: request.systemPrompt,
-            messages: [{ role: 'user', content: request.input, timestamp: Date.now() }],
-          },
-          {
-            signal: request.signal,
-            maxTokens: request.maxTokens,
-            cacheRetention: request.cacheRetention,
-            reasoningEffort: 'none',
-            maxRetries: 0,
-          },
-        );
-        if (response.stopReason === 'error' || response.stopReason === 'aborted')
-          throw new Error(response.errorMessage ?? `Model stopped: ${response.stopReason}`);
+        const response = await completeAuxiliaryModel(reference, { ...request, tools: undefined });
         return response.content
           .filter((part) => part.type === 'text')
           .map((part) => part.text)
           .join('')
           .trim();
+      },
+    },
+    toolCompletion: {
+      async complete(reference, request) {
+        const response = await completeAuxiliaryModel(reference, request);
+        if (response.stopReason === 'length') throw new Error('Auxiliary tool request exceeded its output limit.');
+        return {
+          toolCalls: response.content.filter((part) => part.type === 'toolCall'),
+          usage: response.usage,
+        };
       },
     },
     session: {

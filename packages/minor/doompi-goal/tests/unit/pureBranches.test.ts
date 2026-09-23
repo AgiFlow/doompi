@@ -144,7 +144,9 @@ describe('prompts, settings, tools, and safety branches', () => {
     const systemPrompt = buildGoalSystemPrompt(goal);
     expect(systemPrompt).toContain('<goal_objective>');
     expect(systemPrompt).toContain('objective &lt; &amp;');
-    expect(systemPrompt).toContain('<goal_id>');
+    expect(systemPrompt).not.toContain('<goal_id>');
+    expect(systemPrompt).not.toMatch(/goal_complete|goal_blocked/);
+    expect(buildContinuePrompt(goal, 'Verify the deployment.')).toBe('[goal]\nVerify the deployment.');
     expect(systemPrompt).toContain('Respect the goal token budget');
     expect(systemPrompt).toContain('Goal-mode rules:');
   });

@@ -18,6 +18,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { facet as goalServerFacet } from '../../generated/server';
 import { GOAL_VIEW_STATUS_KEY, parseGoalStatusView } from '../../src/types/goalView';
 
+vi.mock('../../src/services/historyStore', () => ({
+  GoalHistoryStore: class {
+    async archive(entry: unknown) {
+      return entry;
+    }
+  },
+}));
 /**
  * The last value this facet published for the activity dock.
  *
@@ -64,9 +71,10 @@ async function fixture() {
         appendedEntries.push(entry);
       },
       prompt: vi.fn(),
+      admitPrompt: vi.fn().mockResolvedValue(undefined),
       abort: vi.fn(),
       compact: vi.fn(),
-      activity: vi.fn(),
+      activity: vi.fn().mockResolvedValue({ isIdle: true, hasPendingMessages: false }),
     },
     shutdown: vi.fn(),
   } as unknown as DoomHeadlessExecutionContext;
@@ -149,6 +157,20 @@ describe('goal server facet', () => {
 
     expect(test.selection().state?.['minor-mode']).toEqual(['goal']);
     expect(test.appendedEntries).toHaveLength(1);
+    expect(test.execution.session.admitPrompt).toHaveBeenCalledExactlyOnceWith('[goal]\nShip the feature', 'steer');
+    expect(test.tools).toEqual([]);
+    expect(test.hooks.map(({ event }) => event)).toEqual(
+      expect.arrayContaining([
+        'agent_start',
+        'agent_settled',
+        'message_end',
+        'tool_execution_start',
+        'session_before_compact',
+        'session_compact',
+        'model_select',
+        'session_tree',
+      ]),
+    );
     expect(test.appendedEntries[0]).toEqual([
       'goal-state',
       { goal: expect.objectContaining({ status: 'active', text: 'Ship the feature' }) },
@@ -164,23 +186,15 @@ describe('goal server facet', () => {
     await command.execute('pause', test.execution);
     await command.execute('resume', test.execution);
     await command.execute('pause unexpectedly', test.execution);
-    expect(test.execution.client.notify).toHaveBeenCalledWith({ body: 'Goal paused.', level: 'info' });
+    expect(test.execution.client.notify).toHaveBeenCalledWith({ body: 'Goal paused.', level: 'warning' });
+    expect(test.execution.session.abort).toHaveBeenCalledOnce();
+    expect(test.execution.session.admitPrompt).toHaveBeenCalledTimes(2);
     expect(test.execution.client.notify).toHaveBeenCalledWith({ body: 'Goal resumed.', level: 'info' });
     expect(test.execution.client.notify).toHaveBeenCalledWith({ body: 'Usage: /goal pause', level: 'error' });
 
     await shutdownHook.handle({}, test.execution);
-    const state = test.appendedEntries.at(-1)?.[1] as { goal: { id: string } };
-    const complete = test.tools.find(({ name }) => name === 'goal_complete');
-    if (!complete) throw new Error('Goal completion tool was not registered');
-    const result = await complete.execute(
-      'call-1',
-      { goal_id: state.goal.id, summary: 'Feature shipped.' } as never,
-      undefined,
-      undefined,
-      test.execution,
-    );
-    expect(result).toMatchObject({ details: { completed: true } });
-    expect(test.selection().state?.['minor-mode']).toEqual([]);
+    expect(test.tools).toEqual([]);
+    expect(test.appendedEntries.at(-1)?.[1]).toMatchObject({ goal: { status: 'active' } });
 
     await test.close?.();
     expect(test.dispose).toHaveBeenCalled();

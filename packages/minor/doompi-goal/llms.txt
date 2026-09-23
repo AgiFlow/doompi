@@ -6,4 +6,4 @@
 
 ## How to use
 
-- [doompi-use-goal](./src/prompts/doompi-use-goal/SKILL.md): Start, budget, pause, resume, complete, block, and inspect persistent repository goals.
+- [doompi-use-goal](./src/prompts/doompi-use-goal/SKILL.md): Start, budget, pause, resume, and inspect persistent goals with automatic completion checking.
