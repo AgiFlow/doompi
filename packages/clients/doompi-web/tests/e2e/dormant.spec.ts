@@ -19,12 +19,16 @@ test('shows a recorded session as stopped and starts it only when asked', async 
   await expect(page.getByTestId('composer-input')).toBeHidden();
   await expect(page.getByTestId('suggestion-0')).toBeHidden();
   await expect(card).toContainText('stopped');
+  await expect(page.getByTestId('template-diagnostic')).toBeHidden();
+  await expect(page.getByTestId('activity-error')).toBeHidden();
 
   // A live session is still reachable without touching the dormant one.
   await page.getByTestId('session-open-s1').click();
   await expect(page.getByTestId('composer-input')).toBeVisible();
   await expect(page.getByTestId('dormant-session')).toBeHidden();
   await expect(card).toContainText('stopped');
+  await expect(page.getByTestId('template-diagnostic')).toBeHidden();
+  await expect(page.getByTestId('activity-error')).toBeHidden();
 
   await page.getByTestId('session-open-d1').click();
   await expect(page.getByTestId('dormant-session')).toBeVisible();
@@ -35,4 +39,6 @@ test('shows a recorded session as stopped and starts it only when asked', async 
   await expect(page.getByTestId('composer-input')).toBeVisible();
   await expect(page.getByTestId('dormant-session')).toBeHidden();
   await expect(card).not.toContainText('stopped');
+  await expect(page.getByTestId('template-diagnostic')).toBeHidden();
+  await expect(page.getByTestId('activity-error')).toBeHidden();
 });

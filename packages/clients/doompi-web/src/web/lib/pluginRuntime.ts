@@ -110,13 +110,13 @@ let scriptQueue: Promise<unknown> = Promise.resolve();
 let localVerifier: { key: string; ready: Promise<void> } | undefined;
 let pendingCompositionRefresh: Promise<void> | undefined;
 let focusedSessionComposition:
-  | { sessionId: string; composition?: SessionWebComposition; workspaceId?: string }
+  | { sessionId: string; composition?: SessionWebComposition | null; workspaceId?: string }
   | undefined;
 /** The last session focus, reused while its session, composition, workspace and mount are unchanged. */
 let lastSessionFocus:
   | {
       sessionId: string;
-      key: string | undefined;
+      key: string | null | undefined;
       workspaceId: string | undefined;
       runtimeEpoch: number;
       ownerEpoch: number;
@@ -255,9 +255,20 @@ function reportDiagnostics(): void {
 }
 
 /** Replace only the requested mount after its new assets have been verified. */
-async function mountComposition(mount: WebPluginMount, composition: SessionWebComposition | undefined): Promise<void> {
+async function mountComposition(
+  mount: WebPluginMount,
+  composition: SessionWebComposition | null | undefined,
+): Promise<void> {
   if (!runtime) return;
   const owner = mountKey(mount);
+  if (composition === null && mount.scope === 'session') {
+    // A stopped session has history, not a live plugin runtime. Keep its verified inherited UI.
+    bindSessionWebWorkspace(mount.sessionId, mount.workspaceId);
+    installSessionWebPlugins(mount.sessionId, []);
+    loadedMounts.set(owner, { key: 'stopped', stop: () => {}, styles: [], releaseAssets: () => {} });
+    setMountState(owner, { phase: 'ready' });
+    return;
+  }
   const epoch = runtimeEpoch;
   const ownerEpoch = mountEpochs.get(owner) ?? 0;
   const stale = () => epoch !== runtimeEpoch || ownerEpoch !== (mountEpochs.get(owner) ?? 0);
@@ -476,15 +487,15 @@ export async function focusWorkspaceWebPlugins(workspaceId: string | null): Prom
 }
 
 /**
- * Session focus changes visibility; it does not destroy other mounts. Session store updates call this on every
- * change, so an unchanged focus reuses the previous request instead of writing mount state again.
+ * Session focus changes visibility; it does not destroy other mounts. A null composition explicitly names a
+ * stopped session, while undefined means a missing live composition. Unchanged focus reuses the prior request.
  */
 export function focusSessionWebPlugins(
   sessionId: string | null,
-  composition: SessionWebComposition | undefined,
+  composition: SessionWebComposition | null | undefined,
   workspaceId?: string,
 ): Promise<void> {
-  const key = composition === undefined ? undefined : compositionKey(composition);
+  const key = composition == null ? composition : compositionKey(composition);
   const last = lastSessionFocus;
   if (
     sessionId !== null &&
@@ -518,7 +529,7 @@ export function focusSessionWebPlugins(
 
 async function focusSessionMount(
   sessionId: string | null,
-  composition: SessionWebComposition | undefined,
+  composition: SessionWebComposition | null | undefined,
   workspaceId?: string,
 ): Promise<void> {
   const epoch = ++focusEpoch;
@@ -527,6 +538,8 @@ async function focusSessionMount(
   activateWebPluginSession(sessionId);
   if (!sessionId || !runtime) return;
   const owner = `session:${sessionId}`;
+  if (composition === null) disposeMount(owner);
+  else mountEpochs.set(owner, (mountEpochs.get(owner) ?? 0) + 1);
   const ownerEpoch = mountEpochs.get(owner) ?? 0;
   setMountState(owner, { phase: 'loading' });
   try {
@@ -538,7 +551,6 @@ async function focusSessionMount(
   } catch (error) {
     if (epoch === focusEpoch && runtimeAtStart === runtimeEpoch) {
       setMountState(`session:${sessionId}`, { phase: 'error', error: compositionError(error) });
-      setCompositionState({ phase: 'error', error: compositionError(error) });
     }
     throw error;
   }

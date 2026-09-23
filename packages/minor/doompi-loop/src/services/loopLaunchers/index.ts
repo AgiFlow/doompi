@@ -32,6 +32,7 @@ export interface LoopLaunchersDependencies {
 }
 
 function validId(value: string, label: string): string {
+  if (typeof value !== 'string') throw new TypeError(`Invalid ${label}.`);
   const normalized = value.trim();
   let hasControl = false;
   for (const character of normalized) {
@@ -126,6 +127,7 @@ export function createDoomLoopLaunchersService({
           source: definition.source,
           label: definition.label,
           ...(definition.description ? { description: definition.description } : {}),
+          ...(definition.inputSchema ? { inputSchema: definition.inputSchema } : {}),
         }))
         .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
     },
@@ -147,16 +149,27 @@ export function createDoomLoopLaunchersService({
     },
     async launch(launcherId, options) {
       ensureActive();
+      options?.signal?.throwIfAborted();
       const normalizedLauncherId = validId(launcherId, LAUNCHER_ID_LABEL);
       const launcher = launchers.get(normalizedLauncherId);
       if (!launcher) throw new Error(`Loop launcher '${normalizedLauncherId}' is unavailable.`);
       const instanceId = validId(options?.instanceId ?? createInstanceId(), INSTANCE_ID_LABEL);
       if (instances.has(instanceId)) throw new Error(`Loop instance '${instanceId}' already exists.`);
       const entry: InstanceEntry = { instanceId, launcher, abortController: new AbortController(), state: 'starting' };
+      const abortSetup = (): void => entry.abortController.abort(options?.signal?.reason);
+      options?.signal?.addEventListener('abort', abortSetup, { once: true });
       instances.set(instanceId, entry);
       notify();
       try {
-        const handle = await launcher.definition.launch({ instanceId, signal: entry.abortController.signal });
+        if (options?.interactive === false && !launcher.definition.inputSchema) {
+          throw new Error(`Loop launcher '${normalizedLauncherId}' requires manual setup in Activity.`);
+        }
+        const handle = await launcher.definition.launch({
+          instanceId,
+          signal: entry.abortController.signal,
+          ...(options?.input === undefined ? {} : { input: options.input }),
+          ...(options?.interactive === undefined ? {} : { interactive: options.interactive }),
+        });
         const active = !disposed && instances.get(instanceId) === entry && !entry.abortController.signal.aborted;
         if (!handle) {
           if (instances.get(instanceId) === entry) instances.delete(instanceId);
@@ -181,6 +194,8 @@ export function createDoomLoopLaunchersService({
         notify();
         if (cancelled) return undefined;
         throw error;
+      } finally {
+        options?.signal?.removeEventListener('abort', abortSetup);
       }
     },
     async stop(instanceId, reason) {

@@ -6,7 +6,7 @@
 import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import { LOOP_VIEW_STATUS_KEY } from '../../../../../../types/loopView';
-import { LoopsActivitySection } from './LoopsActivitySection';
+import { LoopActivityItems, LoopsActivitySection } from './LoopsActivitySection';
 
 const LOOPS = JSON.stringify([
   { instanceId: 'loop-1', label: 'nightly digest', detail: 'every 30m · next in 12m', state: 'running' },
@@ -14,8 +14,14 @@ const LOOPS = JSON.stringify([
   { instanceId: 'loop-3', label: 'release watch', detail: 'draining current run', state: 'stopping' },
 ]);
 
-const props = (raw: string, sessionId: string | null = 's1') =>
-  slotPropsFixture({ sessionId, statuses: { [LOOP_VIEW_STATUS_KEY]: raw } }).props;
+const props = (raw: string, sessionId: string | null = 's1') => {
+  const fixture = slotPropsFixture({ sessionId, statuses: { [LOOP_VIEW_STATUS_KEY]: raw } }).props;
+  return {
+    ...fixture,
+    renderSlot: (slot: string) =>
+      slot === 'loop.items' ? <LoopActivityItems {...fixture} /> : fixture.renderSlot(slot),
+  };
+};
 
 const meta = {
   title: 'Loop/LoopsActivitySection',
@@ -31,6 +37,11 @@ export const Playground = {
       <div className="flex w-72 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">active loops</span>
         <LoopsActivitySection {...props(LOOPS)} />
+      </div>
+
+      <div className="flex w-72 flex-col gap-2">
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">mode off, no loops</span>
+        <LoopsActivitySection {...props('')} />
       </div>
 
       <div className="flex w-72 flex-col gap-2">

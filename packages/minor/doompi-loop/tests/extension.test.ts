@@ -71,7 +71,15 @@ async function harness(sessionId: string, mode: ExtensionContext['mode'] = 'prin
   const listeners = new Map<string, EventListener>();
   const notify = vi.fn();
   const setStatus = vi.fn();
-  const select = vi.fn(async (_title: string, options: readonly string[]) => options[0]);
+  const select = vi.fn(async (_title: string, options: readonly string[]) =>
+    options.includes('Aardvark loop')
+      ? 'Aardvark loop'
+      : options.includes('A failure loop')
+        ? 'A failure loop'
+        : options.includes('Default loop')
+          ? 'Default loop'
+          : options[0],
+  );
   const editor = vi.fn(async () => 'Check the current status.');
   const input = vi.fn(async () => '60');
   const sendUserMessage = vi.fn();
@@ -85,6 +93,7 @@ async function harness(sessionId: string, mode: ExtensionContext['mode'] = 'prin
   const pi = {
     events: testBus(),
     registerCommand,
+    registerTool: vi.fn(),
     sendUserMessage,
     on: vi.fn((event: string, listener: EventListener) => listeners.set(event, listener)),
   } as unknown as ExtensionAPI;
@@ -235,6 +244,7 @@ describe('doom loop extension', () => {
 
     expect(extension.activeLaunchers()?.generation).not.toBe(firstGeneration);
     expect(extension.activeLaunchers()?.listLaunchers()).toEqual([
+      expect.objectContaining({ id: 'doompi.cron', label: 'Cron loop' }),
       expect.objectContaining({ id: 'doompi.default', label: 'Default loop' }),
     ]);
     await extension.shutdown();
@@ -246,15 +256,13 @@ describe('doom loop extension', () => {
 
     await extension.commands.get(START_COMMAND_NAME)?.handler('', extension.context);
 
-    expect(extension.select).toHaveBeenCalledWith('Start loop', ['Default loop']);
+    expect(extension.select).toHaveBeenCalledWith('Start loop', ['Cron loop', 'Default loop']);
     expect(extension.editor).toHaveBeenCalledWith('Loop prompt', '');
     expect(extension.input).toHaveBeenCalledWith('Loop interval in seconds', 'Default: 300s');
     expect(extension.sendUserMessage).toHaveBeenCalledWith('Check the current status.');
     expect(extension.notify).toHaveBeenCalledWith('Default loop started.', 'info');
     expect(extension.setStatus).toHaveBeenCalledWith(STATUS_KEY, 'loops: 1');
-    expect(extension.modeUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ activation: 'active', detail: '1 active' }),
-    );
+    expect(extension.modeUpdate).toHaveBeenCalledWith(expect.objectContaining({ activation: 'inactive' }));
     await extension.shutdown();
   });
 
@@ -383,7 +391,7 @@ describe('doom loop extension', () => {
     await expect(stop).resolves.toBe(true);
     await vi.waitFor(() => {
       const call = extension.setStatus.mock.calls.filter(([key]) => key === LOOP_VIEW_STATUS_KEY).at(-1);
-      expect(call).toEqual([LOOP_VIEW_STATUS_KEY, undefined]);
+      expect(call).toEqual([LOOP_VIEW_STATUS_KEY, '']);
     });
 
     await external.dispose();
@@ -412,17 +420,19 @@ describe('doom loop extension', () => {
     const extension = await harness('extension-mode-actions');
     await extension.startSession();
 
-    await expect(
-      extension.invokeMode('start', { launcherId: 'doompi.default', instanceId: 'mode-instance' }),
-    ).resolves.toEqual({ message: "Loop 'mode-instance' started." });
-    await expect(extension.invokeMode('stop', { instanceId: 'mode-instance', reason: 'mode test' })).resolves.toEqual({
-      message: 'Loop stopped.',
-    });
+    await extension.invokeMode('activate', {});
+    expect(extension.modeUpdate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ activation: 'active', detail: '0 loops' }),
+    );
+    await extension.activeLaunchers()!.launch('doompi.default', { instanceId: 'mode-instance' });
+    await extension.invokeMode('deactivate', {});
+    expect(extension.modeUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ activation: 'inactive' }));
+    expect(extension.activeLaunchers()!.listInstances()).toHaveLength(1);
+    await extension.commands.get(LIST_COMMAND_NAME)?.handler('stop mode-instance', extension.context);
+    expect(extension.activeLaunchers()!.listInstances()).toEqual([]);
     await expect(extension.invokeMode('unknown', {})).rejects.toThrow('Unknown loop mode action');
     await extension.endSession();
-    await expect(extension.invokeMode('start', { launcherId: 'doompi.default' })).rejects.toThrow(
-      'unavailable for the active session',
-    );
+    await expect(extension.invokeMode('activate', {})).rejects.toThrow('unavailable for the active session');
     await extension.shutdown();
   });
 
@@ -439,12 +449,13 @@ describe('doom loop extension', () => {
 
     await extension.commands.get(START_COMMAND_NAME)?.handler('', extension.context);
 
-    expect(extension.select).toHaveBeenCalledWith('Start loop', ['Aardvark loop', 'Default loop']);
+    expect(extension.select).toHaveBeenCalledWith('Start loop', ['Aardvark loop', 'Cron loop', 'Default loop']);
     expect(extension.notify).toHaveBeenCalledWith('Example instance started.', 'info');
     await extension.startSession();
     expect(stop).toHaveBeenCalledOnce();
     expect(extension.activeLaunchers()?.listLaunchers()).toEqual([
       expect.objectContaining({ id: 'example' }),
+      expect.objectContaining({ id: 'doompi.cron' }),
       expect.objectContaining({ id: 'doompi.default' }),
     ]);
     await external.dispose();
@@ -488,6 +499,7 @@ describe('doom loop extension', () => {
     const pi = {
       events,
       registerCommand: vi.fn(),
+      registerTool: vi.fn(),
       sendUserMessage: vi.fn(),
       on: vi.fn((event: string, listener: EventListener) => {
         const current = listeners.get(event) ?? [];

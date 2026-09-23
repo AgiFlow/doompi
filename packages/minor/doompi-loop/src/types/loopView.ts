@@ -30,8 +30,8 @@ function isState(value: unknown): value is LoopStatusState {
 }
 
 /** Projects runtime snapshots into the JSON status consumed by the web plugin. */
-export function formatLoopStatusView(instances: readonly LoopStatusSource[]): string | undefined {
-  if (instances.length === 0) return undefined;
+export function formatLoopStatusView(instances: readonly LoopStatusSource[]): string {
+  if (instances.length === 0) return '';
   return JSON.stringify(
     instances.map((instance) => ({
       instanceId: instance.instanceId,

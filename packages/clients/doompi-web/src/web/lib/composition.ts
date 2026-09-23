@@ -102,7 +102,7 @@ export interface MinorModeSource {
 export const PACKAGED_MINOR_MODES: readonly MinorModeSource[] = [
   { name: 'help', keys: 'h e' },
   { name: 'plan', keys: 'p e', statusKey: 'plan-mode' },
-  { name: 'loop', keys: 'l l', statusKey: 'doom-loop', activityGroup: 'loops' },
+  { name: 'loop', keys: 'l l', statusKey: 'doom-loop' },
   { name: 'goal', keys: 'g e', statusKey: 'goal' },
   { name: 'author', keys: 'o a' },
   { name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress' },

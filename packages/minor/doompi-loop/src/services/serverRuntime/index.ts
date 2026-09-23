@@ -1,213 +1,211 @@
-import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
-import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
+import type { DoomHeadlessExecutionContext, DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
+import { defineMinorMode, serverMinorModes } from '@agimon-ai/doompi-minor-mode';
+import { Cron } from 'croner';
 
 import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../../constants/loop';
-import type { DoomLoopLaunchersService, LoopLauncherRegistration, StoppableLoop } from '../../schemas/loopLaunchers';
-import { createDoomLoopLaunchersService, type LoopLaunchersDependencies } from '../../services/loopLaunchers';
+import { MODE_STATUS_ID, PACKAGE_SOURCE } from '../../constants/piLoop';
+import { DOOM_LOOP_LAUNCHERS_SERVICE, type LoopLaunchRequest } from '../../schemas/loopLaunchers';
+import { CronLoopSchema, IntervalLoopSchema, parseCronLoop, parseIntervalLoop } from '../../schemas/loopTools';
 import { formatLoopStatusView, LOOP_VIEW_STATUS_KEY } from '../../types/loopView';
+import { createDoomLoopLaunchersService } from '../loopLaunchers';
+import { createLoopTools } from '../loopTools';
+import type { LoopToolsRoot } from '../loopTools/type';
 
-const SOURCE = '@agimon-ai/doompi-loop';
-const MODE_ID = 'loop.active';
-const DEFAULT_LAUNCHER_ID = 'doompi.default';
-const DEFAULT_INTERVAL_SECONDS = 300;
-const MIN_INTERVAL_SECONDS = 30;
-const MAX_INTERVAL_SECONDS = 3600;
+export type LoopServerState = DoomServerSessionPlugin & LoopToolsRoot;
 
-function notify(
-  context: {
-    client: { notify(request: { body: string; level?: 'info' | 'warning' | 'error' }): void | Promise<void> };
-  },
-  body: string,
-  level: 'info' | 'warning' | 'error' = 'info',
-): Promise<void> {
-  return Promise.resolve(context.client.notify({ body, level }));
-}
-
-function numberInput(value: unknown, fallback: number): number {
-  if (typeof value !== 'string' || value.trim() === '') return fallback;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < MIN_INTERVAL_SECONDS || parsed > MAX_INTERVAL_SECONDS) {
-    throw new Error(`Interval must be between ${MIN_INTERVAL_SECONDS} and ${MAX_INTERVAL_SECONDS} seconds.`);
+async function prepareLoop(execution: DoomHeadlessExecutionContext, request: LoopLaunchRequest, cron: boolean) {
+  if (request.input !== undefined) return cron ? parseCronLoop(request.input) : parseIntervalLoop(request.input);
+  if (request.interactive === false) throw new Error('Loop configuration is required for agent launches.');
+  const input = await execution.client.request(
+    { kind: 'input', title: 'Loop prompt', multiline: true },
+    request.signal,
+  );
+  const prompt = typeof input === 'string' ? input.trim() : '';
+  if (!prompt || request.signal.aborted) return undefined;
+  if (cron) {
+    const expression = await execution.client.request(
+      { kind: 'input', title: 'Cron expression (five fields)', initialValue: '0 * * * *' },
+      request.signal,
+    );
+    if (typeof expression !== 'string' || request.signal.aborted) return undefined;
+    const timezone = await execution.client.request(
+      { kind: 'input', title: 'Loop timezone', initialValue: 'UTC' },
+      request.signal,
+    );
+    if (typeof timezone !== 'string' || request.signal.aborted) return undefined;
+    return parseCronLoop({ prompt, cron: expression, timezone: timezone.trim() || 'UTC' });
   }
-  return parsed;
+  const interval = await execution.client.request(
+    { kind: 'input', title: 'Loop interval in seconds', initialValue: '300' },
+    request.signal,
+  );
+  if (typeof interval !== 'string' || request.signal.aborted) return undefined;
+  return parseIntervalLoop({ prompt, intervalSeconds: Number(interval.trim() || '300') });
 }
 
-import { type DoomHeadlessExecutionContext, type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
-import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
-export function createSessionState(host: DoomHeadlessHostService): DoomServerSessionPlugin {
-  let launchers: DoomLoopLaunchersService | undefined;
-  let defaultRegistration: LoopLauncherRegistration | undefined;
-  let unsubscribe: (() => void) | undefined;
-  let modeOwner: MinorModeOwner | undefined;
-  const modeSelected = (): boolean => (host.context.selection.state?.['minor-mode'] ?? []).includes(MODE_ID);
-  const modeState = (): MinorModeState => {
-    const launcherCount = launchers?.listLaunchers().length ?? 0;
-    const active = (launchers?.listInstances().length ?? 0) > 0;
-    const canStart = launcherCount > 0 || !modeSelected();
-    return {
-      activation: active ? 'active' : 'inactive',
-      condition: launchers?.listInstances().some(({ state }) => state !== 'running') ? 'queued' : 'ready',
-      ...(active ? { detail: `${launchers?.listInstances().length} active`, color: 'warning' } : {}),
+export function createSessionState(host: DoomHeadlessHostService): LoopServerState {
+  const launchers = createDoomLoopLaunchersService({
+    generation: `${host.context.sessionId}:loop-launchers`,
+    createInstanceId: () => crypto.randomUUID(),
+    timestamp: () => new Date().toISOString(),
+  });
+  let disposed = false;
+  const modeSelected = (): boolean =>
+    !disposed && (host.context.selection.state?.['minor-mode'] ?? []).includes(MODE_STATUS_ID);
+  const publishView = (): void =>
+    host.context.client.setStatus(LOOP_VIEW_STATUS_KEY, formatLoopStatusView(launchers.listInstances()));
+  const modeOwner = defineMinorMode({
+    descriptor: {
+      source: PACKAGE_SOURCE,
+      id: MODE_STATUS_ID,
+      label: 'Loop',
+      description: 'Give the agent tools to create, inspect, and stop session loops.',
+      order: 60,
       actions: [
         {
-          id: 'start',
-          enabled: canStart,
-          ...(canStart ? {} : { disabledReason: 'No loop launchers are registered.' }),
+          id: 'activate',
+          label: 'Activate',
+          description: 'Expose loop tools to the agent.',
+          contexts: ['headless'],
+          parameters: [],
         },
         {
-          id: 'stop',
-          enabled: active,
-          ...(active ? {} : { disabledReason: 'No loops are active.' }),
+          id: 'deactivate',
+          label: 'Deactivate',
+          description: 'Hide agent loop tools. Existing loops and manual controls remain available.',
+          contexts: ['headless'],
+          parameters: [],
         },
       ],
-    };
-  };
-  /**
-   * The instances the activity dock lists.
-   *
-   * An empty list publishes an empty value rather than nothing, because the key
-   * being present is what keeps the group on screen as a launcher. The group
-   * declares no `hideWhenEmpty`, so an empty value is a header with no rows.
-   */
-  const publishView = (): void =>
-    host.context.client.setStatus(LOOP_VIEW_STATUS_KEY, formatLoopStatusView(launchers?.listInstances() ?? []));
-  /** Both surfaces a loop shows up on: the minor-mode catalog and the activity dock. */
-  const publishMode = (): void => {
-    modeOwner?.publish();
+    },
+    state: () => ({
+      activation: modeSelected() ? 'active' : 'inactive',
+      condition: 'ready',
+      ...(modeSelected() ? { detail: `${launchers.listInstances().length} loops`, color: 'accent' } : {}),
+      actions: [
+        {
+          id: 'activate',
+          enabled: !modeSelected(),
+          ...(modeSelected() ? { disabledReason: 'Loop mode is already active.' } : {}),
+        },
+        {
+          id: 'deactivate',
+          enabled: modeSelected(),
+          ...(modeSelected() ? {} : { disabledReason: 'Loop mode is not active.' }),
+        },
+      ],
+    }),
+    async handleAction(_runtime, actionId, _arguments, { signal }) {
+      signal.throwIfAborted();
+      if (actionId !== 'activate' && actionId !== 'deactivate')
+        throw new Error(`Unknown loop mode action: ${actionId}`);
+      const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== MODE_STATUS_ID);
+      await host.changeSelection({
+        axis: 'state',
+        key: 'minor-mode',
+        values: actionId === 'activate' ? [...modes, MODE_STATUS_ID] : modes,
+      });
+      modeOwner.publish();
+      return {
+        message:
+          actionId === 'activate' ? 'Loop tools activated.' : 'Loop tools deactivated. Existing loops are unchanged.',
+      };
+    },
+  }).createOwner(undefined);
+  const publish = (): void => {
+    if (disposed) return;
+    modeOwner.publish();
     publishView();
   };
-  const startActivity = async (execution: typeof host.context): Promise<() => Promise<void>> => {
-    if (launchers !== undefined) return async () => undefined;
-    const dependencies: LoopLaunchersDependencies = {
-      generation: `${execution.sessionId}:loop-launchers`,
-      createInstanceId: () => crypto.randomUUID(),
-      timestamp: () => new Date().toISOString(),
-    };
-    const service = createDoomLoopLaunchersService(dependencies);
-    const registration = service.register({
-      id: DEFAULT_LAUNCHER_ID,
-      source: SOURCE,
-      label: 'Default loop',
-      description: 'Run a prompt in this session on an interval.',
-      async launch({ instanceId, signal }): Promise<StoppableLoop | undefined> {
-        const promptValue = await execution.client.request(
-          { kind: 'input', title: 'Loop prompt', multiline: true },
-          signal,
-        );
-        const prompt = typeof promptValue === 'string' ? promptValue.trim() : '';
-        if (!prompt || signal.aborted) return undefined;
-        const interval = numberInput(
-          await execution.client.request(
-            { kind: 'input', title: 'Loop interval in seconds', initialValue: String(DEFAULT_INTERVAL_SECONDS) },
-            signal,
-          ),
-          DEFAULT_INTERVAL_SECONDS,
-        );
+  const unsubscribe = launchers.subscribe(publish);
+  let submitting = false;
+  for (const cron of [false, true]) {
+    launchers.register({
+      id: cron ? 'doompi.cron' : 'doompi.default',
+      source: PACKAGE_SOURCE,
+      label: cron ? 'Cron loop' : 'Default loop',
+      description: cron
+        ? 'Run a prompt on a five-field cron schedule.'
+        : 'Run a prompt in this session on an interval.',
+      inputSchema: { ...(cron ? CronLoopSchema : IntervalLoopSchema) },
+      async launch(request) {
+        const execution = host.context;
+        const prepared = await prepareLoop(execution, request, cron);
+        if (!prepared || request.signal.aborted) return undefined;
         let stopped = false;
-        const tick = (): void => {
-          if (stopped || signal.aborted) return;
-          void execution.session.prompt(prompt).catch((error) => {
-            void notify(
-              execution,
-              `Loop pass failed: ${error instanceof Error ? error.message : String(error)}`,
-              'warning',
-            );
-          });
+        const tick = async (): Promise<void> => {
+          if (stopped || request.signal.aborted || submitting) return;
+          submitting = true;
+          try {
+            const activity = await execution.session.activity();
+            if (stopped || request.signal.aborted || !activity.isIdle || activity.hasPendingMessages) return;
+            await execution.session.prompt(prepared.prompt);
+          } catch (error) {
+            await execution.client.notify({
+              body: `Loop pass failed: ${error instanceof Error ? error.message : String(error)}`,
+              level: 'warning',
+            });
+          } finally {
+            submitting = false;
+          }
         };
-        const timer = setInterval(tick, interval * 1000);
-        timer.unref?.();
-        tick();
+        let stopTimer: () => void;
+        let detail: string;
+        if ('cron' in prepared) {
+          const job = new Cron(prepared.cron, { timezone: prepared.timezone, unref: true }, tick);
+          if (job.nextRun() === null) {
+            job.stop();
+            throw new Error('Cron expression has no future run.');
+          }
+          stopTimer = () => {
+            job.stop();
+          };
+          detail = `${prepared.cron} (${prepared.timezone})`;
+        } else {
+          const timer = setInterval(() => {
+            void tick();
+          }, prepared.intervalSeconds * 1000);
+          timer.unref?.();
+          stopTimer = () => clearInterval(timer);
+          detail = `every ${prepared.intervalSeconds}s`;
+          void tick();
+        }
         return {
-          instanceId,
-          label: 'Default loop',
-          detail: `every ${interval}s`,
+          instanceId: request.instanceId,
+          label: cron ? 'Cron loop' : 'Default loop',
+          detail,
           stop() {
             stopped = true;
-            clearInterval(timer);
+            stopTimer();
           },
         };
       },
     });
-    launchers = service;
-    defaultRegistration = registration;
-    unsubscribe = service.subscribe(publishMode);
-    publishMode();
-    return async () => {
-      unsubscribe?.();
-      unsubscribe = undefined;
-      await registration.dispose('Headless loop activity stopped.');
-      await service.dispose('Headless loop activity stopped.');
-      if (launchers === service) launchers = undefined;
-      if (defaultRegistration === registration) defaultRegistration = undefined;
-      publishMode();
-    };
-  };
-  modeOwner = defineMinorMode({
-    descriptor: {
-      source: SOURCE,
-      id: MODE_ID,
-      label: 'Loop',
-      description: 'Session-scoped recurring prompt loops.',
-      order: 60,
-      actions: [
-        {
-          id: 'start',
-          label: 'Start',
-          description: 'Start a loop with a registered launcher.',
-          contexts: ['headless'],
-          parameters: [
-            { name: 'launcherId', label: 'Launcher', kind: 'string', required: true, minLength: 1 },
-            { name: 'instanceId', label: 'Instance ID', kind: 'string', required: false, minLength: 1 },
-          ],
-        },
-        {
-          id: 'stop',
-          label: 'Stop',
-          description: 'Stop one active loop instance.',
-          contexts: ['headless'],
-          parameters: [
-            { name: 'instanceId', label: 'Instance ID', kind: 'string', required: true, minLength: 1 },
-            { name: 'reason', label: 'Reason', kind: 'string', required: false, minLength: 1 },
-          ],
-        },
-      ],
+  }
+  const loopTools = createLoopTools(
+    () => launchers,
+    () => {
+      if (!modeSelected()) throw new Error('Enable Loop minor mode before using agent loop tools.');
     },
-    state: modeState,
-    async handleAction(_runtime, actionId, argumentsValue, { signal }) {
-      signal.throwIfAborted();
-      if (actionId === 'start' && !launchers) {
-        const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== MODE_ID);
-        await host.changeSelection({ axis: 'state', key: 'minor-mode', values: [...modes, MODE_ID] });
-      }
-      if (!launchers) throw new Error('Loop activity is not active.');
-      if (actionId === 'start') {
-        const instance = await launchers.launch(
-          String(argumentsValue.launcherId ?? ''),
-          argumentsValue.instanceId ? { instanceId: String(argumentsValue.instanceId) } : {},
-        );
-        publishMode();
-        return { message: instance ? `Loop '${instance.instanceId}' started.` : 'Loop launch was cancelled.' };
-      }
-      if (actionId === 'stop') {
-        const stopped = await launchers.stop(
-          String(argumentsValue.instanceId ?? ''),
-          String(argumentsValue.reason ?? 'Stopped through minor_mode.'),
-        );
-        if (stopped && launchers.listInstances().length === 0) {
-          const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== MODE_ID);
-          await host.changeSelection({ axis: 'state', key: 'minor-mode', values: modes });
-        }
-        publishMode();
-        return { message: stopped ? 'Loop stopped.' : 'Loop instance was not active.' };
-      }
-      throw new Error(`Unknown loop mode action: ${actionId}`);
-    },
-  }).createOwner(undefined);
+  ).map((tool) => ({
+    ...tool,
+    when: { state: { 'minor-mode': MODE_STATUS_ID }, attribution: { kind: 'minor' as const, mode: MODE_STATUS_ID } },
+  }));
   return {
-    services: [serverMinorModes([modeOwner])],
+    loopTools,
+    services: [
+      (context) => {
+        context.plugin((provider) => {
+          provider.provide(DOOM_LOOP_LAUNCHERS_SERVICE, launchers);
+        });
+        context.effect(() => host.subscribeSelection(publish));
+      },
+      serverMinorModes([modeOwner]),
+    ],
     resources: [
       {
-        when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
+        when: { state: { 'minor-mode': MODE_STATUS_ID }, attribution: { kind: 'minor', mode: MODE_STATUS_ID } },
         name: 'doompi-use-loop',
         kind: 'skill',
         read: () => readPackageResource(import.meta.url, 'src/prompts/doompi-use-loop/SKILL.md'),
@@ -215,21 +213,21 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
     ],
     activities: [
       {
-        when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
         name: 'doompi-loop',
-        start: startActivity,
+        async start() {
+          publish();
+          return async () => {
+            await launchers.stopAll('Session loop activity stopped.');
+            publish();
+          };
+        },
       },
     ],
     commands: [
       {
         name: START_COMMAND_NAME,
-        description: 'Start a registered loop.',
+        description: 'Start a registered loop manually.',
         async execute(args: string, execution: DoomHeadlessExecutionContext) {
-          if (!launchers) {
-            const modes = host.context.selection.state?.['minor-mode'] ?? [];
-            await host.changeSelection({ axis: 'state', key: 'minor-mode', values: [...modes, MODE_ID] });
-          }
-          if (!launchers) throw new Error('Loop activity is not active.');
           const available = launchers.listLaunchers();
           const selected =
             args.trim() ||
@@ -238,43 +236,56 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
               title: 'Choose a loop launcher',
               options: available.map((entry) => ({ label: entry.label, value: entry.id })),
             }));
-          const launcherId = args.trim() || (typeof selected === 'string' ? selected : '');
-          if (!launcherId) return;
-          const instance = await launchers.launch(launcherId);
-          publishMode();
-          await notify(execution, instance ? `Loop '${instance.instanceId}' started.` : 'Loop launch was cancelled.');
+          if (typeof selected !== 'string' || !selected) return;
+          const instance = await launchers.launch(selected);
+          await execution.client.notify({
+            body: instance ? `Loop '${instance.instanceId}' started.` : 'Loop launch was cancelled.',
+            level: 'info',
+          });
         },
       },
       {
         name: LIST_COMMAND_NAME,
-        description: 'List and stop active loops.',
-        async execute(_args: string, execution: DoomHeadlessExecutionContext) {
-          const instances = launchers?.listInstances() ?? [];
-          await notify(execution, instances.length === 0 ? 'No loops are active.' : JSON.stringify(instances, null, 2));
+        description: 'List or stop session loops. Usage: /loops [stop instanceId].',
+        async execute(args: string, execution: DoomHeadlessExecutionContext) {
+          const parts = args.trim().split(/\s+/u);
+          if (parts[0] === 'stop' && parts.length === 2) {
+            const stopped = await launchers.stop(parts[1]!, 'Stopped manually.');
+            await execution.client.notify({
+              body: stopped ? 'Loop stopped.' : 'Loop instance was not active.',
+              level: 'info',
+            });
+            return;
+          }
+          if (args.trim()) throw new Error('Usage: /loops [stop instanceId]');
+          const instances = launchers.listInstances();
+          await execution.client.notify({
+            body: instances.length === 0 ? 'No loops are active.' : JSON.stringify(instances, null, 2),
+            level: 'info',
+          });
         },
       },
     ],
     hooks: [
       {
-        // Ungated on purpose: the dock's loops group is a way in, so it has to
-        // exist before anyone selects loop mode. The activity below is gated on
-        // that selection and cannot do this job.
         event: 'session_start',
         async handle() {
-          publishView();
+          publish();
         },
       },
       {
-        when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
         event: 'session_shutdown',
         async handle() {
-          await launchers?.stopAll('Headless session shutdown.');
+          await launchers.stopAll('Headless session shutdown.');
         },
       },
     ],
+    onStart: publish,
     async onDispose() {
-      await defaultRegistration?.dispose('Headless loop facet disposed.');
-      await launchers?.dispose('Headless loop facet disposed.');
+      if (disposed) return;
+      disposed = true;
+      unsubscribe();
+      await launchers.dispose('Headless loop facet disposed.');
     },
   };
 }

@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
 import { PluginSurface } from '../../components/PluginSurface';
 import { type ActivityGroup, useActivityGroups, useDockFaces } from '../../lib/composition';
 import { activityGroupSlot, HOST_SLOTS, slotFills } from '../../lib/pluginRegistry';
-import { retryWebPluginCompositions, webPluginCompositionStore } from '../../lib/pluginRuntime';
+import { retryWebPluginCompositions, webPluginCompositionStore, webPluginMountState } from '../../lib/pluginRuntime';
 import { sessionsStore } from '../../stores/sessionsStore';
 import { useActiveSession } from '../../stores/sessionStore';
 import { setDockTab, uiStore } from '../../stores/uiStore';
@@ -42,7 +42,14 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
   const automaticFace = dockFaces.find((face) => face.autoSelect === true);
   const automaticFaceKey = `${activeId ?? ''}:${automaticFace?.id ?? ''}`;
   const lastAutomaticFaceKey = useRef<string | undefined>(undefined);
-  const compositionState = useStore(webPluginCompositionStore);
+  const workspaceId = useStore(sessionsStore, (state) =>
+    state.activeId === null ? undefined : state.byId[state.activeId]?.summary.workspaceId,
+  );
+  const compositionSnapshot = useStore(webPluginCompositionStore);
+  const compositionState = webPluginMountState(
+    activeId === null ? { scope: 'global' } : { scope: 'session', sessionId: activeId, workspaceId: workspaceId ?? '' },
+    compositionSnapshot,
+  );
   const groups = useActivityGroups(statuses, widgets, activeId);
   const ordinaryGroups = groups.filter((group) => group.placement !== 'bottom');
   const pinnedGroups = groups.filter((group) => group.placement === 'bottom');
