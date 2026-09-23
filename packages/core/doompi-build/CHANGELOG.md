@@ -1,3 +1,17 @@
+## 0.0.1-alpha.10 (2026-09-23)
+
+### 🚀 Features
+
+- **web:** add selectable template packages ([#159](https://github.com/AgiFlow/doompi/pull/159))
+
+### 🩹 Fixes
+
+- **web:** load templates deterministically ([#164](https://github.com/AgiFlow/doompi/pull/164))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.9 (2026-09-22)
 
 ### 🚀 Features

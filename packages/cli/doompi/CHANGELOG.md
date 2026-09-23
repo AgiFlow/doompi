@@ -1,3 +1,38 @@
+## 0.0.1-alpha.84 (2026-09-23)
+
+### 🚀 Features
+
+- **web:** add selectable template packages ([#159](https://github.com/AgiFlow/doompi/pull/159))
+
+### 🩹 Fixes
+
+- **web:** load templates deterministically ([#164](https://github.com/AgiFlow/doompi/pull/164))
+- **doompi:** restore metrics and MCP telemetry ([#163](https://github.com/AgiFlow/doompi/pull/163))
+- **doompi-session:** stop reading the delivery service back from its own provider ([#162](https://github.com/AgiFlow/doompi/pull/162))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.58
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.47
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.80
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.59
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.81
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.59
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.58
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.59
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.5
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.81
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.59
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.78
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.81
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.81
+- Updated @agimon-ai/vibe-lint-plugin-doom-cli to 0.0.1-alpha.13
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.83 (2026-09-22)
 
 ### 🚀 Features
