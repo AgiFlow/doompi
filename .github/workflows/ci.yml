@@ -27,7 +27,8 @@ jobs:
   quality_checks:
     name: Quality (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Tests builds every package before running them serially; hosted runners vary enough to exceed 15 minutes.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
