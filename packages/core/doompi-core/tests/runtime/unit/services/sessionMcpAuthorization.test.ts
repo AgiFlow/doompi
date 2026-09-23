@@ -225,6 +225,49 @@ describe('session MCP restricted OAuth', () => {
     expect(tokens.grant.sessionGeneration).toBe(9);
   });
 
+  it('authenticates only the exact bound API key and revokes it with the session generation', () => {
+    const service = createSessionMcpAuthorizationService();
+    const client = service.createClient({ name: 'External MCP', authMethod: 'api_key' });
+    const binding = service.createAuthorizationBinding({
+      clientId: client.clientId,
+      sessionId: 'alpha',
+      sessionGeneration: 4,
+      audience: AUDIENCE,
+      scope: 'session',
+      routing: 'conversation',
+    });
+    expect(client).toMatchObject({ tokenEndpointAuthMethod: 'api_key', redirectUri: '' });
+    expect(JSON.stringify(service.listClients())).not.toContain(client.clientSecret);
+    expect(service.authenticateAccessToken(client.clientSecret, AUDIENCE)).toMatchObject(binding);
+    expect(service.authenticateAccessToken(`${client.clientSecret}x`, AUDIENCE)).toBeUndefined();
+    expect(service.authenticateAccessToken(client.clientSecret, `${AUDIENCE}/other`)).toBeUndefined();
+    expect(() =>
+      service.issueAuthorizationCode({
+        clientId: client.clientId,
+        redirectUri: '',
+        codeChallenge: CHALLENGE,
+        codeChallengeMethod: 'S256',
+      }),
+    ).toThrow('does not support OAuth');
+    expect(() =>
+      service.exchangeToken({
+        grantType: 'refresh_token',
+        clientId: client.clientId,
+        clientSecret: client.clientSecret,
+        refreshToken: 'unused',
+      }),
+    ).toThrow('does not support OAuth');
+    const registration = service.persistentRegistration(client.clientId, 'workspace', 10_000)!;
+    expect(service.revokeSessionGeneration('alpha', 4)).toBe(0);
+    expect(service.authenticateAccessToken(client.clientSecret, AUDIENCE)).toBeUndefined();
+    expect(JSON.stringify(registration)).not.toContain(client.clientSecret);
+    const restored = createSessionMcpAuthorizationService();
+    expect(restored.restorePersistentRegistration(registration, 5)).toBe(true);
+    expect(restored.authenticateAccessToken(client.clientSecret, AUDIENCE)).toMatchObject({ sessionGeneration: 5 });
+    expect(restored.revokeClient(client.clientId)).toBe(true);
+    expect(restored.authenticateAccessToken(client.clientSecret, AUDIENCE)).toBeUndefined();
+  });
+
   it('sweeps expired codes and orphan grants before enforcing the record bound', () => {
     let now = 1_000;
     const service = createSessionMcpAuthorizationService({

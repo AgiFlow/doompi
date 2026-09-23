@@ -393,6 +393,48 @@ describe('conversation-bound Session MCP routing', () => {
     expect((await f.host('POST', '/clients', input))!.status).toBe(201);
     expect((await f.host('POST', '/clients', { ...input, routing: 'unknown' }))!.status).toBe(400);
   });
+  it('creates host-only API keys, persists before revealing them, and revokes conversation access', async () => {
+    const f = fixture('conversation', false, true);
+    const input = { authMethod: 'api_key', name: 'External MCP', scope: 'session', routing: 'conversation' };
+    for (const invalid of [
+      { ...input, redirectUri: 'https://chatgpt.com/callback' },
+      { ...input, scope: 'restricted', tools: [], skills: [] },
+      { ...input, routing: 'unknown' },
+      { ...input, authMethod: 'unknown' },
+    ])
+      expect((await f.host('POST', '/clients', invalid))!.status).toBe(400);
+    const created = (await (await f.host('POST', '/clients', input))!.json()) as {
+      client: { clientId: string; clientSecret: string; tokenEndpointAuthMethod: string; redirectUri: string };
+    };
+    expect(created.client).toMatchObject({ tokenEndpointAuthMethod: 'api_key', redirectUri: '' });
+    const listed = (await (await f.host('GET', '/clients'))!.json()) as { clients: Record<string, unknown>[] };
+    expect(listed.clients).toHaveLength(2);
+    expect(listed.clients[1]).not.toHaveProperty('clientSecret');
+    const stored = fs.readFileSync(path.join(f.root, 'state', 'session-mcp-registrations.json'), 'utf8');
+    expect(stored).not.toContain(created.client.clientSecret);
+    expect(f.authorization.authenticateAccessToken(created.client.clientSecret, audience)).toBeDefined();
+    expect(f.authorization.authenticateAccessToken(created.client.clientSecret, `${audience}/other`)).toBeUndefined();
+    const saveSpy = vi.spyOn(fs, 'renameSync');
+    const response = await f.routes.handlePublic(
+      new Request(audience, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${created.client.clientSecret}`,
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+      }),
+    );
+    expect(response!.status).toBe(200);
+    expect(saveSpy).not.toHaveBeenCalled();
+    saveSpy.mockRestore();
+    const body = (await response!.json()) as { result: { tools: { name: string }[] } };
+    expect(body.result.tools.map((tool) => tool.name)).toContain('write');
+    expect((await f.host('DELETE', `/clients/${created.client.clientId}`))!.status).toBe(200);
+    expect(f.authorization.authenticateAccessToken(created.client.clientSecret, audience)).toBeUndefined();
+  });
+
   it('preserves the association when the parent restarts and the client reauthorizes', async () => {
     const f = fixture();
     await f.call('a');

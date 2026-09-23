@@ -41,7 +41,7 @@ export interface SessionMcpClient {
   readonly clientId: string;
   readonly name: string;
   readonly redirectUri: string;
-  readonly tokenEndpointAuthMethod: 'client_secret_post';
+  readonly tokenEndpointAuthMethod: 'client_secret_post' | 'api_key';
   readonly createdAt: number;
 }
 
@@ -97,10 +97,9 @@ export interface SessionMcpAuthorizationServiceOptions {
   readonly maxRecords?: number;
 }
 
-export interface CreateSessionMcpClientInput {
-  readonly name: string;
-  readonly redirectUri: string;
-}
+export type CreateSessionMcpClientInput =
+  | { readonly name: string; readonly redirectUri: string; readonly authMethod?: 'oauth' }
+  | { readonly name: string; readonly authMethod: 'api_key'; readonly redirectUri?: never };
 
 export interface IssueSessionMcpAuthorizationCodeInput {
   readonly clientId: string;
@@ -345,8 +344,8 @@ export function createSessionMcpAuthorizationService(
       const client: StoredClient = {
         clientId,
         name: requireName(input.name, 'Client name'),
-        redirectUri: requireHttpsUrl(input.redirectUri, 'Redirect URI', true),
-        tokenEndpointAuthMethod: 'client_secret_post',
+        redirectUri: input.authMethod === 'api_key' ? '' : requireHttpsUrl(input.redirectUri, 'Redirect URI', true),
+        tokenEndpointAuthMethod: input.authMethod === 'api_key' ? 'api_key' : 'client_secret_post',
         createdAt,
         secretHash: digest(clientSecret),
       };
@@ -438,14 +437,25 @@ export function createSessionMcpAuthorizationService(
         if (
           held &&
           (held.redirectUri !== registration.client.redirectUri ||
+            held.tokenEndpointAuthMethod !== registration.client.tokenEndpointAuthMethod ||
             !timingSafeEqual(held.secretHash, Buffer.from(registration.secretHash, 'hex')))
+        )
+          return false;
+        if (
+          (registration.client.tokenEndpointAuthMethod !== 'client_secret_post' &&
+            registration.client.tokenEndpointAuthMethod !== 'api_key') ||
+          (registration.client.tokenEndpointAuthMethod === 'api_key' &&
+            (registration.client.redirectUri !== '' || registration.binding.scope !== 'session'))
         )
           return false;
         const client: StoredClient = {
           clientId: requireName(registration.client.clientId, 'Client ID'),
           name: requireName(registration.client.name, 'Client name'),
-          redirectUri: requireHttpsUrl(registration.client.redirectUri, 'Redirect URI', true),
-          tokenEndpointAuthMethod: 'client_secret_post',
+          redirectUri:
+            registration.client.tokenEndpointAuthMethod === 'api_key'
+              ? registration.client.redirectUri
+              : requireHttpsUrl(registration.client.redirectUri, 'Redirect URI', true),
+          tokenEndpointAuthMethod: registration.client.tokenEndpointAuthMethod,
           createdAt: registration.client.createdAt,
           secretHash: Buffer.from(registration.secretHash, 'hex'),
         };
@@ -488,6 +498,9 @@ export function createSessionMcpAuthorizationService(
       if (binding === undefined) {
         throw new SessionMcpOAuthError('invalid_request', 'Client authorization has not been preauthorized.');
       }
+      if (client.tokenEndpointAuthMethod !== 'client_secret_post') {
+        throw new SessionMcpOAuthError('invalid_client', 'This client does not support OAuth authorization.');
+      }
       if (input.redirectUri !== client.redirectUri) {
         throw new SessionMcpOAuthError(
           'invalid_request',
@@ -517,7 +530,10 @@ export function createSessionMcpAuthorizationService(
       return { code, grant, expiresAt };
     },
     exchangeToken(request) {
-      authenticateClient(request.clientId, request.clientSecret);
+      const client = authenticateClient(request.clientId, request.clientSecret);
+      if (client.tokenEndpointAuthMethod !== 'client_secret_post') {
+        throw new SessionMcpOAuthError('invalid_client', 'This client does not support OAuth tokens.');
+      }
       sweep();
       if (request.grantType === 'authorization_code') {
         const codeKey = tokenKey(request.code);
@@ -576,6 +592,15 @@ export function createSessionMcpAuthorizationService(
     authenticateAccessToken(token, audience) {
       sweep();
       const key = tokenKey(token);
+      // API keys are long-lived credentials, but remain tied to the current binding and audience.
+      const presentedHash = digest(token);
+      for (const client of clients.values()) {
+        if (client.tokenEndpointAuthMethod !== 'api_key' || !timingSafeEqual(presentedHash, client.secretHash))
+          continue;
+        const binding = bindings.get(client.clientId);
+        if (binding === undefined || binding.audience !== audience) return undefined;
+        return { id: client.clientId, ...binding, createdAt: client.createdAt, expiresAt: Number.MAX_SAFE_INTEGER };
+      }
       const stored = accessTokens.get(key);
       if (stored === undefined) return undefined;
       if (stored.expiresAt <= now() || !grants.has(stored.grant.id)) {

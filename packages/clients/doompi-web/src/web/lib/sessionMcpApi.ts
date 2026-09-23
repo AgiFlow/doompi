@@ -58,7 +58,7 @@ function isClient(value: unknown): value is SessionMcpClient {
     typeof value.clientId === 'string' &&
     typeof value.name === 'string' &&
     typeof value.redirectUri === 'string' &&
-    value.tokenEndpointAuthMethod === 'client_secret_post' &&
+    (value.tokenEndpointAuthMethod === 'client_secret_post' || value.tokenEndpointAuthMethod === 'api_key') &&
     typeof value.createdAt === 'number' &&
     (value.scope === undefined || value.scope === 'restricted' || value.scope === 'session') &&
     (value.routing === undefined || value.routing === 'conversation') &&

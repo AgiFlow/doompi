@@ -51,6 +51,28 @@ describe('session MCP registration store', () => {
     expect(createSessionMcpRegistrationStore({ stateDir }).registrations()).toEqual([registration]);
   });
 
+  it('round-trips API key hashes without a callback and rejects malformed key metadata', () => {
+    const stateDir = directory();
+    const store = createSessionMcpRegistrationStore({ stateDir });
+    const key = {
+      ...registration,
+      client: { ...registration.client, redirectUri: '', tokenEndpointAuthMethod: 'api_key' as const },
+    };
+    expect(store.save(key)).toBe(true);
+    expect(createSessionMcpRegistrationStore({ stateDir }).registrations()).toEqual([key]);
+    const file = path.join(stateDir, 'session-mcp-registrations.json');
+    fs.writeFileSync(file, JSON.stringify({ version: 1, registrations: [{ ...key, client: registration.client }] }));
+    expect(createSessionMcpRegistrationStore({ stateDir }).registrations()).toEqual([registration]);
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        version: 1,
+        registrations: [{ ...key, client: { ...key.client, redirectUri: 'https://unexpected.example' } }],
+      }),
+    );
+    expect(createSessionMcpRegistrationStore({ stateDir }).registrations()).toEqual([]);
+  });
+
   it('fails closed for malformed registration data and failed writes', () => {
     const stateDir = directory();
     const file = path.join(stateDir, 'session-mcp-registrations.json');

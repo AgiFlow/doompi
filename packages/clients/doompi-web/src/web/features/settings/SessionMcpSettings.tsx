@@ -102,6 +102,7 @@ export function SessionMcpSettings() {
   const [config, setConfig] = useState<SessionMcpConfig>();
   const [clients, setClients] = useState<SessionMcpClient[]>([]);
   const [redirectUri, setRedirectUri] = useState('');
+  const [authMethod, setAuthMethod] = useState<'api_key' | 'oauth'>('api_key');
   const [created, setCreated] = useState<{ sessionId: string; client: CreatedSessionMcpClient }>();
   const visibleCreated = created?.sessionId === sessionId ? created.client : undefined;
   const [loading, setLoading] = useState(false);
@@ -149,19 +150,26 @@ export function SessionMcpSettings() {
     };
   }, [available, sessionId, workspaceId]);
 
-  const invalidCallback = redirectUri !== '' && !exactHttpsUrl(redirectUri);
-  const canCreate = available && !remoteCaller && config !== undefined && exactHttpsUrl(redirectUri) && !busy;
+  const invalidCallback = authMethod === 'oauth' && redirectUri !== '' && !exactHttpsUrl(redirectUri);
+  const canCreate =
+    available &&
+    !remoteCaller &&
+    config !== undefined &&
+    (authMethod === 'api_key' || exactHttpsUrl(redirectUri)) &&
+    !busy;
 
   async function createClient(): Promise<void> {
     if (!canCreate || workspaceId === undefined) return;
     const operationSelection = selectionKey;
     setBusy(true);
     setError(undefined);
-    const result = await createSessionMcpClient(workspaceId, sessionId, {
-      redirectUri: redirectUri.trim(),
-      scope: 'session',
-      routing: 'conversation',
-    });
+    const result = await createSessionMcpClient(
+      workspaceId,
+      sessionId,
+      authMethod === 'api_key'
+        ? { authMethod: 'api_key', scope: 'session', routing: 'conversation' }
+        : { redirectUri: redirectUri.trim(), scope: 'session', routing: 'conversation' },
+    );
     if (selectionKeyRef.current !== operationSelection) return;
     setBusy(false);
     if ('error' in result) {
@@ -260,8 +268,9 @@ export function SessionMcpSettings() {
           <div className="flex flex-col gap-1">
             <h4 className="text-sm font-bold text-doom-hi">connect this session to ChatGPT</h4>
             <p className="text-sm leading-relaxed text-doom-faint">
-              In ChatGPT, choose <strong>User-Defined OAuth Client</strong>, copy its <strong>Callback URL</strong>, and
-              paste it below.
+              ChatGPT supports an API key in the Bearer header. Create a key below and paste it into ChatGPT. For OAuth,
+              DoomPi still needs the exact redirect URL to register a client. The current ChatGPT form does not show
+              one.
             </p>
           </div>
           <div
@@ -277,26 +286,40 @@ export function SessionMcpSettings() {
               stays unavailable and reports the failure instead of falling back to this session.
             </p>
           </div>
-          <label htmlFor="session-mcp-callback" className="flex flex-col gap-1 text-sm text-doom-faint">
-            Callback URL from ChatGPT
-            <Input
-              id="session-mcp-callback"
-              data-testid="session-mcp-callback"
-              type="url"
-              value={redirectUri}
-              placeholder="https://chatgpt.com/connector/oauth/…"
-              aria-invalid={invalidCallback}
-              aria-describedby="session-mcp-callback-help"
-              onChange={(event) => setRedirectUri(event.target.value)}
-            />
+          <label htmlFor="session-mcp-auth-method" className="flex flex-col gap-1 text-sm text-doom-faint">
+            authentication
+            <Select value={authMethod} onValueChange={(value) => setAuthMethod(value as 'api_key' | 'oauth')}>
+              <SelectTrigger id="session-mcp-auth-method" data-testid="session-mcp-auth-method">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="api_key">API key (Bearer)</SelectItem>
+                <SelectItem value="oauth">OAuth (callback required)</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
-          <p id="session-mcp-callback-help" className="text-xs leading-relaxed text-doom-faint">
-            Paste the exact HTTPS callback ChatGPT shows. DoomPi cannot generate this URL for you.
-          </p>
-          {invalidCallback ? (
-            <p className="text-xs text-doom-red">
-              use the exact absolute HTTPS callback without credentials or a fragment.
-            </p>
+          {authMethod === 'oauth' ? (
+            <>
+              <label htmlFor="session-mcp-callback" className="flex flex-col gap-1 text-sm text-doom-faint">
+                OAuth redirect URL from the client
+                <Input
+                  id="session-mcp-callback"
+                  data-testid="session-mcp-callback"
+                  type="url"
+                  value={redirectUri}
+                  placeholder="https://chatgpt.com/connector/oauth/…"
+                  aria-invalid={invalidCallback}
+                  aria-describedby="session-mcp-callback-help"
+                  onChange={(event) => setRedirectUri(event.target.value)}
+                />
+              </label>
+              <p id="session-mcp-callback-help" className="text-xs leading-relaxed text-doom-faint">
+                Use only a redirect URL confirmed by your OAuth client. Do not guess the callback from the MCP URL.
+              </p>
+              {invalidCallback ? (
+                <p className="text-xs text-doom-red">use an absolute HTTPS URL without credentials or a fragment.</p>
+              ) : null}
+            </>
           ) : null}
           <p className="text-xs leading-relaxed text-doom-faint">
             Access follows this session&apos;s current major mode, minor modes, domains, and profile, including future
@@ -308,7 +331,7 @@ export function SessionMcpSettings() {
             disabled={!canCreate}
             onClick={() => void createClient()}
           >
-            create OAuth client
+            {authMethod === 'api_key' ? 'create API key' : 'create OAuth client'}
           </Button>
         </div>
       )}
@@ -334,17 +357,32 @@ export function SessionMcpSettings() {
           {config === undefined ? null : (
             <CopyValue label="MCP URL" value={config.audience} testId="session-mcp-created-url" />
           )}
-          <CopyValue label="Client ID" value={visibleCreated.clientId} testId="session-mcp-created-id" />
-          <CopyValue
-            label="one-time client secret"
-            value={visibleCreated.clientSecret}
-            testId="session-mcp-created-secret"
-          />
-          <p className="text-xs leading-relaxed text-doom-faint">
-            Paste these values into ChatGPT. Select <code>client_secret_post</code> as the token endpoint auth method,
-            not <code>none</code>. The secret is shown only once and disappears on dismissal, navigation, or session
-            change.
-          </p>
+          {visibleCreated.tokenEndpointAuthMethod === 'api_key' ? (
+            <>
+              <CopyValue
+                label="one-time API key"
+                value={visibleCreated.clientSecret}
+                testId="session-mcp-created-secret"
+              />
+              <p className="text-xs leading-relaxed text-doom-faint">
+                In ChatGPT, select API key and Bearer as the header. Paste this key as the value. It is shown only once
+                and disappears on dismissal, navigation, or session change.
+              </p>
+            </>
+          ) : (
+            <>
+              <CopyValue label="Client ID" value={visibleCreated.clientId} testId="session-mcp-created-id" />
+              <CopyValue
+                label="one-time client secret"
+                value={visibleCreated.clientSecret}
+                testId="session-mcp-created-secret"
+              />
+              <p className="text-xs leading-relaxed text-doom-faint">
+                Paste the client ID and secret into your OAuth client. Select <code>client_secret_post</code> as the
+                token endpoint auth method. The secret is shown only once.
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -366,7 +404,9 @@ export function SessionMcpSettings() {
                 <Badge tone="neutral">{client.tokenEndpointAuthMethod}</Badge>
               </div>
               <code className="block break-all text-xs text-doom-faint">{client.clientId}</code>
-              <span className="block break-all text-xs text-doom-faint">{client.redirectUri}</span>
+              {client.redirectUri ? (
+                <span className="block break-all text-xs text-doom-faint">{client.redirectUri}</span>
+              ) : null}
               {client.scope === 'session' ? (
                 <span className="block text-xs text-doom-faint">access follows the live session surface</span>
               ) : (
