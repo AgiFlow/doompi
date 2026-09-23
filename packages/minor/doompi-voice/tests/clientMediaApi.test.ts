@@ -1,5 +1,5 @@
 import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { IVoiceMediaHostConnection } from '../src/types';
 import {
@@ -225,18 +225,21 @@ describe('voice client media session API', () => {
     api.close();
   });
 
-  it('waits briefly for a remote media client that is still connecting', async () => {
+  it('waits for a browser media client that connects after the old three-second deadline', async () => {
+    vi.useFakeTimers();
     const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
-    const capture = Promise.resolve(
-      api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStart, json({ captureId: 'capture-waiting' }), true)),
-    );
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    await connect(api);
-
-    expect((await capture).status).toBe(201);
-    expect(await nextEvent(api, 0)).toMatchObject({ type: 'capture-start', captureId: 'capture-waiting' });
-    api.close();
+    try {
+      const capture = Promise.resolve(
+        api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStart, json({ captureId: 'capture-waiting' }), true)),
+      );
+      await vi.advanceTimersByTimeAsync(3_100);
+      await connect(api);
+      expect((await capture).status).toBe(201);
+      expect(await nextEvent(api, 0)).toMatchObject({ type: 'capture-start', captureId: 'capture-waiting' });
+    } finally {
+      api.close();
+      vi.useRealTimers();
+    }
   });
 
   it('refreshes exact-identity capabilities without failing active capture or changing its configuration', async () => {

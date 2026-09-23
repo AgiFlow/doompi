@@ -52,6 +52,8 @@ import { MlxWhisperAdapter, OpenAiWhisperAdapter, TranscriberRegistry, WhisperCp
 
 const MAX_SESSION_NOISE_PROFILES = 8;
 const BARGE_IN_PROBE_TIMEOUT_MS = 5_000;
+// ponytail: Browser permission and input selection have 25 seconds before the first-frame retry; a client-ready acknowledgement would remove this ceiling.
+const CLIENT_FIRST_FRAME_TIMEOUT_MS = 25_000;
 const AUTONOMOUS_PRE_ROLL_BYTES = (DEFAULT_VAD_CONFIGURATION.preRollMs / PCM_FRAME_MS) * PCM_FRAME_BYTES;
 
 interface ActiveWorkerCapture {
@@ -338,6 +340,9 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
       config,
       spool,
       clock: this.clock,
+      ...(this.recorder instanceof ClientPcmAudioRecorder
+        ? { firstFrameTimeoutMs: CLIENT_FIRST_FRAME_TIMEOUT_MS }
+        : {}),
       onFrame: (frame) => {
         if (activeReference) this.observeFrame(activeReference, frame, publish);
       },

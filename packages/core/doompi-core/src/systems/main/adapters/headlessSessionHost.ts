@@ -605,7 +605,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     ...(resolved.thinkingLevel === undefined ? {} : { thinkingLevel: resolved.thinkingLevel }),
     beforeModelRequest: async ({ phase }) => {
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
-      if (phase === 'turn') await headlessHost.inheritSelection((await options.inheritedSelection?.()) ?? {});
+      // Standalone hosts have no inherited axes to refresh on each turn.
+      if (phase === 'turn' && options.inheritedSelection) {
+        await headlessHost.inheritSelection(await options.inheritedSelection());
+      }
     },
     transformContext: async (event) => {
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
@@ -1223,7 +1226,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       // `onApplied` runs before HeadlessHost publishes its ready snapshot. Recompose
       // the remote surface here, after selection is coherent, rather than making a
       // transient not-ready state fail the host selection.
-      if (!headlessReady) return;
+      if (!headlessReady || !headlessHost?.status.ready) return;
       await prepareMcpSurface();
       await publishComposition(selection);
     });

@@ -390,6 +390,12 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
         ? { profile: selection.profile }
         : {}),
     };
+    if (
+      (patch.majorMode === undefined || patch.majorMode === this.requested.majorMode) &&
+      (patch.domains === undefined || sameStrings(patch.domains, this.requested.domains)) &&
+      (!Object.hasOwn(patch, 'profile') || patch.profile === this.requested.profile)
+    )
+      return;
     await this.select(patch);
   }
 

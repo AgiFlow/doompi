@@ -43,7 +43,11 @@ const cleanup: Array<() => Promise<void> | void> = [];
 
 async function fixture(
   mcpPlugins: Parameters<typeof createHeadlessSessionHost>[0]['mcpPlugins'] = [],
-  options: { candidates?: DoomServerBundleEntry[]; modes?: string[] } = {},
+  options: {
+    candidates?: DoomServerBundleEntry[];
+    modes?: string[];
+    inheritedSelection?: Parameters<typeof createHeadlessSessionHost>[0]['inheritedSelection'];
+  } = {},
 ): Promise<{
   host: Awaited<ReturnType<typeof createHeadlessSessionHost>>;
   context: Context;
@@ -79,6 +83,7 @@ async function fixture(
     mcpPlugins,
     piExtensions: false,
     selection: { majorMode: 'test', activeLayers: [], domains: [], state: { 'minor-mode': options.modes ?? [] } },
+    ...(options.inheritedSelection ? { inheritedSelection: options.inheritedSelection } : {}),
   });
   host.prepareFacets(context);
   cleanup.push(async () => {
@@ -424,6 +429,34 @@ describe('MCP execution boundary', () => {
     expect(result.content).toEqual([{ type: 'text', text: 'redacted' }]);
     expect(result.structuredContent).toBeUndefined();
     expect(result._meta).toBeUndefined();
+  });
+
+  it('does not reconcile unchanged inherited defaults at turn admission', async () => {
+    const createRuntime = vi.spyOn(directHarnessRuntime, 'createDirectHarnessRuntime');
+    const current = await fixture([], { inheritedSelection: () => ({ majorMode: 'test', domains: [] }) });
+    const beforeModelRequest = createRuntime.mock.calls.at(-1)?.[0].beforeModelRequest;
+    expect(beforeModelRequest).toBeDefined();
+    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
+    await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
+    const revision = current.host.host!.status.requestedRevision;
+    await beforeModelRequest!({ phase: 'turn' } as never, undefined as never);
+    await beforeModelRequest!({ phase: 'turn' } as never, undefined as never);
+    expect(current.host.host!.status.requestedRevision).toBe(revision);
+    expect(current.host.host!.status.ready).toBe(true);
+  });
+
+  it('does not reconcile an unchanged selection on each turn without inherited defaults', async () => {
+    const createRuntime = vi.spyOn(directHarnessRuntime, 'createDirectHarnessRuntime');
+    const current = await fixture();
+    const beforeModelRequest = createRuntime.mock.calls.at(-1)?.[0].beforeModelRequest;
+    expect(beforeModelRequest).toBeDefined();
+    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
+    await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
+    const revision = current.host.host!.status.requestedRevision;
+    await beforeModelRequest!({ phase: 'turn' } as never, undefined as never);
+    await beforeModelRequest!({ phase: 'turn' } as never, undefined as never);
+    expect(current.host.host!.status.requestedRevision).toBe(revision);
+    expect(current.host.host!.status.ready).toBe(true);
   });
 
   it('keeps the remote surface empty without explicit declarations', async () => {

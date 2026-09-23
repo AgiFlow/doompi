@@ -1,11 +1,7 @@
 export const VOICE_OWNERSHIP_PROTOCOL_VERSION = 3;
 export const VOICE_OWNERSHIP_LEASE_MS = 15_000;
-/**
- * Ownership transitions include autonomous startup, whose worker handshake may
- * legitimately take 21 seconds. Keep command delivery above that bound so the
- * hub does not reject a transition that is still completing.
- */
-export const VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS = 30_000;
+/** Allow browser permission and device selection to finish before ownership is acknowledged. */
+export const VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS = 75_000;
 export const VOICE_OWNERSHIP_MAX_TARGETS = 32;
 export const VOICE_OWNERSHIP_FRAME_TYPE = 'voice_ownership';
 export const VOICE_OWNERSHIP_ROUTES = {

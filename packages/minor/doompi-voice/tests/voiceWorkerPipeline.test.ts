@@ -920,8 +920,10 @@ describe('VoiceWorkerPipeline manual dictation', () => {
       stopPlayback: async () => undefined,
       abortPlayback: async () => undefined,
     };
+    const clock = new WorkerClock();
+    const firstFrameTimer = vi.spyOn(clock, 'setTimeout');
     const pipeline = new VoiceWorkerPipeline({
-      clock: new WorkerClock(),
+      clock,
       recorder: new ClientPcmAudioRecorder(connection),
       registry: registryWith({
         engine: 'mlx-whisper',
@@ -942,6 +944,7 @@ describe('VoiceWorkerPipeline manual dictation', () => {
       events.push(event),
     );
     await vi.waitFor(() => expect(captureId).toBeDefined());
+    expect(firstFrameTimer).toHaveBeenCalledWith(expect.any(Function), 25_000);
     const audioRoute = `${VOICE_MEDIA_ROUTES.clientAudio}?clientId=${clientId}&connectionId=${connectionId}&captureId=${captureId!}`;
     const upload = (state: 'speech' | 'endpoint', elapsedMs: number, pcm: Buffer): Promise<Response> =>
       Promise.resolve(
