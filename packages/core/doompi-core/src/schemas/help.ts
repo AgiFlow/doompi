@@ -4,6 +4,10 @@ import { Check, Errors } from 'typebox/value';
 
 /** Provider-owned Cordis service for the live Help catalog. */
 export const DOOM_HELP_SERVICE = 'doom/help';
+export const DOOM_HELP_WHEN = {
+  state: { 'minor-mode': 'help' },
+  attribution: { kind: 'minor', mode: 'help' },
+} as const;
 export const DOOM_HELP_MAX_CONTRIBUTORS = 32;
 export const DOOM_HELP_MAX_SKILLS = 64;
 export const DOOM_HELP_MAX_DIAGNOSTICS = 64;
@@ -133,6 +137,10 @@ export interface DoomHelpService {
   getSnapshot(): DoomHelpSnapshot;
   publish(snapshot: DoomHelpSnapshotDraft): DoomHelpSnapshot;
   subscribeSnapshot(listener: (snapshot: DoomHelpSnapshot) => void): () => void;
+  /** Bind the skill consumer's accepted file paths, without duplicating its inventory. */
+  bindSkillInventory(read: () => Promise<readonly string[] | undefined>): () => void;
+  /** Accepted Help skills, or undefined while the consumer is absent, discovering, or superseded. */
+  inspectSkills(): Promise<readonly DoomHelpSkill[] | undefined>;
   dispose(): void;
 }
 
@@ -203,6 +211,7 @@ export function createDoomHelpService(generation: string): DoomHelpService {
   const snapshotListeners = new Set<(value: DoomHelpSnapshot) => void>();
   let registrationSequence = 0;
   let disposed = false;
+  let skillInventory: { token: symbol; read: () => Promise<readonly string[] | undefined> } | undefined;
   let snapshot: DoomHelpSnapshot = {
     hostGeneration: generation,
     revision: 0,
@@ -291,9 +300,30 @@ export function createDoomHelpService(generation: string): DoomHelpService {
       snapshotListeners.add(listener);
       return () => snapshotListeners.delete(listener);
     },
+    bindSkillInventory(read) {
+      ensureActive();
+      const token = Symbol('help-skill-inventory');
+      skillInventory = { token, read };
+      return () => {
+        if (skillInventory?.token === token) skillInventory = undefined;
+      };
+    },
+    async inspectSkills() {
+      if (disposed) return undefined;
+      if (snapshot.activation === 'inactive') return [];
+      const reader = skillInventory;
+      if (!reader) return undefined;
+      const revision = snapshot.revision;
+      const paths = await reader.read();
+      if (disposed || reader !== skillInventory || revision !== snapshot.revision || paths === undefined)
+        return undefined;
+      const accepted = new Set(paths);
+      return snapshot.skills.filter((skill) => accepted.has(skill.filePath)).map((skill) => ({ ...skill }));
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
+      skillInventory = undefined;
       contributions.clear();
       contributionListeners.clear();
       snapshotListeners.clear();

@@ -228,6 +228,65 @@ describe('Help activation service', () => {
     expect(fixture.dependencies.resolver.resolve).toHaveBeenCalledTimes(2);
   });
 
+  it.each(['withdraw', 'replace'] as const)(
+    'immediately revokes a changed owner during %s reconciliation',
+    async (change) => {
+      let resolvePending!: (value: ResolvedHelpIndex) => void;
+      const pending = new Promise<ResolvedHelpIndex>((resolve) => {
+        resolvePending = resolve;
+      });
+      const fixture = dependencies();
+      const service = new DefaultHelpActivationService(fixture.dependencies);
+      const alpha = contribution('@agimon-ai/alpha');
+      const beta = contribution('@agimon-ai/beta');
+      service.replaceContributions([alpha, beta]);
+      await service.activate();
+      vi.mocked(fixture.dependencies.resolver.resolve).mockImplementation(() => pending);
+
+      try {
+        service.replaceContributions(
+          change === 'withdraw' ? [beta] : [{ ...alpha, moduleUrl: 'file:///replacement.mjs' }, beta],
+        );
+        expect(service.getState()).toMatchObject({
+          activation: 'activating',
+          skills: [skill(beta.source, 'beta-help')],
+        });
+        expect(fixture.published.at(-1)).toMatchObject({ skills: [skill(beta.source, 'beta-help')] });
+        service.deactivate();
+        resolvePending(resolved(beta.source));
+        await pending;
+        await Promise.resolve();
+        expect(fixture.dependencies.materializer.materialize).toHaveBeenCalledTimes(2);
+        expect(service.getState()).toEqual({ activation: 'inactive', skills: [], diagnostics: [] });
+      } finally {
+        service.dispose();
+        resolvePending(resolved(beta.source));
+      }
+    },
+  );
+
+  it('does not resurrect a withdrawn owner when a subsequent refresh is cancelled', async () => {
+    const fixture = dependencies();
+    const service = new DefaultHelpActivationService(fixture.dependencies);
+    const alpha = contribution('@agimon-ai/alpha');
+    const beta = contribution('@agimon-ai/beta');
+    service.replaceContributions([alpha, beta]);
+    await service.activate();
+    vi.mocked(fixture.dependencies.resolver.resolve).mockImplementation(
+      (_entry, signal) =>
+        new Promise((_resolve, reject) =>
+          signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }),
+        ),
+    );
+
+    service.replaceContributions([beta]);
+    const controller = new AbortController();
+    const refresh = service.activate(controller.signal);
+    controller.abort();
+    await expect(refresh).rejects.toThrow('cancelled');
+    expect(service.getState()).toMatchObject({ activation: 'active', skills: [skill(beta.source, 'beta-help')] });
+    service.dispose();
+  });
   it('bounds aggregate loaded bytes and publishes state subscriptions', async () => {
     const fixture = dependencies({
       resolver: { resolve: vi.fn(async (entry) => resolved(entry.source, 1024 * 1024)) },

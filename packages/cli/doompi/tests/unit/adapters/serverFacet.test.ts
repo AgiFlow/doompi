@@ -126,8 +126,9 @@ describe('doompiServerFacet headless minor command', () => {
       changeSelection: vi.fn(async () => undefined),
       assertActive: vi.fn(),
       subscribeSelection: vi.fn(() => vi.fn()),
+      inspectCapabilities: () => ({ revision: 1, ready: true, capabilities: [] }),
       registerToolRestriction: vi.fn(),
-      registerTool: vi.fn(),
+      registerTool: vi.fn(() => ({ dispose() {} })),
       registerResource: vi.fn(),
       registerCommand: vi.fn((candidate) => {
         command = candidate;

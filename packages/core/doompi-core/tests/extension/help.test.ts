@@ -20,6 +20,42 @@ function contribution(source = '@agimon-ai/example-help', moduleUrl = 'file:///p
 }
 
 describe('Doom Help Cordis service', () => {
+  it('queries the live skill consumer and fences reader replacement, revisions, and disposal', async () => {
+    const service = createDoomHelpService('skills');
+    const skill = {
+      source: '@fixture/help',
+      name: 'help',
+      description: 'Help',
+      filePath: '/fixture/SKILL.md',
+      baseDir: '/fixture',
+    };
+    expect(await service.inspectSkills()).toEqual([]);
+    service.publish({ activation: 'active', skills: [skill], diagnostics: [] });
+    expect(await service.inspectSkills()).toBeUndefined();
+    const stale = service.bindSkillInventory(async () => []);
+    const unbind = service.bindSkillInventory(async () => [skill.filePath]);
+    stale();
+    const accepted = await service.inspectSkills();
+    expect(accepted).toEqual([skill]);
+    (accepted![0] as { name: string }).name = 'changed';
+    expect((await service.inspectSkills())![0]!.name).toBe('help');
+    unbind();
+    expect(await service.inspectSkills()).toBeUndefined();
+    let resolve!: (paths: string[]) => void;
+    service.bindSkillInventory(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const reading = service.inspectSkills();
+    service.publish({ activation: 'inactive', skills: [], diagnostics: [] });
+    resolve([skill.filePath]);
+    expect(await reading).toBeUndefined();
+    service.dispose();
+    expect(await service.inspectSkills()).toBeUndefined();
+    expect(() => service.bindSkillInventory(async () => [])).toThrow('disposed');
+  });
   it('replaces one source atomically and fences stale disposal', () => {
     const service = createDoomHelpService('help-generation');
     const changed = vi.fn();

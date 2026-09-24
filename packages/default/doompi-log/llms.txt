@@ -1,0 +1,7 @@
+# DoomPi Log
+
+Session telemetry and evidence-based agent diagnostics.
+
+## Help
+
+- [doompi-debug-agent](./src/prompts/doompi-debug-agent/SKILL.md): Diagnose captured failures and token usage without changing the sink or exposing secrets.

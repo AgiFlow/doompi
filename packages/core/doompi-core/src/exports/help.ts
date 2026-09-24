@@ -19,6 +19,7 @@ export {
   DOOM_HELP_MAX_DIAGNOSTICS,
   DOOM_HELP_MAX_SKILLS,
   DOOM_HELP_SERVICE,
+  DOOM_HELP_WHEN,
   DoomHelpActivationSchema,
   DoomHelpContributionSchema,
   DoomHelpDiagnosticSchema,
@@ -31,3 +32,4 @@ export {
   readDoomHelpService,
   requireDoomHelpService,
 } from '../schemas/help';
+export { createPiHelpToolGate } from '../services/piHelpTools';

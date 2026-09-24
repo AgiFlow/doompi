@@ -1,17 +1,18 @@
 import os from 'node:os';
 import path from 'node:path';
 
+import { loadDoomConfig } from '@agimon-ai/doompi-config/config';
 import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
+import { loadProfiles } from '@agimon-ai/doompi-config/profiles';
 
 import { createLayerResolvers } from '../../../builders/cli/extensionAssembler';
 import { missingLayerPackageSpecifiers } from '../../../composition/layerPackageInstaller';
-import { loadDoomConfig } from '../../../composition/projectTrust';
 import { resolveDoomConfigurationRoot } from '../../../composition/repository';
 import { readLocatedSyncState } from '../../../composition/syncState';
 import { parseHarnessArgs } from '../../options';
 import { wantsHelp } from '../../router';
-import { collectDrift, selectionCompositionFingerprint, selectionEnvironment, toSelection } from '../sync';
+import { collectDrift, selectionCompositionFingerprint, selectionEnvironment, toSelection } from '../sync/inspection';
 import { doctorHelp } from './help';
 
 const DOCTOR_COMMAND = 'doctor';
@@ -67,24 +68,8 @@ export function runDoctor(
     output.write(doctorHelp());
     return 0;
   }
-  const homeDirectory = environment.HOME ?? os.homedir();
-  const inheritedRoot = environment[HARNESS_ROOT_ENV];
-  const repoRoot = inheritedRoot
-    ? path.resolve(inheritedRoot)
-    : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
-
-  const sections: Section[] = [
-    { label: 'config.yaml', problems: check(() => loadDoomConfig(repoRoot)) },
-    { label: 'modes.yaml', problems: check(() => loadMajorModesConfig(repoRoot, homeDirectory)) },
-  ];
-  // Everything below reads the resolved composition, which cannot be trusted
-  // while either file is still unreadable.
-  const configurationIsSound = sections.every((section) => section.problems.length === 0);
-  if (configurationIsSound)
-    sections.push(...installationSectionsDoctor(repoRoot, homeDirectory, environment, currentDirectory));
-
+  const { sections, problems } = collectDoctorReport(environment, currentDirectory);
   for (const section of sections) output.write(formatSection(section));
-  const problems = sections.reduce((total, section) => total + section.problems.length, 0);
   if (problems === 0) {
     output.write('\nno problems found\n');
     return 0;
@@ -93,6 +78,35 @@ export function runDoctor(
   return 1;
 }
 
+/** The CLI and session diagnostic tool run the same read-only checks. */
+export function collectDoctorReport(environment: NodeJS.ProcessEnv, currentDirectory: string) {
+  const homeDirectory = environment.HOME ?? os.homedir();
+  const inheritedRoot = environment[HARNESS_ROOT_ENV];
+  const repoRoot = inheritedRoot
+    ? path.resolve(inheritedRoot)
+    : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
+  const sections: Section[] = [
+    { label: 'config.yaml', problems: check(() => loadDoomConfig(repoRoot, homeDirectory)) },
+    { label: 'modes.yaml', problems: check(() => loadMajorModesConfig(repoRoot, homeDirectory)) },
+    { label: 'domains.yaml', problems: check(() => loadDomains(repoRoot, homeDirectory)) },
+    { label: 'profiles.yaml', problems: check(() => loadProfiles(repoRoot, homeDirectory)) },
+  ];
+  const skipped = sections.some((section) => section.problems.length > 0) ? ['packages', 'sync state', 'drift'] : [];
+  if (skipped.length === 0) {
+    try {
+      sections.push(...installationSectionsDoctor(repoRoot, homeDirectory, environment, currentDirectory));
+    } catch (error) {
+      sections.push({ label: 'installation', problems: [messageOf(error)] });
+    }
+  }
+  return {
+    repoRoot,
+    homeDirectory,
+    sections,
+    skipped,
+    problems: sections.reduce((total, section) => total + section.problems.length, 0),
+  };
+}
 function installationSectionsDoctor(
   repoRoot: string,
   homeDirectory: string,

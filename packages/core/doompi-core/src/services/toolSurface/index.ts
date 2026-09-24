@@ -27,12 +27,12 @@ import type {
   DoomToolRestrictionDefinition,
   DoomToolRestrictionHandle,
   DoomToolSurfaceService,
+  DoomToolSurfaceEntry,
 } from '../../schemas/toolSurface';
 
 const SLOT = 'tools';
 
-interface RestrictionHolder {
-  readonly source: string;
+interface RestrictionHolder extends Pick<DoomToolRestrictionDefinition, 'source' | 'controlledTools' | 'attribution'> {
   restrict: DoomToolRestriction;
 }
 
@@ -60,6 +60,9 @@ export function createDoomToolSurface(options: CreateDoomToolSurfaceOptions): Do
   const kernel = createDoomKernel({ activeLayers: options.activeLayers });
   let pushed: readonly string[] | undefined;
   let disposed = false;
+  let inspection: readonly DoomToolSurfaceEntry[] = [];
+  let fingerprint = '';
+  const listeners = new Set<() => void>();
 
   const apply = (holders: readonly RestrictionHolder[]): void => {
     const available = [...new Set(options.allTools())];
@@ -70,16 +73,28 @@ export function createDoomToolSurface(options: CreateDoomToolSurfaceOptions): Do
         const result = holder.restrict(current, available);
         current = [...new Set(result)].filter((name) => known.has(name));
       } catch (error) {
+        current = current.filter((name) => !holder.controlledTools?.includes(name));
         options.onError?.(holder.source, error);
       }
     }
     const actual = options.activeTools();
-    if (sameList(actual, current)) {
-      pushed = current;
-      return;
+    if (!sameList(actual, current)) options.setActiveTools([...current]);
+    pushed = [...current];
+    inspection = holders.flatMap((holder) =>
+      (holder.controlledTools ?? [])
+        .filter((name) => known.has(name))
+        .map((name) => ({
+          source: holder.source,
+          name,
+          active: current.includes(name),
+          ...(holder.attribution ? { attribution: { ...holder.attribution } } : {}),
+        })),
+    );
+    const next = JSON.stringify([pushed, inspection]);
+    if (next !== fingerprint) {
+      fingerprint = next;
+      for (const listener of listeners) listener();
     }
-    options.setActiveTools([...current]);
-    pushed = current;
   };
 
   const slot = kernel.defineSlot<RestrictionHolder>(SLOT, apply);
@@ -90,8 +105,14 @@ export function createDoomToolSurface(options: CreateDoomToolSurfaceOptions): Do
   return Object.freeze({
     generation: options.generation,
     register(definition: DoomToolRestrictionDefinition): DoomToolRestrictionHandle {
+      if (disposed) throw new Error('The tool surface is disposed.');
       if (definition.source.trim().length === 0) throw new Error('A tool restriction needs a source.');
-      const holder: RestrictionHolder = { source: definition.source, restrict: definition.restrict };
+      const holder: RestrictionHolder = {
+        source: definition.source,
+        restrict: definition.restrict,
+        controlledTools: definition.controlledTools ? [...new Set(definition.controlledTools)] : undefined,
+        attribution: definition.attribution ? { ...definition.attribution } : undefined,
+      };
       const registration = slot.contribute({ source: definition.source, layer: definition.layer, value: holder });
       applyNow();
       let removed = false;
@@ -118,11 +139,28 @@ export function createDoomToolSurface(options: CreateDoomToolSurfaceOptions): Do
       applyNow();
     },
     active(): readonly string[] {
-      return disposed ? [] : (pushed ?? options.activeTools());
+      return disposed ? [] : [...(pushed ?? options.activeTools())];
+    },
+    inspect(): readonly DoomToolSurfaceEntry[] {
+      return disposed
+        ? []
+        : inspection.map((entry) => ({
+            ...entry,
+            ...(entry.attribution ? { attribution: { ...entry.attribution } } : {}),
+          }));
+    },
+    subscribe(listener: () => void): () => void {
+      if (disposed) throw new Error('The tool surface is disposed.');
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
     },
     dispose(): void {
       if (disposed) return;
       disposed = true;
+      listeners.clear();
+      inspection = [];
       kernel.dispose();
     },
   });

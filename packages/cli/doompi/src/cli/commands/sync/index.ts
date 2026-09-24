@@ -6,17 +6,10 @@ import path from 'node:path';
 
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
 import { loadDomains } from '@agimon-ai/doompi-config/domains';
-import { filterHookDisabledLayers, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
-import { loadMajorModesConfig, loadMajorModesConfigLenient } from '@agimon-ai/doompi-config/majorModes';
+import { loadMajorModesConfigLenient } from '@agimon-ai/doompi-config/majorModes';
 import type { ConfigDiagnostic } from '@agimon-ai/doompi-config/types';
 import { DOOM_MCP_BUNDLE_FILE } from '@agimon-ai/doompi-core/mcpFacet';
-import {
-  mergePiSettings,
-  piAgentDirectory,
-  piThemeDirectory,
-  readPiSettings,
-  serializePiSettings,
-} from '@agimon-ai/doompi-core/runtimePiSettings';
+import { piAgentDirectory, piThemeDirectory } from '@agimon-ai/doompi-core/runtimePiSettings';
 import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/serverFacet';
 import {
   acquireSyncLocationLock,
@@ -26,33 +19,18 @@ import {
 import {
   DOOMPI_API_VERSION,
   publishSyncRegistration,
-  readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
   type SyncPackageRegistration,
 } from '@agimon-ai/doompi-core/syncRegistration';
-import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
+import { DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
 
 import { buildSyncedRuntime } from '../../../builders/cli';
-import { readBootstrapStatus } from '../../../builders/cli/bootstrapLocator';
-import {
-  createLayerResolvers,
-  type ExtensionComposition,
-  PERSONA_ENTRY,
-  resolveExtensionComposition,
-} from '../../../builders/cli/extensionAssembler';
+import { createLayerResolvers, type ExtensionComposition } from '../../../builders/cli/extensionAssembler';
 import { buildHarnessContext } from '../../../builders/cli/harnessContext';
-import {
-  doomPiPackageRoot,
-  piExtensionAliasIsCurrent,
-  writePiExtensionAlias,
-} from '../../../builders/cli/piExtensionAlias';
+import { doomPiPackageRoot, writePiExtensionAlias } from '../../../builders/cli/piExtensionAlias';
 import { piExtensionDispatcherIsUpgradeable } from '../../../builders/cli/piExtensionDispatcher';
-import {
-  DUPLICATE_REGISTRATION_DRIFT,
-  projectRegistersDoom,
-  writeProjectPiSettings,
-} from '../../../builders/cli/projectSettings';
+import { writeProjectPiSettings } from '../../../builders/cli/projectSettings';
 import { syncServerBundle } from '../../../builders/server';
 import { syncMcpBundle } from '../../../builders/server/mcpBundle';
 import { syncWebBundle } from '../../../builders/web';
@@ -60,7 +38,7 @@ import { HARNESS_STATE_POINTER, loadHarnessState } from '../../../composition/ha
 import { ensureLayerPackages, missingLayerPackageSpecifiers } from '../../../composition/layerPackageInstaller';
 import { loadDoomConfigLenient } from '../../../composition/projectTrust';
 import { resolveDoomConfigurationRoot } from '../../../composition/repository';
-import { readSyncDrift, type SyncDriftReason } from '../../../composition/syncDrift';
+import { readSyncDrift } from '../../../composition/syncDrift';
 import {
   computeInputsHash,
   computeMcpSourcesHash,
@@ -72,13 +50,30 @@ import {
   SYNC_STATE_VERSION,
   type SyncSelection,
   type SyncState,
-  syncStateRootMatches,
   writeSyncState,
 } from '../../../composition/syncState';
 import type { HarnessOptions } from '../../../composition/types/harness';
 import { DOOMPI_DOMAINS_ENV, DOOMPI_MAJOR_MODE_ENV, DOOMPI_PROFILE_ENV } from '../../matrixOptions';
 import { parseHarnessArgs } from '../../options';
+import {
+  collectDrift,
+  piIntegrationDrift,
+  selectionCompositionFingerprint,
+  selectionEnvironment,
+  syncRegistrationNeedsApiMigration,
+  toSelection,
+  type SyncSettingsMode,
+} from './inspection';
 import { SyncProgress, type SyncProgressOutput } from './presenter';
+
+export {
+  collectDrift,
+  selectionCompositionFingerprint,
+  selectionEnvironment,
+  syncRegistrationNeedsApiMigration,
+  toSelection,
+  type SyncSettingsMode,
+} from './inspection';
 
 /**
  * `doom-pi sync`: resolve the matrix once and write it where plain Pi finds it.
@@ -172,8 +167,6 @@ const EXCLUDED_KEYS = new Set([
 
 type SyncOutput = SyncProgressOutput;
 
-export type SyncSettingsMode = 'persisted' | 'embedded';
-
 export interface SyncCommandOptions {
   settingsMode?: SyncSettingsMode;
   /** Test/embedding override; normal CLI execution uses the process home. */
@@ -218,161 +211,6 @@ function writeConfigDiagnostics(diagnostics: readonly ConfigDiagnostic[], output
   output.write(
     `config:   ignored ${String(diagnostics.length)} unsupported key(s); run doompi doctor for the strict check\n${lines}\n`,
   );
-}
-/**
- * Layers the repository's declared selection under the usual resolution.
- *
- * `.doom/config.yaml` holds what the repository selects by default, the way
- * init.el does for doom-emacs. Seeding the environment the parser reads keeps
- * the precedence the launcher already documents: an explicit flag wins, then an
- * exported variable, then the declared default.
- */
-export function selectionEnvironment(
-  repoRoot: string,
-  environment: NodeJS.ProcessEnv,
-  homeDirectory?: string,
-): NodeJS.ProcessEnv {
-  const { selection } = loadDoomConfigLenient(repoRoot, homeDirectory).config;
-  if (!selection) return environment;
-  return {
-    ...environment,
-    ...(selection.majorMode && !environment[DOOMPI_MAJOR_MODE_ENV]
-      ? { [DOOMPI_MAJOR_MODE_ENV]: selection.majorMode }
-      : {}),
-    ...(selection.profile && !environment[DOOMPI_PROFILE_ENV] ? { [DOOMPI_PROFILE_ENV]: selection.profile } : {}),
-    ...(selection.domains && environment[DOOMPI_DOMAINS_ENV] === undefined
-      ? { [DOOMPI_DOMAINS_ENV]: selection.domains.join(',') }
-      : {}),
-  };
-}
-
-export function toSelection(
-  options: Pick<HarnessOptions, 'majorMode' | 'domains' | 'profile' | 'preset'>,
-): SyncSelection {
-  return {
-    majorMode: options.majorMode,
-    domains: options.domains,
-    profile: options.profile,
-    preset: options.preset,
-  };
-}
-
-export function selectionCompositionFingerprint(
-  repoRoot: string,
-  options: Pick<HarnessOptions, 'agents' | 'hooks' | 'majorMode' | 'mcp' | 'preset'>,
-  homeDirectory: string = os.homedir(),
-): string {
-  const majorModesConfig = loadMajorModesConfig(repoRoot, homeDirectory);
-  const resolvers = createLayerResolvers(repoRoot);
-  return resolveExtensionComposition({
-    agents: options.agents,
-    autoStop: false,
-    mute: false,
-    preset: options.preset,
-    personaEntry: resolvers.packageEntry(PERSONA_ENTRY),
-    majorMode: options.majorMode,
-    layers: filterHookDisabledLayers(
-      majorModesConfig,
-      resolveLayers(majorModesConfig, options.majorMode),
-      options.hooks,
-    ),
-    majorModesConfig,
-    resolvers,
-  }).fingerprint;
-}
-
-/** Settings, dispatcher and theme differences an init would fix, independent of sync state. */
-function piIntegrationDrift(agentDirectory: string): string[] {
-  const drift: string[] = [];
-  const themePath = path.join(piThemeDirectory(agentDirectory), `${DEFAULT_THEME_NAME}.json`);
-  const settings = readPiSettings(agentDirectory);
-  const merged = mergePiSettings(settings, agentDirectory, { themePath, themeName: DEFAULT_THEME_NAME });
-  if (serializePiSettings(merged) !== serializePiSettings(settings)) {
-    drift.push('Pi user settings are out of date; run doompi init');
-  }
-  if (!piExtensionAliasIsCurrent(agentDirectory)) drift.push('Pi user dispatcher is out of date; run doompi init');
-  const expectedTheme = `${JSON.stringify(DEFAULT_THEME, null, 2)}\n`;
-  if (!fs.existsSync(themePath) || fs.readFileSync(themePath, 'utf8') !== expectedTheme) {
-    drift.push('Pi user theme is out of date; run doompi init');
-  }
-  return drift;
-}
-
-/** Differences between what a sync would produce and what is on disk. */
-export function collectDrift(
-  repoRoot: string,
-  selection: SyncSelection,
-  state: SyncState | undefined,
-  environment: NodeJS.ProcessEnv = process.env,
-  settingsMode: SyncSettingsMode = 'persisted',
-  expectedCompositionFingerprint?: string,
-): string[] {
-  if (!state) return ['no sync state: run doompi sync'];
-  const drift: string[] = [];
-  if (syncRegistrationNeedsApiMigration(repoRoot, environment.HOME ?? os.homedir())) {
-    drift.push('DoomPi registration needs API migration');
-  }
-  if (!syncStateRootMatches(repoRoot, state.root)) drift.push('sync state belongs to a different repository');
-  const recorded = state.selection;
-  if (
-    recorded.majorMode !== selection.majorMode ||
-    recorded.profile !== selection.profile ||
-    recorded.preset !== selection.preset ||
-    recorded.domains.join(',') !== selection.domains.join(',')
-  ) {
-    drift.push('selection changed since the last sync');
-  }
-  // Hashed against the recorded selection, not the requested one, so a
-  // selection change is reported once rather than as two findings.
-  if (computeInputsHash(repoRoot, recorded, environment.HOME ?? os.homedir()) !== state.inputsHash) {
-    drift.push('.doom configuration changed');
-  }
-  // Re-resolving is what catches a dependency upgrade moving a package, which
-  // the inputs hash deliberately does not read.
-  if (
-    JSON.stringify(
-      recordResolvedEntries(
-        loadMajorModesConfig(repoRoot, environment.HOME ?? os.homedir()),
-        createLayerResolvers(repoRoot),
-      ),
-    ) !== JSON.stringify(state.resolved)
-  ) {
-    drift.push('resolved extension paths changed');
-  }
-  if (expectedCompositionFingerprint && state.compositionFingerprint !== expectedCompositionFingerprint) {
-    drift.push('extension composition changed');
-  }
-  try {
-    if (!readBootstrapStatus(repoRoot, undefined, environment.HOME ?? os.homedir()).fresh) {
-      drift.push('precompiled runtime is missing or stale');
-    }
-  } catch {
-    drift.push('precompiled runtime is missing or stale');
-  }
-
-  if (settingsMode === 'persisted') {
-    const agentDirectory = piAgentDirectory(environment);
-    const themePath = path.join(piThemeDirectory(agentDirectory), `${DEFAULT_THEME_NAME}.json`);
-    drift.push(...piIntegrationDrift(agentDirectory));
-    if (projectRegistersDoom(repoRoot)) drift.push(DUPLICATE_REGISTRATION_DRIFT);
-    if (state.baseline.themePath !== themePath || state.baseline.themeName !== DEFAULT_THEME_NAME) {
-      drift.push('synced theme location is out of date');
-    }
-  }
-  const sharedDrift = readSyncDrift({ repoRoot, homeDirectory: environment.HOME ?? os.homedir() });
-  const sharedMessages: Partial<Record<SyncDriftReason, string>> = {
-    'never-synced': 'sync registration is missing or invalid',
-    'code-changed': 'cockpit sources changed since the last sync',
-    'cockpit-bundle-missing': 'cockpit bundle is missing',
-    'package-apis-missing': 'package API routes are missing',
-    'server-bundle-stale': 'server bundle is missing or stale',
-    'mcp-bundle-stale': 'MCP bundle is missing or stale',
-  };
-  for (const reason of sharedDrift.reasons) {
-    const message = sharedMessages[reason];
-    if (message) drift.push(message);
-  }
-  return drift;
 }
 
 /** Regenerates the hook files the other frontends read before any harness code runs. */
@@ -450,19 +288,6 @@ function packageRegistrationFor(): SyncPackageRegistration {
     manifestPath,
     entry: fs.realpathSync(path.resolve(root, extension)),
   };
-}
-
-/** Returns true when a valid legacy registration must be republished with API metadata. */
-export function syncRegistrationNeedsApiMigration(repoRoot: string, homeDirectory: string): boolean {
-  try {
-    const registration = readSyncRegistration(repoRoot, homeDirectory);
-    return (
-      registration !== undefined &&
-      (registration.version !== SYNC_REGISTRATION_VERSION || registration.package.apiVersion === undefined)
-    );
-  } catch {
-    return false;
-  }
 }
 
 /** Resolves the matrix, stages it into home-scoped worktree storage, and publishes one generation. */

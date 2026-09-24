@@ -24,7 +24,7 @@ export interface SkillReadiness {
   current(): Promise<DeferredSkillSnapshot | undefined>;
 }
 
-function loadedSkillCommandNames(pi: ExtensionAPI): string[] {
+export function loadedSkillCommandNames(pi: ExtensionAPI): string[] {
   if (typeof pi.getCommands !== 'function') return [];
   return pi
     .getCommands()

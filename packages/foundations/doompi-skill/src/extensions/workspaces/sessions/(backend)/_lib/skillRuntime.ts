@@ -15,7 +15,7 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 
 import { createActiveHelpSkillView } from '../../../../../services/helpSkills';
 import { SKILLS_LEADER_CONTRIBUTION } from '../../../../../types/skills';
-import { createSkillReadiness, skillInventory } from './skillReadiness';
+import { createSkillReadiness, loadedSkillCommandNames, skillInventory } from './skillReadiness';
 import { createSkillsCommand, type SkillsCommandDependencies } from './skillsCommand';
 
 /**
@@ -78,7 +78,19 @@ export function createSkillRuntime({ pi, openOverlay }: SkillPluginConfig): PiPl
     cordis.inject([DOOM_HELP_SERVICE], (helpContext) => {
       const help = requireDoomHelpService(helpContext);
       const unbind = helpSkillView.bind(help);
+      const unbindInventory = help.bindSkillInventory(async () => {
+        const deferred = await readiness.current();
+        if (!deferred) return undefined;
+        return helpSkillView
+          .merge({
+            normalSkills: [],
+            normalSkillNames: loadedSkillCommandNames(pi),
+            deferredSkills: deferred.skills,
+          })
+          .helpSkills.map((skill) => skill.filePath);
+      });
       return () => {
+        unbindInventory();
         unbind();
       };
     });

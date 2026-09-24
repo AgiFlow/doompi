@@ -12,11 +12,20 @@ export const DOOM_TOOL_SURFACE_SERVICE = 'doom/tool-surface';
  */
 export type DoomToolRestriction = (incoming: readonly string[], available: readonly string[]) => readonly string[];
 
+export interface DoomToolSurfaceEntry {
+  readonly source: string;
+  readonly name: string;
+  readonly active: boolean;
+  readonly attribution?: { kind: 'minor' | 'domain'; mode: string; label?: string };
+}
 export interface DoomToolRestrictionDefinition<TRestriction = DoomToolRestriction> {
   /** Package-unique owner label, used for diagnostics and ordering ties. */
   readonly source: string;
   /** Layer that owns this restriction, gated by the kernel when set. */
   readonly layer?: string;
+  /** Optional diagnostic metadata for tools this restriction owns, not a second tool registry. */
+  readonly controlledTools?: readonly string[];
+  readonly attribution?: DoomToolSurfaceEntry['attribution'];
   readonly restrict: TRestriction;
   subscribe?(listener: () => void): () => void;
 }
@@ -45,6 +54,9 @@ export interface DoomToolSurfaceService {
   setActiveLayers(layers: readonly string[]): void;
   /** The list most recently reconciled with the host. */
   active(): readonly string[];
+  /** Applied activation of owner-declared tools, with no executable definitions. */
+  inspect(): readonly DoomToolSurfaceEntry[];
+  subscribe(listener: () => void): () => void;
   dispose(): void;
 }
 
