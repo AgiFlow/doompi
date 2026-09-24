@@ -3,6 +3,8 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { TranscriptPage, TranscriptPageRequest } from '../../../schemas/sessionProtocol';
 
 export const DOOM_CHILD_SESSION_SERVICE = 'doom/child-session';
+/** Optional session-owned MCP dispatcher. Children borrow it without owning its connections. */
+export const DOOM_CHILD_SESSION_MCP_TOOL_SERVICE = 'doom/child-session-mcp-tool';
 
 export type DoomChildSessionState = 'starting' | 'running' | 'completed' | 'failed' | 'stopped';
 
@@ -95,7 +97,10 @@ export interface DoomChildSessionEvent {
 }
 
 export interface DoomChildSessionToolResult {
-  readonly content: readonly { readonly type: 'text'; readonly text: string }[];
+  readonly content: readonly (
+    | { readonly type: 'text'; readonly text: string }
+    | { readonly type: 'image'; readonly data: string; readonly mimeType: string }
+  )[];
   readonly details?: unknown;
   readonly isError?: boolean;
 }
@@ -166,6 +171,7 @@ export interface DoomChildSessionServiceProvider {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     'doom/child-session': DoomChildSessionService;
+    'doom/child-session-mcp-tool': DoomChildSessionTool;
   }
 }
 

@@ -1,5 +1,9 @@
+import type { DoomChildSessionTool } from '@agimon-ai/doompi-core/childSession';
 import type { DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
+import type { Static } from 'typebox';
+import { Value } from 'typebox/value';
 
+import { McpHeadlessToolParameters } from '../../schemas/mcpHeadlessTool';
 import type { CatalogTool } from '../mcpCatalog';
 import type { McpSession } from '../mcpSession';
 
@@ -21,4 +25,25 @@ export function createMcpSessionToolsService(session: McpSession, generation: st
     invoke: (name: string, parameters: Record<string, unknown>, signal?: AbortSignal) =>
       session.invokeTool(name, parameters, signal),
   });
+}
+
+/** Borrow an existing MCP runtime; a child never starts or disposes its own upstream connections. */
+export function createMcpChildTool(
+  invoke: (
+    parameters: Static<typeof McpHeadlessToolParameters>,
+    signal?: AbortSignal,
+  ) => Promise<DoomHeadlessToolResult>,
+): DoomChildSessionTool {
+  return {
+    name: 'mcp',
+    description: 'Call a tool exposed by a connected MCP server.',
+    parameters: McpHeadlessToolParameters,
+    async execute(_toolCallId, parameters, signal) {
+      signal?.throwIfAborted();
+      if (!Value.Check(McpHeadlessToolParameters, parameters)) throw new Error('Invalid MCP tool arguments.');
+      const result = await invoke(parameters, signal);
+      signal?.throwIfAborted();
+      return result;
+    },
+  };
 }

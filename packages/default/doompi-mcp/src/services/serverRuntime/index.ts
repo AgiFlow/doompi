@@ -10,6 +10,7 @@ import { McpHeadlessToolParameters } from '../../schemas/mcpHeadlessTool';
 import { buildMcpConfigGroups } from '../../services/configSources';
 import { McpRuntimeOwner } from '../../services/mcpRuntime';
 import { readSessionConfig } from '../../services/sessionConfig';
+import { createMcpChildTool } from '../mcpSessionTools';
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -86,6 +87,33 @@ export function createMcpServerRuntime() {
     },
   };
 
+  const invoke: Parameters<typeof createMcpChildTool>[0] = async (parameters, signal) => {
+    const owner = runtime;
+    const services = owner?.getServices();
+    if (!owner || !services) {
+      return { content: [{ type: 'text', text: 'The MCP runtime has not started yet.' }], isError: true };
+    }
+    try {
+      signal?.throwIfAborted();
+      const connection = await services.clientManager.ensureConnected(parameters.server);
+      signal?.throwIfAborted();
+      if (runtime !== owner || !owner.isCurrent(services)) throw new Error('The MCP runtime is no longer available.');
+      const result = await connection.callTool(parameters.tool, parameters.arguments ?? {});
+      signal?.throwIfAborted();
+      return {
+        content: resultContent(result),
+        details: result,
+        ...(record(result).isError === true ? { isError: true } : {}),
+      };
+    } catch (error) {
+      signal?.throwIfAborted();
+      return {
+        content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
+        isError: true,
+      };
+    }
+  };
+
   // web-plugin-tool-renderers: ignore mcp_use, headless-only generic MCP dispatch
   const tool: DoomHeadlessTool<typeof McpHeadlessToolParameters> = {
     name: 'mcp_use',
@@ -93,26 +121,7 @@ export function createMcpServerRuntime() {
     description: 'Call a tool exposed by a connected MCP server.',
     parameters: McpHeadlessToolParameters,
     executionMode: 'serial',
-    async execute(_toolCallId, parameters) {
-      const services = runtime?.getServices();
-      if (!services) {
-        return { content: [{ type: 'text', text: 'The MCP runtime has not started yet.' }], isError: true };
-      }
-      try {
-        const connection = await services.clientManager.ensureConnected(parameters.server);
-        const result = await connection.callTool(parameters.tool, parameters.arguments ?? {});
-        return {
-          content: resultContent(result),
-          details: result,
-          ...(record(result).isError === true ? { isError: true } : {}),
-        };
-      } catch (error) {
-        return {
-          content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
-          isError: true,
-        };
-      }
-    },
+    execute: (_toolCallId, parameters, signal) => invoke(parameters, signal),
   };
 
   const command: DoomHeadlessCommand = {
@@ -143,5 +152,5 @@ export function createMcpServerRuntime() {
   };
   // The MCP config block named local filesystem paths and diagnostics, none of it
   // model-actionable: the servers themselves already appear as tools.
-  return { activities: [activity], commands: [command], tools: [tool] };
+  return { activities: [activity], commands: [command], tools: [tool], childTool: createMcpChildTool(invoke) };
 }

@@ -1,6 +1,10 @@
 import path from 'node:path';
 
-import { DOOM_CHILD_SESSION_SERVICE } from '@agimon-ai/doompi-core/childSession';
+import {
+  DOOM_CHILD_SESSION_SERVICE,
+  DOOM_CHILD_SESSION_MCP_TOOL_SERVICE,
+  type DoomChildSessionTool,
+} from '@agimon-ai/doompi-core/childSession';
 import {
   connectDoomCordisHost,
   DOOM_CORDIS_SESSION_SERVICE,
@@ -41,6 +45,7 @@ function terminalChildSessionPlugin(cordis: Context, models: ModelRuntime, sessi
       models,
       providers: () => registeredProviders(extensionContext.modelRegistry),
       defaultModel: () => extensionContext.model,
+      mcpTool: () => sessionContext.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionTool | undefined,
     });
     sessionContext.provide(DOOM_CHILD_SESSION_SERVICE, childSessions.get());
     sessionContext.effect(() => () => childSessions.close(), `${PACKAGE_SOURCE}/lifetime`);

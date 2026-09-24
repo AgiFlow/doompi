@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import projectSessionTools from '../src/extensions/workspaces/sessions/(backend)/tool/session_mcp.mcp';
 import type { CatalogTool } from '../src/services/mcpCatalog';
-import { createMcpSessionToolsService } from '../src/services/mcpSessionTools';
+import { createMcpChildTool, createMcpSessionToolsService } from '../src/services/mcpSessionTools';
 
 describe('MCP session tools service', () => {
   it('projects metadata, preserves results, and refreshes metadata-only changes', async () => {
@@ -62,5 +62,36 @@ describe('MCP session tools service', () => {
       content: [{ type: 'text', text: 'ok' }],
     });
     expect(session.invokeTool).toHaveBeenCalledWith(tool.piName, { quality: 'full' }, undefined);
+  });
+});
+
+describe('native child MCP dispatcher', () => {
+  it('validates arguments and preserves images, errors, details, and cancellation', async () => {
+    const result = {
+      content: [{ type: 'image' as const, data: 'YWJj', mimeType: 'image/png' }],
+      isError: true,
+      details: { reason: 'denied' },
+    };
+    const invoke = vi.fn(async () => result);
+    const tool = createMcpChildTool(invoke);
+    const parameters = { server: 'docs', tool: 'search', arguments: { query: 'templates' } };
+    const controller = new AbortController();
+    await expect(tool.execute('call', parameters, controller.signal)).resolves.toBe(result);
+    expect(invoke).toHaveBeenCalledWith(parameters, controller.signal);
+    await expect(tool.execute('invalid', { server: '', tool: 'search' })).rejects.toThrow('Invalid MCP tool arguments');
+    controller.abort(new Error('cancelled'));
+    await expect(tool.execute('cancelled', parameters, controller.signal)).rejects.toThrow('cancelled');
+    expect(invoke).toHaveBeenCalledOnce();
+  });
+
+  it('does not return an upstream result after the child has been aborted', async () => {
+    const controller = new AbortController();
+    const tool = createMcpChildTool(async () => {
+      controller.abort(new Error('child stopped'));
+      return { content: [{ type: 'text', text: 'late result' }] };
+    });
+    await expect(tool.execute('call', { server: 'docs', tool: 'search' }, controller.signal)).rejects.toThrow(
+      'child stopped',
+    );
   });
 });

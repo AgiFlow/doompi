@@ -124,6 +124,39 @@ beforeEach(() => {
 });
 
 describe('terminal Pi child session provider', () => {
+  it.each(['fresh', 'terminal-pi-fork'] as const)('passes the parent MCP dispatcher to a %s child', async (kind) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-mcp-'));
+    tempRoots.push(root);
+    const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'MCP result' }] }));
+    const dispatcher = { name: 'mcp', description: 'MCP dispatch', parameters: {}, execute };
+    const factory = vi.fn(async (options: DirectHarnessRuntimeOptions) => fakeRuntime(options));
+    const service = createTerminalPiChildSessionService({
+      cwd: root,
+      sessionsRoot: root,
+      historyOwnership: owner().ownership,
+      runtimeFactory: factory,
+      mcpTool: () => dispatcher,
+    });
+    const source: DoomChildSessionRequest['source'] =
+      kind === 'fresh'
+        ? { kind }
+        : {
+            kind,
+            sourceSessionId: 'parent-session',
+            sourceLeafId: 'parent-leaf',
+            snapshotJsonl: v3Snapshot(),
+          };
+    const handle = await service.start({ ...request(source, root), tools: ['read', 'mcp'] });
+    expect(factory.mock.calls[0]![0].activeToolNames).toEqual(['read', 'mcp']);
+    const tool = factory.mock.calls[0]![0].tools!.find((candidate) => candidate.name === 'mcp')!;
+    await expect(
+      tool.execute('call', { server: 'docs', tool: 'search' }, vi.fn(), undefined, {} as never, {} as never),
+    ).resolves.toMatchObject({ content: [{ text: 'MCP result' }] });
+    expect(execute).toHaveBeenCalledOnce();
+    await handle.dispose();
+    await service.close();
+  });
+
   it('captures an immutable selected branch snapshot instead of a live v3 path', () => {
     const entry: Record<string, unknown> = {
       id: 'parent-leaf',
