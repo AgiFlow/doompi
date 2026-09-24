@@ -1,5 +1,6 @@
 import { listDomainNames } from '@agimon-ai/doompi-config/domains';
 import { type DoomHeadlessCommand, type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import { DOOM_RESOURCE_CATALOG_ENTRY_TYPE, type ResourceCatalogProjection } from '@agimon-ai/doompi-core/skills';
 
 import {
   DOMAIN_COMMAND,
@@ -42,6 +43,10 @@ export function createDomainServerCommand(host: DoomHeadlessHostService): DoomHe
         return;
       }
       await host.changeSelection({ axis: 'domains', domains: requested });
+      // The web composer caches get_commands for `$` completion. Signal only after
+      // the headless host has reconciled commands so the re-read sees this selection.
+      const projection: ResourceCatalogProjection = { version: 1, revision: Date.now() };
+      await execution.session.appendCustomEntry(DOOM_RESOURCE_CATALOG_ENTRY_TYPE, projection);
     },
   };
 }
