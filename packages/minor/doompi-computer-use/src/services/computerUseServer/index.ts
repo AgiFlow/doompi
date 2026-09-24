@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
+import type { DoomApiContext } from '@agimon-ai/doompi-core/packageApi';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
 
@@ -8,10 +9,16 @@ import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../../constants/computerUse';
 import { modeState } from '../../models/computerUseMode';
 import { ComputerScriptRunner } from '../../services/computerScriptRunner';
 import { DefaultComputerUseExtensionService } from '../../services/extensionService';
-import { createComputerUseSessionClient } from '../../services/sessionApiClient';
-import type { ComputerUseAction, ComputerUseObservation } from '../../types/computerUse';
-import { COMPUTER_USE_MODE_ID, COMPUTER_USE_STATUS_KEY } from '../../types/computerUseApi';
+import type { ComputerScriptExecutionOptions } from '../../types/computerScript';
+import type { ComputerUseAction } from '../../types/computerUse';
+import { API_BASE_PATH, COMPUTER_USE_MODE_ID, COMPUTER_USE_STATUS_KEY } from '../../types/computerUseApi';
 import type { ComputerUseSessionView } from '../../types/computerUseApi';
+import {
+  computerObservationOutput as observationOutput,
+  computerScriptOutput,
+  computerScriptFailure,
+} from '../computerToolOutput';
+import { createComputerUseApi } from '../computerUseApi';
 
 /** This package's identity for mode, activity and restriction ownership, not a status key. */
 const SOURCE = '@agimon-ai/doompi-computer-use';
@@ -28,37 +35,43 @@ function output(value: unknown, isError = false): DoomHeadlessToolResult {
   };
 }
 
-function observationOutput(value: ComputerUseObservation): DoomHeadlessToolResult {
-  return {
-    content: [
-      { type: 'text', text: JSON.stringify({ ...value, screenshot: undefined }, null, 2) },
-      { type: 'image', data: value.screenshot.data, mimeType: value.screenshot.mimeType },
-    ],
-    details: value,
-  };
-}
-
 import {
   type DoomHeadlessHostService,
   type DoomHeadlessTool,
   type DoomHeadlessCommand,
 } from '@agimon-ai/doompi-core/headless';
 import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
-export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
-  DoomServerSessionPlugin,
-  'tools' | 'commands'
-> & {
+export function createComputerUseServer(
+  host: DoomHeadlessHostService,
+  apiContext?: DoomApiContext,
+): Omit<DoomServerSessionPlugin, 'tools' | 'commands'> & {
   tools: readonly DoomHeadlessTool[];
   commands: readonly DoomHeadlessCommand[];
 } {
-  const client = createComputerUseSessionClient();
+  if (!apiContext?.computerUse?.available || !apiContext.directEvents) return { tools: [], commands: [] };
+  const desktop = apiContext.computerUse;
+  const broker = createComputerUseApi({
+    sessionId: host.context.sessionId,
+    internalToken: apiContext.internalToken,
+    hubToken: apiContext.hubToken,
+    directEvents: apiContext.directEvents,
+    desktop,
+    beforeActivate: async () => {
+      if (!modeSelected()) throw new Error('Enable computer use before authorizing an application.');
+      const activity = await host.context.session.activity();
+      if (!activity.isIdle || activity.hasPendingMessages)
+        throw new Error('Wait for the agent and its queued prompts to finish before granting computer use.');
+    },
+  });
+  const client = broker.sessionClient();
   const allowedScriptPaths = (host.context.environment[SCRIPT_PATHS_ENV] ?? '')
     .split(path.delimiter)
     .filter((entry) => entry.length > 0);
-  const scriptRunner = client === undefined ? undefined : new ComputerScriptRunner({ client, allowedScriptPaths });
+  const scriptRunner = new ComputerScriptRunner({ client, allowedScriptPaths, scriptRoot: host.context.cwd });
   const service = new DefaultComputerUseExtensionService(client);
   const dependencies = { client, scriptRunner, service };
-  let state: ComputerUseSessionView | undefined;
+  let state: ComputerUseSessionView | undefined = broker.state();
+  const restrictionListeners = new Set<() => void>();
   let stopActivity: (() => void) | undefined;
   let modeOwner: MinorModeOwner | undefined;
   const modeSelected = (): boolean =>
@@ -71,6 +84,7 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
       next === undefined || next.phase === 'inactive' ? undefined : `computer use: ${next.phase}`,
     );
     publishMode();
+    for (const listener of restrictionListeners) listener();
   };
   const selectMode = async (enabled: boolean): Promise<void> => {
     const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== COMPUTER_USE_MODE_ID);
@@ -93,7 +107,8 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
     }
   };
   const requireActive = (): NonNullable<typeof client> => {
-    if (!client || state?.phase !== 'active') throw new Error('Computer use is not active for this session.');
+    if (!desktop.available || desktop.enabled === false || !modeSelected() || state?.phase !== 'active')
+      throw new Error('Computer use is not active for this session.');
     return client;
   };
   modeOwner = defineMinorMode<undefined>({
@@ -127,14 +142,29 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
         },
       ],
     },
-    state: () => modeState(state, modeSelected()),
+    state: () => {
+      const mode = modeState(state, modeSelected());
+      return desktop.enabled === false
+        ? {
+            ...mode,
+            condition: 'blocked',
+            detail: 'Enable computer use in global Desktop settings.',
+            actions: mode.actions.map((action) => ({
+              ...action,
+              enabled: false,
+              disabledReason: 'Enable computer use in global Desktop settings.',
+            })),
+          }
+        : mode;
+    },
     async handleAction(_runtime, actionId, _argumentsValue, execution) {
       execution.signal.throwIfAborted();
       if (actionId === 'activate') {
-        if (!client) throw new Error('DoomPi Desktop computer use is unavailable.');
+        if (!desktop.available || desktop.enabled === false)
+          throw new Error('Enable computer use in global Desktop settings first.');
         await selectMode(true);
         await refresh(execution.signal);
-        return { message: 'Computer use activated.' };
+        return { message: 'Computer use is ready to configure in Activity.' };
       }
       if (actionId === 'doctor') {
         await refresh(execution.signal);
@@ -154,8 +184,36 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
       throw new Error(`Unknown computer-use action: ${actionId}`);
     },
   }).createOwner(undefined);
+  const unsubscribeState = client.subscribeStatus?.(applyState);
   return {
-    services: [serverMinorModes([modeOwner])],
+    api: [{ basePath: API_BASE_PATH, start: () => broker }],
+    services: [
+      (context) => {
+        const fiber = context.plugin(serverMinorModes([modeOwner!]));
+        context.effect(() =>
+          desktop.subscribe(() => {
+            if (!desktop.available) void fiber.dispose();
+          }),
+        );
+      },
+    ],
+    toolRestrictions: [
+      {
+        source: SOURCE,
+        restrict: () => ({
+          excludedTools:
+            desktop.available && desktop.enabled !== false && modeSelected() && state?.phase === 'active'
+              ? []
+              : ['computer_state', 'computer_action', 'computer_exec'],
+        }),
+        subscribe: (listener) => {
+          restrictionListeners.add(listener);
+          return () => {
+            restrictionListeners.delete(listener);
+          };
+        },
+      },
+    ],
     activities: [
       {
         when: {
@@ -165,10 +223,8 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
         name: SOURCE,
         async start() {
           await refresh();
-          const unsubscribe = client?.subscribeStatus?.(applyState);
           stopActivity = () => {
-            unsubscribe?.();
-            applyState(undefined);
+            void client.stop();
           };
           return () => {
             stopActivity?.();
@@ -186,12 +242,18 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
         name: 'computer_state',
         label: 'Computer State',
         description: 'Observe the authorized application window and return semantic accessibility state.',
-        parameters: { type: 'object', properties: {}, additionalProperties: false },
+        parameters: {
+          type: 'object',
+          properties: { includeScreenshot: { type: 'boolean' } },
+          additionalProperties: false,
+        },
         executionMode: 'serial',
         async execute(_toolCallId, _parameters, signal) {
           try {
             const session = requireActive();
-            const observation = await session.observe(signal);
+            const observation = await session.observe(signal, {
+              includeScreenshot: (_parameters as { includeScreenshot?: boolean }).includeScreenshot !== false,
+            });
             return observationOutput(observation);
           } catch (error) {
             return output(error instanceof Error ? error.message : String(error), true);
@@ -238,21 +300,29 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
         name: 'computer_exec',
         label: 'Computer Script',
         description:
-          'Run a trusted, explicitly allowed local TypeScript script against the authorized application session.',
+          'Run a reusable function with only the authorized program API. Relative helpers are supported. Full Node requires trusted:true and an explicitly allowlisted path.',
         parameters: {
           type: 'object',
-          properties: { scriptPath: { type: 'string', minLength: 1 }, input: {} },
+          properties: {
+            scriptPath: { type: 'string', minLength: 1 },
+            input: {},
+            trusted: { type: 'boolean' },
+            includeScreenshot: { type: 'boolean' },
+          },
           required: ['scriptPath', 'input'],
           additionalProperties: false,
         },
         executionMode: 'serial',
         async execute(_toolCallId, parameters, signal) {
           try {
+            requireActive();
             if (!dependencies.scriptRunner) throw new Error('Computer script execution is unavailable.');
-            const input = parameters as { scriptPath: string; input: unknown };
-            return output(await dependencies.scriptRunner.execute(input.scriptPath, input.input, signal));
+            const input = parameters as { scriptPath: string; input: unknown } & ComputerScriptExecutionOptions;
+            return computerScriptOutput(
+              await dependencies.scriptRunner.execute(input.scriptPath, input.input, signal, input),
+            );
           } catch (error) {
-            return output(error instanceof Error ? error.message : String(error), true);
+            return computerScriptFailure(error);
           }
         },
       },
@@ -304,6 +374,9 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
     onDispose() {
       stopActivity?.();
       stopActivity = undefined;
+      unsubscribeState?.();
+      broker.close();
+      restrictionListeners.clear();
       host.context.client.setStatus(COMPUTER_USE_STATUS_KEY, undefined);
     },
   };

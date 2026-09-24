@@ -29,8 +29,10 @@ function fixture() {
     },
     signal: new AbortController().signal,
   } as unknown as DoomMcpPluginContext;
+  const gated = bindMcpTool(context, tool.name);
+  if (!gated) throw new Error('The injected tool was not bound.');
   return {
-    gated: bindMcpTool(context, tool.name),
+    gated,
     execute,
     setActiveModes: (modes: string[]) => {
       activeModes = modes;
@@ -39,6 +41,11 @@ function fixture() {
 }
 
 describe('computer use remote MCP tool gate', () => {
+  it('contributes no MCP tool when there is no Desktop-owned catalog', () => {
+    const context = { services: { get: () => undefined } } as unknown as DoomMcpPluginContext;
+    expect(bindMcpTool(context, 'computer_state')).toBeUndefined();
+  });
+
   it('checks live minor mode state for every call without hiding the cached tool', async () => {
     const test = fixture();
 

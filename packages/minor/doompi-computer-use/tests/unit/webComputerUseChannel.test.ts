@@ -90,11 +90,11 @@ describe('computer-use hub channel', () => {
     await vi.waitFor(() =>
       expect(test.publish).toHaveBeenCalledWith(scope.sessionId, { state: state('inactive'), targets: [] }),
     );
-    test.channel.receive?.(scope, { action: 'targets' }, { connectionId: 'c1' });
+    test.channel.receive?.(scope, { action: 'targets' }, { connectionId: 'c1', desktopAuthorized: true });
     await vi.waitFor(() =>
       expect(test.source.payloadFor(scope)).toEqual({ state: state('inactive'), targets: [{ id: 'screen' }] }),
     );
-    test.channel.receive?.(scope, { action: 'unknown' }, { connectionId: 'c1' });
+    test.channel.receive?.(scope, { action: 'unknown' }, { connectionId: 'c1', desktopAuthorized: true });
     test.announce({ sessionId: 'other', revision: 2, wake: 2, phase: 'active' });
     expect(test.source.payloadFor(scope)).toEqual({ state: state('inactive'), targets: [{ id: 'screen' }] });
     test.source.sessionRemoved?.(scope.sessionId);
@@ -130,7 +130,7 @@ describe('computer-use hub channel', () => {
     test.source.sessionAdded?.(scope);
     await vi.waitFor(() => expect(test.source.payloadFor(scope)).toMatchObject({ state: { phase: 'inactive' } }));
     test.setState(state('stopping'));
-    test.channel.receive?.(scope, { action: 'stop' }, { connectionId: 'c1' });
+    test.channel.receive?.(scope, { action: 'stop' }, { connectionId: 'c1', desktopAuthorized: true });
     await vi.waitFor(() =>
       expect(test.requestSessionApi).toHaveBeenCalledWith(
         scope,
@@ -157,7 +157,7 @@ describe('computer-use hub channel', () => {
     expect(test.desktopRequest).not.toHaveBeenCalled();
     expect(test.onNotice).not.toHaveBeenCalled();
 
-    test.channel.receive?.(scope, { action: 'targets' }, { connectionId: 'c1' });
+    test.channel.receive?.(scope, { action: 'targets' }, { connectionId: 'c1', desktopAuthorized: true });
     await vi.waitFor(() => expect(test.source.payloadFor(scope)).toEqual({ state: state('inactive'), targets: [] }));
     expect(test.onNotice).not.toHaveBeenCalled();
     test.source.close();

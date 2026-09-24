@@ -40,6 +40,7 @@ import { findRepositoryRoot } from '../../composition/repository';
 import { readSyncDrift } from '../../composition/syncDrift';
 import { readSyncState } from '../../composition/syncState';
 import { buildHarnessContext } from '../cli/harnessContext';
+import { createComputerUseBinding } from './computerUseBinding';
 import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { resolveSessionIdentity } from './sessionArguments';
 import type { ServeOptions, ServerRuntimeEnvironment } from './types';
@@ -190,6 +191,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   let admitWorkspace: (root: string) => Promise<{ id: string; root: string; available: boolean }> = async () => {
     throw new Error('Workspace admission is not ready.');
   };
+  const computerUse = await createComputerUseBinding();
   let hub!: HeadlessHub;
   hub = createHeadlessHub({
     manager: sessionManager,
@@ -216,6 +218,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     onNotice: notice,
     hubToken: () => attachToken,
     requestSessionApi: (scope, request) => requestSessionApi(scope, request),
+    ...(computerUse === undefined ? {} : { computerUse }),
   });
   let harnessContext: Awaited<ReturnType<typeof buildHarnessContext>> | undefined;
   let cockpit: Awaited<ReturnType<typeof serveHeadlessServer>> | undefined;
@@ -492,6 +495,21 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           cwd: sessionOptions.cwd,
           environment: sessionOptions.environment,
           directEvents: hub.directEvents,
+          ...(computerUse === undefined
+            ? {}
+            : {
+                computerUse: {
+                  get available() {
+                    return computerUse.available;
+                  },
+                  get enabled() {
+                    return computerUse.enabled === true;
+                  },
+                  authorize: (headers: Headers) => computerUse.authorize?.(headers) === true,
+                  claim: () => computerUse.claimSession?.(sessionOptions.sessionId),
+                  subscribe: (listener: () => void) => computerUse.subscribe?.(listener) ?? (() => undefined),
+                },
+              }),
           hubToken: token,
           sessionService: hub.sessionService,
           pluginRegistry: hub.pluginRegistry,
@@ -834,6 +852,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     } catch (error) {
       notice(error instanceof Error ? error.message : String(error));
     }
+    computerUse?.close?.();
     webCompositions?.close();
     const pendingCleanups = [...pendingSessions.values()].map((setup) => setup.cleanup());
     pendingSessions.clear();

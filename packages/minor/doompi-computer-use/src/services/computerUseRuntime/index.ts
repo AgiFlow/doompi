@@ -5,6 +5,7 @@ import { defineMinorMode, type MinorModeOwner, type MinorModeOwnerActionContext 
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import { COMPUTER_USE_GUIDANCE } from '../../constants/computerUse';
+import type { ComputerScriptExecutionOptions } from '../../types/computerScript';
 import type { ComputerUseAction } from '../../types/computerUse';
 import {
   COMPUTER_USE_MODE_ID,
@@ -13,6 +14,7 @@ import {
   type ComputerUseSessionView,
 } from '../../types/computerUseApi';
 import type { ComputerUseExtensionDependencies } from '../../types/extension';
+import { computerObservationOutput, computerScriptOutput, computerScriptFailure } from '../computerToolOutput';
 import { createComputerUseCommand } from '../computerUseCommand';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-computer-use';
@@ -178,12 +180,18 @@ export function createComputerUseRuntime(
         label: 'Computer State',
         description: 'Observe the authorized application window and return its semantic accessibility state.',
         promptSnippet: 'Observe the authorized application before choosing a semantic action',
-        parameters: { type: 'object', properties: {}, additionalProperties: false },
+        parameters: {
+          type: 'object',
+          properties: { includeScreenshot: { type: 'boolean' } },
+          additionalProperties: false,
+        },
         async execute(_toolCallId, _params, signal) {
           if (!globallyEnabled || client === undefined || state?.phase !== 'active')
             throw new Error('Computer use is not active for this session.');
-          const observation = await client.observe(signal);
-          return { content: [{ type: 'text', text: JSON.stringify(observation, null, 2) }], details: observation };
+          const observation = await client.observe(signal, {
+            includeScreenshot: (_params as { includeScreenshot?: boolean }).includeScreenshot !== false,
+          });
+          return computerObservationOutput(observation);
         },
       },
       {
@@ -215,13 +223,16 @@ export function createComputerUseRuntime(
         name: 'computer_exec',
         label: 'Computer Script',
         description:
-          'Run a trusted, explicitly allowed local TypeScript script against the authorized application session.',
-        promptSnippet: 'Run a trusted reusable computer script by its explicitly allowed path and JSON input',
+          'Run a reusable function with the authorized program API. Full Node requires trusted:true and an explicitly allowlisted path.',
+        promptSnippet:
+          'Compose small computer functions using fresh semantic observations; request screenshots only when needed',
         parameters: {
           type: 'object',
           properties: {
             scriptPath: { type: 'string' },
             input: {},
+            trusted: { type: 'boolean' },
+            includeScreenshot: { type: 'boolean' },
           },
           required: ['scriptPath', 'input'],
           additionalProperties: false,
@@ -230,15 +241,20 @@ export function createComputerUseRuntime(
           if (!globallyEnabled || client === undefined || state?.phase !== 'active')
             throw new Error('Computer use is not active for this session.');
           if (dependencies.scriptRunner === undefined) throw new Error('Computer script execution is unavailable.');
-          const input = params as { scriptPath: string; input: unknown };
-          const result = await dependencies.scriptRunner.execute(input.scriptPath, input.input, signal);
-          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], details: result };
+          const input = params as { scriptPath: string; input: unknown } & ComputerScriptExecutionOptions;
+          try {
+            return computerScriptOutput(
+              await dependencies.scriptRunner.execute(input.scriptPath, input.input, signal, input),
+            );
+          } catch (error) {
+            return computerScriptFailure(error);
+          }
         },
       },
     ],
     services: [
       piMinorModes({
-        snapshot: () => (globallyEnabled ? [mode] : []),
+        snapshot: () => (globallyEnabled && client !== undefined ? [mode] : []),
         subscribe(listener) {
           modeListeners.add(listener);
           return () => {
@@ -268,6 +284,10 @@ export function createComputerUseRuntime(
         if (signal.aborted) return;
         activeContext = context;
         reconcileTools(false);
+        if (client === undefined) {
+          publish();
+          return;
+        }
         void refresh();
         if (timer) clearInterval(timer);
         timer = setInterval(() => void refresh(), 250);

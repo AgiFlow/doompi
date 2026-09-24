@@ -8,7 +8,12 @@
  * to one HTTP framework; a Hono app satisfies it through `app.fetch`.
  */
 
-import type { DoomDirectEventBus, DoomHubSessionService, DoomSessionCommunicationEndpoint } from './hubChannel';
+import type {
+  DoomComputerUseSessionAccess,
+  DoomDirectEventBus,
+  DoomHubSessionService,
+  DoomSessionCommunicationEndpoint,
+} from './hubChannel';
 import type { DoomMcpProjection } from './mcpProjection';
 /** The host-owned sync view a repository-scoped package API may inspect. */
 export interface DoomRepositorySyncView {
@@ -172,6 +177,8 @@ export interface DoomApiContext {
   sessionCommunication?: DoomSessionCommunicationEndpoint;
   /** Same-process events shared by session APIs and hub channels. */
   directEvents?: DoomDirectEventBus;
+  /** Present only on a session mounted by an authenticated Desktop host. */
+  computerUse?: DoomComputerUseSessionAccess;
   /** Deliver a typed method to a channel on this exact hub mount, retaining the caller's connection identity. */
   receiveChannel?(sessionId: string, frameType: string, payload: unknown, connectionId: string): boolean;
   /** Machine-owned Remote Control service, mounted only by the global core facet. */

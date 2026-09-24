@@ -1,4 +1,5 @@
 import type {
+  DoomComputerUseHostBinding,
   DoomDirectEventBus,
   DoomHubChannel,
   DoomHubChannelConnection,
@@ -78,6 +79,7 @@ export interface HeadlessHubOptions {
   onNotice?: (message: string) => void;
   sessionReservations?: DoomHubSessionReservations;
   requestSessionApi?: (scope: DoomHubSessionScope, request: DoomHubSessionApiRequest) => Promise<Response>;
+  computerUse?: DoomComputerUseHostBinding;
   admitWorkspace?: (root: string) => Promise<HeadlessWorkspace>;
   onWorkspaceRemoved?: (workspaceId: string) => void;
 }
@@ -87,6 +89,7 @@ export interface HeadlessHub {
   readonly sessionService: DoomHubSessionService;
   /** Lifecycle-owned event path shared by session facets and hub channels. */
   readonly directEvents: DoomDirectEventBus;
+  readonly computerUse?: DoomComputerUseHostBinding;
   snapshot(): readonly HeadlessHubSession[];
   session(sessionId: string): HeadlessHubSession | undefined;
   runtime(sessionId: string): HeadlessSessionHost['runtime'] | undefined;
@@ -115,7 +118,13 @@ export interface HeadlessHub {
   channelFrames(sessionId: string): Array<{ type: string; sessionId: string; payload: unknown }>;
   /** Resolves a channel-owned child journal for the browser thread projection. */
   threadJournal(sessionId: string, threadId: string): string | undefined;
-  receiveChannel(sessionId: string, frameType: string, payload: unknown, connectionId: string): void;
+  receiveChannel(
+    sessionId: string,
+    frameType: string,
+    payload: unknown,
+    connectionId: string,
+    desktopAuthorized?: boolean,
+  ): void;
   disconnectChannels(connectionId: string): void;
   close(): Promise<void>;
 }
@@ -455,6 +464,20 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
         return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
       return options.requestSessionApi(scope, hubAuthenticated(request));
     },
+    ...(options.computerUse === undefined
+      ? {}
+      : {
+          computerUse: {
+            get available() {
+              return options.computerUse!.available;
+            },
+            request(scope, request) {
+              const session = sessions.get(scope.sessionId);
+              if (!session || !belongs(mount, session)) throw new Error('Computer-use session is outside this mount.');
+              return options.computerUse!.request(scopeOf(session), request);
+            },
+          },
+        }),
     onNotice: (message) => options.onNotice?.(message),
   });
 
@@ -517,11 +540,12 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     const cleanup = sessionCleanups.get(sessionId);
     if (cleanup !== undefined) subscriptions.delete(cleanup);
     communicationEndpoints.get(sessionId)?.endpoint.close();
+    // Let scoped sources dispatch their final stop while the live-session boundary still admits it.
+    for (const { source } of selectedChannels(current)) source.sessionRemoved?.(sessionId);
     sessions.delete(sessionId);
     sessionCleanups.delete(sessionId);
     presentationCleanups.get(sessionId)?.();
     presentationCleanups.delete(sessionId);
-    for (const { source } of selectedChannels(current)) source.sessionRemoved?.(sessionId);
     directEvents.clearSession?.(sessionId);
     emit({ kind: 'removed', sessionId });
   };
@@ -705,6 +729,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   return {
     sessionService,
     directEvents,
+    ...(options.computerUse === undefined ? {} : { computerUse: options.computerUse }),
     snapshot: () => [...sessions.values()].map(present),
     session: (sessionId) => {
       const session = sessions.get(sessionId);
@@ -831,12 +856,15 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       }
       return undefined;
     },
-    receiveChannel(sessionId, frameType, payload, connectionId) {
+    receiveChannel(sessionId, frameType, payload, connectionId, desktopAuthorized = false) {
       if (connectionId === '') return;
       const session = sessions.get(sessionId);
       const started = session && selectedChannels(session).find(({ channel }) => channel.frameType === frameType);
       if (session === undefined || started === undefined) return;
-      started.channel.receive?.(scopeOf(session), payload, { connectionId } satisfies DoomHubChannelConnection);
+      started.channel.receive?.(scopeOf(session), payload, {
+        connectionId,
+        ...(desktopAuthorized ? { desktopAuthorized: true } : {}),
+      } satisfies DoomHubChannelConnection);
     },
     disconnectChannels(connectionId) {
       if (connectionId === '') return;

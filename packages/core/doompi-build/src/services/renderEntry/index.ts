@@ -107,10 +107,12 @@ function keyedResolver(): string {
  * authored file supplies only the half the path cannot. The cost is that the
  * merged shape is not checked against `T`, only its position is.
  */
-// One line on purpose: at 118 characters it fits the repository's 120 print
-// width, so oxfmt would join a wrapped form and leave every build dirty.
-const IDENTITY_HELPER =
-  'const via = <T>(identity: Record<string, unknown>, value: unknown): T => ({ ...identity, ...(value as object) }) as T;';
+// Preserve absence before applying a path-derived name. Otherwise optional routes
+// become incomplete placeholder tools or hooks that the `defined` filter cannot remove.
+const IDENTITY_HELPER = [
+  'const via = <T>(identity: Record<string, unknown>, value: unknown): T =>',
+  '  (value === undefined ? undefined : { ...identity, ...(value as object) }) as T;',
+].join('\n');
 
 /**
  * Every fill is a slot fill. There is no host-region special case.

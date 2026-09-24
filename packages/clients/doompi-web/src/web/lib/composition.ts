@@ -3,6 +3,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 
 import type { MinorModeProjection, MinorModeRecordProjection } from '../../types/hub';
 import {
+  isDesktopClient,
   pluginActivityGroups,
   pluginDockFaces,
   pluginFileLinks,
@@ -87,6 +88,7 @@ export interface MinorModeSource {
   statusKey?: string;
   widgetKey?: string;
   hideWhenMissing?: boolean;
+  desktopOnly?: boolean;
 }
 
 /**
@@ -114,6 +116,7 @@ export const PACKAGED_MINOR_MODES: readonly MinorModeSource[] = [
     keys: 'c e',
     statusKey: 'doom-computer-use-mode',
     hideWhenMissing: true,
+    desktopOnly: true,
   },
 ];
 
@@ -132,27 +135,29 @@ function sourceFor(sources: readonly MinorModeSource[], mode: MinorModeRecordPro
  * is missing from a composition stays visible rather than silently gone.
  */
 function catalogMinorModes(sources: readonly MinorModeSource[], projection: MinorModeProjection): MinorMode[] {
-  const rows: MinorMode[] = projection.modes.map((mode) => {
-    const source = sourceFor(sources, mode);
-    const on = mode.activation === 'active' || mode.activation === 'deactivating';
-    // The catalog says per action whether it can run here and why not. A mode
-    // with nothing runnable is offered as a row that cannot be clicked rather
-    // than one that answers "no actions available" after the fact.
-    const blocked = mode.actions.length > 0 && mode.actions.every((action) => !action.enabled);
-    const reason = blocked ? (mode.actions.find((action) => action.disabledReason)?.disabledReason ?? '') : '';
-    return {
-      name: source?.name ?? mode.label.toLowerCase(),
-      id: mode.id,
-      keys: source?.keys ?? '',
-      availability: blocked && !on ? 'unavailable' : on ? 'on' : 'off',
-      ...(source?.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
-      detail: mode.detail ?? (mode.activation === 'activating' ? 'activating' : ''),
-      unavailableReason: reason,
-    };
-  });
+  const rows: MinorMode[] = projection.modes
+    .filter((mode) => !sourceFor(sources, mode)?.desktopOnly || isDesktopClient())
+    .map((mode) => {
+      const source = sourceFor(sources, mode);
+      const on = mode.activation === 'active' || mode.activation === 'deactivating';
+      // The catalog says per action whether it can run here and why not. A mode
+      // with nothing runnable is offered as a row that cannot be clicked rather
+      // than one that answers "no actions available" after the fact.
+      const blocked = mode.actions.length > 0 && mode.actions.every((action) => !action.enabled);
+      const reason = blocked ? (mode.actions.find((action) => action.disabledReason)?.disabledReason ?? '') : '';
+      return {
+        name: source?.name ?? mode.label.toLowerCase(),
+        id: mode.id,
+        keys: source?.keys ?? '',
+        availability: blocked && !on ? 'unavailable' : on ? 'on' : 'off',
+        ...(source?.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
+        detail: mode.detail ?? (mode.activation === 'activating' ? 'activating' : ''),
+        unavailableReason: reason,
+      };
+    });
   const seen = new Set(rows.map((row) => row.name));
   for (const source of sources) {
-    if (source.hideWhenMissing === true) continue;
+    if (source.hideWhenMissing === true || (source.desktopOnly && !isDesktopClient())) continue;
     if (!seen.has(source.name)) {
       rows.push({
         name: source.name,
@@ -177,6 +182,7 @@ export function minorModes(
   const sources: readonly MinorModeSource[] = declared.length > 0 ? declared : PACKAGED_MINOR_MODES;
   if (projection) return catalogMinorModes(sources, projection);
   return sources.flatMap((source) => {
+    if (source.desktopOnly && !isDesktopClient()) return [];
     if (source.statusKey !== undefined) {
       const raw = statuses[source.statusKey];
       if (raw === undefined) {

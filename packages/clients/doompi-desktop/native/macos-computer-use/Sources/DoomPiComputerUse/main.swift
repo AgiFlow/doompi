@@ -163,10 +163,12 @@ func semanticObservation(target: Target) throws -> [String: JSONValue] {
         if !secure, AXUIElementIsAttributeSettable(element, kAXFocusedAttribute as CFString, &focusSettable) == .success,
            focusSettable.boolValue { actions.append(JSONValue(value: "focus")) }
         if nativeActions.contains(where: { $0.hasPrefix("AXScroll") }) { actions.append(JSONValue(value: "scroll")) }
-        node["actions"] = JSONValue(value: actions)
+        node["actions"] = JSONValue(value: secure ? [JSONValue]() : actions)
         signature += "|\(path)|\(role)|\(title ?? "")|\(secure ? "<secure>" : axString(element, kAXValueAttribute) ?? "")|\(children(element).count)"
         nodes.append(node)
-        for (index, child) in children(element).prefix(100).enumerated() { visit(child, path: path + [index], depth: depth + 1) }
+        if !secure {
+            for (index, child) in children(element).prefix(100).enumerated() { visit(child, path: path + [index], depth: depth + 1) }
+        }
     }
     visit(root, path: [], depth: 0)
     return [
@@ -194,12 +196,14 @@ func screenshot(target: Target) async throws -> String {
     return data.base64EncodedString()
 }
 
-func observation(target: Target) async throws -> [String: JSONValue] {
+func observation(target: Target, includeScreenshot: Bool = true) async throws -> [String: JSONValue] {
     var result = try semanticObservation(target: target)
-    result["screenshot"] = JSONValue(value: [
-        "mimeType": JSONValue(value: "image/png"),
-        "data": JSONValue(value: try await screenshot(target: target)),
-    ])
+    if includeScreenshot {
+        result["screenshot"] = JSONValue(value: [
+            "mimeType": JSONValue(value: "image/png"),
+            "data": JSONValue(value: try await screenshot(target: target)),
+        ])
+    }
     return result
 }
 
@@ -220,8 +224,15 @@ func act(_ envelope: OperationEnvelope) throws -> [String: JSONValue] {
         throw ProtocolError.invalid("A bounded semantic action is required.")
     }
     let target = envelope.activation.target
-    let expectedSnapshot = try semanticObservation(target: target)["snapshotId"]?.value as? String
-    guard envelope.request.snapshotId == expectedSnapshot else { throw ProtocolError.invalid("The semantic snapshot is stale.") }
+    let current = try semanticObservation(target: target)
+    guard envelope.request.snapshotId == current["snapshotId"]?.value as? String else { throw ProtocolError.invalid("The semantic snapshot is stale.") }
+    let nodes = (current["elements"]?.value as? [JSONValue]) ?? []
+    let node = nodes.compactMap { $0.value as? [String: JSONValue] }.first { $0["ref"]?.value as? String == reference }
+    let actions = (node?["actions"]?.value as? [JSONValue]) ?? []
+    guard node?["secure"]?.value as? Bool == false, node?["enabled"]?.value as? Bool == true,
+          actions.contains(where: { $0.value as? String == kind }) else {
+        throw ProtocolError.invalid("The element is secure, disabled, unobserved, or does not support this action.")
+    }
     let element = try resolve(target: target, reference: try boundedString(reference, maximum: 256, label: "elementRef"))
     guard FileManager.default.fileExists(atPath: envelope.authorizationPath) else {
         throw ProtocolError.invalid("The computer-use authorization was revoked.")
@@ -430,7 +441,7 @@ Task {
         case "targets": emit(try discoverTargets().map { JSONValue(value: $0) })
         case "observe":
             let envelope = try input(OperationEnvelope.self)
-            emit(try await observation(target: envelope.activation.target))
+            emit(try await observation(target: envelope.activation.target, includeScreenshot: envelope.request.includeScreenshot ?? true))
         case "act": emit(try act(input(OperationEnvelope.self)))
         case "record": try await record(input(ActivationEnvelope.self))
         default: throw ProtocolError.invalid("Unsupported helper operation.")

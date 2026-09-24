@@ -24,10 +24,10 @@ export function mountMcpTools(tools: readonly DoomHeadlessTool[]) {
   };
 }
 
-export function bindMcpTool(context: DoomMcpPluginContext, name: string): DoomHeadlessTool {
+export function bindMcpTool(context: DoomMcpPluginContext, name: string): DoomHeadlessTool | undefined {
   const catalog = context.services.get<McpToolCatalog>(COMPUTER_USE_MCP_TOOLS_SERVICE);
   const tool = catalog?.get(name);
-  if (!tool || !catalog) throw new Error(`Computer use tool is unavailable: ${name}`);
+  if (!tool || !catalog) return undefined;
   return {
     ...tool,
     execute(toolCallId, parameters, signal, onUpdate) {

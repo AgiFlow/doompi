@@ -105,6 +105,7 @@ export async function startHub(
   plan: HubLaunchPlan,
   onNotice: (message: string) => void = () => {},
   computerUseHost?: ComputerUseHost,
+  desktopToken?: string,
 ): Promise<RunningHub> {
   const url = `http://${plan.host}:${String(plan.port)}`;
   const headless = spawn(nodeRuntimeExecutable(process.execPath), headlessArguments(plan), {
@@ -119,7 +120,9 @@ export async function startHub(
   let presentation: ChildProcess | undefined;
   try {
     computerUseBridge =
-      computerUseHost === undefined ? undefined : attachComputerUseHostBridge(headless, computerUseHost, onNotice);
+      computerUseHost === undefined
+        ? undefined
+        : attachComputerUseHostBridge(headless, computerUseHost, onNotice, desktopToken);
     await waitForHealth(plan.host, plan.headlessPort, headless, 'headless server');
     presentation = spawn(nodeRuntimeExecutable(process.execPath), hubArguments(plan), {
       cwd: plan.cwd,

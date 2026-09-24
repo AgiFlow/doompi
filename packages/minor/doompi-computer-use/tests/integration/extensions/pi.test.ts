@@ -137,10 +137,21 @@ describe('doompi-computer-use Pi extension', () => {
     await expect(
       host.callTool('computer_action', { kind: 'press', snapshotId: 'snapshot-1', elementRef: 'button-1' }),
     ).resolves.toMatchObject({ details: { applied: true } });
-    await expect(
-      host.callTool('computer_exec', { scriptPath: '/trusted/fill-form.ts', input: { name: 'Ada' } }),
-    ).resolves.toMatchObject({ details: { observation: { snapshotId: 'snapshot-2' } } });
-    expect(scriptRunner.execute).toHaveBeenCalledWith('/trusted/fill-form.ts', { name: 'Ada' }, undefined);
+    const scriptInput = {
+      scriptPath: '/trusted/fill-form.ts',
+      input: { name: 'Ada' },
+      trusted: true,
+      includeScreenshot: true,
+    };
+    await expect(host.callTool('computer_exec', scriptInput)).resolves.toMatchObject({
+      details: { observation: { snapshotId: 'snapshot-2' } },
+    });
+    expect(scriptRunner.execute).toHaveBeenCalledWith(
+      scriptInput.scriptPath,
+      scriptInput.input,
+      undefined,
+      scriptInput,
+    );
     const prompts = await host.emit('before_agent_start', { systemPrompt: 'base' });
     expect(prompts).toEqual(
       expect.arrayContaining([

@@ -341,7 +341,14 @@ function writeSse(response: ServerResponse, event: string, value: unknown): void
 export async function serveHeadlessServer(options: HeadlessServerOptions): Promise<HeadlessServer> {
   const clients = new Set<Client>();
   const scopedProtocols = new Set<Awaited<ReturnType<typeof createHeadlessProtocol>>>();
-  const sse = new Set<ServerResponse>();
+  const sse = new Map<ServerResponse, () => boolean>();
+  const desktopAuthorized = (request: IncomingMessage): boolean => {
+    const proof = request.headers['x-doompi-desktop'];
+    return (
+      typeof proof === 'string' &&
+      options.headlessHub.computerUse?.authorize?.(new Headers({ 'x-doompi-desktop': proof })) === true
+    );
+  };
   let closed = false;
   const webSockets = new WebSocketServer({ noServer: true });
   /**
@@ -379,7 +386,16 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
 
   const unsubscribe = options.headlessHub.onEvent((event) => {
     const frame = eventFrame(event);
-    for (const response of sse) writeSse(response, String(frame.type), frame);
+    const sessionId = event.kind === 'upsert' ? event.session.id : 'sessionId' in event ? event.sessionId : undefined;
+    for (const [response, native] of sse) {
+      if (
+        (sessionId !== undefined && options.headlessHub.computerUse?.ownsSession?.(sessionId)) ||
+        frame.type === 'computer_use_state'
+      ) {
+        if (!native()) continue;
+      }
+      writeSse(response, String(frame.type), frame);
+    }
   });
 
   async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -391,6 +407,15 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         protocol: PROTOCOL_VERSION,
         sessions: options.headlessHub.snapshot().length,
       });
+      return;
+    }
+    const scopedSession = /^\/api\/workspaces\/[^/]+\/sessions\/([^/]+)(?:\/|$)/u.exec(url.pathname)?.[1];
+    if (
+      scopedSession &&
+      options.headlessHub.computerUse?.ownsSession?.(decodeURIComponent(scopedSession)) &&
+      !desktopAuthorized(request)
+    ) {
+      json(response, 404, { error: 'This session belongs to its Desktop instance.' });
       return;
     }
     if (isPublicSessionMcpRoute(request.method ?? 'GET', url.pathname)) {
@@ -560,11 +585,19 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         connection: 'keep-alive',
         'content-type': 'text/event-stream; charset=utf-8',
       });
-      sse.add(response);
+      sse.set(response, () => desktopAuthorized(request));
       response.on('close', () => sse.delete(response));
       writeSse(response, 'sessions_snapshot', {
         type: 'sessions_snapshot',
-        sessions: [...options.headlessHub.snapshot().map(sessionView), ...dormant().map(dormantView)],
+        sessions: [
+          ...options.headlessHub
+            .snapshot()
+            .filter(
+              (session) => !options.headlessHub.computerUse?.ownsSession?.(session.id) || desktopAuthorized(request),
+            )
+            .map(sessionView),
+          ...dormant().map(dormantView),
+        ],
       });
       writeSse(response, 'workspaces_snapshot', {
         type: 'workspaces_snapshot',
@@ -833,11 +866,19 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         json(response, 400, { error: 'Invalid target session id.' });
         return;
       }
+      if (options.headlessHub.computerUse?.ownsSession?.(targetSessionId) && !desktopAuthorized(request)) {
+        json(response, 404, { error: 'This session belongs to its Desktop instance.' });
+        return;
+      }
       json(response, 200, { sessionId: await options.resumeSession(session, targetSessionId) });
       return;
     }
     if (suffix === '/channels' && request.method === 'GET') {
-      json(response, 200, { channels: options.headlessHub.channelFrames(sessionId) });
+      json(response, 200, {
+        channels: options.headlessHub
+          .channelFrames(sessionId)
+          .filter((frame) => frame.type !== 'computer_use_state' || desktopAuthorized(request)),
+      });
       return;
     }
     const channelMatch = /^\/channel\/([^/]+)$/u.exec(suffix);
@@ -849,6 +890,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         frameType,
         parseJson(await readBody(request)),
         typeof connectionId === 'string' ? connectionId : 'http',
+        desktopAuthorized(request),
       );
       json(response, 202, { ok: true });
       return;
@@ -879,7 +921,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       return;
     }
     const prepare =
-      mount.scope === 'global'
+      mount.scope === 'global' && options.headlessHub.computerUse === undefined
         ? Promise.resolve(protocol)
         : createHeadlessProtocol({
             hub: options.headlessHub,
@@ -887,6 +929,8 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
             telemetry: options.telemetry,
             onNotice: options.onNotice,
             dormantSessions: dormant,
+            authorizeSession: (id) => !options.headlessHub.computerUse?.ownsSession?.(id) || desktopAuthorized(request),
+            authorizeDesktop: () => desktopAuthorized(request),
           });
     void prepare
       .then(async (selected) => {
@@ -944,7 +988,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       if (closed) return;
       closed = true;
       unsubscribe();
-      for (const response of sse) response.end();
+      for (const response of sse.keys()) response.end();
       sse.clear();
       for (const client of clients) client.socket.terminate();
       clients.clear();
