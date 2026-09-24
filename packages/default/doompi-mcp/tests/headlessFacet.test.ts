@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { DOOM_CHILD_SESSION_MCP_TOOL_SERVICE, type DoomChildSessionTool } from '@agimon-ai/doompi-core/childSession';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
@@ -8,240 +12,358 @@ import {
   type DoomHeadlessResource,
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
+import { DOOM_MCP_STATUS_SERVICE, type DoomMcpStatusService } from '@agimon-ai/doompi-core/mcpStatus';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/serverFacet';
 import { Context } from '@deepseek-ai/cordis';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { facet as mcpHeadlessFacet } from '../generated/server';
+import sessionMcp from '../src/extensions/workspaces/sessions/(backend)/tool/session_mcp.mcp';
+import type { McpRuntimeOptions } from '../src/services/mcpRuntime';
+import { MCP_SESSION_TOOLS_SERVICE, type McpSessionToolsService } from '../src/services/mcpSessionTools';
 import { sessionConfigEnvironment } from '../src/services/sessionConfig';
+import { MCP_SESSION_AUTH_STATUS_KEY, parseMcpSessionAuthStatus } from '../src/types/webMcp';
 
-const runtimeState = vi.hoisted(() => ({
-  startError: undefined as unknown,
-  services: undefined as
-    | {
-        clientManager: {
-          ensureConnected: ReturnType<typeof vi.fn>;
-        };
-      }
-    | undefined,
+const mock = vi.hoisted(() => ({
+  start: vi.fn(),
+  dispose: vi.fn(),
+  ensureConnected: vi.fn(),
+  disconnect: vi.fn(),
+  callTool: vi.fn(),
+  clearToken: vi.fn(),
+  options: [] as McpRuntimeOptions[],
 }));
 
+vi.mock('../src/services/keyringTokenStore', () => ({
+  createTokenStore: async () => ({ read: vi.fn(), write: vi.fn(), clear: mock.clearToken }),
+}));
 vi.mock('../src/services/mcpRuntime', () => ({
+  readCachedCatalog: () => ({ servers: [] }),
   McpRuntimeOwner: class {
-    async start(options: {
-      onAuthorizationUrl: (url: URL, serverName: string) => void;
-      onServerStateChange: (change: { serverName: string; state: string }) => void;
-    }): Promise<void> {
-      if (runtimeState.startError !== undefined) throw runtimeState.startError;
-      options.onAuthorizationUrl(new URL('https://mcp.example/authorize'), 'example');
-      options.onServerStateChange({ serverName: 'example', state: 'connected' });
+    private live = false;
+    private readonly services = {
+      clientManager: {
+        ensureConnected: mock.ensureConnected,
+        disconnectServer: mock.disconnect,
+        getServerRequestTimeout: () => 500,
+      },
+    };
+    async start(options: McpRuntimeOptions) {
+      mock.options.push(options);
+      await mock.start();
+      this.live = true;
     }
-    async dispose(): Promise<void> {}
     getServices() {
-      return runtimeState.services;
+      return this.live ? this.services : undefined;
     }
     isCurrent(services: unknown) {
-      return services === runtimeState.services;
+      return this.live && services === this.services;
+    }
+    async dispose() {
+      this.live = false;
+      await mock.dispose();
     }
   },
 }));
 
-import { facet as mcpHeadlessFacet } from '../generated/server';
+const cleanups: Array<() => void | Promise<void>> = [];
+let root: string;
 
-function contextFor(host: DoomHeadlessHostService): Context {
-  const context = new Context();
-  context.provide(DOOM_SERVER_HOST_SERVICE, {
-    scope: 'session',
-    registerApi: () => ({ dispose() {} }),
+beforeEach(() => {
+  vi.clearAllMocks();
+  mock.options.length = 0;
+  mock.start.mockResolvedValue(undefined);
+  mock.dispose.mockResolvedValue(undefined);
+  mock.disconnect.mockResolvedValue(undefined);
+  mock.callTool.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
+  mock.ensureConnected.mockResolvedValue({
+    callTool: mock.callTool,
+    listTools: async () => [{ name: 'ping', description: 'Ping upstream', inputSchema: { type: 'object' } }],
   });
-  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
-  return context;
-}
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-mcp-server-'));
+  fs.writeFileSync(
+    path.join(root, '.mcp.json'),
+    JSON.stringify({
+      mcpServers: { example: { command: 'unused-fixture' }, pending: { command: 'unused-fixture' } },
+    }),
+  );
+});
 
-function execution(environment: Readonly<Record<string, string | undefined>> = {}): DoomHeadlessExecutionContext {
-  return {
-    cwd: '/tmp',
-    repoRoot: '/tmp',
-    sessionId: 'mcp-headless-test',
-    environment,
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+async function setup(enabled = true) {
+  const statuses: Record<string, string> = {};
+  const execution = {
+    cwd: root,
+    repoRoot: root,
+    sessionId: crypto.randomUUID(),
+    environment: sessionConfigEnvironment({ enabled, repoRoot: root, stagingDirectory: path.join(root, 'staging') }),
     client: {
       notify: vi.fn(),
       request: vi.fn(),
-      setStatus: vi.fn(),
+      setStatus: vi.fn((key: string, value?: string) => {
+        if (value === undefined) delete statuses[key];
+        else statuses[key] = value;
+      }),
     },
   } as unknown as DoomHeadlessExecutionContext;
+  const resources: DoomHeadlessResource[] = [];
+  const activities: DoomHeadlessActivity[] = [];
+  const commands: DoomHeadlessCommand[] = [];
+  const tools: DoomHeadlessTool[] = [];
+  const registration = () => ({ dispose: vi.fn() });
+  const host = {
+    context: execution,
+    registerResource: (value: DoomHeadlessResource) => {
+      resources.push(value);
+      return registration();
+    },
+    registerActivity: (value: DoomHeadlessActivity) => {
+      activities.push(value);
+      return registration();
+    },
+    registerCommand: (value: DoomHeadlessCommand) => {
+      commands.push(value);
+      return registration();
+    },
+    registerTool: (value: DoomHeadlessTool) => {
+      tools.push(value);
+      return registration();
+    },
+  } as unknown as DoomHeadlessHostService;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session', registerApi: registration });
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  const close = await mcpHeadlessFacet.apply(context);
+  cleanups.push(async () => {
+    await close?.();
+  });
+  const start = async () => {
+    const stop = await activities[0]!.start(execution);
+    let stopped = false;
+    const stopOnce = async () => {
+      if (!stopped) {
+        stopped = true;
+        await stop();
+      }
+    };
+    cleanups.push(stopOnce);
+    return stopOnce;
+  };
+  const service = () => context.get(MCP_SESSION_TOOLS_SERVICE) as McpSessionToolsService;
+  const childTool = () => context.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionTool | undefined;
+  return { context, execution, statuses, resources, command: commands[0]!, tool: tools[0]!, start, service, childTool };
 }
 
-describe('MCP headless facet', () => {
-  it('exposes config, status, authorization, and safe pre-runtime tool behavior', async () => {
-    const resources: DoomHeadlessResource[] = [];
-    const activities: DoomHeadlessActivity[] = [];
-    const commands: DoomHeadlessCommand[] = [];
-    const tools: DoomHeadlessTool[] = [];
-    const disposers: Array<ReturnType<typeof vi.fn>> = [];
-    const register = () => {
-      const dispose = vi.fn();
-      disposers.push(dispose);
-      return { dispose };
-    };
-    const host = {
-      registerApi: () => register(),
-      registerResource: (resource: DoomHeadlessResource) => {
-        resources.push(resource);
-        return register();
-      },
-      registerActivity: (activity: DoomHeadlessActivity) => {
-        activities.push(activity);
-        return register();
-      },
-      registerCommand: (command: DoomHeadlessCommand) => {
-        commands.push(command);
-        return register();
-      },
-      registerTool: (tool: DoomHeadlessTool) => {
-        tools.push(tool);
-        return register();
-      },
-    } as unknown as DoomHeadlessHostService;
-    const context = contextFor(host);
-    const close = await mcpHeadlessFacet.apply(context);
-    const childTool = context.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionTool | undefined;
-    expect(childTool?.name).toBe('mcp');
-    const activity = activities[0];
-    const command = commands[0];
-    const tool = tools[0];
-    if (!activity || !command || !tool) throw new Error('MCP headless registrations were not created');
-    // The config is served on demand by the command, never as a prompt section: it
-    // carried local filesystem paths and diagnostics the model cannot act on.
-    expect(resources).toEqual([]);
+async function connected() {
+  const current = await setup();
+  const stop = await current.start();
+  await vi.waitFor(() => expect(mock.options).toHaveLength(1));
+  mock.options[0]!.onServerStateChange?.({ serverName: 'example', state: 'connected' });
+  await vi.waitFor(() => expect(current.service().snapshot()).toHaveLength(1));
+  return { ...current, stop };
+}
 
-    const testExecution = execution();
-    await command.execute('', testExecution);
-    expect(testExecution.client.notify).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'DoomPi MCP', level: 'info' }),
+describe('MCP server facet contracts', () => {
+  it('keeps config out of the prompt and rejects tools before startup', async () => {
+    const current = await setup();
+    expect(current.resources).toEqual([]);
+    expect(
+      await current.tool.execute('call', { server: 'example', tool: 'ping' }, undefined, undefined, current.execution),
+    ).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('not started') }] });
+    expect(mock.ensureConnected).not.toHaveBeenCalled();
+    await current.command.execute('auth example', current.execution);
+    expect(current.execution.client.notify).toHaveBeenLastCalledWith(
+      expect.objectContaining({ body: expect.stringContaining('not started'), level: 'warning' }),
     );
-
-    vi.mocked(testExecution.client.request).mockResolvedValue('https://mcp.example/authorize');
-    await command.execute('auth example', testExecution);
-    expect(testExecution.client.notify).toHaveBeenCalledWith({
-      body: 'MCP authorization received for example.',
-      level: 'info',
-    });
-
-    vi.mocked(testExecution.client.request).mockResolvedValue(undefined);
-    await command.execute('auth', testExecution);
-    expect(testExecution.client.request).toHaveBeenLastCalledWith(
-      expect.objectContaining({ title: 'Authorize MCP server' }),
-    );
-    await command.execute('unexpected', testExecution);
-    expect(testExecution.client.notify).toHaveBeenLastCalledWith(
-      expect.objectContaining({ title: 'DoomPi MCP', level: 'warning' }),
-    );
-    const result = await tool.execute(
-      'mcp-use-1',
-      { server: 'example', tool: 'status', arguments: {} },
-      undefined,
-      undefined,
-      testExecution,
-    );
-    expect(result).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('not started') }] });
-
-    const callTool = vi.fn().mockResolvedValue({
-      content: [
-        { type: 'text', text: 'ok' },
-        { type: 'image', data: 'abc', mimeType: 'image/png' },
-        { type: 'structured', value: 1 },
-      ],
-      isError: true,
-    });
-    const ensureConnected = vi.fn().mockResolvedValue({ callTool });
-    runtimeState.services = { clientManager: { ensureConnected } };
-    const stop = await activity.start(testExecution);
-    expect(testExecution.client.notify).toHaveBeenCalledWith({
-      title: 'Authorize MCP server example',
-      body: 'https://mcp.example/authorize',
-      level: 'warning',
-    });
-    expect(testExecution.client.setStatus).toHaveBeenCalledWith('doompi-mcp', 'example: connected');
-    const success = await tool.execute(
-      'mcp-use-2',
-      { server: 'example', tool: 'status', arguments: { verbose: true } },
-      undefined,
-      undefined,
-      testExecution,
-    );
-    expect(success).toMatchObject({
-      isError: true,
-      content: [
-        { type: 'text', text: 'ok' },
-        { type: 'image', data: 'abc', mimeType: 'image/png' },
-        { type: 'text', text: '{"type":"structured","value":1}' },
-      ],
-      details: expect.objectContaining({ isError: true }),
-    });
-
-    const signal = new AbortController().signal;
-    await expect(
-      childTool!.execute('child-call', { server: 'example', tool: 'status', arguments: { child: true } }, signal),
-    ).resolves.toEqual(success);
-    expect(callTool).toHaveBeenLastCalledWith('status', { child: true });
-    ensureConnected.mockRejectedValueOnce(new Error('connection failed'));
-    await expect(
-      tool.execute('mcp-use-3', { server: 'example', tool: 'status' }, undefined, undefined, testExecution),
-    ).resolves.toMatchObject({ isError: true, content: [{ text: 'connection failed' }] });
-
-    await stop();
-    expect(testExecution.client.setStatus).toHaveBeenCalledWith('doompi-mcp', undefined);
-    await expect(childTool!.execute('stopped-child', { server: 'example', tool: 'status' })).resolves.toMatchObject({
-      isError: true,
-    });
-
-    runtimeState.startError = new Error('startup failed');
-    const stopFailedRuntime = await activity.start(testExecution);
-    expect(testExecution.client.notify).toHaveBeenLastCalledWith({
-      title: 'DoomPi MCP unavailable',
-      body: 'startup failed',
-      level: 'warning',
-    });
-    await stopFailedRuntime();
-    runtimeState.startError = undefined;
-
-    await close?.();
-    expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
-    expect(context.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE)).toBeUndefined();
   });
 
-  it('reads each session MCP configuration from its admitted environment', async () => {
-    const commands: DoomHeadlessCommand[] = [];
-    const register = () => ({ dispose: vi.fn() });
-    const host = {
-      registerApi: () => register(),
-      registerResource: vi.fn(() => register()),
-      registerActivity: vi.fn(() => register()),
-      registerCommand: vi.fn((command: DoomHeadlessCommand) => {
-        commands.push(command);
-        return register();
-      }),
-      registerTool: vi.fn(() => register()),
-    } as unknown as DoomHeadlessHostService;
-    const close = await mcpHeadlessFacet.apply(contextFor(host));
-    const command = commands[0];
-    if (!command) throw new Error('MCP config command was not registered');
+  it('publishes every configured server before tool discovery', async () => {
+    const current = await setup();
+    await current.start();
+    expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])).toEqual([
+      { name: 'example', state: 'not-connected' },
+      { name: 'pending', state: 'not-connected' },
+    ]);
+  });
 
-    const first = execution(sessionConfigEnvironment({ repoRoot: '/first-repo', stagingDirectory: '/tmp/first-mcp' }));
-    const second = execution(
-      sessionConfigEnvironment({ repoRoot: '/second-repo', stagingDirectory: '/tmp/second-mcp' }),
+  it('publishes the filtered parent MCP dispatcher for child sessions', async () => {
+    const current = await connected();
+    const childTool = current.childTool();
+    expect(childTool?.name).toBe('mcp');
+    await expect(childTool!.execute('child-call', { server: 'example', tool: 'ping' })).resolves.toMatchObject({
+      content: [{ text: 'ok' }],
+    });
+    expect(mock.callTool).toHaveBeenLastCalledWith('ping', {}, { timeout: 500 });
+
+    await current.command.execute('disconnect example', current.execution);
+    await expect(
+      childTool!.execute('child-after-disconnect', { server: 'example', tool: 'ping', arguments: {} }),
+    ).rejects.toThrow('not available in this session');
+  });
+
+  it('publishes all server states, the shared status service, and upstream tools without the Pi adapter', async () => {
+    const current = await connected();
+    mock.options[0]!.onServerStateChange?.({ serverName: 'pending', state: 'failed', error: 'fixture failure' });
+    await vi.waitFor(() =>
+      expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])).toEqual([
+        { name: 'example', state: 'connected' },
+        { name: 'pending', state: 'failed' },
+      ]),
     );
+    const status = current.context.get(DOOM_MCP_STATUS_SERVICE) as DoomMcpStatusService;
+    expect(status.getSnapshot().servers.find((server) => server.name === 'example')?.tools).toHaveLength(1);
+    const lifecycle = new AbortController();
+    const refresh = vi.fn();
+    const tools = sessionMcp({
+      services: { get: <T>(name: string) => current.context.get(name) as T | undefined },
+      signal: lifecycle.signal,
+      refresh,
+    } as unknown as Parameters<typeof sessionMcp>[0]);
+    expect(tools).toHaveLength(1);
+    expect(tools[0]?.name).toBe(current.service().snapshot()[0]?.piName);
+    await tools[0]!.execute('call', {}, undefined, undefined, current.execution);
+    expect(mock.callTool).toHaveBeenCalledWith('ping', {}, { timeout: 500 });
+    await current.command.execute('disconnect example', current.execution);
+    expect(refresh).toHaveBeenCalled();
+    expect(current.service().snapshot()).toEqual([]);
+    lifecycle.abort();
+  });
 
-    // Per-session isolation is unchanged; it is now observed through the on-demand
-    // command rather than a prompt resource.
-    await command.execute('', first);
-    await command.execute('', second);
-    expect(JSON.parse((first.client.notify as ReturnType<typeof vi.fn>).mock.calls[0]![0].body)).toMatchObject({
-      repoRoot: '/first-repo',
-    });
-    expect(JSON.parse((second.client.notify as ReturnType<typeof vi.fn>).mock.calls[0]![0].body)).toMatchObject({
-      repoRoot: '/second-repo',
-    });
-    await close?.();
+  it('runs genuine authorization without requesting a pasted code or blocking the command', async () => {
+    const current = await connected();
+    let finish!: () => void;
+    mock.ensureConnected.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await current.command.execute('auth example', current.execution);
+    await vi.waitFor(() => expect(mock.clearToken).toHaveBeenCalledWith('example'));
+    expect(current.execution.client.request).not.toHaveBeenCalled();
+    mock.options[0]!.onAuthorizationUrl?.(new URL('https://auth.example.test/authorize'), 'example');
+    expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])?.[0]?.authorizationUrl).toBe(
+      'https://auth.example.test/authorize',
+    );
+    expect(current.execution.client.notify).not.toHaveBeenCalledWith(
+      expect.objectContaining({ body: 'example is authorized.' }),
+    );
+    finish();
+    await vi.waitFor(() =>
+      expect(current.execution.client.notify).toHaveBeenCalledWith(
+        expect.objectContaining({ body: 'example is authorized.' }),
+      ),
+    );
+  });
+
+  it('disconnects without clearing credentials and prevents generic dispatch from reconnecting it', async () => {
+    const current = await connected();
+    await current.command.execute('disconnect example', current.execution);
+    expect(mock.disconnect).toHaveBeenCalledWith('example');
+    expect(mock.clearToken).not.toHaveBeenCalled();
+    expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])?.[0]?.state).toBe('closed');
+    mock.ensureConnected.mockClear();
+    expect(
+      await current.tool.execute('call', { server: 'example', tool: 'ping' }, undefined, undefined, current.execution),
+    ).toMatchObject({ isError: true });
+    expect(mock.ensureConnected).not.toHaveBeenCalled();
+  });
+
+  it('normalizes non-Error disconnect failures', async () => {
+    const current = await connected();
+    mock.disconnect.mockRejectedValueOnce('disconnect failed');
+    await current.command.execute('disconnect example', current.execution);
+    expect(current.execution.client.notify).toHaveBeenLastCalledWith(
+      expect.objectContaining({ body: 'disconnect failed', level: 'warning' }),
+    );
+  });
+
+  it('normalizes non-Error MCP invocation failures', async () => {
+    const current = await connected();
+    mock.ensureConnected.mockRejectedValueOnce('connection failed');
+    await expect(
+      current.tool.execute('call', { server: 'example', tool: 'ping' }, undefined, undefined, current.execution),
+    ).resolves.toMatchObject({ isError: true, content: [{ text: 'connection failed' }] });
+  });
+
+  it('reloads changed source contents even when their configured paths are unchanged', async () => {
+    const current = await connected();
+    fs.writeFileSync(
+      path.join(root, '.mcp.json'),
+      JSON.stringify({ mcpServers: { replacement: { command: 'unused-fixture' } } }),
+    );
+    await current.command.execute('reload', current.execution);
+    expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])).toEqual([
+      { name: 'replacement', state: 'not-connected' },
+    ]);
+    expect(current.service().snapshot()).toEqual([]);
+  });
+
+  it('keeps explicitly disabled sessions empty and never creates a runtime', async () => {
+    const current = await setup(false);
+    await current.start();
+    expect(current.statuses[MCP_SESSION_AUTH_STATUS_KEY]).toBeUndefined();
+    expect(current.service().snapshot()).toEqual([]);
+    expect(mock.start).not.toHaveBeenCalled();
+    await current.command.execute('auth example', current.execution);
+    expect(mock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it('reports startup errors and clears state and stale callbacks on stop', async () => {
+    mock.start.mockRejectedValueOnce(new Error('startup failed'));
+    const current = await setup();
+    const stop = await current.start();
+    await vi.waitFor(() =>
+      expect(current.execution.client.notify).toHaveBeenCalledWith(
+        expect.objectContaining({ body: expect.stringContaining('startup failed') }),
+      ),
+    );
+    await stop();
+    mock.options[0]!.onAuthorizationUrl?.(new URL('https://auth.example.test/late'), 'example');
+    expect(current.statuses).toEqual({});
+    expect(current.service().snapshot()).toEqual([]);
+  });
+
+  it('withdraws status and tools even when runtime disposal fails', async () => {
+    const current = await connected();
+    mock.dispose.mockRejectedValueOnce(new Error('disconnect failed'));
+    await expect(current.stop()).rejects.toThrow('disconnect failed');
+    expect(current.statuses).toEqual({});
+    expect(current.service().snapshot()).toEqual([]);
+  });
+
+  it('fails closed when reload cannot dispose the old runtime', async () => {
+    const current = await connected();
+    mock.dispose.mockRejectedValueOnce(new Error('disconnect failed'));
+    await current.command.execute('reload', current.execution);
+    expect(current.statuses[MCP_SESSION_AUTH_STATUS_KEY]).toBeUndefined();
+    expect(current.service().snapshot()).toEqual([]);
+    expect(mock.start).toHaveBeenCalledTimes(1);
+    expect(current.execution.client.notify).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        body: 'disconnect failed',
+        level: 'warning',
+      }),
+    );
+  });
+
+  it('isolates session state and validates management commands before touching connections', async () => {
+    const first = await connected();
+    const second = await setup(false);
+    await second.start();
+    expect(first.service().snapshot()).toHaveLength(1);
+    expect(second.service().snapshot()).toEqual([]);
+    mock.disconnect.mockClear();
+    for (const args of ['auth', 'auth missing', 'disconnect missing', 'unexpected'])
+      await first.command.execute(args, first.execution);
+    expect(mock.disconnect).not.toHaveBeenCalled();
+    await first.command.execute('status', first.execution);
+    expect(first.execution.client.notify).toHaveBeenLastCalledWith(
+      expect.objectContaining({ body: expect.stringContaining('example: connected') }),
+    );
   });
 });

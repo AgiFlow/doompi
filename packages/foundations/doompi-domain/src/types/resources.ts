@@ -8,6 +8,7 @@ export type JsonObject = Record<string, unknown>;
 export interface NamedResource {
   name: string;
   path: string;
+  description?: string;
   digest?: string;
 }
 

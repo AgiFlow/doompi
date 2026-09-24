@@ -1,3 +1,8 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -5,6 +10,9 @@ import {
   McpSessionAuthSection,
   requestMcpSessionAuthorization,
 } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/McpSessionAuthSection';
+import { McpSession } from '../../src/services/mcpSession';
+import { createMcpServerRuntime } from '../../src/services/serverRuntime';
+import { sessionConfigEnvironment } from '../../src/services/sessionConfig';
 import {
   formatMcpSessionAuthStatus,
   MCP_SESSION_AUTH_STATUS_KEY,
@@ -12,6 +20,56 @@ import {
 } from '../../src/types/webMcp';
 
 describe('MCP live-session authorization status', () => {
+  it('renders the real server-produced status before any MCP connection or tool discovery', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-mcp-web-contract-'));
+    // Keep real config collection and publication, replacing only detached network startup.
+    const configure = vi.spyOn(McpSession.prototype, 'reconfigure').mockImplementation(async function (
+      this: McpSession,
+      config,
+    ) {
+      this.install(config);
+    });
+    let stop: (() => void | Promise<void>) | undefined;
+    try {
+      fs.writeFileSync(
+        path.join(root, '.mcp.json'),
+        JSON.stringify({
+          mcpServers: { example: { command: 'unused-fixture' }, pending: { command: 'unused-fixture' } },
+        }),
+      );
+      const statuses: Record<string, string> = {};
+      const execution = {
+        cwd: root,
+        repoRoot: root,
+        sessionId: 'web-contract',
+        environment: sessionConfigEnvironment({ repoRoot: root, stagingDirectory: path.join(root, 'staging') }),
+        client: {
+          notify: vi.fn(),
+          request: vi.fn(),
+          setStatus: (key: string, value?: string) => {
+            if (value === undefined) delete statuses[key];
+            else statuses[key] = value;
+          },
+        },
+      } as unknown as DoomHeadlessExecutionContext;
+      stop = await createMcpServerRuntime().activities[0]!.start(execution);
+      const rendered = renderPlugin(
+        McpSessionAuthSection,
+        slotPropsFixture({
+          sessionId: execution.sessionId,
+          statuses,
+        }).props,
+      );
+      expect(rendered.error).toBeUndefined();
+      expect(rendered.html).toContain('context-mcp-auth');
+      expect(rendered.html).toContain('Authorize example');
+      expect(rendered.html).toContain('Authorize pending');
+    } finally {
+      await stop?.();
+      configure.mockRestore();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
   it('serializes connected completion and safe authorization URLs without diagnostics', () => {
     const authorizationUrl = 'https://auth.example.test/authorize?state=waiting';
     const status = formatMcpSessionAuthStatus([
