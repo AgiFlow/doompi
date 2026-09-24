@@ -1794,8 +1794,8 @@
     "pi": {
       "extensions": ["./dist/extensions/pi.mjs"]
     },
-    "assets": [],
-    "files": ["dist"],
+    "assets": ["./llms.txt", "./src/prompts/doompi-debug-agent/SKILL.md"],
+    "files": ["dist", "llms.txt", "src/prompts"],
     "os": [],
     "cpu": []
   },
