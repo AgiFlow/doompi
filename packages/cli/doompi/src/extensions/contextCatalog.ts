@@ -1,15 +1,25 @@
+import os from 'node:os';
+
+import { requireHarnessRoot } from '@agimon-ai/doompi-config/harnessStore';
+import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
+import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
 import { removeContextDetail, writeContextDetail } from '@agimon-ai/doompi-core/contextDetailStore';
 import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordisHost';
 import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-core/help';
+import { createPiHelpToolGate } from '@agimon-ai/doompi-core/help';
 import { DOOM_MCP_STATUS_SERVICE, readDoomMcpStatus } from '@agimon-ai/doompi-core/mcpStatus';
 import { definePiExtension } from '@agimon-ai/doompi-core/piExtension';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
 
 import { createContextPublisher, type ContextPublisher } from '../builders/cli/contextCatalog';
+import { createSetupDiagnosticsTool, DIAGNOSE_SETUP_NAME, type SetupDiagnosticScope } from './setupDiagnostics';
+
 const HELP_CONTRIBUTION_SOURCE = '@agimon-ai/doompi';
 export default definePiExtension('@agimon-ai/doompi/context-catalog', ({ pi }) => {
   let publisher: ContextPublisher | undefined;
+  let readSetupScope: (() => SetupDiagnosticScope) | undefined;
+  const helpGate = createPiHelpToolGate(HELP_CONTRIBUTION_SOURCE, [DIAGNOSE_SETUP_NAME]);
   /**
    * A handler's context, kept so the prompt can be read when the composition is
    * published rather than only when an event fires.
@@ -23,6 +33,22 @@ export default definePiExtension('@agimon-ai/doompi/context-catalog', ({ pi }) =
   /** Pi hands out the base prompt until a turn replaces it with the one it sent. */
   let turned = false;
   const bind = (cordis: Context): void => {
+    cordis.inject([DOOM_CONFIG_SERVICE, DOOM_CORDIS_SESSION_SERVICE], (context) => {
+      const session = context.get(DOOM_CORDIS_SESSION_SERVICE) as DoomCordisSessionService;
+      const read = (): SetupDiagnosticScope => {
+        const harness = requireDoomConfigContext(context).harness;
+        return {
+          repoRoot: requireHarnessRoot(harness),
+          cwd: session.context.cwd,
+          environment: { HOME: os.homedir(), ...harness.profileEnvironment },
+          selection: { majorMode: harness.majorMode, domains: [...harness.domains], profile: harness.profile },
+        };
+      };
+      readSetupScope = read;
+      return () => {
+        if (readSetupScope === read) readSetupScope = undefined;
+      };
+    });
     cordis.inject([DOOM_HELP_SERVICE], (helpContext) => {
       const contribution = requireDoomHelpService(helpContext).register({
         source: HELP_CONTRIBUTION_SOURCE,
@@ -81,7 +107,17 @@ export default definePiExtension('@agimon-ai/doompi/context-catalog', ({ pi }) =
     });
   };
   return {
-    services: [bind],
+    services: [...helpGate.services, bind],
+    tools: [
+      createSetupDiagnosticsTool(
+        () => {
+          if (!readSetupScope) throw new Error('Setup diagnostics require the current session configuration.');
+          return readSetupScope();
+        },
+        (signal) => helpGate.assertActive(DIAGNOSE_SETUP_NAME, signal),
+      ),
+    ],
+    onStart: helpGate.onStart,
     events: {
       session_start(_event, ctx) {
         promptContext = ctx;

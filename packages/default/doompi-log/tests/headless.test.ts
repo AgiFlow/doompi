@@ -26,9 +26,11 @@ describe('doom-log headless entry', () => {
     const pi = {
       on: vi.fn(),
       registerCommand: vi.fn(),
+      registerTool: vi.fn(),
     };
 
     await expect(register(pi as never)).resolves.toBeUndefined();
     expect(pi.registerCommand).toHaveBeenCalledWith('log-metrics', expect.any(Object));
+    expect(pi.registerTool).toHaveBeenCalledWith(expect.objectContaining({ name: 'diagnose_agent' }));
   });
 });

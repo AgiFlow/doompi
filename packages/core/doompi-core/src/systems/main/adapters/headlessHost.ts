@@ -201,6 +201,65 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     return this.resolvedResources;
   }
 
+  inspectCapabilities(): ReturnType<DoomHeadlessHostService['inspectCapabilities']> {
+    const ready = this.ready && !this.disposed;
+    const capabilities: ReturnType<DoomHeadlessHostService['inspectCapabilities']>['capabilities'][number][] = [];
+    if (ready) {
+      for (const entry of this.kernel.activeValues<Owned<DoomHeadlessTool>>('tools')) {
+        const active = this.tools.get(entry.value.name) === entry;
+        const reason = active
+          ? undefined
+          : !this.matches(entry.value.when)
+            ? 'inactive'
+            : !this.allowsTool(entry.value.name)
+              ? 'restricted'
+              : 'shadowed';
+        capabilities.push({
+          source: entry.source,
+          name: entry.value.name,
+          kind: 'tool',
+          when: structuredClone(entry.value.when),
+          active,
+          discoverable: active,
+          ...(reason ? { reason } : {}),
+        });
+      }
+      // The session skill surface uses the last resolved declaration for a name.
+      const resolved = new Map(
+        this.resolvedResources.filter((entry) => entry.kind === 'skill').map((entry) => [entry.name, entry]),
+      );
+      for (const entry of this.kernel.activeValues<Owned<DoomHeadlessResource>>('resources')) {
+        if (entry.value.kind !== 'skill') continue;
+        const current = resolved.get(entry.value.name);
+        const selected = this.matches(entry.value.when);
+        const active =
+          selected &&
+          current?.source === entry.source &&
+          current.path === entry.value.path &&
+          current.text.trim().length > 0;
+        const discoverable = active && !!current?.path && !!current.description?.trim();
+        const reason = !selected
+          ? 'inactive'
+          : current && current.source !== entry.source
+            ? 'shadowed'
+            : !active
+              ? 'unavailable'
+              : !discoverable
+                ? 'not-discoverable'
+                : undefined;
+        capabilities.push({
+          source: entry.source,
+          name: entry.value.name,
+          kind: 'skill',
+          when: structuredClone(entry.value.when),
+          active,
+          discoverable,
+          ...(reason ? { reason } : {}),
+        });
+      }
+    }
+    return { revision: this.appliedRevision, ready, capabilities };
+  }
   /**
    * Every tool name this composition's eligible owners declare, including the
    * ones a condition or a restriction currently gates out.

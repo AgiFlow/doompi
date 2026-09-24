@@ -25,6 +25,38 @@ function harness(tools: string[] = ['read', 'write', 'bash', 'task']) {
 }
 
 describe('createDoomToolSurface', () => {
+  it('reports applied owner metadata, isolates returned records, and closes owned tools on restriction failure', () => {
+    const { surface } = harness();
+    const changed = vi.fn();
+    const unsubscribe = surface.subscribe(changed);
+    const handle = surface.register({
+      source: 'help-provider',
+      controlledTools: ['write'],
+      attribution: { kind: 'minor', mode: 'help' },
+      restrict: (names) => names,
+    });
+    expect(surface.inspect()).toEqual([
+      { source: 'help-provider', name: 'write', active: true, attribution: { kind: 'minor', mode: 'help' } },
+    ]);
+    const metadata = surface.inspect()[0]!;
+    (metadata.attribution as { mode: string }).mode = 'modified';
+    expect(surface.inspect()[0]!.attribution?.mode).toBe('help');
+    const count = changed.mock.calls.length;
+    surface.refresh();
+    expect(changed).toHaveBeenCalledTimes(count);
+    handle.update(() => {
+      throw new Error('broken contribution');
+    });
+    expect(surface.active()).toEqual(['read', 'bash', 'task']);
+    expect(surface.inspect()[0]!.active).toBe(false);
+    unsubscribe();
+    handle.dispose();
+    expect(surface.inspect()).toEqual([]);
+    surface.dispose();
+    expect(surface.active()).toEqual([]);
+    expect(() => surface.subscribe(() => {})).toThrow('disposed');
+    expect(() => surface.register({ source: 'late', restrict: (names) => names })).toThrow('disposed');
+  });
   it('applies a restriction the moment it registers', () => {
     const { setActiveTools, surface } = harness();
     surface.register({ source: 'plan', restrict: (incoming) => incoming.filter((name) => name !== 'write') });

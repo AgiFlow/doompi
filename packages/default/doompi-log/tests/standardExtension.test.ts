@@ -54,6 +54,7 @@ function createPi(): {
         handlers.set(name, list);
       },
       registerCommand: vi.fn(),
+      registerTool: vi.fn(),
     } as unknown as ExtensionAPI,
     handler(name: string) {
       const handler = handlers.get(name);

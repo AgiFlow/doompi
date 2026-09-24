@@ -1785,6 +1785,72 @@ describe('conventional Pi discovery', () => {
       await probe.shutdown();
     }
   });
+  it('activates packed Help skills and their published references without checkout files or network fallback', async () => {
+    assertConsumerInstall();
+    const helpContracts = (await import(
+      pathToFileURL(installedConditionalTarget('@agimon-ai/doompi-core', './help', 'import')).href
+    )) as { createDoomHelpService(generation: string): DoomHelpService };
+    const resources = (await import(
+      pathToFileURL(installedConditionalTarget('@agimon-ai/doompi-core', './serverFacet', 'import')).href
+    )) as { packageResourcePath(moduleUrl: string, file: string): string | undefined };
+    const helpModule = (await import(
+      pathToFileURL(installedConditionalTarget('@agimon-ai/doompi-help', '.', 'import')).href
+    )) as {
+      createHelpRuntime(
+        service: DoomHelpService,
+        options: { cacheRoot: string; fetch: () => Promise<never> },
+      ): { activation: { activate(): Promise<unknown>; deactivate(): unknown }; dispose(): void };
+    };
+    const cacheRoot = fs.mkdtempSync(path.join(consumer.root, 'packed-help-cache-'));
+    const service = helpContracts.createDoomHelpService('packed-help-resources');
+    let networkAttempts = 0;
+    const runtime = helpModule.createHelpRuntime(service, {
+      cacheRoot,
+      fetch: async () => {
+        networkAttempts += 1;
+        throw new Error('Packed Help must resolve its installed resources without a network fallback.');
+      },
+    });
+    const contributors = [
+      ['@agimon-ai/doompi-help', 'doompi-use-help'],
+      ['@agimon-ai/doompi-log', 'doompi-debug-agent'],
+      ['@agimon-ai/doompi-config', 'doompi-author-config'],
+      ['@agimon-ai/doompi-domain', 'doompi-author-domain'],
+      ['@agimon-ai/doompi-major-mode', 'doompi-author-major-mode'],
+      ['@agimon-ai/doompi-profile', 'doompi-author-profile'],
+      ['@agimon-ai/doompi-skill', 'doompi-author-skill'],
+    ] as const;
+    try {
+      for (const [source, name] of contributors) {
+        const moduleUrl = pathToFileURL(installedConditionalTarget(source, './extensions/server', 'import')).href;
+        const skillPath = resources.packageResourcePath(moduleUrl, `src/prompts/${name}/SKILL.md`);
+        const indexPath = resources.packageResourcePath(moduleUrl, 'llms.txt');
+        if (!skillPath || !indexPath) throw new Error(`Packed ${source} is missing its Help resources.`);
+        expect(skillPath).not.toContain(REPOSITORY_ROOT);
+        expect(fs.readFileSync(skillPath, 'utf8')).toContain(`name: ${name}`);
+        expect(fs.readFileSync(indexPath, 'utf8')).toContain(`./src/prompts/${name}/SKILL.md`);
+        service.register({ source, moduleUrl, skills: [{ name, description: `Installed ${name} guidance` }] });
+      }
+      await runtime.activation.activate();
+      const snapshot = service.getSnapshot();
+      expect(snapshot.activation).toBe('active');
+      expect(snapshot.diagnostics).toEqual([]);
+      expect(snapshot.skills.map((skill) => skill.name).sort()).toEqual(contributors.map((entry) => entry[1]).sort());
+      for (const skill of snapshot.skills) {
+        expect(skill.filePath.startsWith(`${cacheRoot}${path.sep}`)).toBe(true);
+        const content = fs.readFileSync(skill.filePath, 'utf8');
+        expect(content).toContain(skill.name);
+        expect(content).not.toContain(REPOSITORY_ROOT);
+      }
+      expect(networkAttempts).toBe(0);
+      runtime.activation.deactivate();
+      expect(service.getSnapshot()).toMatchObject({ activation: 'inactive', skills: [] });
+    } finally {
+      runtime.dispose();
+      service.dispose();
+      fs.rmSync(cacheRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('consumer ownership boundaries', () => {

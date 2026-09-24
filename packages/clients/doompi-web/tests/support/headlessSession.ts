@@ -406,6 +406,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     changeSelection: async () => undefined,
     assertActive: () => undefined,
     subscribeSelection: () => () => undefined,
+    inspectCapabilities: () => ({ revision: 0, ready: true, capabilities: [] }),
     registerToolRestriction: () => registration,
     registerTool: () => registration,
     registerResource: () => registration,

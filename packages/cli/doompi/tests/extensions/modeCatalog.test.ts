@@ -102,11 +102,16 @@ describe('mode catalog extension', () => {
     }
   });
 
-  it('publishes the session service without registering a Pi tool', async () => {
-    const { binding, connection, dispatch, registerTool } = await setup();
+  it('publishes the session service and keeps the setup diagnostic closed without Help', async () => {
+    const { binding, connection, dispatch, registerTool, context } = await setup();
     await dispatch('session_start', { reason: 'startup' });
     expect(readMinorModeCatalog(connection.root)).toBeDefined();
-    expect(registerTool).not.toHaveBeenCalled();
+    expect(registerTool).toHaveBeenCalledOnce();
+    const tool = registerTool.mock.calls[0]![0] as Parameters<ExtensionAPI['registerTool']>[0];
+    expect(tool.name).toBe('diagnose_setup');
+    await expect(tool.execute('unavailable', {}, undefined, undefined, context)).rejects.toThrow(
+      'inactive or restricted',
+    );
     await dispatch('session_shutdown');
     expect(readMinorModeCatalog(connection.root)).toBeUndefined();
     binding.dispose();

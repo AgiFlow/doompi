@@ -307,12 +307,31 @@ export interface DoomHeadlessActivity {
   start(context: DoomHeadlessExecutionContext): (() => void | Promise<void>) | Promise<() => void | Promise<void>>;
 }
 
+/** Read-only metadata for the currently applied session, never executable declarations or resource bodies. */
+export interface DoomHeadlessCapability {
+  readonly source: string;
+  readonly name: string;
+  readonly kind: 'tool' | 'skill';
+  readonly when?: DoomHeadlessCondition;
+  readonly active: boolean;
+  readonly discoverable: boolean;
+  readonly reason?: 'inactive' | 'restricted' | 'shadowed' | 'unavailable' | 'not-discoverable';
+}
+
+export interface DoomHeadlessCapabilitySnapshot {
+  readonly revision: number;
+  readonly ready: boolean;
+  readonly capabilities: readonly DoomHeadlessCapability[];
+}
+
 /** Registrations inherit package ownership from the caller's Cordis facet. */
 export interface DoomHeadlessHostService {
   readonly context: DoomHeadlessExecutionContext;
   changeSelection(change: DoomHeadlessSelectionChange): Promise<void>;
   assertActive(source?: string): void;
   subscribeSelection(listener: (selection: DoomHeadlessSelection) => void | Promise<void>): () => void;
+  /** Inspect only a coherently applied generation. A transition returns ready=false and no partial inventory. */
+  inspectCapabilities(): DoomHeadlessCapabilitySnapshot;
   registerToolRestriction(restriction: DoomHeadlessToolRestriction): DoomHeadlessRegistration;
   registerTool<TParameters extends TSchema>(tool: DoomHeadlessTool<TParameters>): DoomHeadlessRegistration;
   registerResource(resource: DoomHeadlessResource): DoomHeadlessRegistration;

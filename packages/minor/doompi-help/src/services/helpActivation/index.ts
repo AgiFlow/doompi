@@ -94,6 +94,21 @@ export class DefaultHelpActivationService implements HelpActivationService {
     const next = contributions.map(cloneContribution).sort((left, right) => left.source.localeCompare(right.source));
     const fingerprint = contributionFingerprint(next);
     if (fingerprint === this.fingerprint) return;
+    const previous = new Map(this.contributions.map((entry) => [entry.source, contributionFingerprint([entry])]));
+    const retained = new Set(
+      next
+        .filter((entry) => previous.get(entry.source) === contributionFingerprint([entry]))
+        .map((entry) => entry.source),
+    );
+    // A refresh may retain unchanged owners, never withdrawn or replaced ones.
+    // Prune the rollback snapshot too, so cancellation cannot resurrect them.
+    const skills = this.settledState.skills.filter((entry) => retained.has(entry.source));
+    const diagnostics = this.settledState.diagnostics.filter((entry) => !entry.source || retained.has(entry.source));
+    this.settledState = {
+      activation: skills.length === 0 ? 'inactive' : diagnostics.length > 0 ? 'degraded' : 'active',
+      skills,
+      diagnostics,
+    };
     this.contributions = next;
     this.fingerprint = fingerprint;
     if (this.state.activation !== 'inactive') {
@@ -120,17 +135,19 @@ export class DefaultHelpActivationService implements HelpActivationService {
   }
 
   private async loadSources(signal: AbortSignal): Promise<SourceOutcome[]> {
-    const outcomes: SourceOutcome[] = Array.from({ length: this.contributions.length });
+    const contributions = this.contributions;
+    const outcomes: SourceOutcome[] = Array.from({ length: contributions.length });
     let cursor = 0;
     const worker = async (): Promise<void> => {
-      while (cursor < this.contributions.length) {
+      while (cursor < contributions.length) {
         const index = cursor;
         cursor += 1;
-        const contribution = this.contributions[index];
+        const contribution = contributions[index];
         if (!contribution) return;
         if (signal.aborted) throw new HelpActivationError(CANCELLATION_MESSAGE);
         try {
           const resolved = await this.dependencies.resolver.resolve(contribution, signal);
+          if (signal.aborted) throw new HelpActivationError(CANCELLATION_MESSAGE);
           const skills = await this.dependencies.materializer.materialize(contribution, resolved, signal);
           outcomes[index] = { source: contribution.source, loaded: { contribution, index: resolved, skills } };
         } catch (error) {
@@ -139,7 +156,7 @@ export class DefaultHelpActivationService implements HelpActivationService {
         }
       }
     };
-    const count = Math.min(MAX_RESOLUTION_CONCURRENCY, this.contributions.length);
+    const count = Math.min(MAX_RESOLUTION_CONCURRENCY, contributions.length);
     await Promise.all(Array.from({ length: count }, () => worker()));
     return outcomes;
   }
