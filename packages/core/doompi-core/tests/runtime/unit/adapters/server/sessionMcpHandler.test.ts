@@ -20,6 +20,12 @@ const UI_RESOURCE = {
   mimeType: 'text/html;profile=mcp-app' as const,
   _meta: { ui: { csp: { connectDomains: [], resourceDomains: [] }, prefersBorder: true } },
 };
+const ACTIVITY_RESOURCE = {
+  ...UI_RESOURCE,
+  uri: 'ui://doompi/activity/v1/index.html',
+  name: 'Tool activity',
+  _meta: { ...UI_RESOURCE._meta, 'doompi/defaultToolUi': true },
+};
 function rpcResult(body: unknown) {
   const response = JSONRPCResponseSchema.parse(body);
   if ('error' in response) throw new Error(response.error.message);
@@ -65,6 +71,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
   const readUiResource = vi.fn(async () => '<!doctype html><title>Session</title>');
   const onNotice = vi.fn();
   let uiEnabled = false;
+  let activityEnabled = false;
   let revision = 12;
   let includeNewCapabilities = false;
   const toolSurface: SessionToolSurface = {
@@ -105,7 +112,10 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
           ? [{ name: 'new-skill', description: 'Newly enabled', uri: 'doompi://session/alpha/skills/new-skill' }]
           : []),
       ],
-      uiResources: uiEnabled ? [UI_RESOURCE, { ...UI_RESOURCE, uri: 'ui://doompi/hidden/v1/index.html' }] : [],
+      uiResources: [
+        ...(uiEnabled ? [UI_RESOURCE, { ...UI_RESOURCE, uri: 'ui://doompi/hidden/v1/index.html' }] : []),
+        ...(activityEnabled ? [ACTIVITY_RESOURCE] : []),
+      ],
     }),
     invokeTool,
     readSkill,
@@ -181,6 +191,8 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
     onNotice,
     readSkill,
     readUiResource,
+    toolSurface,
+    setActivityEnabled: (value: boolean) => (activityEnabled = value),
     setUiEnabled: (value: boolean) => (uiEnabled = value),
     grantId: tokens.grantId,
     setGeneration: (value: number) => (generation = value),
@@ -193,6 +205,129 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
 }
 
 describe('session MCP Streamable HTTP handler', () => {
+  it.each([
+    'read',
+    'write',
+    'edit',
+    'grep',
+    'find',
+    'ls',
+    'bash',
+    'task',
+    'load_context',
+    'search_skills',
+    'load_skill',
+    'mcp_use',
+    'computer_state',
+    'computer_action',
+    'computer_exec',
+    'complete_plan',
+    'record_debug_evidence',
+    'run_fable_plan',
+    'write_plan',
+    'future_tool',
+  ])('adds an activity widget to %s without changing its contract or permissions', async (name) => {
+    const f = fixture('session');
+    f.setActivityEnabled(true);
+    const snapshot = f.toolSurface.readSurface();
+    const original = { ...snapshot.tools[0]!, name };
+    vi.spyOn(f.toolSurface, 'readSurface').mockReturnValue({ ...snapshot, tools: [original] });
+    const result = ListToolsResultSchema.parse(rpcResult(await (await f.request('tools/list')).json()));
+    expect(result.tools).toHaveLength(1);
+    expect(result.tools[0]).toMatchObject({
+      name,
+      inputSchema: original.parameters,
+      outputSchema: original.outputSchema,
+      annotations: original.annotations,
+      _meta: {
+        ui: { resourceUri: ACTIVITY_RESOURCE.uri, visibility: ['model'] },
+        'openai/outputTemplate': ACTIVITY_RESOURCE.uri,
+      },
+    });
+    expect(original._meta).toBeUndefined();
+  });
+
+  it('preserves native results and limits widget context to bounded safe input fields', async () => {
+    const f = fixture();
+    f.setActivityEnabled(true);
+    const native = {
+      content: [{ type: 'text' as const, text: 'original output' }],
+      structuredContent: { status: 'ok' },
+      _meta: { privateDetail: 'preserved' },
+      isError: false,
+    };
+    f.invokeTool.mockResolvedValue(native);
+    const body = rpcResult(
+      await (
+        await f.request('tools/call', {
+          name: 'allowed_tool',
+          arguments: {
+            path: 'src/file.ts',
+            pattern: 'x'.repeat(1000),
+            content: 'private file contents',
+            command: 'TOKEN=secret run',
+            password: 'secret',
+            arguments: { token: 'secret' },
+          },
+        })
+      ).json(),
+    );
+    expect(body).toMatchObject({
+      ...native,
+      _meta: {
+        ...native._meta,
+        'doompi/toolActivity': {
+          tool: 'allowed_tool',
+          title: 'Allowed tool',
+          input: { path: 'src/file.ts', pattern: `${'x'.repeat(500)}...` },
+          durationMs: expect.any(Number),
+        },
+      },
+    });
+    expect(JSON.stringify(body._meta)).not.toContain('secret');
+    expect(JSON.stringify(body._meta)).not.toContain('private file contents');
+    f.invokeTool.mockResolvedValue({ content: [{ type: 'text', text: 'Write failed' }], isError: true });
+    const failed = rpcResult(await (await f.request('tools/call', { name: 'allowed_tool' })).json());
+    expect(failed).toMatchObject({
+      isError: true,
+      content: [{ type: 'text', text: 'Write failed' }],
+      _meta: { 'doompi/toolActivity': { tool: 'allowed_tool' } },
+    });
+  });
+
+  it('serves only referenced fallback resources and keeps custom widgets authoritative', async () => {
+    const f = fixture();
+    f.setActivityEnabled(true);
+    const resources = rpcResult(await (await f.request('resources/list')).json());
+    expect(resources.resources).toEqual([ACTIVITY_RESOURCE]);
+    const read = rpcResult(await (await f.request('resources/read', { uri: ACTIVITY_RESOURCE.uri })).json());
+    expect(read.contents).toEqual([{ ...ACTIVITY_RESOURCE, text: '<!doctype html><title>Session</title>' }]);
+    f.setUiEnabled(true);
+    const tools = ListToolsResultSchema.parse(rpcResult(await (await f.request('tools/list')).json()));
+    expect(tools.tools[0]?._meta?.ui).toEqual({ resourceUri: UI_RESOURCE.uri, visibility: ['model', 'app'] });
+    expect(tools.tools[0]?._meta?.['doompi/toolActivity']).toBeUndefined();
+    expect(rpcResult(await (await f.request('resources/list')).json()).resources).toEqual([UI_RESOURCE]);
+    const denied = await (await f.request('resources/read', { uri: ACTIVITY_RESOURCE.uri })).json();
+    expect(denied).toMatchObject({ error: { message: expect.stringContaining('not granted or active') } });
+    const native = { content: [{ type: 'text' as const, text: 'custom' }], _meta: { custom: true }, isError: false };
+    f.invokeTool.mockResolvedValue(native);
+    expect(rpcResult(await (await f.request('tools/call', { name: 'allowed_tool' })).json())).toEqual(native);
+  });
+
+  it('does not expose an unused or ambiguous activity resource', async () => {
+    const f = fixture();
+    f.setActivityEnabled(true);
+    const snapshot = f.toolSurface.readSurface();
+    const read = vi.spyOn(f.toolSurface, 'readSurface').mockReturnValue({ ...snapshot, tools: [] });
+    expect(rpcResult(await (await f.request('resources/list')).json()).resources).toEqual([]);
+    read.mockReturnValue({
+      ...snapshot,
+      uiResources: [ACTIVITY_RESOURCE, { ...ACTIVITY_RESOURCE, uri: 'ui://other/default' }],
+    });
+    const tools = ListToolsResultSchema.parse(rpcResult(await (await f.request('tools/list')).json()));
+    expect(tools.tools[0]?._meta?.ui).toEqual({ visibility: ['model'] });
+    expect(rpcResult(await (await f.request('resources/list')).json()).resources).toEqual([]);
+  });
   it('advertises a self-contained bootstrap without needing plugin resources', async () => {
     const { request } = fixture();
     const response = await request('initialize', {

@@ -5,18 +5,20 @@ export interface SessionHostHarness {
   calls: { name: string; arguments?: Record<string, unknown> }[];
   send(result: CallToolResult): Promise<void>;
   respond(result: CallToolResult): void;
+  input(args: Record<string, unknown>, partial?: boolean): Promise<void>;
+  cancel(): Promise<void>;
   theme(value: 'light' | 'dark'): void;
   teardown(): Promise<void>;
 }
 
 declare global {
   interface Window {
-    startSessionHost(html: string, tools: boolean): Promise<void>;
+    startSessionHost(html: string, tools: boolean, toolName?: string): Promise<void>;
     sessionHost: SessionHostHarness;
   }
 }
 
-window.startSessionHost = async (html, tools) => {
+window.startSessionHost = async (html, tools, toolName = 'show_session') => {
   const iframe = document.createElement('iframe');
   iframe.id = 'session-app';
   iframe.title = 'Doompi session';
@@ -26,7 +28,11 @@ window.startSessionHost = async (html, tools) => {
   iframe.style.border = '0';
   document.body.append(iframe);
   const bridge = new AppBridge(null, { name: 'doompi-test-host', version: '1' }, tools ? { serverTools: {} } : {}, {
-    hostContext: { theme: 'light', displayMode: 'inline' },
+    hostContext: {
+      theme: 'light',
+      displayMode: 'inline',
+      toolInfo: { id: 'test-call', tool: { name: toolName, inputSchema: { type: 'object' } } },
+    },
   });
   const calls: SessionHostHarness['calls'] = [];
   let next: CallToolResult = { content: [], isError: true };
@@ -52,6 +58,9 @@ window.startSessionHost = async (html, tools) => {
     respond: (result) => {
       next = result;
     },
+    input: (args, partial = false) =>
+      partial ? bridge.sendToolInputPartial({ arguments: args }) : bridge.sendToolInput({ arguments: args }),
+    cancel: () => bridge.sendToolCancelled({ reason: 'Cancelled by user' }),
     theme: (theme) => bridge.setHostContext({ theme, displayMode: 'inline' }),
     async teardown() {
       await bridge.teardownResource({});

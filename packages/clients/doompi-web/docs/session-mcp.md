@@ -116,6 +116,35 @@ must use a dedicated-session connection. DoomPi never silently redirects a missi
 conversation ID to a shared session. The widget also hides its data if a refresh
 returns a different session ID.
 
+### Activity widgets for remote tools
+
+Config also packages a read-only activity template at
+`ui://doompi/activity/<content-hash>/index.html`. Its resource metadata sets
+`doompi/defaultToolUi: true`. The HTTP transport attaches this template to every
+active, granted tool without an explicit widget, including `read`, `write`,
+`edit`, `grep`, `find`, `ls`, `bash`, skills, planning, tasks, computer tools, and
+future remote tools. An existing custom widget, such as `show_session`, wins.
+A missing or ambiguous default does not change a tool's existing UI metadata.
+
+The card shows host-delivered input progress, an allowlisted input summary,
+elapsed tool-call time, errors or cancellation, and an expandable output preview
+capped at 8,000 characters. File contents, scripts, and arbitrary nested arguments
+are not echoed into the input summary. Output is inserted as text, never HTML;
+non-text results are counted rather than fetched or embedded. A returned background
+runner is labelled **Result received**, not as completed background work. This is
+an invocation view, not a continuously polled runner dashboard.
+
+Widget context is carried in result `_meta['doompi/toolActivity']`. Original
+`content`, `structuredContent`, output schemas, and error semantics are preserved.
+The activity widget makes no server calls and introduces no replay controls.
+Attaching it does not opt a tool into component invocation: existing visibility,
+grants, authorization rechecks, and conversation isolation remain authoritative.
+Only resources referenced by granted tools are listed or readable.
+
+After rebuilding Config and Core, relaunch the updated host and session, refresh
+the MCP connection, and make new tool calls to exercise the new template. Existing
+rendered cards and an already running server do not reload from a source edit.
+
 The repository tests cover protocol metadata, grants and revocation, conversation
 isolation, installed-package resources, and a sandboxed browser host using the
 standard SDK's `AppBridge`. Run the component tests with

@@ -17,7 +17,7 @@ import {
 
 import type { SessionMcpAccessGrant, SessionMcpAuthorizationService } from '../services/sessionMcpAuthorization';
 import { sessionMcpConversationDigest, SessionMcpConversationError } from '../services/sessionMcpConversations';
-import type { SessionToolSurface } from '../types/server/sessionToolSurface';
+import type { SessionToolDescriptor, SessionToolSurface } from '../types/server/sessionToolSurface';
 
 export interface SessionMcpTarget {
   readonly generation: number;
@@ -85,13 +85,59 @@ function grantedSurface(grant: SessionMcpAccessGrant, surface: SessionToolSurfac
   const snapshot = surface.readSurface();
   const toolNames = new Set(grant.tools);
   const skillNames = new Set(grant.skills);
-  const tools = grant.scope === 'session' ? snapshot.tools : snapshot.tools.filter((tool) => toolNames.has(tool.name));
+  const resources = snapshot.uiResources ?? [];
+  const defaults = resources.filter((resource) => resource._meta?.['doompi/defaultToolUi'] === true);
+  // Ambiguous defaults fail closed. Custom tool views and all existing permissions remain authoritative.
+  const fallback = surface.readUiResource && defaults.length === 1 ? defaults[0] : undefined;
+  const allowed =
+    grant.scope === 'session' ? snapshot.tools : snapshot.tools.filter((tool) => toolNames.has(tool.name));
+  const tools = allowed.map((tool): SessionToolDescriptor => {
+    if (!fallback || tool._meta?.ui?.resourceUri || tool._meta?.['openai/outputTemplate']) return tool;
+    return {
+      ...tool,
+      _meta: {
+        ...tool._meta,
+        ui: { ...tool._meta?.ui, resourceUri: fallback.uri, visibility: tool._meta?.ui?.visibility ?? ['model'] },
+        'openai/outputTemplate': fallback.uri,
+        'doompi/toolActivity': true,
+      },
+    };
+  });
   const resourceUris = new Set(tools.map((tool) => tool._meta?.ui?.resourceUri));
   return {
     snapshot,
     tools,
     skills: grant.scope === 'session' ? snapshot.skills : snapshot.skills.filter((skill) => skillNames.has(skill.name)),
     uiResources: (snapshot.uiResources ?? []).filter((resource) => resourceUris.has(resource.uri)),
+  };
+}
+
+/** Adds widget-only context without changing the tool's text, structured output, or error semantics. */
+function activityResult(
+  tool: SessionToolDescriptor | undefined,
+  args: Record<string, unknown>,
+  result: CallToolResult,
+  startedAt: number,
+): CallToolResult {
+  if (tool?._meta?.['doompi/toolActivity'] !== true) return result;
+  // Never mirror arbitrary arguments, file contents, scripts, credentials, or nested delegated calls.
+  const input: Record<string, string | number | boolean> = {};
+  for (const key of ['path', 'pattern', 'offset', 'limit', 'action', 'name', 'query', 'server', 'tool']) {
+    const value = args[key];
+    if (typeof value === 'string') input[key] = value.length > 500 ? `${value.slice(0, 500)}...` : value;
+    else if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) input[key] = value;
+  }
+  return {
+    ...result,
+    _meta: {
+      ...result._meta,
+      'doompi/toolActivity': {
+        tool: tool.name,
+        title: tool.label,
+        input,
+        durationMs: Math.max(0, Date.now() - startedAt),
+      },
+    },
   };
 }
 
@@ -213,6 +259,8 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       const signal = AbortSignal.any([request.signal, extra.signal, controller.signal]);
       const invocationId = randomUUID();
       let skillAccessOpen = true;
+      const startedAt = Date.now();
+      let activityTool: SessionToolDescriptor | undefined;
       try {
         const parent = await authorizeOperation();
         const advertised = grantedSurface(parent.grant, parent.target.toolSurface).tools.find(
@@ -220,6 +268,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         );
         if (!advertised)
           throw new McpError(ErrorCode.InvalidParams, `Tool '${message.params.name}' is not granted or active.`);
+        activityTool = advertised;
         // A binding must not outlive an unpersisted registration when tools/call precedes tools/list.
         await options.onVerified?.(parent.grant);
         options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=started`);
@@ -308,24 +357,34 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         });
         await recheck();
         options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
-        return {
-          content: result.content,
-          ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
-          ...(result._meta === undefined ? {} : { _meta: result._meta }),
-          isError: result.isError ?? false,
-        };
+        return activityResult(
+          selected,
+          message.params.arguments ?? {},
+          {
+            content: result.content,
+            ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
+            ...(result._meta === undefined ? {} : { _meta: result._meta }),
+            isError: result.isError ?? false,
+          },
+          startedAt,
+        );
       } catch (error) {
         options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=failed`);
         if (!(error instanceof SessionMcpConversationError)) throw error;
-        return {
-          content: [{ type: 'text', text: error.message }],
-          isError: true,
-          structuredContent: {
-            code: error.code,
-            message: error.message,
-            ...(error.bindingId === undefined ? {} : { bindingId: error.bindingId }),
+        return activityResult(
+          activityTool,
+          message.params.arguments ?? {},
+          {
+            content: [{ type: 'text', text: error.message }],
+            isError: true,
+            structuredContent: {
+              code: error.code,
+              message: error.message,
+              ...(error.bindingId === undefined ? {} : { bindingId: error.bindingId }),
+            },
           },
-        };
+          startedAt,
+        );
       } finally {
         skillAccessOpen = false;
         operations.delete(key);
