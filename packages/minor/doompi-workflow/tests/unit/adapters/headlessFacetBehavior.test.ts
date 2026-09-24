@@ -21,6 +21,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
 import { facet as workflowServerFacet } from '../../../generated/server';
+import { workflowLaunchLine } from '../../../src/extensions/workspaces/sessions/(frontend)/_lib/launchLine';
 
 const embeddedFeature = vi.hoisted(() => {
   const listeners = new Map<string, Set<() => void>>();
@@ -58,7 +59,15 @@ const embeddedFeature = vi.hoisted(() => {
     },
     runTool: {
       getInputSchema: vi.fn(() => ({})),
-      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'workflow launched' }] })),
+      execute: vi.fn(
+        async (_parameters?: {
+          env?: Record<string, string>;
+          workflowPath?: string;
+        }): Promise<{
+          content: { type: string; text: string }[];
+          isError?: boolean;
+        }> => ({ content: [{ type: 'text', text: 'workflow launched' }] }),
+      ),
     },
   };
   return {
@@ -82,6 +91,35 @@ const workflowWatcher = vi.hoisted(() => ({
 
 vi.mock('@agimon-ai/workflow-mcp', () => ({
   createEmbeddedWorkflowFeature: () => embeddedFeature.feature,
+}));
+vi.mock('../../../src/services/workflowCatalogDeps', () => ({
+  defaultCatalogDeps: () => ({
+    list: async () => [
+      { path: '/tmp/build.workflow.yml', relativePath: 'build.workflow.yml', name: 'build', description: '', tags: [] },
+      {
+        path: '/tmp/blog.workflow.yml',
+        relativePath: 'blog.workflow.yml',
+        name: 'Blog Writing',
+        description: '',
+        tags: [],
+      },
+      {
+        path: '/tmp/broken.workflow.yml',
+        relativePath: 'broken.workflow.yml',
+        name: 'broken',
+        description: '',
+        tags: [],
+      },
+    ],
+    stamp: () => undefined,
+    summarize: (path: string) => ({
+      triggers: [],
+      inputs: path.includes('blog') ? [{ name: 'brief', required: true }] : [],
+      jobs: [],
+      artifacts: [],
+      ...(path.includes('broken') ? { error: 'Invalid workflow' } : {}),
+    }),
+  }),
 }));
 vi.mock('../../../src/services/workflowWatcher', () => ({
   readWorkflowRuns: () => workflowWatcher.records,
@@ -326,10 +364,11 @@ describe('workflow headless facet', () => {
     });
     await command.execute('build runner=local environment=prod Deploy now', test.execution);
     expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith({
-      workflowPath: 'build',
+      workflowPath: '/tmp/build.workflow.yml',
       runner: 'local',
       inputs: { environment: 'prod' },
       prompt: 'Deploy now',
+      env: { PI_SESSION_ID: test.execution.sessionId },
     });
     expect(test.execution.client.notify).toHaveBeenLastCalledWith({ body: 'workflow launched', level: 'info' });
 
@@ -339,6 +378,102 @@ describe('workflow headless facet', () => {
     await test.close?.();
     expect(test.modeDispose).toHaveBeenCalledOnce();
     expect(test.registration.dispose).toHaveBeenCalled();
+  });
+
+  it('resolves a browser launch and makes both launch paths visible to session status', async () => {
+    const test = await fixture();
+    try {
+      const command = test.commands[0]!;
+      const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
+      const status = test.tools.find(({ name }) => name === 'workflow_run')!;
+      embeddedFeature.feature.runTool.execute.mockImplementationOnce(async (parameters) => {
+        workflowWatcher.records.push({
+          piSessionId: parameters?.env?.PI_SESSION_ID,
+          view: { runKey: 'browser-run', workspace: '/tmp' },
+        });
+        return { content: [{ type: 'text', text: 'workflow launched' }] };
+      });
+      const line = workflowLaunchLine({
+        workflow: 'Blog Writing',
+        inputs: { brief: 'a good post' },
+        prompt: 'Draft it',
+      });
+      await command.execute(line.slice('/workflow-launch '.length), test.execution);
+      expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith({
+        workflowPath: '/tmp/blog.workflow.yml',
+        inputs: { brief: 'a good post' },
+        prompt: 'Draft it',
+        env: { PI_SESSION_ID: test.execution.sessionId },
+      });
+      expect(
+        await status.execute(
+          'status',
+          { action: 'status', runKey: 'browser-run' },
+          undefined,
+          undefined,
+          test.execution,
+        ),
+      ).toMatchObject({ details: { runKey: 'browser-run', workspace: '/tmp' } });
+
+      embeddedFeature.feature.runTool.execute.mockImplementationOnce(async (parameters) => {
+        workflowWatcher.records.push({
+          piSessionId: parameters?.env?.PI_SESSION_ID,
+          view: { runKey: 'tool-run', workspace: '/tmp' },
+        });
+        return { content: [{ type: 'text', text: 'workflow launched' }] };
+      });
+      await launch.execute(
+        'launch',
+        { workflowPath: '/tmp/build.workflow.yml', env: { CUSTOM: 'kept', PI_SESSION_ID: 'foreign' } },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith({
+        workflowPath: '/tmp/build.workflow.yml',
+        env: { CUSTOM: 'kept', PI_SESSION_ID: test.execution.sessionId },
+      });
+      expect(
+        await status.execute('status', { action: 'status', runKey: 'tool-run' }, undefined, undefined, test.execution),
+      ).toMatchObject({ details: { runKey: 'tool-run', workspace: '/tmp' } });
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('rejects invalid manual launches and preserves engine errors', async () => {
+    const test = await fixture();
+    try {
+      const command = test.commands[0]!;
+      const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
+      const calls = embeddedFeature.feature.runTool.execute.mock.calls.length;
+      for (const name of ['missing', 'broken', 'Blog Writing']) {
+        await command.execute(name, test.execution);
+        expect(test.execution.client.notify).toHaveBeenLastCalledWith(expect.objectContaining({ level: 'error' }));
+      }
+      expect(embeddedFeature.feature.runTool.execute).toHaveBeenCalledTimes(calls);
+      embeddedFeature.feature.runTool.execute.mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'engine failed' }],
+        isError: true,
+      });
+      expect(
+        await launch.execute(
+          'launch',
+          { workflowPath: '/tmp/build.workflow.yml' },
+          undefined,
+          undefined,
+          test.execution,
+        ),
+      ).toMatchObject({ isError: true });
+      embeddedFeature.feature.runTool.execute.mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'engine failed' }],
+        isError: true,
+      });
+      await command.execute('build', test.execution);
+      expect(test.execution.client.notify).toHaveBeenLastCalledWith({ body: 'engine failed', level: 'error' });
+    } finally {
+      await test.close?.();
+    }
   });
 
   it('reports only active owned workflow runs as background work', async () => {
