@@ -1,3 +1,4 @@
+import { DOOM_CHILD_SESSION_MCP_TOOL_SERVICE, type DoomChildSessionTool } from '@agimon-ai/doompi-core/childSession';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
@@ -37,6 +38,9 @@ vi.mock('../src/services/mcpRuntime', () => ({
     async dispose(): Promise<void> {}
     getServices() {
       return runtimeState.services;
+    }
+    isCurrent(services: unknown) {
+      return services === runtimeState.services;
     }
   },
 }));
@@ -98,7 +102,10 @@ describe('MCP headless facet', () => {
         return register();
       },
     } as unknown as DoomHeadlessHostService;
-    const close = await mcpHeadlessFacet.apply(contextFor(host));
+    const context = contextFor(host);
+    const close = await mcpHeadlessFacet.apply(context);
+    const childTool = context.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionTool | undefined;
+    expect(childTool?.name).toBe('mcp');
     const activity = activities[0];
     const command = commands[0];
     const tool = tools[0];
@@ -172,6 +179,11 @@ describe('MCP headless facet', () => {
       details: expect.objectContaining({ isError: true }),
     });
 
+    const signal = new AbortController().signal;
+    await expect(
+      childTool!.execute('child-call', { server: 'example', tool: 'status', arguments: { child: true } }, signal),
+    ).resolves.toEqual(success);
+    expect(callTool).toHaveBeenLastCalledWith('status', { child: true });
     ensureConnected.mockRejectedValueOnce(new Error('connection failed'));
     await expect(
       tool.execute('mcp-use-3', { server: 'example', tool: 'status' }, undefined, undefined, testExecution),
@@ -179,6 +191,9 @@ describe('MCP headless facet', () => {
 
     await stop();
     expect(testExecution.client.setStatus).toHaveBeenCalledWith('doompi-mcp', undefined);
+    await expect(childTool!.execute('stopped-child', { server: 'example', tool: 'status' })).resolves.toMatchObject({
+      isError: true,
+    });
 
     runtimeState.startError = new Error('startup failed');
     const stopFailedRuntime = await activity.start(testExecution);
@@ -192,6 +207,7 @@ describe('MCP headless facet', () => {
 
     await close?.();
     expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
+    expect(context.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE)).toBeUndefined();
   });
 
   it('reads each session MCP configuration from its admitted environment', async () => {

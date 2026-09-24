@@ -1,5 +1,6 @@
 import path from 'node:path';
 
+import { DOOM_CHILD_SESSION_MCP_TOOL_SERVICE } from '@agimon-ai/doompi-core/childSession';
 import type { DoomCordisRuntimeService } from '@agimon-ai/doompi-core/cordisHost';
 import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordisHost';
 import { DOOM_MCP_PROJECTION_SERVICE, readDoomMcpProjectionService } from '@agimon-ai/doompi-core/mcpProjection';
@@ -20,7 +21,7 @@ import { readSessionConfig } from '../../services/sessionConfig';
 import type { McpSessionConfig } from '../../types/mcpConfig';
 import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../types/webMcp';
 import { registerLeaderContribution } from '../leader';
-import { createMcpSessionToolsService, MCP_SESSION_TOOLS_SERVICE } from '../mcpSessionTools';
+import { createMcpChildTool, createMcpSessionToolsService, MCP_SESSION_TOOLS_SERVICE } from '../mcpSessionTools';
 
 const INFO = 'info';
 const WARNING = 'warning';
@@ -122,10 +123,24 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
             resolve: (selectors: readonly string[]) => session.resolveToolSelectors(selectors),
           });
           const sessionTools = createMcpSessionToolsService(session, `${hostSession.generation}:mcp-tools`);
+          const childTool = createMcpChildTool(async (parameters, signal) => {
+            if (!sessionActive || disposed) throw new Error('The parent MCP session is no longer available.');
+            const tool = sessionTools
+              .snapshot()
+              .find(
+                (candidate) => candidate.serverName === parameters.server && candidate.toolName === parameters.tool,
+              );
+            if (!tool)
+              throw new Error(
+                `MCP tool ${parameters.server}/${parameters.tool} is not available in the current session configuration.`,
+              );
+            return sessionTools.invoke(tool.piName, parameters.arguments ?? {}, signal);
+          });
           sessionContext.plugin((providerContext) => {
             providerContext.provide(DOOM_MCP_STATUS_SERVICE, status);
             providerContext.provide(DOOM_MCP_TOOL_RESOLVER_SERVICE, toolResolver);
             providerContext.provide(MCP_SESSION_TOOLS_SERVICE, sessionTools);
+            providerContext.provide(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE, childTool);
           });
           for (const diagnostic of session.getDiagnostics()) context.ui?.notify(diagnostic, WARNING);
           return async () => {

@@ -370,6 +370,105 @@ describe('headless child session provider', () => {
     ).rejects.toThrow('requires unavailable tools: bash');
     expect(factory).not.toHaveBeenCalled();
   });
+  it.each(['mcp', 'mcp_use'])('runs the requested %s dispatcher through the parent MCP runtime', async (name) => {
+    const factory = runtimeFactory(fakeRuntime('mcp-child'));
+    const content = [{ type: 'image' as const, data: 'aW1hZ2U=', mimeType: 'image/png' }];
+    const execute = vi.fn(async () => ({ content, details: { server: 'docs' } }));
+    const dispatcher = { name: 'mcp', description: 'MCP dispatch', parameters: {}, execute };
+    const mcpTool = vi.fn(() => dispatcher);
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent',
+      cwd: '/tmp',
+      runtimeFactory: factory,
+      mcpTool,
+    });
+    const handle = await service.start({ ...request({ kind: 'fresh' }), tools: ['read', name] });
+    expect(factory.mock.calls[0]?.[0].activeToolNames).toEqual(['read', name]);
+    const tool = factory.mock.calls[0]?.[0].tools?.find((tool) => tool.name === name);
+    const signal = new AbortController().signal;
+    const parameters = { server: 'docs', tool: 'search', arguments: { query: 'templates' } };
+    const result = await tool!.execute(
+      'mcp-call',
+      parameters,
+      vi.fn(),
+      undefined,
+      {} as never,
+      { abortSignal: signal } as never,
+    );
+    expect(execute).toHaveBeenCalledWith('mcp-call', parameters, signal, expect.any(Function));
+    expect(result).toEqual({ content, details: { server: 'docs' } });
+    expect(mcpTool).toHaveBeenCalledTimes(2);
+    await handle.dispose();
+  });
+
+  it.each([
+    { capabilityCeiling: { allowMcpTools: false } },
+    { capabilityCeiling: { allowedTools: ['read'] } },
+    { excludeTools: ['mcp'] },
+    { excludeTools: ['mcp_use'] },
+  ])('does not resolve MCP when a child policy denies it: %j', async (policy) => {
+    const factory = runtimeFactory(fakeRuntime('bounded-child'));
+    const mcpTool = vi.fn(() => undefined);
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent',
+      cwd: '/tmp',
+      runtimeFactory: factory,
+      mcpTool,
+    });
+    const handle = await service.start({ ...request({ kind: 'fresh' }), tools: ['read', 'mcp', 'mcp_use'], ...policy });
+    expect(factory.mock.calls[0]?.[0].activeToolNames).toEqual(['read']);
+    expect(mcpTool).not.toHaveBeenCalled();
+    await handle.dispose();
+  });
+
+  it('fails before opening a child journal when MCP is unavailable or required but denied', async () => {
+    const factory = runtimeFactory(fakeRuntime('unused'));
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent',
+      cwd: '/tmp',
+      runtimeFactory: factory,
+    });
+    const source = { kind: 'v4-fork' as const, sessionFile: '/missing/parent.sqlite', branch: 'main' };
+    await expect(service.start({ ...request(source), tools: ['mcp'] })).rejects.toThrow('MCP tools are unavailable');
+    await expect(
+      service.start({
+        ...request(source),
+        tools: ['mcp'],
+        capabilityCeiling: { requiredTools: ['mcp'], allowMcpTools: false },
+      }),
+    ).rejects.toThrow('requires unavailable tools: mcp');
+    await expect(service.start({ ...request(source), tools: ['toString'] })).rejects.toThrow(
+      'unknown direct harness tools: toString',
+    );
+    expect(factory).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale MCP dispatchers and surfaces upstream tool errors as failures', async () => {
+    const factory = runtimeFactory(fakeRuntime('mcp-errors'));
+    const execute = vi.fn(async () => ({
+      content: [{ type: 'text' as const, text: 'permission denied' }],
+      isError: true,
+    }));
+    const dispatcher = { name: 'mcp', description: 'MCP dispatch', parameters: {}, execute };
+    let active: typeof dispatcher | undefined = dispatcher;
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent',
+      cwd: '/tmp',
+      runtimeFactory: factory,
+      mcpTool: () => active,
+    });
+    const handle = await service.start({ ...request({ kind: 'fresh' }), tools: ['mcp'] });
+    const tool = factory.mock.calls[0]![0].tools![0]!;
+    const call = () => tool.execute('call', {}, vi.fn(), undefined, {} as never, {} as never);
+    await expect(call()).rejects.toThrow('permission denied');
+    active = undefined;
+    await expect(call()).rejects.toThrow('no longer available');
+    active = { ...dispatcher };
+    await expect(call()).rejects.toThrow('no longer available');
+    expect(execute).toHaveBeenCalledOnce();
+    await handle.dispose();
+  });
+
   it('projects native tools, skills, prompt mode, exclusions, and capability ceilings', async () => {
     const runtime = fakeRuntime('configured-tools');
     const factory = runtimeFactory(runtime);

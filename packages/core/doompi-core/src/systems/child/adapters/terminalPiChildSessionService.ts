@@ -15,6 +15,7 @@ import {
   type DoomChildSessionTerminalPiForkSource,
   type DoomChildSessionRequest,
 } from '../../../exports/childSession';
+import type { DoomChildSessionTool } from '../../../exports/childSession';
 import {
   createDirectHarnessRuntime,
   promptForAssistantText,
@@ -46,6 +47,7 @@ export interface TerminalPiChildSessionServiceOptions {
    */
   readonly providers?: readonly Provider[] | (() => readonly Provider[]);
   readonly defaultModel?: () => DirectHarnessModel | undefined;
+  readonly mcpTool?: () => DoomChildSessionTool | undefined;
   readonly historyOwnership?: HistoryOwnership;
   readonly now?: () => number;
   readonly runtimeFactory?: (options: DirectHarnessRuntimeOptions) => Promise<DirectHarnessRuntime>;
@@ -268,6 +270,7 @@ export function createTerminalPiChildSessionService(
     ...(options.models === undefined ? {} : { models: options.models }),
     ...(options.providers === undefined ? {} : { providers: options.providers }),
     ...(options.defaultModel === undefined ? {} : { defaultModel: options.defaultModel }),
+    ...(options.mcpTool === undefined ? {} : { mcpTool: options.mcpTool }),
     historyOwnership: ownership,
     ...(options.now === undefined ? {} : { now: options.now }),
     runtimeFactory,
@@ -278,7 +281,7 @@ export function createTerminalPiChildSessionService(
       signal?.throwIfAborted();
       if (request.source.kind !== 'terminal-pi-fork')
         throw new Error('Terminal Pi child sessions require terminal Pi fork sources.');
-      const directRequestOptions = composeDirectHarnessRequestOptions(request);
+      const directRequestOptions = composeDirectHarnessRequestOptions(request, options.mcpTool);
       const requestedModel = parseChildModelReference(request.model);
       const model = requestedModel?.model ?? options.defaultModel?.();
       const thinking = request.thinking ?? requestedModel?.thinking;

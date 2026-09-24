@@ -1,3 +1,5 @@
+import { DOOM_CHILD_SESSION_MCP_TOOL_SERVICE } from '@agimon-ai/doompi-core/childSession';
+import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordisHost';
 import { createTerminalPiChildSessionServiceProvider } from '@agimon-ai/doompi-core/terminalPiChildSessionService';
 import type { Provider } from '@earendil-works/pi-ai';
 import type {
@@ -95,6 +97,7 @@ async function setup(state: RegistryState) {
     throw new Error('The terminal child session service received no providers thunk.');
   return {
     providers,
+    pi,
     close: () => dispatch({ type: 'session_shutdown', reason: 'reload' }),
   };
 }
@@ -168,8 +171,29 @@ describe('terminal child session wiring', () => {
         cwd: '/repo',
         providers: expect.any(Function),
         defaultModel: expect.any(Function),
+        mcpTool: expect.any(Function),
       });
     } finally {
+      await fixture.close();
+    }
+  });
+  it('resolves late MCP registration and revocation from the owning Cordis session', async () => {
+    const fixture = await setup({ ids: [], native: new Map(), generic: new Map() });
+    const connection = await connectDoomCordisHost(fixture.pi, 'test/child-mcp');
+    const resolve = vi.mocked(createTerminalPiChildSessionServiceProvider).mock.calls[0]![0].mcpTool!;
+    expect(resolve()).toBeUndefined();
+    const tool = { name: 'mcp', description: 'MCP', parameters: {}, execute: async () => ({ content: [] }) };
+    const fiber = connection.root.plugin((context) => {
+      context.provide(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE, tool);
+    });
+    try {
+      await fiber;
+      expect(resolve()).toBe(tool);
+      await fiber.dispose();
+      expect(resolve()).toBeUndefined();
+    } finally {
+      await fiber.dispose();
+      await connection.dispose();
       await fixture.close();
     }
   });

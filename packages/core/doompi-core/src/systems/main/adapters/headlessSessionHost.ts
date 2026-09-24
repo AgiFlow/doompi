@@ -20,7 +20,11 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { Value } from 'typebox/value';
 
-import { DOOM_CHILD_SESSION_SERVICE } from '../../../exports/childSession';
+import {
+  DOOM_CHILD_SESSION_SERVICE,
+  DOOM_CHILD_SESSION_MCP_TOOL_SERVICE,
+  type DoomChildSessionTool,
+} from '../../../exports/childSession';
 import type {
   DoomHeadlessEventName,
   DoomHeadlessExecutionContext,
@@ -806,6 +810,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     sessionsRoot: parsed.sessionDir ?? path.join(agentDir, 'server', 'sessions'),
     models: modelRuntime,
     defaultModel: () => currentModel,
+    mcpTool: () => {
+      if (disposed || !headlessReady || !headlessHost?.status.ready) return undefined;
+      return mcpServiceRoot?.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionTool | undefined;
+    },
   });
 
   const completeAuxiliaryModel = async (
