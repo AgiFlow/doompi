@@ -11,9 +11,13 @@ import { z } from 'zod';
 import { registerRunProvider, type RunProviderHandle } from '../../services/backgroundWork';
 import { createWorkflowCatalogReader, presentWorkflowCatalog } from '../../services/webWorkflowCatalog';
 import { defaultCatalogDeps } from '../../services/workflowCatalogDeps';
-import { parseWorkflowLaunchCommand } from '../../services/workflowLaunchCommand';
+import {
+  parseWorkflowLaunchCommand,
+  resolveWorkflowEntry,
+  validateWorkflowLaunch,
+} from '../../services/workflowLaunchCommand';
 import { readWorkflowSkill as skill } from '../../services/workflowResource';
-import { presentWorkflowRuns, runBelongsToSession } from '../../services/workflowRuns';
+import { PI_SESSION_ENV, presentWorkflowRuns, runBelongsToSession } from '../../services/workflowRuns';
 import { readWorkflowRuns } from '../../services/workflowWatcher';
 import { WORKFLOW_CATALOG_TYPE, WORKFLOW_RUNS_TYPE } from '../../types/webWorkflows';
 
@@ -36,7 +40,13 @@ function callResult(value: unknown): DoomHeadlessToolResult {
     }
   }
   if (content.length === 0) content.push({ type: 'text', text: JSON.stringify(value, null, 2) });
-  return { content, details: value };
+  return {
+    content,
+    details: value,
+    ...(typeof value === 'object' && value !== null && 'isError' in value && value.isError === true
+      ? { isError: true }
+      : {}),
+  };
 }
 
 import { type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
@@ -79,6 +89,11 @@ export function createWorkflowServerRuntime(
     return activeItems.length > 0;
   };
   const feature = createEmbeddedWorkflowFeature();
+  const launch = (parameters: Parameters<typeof feature.runTool.execute>[0]) =>
+    feature.runTool.execute({
+      ...parameters,
+      env: { ...parameters.env, [PI_SESSION_ENV]: host.context.sessionId },
+    });
   let control: ReturnType<typeof feature.createRunControl> | undefined;
   let controlDisposers: (() => void)[] = [];
   const disposeControl = (): void => {
@@ -265,7 +280,7 @@ export function createWorkflowServerRuntime(
         executionMode: 'serial',
         async execute(_toolCallId, parameters, signal) {
           signal?.throwIfAborted();
-          return callResult(await feature.runTool.execute(parameters as Parameters<typeof feature.runTool.execute>[0]));
+          return callResult(await launch(parameters as Parameters<typeof feature.runTool.execute>[0]));
         },
       },
       {
@@ -338,17 +353,36 @@ export function createWorkflowServerRuntime(
             await execution.client.notify({ body: parsed.error, level: 'error' });
             return;
           }
-          const result = await feature.runTool.execute({
-            workflowPath: parsed.workflow,
-            ...(parsed.runner === undefined ? {} : { runner: parsed.runner }),
-            ...(Object.keys(parsed.inputs).length === 0 ? {} : { inputs: parsed.inputs }),
-            ...(parsed.prompt === undefined ? {} : { prompt: parsed.prompt }),
-          });
-          const rendered = callResult(result).content.find((entry) => entry.type === 'text');
-          await execution.client.notify({
-            body: rendered?.type === 'text' ? rendered.text : 'Workflow launch requested.',
-            level: 'info',
-          });
+          try {
+            const entry = resolveWorkflowEntry(await catalogReader.read(execution.cwd), parsed.workflow);
+            if (!entry || entry.error) {
+              await execution.client.notify({
+                body: entry?.error ?? `Workflow not found: ${parsed.workflow}`,
+                level: 'error',
+              });
+              return;
+            }
+            const problems = validateWorkflowLaunch(entry, parsed);
+            if (problems.length > 0) {
+              await execution.client.notify({ body: problems.join('\n'), level: 'error' });
+              return;
+            }
+            const result = callResult(
+              await launch({
+                workflowPath: entry.path,
+                ...(parsed.runner === undefined ? {} : { runner: parsed.runner }),
+                ...(Object.keys(parsed.inputs).length === 0 ? {} : { inputs: parsed.inputs }),
+                ...(parsed.prompt === undefined ? {} : { prompt: parsed.prompt }),
+              }),
+            );
+            const rendered = result.content.find((item) => item.type === 'text');
+            await execution.client.notify({
+              body: rendered?.type === 'text' ? rendered.text : 'Workflow launch requested.',
+              level: result.isError ? 'error' : 'info',
+            });
+          } catch (error) {
+            await execution.client.notify({ body: String(error), level: 'error' });
+          }
         },
       },
     ],
