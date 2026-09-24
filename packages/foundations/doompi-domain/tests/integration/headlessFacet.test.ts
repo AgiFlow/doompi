@@ -22,7 +22,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
-async function setup(withSkill = false) {
+async function setup(withSkill = false, options: { unnamed?: boolean; brokenInactive?: boolean } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-domain-headless-'));
   roots.push(root);
   const home = path.join(root, 'home');
@@ -42,22 +42,37 @@ async function setup(withSkill = false) {
     );
     fs.writeFileSync(
       path.join(plugin, 'skills/web-guide/SKILL.md'),
-      '---\nname: web-guide\ndescription: Web guide\n---\n# Web guidance',
+      `---\n${options.unnamed ? '' : 'name: web-guide\n'}description: Web guide\n---\n# Web guidance`,
     );
     fs.writeFileSync(
       path.join(root, '.doom/domains.yaml'),
       JSON.stringify({
         plugins: { roots: ['plugins'] },
-        domains: { default: {}, web: { plugins: ['web'] } },
+        domains: {
+          default: {},
+          web: { plugins: ['web'] },
+          ...(options.brokenInactive ? { broken: { plugins: ['broken'] } } : {}),
+        },
       }),
     );
   }
+  if (options.brokenInactive) {
+    const plugin = path.join(root, 'plugins', 'broken');
+    fs.mkdirSync(path.join(plugin, '.claude-plugin'), { recursive: true });
+    fs.mkdirSync(path.join(plugin, 'skills', 'bad'), { recursive: true });
+    fs.writeFileSync(
+      path.join(plugin, '.claude-plugin/plugin.json'),
+      JSON.stringify({ name: 'broken', skills: './skills/' }),
+    );
+    fs.writeFileSync(path.join(plugin, 'skills/bad/SKILL.md'), 'invalid frontmatter');
+  }
+  const notify = vi.fn();
   const commands: DoomHeadlessCommand[] = [];
   const resources: DoomHeadlessResource[] = [];
   const disposed = vi.fn();
   const changeSelection = vi.fn(async () => undefined);
   const host = {
-    context: { repoRoot: root, environment: { HOME: home } },
+    context: { repoRoot: root, environment: { HOME: home }, client: { notify } },
     registerResource: (resource: DoomHeadlessResource) => {
       resources.push(resource);
       return { dispose: disposed };
@@ -89,15 +104,39 @@ async function setup(withSkill = false) {
     },
     shutdown: vi.fn(),
   };
-  return { changeSelection, command: commands[0]!, execution, resources, dispose, disposed };
+  return { changeSelection, command: commands[0]!, execution, resources, dispose, disposed, root, notify };
 }
 
 describe('headless domains command', () => {
   it('loads configured plugin skill content and gates it on its domain', async () => {
-    const { resources, execution } = await setup(true);
+    const { resources, execution, root } = await setup(true);
     const skill = resources.find((resource) => resource.name === 'web-guide');
-    expect(skill?.when).toEqual({ domain: 'web', attribution: { kind: 'domain', mode: 'web' } });
+    expect(skill).toMatchObject({
+      description: 'Web guide',
+      path: path.join(root, 'plugins/web/skills/web-guide/SKILL.md'),
+      when: { domain: 'web', attribution: { kind: 'domain', mode: 'web' } },
+    });
     expect(await skill?.read(execution)).toContain('# Web guidance');
+  });
+
+  it('keeps the collector directory-name fallback and model discovery metadata', async () => {
+    const { resources, execution } = await setup(true, { unnamed: true });
+    const skill = resources.find((resource) => resource.name === 'web-guide');
+    expect(skill).toMatchObject({ name: 'web-guide', description: 'Web guide' });
+    expect(await skill?.read(execution)).toContain('# Web guidance');
+  });
+
+  it('reports an invalid inactive domain without losing valid domain registrations or commands', async () => {
+    const { resources, execution, command, changeSelection, notify } = await setup(true, { brokenInactive: true });
+    expect(resources.map((resource) => resource.name)).toEqual(['web-guide', 'doompi-author-domain']);
+    expect(notify).toHaveBeenCalledExactlyOnceWith({
+      title: 'DoomPi domain broken unavailable',
+      body: 'Resource is missing YAML frontmatter',
+      level: 'warning',
+    });
+    await command.execute('web', execution);
+    expect(changeSelection).toHaveBeenCalledWith({ axis: 'domains', domains: ['web'] });
+    expect(resources.find((resource) => resource.name === 'web-guide')?.when?.domain).toBe('web');
   });
   it('opens a typed toggle picker and applies the resulting domain set', async () => {
     const { changeSelection, command, execution } = await setup();

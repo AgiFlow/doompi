@@ -1,76 +1,57 @@
-import {
-  type DoomHeadlessActivity,
-  type DoomHeadlessCommand,
-  type DoomHeadlessContent,
-  type DoomHeadlessTool,
+import type {
+  DoomHeadlessActivity,
+  DoomHeadlessCommand,
+  DoomHeadlessExecutionContext,
+  DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
 
 import { COMMAND_NAME, SERVER_COMMAND_DESCRIPTION } from '../../constants/mcp';
+import { MCP_STATUS_KEY } from '../../constants/piMcp';
 import { McpHeadlessToolParameters } from '../../schemas/mcpHeadlessTool';
-import { buildMcpConfigGroups } from '../../services/configSources';
-import { McpRuntimeOwner } from '../../services/mcpRuntime';
-import { readSessionConfig } from '../../services/sessionConfig';
+import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../types/webMcp';
+import { formatStatus } from '../mcpCommand';
+import { McpSession } from '../mcpSession';
 import { createMcpChildTool } from '../mcpSessionTools';
+import { readSessionConfig } from '../sessionConfig';
 
-type JsonRecord = Readonly<Record<string, unknown>>;
-
-function record(value: unknown): JsonRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as JsonRecord) : {};
-}
-
-function resultContent(result: unknown): DoomHeadlessContent[] {
-  const content = record(result).content;
-  if (!Array.isArray(content)) return [{ type: 'text', text: JSON.stringify(result) }];
-  return content.map((block): DoomHeadlessContent => {
-    const item = record(block);
-    if (item.type === 'text' && typeof item.text === 'string') return { type: 'text', text: item.text };
-    if (item.type === 'image' && typeof item.data === 'string' && typeof item.mimeType === 'string') {
-      return { type: 'image', data: item.data, mimeType: item.mimeType };
-    }
-    return { type: 'text', text: JSON.stringify(block) };
-  });
-}
-
-function readConfig(environment: Readonly<Record<string, string | undefined>>, cwd: string): string {
-  const config = readSessionConfig(environment, cwd);
-  const groups = buildMcpConfigGroups(config);
-  return JSON.stringify(
-    {
-      enabled: config.enabled !== false,
-      repoRoot: config.repoRoot,
-      shared: groups.shared.configPaths,
-      sessionLocal: groups.sessionLocal.configPaths,
-      droppedServers: groups.droppedServers,
-      diagnostics: groups.diagnostics,
+export function createMcpServerRuntime(environment: Readonly<Record<string, string | undefined>> = {}) {
+  let active: DoomHeadlessExecutionContext | undefined;
+  const authorizing = new Map<string, symbol>();
+  const session = new McpSession({
+    environment: { ...environment },
+    onAuthorizationUrl: async (url, serverName) => {
+      await active?.client.notify({
+        title: `Authorize MCP server ${serverName}`,
+        body: url.toString(),
+        level: 'warning',
+      });
     },
-    null,
-    2,
-  );
-}
+  });
 
-export function createMcpServerRuntime() {
-  let runtime: McpRuntimeOwner | undefined;
   const activity: DoomHeadlessActivity = {
     name: 'doompi-mcp-runtime',
     async start(execution) {
-      const owner = new McpRuntimeOwner();
-      runtime = owner;
+      active = execution;
+      const reported = new Set<string>();
+      const publish = () => {
+        execution.client.setStatus(
+          MCP_STATUS_KEY,
+          session
+            .getServers()
+            .map((server) => server.name)
+            .join(','),
+        );
+        execution.client.setStatus(MCP_SESSION_AUTH_STATUS_KEY, formatMcpSessionAuthStatus(session.getServers()));
+        for (const diagnostic of session.getDiagnostics()) {
+          if (reported.has(diagnostic)) continue;
+          reported.add(diagnostic);
+          void execution.client.notify({ title: 'DoomPi MCP', body: diagnostic, level: 'warning' });
+        }
+      };
+      const stopPublishing = session.onChange(publish);
       try {
-        const config = readSessionConfig(execution.environment, execution.cwd);
-        const groups = buildMcpConfigGroups(config);
-        const sources = [...groups.shared.configSources, ...groups.sessionLocal.configSources];
-        await owner.start({
-          configSources: sources,
-          onAuthorizationUrl: (url, serverName) =>
-            void execution.client.notify({
-              title: `Authorize MCP server ${serverName}`,
-              body: url.toString(),
-              level: 'warning',
-            }),
-          onServerStateChange: (change) => {
-            execution.client.setStatus('doompi-mcp', `${change.serverName}: ${change.state}`);
-          },
-        });
+        await session.reconfigure(readSessionConfig(execution.environment, execution.cwd));
+        publish();
       } catch (error) {
         await execution.client.notify({
           title: 'DoomPi MCP unavailable',
@@ -79,40 +60,32 @@ export function createMcpServerRuntime() {
         });
       }
       return async () => {
-        if (runtime !== owner) return;
-        runtime = undefined;
-        await owner.dispose();
-        execution.client.setStatus('doompi-mcp', undefined);
+        stopPublishing();
+        if (active !== execution) return;
+        active = undefined;
+        authorizing.clear();
+        try {
+          await session.dispose();
+        } finally {
+          // Withdraw tools and UI state even when a connection fails to close.
+          session.install({ enabled: false, repoRoot: execution.cwd, stagingDirectory: execution.cwd });
+          execution.client.setStatus(MCP_STATUS_KEY, undefined);
+          execution.client.setStatus(MCP_SESSION_AUTH_STATUS_KEY, undefined);
+        }
       };
     },
   };
 
   const invoke: Parameters<typeof createMcpChildTool>[0] = async (parameters, signal) => {
-    const owner = runtime;
-    const services = owner?.getServices();
-    if (!owner || !services) {
-      return { content: [{ type: 'text', text: 'The MCP runtime has not started yet.' }], isError: true };
-    }
-    try {
-      signal?.throwIfAborted();
-      const connection = await services.clientManager.ensureConnected(parameters.server);
-      signal?.throwIfAborted();
-      if (runtime !== owner || !owner.isCurrent(services)) throw new Error('The MCP runtime is no longer available.');
-      const result = await connection.callTool(parameters.tool, parameters.arguments ?? {});
-      signal?.throwIfAborted();
-      return {
-        content: resultContent(result),
-        details: result,
-        ...(record(result).isError === true ? { isError: true } : {}),
-      };
-    } catch (error) {
-      signal?.throwIfAborted();
-      return {
-        content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
-        isError: true,
-      };
-    }
+    if (!active) throw new Error('The MCP runtime has not started yet.');
+    const selected = session
+      .activeToolDefinitions()
+      .find((candidate) => candidate.serverName === parameters.server && candidate.toolName === parameters.tool);
+    if (!selected)
+      throw new Error(`MCP tool ${parameters.server}/${parameters.tool} is not available in this session.`);
+    return session.invokeTool(selected.piName, parameters.arguments ?? {}, signal);
   };
+  const childTool = createMcpChildTool(invoke);
 
   // web-plugin-tool-renderers: ignore mcp_use, headless-only generic MCP dispatch
   const tool: DoomHeadlessTool<typeof McpHeadlessToolParameters> = {
@@ -121,36 +94,85 @@ export function createMcpServerRuntime() {
     description: 'Call a tool exposed by a connected MCP server.',
     parameters: McpHeadlessToolParameters,
     executionMode: 'serial',
-    execute: (_toolCallId, parameters, signal) => invoke(parameters, signal),
+    async execute(_toolCallId, parameters, signal) {
+      try {
+        return await invoke(parameters, signal);
+      } catch (error) {
+        return {
+          content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
+          isError: true,
+        };
+      }
+    },
   };
 
   const command: DoomHeadlessCommand = {
     name: COMMAND_NAME,
     description: SERVER_COMMAND_DESCRIPTION,
     async execute(args, execution) {
-      const [subcommand = 'status', serverName] = args.trim().split(/\s+/u).filter(Boolean);
-      if (subcommand === 'auth') {
-        const result = await execution.client.request({
-          kind: 'input',
-          title: `Authorize MCP server${serverName ? ` ${serverName}` : ''}`,
-          message: 'Paste the authorization URL or code supplied by the MCP server.',
-        });
-        if (typeof result === 'string' && result.trim()) {
-          await execution.client.notify({
-            body: `MCP authorization received for ${serverName ?? 'server'}.`,
-            level: 'info',
-          });
+      const [subcommand = 'status', ...rest] = args.trim().split(/\s+/u).filter(Boolean);
+      const serverName = rest.join(' ');
+      const notify = (body: string, level: 'info' | 'warning' = 'info') =>
+        execution.client.notify({ title: 'DoomPi MCP', body, level });
+      try {
+        if (subcommand === 'status') {
+          await notify(formatStatus(session));
+          return;
         }
-        return;
+        if (!active) throw new Error('The MCP runtime has not started yet.');
+        if (subcommand === 'auth' || subcommand === 'disconnect') {
+          if (!serverName) throw new Error(`Name the server, for example /mcp ${subcommand} <server>.`);
+          const server = session.getServers().find((candidate) => candidate.name === serverName);
+          if (!server) throw new Error(`Unknown MCP server: ${serverName}`);
+          if (subcommand === 'disconnect') {
+            await session.disconnect(serverName);
+            authorizing.delete(serverName);
+            await notify(`${serverName} is disconnected from this session. Saved credentials were kept.`);
+            return;
+          }
+          if (server.authorizationUrl) {
+            await session.openAuthorizationPage(serverName);
+            return;
+          }
+          if (authorizing.has(serverName)) return;
+          const request = Symbol(serverName);
+          authorizing.set(serverName, request);
+          const owner = active;
+          // OAuth waits for the browser. Do not hold the session command queue while it does.
+          void session.reauthorize(serverName).then(
+            async () => {
+              if (active !== owner || authorizing.get(serverName) !== request) return;
+              authorizing.delete(serverName);
+              await notify(`${serverName} is authorized.`);
+            },
+            async (error: unknown) => {
+              if (active !== owner || authorizing.get(serverName) !== request) return;
+              authorizing.delete(serverName);
+              await notify(
+                `Could not authorize ${serverName}: ${error instanceof Error ? error.message : String(error)}`,
+                'warning',
+              );
+            },
+          );
+          return;
+        }
+        if (subcommand === 'reload') {
+          authorizing.clear();
+          try {
+            await session.dispose();
+          } finally {
+            // Reset the catalog even when paths are unchanged or teardown fails.
+            session.install({ enabled: false, repoRoot: execution.cwd, stagingDirectory: execution.cwd });
+          }
+          await session.reconfigure(readSessionConfig(execution.environment, execution.cwd));
+          await notify('Reconnecting MCP servers.');
+          return;
+        }
+        throw new Error(`Unknown /${COMMAND_NAME} subcommand "${subcommand}". Use status, auth, disconnect, reload.`);
+      } catch (error) {
+        await notify(error instanceof Error ? error.message : String(error), 'warning');
       }
-      await execution.client.notify({
-        title: 'DoomPi MCP',
-        body: readConfig(execution.environment, execution.cwd),
-        level: subcommand === 'status' ? 'info' : 'warning',
-      });
     },
   };
-  // The MCP config block named local filesystem paths and diagnostics, none of it
-  // model-actionable: the servers themselves already appear as tools.
-  return { activities: [activity], commands: [command], tools: [tool], childTool: createMcpChildTool(invoke) };
+  return { session, activities: [activity], commands: [command], tools: [tool], childTool };
 }

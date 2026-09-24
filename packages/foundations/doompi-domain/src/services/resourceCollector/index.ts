@@ -29,7 +29,7 @@ import { toPiToolName } from '../toolNames';
 
 export const DISPATCHER_AGENT_NAME = 'agiflow-dispatcher';
 const DISPATCHER_TOOLS = ['read', 'grep', 'find', 'ls', 'bash', 'launch_workflow', 'list_workflows'];
-const SKILL_MANIFEST_VERSION = 3;
+const SKILL_MANIFEST_VERSION = 4;
 const SKILL_MANIFEST_HASH_LENGTH = 16;
 const AGENT_PLUGIN_SCHEMA = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json';
 const PLUGIN_DATA_DIRECTORY = 'plugin-data';
@@ -118,6 +118,7 @@ async function pluginMcpSource(
 interface SkillManifestFile {
   path: string;
   name: string;
+  description?: string;
   digest: string;
   size: number;
   mtimeMs: number;
@@ -420,6 +421,7 @@ function scanSkillManifest(root: string, discovery: PluginSkillDiscovery): Skill
       files.push({
         path: candidate,
         name: skillName(candidate, attributes),
+        ...(typeof attributes.description === 'string' ? { description: attributes.description.trim() } : {}),
         digest: createHash('sha256').update(content).digest('hex'),
         size: stat.size,
         mtimeMs: stat.mtimeMs,
@@ -446,7 +448,12 @@ export function discoverSkills(
   const cached = readSkillManifest(manifestPath, root, discovery);
   const manifest = cached ?? scanSkillManifest(root, discovery);
   if (!cached) writeSkillManifest(manifestPath, manifest);
-  return manifest.files.map(({ name, path: filePath, digest }) => ({ name, path: filePath, digest }));
+  return manifest.files.map(({ name, path: filePath, description, digest }) => ({
+    name,
+    path: filePath,
+    digest,
+    ...(description === undefined ? {} : { description }),
+  }));
 }
 
 async function scanSkillManifestAsync(root: string, discovery: PluginSkillDiscovery): Promise<SkillManifest> {
@@ -483,6 +490,7 @@ async function scanSkillManifestAsync(root: string, discovery: PluginSkillDiscov
       files.push({
         path: candidate,
         name: skillName(candidate, attributes),
+        ...(typeof attributes.description === 'string' ? { description: attributes.description.trim() } : {}),
         digest: createHash('sha256').update(content).digest('hex'),
         size: stat.size,
         mtimeMs: stat.mtimeMs,
@@ -508,7 +516,12 @@ export async function discoverSkillsAsync(
   const cached = await readSkillManifestAsync(manifestPath, root, discovery);
   const manifest = cached ?? (await scanSkillManifestAsync(root, discovery));
   if (!cached) await writeSkillManifestAsync(manifestPath, manifest);
-  return manifest.files.map(({ name, path: filePath, digest }) => ({ name, path: filePath, digest }));
+  return manifest.files.map(({ name, path: filePath, description, digest }) => ({
+    name,
+    path: filePath,
+    digest,
+    ...(description === undefined ? {} : { description }),
+  }));
 }
 
 async function markdownFilesAsync(directory: string): Promise<string[]> {
@@ -759,7 +772,7 @@ export async function collectResources(
   repoRoot: string,
   plugins: Array<string | PluginEntry>,
   options: HarnessResourceOptions,
-): Promise<HarnessResources> {
+): Promise<HarnessResources & { skillSources: NamedResource[] }> {
   const pluginEntries: PluginEntry[] = plugins.map((plugin) =>
     typeof plugin === 'string' ? { directory: plugin } : plugin,
   );
@@ -855,6 +868,7 @@ export async function collectResources(
   return {
     temporaryDirectory,
     skillDirectories,
+    skillSources,
     skillCount: skillSources.length,
     agentCount: agentSources.length,
     agentDirectories,
