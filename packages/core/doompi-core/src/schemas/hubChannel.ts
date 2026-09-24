@@ -109,12 +109,32 @@ export interface DoomComputerUseHostRequest {
 
 export interface DoomComputerUseHostBinding {
   readonly available: boolean;
+  /** Global opt-in, separate from the presence of a native host. */
+  readonly enabled?: boolean;
   request(scope: DoomHubSessionScope, request: DoomComputerUseHostRequest): Promise<unknown>;
+  /** Checks a proof injected by the owning Desktop process, never a renderer marker. */
+  authorize?(headers: Headers): boolean;
+  /** Pins a session to Desktop before asking for a native grant. Ownership is not persisted. */
+  claimSession?(sessionId: string): void;
+  ownsSession?(sessionId: string): boolean;
+  forgetSession?(sessionId: string): void;
+  subscribe?(listener: () => void): () => void;
   close?(): void;
+}
+
+/** Narrow, host-bound access. An extension cannot select another session's identity. */
+export interface DoomComputerUseSessionAccess {
+  readonly available: boolean;
+  readonly enabled?: boolean;
+  authorize(headers: Headers): boolean;
+  claim(): void;
+  subscribe(listener: () => void): () => void;
 }
 
 export interface DoomHubChannelConnection {
   connectionId: string;
+  /** Host-verified native renderer proof, never copied from a channel payload. */
+  desktopAuthorized?: boolean;
 }
 
 export interface DoomHubChannelHost {

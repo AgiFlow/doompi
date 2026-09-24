@@ -3,7 +3,6 @@ import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
 import { facet as computerUseServerFacet } from '../../../generated/server';
-import { api } from '../../../src/services/computerUseApi';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 type MountedChannel = Parameters<DoomServerHostService['registerChannel']>[0];
@@ -41,18 +40,18 @@ describe('computerUseServerFacet', () => {
     expect(computerUseServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the exact computer-use API in session scope', async () => {
+  it('does not register an API in a session without a Desktop agent binding', async () => {
     const harness = hostContext('session');
     expect(typeof (await computerUseServerFacet.apply(harness.context))).toBe('function');
-    expect(harness.registered).toEqual([api]);
+    expect(harness.registered).toEqual([]);
   });
 
-  it('unregisters the API on disposal', async () => {
+  it('disposes an unavailable session without inventing an API registration', async () => {
     const harness = hostContext('session');
     await (
       await computerUseServerFacet.apply(harness.context)
     )?.();
-    expect(harness.state.disposed).toBe(1);
+    expect(harness.state.disposed).toBe(0);
   });
 
   it('registers and disposes its live channel in hub scope', async () => {

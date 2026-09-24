@@ -1,3 +1,17 @@
+import type { ComputerUseSessionView } from './computerUseApi';
+
+export interface ComputerUseSessionClient {
+  state(signal?: AbortSignal): Promise<ComputerUseSessionView>;
+  subscribeStatus?(listener: (state: ComputerUseSessionView) => void): () => void;
+  observe(signal?: AbortSignal, options?: ComputerUseObservationOptions): Promise<ComputerUseObservation>;
+  act(action: ComputerUseAction, signal?: AbortSignal): Promise<unknown>;
+  stop(signal?: AbortSignal): Promise<ComputerUseSessionView>;
+}
+
+export interface ComputerUseObservationOptions {
+  includeScreenshot?: boolean;
+}
+
 export const COMPUTER_USE_PHASES = [
   'inactive',
   'requesting',
@@ -50,7 +64,7 @@ export interface ComputerUseObservation {
   readonly bundleId: string;
   readonly windowTitle: string;
   readonly elements: readonly ComputerUseElement[];
-  readonly screenshot: {
+  readonly screenshot?: {
     readonly mimeType: 'image/png';
     readonly data: string;
   };

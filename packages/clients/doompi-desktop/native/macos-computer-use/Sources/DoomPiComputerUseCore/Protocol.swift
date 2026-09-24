@@ -30,6 +30,7 @@ public struct OperationEnvelope: Decodable, Sendable {
     public let authorizationPath: String
     public let request: Request
     public struct Request: Decodable, Sendable {
+        public let includeScreenshot: Bool?
         public let kind: String?
         public let snapshotId: String?
         public let elementRef: String?

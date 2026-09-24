@@ -39,7 +39,7 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function normalizeObservation(value: unknown, active: ActiveHelper): unknown {
+function normalizeObservation(value: unknown, active: ActiveHelper, includeScreenshot = true): unknown {
   const observation = record(value);
   const target = record(record(active.activation)?.target);
   const screenshot = record(observation?.screenshot);
@@ -50,8 +50,7 @@ function normalizeObservation(value: unknown, active: ActiveHelper): unknown {
     typeof target.bundleId !== 'string' ||
     typeof target.windowId !== 'string' ||
     typeof target.windowTitle !== 'string' ||
-    typeof screenshot?.data !== 'string' ||
-    screenshot.mimeType !== 'image/png'
+    (includeScreenshot && (typeof screenshot?.data !== 'string' || screenshot.mimeType !== 'image/png'))
   )
     throw new Error('The macOS helper returned an invalid observation.');
   return {
@@ -62,7 +61,7 @@ function normalizeObservation(value: unknown, active: ActiveHelper): unknown {
     bundleId: target.bundleId,
     windowTitle: target.windowTitle,
     elements: observation.elements,
-    screenshot: { mimeType: 'image/png', data: screenshot.data },
+    ...(includeScreenshot && screenshot ? { screenshot: { mimeType: 'image/png', data: screenshot.data } } : {}),
     ...(observation.truncated === true ? { truncated: true } : {}),
   };
 }
@@ -278,7 +277,7 @@ export function createMacOsComputerUseBackend(options: MacOsComputerUseBackendOp
         input.signal,
         recording.operations,
       );
-      return normalizeObservation(observation, recording);
+      return normalizeObservation(observation, recording, record(input.payload)?.includeScreenshot !== false);
     },
     async act(input) {
       const recording = active;

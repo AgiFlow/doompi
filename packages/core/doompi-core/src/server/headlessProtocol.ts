@@ -132,10 +132,16 @@ function frameOf(event: HeadlessHubEvent): HubFrame {
   }
 }
 
-function permitsSession(hub: HeadlessHub, mount: DoomSocketMount, sessionId: string): boolean {
+function permitsSession(
+  hub: HeadlessHub,
+  mount: DoomSocketMount,
+  sessionId: string,
+  authorize: (id: string) => boolean = () => true,
+): boolean {
   const session = hub.session(sessionId);
   return (
     session !== undefined &&
+    authorize(sessionId) &&
     (mount.scope === 'global' ||
       (session.workspaceId === mount.workspaceId && (mount.scope === 'workspace' || mount.sessionId === sessionId)))
   );
@@ -152,6 +158,8 @@ function managementHost(
   threads: ThreadJournals,
   mount: DoomSocketMount,
   dormantSessions: () => readonly OpenSessionRecord[],
+  authorizeSession: (id: string) => boolean,
+  authorizeDesktop: () => boolean,
 ): RoutedServerServiceHost {
   return {
     attachClient(presentation) {
@@ -171,7 +179,7 @@ function managementHost(
       const visible = new Set(
         hub
           .snapshot()
-          .filter((session) => permitsSession(hub, mount, session.id))
+          .filter((session) => permitsSession(hub, mount, session.id, authorizeSession))
           .map((session) => session.id),
       );
       publish({
@@ -208,17 +216,19 @@ function managementHost(
           if (!visible.delete(event.sessionId)) return;
         } else {
           const id = event.kind === 'upsert' ? event.session.id : event.sessionId;
-          if (!permitsSession(hub, mount, id)) return;
+          if (!permitsSession(hub, mount, id, authorizeSession)) return;
           if (event.kind === 'upsert') visible.add(id);
         }
         if (event.kind === 'channel') {
+          if (event.frameType === 'computer_use_state' && !authorizeDesktop()) return;
           if (!subscriptions.has(event.sessionId)) return;
           if (event.connectionId !== undefined && event.connectionId !== connectionId) return;
         }
         publish(frameOf(event));
       });
       const stopThreadFrames = threads.onFrame((event) => {
-        if (!threadSubscriptions.has(`${event.sessionId}\n${event.threadId}`)) return;
+        if (!authorizeSession(event.sessionId) || !threadSubscriptions.has(`${event.sessionId}\n${event.threadId}`))
+          return;
         publish({
           type: 'thread_frame',
           sessionId: event.sessionId,
@@ -230,12 +240,15 @@ function managementHost(
         state,
         async send(frame) {
           const sessionId = typeof frame.sessionId === 'string' ? frame.sessionId : undefined;
-          if (mount.scope !== 'global' && sessionId !== undefined && !permitsSession(hub, mount, sessionId))
-            throw new Error('Session is outside this WebSocket scope.');
+          if (sessionId !== undefined && !authorizeSession(sessionId))
+            throw new SessionNotFoundError('This session belongs to Desktop.');
+          if (sessionId !== undefined && !permitsSession(hub, mount, sessionId)) return;
           if (frame.type === 'subscribe' && sessionId !== undefined) {
             if (!hub.session(sessionId)) return;
             subscriptions.add(sessionId);
-            for (const channelFrame of hub.channelFrames(sessionId)) publish(channelFrame as HubFrame);
+            for (const channelFrame of hub.channelFrames(sessionId)) {
+              if (channelFrame.type !== 'computer_use_state' || authorizeDesktop()) publish(channelFrame as HubFrame);
+            }
             return;
           }
           if (frame.type === 'unsubscribe' && sessionId !== undefined) {
@@ -260,7 +273,8 @@ function managementHost(
             });
             return;
           }
-          if (sessionId !== undefined) hub.receiveChannel(sessionId, frame.type, frame.payload, connectionId);
+          if (sessionId !== undefined)
+            hub.receiveChannel(sessionId, frame.type, frame.payload, connectionId, authorizeDesktop());
         },
       };
       const provider = new RemoteServiceProvider([
@@ -271,6 +285,9 @@ function managementHost(
       provider.provide(DoomHubService, service);
       provider.provide(DoomPluginService, {
         async invoke(call) {
+          if (call.mount.scope === 'session' && !authorizeSession(call.mount.sessionId)) {
+            throw new Error('This session belongs to its Desktop instance.');
+          }
           if (mount.scope !== 'global') {
             const permitted =
               call.mount.scope === 'session'
@@ -284,7 +301,10 @@ function managementHost(
         },
       });
       provider.provide(DoomSessionManagementService, {
-        attach: (sessionId, context) => presentation.attachSession(sessionId, context),
+        attach: (sessionId, context) => {
+          if (!authorizeSession(sessionId)) throw new SessionNotFoundError('This session belongs to Desktop.');
+          return presentation.attachSession(sessionId, context);
+        },
         detach: (context) => presentation.detachSession(context),
       });
       const endpoint = createRemoteServiceEndpoint(provider);
@@ -317,25 +337,36 @@ function protocolHost(
   telemetry: ServerTelemetry | undefined,
   mount: DoomSocketMount,
   dormantSessions: () => readonly OpenSessionRecord[],
+  authorizeSession: (id: string) => boolean,
+  authorizeDesktop: () => boolean,
 ): ServerHost<DoomSessionMetadata> {
   return {
-    serverServices: managementHost(hub, threads, mount, dormantSessions),
+    serverServices: managementHost(hub, threads, mount, dormantSessions, authorizeSession, authorizeDesktop),
     async resolveSession(sessionId) {
       const session = hub.session(sessionId);
-      if (!session || !permitsSession(hub, mount, session.id))
+      if (!session || !permitsSession(hub, mount, session.id, authorizeSession))
         throw new SessionNotFoundError(`No session ${sessionId}`);
       return metadataOf(session);
     },
     async openSession(metadata, context): Promise<RoutedSessionHandle> {
       const session = hub.session(metadata.id);
-      if (!session || !permitsSession(hub, mount, session.id))
+      if (!session || !permitsSession(hub, mount, session.id, authorizeSession))
         throw new SessionNotFoundError(`No session ${metadata.id}`);
+      const permitted = () => hub.session(session.id)?.host === session.host && authorizeSession(session.id);
       const service = createAgentServerService({
         runtime: session.host.runtime,
-        onPresentationFrame: (listener) => session.host.onPresentationFrame(listener),
-        respondToExtensionUi: (frame) => session.host.respondToExtensionUi(frame),
-        readThreadTranscript: (threadId, request, readContext) =>
-          threads.readPage(session.id, threadId, request, readContext),
+        onPresentationFrame: (listener) =>
+          session.host.onPresentationFrame((frame) => {
+            if (permitted()) listener(frame);
+          }),
+        respondToExtensionUi: (frame) => {
+          if (!permitted()) throw new SessionNotFoundError('This session belongs to Desktop.');
+          return session.host.respondToExtensionUi(frame);
+        },
+        readThreadTranscript: (threadId, request, readContext) => {
+          if (!permitted()) throw new SessionNotFoundError('This session belongs to Desktop.');
+          return threads.readPage(session.id, threadId, request, readContext);
+        },
         sessionId: session.id,
         sessionName: session.name,
         cwd: session.cwd,
@@ -345,6 +376,22 @@ function protocolHost(
       const handle = await service.openSession(metadata, context);
       return {
         ...handle,
+        async attachClient(...args) {
+          const attachment = await handle.attachClient(...args);
+          return {
+            ...attachment,
+            invokeService(call, publish, invocationContext) {
+              if (!permitted()) throw new SessionNotFoundError('This session belongs to Desktop.');
+              return attachment.invokeService(
+                call,
+                (...values) => {
+                  if (permitted()) return publish(...values);
+                },
+                invocationContext,
+              );
+            },
+          };
+        },
         terminated: session.host.runtime.exited.then(async () => {
           await handle.close(BACKGROUND_CONTEXT);
           return undefined;
@@ -367,14 +414,23 @@ export async function createHeadlessProtocol(options: {
   onNotice?: (message: string) => void;
   /** Recorded sessions the server has not reopened; they join the first snapshot only. */
   dormantSessions?: () => readonly OpenSessionRecord[];
+  /** Evaluated for every invocation, including attachments established before a Desktop claim. */
+  authorizeSession?: (sessionId: string) => boolean;
+  authorizeDesktop?: () => boolean;
 }): Promise<HeadlessProtocol> {
   const listener = createPiWebSocketListener({ onError: (error) => options.onNotice?.(error.message) });
   const threads = createThreadJournals({
     resolve: (sessionId, threadId) => options.hub.threadJournal(sessionId, threadId),
   });
   const server = await new Server(
-    protocolHost(options.hub, threads, options.telemetry, options.mount ?? { scope: 'global' }, () =>
-      options.dormantSessions === undefined ? [] : options.dormantSessions(),
+    protocolHost(
+      options.hub,
+      threads,
+      options.telemetry,
+      options.mount ?? { scope: 'global' },
+      () => (options.dormantSessions === undefined ? [] : options.dormantSessions()),
+      options.authorizeSession ?? ((id) => !options.hub.computerUse?.ownsSession?.(id)),
+      options.authorizeDesktop ?? (() => false),
     ),
     {
       listeners: [listener],

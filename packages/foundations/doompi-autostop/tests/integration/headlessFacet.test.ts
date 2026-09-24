@@ -139,6 +139,36 @@ describe('headless auto-stop activity checks', () => {
     expect(test.shutdown).toHaveBeenCalledTimes(1);
     await test.dispose?.();
   });
+  it('defers a session-tree recheck while background work is active', async () => {
+    let items: BackgroundWorkItem[] = [{ provider: 'doom-runner', id: 'runner-1', sessionId: 'autostop-test' }];
+    const backgroundWork = {
+      generation: 'headless-autostop-session-tree-test',
+      register: vi.fn(),
+      snapshot: (sessionId?: string) => ({
+        items: items.filter((item) => sessionId === undefined || item.sessionId === sessionId),
+        errors: [],
+      }),
+    } as unknown as DoomBackgroundWorkService;
+    const test = await fixture(
+      [
+        { hasPendingMessages: false, isIdle: true },
+        { hasPendingMessages: false, isIdle: true },
+      ],
+      backgroundWork,
+    );
+
+    await test.hook('agent_settled').handle({}, test.execution);
+    await test.hook('session_tree').handle({}, test.execution);
+    expect(test.shutdown).not.toHaveBeenCalled();
+    expect(test.activity).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(1);
+
+    items = [];
+    await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_STOP_DELAYS.cooldownMs);
+    expect(test.shutdown).toHaveBeenCalledTimes(1);
+    expect(test.activity).toHaveBeenCalledTimes(2);
+    await test.dispose?.();
+  });
 
   it('does not arm shutdown when work is already queued at settle', async () => {
     const test = await fixture([{ hasPendingMessages: true, isIdle: true }]);

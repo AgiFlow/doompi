@@ -31,6 +31,7 @@ export interface PackageApiServerOptions {
   readonly environment: Readonly<Record<string, string | undefined>>;
   /** Lifecycle-owned direct events shared with the hub. */
   readonly directEvents: DoomDirectEventBus;
+  readonly computerUse?: DoomApiContext['computerUse'];
   internalToken?: string;
   hubToken?: string;
   /** Shared exact-scope dispatch table, so session facets can mount plugin methods. */
@@ -127,6 +128,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     cwd: options.cwd,
     environment: options.environment,
     directEvents: options.directEvents,
+    ...(options.computerUse === undefined ? {} : { computerUse: options.computerUse }),
     ...(options.internalToken === undefined ? {} : { internalToken: options.internalToken }),
     ...(options.hubToken === undefined ? {} : { hubToken: options.hubToken }),
     ...(exposedSessionService === undefined ? {} : { sessionService: exposedSessionService }),

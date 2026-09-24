@@ -138,13 +138,8 @@ function activationRequest(payload: unknown, now: number): ValidatedActivation {
   if (caller.locality === 'local') {
     exactKeys(caller, ['locality', 'stepUp'], 'caller');
     if (caller.stepUp !== 'not-required') throw new Error('Local caller metadata is invalid.');
-  } else if (caller.locality === 'remote') {
-    exactKeys(caller, ['locality', 'deviceId', 'stepUp'], 'caller');
-    boundedString(caller.deviceId, 'deviceId', 256);
-    if (caller.stepUp !== 'verified' && caller.stepUp !== 'unavailable')
-      throw new Error('Remote activation requires trusted step-up metadata.');
   } else {
-    throw new Error('Trusted activation caller metadata is required.');
+    throw new Error('Computer use requires the owning Desktop instance, not a remote client.');
   }
   return {
     requestId,
@@ -172,6 +167,8 @@ export class ComputerUseHost {
   readonly #confirmationOrder: string[] = [];
   #revoked = false;
   #revocationGeneration = 0;
+  #lastEnabled = false;
+  readonly #availabilityListeners = new Set<() => void>();
 
   constructor(options: ComputerUseHostOptions) {
     this.#backend = options.backend;
@@ -180,6 +177,30 @@ export class ComputerUseHost {
     this.#newId = options.newId;
     this.#enabled = options.enabled;
     this.#confirmLocalActivation = options.confirmLocalActivation;
+    this.#lastEnabled = this.enabled;
+  }
+
+  get enabled(): boolean {
+    try {
+      return !this.#revoked && this.#enabled();
+    } catch {
+      return false;
+    }
+  }
+
+  subscribeAvailability(listener: () => void): () => void {
+    this.#availabilityListeners.add(listener);
+    return () => {
+      this.#availabilityListeners.delete(listener);
+    };
+  }
+
+  async refreshAvailability(): Promise<void> {
+    const enabled = this.enabled;
+    if (enabled === this.#lastEnabled) return;
+    this.#lastEnabled = enabled;
+    for (const listener of this.#availabilityListeners) listener();
+    if (!enabled) await this.stopActive('global_setting_disabled');
   }
 
   async handle(request: ComputerUseDesktopRequest, signal?: AbortSignal): Promise<ComputerUseDesktopResponse> {
@@ -193,12 +214,15 @@ export class ComputerUseHost {
     this.#clearExpiryTimer();
     const active = this.#active;
     this.#active = undefined;
+    if (active !== undefined) for (const listener of this.#availabilityListeners) listener();
     if (active !== undefined) await this.#backend.stop({ ...active, reason });
     return active !== undefined;
   }
 
   async revoke(reason: string): Promise<void> {
+    if (this.#revoked) return;
     this.#revoked = true;
+    for (const listener of this.#availabilityListeners) listener();
     this.#revocationGeneration += 1;
     this.#clearExpiryTimer();
     const active = this.#active;
@@ -211,7 +235,7 @@ export class ComputerUseHost {
       if (this.#revoked) return this.#failure(request, 'desktop_unavailable', 'The Desktop capability is unavailable.');
       if (signal?.aborted === true) return this.#failure(request, 'request_cancelled', 'The request was cancelled.');
       await this.#expireIfNeeded();
-      if (!this.#enabled()) {
+      if (!this.enabled) {
         const active = this.#active;
         if (active !== undefined) {
           this.#clearExpiryTimer();
@@ -267,12 +291,13 @@ export class ComputerUseHost {
     }
     if (!this.#enabled())
       return this.#failure(request, 'desktop_unavailable', 'Computer use was disabled during confirmation.');
+    activationRequest(request.payload, this.#now());
     const durationSeconds = activation.confirmation.durationSeconds;
     const grant: ActiveGrant = {
       sessionId: request.sessionId,
       grantId: this.#newId(),
       runId: this.#newId(),
-      expiresAt: now + durationSeconds * 1000,
+      expiresAt: this.#now() + durationSeconds * 1000,
       nextSequence: 1,
     };
     const result = await this.#backend.activate({ ...grant, payload: request.payload, signal });
@@ -299,6 +324,12 @@ export class ComputerUseHost {
   }
   async #observe(request: ComputerUseDesktopRequest, signal?: AbortSignal): Promise<ComputerUseDesktopResponse> {
     const active = this.#authorized(request);
+    const options = record(request.payload);
+    if (options === undefined) throw new Error('Observation authorization is required.');
+    exactKeys(options, ['grantId', 'includeScreenshot'], 'observation');
+    if (options.includeScreenshot !== undefined && typeof options.includeScreenshot !== 'boolean') {
+      throw new Error('includeScreenshot must be a boolean.');
+    }
     const result = await this.#backend.observe({
       sessionId: active.sessionId,
       grantId: active.grantId,

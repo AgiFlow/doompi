@@ -336,6 +336,8 @@ export interface RepositorySettingsPanelContribution {
  * across plugins; a collision is an install diagnostic and the first wins.
  */
 export interface SettingsSectionContribution {
+  /** Presentation only. Native authority is enforced by the server. */
+  desktopOnly?: boolean;
   id: string;
   label: string;
   detail: string;
@@ -474,6 +476,8 @@ export type LeaderBindingContribution =
  * its package publishes one.
  */
 export interface MinorModeContribution {
+  /** Presentation only. Native authority is enforced by the server. */
+  desktopOnly?: boolean;
   name: string;
   /**
    * The catalog mode this row drives, when the runtime registers it under a
@@ -529,6 +533,8 @@ export interface ActivityGroupActiveSource {
  * the group's slot, `activity.<name>`, with a section of the same name.
  */
 export interface ActivityGroupContribution {
+  /** Presentation only. Native authority is enforced by the server. */
+  desktopOnly?: boolean;
   name: string;
   /** Leader Space key path, as the TUI documents it. */
   keys: string;

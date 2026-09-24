@@ -96,9 +96,9 @@ function host() {
   };
 }
 
-function websocketTransport(url: string): ByteTransportFactory {
+function websocketTransport(url: string, headers?: Record<string, string>): ByteTransportFactory {
   return async (handlers) => {
-    const socket = new WebSocket(url);
+    const socket = new WebSocket(url, { headers });
     await new Promise<void>((resolve, reject) => {
       socket.once('open', resolve);
       socket.once('error', reject);
@@ -134,6 +134,91 @@ afterEach(async () => {
 });
 
 describe('serveHeadlessServer', () => {
+  it('blocks an already-attached browser after Desktop claims the session while allowing the owning native connection', async () => {
+    const first = host();
+    const owned = new Set<string>();
+    const hub = createHeadlessHub({
+      manager: { closeSession: vi.fn(async () => undefined) } as never,
+      computerUse: {
+        available: true,
+        enabled: true,
+        request: vi.fn(),
+        authorize: (headers) => headers.get('x-doompi-desktop') === 'native-proof',
+        ownsSession: (id) => owned.has(id),
+      },
+    });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: first.host,
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0 });
+    servers.push(server);
+    const socketUrl = `${server.url.replace('http:', 'ws:')}/api/ws`;
+    const browser = await Client.connect({
+      serverId: DOOM_COCKPIT_SERVER_ID,
+      transportFactory: websocketTransport(socketUrl),
+    });
+    const native = await Client.connect({
+      serverId: DOOM_COCKPIT_SERVER_ID,
+      transportFactory: websocketTransport(socketUrl, { 'x-doompi-desktop': 'native-proof' }),
+    });
+    const bindings = [] as ReturnType<typeof createRemoteServiceBinding>[];
+    try {
+      for (const client of [browser, native]) {
+        await client.request(
+          { serverId: DOOM_COCKPIT_SERVER_ID },
+          { serviceId: DoomSessionManagementService.id, member: 'attach', args: ['one'] },
+        );
+        const binding = createRemoteServiceBinding({
+          services: [DoomSessionService],
+          transport: createClientServiceTransport(client, () => client.attachment),
+        });
+        await binding.ready(BACKGROUND_CONTEXT);
+        bindings.push(binding);
+      }
+      await bindings[0]!
+        .use(DoomSessionService)
+        .prompt({ text: 'before-grant', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+      owned.add('one');
+      await expect(
+        bindings[0]!
+          .use(DoomSessionService)
+          .prompt({ text: 'browser-after-grant', waitFor: 'accepted' }, BACKGROUND_CONTEXT),
+      ).rejects.toThrow();
+      await bindings[1]!
+        .use(DoomSessionService)
+        .prompt({ text: 'native-after-grant', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+      expect(first.runtime.submitPrompt).not.toHaveBeenCalledWith('browser-after-grant', undefined);
+      expect(first.runtime.submitPrompt).toHaveBeenCalledWith('native-after-grant', undefined);
+      const sessionUrl = `${server.url}/api/workspaces/test-workspace/sessions/one`;
+      expect((await fetch(sessionUrl)).status).toBe(404);
+      expect((await fetch(sessionUrl, { headers: { 'x-doompi-desktop': 'forged' } })).status).toBe(404);
+      expect((await fetch(sessionUrl, { headers: { 'x-doompi-desktop': 'native-proof' } })).status).toBe(200);
+      expect((await fetch(`${sessionUrl}/mcp/config`)).status).toBe(404);
+      await expect(
+        browser.request(
+          { serverId: DOOM_COCKPIT_SERVER_ID },
+          { serviceId: DoomSessionManagementService.id, member: 'attach', args: ['one'] },
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await Promise.allSettled(bindings.map((binding) => binding.dispose(BACKGROUND_CONTEXT)));
+      await browser.dispose();
+      await native.dispose();
+      await hub.close();
+    }
+  });
+
   it('closes active Pi clients before waiting for the HTTP server', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
     await hub.mountFacets([], {

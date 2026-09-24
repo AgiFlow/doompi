@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   activityGroups,
@@ -9,7 +9,12 @@ import {
   minorModes,
   selectionAxes,
 } from '../../src/web/lib/composition';
-import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry';
+import {
+  installWebPlugins,
+  resetWebPlugins,
+  pluginSettingsSections,
+  pluginActivityGroups,
+} from '../../src/web/lib/pluginRegistry';
 import { ansiSegments, emptySelection, parseSelection, stripAnsi } from '../../src/web/lib/statusLine';
 
 // Captured from a live `doompi --mode rpc` session, so the parser is tested
@@ -172,11 +177,59 @@ describe('minorModes', () => {
       'workflow',
       'voice',
     ]);
-    expect(minorModes({ 'doom-computer-use-mode': '' }, []).find((mode) => mode.name === 'computer use')).toMatchObject(
-      {
-        availability: 'off',
-      },
-    );
+    expect(
+      minorModes({ 'doom-computer-use-mode': '' }, []).find((mode) => mode.name === 'computer use'),
+    ).toBeUndefined();
+    vi.stubGlobal('window', { doompiDesktop: { platform: 'desktop' } });
+    try {
+      expect(minorModes({}, []).find((mode) => mode.name === 'computer use')).toBeUndefined();
+      expect(
+        minorModes({ 'doom-computer-use-mode': '' }, []).find((mode) => mode.name === 'computer use'),
+      ).toMatchObject({ availability: 'off' });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('hides Desktop catalog rows, settings and activity groups from browsers, not just missing statuses', () => {
+    resetWebPlugins();
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'computer-use',
+        minorModes: [{ name: 'computer use', modeId: 'computer-use', keys: 'c e', desktopOnly: true }],
+        settingsSections: [
+          { id: 'computer-use', label: 'Computer use', detail: 'Desktop control', fields: [], desktopOnly: true },
+        ],
+        activityGroups: [{ name: 'computer-use', keys: 'c e', desktopOnly: true }],
+      }),
+    ]);
+    const catalog = {
+      version: 1 as const,
+      revision: 1,
+      modes: [
+        {
+          id: 'computer-use',
+          label: 'Computer Use',
+          description: '',
+          order: 450,
+          activation: 'active' as const,
+          condition: 'ready' as const,
+          actions: [],
+        },
+      ],
+    };
+    try {
+      expect(minorModes({}, [], catalog)).toEqual([]);
+      expect(pluginSettingsSections()).toEqual([]);
+      expect(pluginActivityGroups()).toEqual([]);
+      vi.stubGlobal('window', { doompiDesktop: { platform: 'desktop' } });
+      expect(minorModes({}, [], catalog)).toMatchObject([{ id: 'computer-use', availability: 'on' }]);
+      expect(pluginSettingsSections()).toHaveLength(1);
+      expect(pluginActivityGroups()).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+      resetWebPlugins();
+    }
   });
 
   it('prefers plugin-declared modes over the packaged fallback, in declared order', () => {

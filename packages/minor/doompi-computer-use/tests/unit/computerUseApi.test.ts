@@ -14,7 +14,11 @@ import { COMPUTER_USE_ROUTES } from '../../src/types/computerUseApi';
 
 const internal = { authorization: 'Bearer internal' };
 const hub = { authorization: 'Bearer hub' };
-const local = { [DOOM_API_CALLER_LOCALITY_HEADER]: 'local', [DOOM_API_CALLER_STEP_UP_HEADER]: 'not-required' };
+const local = {
+  'x-doompi-desktop': 'native-proof',
+  [DOOM_API_CALLER_LOCALITY_HEADER]: 'local',
+  [DOOM_API_CALLER_STEP_UP_HEADER]: 'not-required',
+};
 const request = (route: string, method: 'GET' | 'POST', headers: Record<string, string>, value?: unknown) =>
   new Request(`http://host${route}`, {
     method,
@@ -29,7 +33,17 @@ const testDirectEvents: DoomDirectEventBus = {
 };
 const createComputerUseApi = (
   options: Omit<ComputerUseApiOptions, 'directEvents'> & { directEvents?: DoomDirectEventBus } = {},
-) => createComputerUseApiImpl({ directEvents: testDirectEvents, ...options });
+) =>
+  createComputerUseApiImpl({
+    directEvents: testDirectEvents,
+    desktop: {
+      available: true,
+      authorize: (headers) => headers.get('x-doompi-desktop') === 'native-proof',
+      claim: () => undefined,
+      subscribe: () => () => undefined,
+    },
+    ...options,
+  });
 
 describe('computer-use request broker', () => {
   it('publishes lifecycle state changes through the direct event bus', async () => {
@@ -54,7 +68,7 @@ describe('computer-use request broker', () => {
     expect((await broker.fetch(request(COMPUTER_USE_ROUTES.hubState, 'GET', internal))).status).toBe(404);
   });
 
-  it('admits activation only through trusted caller metadata and keeps grantId opaque', async () => {
+  it('admits activation only with native Desktop proof and keeps grantId opaque', async () => {
     const broker = createComputerUseApi({ sessionId: 's1', internalToken: 'internal', hubToken: 'hub' });
     const value = { target: { windowId: 'w1', bundleId: 'app.fixture' }, durationMs: 60_000 };
     expect((await broker.fetch(request(COMPUTER_USE_ROUTES.activate, 'POST', {}, value))).status).toBe(404);
@@ -142,7 +156,7 @@ describe('computer-use request broker', () => {
     }
   });
 
-  it('accepts the paired quick-tunnel fallback but rejects unstamped remote activation', async () => {
+  it('rejects paired, fallback, and unstamped remote callers without native Desktop proof', async () => {
     const value = { target: { windowId: 'w1', bundleId: 'app.fixture' }, durationMs: 60_000 };
     const unavailable = {
       [DOOM_API_CALLER_LOCALITY_HEADER]: 'remote',
@@ -153,7 +167,19 @@ describe('computer-use request broker', () => {
     const accepted = createComputerUseApi();
     const rejected = createComputerUseApi();
 
-    expect((await accepted.fetch(request(COMPUTER_USE_ROUTES.activate, 'POST', unavailable, value))).status).toBe(202);
+    expect((await accepted.fetch(request(COMPUTER_USE_ROUTES.activate, 'POST', unavailable, value))).status).toBe(404);
+    expect(
+      (
+        await accepted.fetch(
+          request(
+            COMPUTER_USE_ROUTES.activate,
+            'POST',
+            { ...unavailable, [DOOM_API_CALLER_STEP_UP_HEADER]: 'verified' },
+            value,
+          ),
+        )
+      ).status,
+    ).toBe(404);
     expect((await rejected.fetch(request(COMPUTER_USE_ROUTES.activate, 'POST', unstamped, value))).status).toBe(404);
   });
 

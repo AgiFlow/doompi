@@ -184,6 +184,8 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     return current;
   };
   const target = (workspaceId: string, sessionId: string) => {
+    // Remote MCP clients cannot inherit a grant, including through conversation child routing.
+    if (options.headlessHub.computerUse?.ownsSession?.(sessionId)) return undefined;
     const session = options.headlessHub.session(sessionId);
     const incarnation = incarnations.get(sessionId);
     return session !== undefined && session.workspaceId === workspaceId && incarnation?.host === session.host

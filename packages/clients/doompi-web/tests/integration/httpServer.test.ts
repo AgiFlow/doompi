@@ -300,6 +300,27 @@ describe('the web presentation server', () => {
     expect(JSON.parse(response.body)).toEqual({ ok: true, token: 'test-token' });
   });
 
+  it.each([undefined, 'a'.repeat(64)])(
+    'forwards only the supplied Desktop proof on WebSocket upgrades (%s)',
+    async (proof) => {
+      const forwarded = new Promise<string | string[] | undefined>((resolve) => {
+        upstreamSockets.once('connection', (_socket, request) => resolve(request.headers['x-doompi-desktop']));
+      });
+      const socket = new WebSocket(`${presentation.url.replace('http', 'ws')}/api/ws`, {
+        headers: proof === undefined ? {} : { 'x-doompi-desktop': proof },
+      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          socket.once('open', resolve);
+          socket.once('error', reject);
+        });
+        expect(await forwarded).toBe(proof);
+      } finally {
+        socket.close();
+      }
+    },
+  );
+
   it('relays the browser protocol WebSocket without owning session state', async () => {
     const socket = new WebSocket(`${presentation.url.replace('http', 'ws')}/api/ws`);
     const received = new Promise<string>((resolve, reject) => {

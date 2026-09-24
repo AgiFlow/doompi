@@ -2,7 +2,6 @@ import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/
 type Runtime = Awaited<ReturnType<typeof import('../root.server').default>>['value'];
 
 type Context = WithRoot<unknown, Runtime>;
-export default defineRoutedContribution(
-  (context: Context) => context.root.hooks?.find((hook) => hook.event === 'before_agent_start'),
-  { cardinality: 'optional' },
-);
+export default defineRoutedContribution((context: Context) => context.root.toolRestrictions?.[0], {
+  cardinality: 'optional',
+});

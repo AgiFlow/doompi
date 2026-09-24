@@ -63,6 +63,64 @@ function fixture(confirmLocalActivation = vi.fn(async () => true)) {
 }
 
 describe('ComputerUseHost', () => {
+  it('publishes opt-in changes without polling and stops a grant immediately on disable', async () => {
+    const { host, backend, setEnabled } = fixture();
+    const listener = vi.fn();
+    const unsubscribe = host.subscribeAvailability(listener);
+    await host.refreshAvailability();
+    expect(listener).not.toHaveBeenCalled();
+    expect(host.enabled).toBe(true);
+    await host.handle(request('session-a', 'activate', activation()));
+    setEnabled(false);
+    await host.refreshAvailability();
+    expect(host.enabled).toBe(false);
+    expect(listener).toHaveBeenCalled();
+    expect(backend.stop).toHaveBeenCalledOnce();
+    setEnabled(true);
+    await host.refreshAvailability();
+    expect(host.enabled).toBe(true);
+    unsubscribe();
+    listener.mockClear();
+    await host.revoke('test-shutdown');
+    await host.revoke('repeated-shutdown');
+    expect(host.enabled).toBe(false);
+    expect(listener).not.toHaveBeenCalled();
+    expect(backend.stop).toHaveBeenCalledOnce();
+  });
+
+  it('fails closed when the global configuration cannot be read', () => {
+    const { backend } = fixture();
+    const host = new ComputerUseHost({
+      backend,
+      hostGeneration: 'host',
+      now: () => 1000,
+      newId: () => 'id',
+      enabled: () => {
+        throw new Error('Unreadable configuration');
+      },
+    });
+    expect(host.enabled).toBe(false);
+  });
+
+  it('validates observation options before invoking the native backend', async () => {
+    const { host, backend } = fixture();
+    await host.handle(request('session-a', 'activate', activation()));
+    expect(
+      await host.handle(request('session-a', 'observe', { grantId: 'id-1', includeScreenshot: 'false' })),
+    ).toMatchObject({ ok: false });
+    expect(await host.handle(request('session-a', 'observe', { grantId: 'id-1', extra: true }))).toMatchObject({
+      ok: false,
+    });
+    expect(backend.observe).not.toHaveBeenCalled();
+    expect(
+      await host.handle(request('session-a', 'observe', { grantId: 'id-1', includeScreenshot: false })),
+    ).toMatchObject({ ok: true });
+    expect(backend.observe).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: { grantId: 'id-1', includeScreenshot: false } }),
+    );
+    await host.stopActive();
+  });
+
   it('binds one grant to the activating session and rejects a second session', async () => {
     const { host } = fixture();
     const activated = await host.handle(request('session-a', 'activate', activation()));
@@ -128,7 +186,7 @@ describe('ComputerUseHost', () => {
     expect(backend.activate).not.toHaveBeenCalled();
   });
 
-  it('accepts verified and quick-tunnel remote confirmation metadata', async () => {
+  it('rejects verified and quick-tunnel remote callers before native activation', async () => {
     const verified = fixture();
     const unavailable = fixture();
     expect(
@@ -138,7 +196,8 @@ describe('ComputerUseHost', () => {
           caller: { locality: 'remote', deviceId: 'device-1', stepUp: 'verified' },
         }),
       ),
-    ).toMatchObject({ ok: true });
+    ).toMatchObject({ ok: false, code: 'invalid_request' });
+    expect(verified.backend.activate).not.toHaveBeenCalled();
     expect(
       await unavailable.host.handle(
         request('session-a', 'activate', {
@@ -146,7 +205,43 @@ describe('ComputerUseHost', () => {
           caller: { locality: 'remote', deviceId: 'device-1', stepUp: 'unavailable' },
         }),
       ),
-    ).toMatchObject({ ok: true });
+    ).toMatchObject({ ok: false, code: 'invalid_request' });
+    expect(unavailable.backend.activate).not.toHaveBeenCalled();
+  });
+
+  it('revokes an active grant immediately on a configuration notification', async () => {
+    const test = fixture();
+    await test.host.handle(request('session-a', 'activate', activation()));
+    const changed = vi.fn();
+    const unsubscribe = test.host.subscribeAvailability(changed);
+    test.setEnabled(false);
+    await test.host.refreshAvailability();
+    expect(test.host.enabled).toBe(false);
+    expect(test.backend.stop).toHaveBeenCalledWith(expect.objectContaining({ reason: 'global_setting_disabled' }));
+    expect(changed).toHaveBeenCalled();
+    test.setEnabled(true);
+    await test.host.refreshAvailability();
+    expect(test.host.enabled).toBe(true);
+    expect(await test.host.handle(request('session-a', 'observe', { grantId: 'id-1' }))).toMatchObject({ ok: false });
+    unsubscribe();
+  });
+
+  it('rejects confirmation that expires while the native dialog is open', async () => {
+    let confirm!: (value: boolean) => void;
+    const test = fixture(
+      vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            confirm = resolve;
+          }),
+      ),
+    );
+    const pending = test.host.handle(request('session-a', 'activate', activation()));
+    await vi.waitFor(() => expect(confirm).toBeTypeOf('function'));
+    test.advance(120_001);
+    confirm(true);
+    expect(await pending).toMatchObject({ ok: false, code: 'invalid_request' });
+    expect(test.backend.activate).not.toHaveBeenCalled();
   });
 
   it('requires and honors native Desktop confirmation for local activation', async () => {

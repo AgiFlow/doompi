@@ -715,6 +715,13 @@ export function pluginDockFaces(): readonly DockFaceContribution[] {
   return activeState().dockFaces;
 }
 
+/** UI discovery only. Requests still require a proof injected by Electron's main process. */
+export function isDesktopClient(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    (window as Window & { doompiDesktop?: { platform?: string } }).doompiDesktop?.platform === 'desktop'
+  );
+}
 /**
  * The settings pages plugins contribute, in menu order. Sorted here rather than
  * at the reader so the menu and the page agree without either sorting twice.
@@ -722,7 +729,8 @@ export function pluginDockFaces(): readonly DockFaceContribution[] {
 export function pluginSettingsSections(
   scope: 'global' | 'workspace' = 'global',
 ): readonly SettingsSectionContribution[] {
-  return (scope === 'global' ? defaultState : workspaceState())?.settingsSections ?? [];
+  const sections = (scope === 'global' ? defaultState : workspaceState())?.settingsSections ?? [];
+  return isDesktopClient() ? sections : sections.filter((section) => !section.desktopOnly);
 }
 
 export interface InstalledSettingsPanel extends SettingsPanelContribution {
@@ -770,7 +778,8 @@ export function pluginMinorModes(): readonly MinorModeContribution[] {
 
 /** Activity-dock group declarations from every installed plugin, in display order. */
 export function pluginActivityGroups(): readonly ActivityGroupContribution[] {
-  return activeState().activityGroups;
+  const groups = activeState().activityGroups;
+  return isDesktopClient() ? groups : groups.filter((group) => !group.desktopOnly);
 }
 
 /**

@@ -1,14 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
-import {
-  doomApiCallerFrom,
-  type DoomApi,
-  type DoomApiContext,
-  type DoomApiHandler,
-} from '@agimon-ai/doompi-core/packageApi';
+import type { DoomComputerUseSessionAccess, DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
+import { type DoomApi, type DoomApiContext, type DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 
 import routes from '../../types/apiRoutes';
+import type { ComputerUseAction, ComputerUseObservation } from '../../types/computerUse';
 import {
   API_BASE_PATH,
   computerUseChannelType,
@@ -20,6 +16,7 @@ import {
   type ComputerUseBrokerRequest,
   type ComputerUseSessionView,
 } from '../../types/computerUseApi';
+import type { ComputerUseSessionClient } from '../sessionApiClient';
 
 interface PendingRequest {
   readonly request: ComputerUseBrokerRequest;
@@ -95,6 +92,8 @@ export interface ComputerUseApiOptions {
   readonly hubToken?: string;
   readonly directEvents: DoomDirectEventBus;
   readonly requestTimeoutMs?: number;
+  readonly desktop?: DoomComputerUseSessionAccess;
+  readonly beforeActivate?: () => Promise<void>;
 }
 
 export class ComputerUseRequestBroker implements DoomApiHandler {
@@ -110,10 +109,15 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
   private grantId?: string;
   private expiresAt?: number;
   private actionSequence = 0;
+  private expiryTimer?: ReturnType<typeof setTimeout>;
   private failure?: ComputerUseSessionView['failure'];
   private artifact?: ComputerUseArtifactView;
   private pending?: PendingRequest;
   private closed = false;
+  private readonly desktop?: DoomComputerUseSessionAccess;
+  private readonly beforeActivate?: () => Promise<void>;
+  private readonly listeners = new Set<(state: ComputerUseSessionView) => void>();
+  private readonly unsubscribeDesktop?: () => void;
 
   private static readonly DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
   public constructor(options: ComputerUseApiOptions) {
@@ -122,6 +126,21 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
     this.hubToken = options.hubToken;
     this.directEvents = options.directEvents;
     this.requestTimeoutMs = options.requestTimeoutMs ?? ComputerUseRequestBroker.DEFAULT_REQUEST_TIMEOUT_MS;
+    this.desktop = options.desktop;
+    this.beforeActivate = options.beforeActivate;
+    this.unsubscribeDesktop = options.desktop?.subscribe(() => {
+      clearTimeout(this.expiryTimer);
+      if (!options.desktop?.available) {
+        this.rejectPending('Desktop disconnected.');
+        this.phase = 'failed';
+        this.grantId = undefined;
+        this.failure = { code: 'desktop_unavailable', message: 'Desktop disconnected.' };
+      } else if (this.phase !== 'inactive' && this.phase !== 'failed') {
+        this.phase = 'stopping';
+        this.rejectPending('Control was stopped by Desktop.');
+      }
+      this.changed();
+    });
   }
 
   public state(): ComputerUseSessionView {
@@ -143,10 +162,52 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
     });
   }
 
+  /** Tools and the API share this broker. No socket, credential discovery, or second state store. */
+  public sessionClient(): ComputerUseSessionClient {
+    const result = async <T>(response: Response): Promise<T> => {
+      const value = (await response.json()) as T & { error?: string };
+      if (!response.ok) throw new Error(value.error ?? `Computer-use request failed (${response.status}).`);
+      return value;
+    };
+    const requireDesktop = (): void => {
+      if (this.closed || !this.desktop?.available || this.desktop.enabled === false)
+        throw new Error('Desktop computer use is unavailable.');
+    };
+    return {
+      state: async () => this.state(),
+      subscribeStatus: (listener) => {
+        this.listeners.add(listener);
+        return () => {
+          this.listeners.delete(listener);
+        };
+      },
+      observe: async (signal, options = {}) => {
+        requireDesktop();
+        return result<ComputerUseObservation>(await this.enqueue('observe', options, signal));
+      },
+      act: async (action: ComputerUseAction, signal) => {
+        requireDesktop();
+        if (!semanticAction(action as unknown as Record<string, unknown>))
+          throw new Error('A valid semantic action is required.');
+        return result(await this.enqueue('act', action, signal));
+      },
+      stop: async (signal) => {
+        signal?.throwIfAborted();
+        if (this.phase !== 'inactive' && this.phase !== 'failed') {
+          this.phase = 'stopping';
+          this.rejectPending('Computer use was stopped.');
+          this.changed();
+        }
+        return this.state();
+      },
+    };
+  }
   private changed(): void {
     this.revision += 1;
     this.wake = (this.wake + 1) % COMPUTER_USE_WAKE_LIMIT;
-    this.directEvents.publish(computerUseChannelType, this.sessionId, this.state());
+    const state = this.state();
+    for (const listener of this.listeners) listener(state);
+    this.directEvents.publish(computerUseChannelType, this.sessionId, state);
   }
 
   private authorized(request: Request, token: string | undefined): boolean {
@@ -154,9 +215,10 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
   }
 
   private async requestActivation(request: Request): Promise<Response> {
-    const caller = doomApiCallerFrom(request.headers);
-    if (caller === undefined || (caller.locality === 'remote' && caller.stepUp === 'not-required'))
-      return jsonError('Not found.', 404);
+    if (!this.desktop?.available || !this.desktop.authorize(request.headers)) return jsonError('Not found.', 404);
+    if (this.desktop.enabled === false) return jsonError('Enable computer use in global Desktop settings first.', 409);
+    // Only the owning native renderer can reach this point. Remote/browser caller stamps cannot grant access.
+    const caller = { locality: 'local', stepUp: 'not-required' } as const;
     if (this.phase !== 'inactive' && this.phase !== 'failed') return jsonError('Computer use is already busy.', 409);
     const input = await body(request);
     const target = record(input.target);
@@ -170,6 +232,15 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
       durationMs > COMPUTER_USE_MAX_DURATION_MS
     )
       return jsonError('The requested duration is invalid.', 400);
+    this.desktop.claim();
+    try {
+      await this.beforeActivate?.();
+    } catch (error) {
+      return jsonError(error instanceof Error ? error.message : String(error), 409);
+    }
+    if (this.closed || !this.desktop.available || (this.phase !== 'inactive' && this.phase !== 'failed')) {
+      return jsonError('Computer use is unavailable or already busy.', 409);
+    }
     const createdAt = Date.now();
     this.activation = Object.freeze({
       requestId: randomUUID(),
@@ -285,9 +356,11 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
       const pending = this.pending;
       this.pending = undefined;
       pending.dispose();
+      if (typeof input.error === 'string') {
+        this.phase = 'stopping';
+        pending.reject(new Error(input.error));
+      } else pending.resolve(input.result);
       this.changed();
-      if (typeof input.error === 'string') pending.reject(new Error(input.error));
-      else pending.resolve(input.result);
       return Response.json(this.state());
     }
     if (request.method === 'POST' && path === routes.hubStop.path) {
@@ -299,14 +372,30 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
           this.activation = undefined;
         } else {
           const host = record(input.host);
-          if (typeof host?.grantId !== 'string' || !Number.isFinite(host.expiresAt))
+          if (
+            typeof host?.grantId !== 'string' ||
+            !Number.isFinite(host.expiresAt) ||
+            (host.expiresAt as number) <= Date.now()
+          )
             return jsonError('Desktop did not issue a complete grant.', 502);
           this.grantId = host.grantId;
           this.expiresAt = host.expiresAt as number;
           this.actionSequence = 0;
           this.phase = 'active';
+          clearTimeout(this.expiryTimer);
+          this.expiryTimer = setTimeout(
+            () => {
+              if (this.closed || this.phase !== 'active') return;
+              this.phase = 'stopping';
+              this.rejectPending('The computer-use grant expired.');
+              this.changed();
+            },
+            Math.max(0, this.expiresAt - Date.now()),
+          );
+          this.expiryTimer.unref?.();
         }
       } else {
+        clearTimeout(this.expiryTimer);
         this.rejectPending('The computer-use session stopped.');
         this.phase = 'inactive';
         this.grantId = undefined;
@@ -321,7 +410,11 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
   }
 
   public close(): void {
+    if (this.closed) return;
     this.closed = true;
+    clearTimeout(this.expiryTimer);
+    this.unsubscribeDesktop?.();
+    this.listeners.clear();
     this.rejectPending('Computer-use broker closed.');
     this.grantId = undefined;
     this.expiresAt = undefined;
@@ -341,6 +434,7 @@ export const api: DoomApi = {
       ...(context.internalToken === undefined ? {} : { internalToken: context.internalToken }),
       ...(context.hubToken === undefined ? {} : { hubToken: context.hubToken }),
       directEvents: context.directEvents,
+      desktop: context.computerUse,
     });
   },
 };

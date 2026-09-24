@@ -1,16 +1,8 @@
-import type { ComputerUseAction, ComputerUseObservation } from '../../types/computerUse';
-import type { ComputerUseSessionView } from '../../types/computerUseApi';
+import type { ComputerUseSessionClient } from '../../types/computerUse';
 
-export interface ComputerUseSessionClient {
-  state(signal?: AbortSignal): Promise<ComputerUseSessionView>;
-  /** Subscribes to lifecycle-owned state changes, without polling the session API. */
-  subscribeStatus?(listener: (state: ComputerUseSessionView) => void): () => void;
-  observe(signal?: AbortSignal): Promise<ComputerUseObservation>;
-  act(action: ComputerUseAction, signal?: AbortSignal): Promise<unknown>;
-  stop(signal?: AbortSignal): Promise<ComputerUseSessionView>;
-}
+export type { ComputerUseSessionClient } from '../../types/computerUse';
 
-/** Uses the host-owned typed service directly. Internal package APIs are in-process. */
+/** Uses the injected host-owned service. Absence never triggers transport or credential discovery. */
 export function createComputerUseSessionClient(host?: ComputerUseSessionClient): ComputerUseSessionClient | undefined {
   return host;
 }

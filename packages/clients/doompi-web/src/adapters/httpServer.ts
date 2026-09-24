@@ -232,6 +232,9 @@ function wsHeaders(request: IncomingMessage, token: string | undefined): Record<
   if (token !== undefined && token !== '') headers['x-doompi-token'] = token;
   const protocol = request.headers['sec-websocket-protocol'];
   if (typeof protocol === 'string') headers['sec-websocket-protocol'] = protocol;
+  // Relay the native proof unchanged. Only the Desktop-owned headless host can authenticate it.
+  const desktop = request.headers['x-doompi-desktop'];
+  if (typeof desktop === 'string') headers['x-doompi-desktop'] = desktop;
   return headers;
 }
 

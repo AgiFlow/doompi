@@ -5,8 +5,8 @@ Session-scoped semantic computer control through the DoomPi Desktop capability.
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- DoomPi Desktop with Computer Use available
-- `@earendil-works/pi-coding-agent` 0.85.0
+- A supported packaged macOS DoomPi Desktop with native Computer Use permissions
+- The Pi version declared by this package's peer dependencies
 
 ## Install
 
@@ -16,7 +16,7 @@ pi install npm:@agimon-ai/doompi-computer-use
 
 ## Use
 
-Enable the default-off **Computer Use** minor mode in the cockpit. Its Activity section then lists eligible Desktop targets, lets you select one, and starts the activation and confirmation flow. Only one session can hold a live Desktop run.
+In Desktop, enable Computer Use in global settings, then select the default-off **Computer Use** minor mode. Its Activity section lists eligible application windows and starts native confirmation. Only one session can hold a live Desktop run. The setting, minor-mode row, and Activity group are hidden in a normal browser, including a browser opened against the Desktop server.
 
 The `computer-use` minor mode exposes Activate, Deactivate, and Doctor actions. `/computer-use` reports the current state.
 
@@ -24,16 +24,17 @@ While active, the package exposes three tools:
 
 - `computer_state` observes the authorized window and returns a semantic snapshot.
 - `computer_action` performs one semantic press, focus change, value change, or scroll against a current snapshot.
-- `computer_exec` runs a trusted, explicitly allowed local TypeScript script with JSON input, then returns a fresh observation.
+- `computer_exec` executes a reusable JavaScript or erasable TypeScript function and its relative helpers in a restricted runtime, then returns a fresh semantic observation.
 
-Computer scripts are trusted Node.js code and are not sandboxed. Configure exact allowed paths with `DOOMPI_COMPUTER_USE_SCRIPT_PATHS` and review every script before allowing it. See [Author computer scripts](./docs/computer-scripts.md) for the execution contract, limits, and an example.
+Generated functions receive the authorized program API, JSON input, bounded logging, and cancellation. They do not receive Node or filesystem access. Script-internal observations omit screenshots by default, and `includeScreenshot: true` requests an image explicitly. Full Node execution requires both `trusted: true` and an exact host-configured `DOOMPI_COMPUTER_USE_SCRIPT_PATHS` allowlist. Trusted scripts remain unsandboxed, including their imported dependencies. See [Author computer functions](./docs/computer-scripts.md) for the contract, limits, trust boundary, and examples.
 
-All three tools and their model guidance remain unavailable during setup and are exposed only after the native grant becomes active. The Activity section shows activation status, busy ownership, stop controls, and completed recording or trace metadata. Browser clients cannot call observation or action routes.
+All three tools remain unavailable during setup and are admitted only after the native grant becomes active. Disabling the mode or global opt-in, stopping control, expiry, or Desktop disconnection stops further actions. Once Desktop claims a session, browser and remote MCP clients cannot drive it, including previously attached clients. This ownership stays pinned for the server lifetime and is not restored from saved session data.
 
 ## Public API
 
 ```ts
-import { activateComputerUseExtension, createComputerUseSessionClient } from '@agimon-ai/doompi-computer-use';
+import { ComputerScriptRunner, createComputerUseSessionClient } from '@agimon-ai/doompi-computer-use';
+import type { ComputerScriptRun } from '@agimon-ai/doompi-computer-use';
 ```
 
 The session-scoped server facet owns the agent and hub routes. Their host-issued context tokens remain opaque and session-bound inside the request broker.
@@ -51,6 +52,4 @@ pnpm build
 
 MIT
 
-Direct plugin entries live in `src/extensions`. Controllers coordinate host APIs, commands, and mode actions. Models own computer-use state and projections; named services own Desktop transport, scripts, and configuration dependencies. Flat `src/exports` exposes reusable helpers and types.
-
-The Pi entry declares a live minor-mode collection so the global opt-in controls catalog presence. Its tool restriction is reactive and the helper owns all registration changes. Session startup begins availability polling; `onStop` cancels the timer and final disposal clears status. The server declares its session mode, activity, tools, commands, and API alongside hub channel factories.
+Direct plugin routes live in `src/extensions`. The session root constructs one broker shared by the typed agent client and activation API. The host owns the Desktop IPC connection, native renderer authentication, session identity, and grant lifetime. The hub channel uses lifecycle events rather than polling to forward operations. The CLI compatibility runtime keeps its existing polling lifecycle. Public exports remain under `src/exports`.

@@ -1,6 +1,8 @@
 import fs from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { runInNewContext } from 'node:vm';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -239,6 +241,24 @@ describe('routed cardinality', () => {
     expect(server).toContain('hooks: defined([');
     expect(cli).toContain('const defined =');
     expect(cli).toContain('const keyed =');
+  });
+
+  it('does not turn an absent optional route into a path-named placeholder', () => {
+    const { server } = raw({
+      'src/extensions/(backend)/tool/computer-state.server.ts':
+        "export default defineRoutedContribution(() => undefined, { cardinality: 'optional' });\n",
+    });
+    const helper = server.match(/const via = [\s\S]*?;\n/u)?.[0];
+    if (!helper) throw new Error('The emitted identity helper is missing.');
+    const via = runInNewContext(`${stripTypeScriptTypes(helper)}\nvia;`) as (
+      identity: object,
+      value: unknown,
+    ) => unknown;
+    expect(via({ name: 'computer_state' }, undefined)).toBeUndefined();
+    expect(via({ name: 'derived' }, { name: 'authored', execute: 'fixture' })).toEqual({
+      name: 'authored',
+      execute: 'fixture',
+    });
   });
 
   it('flattens a many route into its standard surface array', () => {

@@ -68,6 +68,7 @@ export function attachComputerUseHostBridge(
   child: ChildProcess,
   host: ComputerUseHost,
   onNotice: (message: string) => void = () => undefined,
+  desktopToken?: string,
 ): ComputerUseHostBridge {
   if (typeof child.send !== 'function') {
     throw new Error('Desktop computer-use requires the headless server IPC boundary.');
@@ -79,9 +80,40 @@ export function attachComputerUseHostBridge(
     activeRequests.clear();
     void host.revoke(reason);
   };
-  const revoke = (): void => revokeHost('headless_disconnected');
+  const unsubscribeAvailability = host.subscribeAvailability(() => {
+    if (!closed && child.connected)
+      child.send?.({
+        type: 'doompi:computer-use:availability',
+        version: COMPUTER_USE_IPC_VERSION,
+        enabled: host.enabled,
+      });
+  });
+  const revoke = (): void => {
+    unsubscribeAvailability();
+    revokeHost('headless_disconnected');
+  };
   const onMessage = (value: unknown): void => {
     if (closed) return;
+    if (desktopToken !== undefined && typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      const hello = value as Record<string, unknown>;
+      if (
+        hello.type === 'doompi:computer-use:hello' &&
+        hello.version === COMPUTER_USE_IPC_VERSION &&
+        typeof hello.requestId === 'string' &&
+        hello.requestId.length > 0 &&
+        hello.requestId.length <= 128 &&
+        messageBytes(value) <= COMPUTER_USE_MAX_IPC_BYTES
+      ) {
+        child.send?.({
+          type: 'doompi:computer-use:ready',
+          version: COMPUTER_USE_IPC_VERSION,
+          requestId: hello.requestId,
+          token: desktopToken,
+          enabled: host.enabled,
+        });
+        return;
+      }
+    }
     if (
       typeof value === 'object' &&
       value !== null &&
@@ -123,6 +155,7 @@ export function attachComputerUseHostBridge(
     async close() {
       if (closed) return;
       closed = true;
+      unsubscribeAvailability();
       child.off('message', onMessage);
       child.off('disconnect', revoke);
       child.off('exit', revoke);

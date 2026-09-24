@@ -64,6 +64,8 @@ export function createComputerUseChannel(): DoomHubChannel {
       const grants = new Map<string, string>();
       const subscriptions = new Map<string, () => void>();
       const processing = new Set<string>();
+      const rerun = new Map<string, ComputerUseSessionView | undefined>();
+      const requests = new Map<string, AbortController>();
       let activeSessionId: string | undefined;
       let closed = false;
 
@@ -100,13 +102,16 @@ export function createComputerUseChannel(): DoomHubChannel {
 
       const completePending = async (scope: DoomHubSessionScope, pending: ComputerUseBrokerRequest): Promise<void> => {
         if (!host.computerUse?.available) throw new Error(DESKTOP_UNAVAILABLE);
+        const controller = new AbortController();
+        requests.set(scope.sessionId, controller);
         try {
           const result = await host.computerUse.request(scope, {
             operation: pending.operation,
+            signal: controller.signal,
             payload:
               pending.operation === 'act'
                 ? { grantId: pending.grantId, sequence: pending.sequence, action: pending.payload }
-                : { grantId: pending.grantId },
+                : { grantId: pending.grantId, includeScreenshot: record(pending.payload)?.includeScreenshot !== false },
           });
           await responseJson(
             await sessionRequest(scope, COMPUTER_USE_ROUTES.hubComplete, 'POST', { id: pending.id, result }),
@@ -118,10 +123,13 @@ export function createComputerUseChannel(): DoomHubChannel {
               error: error instanceof Error ? error.message : String(error),
             }),
           );
+        } finally {
+          if (requests.get(scope.sessionId) === controller) requests.delete(scope.sessionId);
         }
       };
 
       const stopSession = async (scope: DoomHubSessionScope): Promise<void> => {
+        requests.get(scope.sessionId)?.abort();
         const authorization = (await responseJson(
           await sessionRequest(scope, COMPUTER_USE_ROUTES.hubAuthorization),
         )) as { grantId: string } | null;
@@ -148,7 +156,11 @@ export function createComputerUseChannel(): DoomHubChannel {
       };
 
       const processScope = async (scope: DoomHubSessionScope, announced?: ComputerUseSessionView): Promise<void> => {
-        if (closed || processing.has(scope.sessionId)) return;
+        if (closed || !scopes.has(scope.sessionId)) return;
+        if (processing.has(scope.sessionId)) {
+          rerun.set(scope.sessionId, announced);
+          return;
+        }
         processing.add(scope.sessionId);
         try {
           const state = announced ?? (await refresh(scope));
@@ -166,7 +178,7 @@ export function createComputerUseChannel(): DoomHubChannel {
                 const hostStatus = record(await host.computerUse.request(scope, { operation: 'status' }));
                 owned = hostStatus?.ownedBySession === true;
               } catch {
-                owned = true;
+                owned = false;
               }
             }
             if (expired || !owned) {
@@ -193,10 +205,13 @@ export function createComputerUseChannel(): DoomHubChannel {
             }
             if (activation !== null && host.computerUse?.available) {
               activeSessionId = scope.sessionId;
+              const controller = new AbortController();
+              requests.set(scope.sessionId, controller);
               try {
                 const hostResult = await host.computerUse.request(scope, {
                   operation: 'activate',
                   payload: activation,
+                  signal: controller.signal,
                 });
                 await responseJson(
                   await sessionRequest(scope, COMPUTER_USE_ROUTES.hubStop, 'POST', { host: hostResult }),
@@ -210,6 +225,8 @@ export function createComputerUseChannel(): DoomHubChannel {
                     error: error instanceof Error ? error.message : String(error),
                   }),
                 );
+              } finally {
+                if (requests.get(scope.sessionId) === controller) requests.delete(scope.sessionId);
               }
               await refresh(scope);
             }
@@ -232,12 +249,21 @@ export function createComputerUseChannel(): DoomHubChannel {
           }
         } finally {
           processing.delete(scope.sessionId);
+          if (!closed && scopes.has(scope.sessionId) && rerun.has(scope.sessionId)) {
+            const next = rerun.get(scope.sessionId);
+            rerun.delete(scope.sessionId);
+            queueMicrotask(() => {
+              void processScope(scope, next);
+            });
+          }
         }
       };
 
       const onState = (scope: DoomHubSessionScope, payload: unknown): void => {
         const state = sessionState(payload);
         if (state === undefined || state.sessionId !== scope.sessionId) return;
+        if (state.phase === 'stopping' || state.phase === 'failed' || state.phase === 'inactive')
+          requests.get(scope.sessionId)?.abort();
         publish(scope, state);
         void processScope(scope, state);
       };
@@ -290,6 +316,9 @@ export function createComputerUseChannel(): DoomHubChannel {
           void processScope(scope);
         },
         sessionRemoved(sessionId) {
+          requests.get(sessionId)?.abort();
+          requests.delete(sessionId);
+          rerun.delete(sessionId);
           const scope = scopes.get(sessionId);
           const grantId = grants.get(sessionId);
           subscriptions.get(sessionId)?.();
@@ -312,6 +341,9 @@ export function createComputerUseChannel(): DoomHubChannel {
         },
         close() {
           closed = true;
+          for (const controller of requests.values()) controller.abort();
+          requests.clear();
+          rerun.clear();
           for (const unsubscribe of subscriptions.values()) unsubscribe();
           subscriptions.clear();
           if (host.computerUse?.available) {
@@ -331,7 +363,8 @@ export function createComputerUseChannel(): DoomHubChannel {
       };
       return source;
     },
-    receive(scope, payload) {
+    receive(scope, payload, connection) {
+      if (connection.desktopAuthorized !== true) return;
       receiveCommand?.(scope, payload);
     },
   };

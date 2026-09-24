@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { loadDoomConfig } from '@agimon-ai/doompi-config';
+import { globalDoomConfigDirectory, loadDoomConfig } from '@agimon-ai/doompi-config';
 import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItem, shell } from 'electron';
 
 import { freePort, portIsFree, startHub } from '../adapters/hubProcess';
@@ -133,6 +133,29 @@ async function start(): Promise<void> {
   }
 
   const credential = headlessCredential();
+  const desktopToken = computerUseHost === undefined ? undefined : randomBytes(32).toString('hex');
+  let configWatcher: fs.FSWatcher | undefined;
+  if (computerUseHost) {
+    try {
+      const directory = globalDoomConfigDirectory(os.homedir());
+      fs.mkdirSync(directory, { recursive: true });
+      configWatcher = fs.watch(directory, { persistent: false }, (_event, filename) => {
+        if (filename === null || filename.toString() === 'config.yaml') {
+          void computerUseHost.refreshAvailability().catch((error: unknown) => {
+            notice(`Computer-use configuration refresh failed: ${String(error)}`);
+            void computerUseHost.revoke('configuration_unavailable');
+          });
+        }
+      });
+      configWatcher.on('error', (error) => {
+        notice(`Computer-use configuration watcher failed: ${error.message}`);
+        void computerUseHost.revoke('configuration_unavailable');
+      });
+    } catch (error) {
+      notice(`Computer-use configuration watcher unavailable: ${String(error)}`);
+      await computerUseHost.revoke('configuration_unavailable');
+    }
+  }
   try {
     const started = await startHub(
       {
@@ -147,11 +170,27 @@ async function start(): Promise<void> {
       },
       notice,
       computerUseHost,
+      desktopToken,
     );
+    if (desktopToken !== undefined) {
+      const origin = new URL(started.url).origin;
+      window.webContents.session.webRequest.onBeforeSendHeaders(
+        { urls: [`${origin}/*`, `${origin.replace(/^http/u, 'ws')}/*`] },
+        (details, callback) => {
+          const headers = { ...details.requestHeaders };
+          for (const key of Object.keys(headers)) if (key.toLowerCase() === 'x-doompi-desktop') delete headers[key];
+          if (!window.isDestroyed() && details.webContentsId === window.webContents.id) {
+            headers['x-doompi-desktop'] = desktopToken;
+          }
+          callback({ requestHeaders: headers });
+        },
+      );
+    }
     hub = {
       ...started,
       stop: async () => {
         try {
+          configWatcher?.close();
           await started.stop();
         } finally {
           credential.cleanup();
@@ -159,6 +198,7 @@ async function start(): Promise<void> {
       },
     };
   } catch (error) {
+    configWatcher?.close();
     credential.cleanup();
     throw error;
   }

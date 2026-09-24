@@ -1,8 +1,12 @@
-import type { ComputerUseSessionClient } from '../services/sessionApiClient';
-import type { ComputerUseAction, ComputerUseObservation } from './computerUse';
+import type {
+  ComputerUseAction,
+  ComputerUseObservation,
+  ComputerUseObservationOptions,
+  ComputerUseSessionClient,
+} from './computerUse';
 
 export interface ComputerScriptProgram {
-  observe(): Promise<ComputerUseObservation>;
+  observe(options?: ComputerUseObservationOptions): Promise<ComputerUseObservation>;
   act(action: ComputerUseAction): Promise<unknown>;
 }
 
@@ -17,24 +21,45 @@ export interface ComputerScriptRunContext {
   context: { program: ComputerScriptProgram };
   input: unknown;
   logger: ComputerScriptLogger;
-  signal: AbortSignal;
+  /** Portable cancellation surface. Trusted Node scripts receive the full AbortSignal. */
+  signal: Pick<AbortSignal, 'aborted' | 'throwIfAborted'>;
 }
 
-export type ComputerScriptRun = (options: ComputerScriptRunContext) => Promise<unknown>;
+/** Both a synchronous result and a promise are accepted and awaited by the worker. */
+export type ComputerScriptRun = (options: ComputerScriptRunContext) => unknown;
 
 export interface ComputerScriptExecutionResult {
   result?: unknown;
   observation: ComputerUseObservation;
   logs: readonly string[];
+  metrics?: {
+    actions: number;
+    observations: number;
+    durationMs: number;
+    outputBytes: number;
+  };
+}
+
+export interface ComputerScriptExecutionOptions {
+  /** Full Node execution additionally requires an exact host-configured path allowlist. */
+  trusted?: boolean;
+  includeScreenshot?: boolean;
 }
 
 export interface ComputerScriptExecutor {
-  execute(scriptPath: string, input: unknown, signal?: AbortSignal): Promise<ComputerScriptExecutionResult>;
+  execute(
+    scriptPath: string,
+    input: unknown,
+    signal?: AbortSignal,
+    options?: ComputerScriptExecutionOptions,
+  ): Promise<ComputerScriptExecutionResult>;
 }
 
 export interface ComputerScriptRunnerOptions {
   readonly client: ComputerUseSessionClient;
   readonly allowedScriptPaths: readonly string[];
+  /** Host-admitted root for generated functions and their relative helper modules. */
+  readonly scriptRoot?: string;
   readonly timeoutMs?: number;
   readonly maxOutputBytes?: number;
 }
