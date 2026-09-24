@@ -538,6 +538,79 @@ describe('serveHeadlessServer', () => {
     expect((await rpc(second.url, client.clientSecret)).status).toBe(401);
     await hub.close();
   });
+  it('accepts a host-created signed MCP URL and restores it after restart', async () => {
+    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-session-mcp-url-'));
+    temporaryDirectories.push(stateDir);
+    const root = '/api/workspaces/test-workspace/sessions/one/mcp';
+    const origin = 'https://remote.example.com';
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: host().host,
+    });
+    const start = () =>
+      serveHeadlessServer({
+        headlessHub: hub,
+        port: 0,
+        token: 'browser-secret',
+        sessionMcpPublicOrigin: () => origin,
+        sessionMcpStateDir: stateDir,
+      });
+    const first = await start();
+    const created = await fetch(`${first.url}${root}/clients`, {
+      method: 'POST',
+      headers: { 'x-doompi-token': 'browser-secret' },
+      body: JSON.stringify({ authMethod: 'url_token', scope: 'session', routing: 'conversation' }),
+    });
+    expect(created.status).toBe(201);
+    const body = (await created.json()) as {
+      client: { clientId: string; connectionUrl: string; clientSecret?: string };
+    };
+    expect(body.client.clientSecret).toBeUndefined();
+    expect(body.client.connectionUrl.startsWith(`${origin}${root}/`)).toBe(true);
+
+    const signedPath = new URL(body.client.connectionUrl).pathname;
+    const rpc = (url: string, path: string) =>
+      fetch(`${url}${path}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+      });
+    expect((await rpc(first.url, signedPath)).status).toBe(200);
+
+    const token = signedPath.slice(signedPath.lastIndexOf('/') + 1);
+    const [header, payload] = token.split('.');
+    const invalidPath = `${root}/${header}.${payload}.${'A'.repeat(43)}`;
+    expect((await rpc(first.url, invalidPath)).status).toBe(401);
+
+    await first.close();
+    const second = await start();
+    servers.push(second);
+    expect((await rpc(second.url, signedPath)).status).toBe(200);
+    expect(
+      await fetch(`${second.url}${root}/clients`, { headers: { 'x-doompi-token': 'browser-secret' } }).then(
+        (response) => response.text(),
+      ),
+    ).not.toContain(token);
+
+    expect(
+      (
+        await fetch(`${second.url}${root}/clients/${body.client.clientId}`, {
+          method: 'DELETE',
+          headers: { 'x-doompi-token': 'browser-secret' },
+        })
+      ).status,
+    ).toBe(200);
+    expect((await rpc(second.url, signedPath)).status).toBe(401);
+    await hub.close();
+  });
 
   it('serves mentioned files only from the session working directory', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-session-file-'));

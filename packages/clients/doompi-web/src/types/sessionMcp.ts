@@ -25,7 +25,7 @@ export interface SessionMcpClient {
   clientId: string;
   name: string;
   redirectUri: string;
-  tokenEndpointAuthMethod: 'client_secret_post' | 'api_key';
+  tokenEndpointAuthMethod: 'client_secret_post' | 'api_key' | 'url_token';
   createdAt: number;
   scope: SessionMcpScope;
   routing: SessionMcpRouting;
@@ -35,10 +35,11 @@ export interface SessionMcpClient {
 }
 
 export interface CreatedSessionMcpClient extends SessionMcpClient {
-  /** Returned once by the host and never included in later list responses. */
-  clientSecret: string;
+  /** One-time credential material. Signed URL clients receive only connectionUrl. */
+  clientSecret?: string;
+  connectionUrl?: string;
 }
 
 export type CreateSessionMcpClientInput =
   | { redirectUri: string; scope: 'session'; routing: SessionMcpRouting }
-  | { authMethod: 'api_key'; scope: 'session'; routing: SessionMcpRouting };
+  | { authMethod: 'api_key' | 'url_token'; scope: 'session'; routing: SessionMcpRouting };

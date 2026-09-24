@@ -267,6 +267,39 @@ describe('session MCP restricted OAuth', () => {
     expect(restored.revokeClient(client.clientId)).toBe(true);
     expect(restored.authenticateAccessToken(client.clientSecret, AUDIENCE)).toBeUndefined();
   });
+  it('authenticates a signed URL JWT, survives restart, and revokes with its binding', () => {
+    const service = createSessionMcpAuthorizationService();
+    const client = service.createClient({ name: 'ChatGPT signed URL', authMethod: 'url_token' });
+    const binding = service.createAuthorizationBinding({
+      clientId: client.clientId,
+      sessionId: 'alpha',
+      sessionGeneration: 4,
+      audience: AUDIENCE,
+      scope: 'session',
+      routing: 'conversation',
+    });
+    const token = service.issueUrlToken(client.clientId);
+    const parts = token.split('.');
+
+    expect(client).toMatchObject({ tokenEndpointAuthMethod: 'url_token', redirectUri: '' });
+    expect(parts).toHaveLength(3);
+    expect(service.authenticateUrlToken(token, AUDIENCE)).toMatchObject(binding);
+    expect(service.authenticateUrlToken(token, `${AUDIENCE}/other`)).toBeUndefined();
+    expect(service.authenticateUrlToken(`${parts[0]}.${parts[1]}.${'A'.repeat(43)}`, AUDIENCE)).toBeUndefined();
+
+    const registration = service.persistentRegistration(client.clientId, 'workspace', 10_000)!;
+    expect(JSON.stringify(registration)).not.toContain(token);
+    expect(JSON.stringify(registration)).not.toContain(client.clientSecret);
+
+    expect(service.revokeSessionGeneration('alpha', 4)).toBe(0);
+    expect(service.authenticateUrlToken(token, AUDIENCE)).toBeUndefined();
+
+    const restored = createSessionMcpAuthorizationService();
+    expect(restored.restorePersistentRegistration(registration, 5)).toBe(true);
+    expect(restored.authenticateUrlToken(token, AUDIENCE)).toMatchObject({ sessionGeneration: 5 });
+    expect(restored.revokeClient(client.clientId)).toBe(true);
+    expect(restored.authenticateUrlToken(token, AUDIENCE)).toBeUndefined();
+  });
 
   it('sweeps expired codes and orphan grants before enforcing the record bound', () => {
     let now = 1_000;
