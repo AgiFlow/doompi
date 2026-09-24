@@ -1,3 +1,20 @@
+## 0.0.1-alpha.86 (2026-09-24)
+
+### 🩹 Fixes
+
+- **doompi-workflow:** resolve launch paths and retain session ownership ([#181](https://github.com/AgiFlow/doompi/pull/181))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.43
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.85
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.85 (2026-09-24)
 
 ### 🧱 Updated Dependencies

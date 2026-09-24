@@ -1,3 +1,13 @@
+## 0.0.1-alpha.85 (2026-09-24)
+
+### 🩹 Fixes
+
+- **doompi-core:** inherit parent MCP tools in child sessions ([#178](https://github.com/AgiFlow/doompi/pull/178))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.84 (2026-09-24)
 
 ### 🚀 Features
