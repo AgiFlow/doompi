@@ -104,6 +104,15 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
+describe('session execution controls', () => {
+  it('renames the durable session through the headless context', async () => {
+    const current = await fixture();
+
+    await current.session.setName?.('Remote conversation title');
+
+    await expect(current.runtime.readState()).resolves.toMatchObject({ sessionName: 'Remote conversation title' });
+  });
+});
 describe('request-private auxiliary model tools', () => {
   const tools = [
     {

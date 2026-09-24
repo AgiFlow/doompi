@@ -1,7 +1,7 @@
 import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { createLoadContextTool } from '../src/services/mcpContextTools';
+import { createLoadContextTool, createRenameThreadTool } from '../src/services/mcpContextTools';
 
 describe('createLoadContextTool', () => {
   it('serializes only the host-owned context snapshot', async () => {
@@ -20,5 +20,30 @@ describe('createLoadContextTool', () => {
       content: [{ type: 'text', text: JSON.stringify(snapshot) }],
       structuredContent: snapshot,
     });
+  });
+});
+
+describe('createRenameThreadTool', () => {
+  it('renames the bound session with a trimmed title', async () => {
+    const setName = vi.fn(async () => undefined);
+    const context = { execution: { session: { setName } } } as unknown as DoomMcpPluginContext;
+    const tool = createRenameThreadTool(context);
+
+    await expect(
+      tool.execute('call', { title: ' Worktree sync fix ' }, undefined, undefined, {} as never),
+    ).resolves.toEqual({
+      content: [{ type: 'text', text: 'Renamed thread to "Worktree sync fix".' }],
+    });
+    expect(setName).toHaveBeenCalledWith('Worktree sync fix');
+    expect(tool.annotations).toEqual({ readOnlyHint: false, destructiveHint: false, openWorldHint: false });
+  });
+
+  it('refuses a whitespace-only title when called directly', async () => {
+    const context = { execution: { session: { setName: vi.fn() } } } as unknown as DoomMcpPluginContext;
+    const tool = createRenameThreadTool(context);
+
+    await expect(tool.execute('call', { title: '   ' }, undefined, undefined, {} as never)).rejects.toThrow(
+      'Thread title cannot be empty.',
+    );
   });
 });

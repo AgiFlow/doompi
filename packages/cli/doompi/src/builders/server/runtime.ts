@@ -220,6 +220,12 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     requestSessionApi: (scope, request) => requestSessionApi(scope, request),
     ...(computerUse === undefined ? {} : { computerUse }),
   });
+  const stopPersistSessionNames = hub.onEvent((event) => {
+    if (event.kind !== 'upsert') return;
+    const record = openSessions.list().find((entry) => entry.sessionId === event.session.id);
+    if (record === undefined || record.name === event.session.name) return;
+    openSessions.add({ ...record, name: event.session.name });
+  });
   let harnessContext: Awaited<ReturnType<typeof buildHarnessContext>> | undefined;
   let cockpit: Awaited<ReturnType<typeof serveHeadlessServer>> | undefined;
   let remoteRuntime: RemoteRuntime | undefined;
@@ -838,6 +844,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     }
   } finally {
     shuttingDown = true;
+    stopPersistSessionNames();
     clearInterval(eventLoopMonitor);
     await bounded(telemetry.recordEvent('doompi_server.shutdown'), 'shutdown telemetry', notice);
     await Promise.allSettled([cockpit?.close()]);

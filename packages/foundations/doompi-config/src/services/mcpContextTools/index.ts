@@ -1,7 +1,7 @@
 import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
 import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 
-import { loadContextParameters } from '../../schemas/mcpContextTools';
+import { loadContextParameters, renameThreadParameters } from '../../schemas/mcpContextTools';
 import { sessionViewSchema } from '../../schemas/mcpSessionView';
 import type { SessionView } from '../../types/sessionView';
 
@@ -21,6 +21,23 @@ export function createLoadContextTool(context: DoomMcpPluginContext): DoomHeadle
   };
 }
 
+export function createRenameThreadTool(context: DoomMcpPluginContext): DoomHeadlessTool<typeof renameThreadParameters> {
+  return {
+    // web-plugin-tool-renderers: ignore rename_thread (remote MCP only)
+    name: 'rename_thread',
+    label: 'Rename thread',
+    description: 'Rename the current Doompi conversation so its purpose is clear in the workspace session list.',
+    parameters: renameThreadParameters,
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    async execute(_toolCallId, { title }) {
+      const next = title.trim();
+      if (!next) throw new Error('Thread title cannot be empty.');
+      if (context.execution.session.setName === undefined) throw new Error('Session rename is unavailable.');
+      await context.execution.session.setName(next);
+      return { content: [{ type: 'text', text: `Renamed thread to "${next}".` }] };
+    },
+  };
+}
 export function createShowSessionTool(
   context: DoomMcpPluginContext,
   resourceUri: string,

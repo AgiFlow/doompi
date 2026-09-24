@@ -939,6 +939,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           isIdle: !state.isStreaming && !state.isCompacting,
         };
       },
+      setName: (name) => runtime.setName(name),
     },
     shutdown: () => stop(),
   });
