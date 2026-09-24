@@ -1,3 +1,21 @@
+## 0.0.1-alpha.86 (2026-09-24)
+
+### 🩹 Fixes
+
+- **doompi-mcp:** restore server facet context parity ([#179](https://github.com/AgiFlow/doompi/pull/179))
+- **doompi-core:** inherit parent MCP tools in child sessions ([#178](https://github.com/AgiFlow/doompi/pull/178))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.84
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.43
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.85 (2026-09-24)
 
 ### 🧱 Updated Dependencies
