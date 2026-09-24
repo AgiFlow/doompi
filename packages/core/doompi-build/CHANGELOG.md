@@ -1,3 +1,13 @@
+## 0.0.1-alpha.12 (2026-09-24)
+
+### 🩹 Fixes
+
+- **doompi-computer-use:** bind control to owning desktop ([#174](https://github.com/AgiFlow/doompi/pull/174))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.11 (2026-09-23)
 
 This was a version bump only for @agimon-ai/doompi-build to align it with other projects, there were no code changes.
