@@ -9,6 +9,7 @@ import type {
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-core/headless';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/serverFacet';
+import { DOOM_RESOURCE_CATALOG_ENTRY_TYPE } from '@agimon-ai/doompi-core/skills';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -111,6 +112,10 @@ describe('headless domains command', () => {
       ],
     });
     expect(changeSelection).toHaveBeenCalledExactlyOnceWith({ axis: 'domains', domains: ['default', 'web'] });
+    expect(execution.session.appendCustomEntry).toHaveBeenCalledExactlyOnceWith(
+      DOOM_RESOURCE_CATALOG_ENTRY_TYPE,
+      expect.objectContaining({ version: 1, revision: expect.any(Number) }),
+    );
   });
 
   it.each([undefined, false, ''])('does not transition when the picker is cancelled: %s', async (answer) => {
@@ -132,8 +137,10 @@ describe('headless domains command', () => {
     const { changeSelection, command, execution } = await setup();
     await command.execute('default', execution);
     expect(changeSelection).not.toHaveBeenCalled();
+    expect(execution.session.appendCustomEntry).not.toHaveBeenCalled();
     changeSelection.mockRejectedValueOnce(new Error('Selection was not applied'));
     await expect(command.execute('web', execution)).rejects.toThrow('Selection was not applied');
+    expect(execution.session.appendCustomEntry).not.toHaveBeenCalled();
   });
 
   it('exposes only its authoring skill, and no domain blob, then disposes every contribution', async () => {
