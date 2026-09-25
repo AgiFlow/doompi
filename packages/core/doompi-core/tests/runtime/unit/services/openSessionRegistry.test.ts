@@ -5,6 +5,13 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createOpenSessionRegistry } from '../../../../src/services/openSessionRegistry';
+import { resolveSyncLocation, syncGenerationDirectory } from '../../../../src/services/syncLocation';
+import {
+  DOOMPI_API_VERSION,
+  SYNC_REGISTRATION_VERSION,
+  syncStateSha256,
+  type SyncRegistration,
+} from '../../../../src/services/syncRegistration';
 
 const directories: string[] = [];
 
@@ -20,6 +27,49 @@ function write(directory: string, body: string): string {
   return file;
 }
 
+function artifact(root: string, home: string): SyncRegistration {
+  const location = resolveSyncLocation(root, home);
+  const generation = 'parent-generation';
+  const generationRoot = syncGenerationDirectory(location, generation);
+  const statePath = path.join(generationRoot, 'state.json');
+  const apiDirectory = path.join(generationRoot, 'api');
+  fs.mkdirSync(apiDirectory, { recursive: true });
+  fs.writeFileSync(statePath, '{}\n');
+
+  const packageRoot = fs.realpathSync(fs.mkdtempSync(path.join(home, 'doompi-package-')));
+  const entry = path.join(packageRoot, 'dist', 'doom.mjs');
+  const manifestPath = path.join(packageRoot, 'package.json');
+  fs.mkdirSync(path.dirname(entry), { recursive: true });
+  fs.writeFileSync(entry, 'export default () => undefined;\n');
+  fs.writeFileSync(
+    manifestPath,
+    `${JSON.stringify({
+      name: '@agimon-ai/doompi',
+      version: '1.0.0',
+      doompiApiVersion: DOOMPI_API_VERSION,
+      pi: { extensions: ['./dist/doom.mjs'] },
+    })}\n`,
+  );
+
+  return {
+    version: SYNC_REGISTRATION_VERSION,
+    root: location.root,
+    identity: location.identity,
+    generation,
+    generationRoot,
+    statePath,
+    stateSha256: syncStateSha256(statePath),
+    webDirectory: null,
+    apiDirectory,
+    package: {
+      root: packageRoot,
+      version: '1.0.0',
+      apiVersion: DOOMPI_API_VERSION,
+      manifestPath,
+      entry,
+    },
+  };
+}
 afterEach(() => {
   for (const directory of directories.splice(0)) fs.rmSync(directory, { force: true, recursive: true });
 });
@@ -58,6 +108,50 @@ describe('createOpenSessionRegistry', () => {
     expect(registry.list()).toEqual([expect.objectContaining({ sessionId: 'one', name: 'Second' })]);
   });
 
+  it('persists and revalidates an inherited runtime generation', () => {
+    const directory = temporary();
+    const home = temporary();
+    const root = fs.realpathSync(temporary());
+    const inherited = artifact(root, home);
+    const registry = createOpenSessionRegistry({ directory, homeDirectory: home });
+    const record = {
+      sessionId: 'child',
+      workspaceId: 'workspace',
+      cwd: '/worktree',
+      name: 'Child',
+      createdAt: '2026-09-25',
+      parentSessionId: 'parent',
+      sessionProvenance: 'worktree',
+      artifact: inherited,
+    };
+
+    expect(registry.add(record)).toBe(true);
+    expect(createOpenSessionRegistry({ directory, homeDirectory: home }).list()).toEqual([record]);
+  });
+
+  it('drops a persisted session whose inherited runtime is no longer valid', () => {
+    const directory = temporary();
+    const home = temporary();
+    const root = fs.realpathSync(temporary());
+    const inherited = artifact(root, home);
+    write(
+      directory,
+      JSON.stringify([
+        {
+          sessionId: 'child',
+          workspaceId: 'workspace',
+          cwd: '/worktree',
+          name: 'Child',
+          createdAt: '2026-09-25',
+          artifact: { ...inherited, stateSha256: '0'.repeat(64) },
+        },
+      ]),
+    );
+    const onNotice = vi.fn();
+
+    expect(createOpenSessionRegistry({ directory, homeDirectory: home, onNotice }).list()).toEqual([]);
+    expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('unusable entry'));
+  });
   it('reports an unreadable file and restores nothing from it', () => {
     const directory = temporary();
     const file = write(directory, '{ not json');

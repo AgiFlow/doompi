@@ -19,12 +19,12 @@ const IMPLEMENTED_ACTIONS: ReadonlySet<string> = new Set(Object.values(WORKTREE_
 export const RUN_WORKTREE_DESCRIPTION = `Create and manage git worktrees, each with its own DoomPi session nested under this one.
 
 Actions:
-- spawn_worktree: create a worktree on a new branch and start a session in it. Requires 'branch'. Optional 'baseRef' (defaults to the current branch), 'name' for the rail, 'task' as the first message.
-- close_worktree: stop a worktree's session and delete its directory. Requires 'id'. Refuses a dirty tree unless 'force' is true.
+- spawn_worktree: create a worktree on a new branch and start a session in it. Requires 'branch'. Optional 'baseRef' (defaults to the current branch's remote-tracking ref, then the remote default branch), 'name' for the rail, 'task' as the first message.
+- close_worktree: stop a worktree's session, delete its checkout, and remove its generated sync storage. Requires 'id'. Refuses a dirty tree unless 'force' is true.
 - list: every worktree for this repository, with status.
 - status: one worktree and its uncommitted files. Requires 'id'.
 - merge: merge a worktree's branch into this checkout. Requires 'id'. Refuses when this checkout is dirty.
-- prune: remove orphaned worktrees. Pass 'dryRun' to see the plan without destroying anything.
+- prune: remove orphaned worktrees and their generated sync storage. Pass 'dryRun' to see the plan without destroying anything.
 - send: send a message to the other side of a worktree. Requires 'id' and 'message'.
 - messages: read messages waiting for you from a worktree. Requires 'id'.
 

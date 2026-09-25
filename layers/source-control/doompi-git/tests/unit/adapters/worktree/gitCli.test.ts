@@ -243,6 +243,26 @@ describe('currentBranch', () => {
   });
 });
 
+describe('remoteBaseRef', () => {
+  it('prefers the checked-out branch upstream', async () => {
+    git(repository, 'remote', 'add', 'origin', repository);
+    git(repository, 'update-ref', 'refs/remotes/origin/feature', 'HEAD');
+    git(repository, 'checkout', '-b', 'feature');
+    git(repository, 'config', 'branch.feature.remote', 'origin');
+    git(repository, 'config', 'branch.feature.merge', 'refs/heads/feature');
+
+    await expect(worktreeGit.remoteBaseRef(repository)).resolves.toBe('origin/feature');
+  });
+
+  it('falls back to the remote default instead of the local branch', async () => {
+    git(repository, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+    git(repository, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main');
+    git(repository, 'checkout', '-b', 'local-wip');
+
+    await expect(worktreeGit.remoteBaseRef(repository)).resolves.toBe('origin/main');
+  });
+});
+
 describe('mergeBranch', () => {
   it('merges a worktree branch back and keeps the merge identifiable', async () => {
     const worktree = path.join(root, 'wt-merge');

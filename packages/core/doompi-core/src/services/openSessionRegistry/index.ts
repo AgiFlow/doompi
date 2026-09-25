@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { resolveSyncLocation } from '../syncLocation';
+import { parseSyncRegistration, validateSyncRegistration, type SyncRegistration } from '../syncRegistration';
+
 const REGISTRY_FILE = 'open-sessions.json';
 const DIRECTORY_MODE = 0o700;
 const FILE_MODE = 0o600;
@@ -16,6 +19,8 @@ export interface OpenSessionRecord {
   createdAt: string;
   parentSessionId?: string;
   sessionProvenance?: string;
+  /** Immutable runtime generation inherited by worktree sessions. */
+  artifact?: SyncRegistration;
 }
 
 export interface OpenSessionRegistry {
@@ -28,6 +33,7 @@ export interface OpenSessionRegistry {
 export interface OpenSessionRegistryOptions {
   /** Directory holding the `sessions` journal folder, so the registry sits beside what it points at. */
   directory: string;
+  homeDirectory?: string;
   onNotice?: (message: string) => void;
 }
 
@@ -46,7 +52,7 @@ function optionalText(value: unknown): string | undefined {
  * path, so it is a trust boundary rather than trusted state this process wrote.
  * A bad entry is dropped instead of narrowing the whole file to nothing.
  */
-function parseRecord(value: unknown): OpenSessionRecord | undefined {
+function parseRecord(value: unknown, recordPath: string, homeDirectory?: string): OpenSessionRecord | undefined {
   if (!isRecord(value)) return undefined;
   const { sessionId, workspaceId, cwd, name, createdAt } = value;
   if (typeof sessionId !== 'string' || !SESSION_ID_PATTERN.test(sessionId)) return undefined;
@@ -55,6 +61,15 @@ function parseRecord(value: unknown): OpenSessionRecord | undefined {
   if (typeof name !== 'string' || typeof createdAt !== 'string') return undefined;
   const parentSessionId = optionalText(value.parentSessionId);
   const sessionProvenance = optionalText(value.sessionProvenance);
+  let artifact: SyncRegistration | undefined;
+  if (value.artifact !== undefined) {
+    try {
+      artifact = parseSyncRegistration(value.artifact, `${recordPath} artifact for session '${sessionId}'`);
+      validateSyncRegistration(artifact, resolveSyncLocation(artifact.root, homeDirectory));
+    } catch {
+      return undefined;
+    }
+  }
   return {
     sessionId,
     workspaceId,
@@ -63,6 +78,7 @@ function parseRecord(value: unknown): OpenSessionRecord | undefined {
     createdAt,
     ...(parentSessionId === undefined ? {} : { parentSessionId }),
     ...(sessionProvenance === undefined ? {} : { sessionProvenance }),
+    ...(artifact === undefined ? {} : { artifact }),
   };
 }
 
@@ -100,7 +116,7 @@ export function createOpenSessionRegistry(options: OpenSessionRegistryOptions): 
     }
     const records: OpenSessionRecord[] = [];
     for (const entry of parsed) {
-      const record = parseRecord(entry);
+      const record = parseRecord(entry, filePath, options.homeDirectory);
       if (record === undefined) notice(`open sessions at ${filePath} contain an unusable entry; skipping it`);
       else records.push(record);
     }
@@ -140,6 +156,8 @@ export function createOpenSessionRegistry(options: OpenSessionRegistryOptions): 
     list: () => current,
     add(record) {
       if (!SESSION_ID_PATTERN.test(record.sessionId)) throw new Error(`Invalid session id '${record.sessionId}'.`);
+      if (record.artifact !== undefined)
+        validateSyncRegistration(record.artifact, resolveSyncLocation(record.artifact.root, options.homeDirectory));
       return persist([...current.filter((held) => held.sessionId !== record.sessionId), record]);
     },
     remove(sessionId) {

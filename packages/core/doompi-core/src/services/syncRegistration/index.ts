@@ -250,7 +250,7 @@ export function validateSyncRegistration(registration: SyncRegistration, locatio
   return registration;
 }
 
-function parseRegistration(value: unknown, recordPath: string): SyncRegistration {
+export function parseSyncRegistration(value: unknown, recordPath: string): SyncRegistration {
   if (!isRecord(value)) throw new Error(`Doom sync registration at ${recordPath} is not an object`);
   return {
     version: value.version as number,
@@ -281,7 +281,7 @@ function bundleFrom(value: unknown, recordPath: string, kind: 'server' | 'MCP'):
 export function readSyncRegistration(repoRoot: string, homeDirectory?: string): SyncRegistration | undefined {
   const location = resolveSyncLocation(repoRoot, homeDirectory);
   if (!fs.existsSync(location.registrationPath)) return undefined;
-  const parsed = parseRegistration(
+  const parsed = parseSyncRegistration(
     JSON.parse(fs.readFileSync(location.registrationPath, 'utf8')),
     location.registrationPath,
   );

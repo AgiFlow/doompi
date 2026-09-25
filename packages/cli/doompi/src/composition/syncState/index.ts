@@ -16,7 +16,11 @@ import {
   type SyncIdentity,
   type SyncLocation,
 } from '@agimon-ai/doompi-core/syncLocation';
-import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
+import {
+  readSyncRegistration,
+  validateSyncRegistration,
+  type SyncRegistration,
+} from '@agimon-ai/doompi-core/syncRegistration';
 import { PRECOMPILE_STATE_VERSION, SYNC_STATE_VERSION } from '@agimon-ai/doompi-core/syncStateContract';
 
 import {
@@ -644,6 +648,20 @@ export interface LocatedSyncState {
   layout: 'global';
 }
 
+/** Reads one exact admitted registration, even after the worktree's current registration moves on. */
+export function readRegisteredSyncState(
+  registration: SyncRegistration,
+  homeDirectory: string = os.homedir(),
+): SyncState {
+  const location = resolveSyncLocation(registration.root, homeDirectory);
+  validateSyncRegistration(registration, location);
+  return parseSyncState(fs.readFileSync(registration.statePath, 'utf8'), registration.statePath, {
+    repoRoot: registration.root,
+    location,
+    legacy: false,
+  });
+}
+
 /** Reads only state reached through this repository/worktree's validated registration. */
 export function readLocatedSyncState(
   repoRoot: string,
@@ -653,11 +671,7 @@ export function readLocatedSyncState(
   const registration = readSyncRegistration(repoRoot, homeDirectory);
   if (!registration) return undefined;
   return {
-    state: parseSyncState(fs.readFileSync(registration.statePath, 'utf8'), registration.statePath, {
-      repoRoot,
-      location,
-      legacy: false,
-    }),
+    state: readRegisteredSyncState(registration, homeDirectory),
     location,
     layout: 'global',
   };

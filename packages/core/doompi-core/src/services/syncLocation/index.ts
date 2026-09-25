@@ -50,7 +50,9 @@ function canonicalPath(target: string): string {
   try {
     return fs.realpathSync.native(absolute);
   } catch {
-    return absolute;
+    const parent = path.dirname(absolute);
+    if (parent === absolute) return absolute;
+    return path.join(canonicalPath(parent), path.basename(absolute));
   }
 }
 
@@ -100,9 +102,7 @@ function repositoryLabel(commonDirectory: string | undefined, repositoryRoot: st
   return sanitizeSyncLabel(source, DEFAULT_REPOSITORY_LABEL);
 }
 
-export function resolveSyncLocation(repositoryRoot: string, homeDirectory: string = os.homedir()): SyncLocation {
-  const root = canonicalPath(repositoryRoot);
-  const commonDirectory = gitCommonDirectory(root);
+function locationFor(root: string, commonDirectory: string | undefined, homeDirectory: string): SyncLocation {
   const repositoryToken = commonDirectory ? `git:${commonDirectory}` : `root:${root}`;
   const identity: SyncIdentity = {
     repositoryId: identityHash(repositoryToken),
@@ -131,6 +131,27 @@ export function resolveSyncLocation(repositoryRoot: string, homeDirectory: strin
     legacyDirectory,
     legacyStatePath: path.join(legacyDirectory, 'state.json'),
   };
+}
+
+export function resolveSyncLocation(repositoryRoot: string, homeDirectory: string = os.homedir()): SyncLocation {
+  const root = canonicalPath(repositoryRoot);
+  return locationFor(root, gitCommonDirectory(root), homeDirectory);
+}
+
+/** Resolves a linked worktree namespace even after that worktree directory has been removed. */
+export function resolveWorktreeSyncLocation(
+  repositoryRoot: string,
+  worktreeRoot: string,
+  homeDirectory: string = os.homedir(),
+): SyncLocation {
+  const commonDirectory = gitCommonDirectory(canonicalPath(repositoryRoot));
+  if (commonDirectory === undefined) throw new Error('A Git repository is required to resolve worktree sync storage.');
+  const root = canonicalPath(worktreeRoot);
+  const targetCommonDirectory = gitCommonDirectory(root);
+  if (targetCommonDirectory !== undefined && targetCommonDirectory !== commonDirectory) {
+    throw new Error('The worktree belongs to a different Git repository.');
+  }
+  return locationFor(root, commonDirectory, homeDirectory);
 }
 
 const GENERATION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
@@ -238,7 +259,32 @@ export function assertSyncLocationSafe(location: SyncLocation): void {
   const doomRoot = path.dirname(syncRoot);
   const piRoot = path.dirname(doomRoot);
   const worktreesRoot = path.dirname(location.directory);
-  for (const target of [piRoot, doomRoot, syncRoot, location.repositoryDirectory, worktreesRoot, location.directory]) {
+  const registrationRoot = path.dirname(location.registrationPath);
+  for (const target of [
+    piRoot,
+    doomRoot,
+    syncRoot,
+    location.registrationsDirectory,
+    registrationRoot,
+    location.repositoryDirectory,
+    worktreesRoot,
+    location.directory,
+  ]) {
     rejectSymlink(target);
+  }
+}
+
+/** Deletes one worktree's generated state without touching repository-shared build objects. */
+export function removeSyncLocation(location: SyncLocation): void {
+  assertSyncLocationSafe(location);
+  fs.rmSync(location.directory, { recursive: true, force: true });
+  fs.rmSync(location.registrationPath, { force: true });
+  for (const directory of [path.dirname(location.registrationPath), path.dirname(location.directory)]) {
+    try {
+      fs.rmdirSync(directory);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT' && code !== 'ENOTEMPTY') throw error;
+    }
   }
 }

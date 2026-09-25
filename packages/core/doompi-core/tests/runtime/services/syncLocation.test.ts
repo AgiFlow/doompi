@@ -4,7 +4,13 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { acquireSyncLocationLock, resolveSyncLocation, sanitizeSyncLabel } from '../../../src/services/syncLocation';
+import {
+  acquireSyncLocationLock,
+  removeSyncLocation,
+  resolveSyncLocation,
+  resolveWorktreeSyncLocation,
+  sanitizeSyncLabel,
+} from '../../../src/services/syncLocation';
 
 const temporaryDirectories: string[] = [];
 
@@ -55,6 +61,36 @@ describe('sync location', () => {
     expect(linkedLocation.directory).not.toBe(mainLocation.directory);
   });
 
+  it('recovers and removes one deleted worktree namespace without touching shared artifacts', () => {
+    const main = temporaryDirectory();
+    const common = path.join(main, '.git');
+    const linked = path.join(main, 'linked');
+    const admin = path.join(common, 'worktrees', 'linked');
+    const home = temporaryDirectory();
+    fs.mkdirSync(admin, { recursive: true });
+    fs.mkdirSync(linked, { recursive: true });
+    fs.writeFileSync(path.join(admin, 'commondir'), '../..\n');
+    fs.writeFileSync(path.join(linked, '.git'), `gitdir: ${admin}\n`);
+
+    const parent = resolveSyncLocation(main, home);
+    const child = resolveSyncLocation(linked, home);
+    fs.mkdirSync(path.join(child.directory, 'generations', 'one'), { recursive: true });
+    fs.mkdirSync(path.dirname(child.registrationPath), { recursive: true });
+    fs.writeFileSync(child.registrationPath, '{}\n');
+    fs.mkdirSync(parent.sharedCacheDirectory, { recursive: true });
+    const sharedArtifact = path.join(parent.sharedCacheDirectory, 'kept');
+    fs.writeFileSync(sharedArtifact, 'shared');
+
+    fs.rmSync(linked, { recursive: true, force: true });
+    const recovered = resolveWorktreeSyncLocation(main, linked, home);
+    expect(recovered.identity).toEqual(child.identity);
+
+    removeSyncLocation(recovered);
+
+    expect(fs.existsSync(child.directory)).toBe(false);
+    expect(fs.existsSync(child.registrationPath)).toBe(false);
+    expect(fs.readFileSync(sharedArtifact, 'utf8')).toBe('shared');
+  });
   it('canonicalizes symlink aliases before deriving identity', () => {
     const root = temporaryDirectory();
     const parent = temporaryDirectory();
