@@ -182,15 +182,22 @@ describe('what a session is shown', () => {
 });
 
 describe('automatic conversation worktrees', () => {
-  it('registers a reservation-bound provider and removes it when the channel closes', async () => {
-    const operations = fakeOperations();
+  it('publishes a provisioned worktree to its parent and unregisters on close', async () => {
+    const events = directEvents();
+    const operations = fakeOperations({
+      spawn: vi.fn().mockImplementation(async () => {
+        const created = record();
+        seed(created);
+        return created;
+      }) as WorktreeOperations['spawn'],
+    });
     const published: Published[] = [];
     let provision:
       | ((request: { reservationId: string; parentSessionId: string; signal?: AbortSignal }) => Promise<unknown>)
       | undefined;
     const unregister = vi.fn();
     const complete = vi.fn().mockResolvedValue({ sessionId: 'reserved-child', cwd: '/worktree', workspaceId: 'child' });
-    const base = fakeHost(published, ['parent-1'], directEvents().bus);
+    const base = fakeHost(published, ['parent-1'], events.bus);
     const host: DoomHubChannelHost = {
       ...base,
       sessions: () => [OWNER],
@@ -208,8 +215,10 @@ describe('automatic conversation worktrees', () => {
       },
     };
     const source = createWorktreesChannel({ operations, homeDir: home }).start(host);
+    source.sessionAdded?.(OWNER);
 
     expect(provision).toBeDefined();
+    expect(published.at(-1)?.payload.worktrees).toEqual([]);
     await expect(provision!({ reservationId: 'reserved-child', parentSessionId: OWNER.sessionId })).resolves.toEqual({
       sessionId: 'reserved-child',
       cwd: '/worktree',
@@ -224,6 +233,7 @@ describe('automatic conversation worktrees', () => {
       },
       expect.objectContaining({ signal: undefined }),
     );
+    expect(published.at(-1)?.payload.worktrees.map((entry) => entry.id)).toEqual(['wt1']);
     expect(complete).toHaveBeenCalledWith('reserved-child', OWNER.sessionId);
     source.close();
     expect(unregister).toHaveBeenCalledOnce();

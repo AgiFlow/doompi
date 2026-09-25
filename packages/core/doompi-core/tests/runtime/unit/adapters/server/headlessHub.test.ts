@@ -119,7 +119,7 @@ describe('createHeadlessHub', () => {
     expect((await hub.requestApi({ scope: 'global' }, 'example', new Request('http://localhost/'))).status).toBe(503);
   });
 
-  it('confines channel lifecycle, events, and APIs to the mounted workspace', async () => {
+  it('confines channel writes, events, and APIs to the mounted workspace', async () => {
     const createSession = vi.fn(async () => ({ sessionId: 'created', cwd: '/one' }));
     const requestSessionApi = vi.fn(async () => Response.json({ ok: true }));
     const closeSession = vi.fn(async () => undefined);
@@ -145,7 +145,7 @@ describe('createHeadlessHub', () => {
     const scopedSessions = channelHost?.sessionService;
     expect(scopedSessions).toBeDefined();
     expect(scopedSessions?.isLive('one')).toBe(true);
-    expect(scopedSessions?.isLive('two')).toBe(false);
+    expect(scopedSessions?.isLive('two')).toBe(true);
     await expect(scopedSessions?.create({ cwd: '/one', name: 'child' })).rejects.toThrow('Parent session');
     await expect(scopedSessions?.create({ cwd: '/one', name: 'child', parentSessionId: 'two' })).rejects.toThrow(
       'Parent session',
