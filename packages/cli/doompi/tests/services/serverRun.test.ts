@@ -61,6 +61,55 @@ describe('runServer', () => {
     expect(runServerRuntime).toHaveBeenCalledOnce();
   });
 
+  it('synchronizes changed worktree sources before admitting a session', async () => {
+    vi.mocked(readSyncDrift).mockImplementation(({ requireFreshSources }) => ({
+      fresh: requireFreshSources !== true,
+      reasons: requireFreshSources ? ['mcp-bundle-stale'] : [],
+    }));
+    vi.mocked(runServerRuntime).mockImplementation(async (_options, context) => {
+      await context.syncWorkspace('/worktree', { HOME: '/home' }, true);
+      return 0;
+    });
+
+    await expect(runServer(['--auth-token-file', '/tmp/doompi-test-token'])).resolves.toBe(0);
+    expect(readSyncDrift).toHaveBeenCalledWith(
+      expect.objectContaining({ repoRoot: '/worktree', requireFreshSources: true }),
+    );
+    expect(execFile).toHaveBeenCalledOnce();
+    expect(execFile).toHaveBeenCalledWith(
+      process.execPath,
+      expect.any(Array),
+      expect.objectContaining({ cwd: '/worktree' }),
+      expect.any(Function),
+    );
+  });
+
+  it('leaves unchanged worktree artifacts alone', async () => {
+    vi.mocked(runServerRuntime).mockImplementation(async (_options, context) => {
+      await context.syncWorkspace('/worktree', { HOME: '/home' }, true);
+      return 0;
+    });
+
+    await expect(runServer(['--auth-token-file', '/tmp/doompi-test-token'])).resolves.toBe(0);
+    expect(execFile).not.toHaveBeenCalled();
+  });
+
+  it('does not admit a session when worktree synchronization fails', async () => {
+    vi.mocked(readSyncDrift).mockImplementation(({ requireFreshSources }) => ({
+      fresh: requireFreshSources !== true,
+      reasons: requireFreshSources ? ['mcp-bundle-stale'] : [],
+    }));
+    vi.mocked(execFile).mockImplementation(((_file, _args, _options, callback) => {
+      (callback as (error: Error, stdout: string, stderr: string) => void)(new Error('sync failed'), '', 'sync failed');
+      return {} as ReturnType<typeof execFile>;
+    }) as typeof execFile);
+    vi.mocked(runServerRuntime).mockImplementation(async (_options, context) => {
+      await context.syncWorkspace('/worktree', { HOME: '/home' }, true);
+      return 0;
+    });
+
+    await expect(runServer(['--auth-token-file', '/tmp/doompi-test-token'])).rejects.toThrow('sync failed');
+  });
   it('stops when its IPC parent disconnects', async () => {
     let runtimeSignal: AbortSignal | undefined;
     vi.mocked(runServerRuntime).mockImplementation(async (_options, context) => {

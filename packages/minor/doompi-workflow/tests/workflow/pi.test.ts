@@ -793,7 +793,7 @@ describe('workflow-mcp Pi extension', () => {
       if (!tool) throw new Error('Missing list_workflows tool');
       const list = async (cwd: string, params: Record<string, unknown> = {}) => {
         const result = await tool.execute('list', params, undefined, undefined, { cwd } as ExtensionContext);
-        return JSON.parse(result.content[0]?.text ?? '{}');
+        return JSON.parse(result.content.find((item) => item.type === 'text')?.text ?? '{}');
       };
       expect(
         (await list(workspace, { directory: 'automations', filter: 'workspace', page: 1, pageSize: 1 })).workflows,

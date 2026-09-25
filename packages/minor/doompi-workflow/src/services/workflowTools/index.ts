@@ -79,7 +79,12 @@ export function createWorkflowTools(
           LIST_WORKFLOWS_TOOL_NAME,
           await listWorkflowsTool.execute({
             ...input,
-            directory: typeof input.directory === 'string' ? resolve(ctx.cwd, input.directory) : ctx.cwd,
+            directory:
+              input?.directory === undefined
+                ? ctx.cwd
+                : typeof input.directory === 'string'
+                  ? resolve(ctx.cwd, input.directory)
+                  : input.directory,
           }),
         );
       },

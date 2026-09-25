@@ -270,7 +270,12 @@ export function createWorkflowServerRuntime(
           return callResult(
             await feature.listWorkflowsTool.execute({
               ...input,
-              directory: typeof input.directory === 'string' ? resolve(context.cwd, input.directory) : context.cwd,
+              directory:
+                input?.directory === undefined
+                  ? context.cwd
+                  : typeof input.directory === 'string'
+                    ? resolve(context.cwd, input.directory)
+                    : input.directory,
             }),
           );
         },

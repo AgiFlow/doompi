@@ -64,11 +64,16 @@ function runSyncProcess(root: string, syncEnvironment: NodeJS.ProcessEnv, global
 export async function runServer(args: readonly string[]): Promise<number> {
   const options = parseServeOptions(args);
   const environment = Object.freeze({ ...process.env });
-  const syncRuntime = async (root: string, syncEnvironment: NodeJS.ProcessEnv, global = false): Promise<void> => {
+  const syncRuntime = async (
+    root: string,
+    syncEnvironment: NodeJS.ProcessEnv,
+    requireFreshSources = false,
+    global = false,
+  ): Promise<void> => {
     const runtimeDrift = readSyncDrift({
       repoRoot: root,
       homeDirectory: syncEnvironment.HOME,
-      requireFreshSources: false,
+      requireFreshSources,
       requireWebBundle: true,
     });
     if (runtimeDrift.fresh) return;
@@ -82,7 +87,7 @@ export async function runServer(args: readonly string[]): Promise<number> {
   // parent is killed before it can forward a termination signal.
   process.on('disconnect', stop);
   try {
-    await syncRuntime(globalDoomConfigDirectory(environment.HOME ?? os.homedir()), environment, true);
+    await syncRuntime(globalDoomConfigDirectory(environment.HOME ?? os.homedir()), environment, false, true);
     return await runServerRuntime(options, {
       cwd: process.cwd(),
       environment,
