@@ -96,6 +96,8 @@ export interface DoomHeadlessSession {
   abort(): Promise<void>;
   compact(instructions?: string): Promise<void>;
   activity(): Promise<{ hasPendingMessages: boolean; isIdle: boolean }>;
+  /** Renames the durable session and publishes the updated title to presentation clients. */
+  setName?(name: string): Promise<void>;
   /** Capture the current persisted branch for an in-process child fork. */
   forkSource?(): Promise<{ kind: 'v4-fork'; sessionFile: string; branch: string; entryId?: string }>;
 }
