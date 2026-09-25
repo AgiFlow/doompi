@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
 
 import { loadHarnessState } from '@agimon-ai/doompi-config/harnessStore';
@@ -37,32 +35,8 @@ function sessionConfiguration(execution: DoomHeadlessExecutionContext, workspace
       JSON.stringify(loaded.state.layers) === JSON.stringify(execution.selection.activeLayers) &&
       isDoomMcpProjection(projection) &&
       projection.repoRoot === workspaceRoot
-    ) {
-      const configuration = mcpSessionConfigFromProjection(projection);
-      if (execution.cwd === workspaceRoot || !projection.enabled) return { ...configuration, repoRoot: execution.cwd };
-      const configPath = path.join(execution.cwd, '.mcp.json');
-      let repositorySource: (typeof projection.sources)[number] | undefined;
-      try {
-        const content = fs.readFileSync(configPath);
-        repositorySource = {
-          sourceId: 'repository:.mcp.json',
-          owner: 'repository',
-          format: 'native',
-          configPath,
-          contentDigest: createHash('sha256').update(content).digest('hex'),
-        };
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      }
-      return {
-        ...configuration,
-        repoRoot: execution.cwd,
-        sources: [
-          ...projection.sources.filter((source) => source.owner !== 'repository'),
-          ...(repositorySource ? [repositorySource] : []),
-        ],
-      };
-    }
+    )
+      return mcpSessionConfigFromProjection(projection, execution.cwd);
     return {
       enabled: false,
       repoRoot: execution.cwd,

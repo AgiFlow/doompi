@@ -159,14 +159,20 @@ export interface HubApiOptions {
   /** Injected by tests; production resolves the machine's sink. */
   source?: MetricsSource;
   issues?: IssuesSource;
+  env?: NodeJS.ProcessEnv;
 }
 
 export function createLogHubApi(options: HubApiOptions = {}): Hono {
   const app = new Hono();
   // One source for the life of the hub: it caches the resolved sink endpoint,
   // and rebuilding it per request would re-probe the daemon every time.
-  const source = options.source ?? createMetricsSource({ packageName: PACKAGE_NAME, serviceName: SERVICE_NAME });
-  const issues = options.issues ?? createIssuesSource({ packageName: PACKAGE_NAME, serviceName: SERVICE_NAME });
+  const identity = {
+    packageName: PACKAGE_NAME,
+    serviceName: SERVICE_NAME,
+    ...(options.env === undefined ? {} : { env: options.env }),
+  };
+  const source = options.source ?? createMetricsSource(identity);
+  const issues = options.issues ?? createIssuesSource(identity);
 
   app.get(routes.metrics.path, async (context) => {
     const requestedDimension = context.req.query(METRICS_QUERY_PARAMS.dimension) ?? DEFAULT_DIMENSION;
@@ -241,9 +247,10 @@ export function createLogHubApi(options: HubApiOptions = {}): Hono {
 /** The named export a host imports from this package's built hub entry. */
 export const api: DoomApi = {
   basePath: LOG_API_BASE_PATH,
-  start(_context: DoomApiContext): DoomApiHandler {
-    const source = createMetricsSource({ packageName: PACKAGE_NAME, serviceName: SERVICE_NAME });
-    const app = createLogHubApi({ source });
+  start(context: DoomApiContext): DoomApiHandler {
+    const env = { ...context.environment };
+    const source = createMetricsSource({ env, packageName: PACKAGE_NAME, serviceName: SERVICE_NAME });
+    const app = createLogHubApi({ source, env });
     return {
       fetch: (request) => app.fetch(request),
       close: () => source.close?.(),

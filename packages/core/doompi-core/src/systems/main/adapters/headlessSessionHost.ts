@@ -734,6 +734,19 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     },
   });
   await runtime.session.setValue(value('doompi.session', 'workspaceRoot'), options.repoRoot, BACKGROUND_CONTEXT);
+  await runtime.session.setValue(
+    value('doompi.session', 'execution'),
+    JSON.stringify({
+      cwd: options.cwd,
+      repoRoot: options.repoRoot,
+      workspaceId: options.workspaceId,
+      groupingRoot: options.groupingRoot ?? options.repoRoot,
+      parentSessionId: options.parentSessionId,
+      sessionProvenance: options.sessionProvenance,
+      inheritedArtifact: options.inheritedArtifact,
+    }),
+    BACKGROUND_CONTEXT,
+  );
 
   let currentModel = await runtime.lane.getModel(BACKGROUND_CONTEXT);
   const entries = (

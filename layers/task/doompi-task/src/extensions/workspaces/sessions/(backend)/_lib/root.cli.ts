@@ -176,7 +176,7 @@ const createTaskRootExtension =
 
     const delegationManager = new DelegationManager({
       store: taskStore,
-      cwd: process.cwd(),
+      cwd: '',
       platform: createNodeDelegationPlatform(),
       notify: (message, options) => pi.sendMessage(message, options),
       getSessionId: () => sessionId,
@@ -232,6 +232,7 @@ const createTaskRootExtension =
           const currentSessionId = context.sessionManager?.getSessionId();
           if (!currentSessionId) throw new Error('doom-task requires a session id');
           sessionId = currentSessionId;
+          delegationManager.setCwd(ctx.cwd);
           taskStore.configureSession(resolveSessionKey(currentSessionId));
           stage = SESSION_START_STAGE.storeCleanup;
           const cleanup = await removeLegacyStoreDirectoryAsync(taskStore.storePath);

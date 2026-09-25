@@ -105,7 +105,7 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
                   );
                 }
               } else {
-                await session.reconfigure(mcpSessionConfigFromProjection(projection.getSnapshot()));
+                await session.reconfigure(mcpSessionConfigFromProjection(projection.getSnapshot(), context.cwd));
               }
               return async () => {
                 if (sessionActive && !disposed) await session.reconfigure(failClosedSessionConfig(context.cwd));

@@ -287,9 +287,10 @@ export function createWorkflowServerRuntime(
         description: 'Start a workflow run and return its recorded launch result.',
         parameters: z.toJSONSchema(feature.runTool.getInputSchema()),
         executionMode: 'serial',
-        async execute(_toolCallId, parameters, signal) {
+        async execute(_toolCallId, parameters, signal, _onUpdate, context) {
           signal?.throwIfAborted();
-          return callResult(await launch(parameters as Parameters<typeof feature.runTool.execute>[0]));
+          const input = parameters as Parameters<typeof feature.runTool.execute>[0];
+          return callResult(await launch({ ...input, workflowPath: resolve(context.cwd, input.workflowPath) }));
         },
       },
       {
