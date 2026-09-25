@@ -12,7 +12,11 @@ import { createSessionMcpRoutes, type SessionMcpRoutes } from '../../../../../sr
 import { createSessionMcpAuthorizationService } from '../../../../../src/services/sessionMcpAuthorization';
 import { createSessionMcpConversationStore } from '../../../../../src/services/sessionMcpConversations';
 import { createSessionMcpRegistrationStore } from '../../../../../src/services/sessionMcpRegistrationStore';
-import type { SessionToolInvocation, SessionToolSurface } from '../../../../../src/types/server/sessionToolSurface';
+import type {
+  SessionToolDescriptor,
+  SessionToolInvocation,
+  SessionToolSurface,
+} from '../../../../../src/types/server/sessionToolSurface';
 
 const roots: string[] = [];
 const routePath = '/api/workspaces/workspace/sessions/parent/mcp';
@@ -57,10 +61,15 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
         await invocation.authorize?.();
         if (invocation.name === 'write')
           fs.writeFileSync(path.join(cwd, String(invocation.arguments.path)), String(invocation.arguments.text));
-        const text = invocation.name === 'load_skill' ? await invocation.mcpSkills!.read('guide') : id;
+        const text =
+          invocation.name === 'load_skill'
+            ? await invocation.mcpSkills!.read(
+                typeof invocation.arguments.name === 'string' ? invocation.arguments.name : 'guide',
+              )
+            : id;
         return { content: [{ type: 'text' as const, text }], structuredContent: { sessionId: id, cwd } };
       }),
-      readSkill: () => `guide for ${id}`,
+      readSkill: (_revision, uri) => (uri === 'doompi://child-guide' ? '# child guidance' : `guide for ${id}`),
       readUiResource: vi.fn(() => '<!doctype html><title>Static session view</title>'),
     };
     surfaces.set(id, surface);
@@ -329,6 +338,147 @@ describe('conversation-bound Session MCP routing', () => {
     expect((await f.rpc('resources/list')).result?.resources).toEqual([]);
     expect((await f.rpc('resources/read', { uri: 'doompi://session/parent/guide' })).error).toBeDefined();
     expect(f.surfaces.get('parent')!.invokeTool).not.toHaveBeenCalled();
+  });
+
+  it('discovers child-only tools and skills without changing the parent tools/list catalog', async () => {
+    const f = fixture();
+    const listed = (await f.rpc('tools/list')).result!.tools as { name: string }[];
+    expect(listed.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(['load_extra_tools', 'use_extra_tools', 'load_context', 'load_skill']),
+    );
+    expect(listed.some((tool) => tool.name === 'child_action')).toBe(false);
+    expect(f.store.list()).toHaveLength(0);
+    expect(f.create).not.toHaveBeenCalled();
+
+    const first = await f.call('a', 'load_extra_tools', {});
+    const record = f.store.list()[0];
+    expect(first.result?.isError).toBe(true);
+    expect(first.result?.structuredContent?.bindingId).toBe(record.id);
+    await f.setup(record.id);
+    const child = f.surfaces.get(record.id)!;
+    const original = child.readSurface();
+    const childTool: SessionToolDescriptor = {
+      name: 'child_action',
+      label: 'Child action',
+      description: 'Only available in this conversation',
+      parameters: Type.Object({ message: Type.String() }),
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ['model'] } },
+    };
+    child.readSurface = () => ({
+      ...original,
+      tools: [...original.tools, childTool],
+      skills: [...original.skills, { name: 'child-guide', description: 'Child guidance', uri: 'doompi://child-guide' }],
+    });
+    const discovered = await f.call('a', 'load_extra_tools', {});
+    expect(discovered.result?.isError).toBe(false);
+    expect(discovered.result?.structuredContent).toEqual({
+      tools: [
+        {
+          name: childTool.name,
+          title: childTool.label,
+          description: childTool.description,
+          inputSchema: childTool.parameters,
+          annotations: childTool.annotations,
+          _meta: childTool._meta,
+        },
+      ],
+      skills: [{ name: 'child-guide', description: 'Child guidance' }],
+    });
+    expect(
+      (await f.call('a', 'use_extra_tools', { name: 'child_action', arguments: { message: 'hello' } })).result,
+    ).toMatchObject({ isError: false, structuredContent: { sessionId: record.id } });
+    expect(child.invokeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'child_action',
+        arguments: { message: 'hello' },
+      }),
+    );
+    expect((await f.call('a', 'load_skill')).result?.content?.[0].text).toBe(`guide for ${record.id}`);
+    expect((await f.call('a', 'load_skill', { name: 'child-guide' })).result?.content?.[0].text).toBe(
+      '# child guidance',
+    );
+    expect(child.invokeTool).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'load_skill', arguments: { name: 'child-guide' } }),
+    );
+    expect(f.surfaces.get('parent')!.invokeTool).not.toHaveBeenCalled();
+    expect(
+      ((await f.rpc('tools/list')).result!.tools as { name: string }[]).some((tool) => tool.name === 'child_action'),
+    ).toBe(false);
+  });
+
+  it('refreshes the parent baseline and isolates or withdraws conversation extras', async () => {
+    const f = fixture();
+    await f.rpc('tools/list');
+    await f.call('a');
+    await f.call('b');
+    const [a, b] = f.store.list();
+    await f.setup(a.id);
+    await f.setup(b.id);
+    const parent = f.surfaces.get('parent')!;
+    const aSurface = f.surfaces.get(a.id)!;
+    const bSurface = f.surfaces.get(b.id)!;
+    const originalParent = parent.readSurface();
+    const originalA = aSurface.readSurface();
+    const originalB = bSurface.readSurface();
+    const aTool: SessionToolDescriptor = {
+      name: 'a_only',
+      label: 'A only',
+      description: 'Only in A',
+      parameters: Type.Object({}),
+    };
+    aSurface.readSurface = () => ({ ...originalA, tools: [...originalA.tools, aTool] });
+    expect((await f.call('a', 'load_extra_tools', {})).result?.structuredContent?.tools).toEqual([
+      expect.objectContaining({ name: 'a_only' }),
+    ]);
+    expect((await f.call('b', 'load_extra_tools', {})).result?.structuredContent).toEqual({ tools: [], skills: [] });
+    const rejected = await f.call('b', 'use_extra_tools', { name: 'a_only' });
+    expect(rejected.result?.isError === true || rejected.error !== undefined).toBe(true);
+    expect(bSurface.invokeTool).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'a_only' }));
+
+    parent.readSurface = () => ({ ...originalParent, tools: [...originalParent.tools, aTool] });
+    expect((await f.call('a', 'load_extra_tools', {})).result?.structuredContent?.tools).toEqual([
+      expect.objectContaining({ name: 'a_only' }),
+    ]);
+    await f.rpc('tools/list');
+    expect((await f.call('a', 'load_extra_tools', {})).result?.structuredContent).toEqual({ tools: [], skills: [] });
+    aSurface.readSurface = () => originalA;
+    expect((await f.call('a', 'load_extra_tools', {})).result?.structuredContent).toEqual({ tools: [], skills: [] });
+    const withdrawn = await f.call('a', 'use_extra_tools', { name: 'a_only' });
+    expect(withdrawn.result?.isError === true || withdrawn.error !== undefined).toBe(true);
+    expect(aSurface.invokeTool).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'a_only' }));
+    bSurface.readSurface = () => originalB;
+    expect(f.surfaces.get('parent')!.invokeTool).not.toHaveBeenCalled();
+  });
+  it('retains a signed URL baseline across independent HTTP handlers', async () => {
+    const f = fixture();
+    const created = await f.host('POST', '/clients', { authMethod: 'url_token', scope: 'session' });
+    expect(created!.status).toBe(201);
+    const { client } = (await created!.json()) as { client: { connectionUrl: string } };
+    const signed = async (method: string, params?: Record<string, unknown>) => {
+      const response = await f.routes.handlePublic(
+        new Request(client.connectionUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, ...(params === undefined ? {} : { params }) }),
+        }),
+      );
+      return (await response!.json()) as {
+        result?: { isError?: boolean; structuredContent?: Record<string, unknown> };
+      };
+    };
+    const call = () =>
+      signed('tools/call', {
+        name: 'load_extra_tools',
+        arguments: {},
+        _meta: { 'openai/session': 'signed-chat' },
+      });
+    expect((await call()).result?.structuredContent?.code).toBe('SESSION_MCP_BASELINE_REQUIRED');
+    await signed('tools/list');
+    const pending = await call();
+    expect(pending.result?.isError).toBe(true);
+    await f.setup(f.store.list()[0]!.id);
+    expect((await call()).result?.structuredContent).toEqual({ tools: [], skills: [] });
   });
 
   it('deduplicates setup and refuses shared, nested, or symlink-aliased directories', async () => {

@@ -13,7 +13,12 @@ import {
 import { SessionMcpConversationError, type SessionMcpConversationStore } from '../services/sessionMcpConversations';
 import type { SessionMcpRegistrationStore } from '../services/sessionMcpRegistrationStore';
 import type { HeadlessHub, HeadlessHubSession } from './headlessHub';
-import { createSessionMcpHttpHandler, type SessionMcpHttpHandler } from './sessionMcpHandler';
+import {
+  createSessionMcpHttpHandler,
+  SESSION_MCP_EXTRA_TOOLS,
+  type SessionMcpBaseline,
+  type SessionMcpHttpHandler,
+} from './sessionMcpHandler';
 
 const AUTHORIZATION_SERVER_DISCOVERY = '/.well-known/oauth-authorization-server';
 const AUTHORIZE_ROUTE = '/oauth/authorize';
@@ -138,9 +143,15 @@ function overlappingDirectories(left: string, right: string): boolean {
 /** Routes the process-local session MCP authority and revokes every grant with its live incarnation. */
 export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): SessionMcpRoutes {
   const authorization = options.authorization ?? createSessionMcpAuthorizationService();
+  // ponytail: Catalog baselines last one parent incarnation; persist snapshots only if clients must avoid a refresh after restart.
   const incarnations = new Map<
     string,
-    { host: HeadlessHubSession['host']; generation: number; handlers: Map<string, SessionMcpHttpHandler> }
+    {
+      host: HeadlessHubSession['host'];
+      generation: number;
+      handlers: Map<string, SessionMcpHttpHandler>;
+      baselines: Map<string, SessionMcpBaseline>;
+    }
   >();
   let nextGeneration = 1;
   let publishPending = (): void => {};
@@ -152,7 +163,12 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     const current = incarnations.get(session.id);
     if (current?.host === session.host) return;
     if (current !== undefined) revokeIncarnation(session.id, current.generation);
-    incarnations.set(session.id, { host: session.host, generation: nextGeneration++, handlers: new Map() });
+    incarnations.set(session.id, {
+      host: session.host,
+      generation: nextGeneration++,
+      handlers: new Map(),
+      baselines: new Map(),
+    });
   };
   for (const session of options.headlessHub.snapshot()) register(session);
   const unsubscribe = options.headlessHub.onEvent((event) => {
@@ -181,7 +197,10 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         authorization.revokeClient(client.clientId);
         options.registrationStore?.remove(client.clientId);
       }
-      for (const incarnation of incarnations.values()) incarnation.handlers.clear();
+      for (const incarnation of incarnations.values()) {
+        incarnation.handlers.clear();
+        incarnation.baselines.clear();
+      }
     }
     observedOrigin = current;
     observedOriginRevision = revision;
@@ -401,12 +420,14 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       if (url.pathname !== exactPath || url.search !== '') return json(404, { error: 'Not found.' });
       const audience = `${configuredOrigin}${basePath}`;
       const resource = pathToken === undefined ? audience : `${audience}/${pathToken}`;
-      const handlers = target(workspaceId, sessionId) === undefined ? undefined : incarnations.get(sessionId)?.handlers;
+      const incarnation = target(workspaceId, sessionId) === undefined ? undefined : incarnations.get(sessionId);
+      const handlers = incarnation?.handlers;
       const cachedHandler = pathToken === undefined ? handlers?.get(resource) : undefined;
       const handler =
         cachedHandler ??
         createSessionMcpHttpHandler({
           audience,
+          baselines: incarnation?.baselines ?? new Map(),
           authorization,
           onNotice: options.onNotice,
           ...(pathToken === undefined ? {} : { pathToken }),
@@ -650,11 +671,20 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         } catch {
           return json(409, { error: 'The session capability surface is not ready.' });
         }
+        if (surface.tools.some((tool) => SESSION_MCP_EXTRA_TOOLS.some((wrapper) => wrapper.name === tool.name)))
+          return json(409, { error: 'The session capability surface contains a reserved remote tool name.' });
         return json(200, {
           audience: `${configuredOrigin}${sessionPath(workspaceId, sessionId)}`,
           authorizationEndpoint: `${configuredOrigin}${AUTHORIZE_ROUTE}`,
           tokenEndpoint: `${configuredOrigin}${TOKEN_ROUTE}`,
-          tools: surface.tools.map(({ name, label, description }) => ({ name, label, description })),
+          tools: [
+            ...surface.tools.map(({ name, label, description }) => ({ name, label, description })),
+            ...SESSION_MCP_EXTRA_TOOLS.map(({ name, title, description }) => ({
+              name,
+              label: title ?? name,
+              description,
+            })),
+          ],
           skills: surface.skills,
         });
       }
@@ -714,7 +744,12 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
           } catch {
             return json(409, { error: 'The session capability surface is not ready.' });
           }
-          const activeTools = new Set(surface.tools.map((tool) => tool.name));
+          if (surface.tools.some((tool) => SESSION_MCP_EXTRA_TOOLS.some((wrapper) => wrapper.name === tool.name)))
+            return json(409, { error: 'The session capability surface contains a reserved remote tool name.' });
+          const activeTools = new Set([
+            ...surface.tools.map((tool) => tool.name),
+            ...SESSION_MCP_EXTRA_TOOLS.map((tool) => tool.name),
+          ]);
           const activeSkills = new Set(surface.skills.map((skill) => skill.name));
           if (tools!.some((name) => !activeTools.has(name)) || skills!.some((name) => !activeSkills.has(name)))
             return json(400, { error: 'Every requested grant must be active in the session.' });
@@ -781,6 +816,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
           return json(500, { error: 'Client revocation could not be saved.' });
         }
         authorization.revokeClient(clientId);
+        incarnations.get(sessionId)?.baselines.delete(clientId);
         options.conversationStore?.closeClient(clientId);
         publishPending();
         return json(200, { ok: true });
