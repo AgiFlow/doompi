@@ -22,9 +22,15 @@ export default defineRoot<{ voiceApi?: DoomApi; mediaApi?: DoomApi }, DoomServer
   const broker = new VoiceMediaBroker({
     globalLive: { ready: () => companion?.mediaReady() ?? false },
     sessionId: 'global-live-companion',
+    mediaArbitration: context.mediaArbitration,
     realtimeProvider: createRealtimeRuntime({ stateDirectory: join(context.homeDirectory, '.pi', '.doom') }).provider,
   });
-  companion = new GlobalLiveCompanion({ broker, receipts, onNotice: (message) => context.onNotice(message) });
+  companion = new GlobalLiveCompanion({
+    broker,
+    receipts,
+    homeDirectory: context.homeDirectory,
+    onNotice: (message) => context.onNotice(message),
+  });
   const mediaApi: DoomApi = { basePath: VOICE_MEDIA_API_BASE_PATH, start: () => broker };
   const voiceApi: DoomApi = {
     basePath: 'voice',

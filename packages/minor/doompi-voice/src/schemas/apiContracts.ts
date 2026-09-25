@@ -313,6 +313,42 @@ export const apiContracts = defineApiContract({
       body: { required: true, contentType: 'audio/webm', contentTypes: ['audio/webm', 'audio/mp4'], schema: S },
       responses: { ...Errors, '200': { description: 'Transcript.', schema: Type.Object({ transcript: S }) } },
     },
+    ...(
+      [
+        ['readiness', '/live/agent', 'GET'],
+        ['prepare', '/live/agent/prepare', 'POST'],
+        ['admit', '/live/agent/admit', 'POST'],
+        ['results', '/live/agent/results', 'GET'],
+        ['ack', '/live/agent/results/ack', 'POST'],
+        ['fence', '/live/agent/fence', 'POST'],
+      ] as const
+    ).map(([name, path, method]): DoomHttpContract => ({
+      id: `voice.agent.${name}`,
+      scope: 'session',
+      basePath: 'voice',
+      path,
+      method,
+      authentication: 'owner',
+      description: `Native Voice agent ${name}. Only the host-issued hub bearer can access this route.`,
+      parameters: [
+        { name: 'Authorization', in: 'header', required: true, schema: Type.String({ pattern: '^Bearer .+' }) },
+        ...(name === 'results'
+          ? ['activationId', 'routeGeneration', 'sessionIncarnation', 'after'].map((key) => ({
+              name: key,
+              in: 'query' as const,
+              required: key !== 'after',
+              schema: S,
+            }))
+          : []),
+      ],
+      ...(method === 'POST'
+        ? { body: { required: true, contentType: 'application/json', schema: Type.Unknown() } }
+        : {}),
+      responses: {
+        ...jsonApiResponses(Type.Unknown()),
+        '204': { description: 'Agent result acknowledged or route fenced.' },
+      },
+    })),
     {
       id: 'voice.peer',
       scope: 'global',
@@ -332,6 +368,17 @@ export const apiContracts = defineApiContract({
       method: 'POST',
       authentication: 'none',
       description: 'Discover and stage Voice ownership through an HMAC-authenticated paired host.',
+      body: { required: true, contentType: 'application/json', schema: Type.Unknown() },
+      responses: jsonApiResponses(Type.Unknown()),
+    },
+    {
+      id: 'voice.peerAgent',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/peer-agent',
+      method: 'POST',
+      authentication: 'none',
+      description: 'Accept a signed, replay-guarded, grant-scoped native Voice agent request from a configured peer.',
       body: { required: true, contentType: 'application/json', schema: Type.Unknown() },
       responses: jsonApiResponses(Type.Unknown()),
     },
@@ -375,12 +422,12 @@ export const apiContracts = defineApiContract({
       path: '/live/control',
       method: 'POST',
       authentication: 'owner',
-      description: 'Explicitly activate, mute, interrupt or end the host-global live companion.',
+      description: 'Explicitly activate, transfer, mute, interrupt or end the host-global live companion.',
       body: {
         required: true,
         contentType: 'application/json',
         schema: Type.Object({
-          action: values(['activate', 'mute', 'unmute', 'interrupt', 'end']),
+          action: values(['activate', 'transfer', 'mute', 'unmute', 'interrupt', 'end']),
           sessionId: O(S),
         }),
       },

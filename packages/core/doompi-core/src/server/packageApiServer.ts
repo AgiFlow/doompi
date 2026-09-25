@@ -32,6 +32,8 @@ export interface PackageApiServerOptions {
   /** Lifecycle-owned direct events shared with the hub. */
   readonly directEvents: DoomDirectEventBus;
   readonly computerUse?: DoomApiContext['computerUse'];
+  readonly mediaArbitration?: DoomApiContext['mediaArbitration'];
+  readonly peerAgents?: DoomApiContext['peerAgents'];
   internalToken?: string;
   hubToken?: string;
   /** Shared exact-scope dispatch table, so session facets can mount plugin methods. */
@@ -129,6 +131,8 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     environment: options.environment,
     directEvents: options.directEvents,
     ...(options.computerUse === undefined ? {} : { computerUse: options.computerUse }),
+    ...(options.mediaArbitration === undefined ? {} : { mediaArbitration: options.mediaArbitration }),
+    ...(options.peerAgents === undefined ? {} : { peerAgents: options.peerAgents }),
     ...(options.internalToken === undefined ? {} : { internalToken: options.internalToken }),
     ...(options.hubToken === undefined ? {} : { hubToken: options.hubToken }),
     ...(exposedSessionService === undefined ? {} : { sessionService: exposedSessionService }),

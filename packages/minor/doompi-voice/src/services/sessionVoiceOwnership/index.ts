@@ -184,10 +184,8 @@ export class SessionVoiceOwnership {
           };
     if (staged !== undefined && (staged.leaseId !== binding.leaseId || staged.revision !== binding.revision))
       return this.ack(command, false, 'Voice target incarnation changed.');
-    if (
-      command.action === 'deactivate' && staged !== undefined &&
-      this.handoffRequest?.requestId !== staged.handoffId
-    ) return this.ack(command, false, 'Voice handoff was cancelled.');
+    if (command.action === 'deactivate' && staged !== undefined && this.handoffRequest?.requestId !== staged.handoffId)
+      return this.ack(command, false, 'Voice handoff was cancelled.');
     try {
       if (command.action === 'prepare') {
         if (!binding.eligible || controller.state !== 'disabled')
@@ -227,8 +225,7 @@ export class SessionVoiceOwnership {
         if (staged) this.activationRequest = undefined;
         else this.cancelPending();
         await controller.deactivateVoice(staged ? 'handoff' : 'stop');
-        if (staged && generation !== this.generation)
-          return this.ack(command, false, 'Voice handoff was cancelled.');
+        if (staged && generation !== this.generation) return this.ack(command, false, 'Voice handoff was cancelled.');
         if (staged) {
           this.handoffRequest = undefined;
           this.prepared = undefined;
@@ -322,8 +319,6 @@ export class SessionVoiceOwnershipBridge {
     }, delay);
   }
 
-  // ponytail: Settled turns protect legacy playback, but live WebRTC still belongs to a
-  // session. Move the live companion and agent routing to global scope for uninterrupted transfer.
   private syncSnapshot(): VoiceOwnershipSessionSnapshot {
     const snapshot = this.ownership.snapshot();
     return this.deferHandoff() ? { ...snapshot, handoff: undefined } : snapshot;

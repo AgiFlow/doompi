@@ -171,6 +171,18 @@ export interface DoomRequestReceipts {
   ): Promise<DoomRequestReceipt>;
 }
 
+/** Synchronous host-owned exclusion across media APIs mounted at different scopes. */
+export interface DoomHostMediaArbitration {
+  register(busy: () => boolean): () => void;
+  available(busy: () => boolean): boolean;
+}
+
+/** One host's paired agent registrations, shared across its global and session mounts. */
+export interface DoomPeerAgentRegistry {
+  register(sessionId: string, agent: { fetch(request: Request): Promise<Response> }, hubToken: string): () => void;
+  get(sessionId: string): { fetch(request: Request): Promise<Response>; hubToken: string } | undefined;
+}
+
 /** What the host tells an API about itself when it starts. */
 export interface DoomApiContext {
   scope: DoomApiScope;
@@ -218,6 +230,10 @@ export interface DoomApiContext {
   receiveChannel?(sessionId: string, frameType: string, payload: unknown, connectionId: string): boolean;
   /** Host-owned replay evidence, supplied only on the global mount. Never exposed to browsers or agents. */
   requestReceipts?: DoomRequestReceipts;
+  /** One host's exclusive media activity, shared across global and session scopes. */
+  mediaArbitration?: DoomHostMediaArbitration;
+  /** Paired agents belonging to this host only. */
+  peerAgents?: DoomPeerAgentRegistry;
   /** Machine-owned Remote Control service, mounted only by the global core facet. */
   remoteControl?: { fetch(request: Request): Promise<Response> };
   onNotice(message: string): void;

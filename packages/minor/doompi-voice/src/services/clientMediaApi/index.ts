@@ -119,6 +119,7 @@ export interface VoiceMediaApiOptions {
   eventEpoch?: string;
   directEvents?: DoomDirectEventBus;
   ownershipCommandTimeoutMs?: number;
+  mediaArbitration?: DoomApiContext['mediaArbitration'];
   sessionId?: string;
   /** A global companion binds media to its browser lease, not an agent session. */
   globalLive?: { ready(): boolean };
@@ -289,6 +290,15 @@ export class VoiceMediaBroker implements DoomApiHandler {
   private readonly eventEpoch: string;
   private readonly directEvents: DoomDirectEventBus | undefined;
   private readonly globalLive: VoiceMediaApiOptions['globalLive'];
+  private readonly mediaArbitration: VoiceMediaApiOptions['mediaArbitration'];
+  private readonly mediaBusy = (): boolean =>
+    !this.closed &&
+    (this.currentOwnershipSnapshot().registration?.active === true ||
+      this.currentOwnershipSnapshot().handoff !== undefined ||
+      (this.capture !== undefined && ['active', 'stopping'].includes(this.capture.state)) ||
+      (this.playback !== undefined && this.playback.result === undefined) ||
+      this.realtime?.active === true);
+  private readonly unregisterMedia: () => void;
   private readonly ownershipCommandTimeoutMs: number;
   private readonly events: VoiceMediaClientEvent[] = [];
   private readonly waiters = new Set<() => void>();
@@ -308,6 +318,7 @@ export class VoiceMediaBroker implements DoomApiHandler {
     this.internalToken = options.internalToken;
     this.realtimeProvider = options.realtimeProvider;
     this.globalLive = options.globalLive;
+    this.mediaArbitration = options.mediaArbitration;
     this.sessionId = options.sessionId ?? 'voice-media';
     this.hubToken = options.hubToken;
     this.now = options.now ?? Date.now;
@@ -322,6 +333,12 @@ export class VoiceMediaBroker implements DoomApiHandler {
       this.publishOwnershipSnapshot();
       this.directEvents?.publish(VOICE_MEDIA_WAKE_TYPE, this.sessionId, this.currentWake());
     }
+    this.unregisterMedia = this.mediaArbitration?.register(this.mediaBusy) ?? (() => undefined);
+  }
+
+  private assertMediaAvailable(): void {
+    if (this.mediaArbitration && !this.mediaArbitration.available(this.mediaBusy))
+      throw new VoiceMediaRequestError('Another Voice session owns media.', 409);
   }
 
   public fetch(request: Request): Promise<Response> | Response {
@@ -553,6 +570,7 @@ export class VoiceMediaBroker implements DoomApiHandler {
     this.pendingOwnershipCommand?.reject(new Error('Voice media transport closed.'));
     this.pendingOwnershipCommand = undefined;
     this.failActiveClientWork('Voice media transport closed.');
+    this.unregisterMedia();
     this.wake();
   }
 
@@ -772,6 +790,7 @@ export class VoiceMediaBroker implements DoomApiHandler {
       this.capture.state !== 'failed'
     )
       throw new VoiceMediaRequestError('Voice capture is already active.', 409);
+    this.assertMediaAvailable();
     const configuration: VoiceMediaCaptureConfiguration = {
       mode: requested.mode,
       activityControl:
@@ -841,6 +860,7 @@ export class VoiceMediaBroker implements DoomApiHandler {
       throw new VoiceMediaRequestError('Exact narration is unavailable during live voice.', 409);
     if (this.playback !== undefined && this.playback.result === undefined)
       throw new VoiceMediaRequestError('Voice playback is already active.', 409);
+    this.assertMediaAvailable();
     const delivery: VoiceMediaPlaybackDelivery =
       this.client?.kind === 'browser' || this.client?.controlLocation === 'remote' ? 'streamed' : 'client';
     this.playback = { id: body.playbackId, delivery, audioChunks: [], audioBytes: 0, audioSealed: false };
@@ -1086,6 +1106,7 @@ export class VoiceMediaBroker implements DoomApiHandler {
       (this.playback && this.playback.result === undefined)
     )
       throw new VoiceMediaRequestError('Stop legacy capture and playback before starting live voice.', 409);
+    this.assertMediaAvailable();
     const identity = {
       sessionId: this.sessionId,
       activationId: activationId,

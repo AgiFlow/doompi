@@ -17,6 +17,8 @@ export {
   type DoomApiCallerStepUp,
   type DoomApiContext,
   type DoomApiHandler,
+  type DoomHostMediaArbitration,
+  type DoomPeerAgentRegistry,
   type DoomOAuthRedirect,
   type DoomRepositorySyncView,
   type DoomRequestReceipt,

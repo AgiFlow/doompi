@@ -56,7 +56,7 @@ export interface GlobalLiveReceipts {
 }
 
 export interface GlobalLiveControl {
-  action: 'activate' | 'end' | 'mute' | 'unmute' | 'interrupt';
+  action: 'activate' | 'transfer' | 'end' | 'mute' | 'unmute' | 'interrupt';
   sessionId?: string;
 }
 

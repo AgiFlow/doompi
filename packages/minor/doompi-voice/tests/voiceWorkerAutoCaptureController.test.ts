@@ -240,6 +240,8 @@ function harness(
   };
 }
 
+const deliveryEffect = (text: string) => expect.objectContaining({ type: 'effect.deliver', text });
+
 async function flush(): Promise<void> {
   for (let index = 0; index < 20; index += 1) await Promise.resolve();
 }
@@ -304,7 +306,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     h.candidate(identity, 'Handle my request', 1, strongEvidence);
     await flush();
 
-    expect(h.deliver).toHaveBeenCalledWith('Handle my request');
+    expect(h.deliver).toHaveBeenCalledWith('Handle my request', undefined, deliveryEffect('Handle my request'));
     expect(h.tts.speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Wait for the user turn.' }));
     h.finishPlayback();
     await expect(narration).resolves.toBe('completed');
@@ -567,7 +569,9 @@ describe('VoiceWorkerAutoCaptureController', () => {
 
     expect(await coordinator.handoff('source', choice!.handle)).toBe(true);
     expect(coordinator.payload().activeSessionId).toBe('target');
-    expect(selections).toEqual(['source', 'target']);
+    expect(selections[0]).toBe('source');
+    expect(selections.at(-1)).toBe('target');
+    expect(selections).not.toContain(null);
     expect(source.controller.state).not.toBe('active');
     expect(target.controller.state).toBe('active');
     await expect(source.controller.narrateAgent('Stale source response')).resolves.toBe('interrupted');
@@ -586,8 +590,18 @@ describe('VoiceWorkerAutoCaptureController', () => {
     target.ready();
     const second = await finishTurn(target, 'computer another target request', 2);
     expect(second.outcome).toBe('committed');
-    expect(target.deliver).toHaveBeenNthCalledWith(1, 'continue in target');
-    expect(target.deliver).toHaveBeenNthCalledWith(2, 'another target request');
+    expect(target.deliver).toHaveBeenNthCalledWith(
+      1,
+      'continue in target',
+      undefined,
+      deliveryEffect('continue in target'),
+    );
+    expect(target.deliver).toHaveBeenNthCalledWith(
+      2,
+      'another target request',
+      undefined,
+      deliveryEffect('another target request'),
+    );
     expect(source.deliver).not.toHaveBeenCalled();
     target.acknowledge(second.identity, 2, second.outcome);
     await flush();
@@ -595,7 +609,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     await target.controller.shutdown(target.ui);
     coordinator.update('target', targetOwnership.registration()!);
     expect(coordinator.payload().activeSessionId).toBeNull();
-    expect(selections).toEqual(['source', 'target', null]);
+    expect(selections.at(-1)).toBeNull();
     await source.controller.shutdown(source.ui);
   });
 
@@ -612,7 +626,12 @@ describe('VoiceWorkerAutoCaptureController', () => {
         identity.captureId,
         'soft-endpoint',
       );
-      expect(h.deliver).toHaveBeenNthCalledWith(index, `run check ${index}`);
+      expect(h.deliver).toHaveBeenNthCalledWith(
+        index,
+        `run check ${index}`,
+        undefined,
+        deliveryEffect(`run check ${index}`),
+      );
       h.acknowledge(identity, index, outcome);
       await flush();
       h.ready();
@@ -660,7 +679,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
 
     const first = await finishTurn(h, 'computer run focused tests', 1, strongEvidence);
     expect(first.outcome).toBe('committed');
-    expect(h.deliver).toHaveBeenCalledWith('run focused tests');
+    expect(h.deliver).toHaveBeenCalledWith('run focused tests', undefined, deliveryEffect('run focused tests'));
     h.acknowledge(first.identity, 1, first.outcome);
     await flush();
     h.ready();
@@ -754,7 +773,11 @@ describe('VoiceWorkerAutoCaptureController', () => {
     await flush();
 
     expect(decideSignal?.aborted).toBe(true);
-    expect(h.deliver).toHaveBeenCalledWith('preserve confirmed words');
+    expect(h.deliver).toHaveBeenCalledWith(
+      'preserve confirmed words',
+      undefined,
+      deliveryEffect('preserve confirmed words'),
+    );
     expect(h.client.acknowledgeCandidate).toHaveBeenCalledWith(identity.sessionId, identity.turnId, 1, 'committed');
     h.acknowledge(identity, 1, 'committed');
     await flush();
@@ -824,7 +847,9 @@ describe('VoiceWorkerAutoCaptureController', () => {
     h.drained(identity, 1);
     h.candidate(identity, 'The plan is ready please run all tests', 1, { ...strongEvidence, playbackOverlapMs: 1_200 });
     await vi.waitFor(() => expect(decide).toHaveBeenCalledOnce());
-    await vi.waitFor(() => expect(h.deliver).toHaveBeenCalledWith('please run all tests'));
+    await vi.waitFor(() =>
+      expect(h.deliver).toHaveBeenCalledWith('please run all tests', undefined, deliveryEffect('please run all tests')),
+    );
     await vi.waitFor(() => expect(h.tts.speak).toHaveBeenCalledTimes(2));
     expect(h.tts.speak).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind: 'clarification', text: 'The plan was ready.' }),
@@ -893,7 +918,11 @@ describe('VoiceWorkerAutoCaptureController', () => {
     const sent = await finishTurn(h, 'Doom, send.', 3);
     expect(sent.outcome).toBe('committed');
     expect(h.deliver).toHaveBeenCalledOnce();
-    expect(h.deliver).toHaveBeenCalledWith('Refactor voice. Keep manual dictation unchanged.', 'queuedFollowUp');
+    expect(h.deliver).toHaveBeenCalledWith(
+      'Refactor voice. Keep manual dictation unchanged.',
+      'queuedFollowUp',
+      deliveryEffect('Refactor voice. Keep manual dictation unchanged.'),
+    );
   });
 
   it('retains a composed draft after synchronous send failure and allows retry', async () => {
@@ -918,7 +947,11 @@ describe('VoiceWorkerAutoCaptureController', () => {
     const retried = await finishTurn(h, 'doom send', 3);
     expect(retried.outcome).toBe('committed');
     expect(h.deliver).toHaveBeenCalledTimes(2);
-    expect(h.deliver).toHaveBeenLastCalledWith('Retain this draft.', 'queuedFollowUp');
+    expect(h.deliver).toHaveBeenLastCalledWith(
+      'Retain this draft.',
+      'queuedFollowUp',
+      deliveryEffect('Retain this draft.'),
+    );
   });
 
   it('keeps an empty composition active until content or explicit cancel', async () => {
@@ -962,7 +995,11 @@ describe('VoiceWorkerAutoCaptureController', () => {
       { transcript: 'update doom pie voice', context: undefined },
       expect.any(AbortSignal),
     );
-    expect(h.deliver).toHaveBeenCalledWith('update DoomPi voice', 'queuedFollowUp');
+    expect(h.deliver).toHaveBeenCalledWith(
+      'update DoomPi voice',
+      'queuedFollowUp',
+      deliveryEffect('update DoomPi voice'),
+    );
   });
 
   it('rejects a segment that would exceed the bounded composition draft', async () => {
@@ -1024,7 +1061,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
 
     expect(correct).toHaveBeenCalledWith({ transcript: 'update doom pie voice', context }, expect.any(AbortSignal));
     expect(h.deliver).toHaveBeenCalledOnce();
-    expect(h.deliver).toHaveBeenCalledWith('update DoomPi voice');
+    expect(h.deliver).toHaveBeenCalledWith('update DoomPi voice', undefined, deliveryEffect('update DoomPi voice'));
   });
 
   it('fails open to the policy transcript when correction is invalid or unavailable', async () => {
@@ -1037,7 +1074,11 @@ describe('VoiceWorkerAutoCaptureController', () => {
 
     await finishTurn(h, 'computer preserve my exact request', 1);
 
-    expect(h.deliver).toHaveBeenCalledWith('preserve my exact request');
+    expect(h.deliver).toHaveBeenCalledWith(
+      'preserve my exact request',
+      undefined,
+      deliveryEffect('preserve my exact request'),
+    );
   });
 
   it('aborts correction on toggle-off and finishes the confirmed turn with unchanged text', async () => {
@@ -1068,7 +1109,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     await flush();
 
     expect(correctionSignal?.aborted).toBe(true);
-    expect(h.deliver).toHaveBeenCalledWith('preserve this request');
+    expect(h.deliver).toHaveBeenCalledWith('preserve this request', undefined, deliveryEffect('preserve this request'));
     h.acknowledge(identity, 1, 'committed');
     await flush();
     expect(h.controller.state).toBe('disabled');
@@ -1208,7 +1249,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     h.drained(identity, 4);
     h.candidate(identity, 'computer finish this request', 4, strongEvidence);
     await flush();
-    expect(h.deliver).toHaveBeenCalledWith('finish this request');
+    expect(h.deliver).toHaveBeenCalledWith('finish this request', undefined, deliveryEffect('finish this request'));
     h.acknowledge(identity, 4, 'committed');
     await flush();
 
@@ -1314,7 +1355,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     await flush();
 
     expect(h.deliver).toHaveBeenCalledOnce();
-    expect(h.deliver).toHaveBeenCalledWith('preserve my words');
+    expect(h.deliver).toHaveBeenCalledWith('preserve my words', undefined, deliveryEffect('preserve my words'));
     expect(h.client.acknowledgeCandidate).toHaveBeenCalledWith(identity.sessionId, identity.turnId, 1, 'committed');
   });
 

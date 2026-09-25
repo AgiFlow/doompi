@@ -228,9 +228,11 @@ describe('VoiceDelivery', () => {
       onResult: (result) => results.push(result),
     });
     delivery.submit(request);
-    await vi.waitFor(() => expect(results).toEqual([
-      { kind: 'buffered', sessionId: 'session-1', captureId: 'capture-1', turnId: 'turn-1', revision: 1 },
-    ]));
+    await vi.waitFor(() =>
+      expect(results).toEqual([
+        { kind: 'buffered', sessionId: 'session-1', captureId: 'capture-1', turnId: 'turn-1', revision: 1 },
+      ]),
+    );
   });
 
   it('rejects blank text without invoking delivery', () => {

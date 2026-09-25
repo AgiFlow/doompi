@@ -6,6 +6,6 @@ import type root from '../../root.server';
 type Context = WithRoot<DoomServerPluginContext, Awaited<ReturnType<typeof root>>['value']>;
 
 export default defineRoutedContribution(
-  (context: Context) => context.host.scope === 'global' ? context.root.mediaApi : undefined,
+  (context: Context) => (context.host.scope === 'global' ? context.root.mediaApi : undefined),
   { cardinality: 'optional' },
 );

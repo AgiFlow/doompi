@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import type { DoomApi } from '@agimon-ai/doompi-core/packageApi';
+import { parseRemoteSessionReference } from '@agimon-ai/doompi-session';
 
 import type { AutoCaptureUi } from '../../types';
 import type { RealtimeDeliveryOutcome } from '../../types/realtime';
@@ -8,6 +9,7 @@ import { VoiceMediaBroker } from '../clientMediaApi';
 import { SystemClock } from '../infrastructure';
 import { LiveVoiceController } from '../liveVoiceController';
 import { buildDelegationResultMessages } from '../realtimeProtocol';
+import { requestPairedVoiceAgent } from '../voicePeerRelay';
 import type {
   GlobalLiveAgentHost,
   GlobalLiveControl,
@@ -51,6 +53,7 @@ interface Transfer {
 export interface GlobalLiveCompanionOptions {
   broker: VoiceMediaBroker;
   receipts?: GlobalLiveReceipts;
+  homeDirectory?: string;
   onNotice(message: string): void;
 }
 
@@ -151,6 +154,12 @@ export class GlobalLiveCompanion {
         if (!input.sessionId) throw new Error('Select an admitted Pi session to start live voice.');
         await this.activate(input.sessionId);
         break;
+      case 'transfer':
+        if (!input.sessionId || !this.route) throw new Error('Select an admitted Pi session for live Voice transfer.');
+        if (input.sessionId === this.route.scope.sessionId) break;
+        if (!(await this.handoff(this.route.scope.sessionId, input.sessionId, randomUUID())))
+          throw new Error(this.error ?? 'Live Voice transfer was rejected.');
+        break;
       case 'end':
         await this.stop();
         break;
@@ -231,6 +240,7 @@ export class GlobalLiveCompanion {
         );
       }
       this.transfer = undefined;
+      this.error = undefined;
       return true;
     } catch (error) {
       transfer.failure = errorMessage(error);
@@ -270,13 +280,18 @@ export class GlobalLiveCompanion {
     transactionId: string,
   ): Promise<LiveAgentRoute> {
     const hub = this.hub;
-    const scope = hub?.sessions().find((candidate) => candidate.sessionId === sessionId);
-    if (!hub || !scope) throw new Error('The selected native Pi agent is not available on this host.');
+    const remote = parseRemoteSessionReference(sessionId);
+    const scope = remote
+      ? { sessionId, cwd: `peer/${remote.hostId}` }
+      : hub?.sessions().find((candidate) => candidate.sessionId === sessionId);
+    if (!hub || !scope || (remote && !this.options.homeDirectory))
+      throw new Error('The selected native Pi agent is not available on this host.');
+    const sourceSessionId = remote?.sessionId ?? sessionId;
     const readiness = object(await this.agentRequest({ scope }, AGENT_READINESS, 'GET'));
     if (
       readiness?.available !== true ||
       typeof readiness.sessionIncarnation !== 'string' ||
-      readiness.sourceSessionId !== sessionId
+      readiness.sourceSessionId !== sourceSessionId
     )
       throw new Error('The selected Pi agent cannot accept live Voice requests.');
     const prepared = object(
@@ -287,7 +302,7 @@ export class GlobalLiveCompanion {
       }),
     );
     if (
-      prepared?.sourceSessionId !== sessionId ||
+      prepared?.sourceSessionId !== sourceSessionId ||
       prepared.sessionIncarnation !== readiness.sessionIncarnation ||
       prepared.routeGeneration !== generation
     )
@@ -419,7 +434,8 @@ export class GlobalLiveCompanion {
     for (const event of result.events) {
       if (this.stopped || (this.route !== route && this.transfer?.source !== route)) return true;
       if (
-        event.sourceSessionId !== route.scope.sessionId ||
+        event.sourceSessionId !==
+          (parseRemoteSessionReference(route.scope.sessionId)?.sessionId ?? route.scope.sessionId) ||
         event.sessionIncarnation !== route.sessionIncarnation ||
         !event.runId ||
         !event.resultId ||
@@ -492,12 +508,22 @@ export class GlobalLiveCompanion {
   ): Promise<unknown> {
     const hub = this.hub;
     if (!hub) throw new Error('Global Voice agent host has been disposed.');
-    const response = await hub.requestSessionApi(route.scope, {
-      basePath: AGENT_BASE_PATH,
-      path,
-      method,
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
+    const remote = parseRemoteSessionReference(route.scope.sessionId);
+    const response =
+      remote && this.options.homeDirectory
+        ? await requestPairedVoiceAgent(
+            this.options.homeDirectory,
+            route.scope.sessionId,
+            path,
+            method,
+            body ? JSON.stringify(body) : undefined,
+          )
+        : await hub.requestSessionApi(route.scope, {
+            basePath: AGENT_BASE_PATH,
+            path,
+            method,
+            ...(body ? { body: JSON.stringify(body) } : {}),
+          });
     if (!response.ok) throw new Error(`Pi Voice agent request failed with HTTP ${String(response.status)}.`);
     if (response.status === 204) return undefined;
     return response.json() as Promise<unknown>;
@@ -515,8 +541,8 @@ export class GlobalLiveCompanion {
         const body = object(await request.json().catch(() => undefined));
         if (
           !body ||
-          !['activate', 'end', 'mute', 'unmute', 'interrupt'].includes(String(body.action)) ||
-          (body.action === 'activate' && typeof body.sessionId !== 'string')
+          !['activate', 'transfer', 'end', 'mute', 'unmute', 'interrupt'].includes(String(body.action)) ||
+          ((body.action === 'activate' || body.action === 'transfer') && typeof body.sessionId !== 'string')
         )
           return Response.json({ error: 'Invalid global Voice control.' }, { status: 400 });
         try {

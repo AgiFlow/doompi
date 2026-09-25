@@ -24,6 +24,7 @@ import type {
   DoomHubSessionScope,
 } from '@agimon-ai/doompi-core/hubChannel';
 import { loadMcpBundle, type LoadedMcpBundle } from '@agimon-ai/doompi-core/mcpFacet';
+import type { DoomHostMediaArbitration, DoomPeerAgentRegistry } from '@agimon-ai/doompi-core/packageApi';
 import { serveSessionApis, type PackageApiServer } from '@agimon-ai/doompi-core/packageApiServer';
 import { piAgentDirectory } from '@agimon-ai/doompi-core/piSettings';
 import { createRemoteRuntime, type RemoteRuntime } from '@agimon-ai/doompi-core/remoteRuntime';
@@ -92,6 +93,30 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   const serverDirectory = path.join(piAgentDirectory(baseEnvironment), 'server');
   // This native history has no agent lane and is deliberately outside the session-history catalog.
   const requestReceipts = createRequestReceipts({ directory: path.join(serverDirectory, 'request-receipts') });
+  const activeMedia = new Set<() => boolean>();
+  const mediaArbitration: DoomHostMediaArbitration = {
+    register(busy) {
+      activeMedia.add(busy);
+      return () => {
+        activeMedia.delete(busy);
+      };
+    },
+    available(busy) {
+      return activeMedia.has(busy) && [...activeMedia].every((other) => other === busy || !other());
+    },
+  };
+  const activePeerAgents = new Map<string, { fetch(request: Request): Promise<Response>; hubToken: string }>();
+  const peerAgents: DoomPeerAgentRegistry = {
+    register(sessionId, agent, hubToken) {
+      if (activePeerAgents.has(sessionId)) throw new Error(`Voice peer agent '${sessionId}' is already registered.`);
+      const entry = { fetch: (request: Request) => agent.fetch(request), hubToken };
+      activePeerAgents.set(sessionId, entry);
+      return () => {
+        if (activePeerAgents.get(sessionId) === entry) activePeerAgents.delete(sessionId);
+      };
+    },
+    get: (sessionId) => activePeerAgents.get(sessionId),
+  };
   const workspaces = createWorkspaceRegistry({ directory: serverDirectory, onNotice: notice });
   // Beside the journals it names, because a record pointing at a sessions
   // directory it is not stored next to is a record that can outlive its target.
@@ -323,6 +348,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         environment: baseEnvironment,
         hubToken: token,
         sessionService: hub.sessionService,
+        mediaArbitration,
+        peerAgents,
         directEvents: hub.directEvents,
         repositories: () =>
           hub.workspaces().map((workspace) => ({
@@ -565,6 +592,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               }),
           hubToken: token,
           sessionService: hub.sessionService,
+          mediaArbitration,
+          peerAgents,
           pluginRegistry: hub.pluginRegistry,
           apis: [],
           facets: pendingSessions.get(sessionOptions.sessionId)?.bundle.facets ?? [],

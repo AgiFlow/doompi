@@ -67,7 +67,11 @@ describe('browser voice media push transport', () => {
       if (url.includes('/client/events'))
         return jsonResponse({ sequence: 1, type: 'realtime-start', activationId: 'activation' });
       if (url.endsWith('/client/realtime/negotiate')) return jsonResponse({ sdp: 'answer' });
-      if (url.endsWith('/client/realtime/event') || url.endsWith('/client/realtime/state') || url.endsWith('/client/disconnect'))
+      if (
+        url.endsWith('/client/realtime/event') ||
+        url.endsWith('/client/realtime/state') ||
+        url.endsWith('/client/disconnect')
+      )
         return new Response(null, { status: 204 });
       throw new Error(`Unexpected global live media request: ${url}`);
     });
@@ -78,13 +82,19 @@ describe('browser voice media push transport', () => {
       type: 'realtime-start',
       activationId: 'activation',
     });
-    expect(await transport.realtimeNegotiate('browser', 'lease', 'activation', 'offer', new AbortController().signal))
-      .toBe('answer');
+    expect(
+      await transport.realtimeNegotiate('browser', 'lease', 'activation', 'offer', new AbortController().signal),
+    ).toBe('answer');
     await transport.realtimeEvent('browser', 'lease', 'activation', '{"type":"session.update"}');
     await transport.realtimeState('browser', 'lease', 'activation', {
-      connection: 'connected', listening: true, speaking: false, muted: false,
+      connection: 'connected',
+      listening: true,
+      speaking: false,
+      muted: false,
     });
-    await expect(transport.sendAudio('browser', 'lease', 'capture', new Uint8Array([1]))).rejects.toThrow('session-scoped');
+    await expect(transport.sendAudio('browser', 'lease', 'capture', new Uint8Array([1]))).rejects.toThrow(
+      'session-scoped',
+    );
     await transport.disconnect('browser', 'lease');
     const urls = vi.mocked(sealedTransport.fetch).mock.calls.map(requestUrl);
     expect(urls).toHaveLength(6);

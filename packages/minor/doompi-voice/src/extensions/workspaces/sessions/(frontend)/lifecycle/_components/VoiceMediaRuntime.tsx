@@ -23,6 +23,7 @@ class PageVoiceMediaRuntime {
   private readonly connectionId = `connection-${crypto.randomUUID()}`;
   private ownedSessionId: string | null = null;
   private handoffActive = false;
+  private releaseAudioPending = false;
   private selectionGeneration = 0;
   private focusedSessionId: string | undefined;
   private client: VoiceMediaClient | undefined;
@@ -189,7 +190,7 @@ class PageVoiceMediaRuntime {
   private select(sessionId: string | null): void {
     const handoff = voiceMediaHandoff.store.state;
     const owner = activeVoiceSession.store.state;
-    const releaseAudio =
+    this.releaseAudioPending ||=
       (this.ownedSessionId !== null || this.handoffActive) && owner === null && handoff === undefined;
     this.ownedSessionId = owner;
     this.handoffActive = handoff !== undefined;
@@ -202,9 +203,10 @@ class PageVoiceMediaRuntime {
     if (sessionId !== this.boundSessionId && handoff === undefined) this.client?.endRealtime();
     const switchSession = async (): Promise<void> => {
       if (this.closed || generation !== this.selectionGeneration) return;
-      if (releaseAudio) {
+      if (this.releaseAudioPending) {
         await this.detach();
         await this.device.close();
+        this.releaseAudioPending = false;
       }
       if (this.closed || generation !== this.selectionGeneration) return;
       if (sessionId === null) await this.detach();

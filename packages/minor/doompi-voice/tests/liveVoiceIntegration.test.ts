@@ -24,7 +24,7 @@ import type {
   RealtimeHostSnapshot,
 } from '../src/types/realtime';
 import { REALTIME_ROUTES } from '../src/types/realtime';
-import { VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership';
+import { VOICE_OWNERSHIP_PROTOCOL_VERSION, VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership';
 import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
 
 const clock: IClock = {
@@ -302,7 +302,14 @@ async function createFixture(provider?: RealtimeProvider) {
   expect(
     (
       await authenticated(VOICE_OWNERSHIP_ROUTES.sync, {
-        registration: { version: 3, leaseId: 'lease', revision: 1, label: 'Voice', eligible: true, active: true },
+        registration: {
+          version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+          leaseId: 'lease',
+          revision: 1,
+          label: 'Voice',
+          eligible: true,
+          active: true,
+        },
         targets: [],
       })
     ).status,

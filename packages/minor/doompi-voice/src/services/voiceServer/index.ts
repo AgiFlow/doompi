@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { loadDoomConfig, resolveVoiceConfig } from '@agimon-ai/doompi-config';
 import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import type { DoomPeerAgentRegistry } from '@agimon-ai/doompi-core/packageApi';
 import {
   defineServerMethod,
   readPackageResource,
@@ -44,8 +45,10 @@ import { VoiceWorkerClient } from '../../services/voiceWorkerClient';
 import { VoiceWorkerSessionController } from '../../services/voiceWorkerSessionController';
 import type { AutoCaptureUi, VoiceUi } from '../../types';
 import type { VoiceMediaBroker } from '../clientMediaApi';
+import { LiveAgentSession } from '../liveAgentSession';
 import { LiveVoiceController } from '../liveVoiceController';
 import { VoiceModeController } from '../voiceModeController';
+import { registerVoicePeerAgent } from '../voicePeerRelay';
 
 const SOURCE = '@agimon-ai/doompi-voice';
 const when = {
@@ -58,6 +61,8 @@ export function createVoiceServer(
   host: DoomHeadlessHostService,
   broker?: VoiceMediaBroker,
   homeDirectory?: string,
+  hubToken?: string,
+  peerAgents?: DoomPeerAgentRegistry,
 ): DoomServerSessionPlugin {
   const execution = host.context;
   if (!broker || !homeDirectory) throw new Error('Voice requires the session media broker and configured server home.');
@@ -130,6 +135,7 @@ export function createVoiceServer(
     const activity = await execution.session.activity();
     await execution.session.admitPrompt(text, queued || !activity.isIdle ? 'followUp' : 'prompt');
   };
+  const liveAgent = new LiveAgentSession(execution.sessionId, hubToken, (text) => deliver(text));
   const legacy = new VoiceWorkerAutoCaptureController({
     loadConfig: config,
     spoolDirectory,
@@ -351,6 +357,7 @@ export function createVoiceServer(
   const close = async () => {
     if (closed) return;
     closed = true;
+    liveAgent.close();
     voiceGeneration += 1;
     ownership.cancelPending();
     nativeRuns.clear();
@@ -439,6 +446,9 @@ export function createVoiceServer(
     tools: exposedTools,
     services: [
       serverMinorModes([owner]),
+      ...(peerAgents && hubToken
+        ? [() => registerVoicePeerAgent(peerAgents, execution.sessionId, liveAgent, hubToken)]
+        : []),
       (context) => {
         context.plugin((providerContext) => {
           providerContext.provide(DOOM_VOICE_TOOLS_SERVICE, registry);
@@ -454,6 +464,7 @@ export function createVoiceServer(
         start: () => ({
           async fetch(request) {
             const path = new URL(request.url).pathname;
+            if (path === '/live/agent' || path.startsWith('/live/agent/')) return liveAgent.fetch(request);
             if (request.method === 'GET' && path === '/status')
               return Response.json({
                 ...status(),
@@ -513,6 +524,7 @@ export function createVoiceServer(
       {
         event: 'agent_start',
         handle(event) {
+          liveAgent.onRunStart(event);
           const runId = runIdFrom(event);
           if (!runId || closed || mode.state !== 'active' || nativeRuns.has(runId)) return;
           // A resumed native run has the same runId. Prompt composition is not a run start.
@@ -527,15 +539,20 @@ export function createVoiceServer(
       {
         event: 'turn_end',
         handle(event) {
+          liveAgent.onTurnEnd(event);
           const run = nativeRuns.get(runIdFrom(event) ?? '');
           if (!run || run.generation !== voiceGeneration) return;
-          const turn = event as { turnId?: string; message?: { role?: string; stopReason?: string; content?: Array<{ type: string; text?: string }> } };
+          const turn = event as {
+            turnId?: string;
+            message?: { role?: string; stopReason?: string; content?: Array<{ type: string; text?: string }> };
+          };
           if (turn.message?.role !== 'assistant' || turn.message.stopReason === 'toolUse') return;
           run.turnId = turn.turnId;
-          run.finalText = turn.message.content
-            ?.filter((part) => part.type === 'text')
-            .map((part) => part.text ?? '')
-            .join('') ?? '';
+          run.finalText =
+            turn.message.content
+              ?.filter((part) => part.type === 'text')
+              .map((part) => part.text ?? '')
+              .join('') ?? '';
         },
       },
       {
@@ -551,6 +568,7 @@ export function createVoiceServer(
       {
         event: 'agent_settled',
         handle(event) {
+          liveAgent.onSettled(event);
           const run = nativeRuns.get(runIdFrom(event) ?? '');
           if (!run || run.generation !== voiceGeneration) return;
           nativeRuns.delete(run.runId);

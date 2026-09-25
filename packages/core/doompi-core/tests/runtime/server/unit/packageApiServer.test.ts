@@ -69,12 +69,22 @@ describe('serving a session package APIs', () => {
 
   it('tells an API which session it is serving', async () => {
     const seen: { context?: DoomApiContext } = {};
+    const mediaArbitration: NonNullable<DoomApiContext['mediaArbitration']> = {
+      register: () => () => undefined,
+      available: () => true,
+    };
+    const peerAgents: NonNullable<DoomApiContext['peerAgents']> = {
+      register: () => () => undefined,
+      get: () => undefined,
+    };
     const server = await serveSessionApis({
       ...requiredSessionCapabilities,
       sessionId: 's1',
       cwd: '/repo',
       internalToken: 'agent-only-token',
       hubToken: 'hub-only-token',
+      mediaArbitration,
+      peerAgents,
       apis: [echoApi('runner', seen)],
       onNotice: () => undefined,
     });
@@ -87,6 +97,8 @@ describe('serving a session package APIs', () => {
       internalToken: 'agent-only-token',
       hubToken: 'hub-only-token',
     });
+    expect(seen.context?.mediaArbitration).toBe(mediaArbitration);
+    expect(seen.context?.peerAgents).toBe(peerAgents);
   });
 
   it('returns a closed 404 dispatcher when no package declares an API', async () => {

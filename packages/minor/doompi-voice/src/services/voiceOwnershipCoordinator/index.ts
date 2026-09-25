@@ -179,12 +179,15 @@ export class VoiceOwnershipCoordinator {
       if (!this.matches(target.sessionId, participant) || !this.matches(sourceSessionId, source)) return fail();
       // The source remains selected while its accepted reply and physical
       // narration drain. The browser never sees an unstaged null owner.
-      const sourceStaged = sourceRequestId === undefined ? undefined : {
-        handoffId: sourceRequestId,
-        controllerId: this.controllerId,
-        leaseId: source.leaseId,
-        revision: source.revision,
-      };
+      const sourceStaged =
+        sourceRequestId === undefined
+          ? undefined
+          : {
+              handoffId: sourceRequestId,
+              controllerId: this.controllerId,
+              leaseId: source.leaseId,
+              revision: source.revision,
+            };
       if (!(await this.sendAction(sourceSessionId, 'deactivate', sourceStaged)) || !current()) return fail();
       if (!this.matches(target.sessionId, participant) || !current()) return fail(true);
       this.setHandoff({ ...this.handoffState!, phase: 'rebinding' });

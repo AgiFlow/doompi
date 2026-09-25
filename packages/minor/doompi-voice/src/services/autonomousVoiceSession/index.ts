@@ -19,7 +19,12 @@ import {
   type VoiceTranscriptAdmissionAssessment,
 } from '../transcriptAdmission';
 import { applyTranscriptPolicy } from '../transcriptPolicy';
-import { VoiceDelivery, type VoiceDeliveryIntent, type VoiceDeliveryRequest, type VoiceDeliveryResult } from '../voiceDelivery';
+import {
+  VoiceDelivery,
+  type VoiceDeliveryIntent,
+  type VoiceDeliveryRequest,
+  type VoiceDeliveryResult,
+} from '../voiceDelivery';
 import type {
   VoiceCandidateOutcome,
   VoiceFinalizeReason,

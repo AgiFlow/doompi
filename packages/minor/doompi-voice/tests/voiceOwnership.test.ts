@@ -654,16 +654,24 @@ describe('SessionVoiceOwnership', () => {
     let state: 'active' | 'disabled' = 'active';
     const ownership = new SessionVoiceOwnership();
     ownership.register({
-      label: 'Owner', eligible: true,
+      label: 'Owner',
+      eligible: true,
       controller: {
-        get state() { return state; },
-        activateVoice: async () => { state = 'active'; },
-        deactivateVoice: async () => { state = 'disabled'; },
+        get state() {
+          return state;
+        },
+        activateVoice: async () => {
+          state = 'active';
+        },
+        deactivateVoice: async () => {
+          state = 'disabled';
+        },
       },
     });
     await ownership.command({
       version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
-      commandId: 'catalog-stop', action: 'catalog',
+      commandId: 'catalog-stop',
+      action: 'catalog',
       targets: [{ handle: 'target', label: 'Target', order: 1 }],
       catalogRevision: 'catalog-stop',
     });
@@ -886,11 +894,12 @@ describe('VoiceOwnershipCoordinator', () => {
       'target-private-id:activate',
       'target-private-id:readiness',
     ]);
-    expect(h.selections).toEqual([
-      'source-private-id', 'source-private-id', 'target-private-id', 'target-private-id',
-    ]);
+    expect(h.selections).toEqual(['source-private-id', 'source-private-id', 'target-private-id', 'target-private-id']);
     expect(h.publications.map((payload) => payload.handoff?.phase)).toEqual([
-      'preparing', 'rebinding', 'rebinding', undefined,
+      'preparing',
+      'rebinding',
+      'rebinding',
+      undefined,
     ]);
     expect(h.states.get('source-private-id')).toBe(false);
     expect(h.states.get('target-private-id')).toBe(true);

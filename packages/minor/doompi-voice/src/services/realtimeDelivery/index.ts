@@ -7,7 +7,11 @@ export interface RealtimeDeliveryOptions {
   isBlocked(): boolean;
   send(text: string, intent: 'immediate' | 'follow-up'): void | Promise<void>;
   /** Global delivery identifies the source request before it can reach another Pi agent. */
-  sendRequest?(requestId: string, transcript: string, intent: 'immediate' | 'follow-up'): Promise<RealtimeDeliveryOutcome>;
+  sendRequest?(
+    requestId: string,
+    transcript: string,
+    intent: 'immediate' | 'follow-up',
+  ): Promise<RealtimeDeliveryOutcome>;
   /** Only set when sendRequest checks every provider ID against durable receipts. */
   durableReplay?: boolean;
 }
@@ -61,7 +65,12 @@ export class RealtimeDelivery {
     if (event.type !== 'request' || !validIdentifier(event.requestId) || !validText(event.text)) return;
 
     const retained = this.retained.get(event.requestId);
-    if (retained || this.pending || (!this.options.durableReplay && this.retained.size >= REALTIME_LIMITS.retainedRequests)) return;
+    if (
+      retained ||
+      this.pending ||
+      (!this.options.durableReplay && this.retained.size >= REALTIME_LIMITS.retainedRequests)
+    )
+      return;
     this.pending = {
       requestId: event.requestId,
       text: event.text,

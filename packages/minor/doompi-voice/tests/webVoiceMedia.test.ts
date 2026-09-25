@@ -328,6 +328,49 @@ describe('browser voice media', () => {
     expect(source).toContain("`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`");
   });
 
+  it('offers explicit global Live start only for an idle session, without changing the legacy mode', async () => {
+    const idle = renderPlugin(VoiceActivitySection, slotPropsFixture({ sessionId: 'session-a' }).props);
+    expect(idle.error).toBeUndefined();
+    expect(idle.html).toContain('data-testid="voice-global-live-start"');
+    expect(idle.html).toContain('start Live');
+    expect(idle.html).not.toContain('microphone live');
+
+    for (const props of [
+      { sessionId: null },
+      { sessionId: 'session-a', statuses: { 'doom-voice': 'voice auto: listening' } },
+    ]) {
+      expect(renderPlugin(VoiceActivitySection, slotPropsFixture(props).props).html).not.toContain(
+        'voice-global-live-start',
+      );
+    }
+    voiceMediaBrowserState.update(() => ({
+      sessionId: null,
+      phase: 'connected',
+      realtime: { connection: 'connected', listening: true, speaking: false, muted: false },
+    }));
+    const globalLive = renderPlugin(VoiceActivitySection, slotPropsFixture({ sessionId: 'session-a' }).props).html;
+    expect(globalLive).not.toContain('voice-global-live-start');
+    expect(globalLive).toContain('data-testid="voice-global-live-transfer"');
+    expect(globalLive).toContain('route Live here');
+    expect(renderPlugin(VoiceActivitySection, slotPropsFixture({ sessionId: null }).props).html).not.toContain(
+      'voice-global-live-transfer',
+    );
+
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    expect(source).toContain('voice.global.liveControl({ body: { action, sessionId } })');
+    expect(source).toContain("controlGlobalLive('activate')");
+    expect(source).toContain("controlGlobalLive('transfer')");
+    expect(source).toContain('role="alert"');
+    expect(source).not.toContain('getUserMedia');
+    expect(source).not.toContain("sendSessionFrame(sessionId, { type: 'prompt', message: '/voice-auto");
+  });
+
   it('shows an accessible autonomous microphone toggle only while autonomous voice is applicable', async () => {
     const active = renderPlugin(
       VoiceActivitySection,
