@@ -1,3 +1,13 @@
+## 0.0.1-alpha.86 (2026-09-25)
+
+### 🚀 Features
+
+- add signed URL auth for session MCP ([#187](https://github.com/AgiFlow/doompi/pull/187))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.85 (2026-09-24)
 
 ### 🩹 Fixes
