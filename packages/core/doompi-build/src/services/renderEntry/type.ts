@@ -8,4 +8,6 @@ export interface RenderOptions {
   readonly root: string;
   /** Where the generated entry is written, package-relative, so its imports can be made relative to it. */
   readonly entryDir: string;
+  /** Backend declaration path to its package-owned browser widget key. */
+  readonly mcpWidgets?: Readonly<Record<string, string>>;
 }

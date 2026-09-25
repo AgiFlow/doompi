@@ -12,6 +12,7 @@ import {
 import type { ExtensionGraph, ExtensionNotice } from '../../types/extensionGraph';
 import { renderApiClient } from '../renderClient';
 import { renderCliEntry, renderMcpEntry, renderServerEntry, renderWebEntry } from '../renderEntry';
+import { renderMcpWidgets } from '../renderMcpWidgets';
 import { resolveTarget } from '../resolveTarget';
 import type { BuildTarget } from '../resolveTarget/type';
 import { scanExtensions } from '../scan';
@@ -56,6 +57,8 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
   const notices: ExtensionNotice[] = [...graph.notices];
   const files = new Map<string, string>();
   const targets: BuildTarget[] = [];
+  const mcpWidgets = options.target === 'mcp' ? renderMcpWidgets(graph, packageName, GENERATED_DIR) : undefined;
+  if (mcpWidgets?.source !== undefined) files.set(`${GENERATED_DIR}/mcp-ui.ts`, mcpWidgets.source);
 
   // Here rather than in the scan, deliberately. The doomRoutedFilePosition lint
   // rule calls scanExtensions() directly, so a scan notice would make `.ios` a
@@ -89,7 +92,13 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
 
     targets.push(target);
     const render = RENDERERS[target];
-    const source = render(resolution, { packageName, pluginId, root: graph.root, entryDir: GENERATED_DIR });
+    const source = render(resolution, {
+      packageName,
+      pluginId,
+      root: graph.root,
+      entryDir: GENERATED_DIR,
+      mcpWidgets: mcpWidgets?.declarations,
+    });
     files.set(`${GENERATED_DIR}/${ENTRY_FILENAME[target]}.${ENTRY_EXTENSION[target]}`, source);
   }
 
@@ -120,7 +129,10 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
       ? GENERATED_ENTRY_NAMES.filter(
           (name) => name !== 'mcp' || !fs.existsSync(path.join(options.packageDir, 'tsdown.mcp.config.ts')),
         ).map((name) => `${GENERATED_DIR}/${name}.ts`)
-      : [`${GENERATED_DIR}/${ENTRY_FILENAME[options.target]}.${ENTRY_EXTENSION[options.target]}`];
+      : [
+          `${GENERATED_DIR}/${ENTRY_FILENAME[options.target]}.${ENTRY_EXTENSION[options.target]}`,
+          ...(options.target === 'mcp' ? [`${GENERATED_DIR}/mcp-ui.ts`] : []),
+        ];
   const { changed } = writeGenerated(options.packageDir, files, options.check, managed);
   return { graph, packageName, pluginId, files, changed, notices, targets };
 }

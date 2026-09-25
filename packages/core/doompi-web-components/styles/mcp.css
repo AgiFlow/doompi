@@ -1,0 +1,22 @@
+@import './tokens.css';
+
+/* MCP hosts supply these variables. System colours also work in an offline reference host. */
+:root {
+  color-scheme: light dark;
+  --doom-bg: var(--color-background-primary, Canvas);
+  --doom-panel: var(--color-background-secondary, Canvas);
+  --doom-text: var(--color-text-primary, CanvasText);
+  --doom-hi: var(--color-text-primary, CanvasText);
+  --doom-dim: var(--color-text-secondary, CanvasText);
+  --doom-border: var(--color-border-primary, GrayText);
+  --doom-border-soft: var(--color-border-secondary, GrayText);
+  --doom-red: var(--color-text-danger, CanvasText);
+  --doom-font-mono: var(--font-mono, ui-monospace, monospace);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  background: var(--doom-bg);
+  color: var(--doom-text);
+}

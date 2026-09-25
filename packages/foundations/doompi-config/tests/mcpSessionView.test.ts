@@ -1,11 +1,7 @@
-import { createHash } from 'node:crypto';
-
 import type { DoomMcpPluginContext } from '@agimon-ai/doompi-core/mcpFacet';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
 
-import { sessionAppUri } from '../generated/mcp-apps/session';
-import resource from '../src/extensions/workspaces/sessions/(backend)/resource/session-view.mcp';
 import showSession from '../src/extensions/workspaces/sessions/(backend)/tool/show_session.mcp';
 import { sessionViewSchema } from '../src/schemas/mcpSessionView';
 import { createShowSessionTool } from '../src/services/mcpContextTools';
@@ -30,10 +26,9 @@ describe('session MCP App', () => {
           persona: 'private persona',
         }),
       } as unknown as DoomMcpPluginContext;
-      const tool = createShowSessionTool(context, sessionAppUri);
+      const tool = createShowSessionTool(context);
       expect(tool._meta).toMatchObject({
-        ui: { resourceUri: sessionAppUri, visibility: ['model', 'app'] },
-        'openai/outputTemplate': sessionAppUri,
+        ui: { visibility: ['model', 'app'] },
       });
       expect(tool.outputSchema).toEqual(sessionViewSchema);
       expect(tool.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
@@ -68,13 +63,7 @@ describe('session MCP App', () => {
         selection: { profile: null, domains: [], majorMode: 'copilot', activeLayers: [] },
       }),
     } as unknown as DoomMcpPluginContext;
-    const result = await createShowSessionTool(context, sessionAppUri).execute(
-      'call',
-      {},
-      undefined,
-      undefined,
-      {} as never,
-    );
+    const result = await createShowSessionTool(context).execute('call', {}, undefined, undefined, {} as never);
     expect(result.structuredContent).toMatchObject({
       repositoryName: 'Repository',
       profile: null,
@@ -84,20 +73,5 @@ describe('session MCP App', () => {
     });
     expect(JSON.stringify(result.content)).toContain('Profile: Default');
     expect(JSON.stringify(result.content)).toContain('Minor modes: None');
-  });
-
-  it('serves self-contained HTML under its exact content-derived URI', async () => {
-    const html = await resource.read();
-    const digest = createHash('sha256').update(html).digest('hex').slice(0, 24);
-    expect(resource.uri).toBe(`ui://doompi/session/${digest}/index.html`);
-    expect(resource.mimeType).toBe('text/html;profile=mcp-app');
-    expect(resource._meta).toMatchObject({
-      ui: { csp: { connectDomains: [], resourceDomains: [] }, prefersBorder: true },
-    });
-    expect(html).toContain('<!doctype html>');
-    expect(html).toContain('<script>');
-    expect(html).not.toContain('<!--APP_SCRIPT-->');
-    expect(html).not.toMatch(/<script[^>]+src=/u);
-    expect(html).not.toContain('/Users/');
   });
 });

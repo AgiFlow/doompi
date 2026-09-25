@@ -45,7 +45,11 @@ describe('scanExtensions', () => {
     const graph = scanExtensions({ packageDir: packageWith({ [file]: EMPTY }) });
     expect(graph.entries).toEqual([]);
     expect(graph.notices).toEqual([
-      { path: file, message: 'MCP declarations belong in a session backend tool/, skill/, or resource/ surface' },
+      {
+        path: file,
+        message:
+          'MCP declarations belong in a session backend tool/, skill/, resource/, or frontend tool/*.mcp.tsx surface',
+      },
     ]);
   });
 
@@ -60,6 +64,26 @@ describe('scanExtensions', () => {
     expect(graph.notices).toEqual([]);
     expect(graph.entries).toHaveLength(3);
     expect(graph.entries.every((entry) => entry.platform === 'mcp' && entry.scope === 'session')).toBe(true);
+  });
+
+  it('accepts session frontend MCP widgets, including gated declarations', () => {
+    const graph = scanExtensions({
+      packageDir: packageWith({
+        'src/extensions/workspaces/sessions/(frontend)/tool/read.mcp.tsx': EMPTY,
+        'src/extensions/workspaces/sessions/(frontend)/mode/plan/tool/write_plan.mcp.tsx': EMPTY,
+      }),
+    });
+    expect(graph.notices).toEqual([]);
+    expect(graph.entries).toHaveLength(2);
+    expect(
+      graph.entries.every(
+        (entry) =>
+          entry.platform === 'mcp' &&
+          entry.scope === 'session' &&
+          entry.side === 'frontend' &&
+          entry.surface === 'tool',
+      ),
+    ).toBe(true);
   });
 
   it('returns an empty graph when the package has no routing root', () => {

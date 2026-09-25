@@ -211,6 +211,7 @@ interface Binding {
   readonly identifier: string;
   readonly contribution: ResolvedContribution;
   readonly identity: Identity | undefined;
+  readonly mcpWidget: string | undefined;
   /** The paired presentation file, when one is folded into this contribution. */
   readonly renderers: { readonly identifier: string; readonly file: string } | undefined;
 }
@@ -228,6 +229,7 @@ function bind(resolution: TargetResolution, options: RenderOptions): Binding[] {
         identifier,
         contribution,
         identity: identityFor(contribution, resolution.target, options),
+        mcpWidget: resolution.target === 'mcp' ? options.mcpWidgets?.[contribution.entry.file] : undefined,
         renderers:
           paired === undefined
             ? undefined
@@ -329,7 +331,8 @@ function member(binding: Binding, contextExpression: string, target: BuildTarget
   const identity = renderIdentity(binding.identity);
   // A channel array holds factories, so the identity is applied inside one.
   if (isFactory) return `() => via({ ${identity} }, ${binding.identifier}())`;
-  return `via({ ${identity} }, ${resolved})`;
+  const value = `via({ ${identity} }, ${resolved})`;
+  return binding.mcpWidget === undefined ? value : `withWidget(${JSON.stringify(binding.mcpWidget)}, ${value})`;
 }
 
 /**
@@ -440,7 +443,7 @@ function bodyFor(
     }
     const renderedMembers = members.map((entry) =>
       entry.contribution.entry.cardinality === 'many'
-        ? `...many(${entry.identifier}, ${contextOf(entry)})`
+        ? `...many(${entry.identifier}, ${contextOf(entry)})${entry.mcpWidget === undefined ? '' : `.map((tool) => withWidget(${JSON.stringify(entry.mcpWidget)}, tool))`}`
         : member(entry, contextOf(entry), target),
     );
     const entries = `[${renderedMembers.join(', ')}]`;
@@ -690,6 +693,14 @@ export function renderMcpEntry(resolution: TargetResolution, options: RenderOpti
     ...importsFor(bindings, [], [], options.entryDir),
     '',
     ...resolverFor(body),
+    ...(bindings.some((binding) => binding.mcpWidget !== undefined)
+      ? [
+          'const withWidget = <T>(key: string, value: T): T => value === undefined ? value : ({',
+          '  ...value, _meta: { ...(value as { _meta?: object })._meta, ["doompi/widget"]: key },',
+          '});',
+          '',
+        ]
+      : []),
     'export const mcp = defineMcpPlugin({',
     `  name: '${options.packageName}',`,
     '  session: (context) => ({',

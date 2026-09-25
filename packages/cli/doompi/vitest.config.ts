@@ -11,7 +11,8 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
     bail: 10,
-    exclude: ['node_modules/**/*', 'dist/**/*', 'coverage/**/*', 'tests/system/**/*'],
+    // Browser specs run through the separate Playwright test:app target.
+    exclude: ['node_modules/**/*', 'dist/**/*', 'coverage/**/*', 'tests/system/**/*', 'tests/browser/**/*'],
     coverage: {
       provider: 'v8',
       reportsDirectory: coverageReportsDirectory,

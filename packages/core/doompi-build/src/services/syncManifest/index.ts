@@ -160,9 +160,21 @@ export function syncManifest(input: ManifestSync): Record<string, unknown> {
 }
 
 /** Updates only the MCP-owned manifest block, leaving normal build metadata untouched. */
-export function syncMcpManifest(manifest: Record<string, unknown>, enabled: boolean): Record<string, unknown> {
+export function syncMcpManifest(
+  manifest: Record<string, unknown>,
+  enabled: boolean,
+  widgets: readonly string[] = [],
+): Record<string, unknown> {
   const next = { ...manifest };
-  if (enabled) next.doompiMcp = { entry: MCP_ENTRY, dist: MCP_DIST, scopes: ['session'] };
+  if (enabled)
+    next.doompiMcp = {
+      entry: MCP_ENTRY,
+      dist: MCP_DIST,
+      scopes: ['session'],
+      ...(widgets.length === 0
+        ? {}
+        : { ui: { entry: `./${GENERATED_DIR}/mcp-ui.ts`, dist: './dist/extensions/mcp-ui.mjs', widgets } }),
+    };
   else delete next.doompiMcp;
   return next;
 }
@@ -177,10 +189,10 @@ export function writeManifest(input: ManifestSync & { readonly targets: readonly
 }
 
 /** Writes only MCP metadata after an isolated build. */
-export function writeMcpManifest(packageDir: string, enabled: boolean): boolean {
+export function writeMcpManifest(packageDir: string, enabled: boolean, widgets: readonly string[] = []): boolean {
   const manifestPath = path.join(packageDir, 'package.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
-  const next = `${JSON.stringify(syncMcpManifest(manifest, enabled), null, 2)}\n`;
+  const next = `${JSON.stringify(syncMcpManifest(manifest, enabled, widgets), null, 2)}\n`;
   if (fs.readFileSync(manifestPath, 'utf8') === next) return false;
   fs.writeFileSync(manifestPath, next);
   return true;

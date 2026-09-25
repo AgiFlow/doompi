@@ -9,6 +9,15 @@ export interface DoomMcpBundleEntry {
   readonly module: string;
   readonly sha256: string;
   readonly owners: readonly DoomServerBundleOwner[];
+  /** Package-owned component keys generated from frontend tool declarations. */
+  readonly widgets?: readonly string[];
+}
+
+export interface DoomMcpUiBundle {
+  readonly file: string;
+  readonly sha256: string;
+  /** Build inputs are checked for sync freshness, never exposed in the UI resource. */
+  readonly inputs: readonly { readonly path: string; readonly sha256: string }[];
 }
 
 export interface DoomMcpBundle {
@@ -16,6 +25,7 @@ export interface DoomMcpBundle {
   readonly generation: string;
   readonly fingerprint: string;
   readonly entries: readonly DoomMcpBundleEntry[];
+  readonly ui?: DoomMcpUiBundle;
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -70,7 +80,48 @@ export function parseDoomMcpBundle(value: unknown): DoomMcpBundle {
       ownership.add(key);
       return { majorMode, layer };
     });
-    return { packageName, entry, module, sha256, owners };
+    const widgets = candidate.widgets;
+    if (
+      widgets !== undefined &&
+      (!Array.isArray(widgets) ||
+        widgets.some(
+          (key: unknown) =>
+            typeof key !== 'string' ||
+            !key.startsWith(`${packageName}/`) ||
+            key.length <= packageName.length + 1 ||
+            key.includes('\0'),
+        ) ||
+        new Set(widgets).size !== widgets.length)
+    )
+      throw new Error(`Invalid MCP bundle ${packageName} widgets`);
+    return {
+      packageName,
+      entry,
+      module,
+      sha256,
+      owners,
+      ...(widgets === undefined ? {} : { widgets: widgets as string[] }),
+    };
   });
-  return { version: DOOM_MCP_BUNDLE_VERSION, generation, fingerprint, entries };
+  let ui: DoomMcpUiBundle | undefined;
+  if (value.ui !== undefined) {
+    if (
+      !record(value.ui) ||
+      typeof value.ui.sha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/u.test(value.ui.sha256) ||
+      !Array.isArray(value.ui.inputs)
+    )
+      throw new Error('Invalid MCP UI bundle');
+    const file = relativeFile(value.ui.file, 'UI file');
+    if (!file.endsWith('.html')) throw new Error('Invalid MCP UI bundle file');
+    const inputs = value.ui.inputs.map((input: unknown) => {
+      if (!record(input) || typeof input.sha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(input.sha256))
+        throw new Error('Invalid MCP UI input');
+      return { path: text(input.path, 'UI input path'), sha256: input.sha256 };
+    });
+    ui = { file, sha256: value.ui.sha256, inputs };
+  }
+  if (entries.some((entry) => (entry.widgets?.length ?? 0) > 0) && ui === undefined)
+    throw new Error('Missing composed MCP UI resource');
+  return { version: DOOM_MCP_BUNDLE_VERSION, generation, fingerprint, entries, ...(ui === undefined ? {} : { ui }) };
 }

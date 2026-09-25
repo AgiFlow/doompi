@@ -2,8 +2,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["node"]
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "noEmit": true
   },
-  "include": ["src/extensions/**/(frontend)/**/*.ts", "tests/browser/**/*.ts"],
+  "include": ["src/extensions/**/(frontend)/**/*.mcp.tsx", "generated/mcp-ui.ts"],
   "exclude": ["node_modules", "dist", "coverage"]
 }

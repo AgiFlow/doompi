@@ -90,6 +90,8 @@ export {
   sessionLineagePath,
 } from '../web/services/sessionRegistry';
 export { toolResultText, toolResultTextLines } from '../web/services/toolResult';
+export { defineMcpWidget } from '../web/services/mcpWidget';
+export type { DoomMcpWidgetProps } from '../web/types/mcpWidget';
 export type { HubAdvertisement, RegistryDirInput, SessionLineageRecord } from '../web/types/sessionRegistry';
 export type {
   ModelContext,

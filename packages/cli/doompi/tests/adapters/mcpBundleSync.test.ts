@@ -128,3 +128,48 @@ describe('MCP bundle sync integrity', () => {
     expect(mcpBundleIsRuntimeUsable(state, registration)).toBe(false);
   });
 });
+
+it('composes package widgets once and fingerprints both their source graph and the immutable HTML', async () => {
+  const { input, entry, resolved } = fixture();
+  const root = path.dirname(path.dirname(entry));
+  const packageFile = path.join(root, 'package.json');
+  const manifest = JSON.parse(fs.readFileSync(packageFile, 'utf8'));
+  manifest.doompiMcp.ui = { entry: './src/read.mcp.tsx', dist: './dist/mcp-ui.mjs', widgets: ['@test/plugin/read'] };
+  fs.writeFileSync(packageFile, JSON.stringify(manifest));
+  const browserEntry = path.join(root, 'dist', 'mcp-ui.mjs');
+  fs.writeFileSync(browserEntry, 'export const widgets = { "@test/plugin/read": function Read() { return null; } };');
+  const result = await syncMcpBundle(input);
+  expect(result.descriptor.ui).toBeDefined();
+  expect(result.descriptor.entries[0]?.widgets).toEqual(['@test/plugin/read']);
+  const uiFile = path.resolve(input.outputDirectory, result.descriptor.ui!.file);
+  expect(result.descriptor.ui!.sha256).toBe(sha256(uiFile));
+  expect(
+    result.descriptor.ui!.inputs.some((file) =>
+      file.path.startsWith(fs.realpathSync(input.outputDirectory) + path.sep),
+    ),
+  ).toBe(false);
+  expect(result.descriptor.ui!.inputs.some((file) => file.path === fs.realpathSync(browserEntry))).toBe(true);
+  expect(fs.readFileSync(uiFile, 'utf8')).toContain('<!doctype html>');
+  expect(fs.readFileSync(uiFile, 'utf8')).not.toMatch(/<script[^>]+src=/u);
+  const descriptorPath = path.join(input.outputDirectory, DOOM_MCP_BUNDLE_FILE);
+  const state = {
+    resolved,
+    mcpBundle: {
+      descriptorPath,
+      fingerprint: input.fingerprint,
+      compilerManifests: result.compilerManifests,
+      sourcesHash: computeMcpSourcesHash(resolved),
+    },
+  };
+  const registration = {
+    generation: input.generation,
+    generationRoot: path.dirname(input.outputDirectory),
+    mcpBundle: { path: descriptorPath, fingerprint: input.fingerprint, sha256: sha256(descriptorPath) },
+  };
+  expect(mcpBundleIsFresh(state, registration)).toBe(true);
+  fs.appendFileSync(browserEntry, '\n// source changed');
+  expect(mcpBundleIsFresh(state, registration)).toBe(false);
+  expect(mcpBundleIsRuntimeUsable(state, registration)).toBe(true);
+  fs.appendFileSync(uiFile, '\nchanged');
+  expect(mcpBundleIsRuntimeUsable(state, registration)).toBe(false);
+}, 30_000);

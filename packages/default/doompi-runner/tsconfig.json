@@ -23,5 +23,13 @@
     "types": ["node", "vitest/globals"]
   },
   "include": ["src", "tests", "vitest.config.ts", "tsdown.config.ts", "generated"],
-  "exclude": ["node_modules", "dist", "coverage", "tests/web", "src/extensions/**/(frontend)/**/*", "generated/web.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "tests/web",
+    "src/extensions/**/(frontend)/**/*",
+    "generated/web.ts",
+    "generated/mcp-ui.ts"
+  ]
 }

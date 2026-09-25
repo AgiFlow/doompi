@@ -652,6 +652,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../foundations/doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../../core/doompi-web-security
@@ -737,6 +740,15 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
+      '@modelcontextprotocol/ext-apps':
+        specifier: 1.5.0
+        version: 1.5.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
+      '@modelcontextprotocol/sdk':
+        specifier: 1.30.0
+        version: 1.30.0(supports-color@7.2.0)(zod@4.6.5)
+      '@playwright/test':
+        specifier: 1.63.0
+        version: 1.63.0
       '@types/cross-spawn':
         specifier: 6.0.6
         version: 6.0.6
@@ -1091,6 +1103,9 @@ importers:
       '@lezer/highlight':
         specifier: 1.2.3
         version: 1.2.3
+      '@modelcontextprotocol/ext-apps':
+        specifier: 1.5.0
+        version: 1.5.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
       '@xterm/xterm':
         specifier: 6.0.0
         version: 6.0.0
@@ -1924,6 +1939,9 @@ importers:
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../doompi-telemetry
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1952,9 +1970,15 @@ importers:
       '@types/node':
         specifier: 26.6.1
         version: 26.6.1
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
       '@vitest/coverage-v8':
         specifier: 5.0.1
         version: 5.0.1(vitest@5.0.1)
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
       tsdown:
         specifier: 0.23.0
         version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
@@ -2264,6 +2288,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -2289,9 +2316,15 @@ importers:
       '@types/node':
         specifier: 26.6.1
         version: 26.6.1
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
       '@vitest/coverage-v8':
         specifier: 5.0.1
         version: 5.0.1(vitest@5.0.1)
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
       tsdown:
         specifier: 0.23.0
         version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
@@ -2341,6 +2374,9 @@ importers:
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../doompi-telemetry
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -2354,9 +2390,6 @@ importers:
       '@agimon-ai/doompi-build':
         specifier: workspace:*
         version: link:../../core/doompi-build
-      '@agimon-ai/doompi-web-components':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-components
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
         version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)

@@ -9,7 +9,7 @@ import {
   type DoomMcpBundleEntry,
   parseDoomMcpBundle,
 } from '../schemas/mcpBundle';
-import type { DoomMcpPluginDefinition } from '../schemas/mcpFacet';
+import type { DoomMcpPluginDefinition, DoomMcpUiResource } from '../schemas/mcpFacet';
 
 export interface LoadMcpBundleOptions {
   readonly directory: string;
@@ -61,6 +61,24 @@ export async function loadMcpBundle(options: LoadMcpBundleOptions): Promise<Load
   const descriptor = parseDoomMcpBundle(JSON.parse(descriptorBytes.toString('utf8')));
   if (descriptor.generation !== options.generation || descriptor.fingerprint !== options.fingerprint)
     throw new Error('MCP bundle does not match the admitted generation');
+  let resource: DoomMcpUiResource | undefined;
+  if (descriptor.ui) {
+    const html = fs.readFileSync(containedFile(directory, descriptor.ui.file), 'utf8');
+    if (crypto.createHash('sha256').update(html).digest('hex') !== descriptor.ui.sha256)
+      throw new Error('MCP UI hash does not match the admitted descriptor');
+    resource = {
+      uri: `ui://doompi/tools/${descriptor.ui.sha256}/index.html`,
+      name: 'doompi-tool-widgets',
+      description: 'Package-owned tool widgets composed by doompi sync.',
+      mimeType: 'text/html;profile=mcp-app',
+      _meta: {
+        ui: { csp: { connectDomains: [], resourceDomains: [] }, prefersBorder: true },
+        'openai/widgetPrefersBorder': true,
+        'openai/widgetCSP': { connect_domains: [], resource_domains: [] },
+      },
+      read: () => html,
+    };
+  }
   const plugins: LoadedMcpPlugin[] = [];
   for (const declaration of descriptor.entries) {
     const eligible = declaration.owners.some(
@@ -75,7 +93,46 @@ export async function loadMcpBundle(options: LoadMcpBundleOptions): Promise<Load
       if (sha256 !== declaration.sha256) throw new Error('module hash does not match the admitted descriptor');
       const imported = (await import(pathToFileURL(file).href)) as { default?: unknown };
       if (!isMcpPlugin(imported.default)) throw new Error('default export is not an MCP plugin');
-      plugins.push({ declaration, plugin: imported.default });
+      const original = imported.default;
+      const ui = resource;
+      const allowedWidgets = new Set(declaration.widgets ?? []);
+      const plugin: DoomMcpPluginDefinition =
+        ui === undefined || allowedWidgets.size === 0
+          ? original
+          : {
+              ...original,
+              async session(context) {
+                const scope =
+                  typeof original.session === 'function' ? await original.session(context) : original.session;
+                const { tools: contributedTools, uiResources: contributedResources, ...rest } = scope;
+                let usesWidget = false;
+                const tools = contributedTools?.map((tool) => {
+                  const widget = tool._meta?.['doompi/widget'];
+                  if (widget === undefined) return tool;
+                  if (typeof widget !== 'string' || !allowedWidgets.has(widget))
+                    throw new Error(`MCP tool '${tool.name}' references a widget not owned by its package`);
+                  usesWidget = true;
+                  return {
+                    ...tool,
+                    _meta: {
+                      ...tool._meta,
+                      ui: {
+                        ...tool._meta?.ui,
+                        resourceUri: ui.uri,
+                        visibility: tool._meta?.ui?.visibility ?? ['model'],
+                      },
+                      'openai/outputTemplate': ui.uri,
+                    },
+                  };
+                });
+                return {
+                  ...rest,
+                  ...(tools === undefined ? {} : { tools }),
+                  uiResources: [...(contributedResources ?? []), ...(usesWidget ? [ui] : [])],
+                };
+              },
+            };
+      plugins.push({ declaration, plugin });
     } catch (error) {
       const message = `MCP plugin '${declaration.packageName}' could not load (${error instanceof Error ? error.message : String(error)})`;
       if (eligible) throw new Error(message, { cause: error });

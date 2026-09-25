@@ -279,10 +279,11 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.app.json",
     "test-system": "vitest run --config vitest.system.config.ts",
     "lint": "oxlint . && oxfmt . --check",
-    "fixcode": "oxlint . --fix && oxfmt ."
+    "fixcode": "oxlint . --fix && oxfmt .",
+    "test:app": "playwright test --config playwright.app.config.ts"
   },
   "dependencies": {
     "@agimon-ai/doompi-autostop": "workspace:*",
@@ -298,6 +299,7 @@
     "@agimon-ai/doompi-skill": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "@earendil-works/chord": "0.87.1",
@@ -328,6 +330,9 @@
     "@earendil-works/pi-ai": "0.87.1",
     "@earendil-works/pi-client": "0.87.1",
     "@earendil-works/pi-tui": "0.87.1",
+    "@modelcontextprotocol/ext-apps": "1.5.0",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@playwright/test": "1.63.0",
     "@types/cross-spawn": "6.0.6",
     "@types/node": "26.6.1",
     "@types/ws": "8.18.1",

@@ -16,6 +16,7 @@ export {
   DOOM_MCP_BUNDLE_VERSION,
   type DoomMcpBundle,
   type DoomMcpBundleEntry,
+  type DoomMcpUiBundle,
   parseDoomMcpBundle,
 } from '../schemas/mcpBundle';
 export {

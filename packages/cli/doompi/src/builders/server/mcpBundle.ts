@@ -14,12 +14,14 @@ import type { DoomServerBundleOwner } from '@agimon-ai/doompi-core/serverFacet';
 
 import { compileExtensionModule, extensionModuleManifestPath } from '../../compiler';
 import type { ExtensionComposition } from '../cli/extensionAssembler';
+import { bundleMcpApp, type McpAppSource } from './mcpApp';
 
 interface DeclaredMcpPlugin {
   readonly packageName: string;
   readonly packageDir: string;
   readonly entry: string;
   readonly dist: string;
+  readonly ui?: { readonly dist: string; readonly widgets: readonly string[] };
 }
 
 export interface McpBundleSyncInput {
@@ -63,9 +65,23 @@ function declaredMcpPlugin(packageDir: string, manifest: Record<string, unknown>
     throw new Error(`doompiMcp scopes in ${packageDir} must be exactly ['session'].`);
   const packageName = manifest.name;
   if (typeof packageName !== 'string' || packageName === '') throw new Error(`Package in ${packageDir} has no name.`);
+  let ui: DeclaredMcpPlugin['ui'];
+  if (declaration.ui !== undefined) {
+    const value = declaration.ui as { dist?: unknown; widgets?: unknown } | null;
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      !Array.isArray(value.widgets) ||
+      value.widgets.some((key: unknown) => typeof key !== 'string' || !key.startsWith(`${packageName}/`)) ||
+      new Set(value.widgets).size !== value.widgets.length
+    )
+      throw new Error(`Invalid MCP widget manifest in ${packageDir}`);
+    ui = { dist: packagePath(packageDir, 'ui.dist', value.dist), widgets: value.widgets as string[] };
+  }
   return {
     packageName,
     packageDir,
+    ...(ui === undefined ? {} : { ui }),
     entry: packagePath(packageDir, 'entry', declaration.entry),
     dist: packagePath(packageDir, 'dist', declaration.dist),
   };
@@ -101,6 +117,7 @@ export async function syncMcpBundle(input: McpBundleSyncInput): Promise<McpBundl
   }
   fs.mkdirSync(input.outputDirectory, { recursive: true });
   const entries: DoomMcpBundleEntry[] = [];
+  const uiSources: McpAppSource[] = [];
   const compilerManifests: Record<string, string> = {};
   for (const [index, { declaration, owners }] of [...packages.values()].entries()) {
     const builtEntry = fs.realpathSync(path.resolve(declaration.packageDir, declaration.dist));
@@ -119,19 +136,29 @@ export async function syncMcpBundle(input: McpBundleSyncInput): Promise<McpBundl
       input.cacheDirectory,
       compileOptions,
     );
+    if (declaration.ui && declaration.ui.widgets.length > 0) {
+      const file = fs.realpathSync(path.resolve(declaration.packageDir, declaration.ui.dist));
+      const relativeUi = path.relative(declaration.packageDir, file);
+      if (relativeUi === '..' || relativeUi.startsWith(`..${path.sep}`) || path.isAbsolute(relativeUi))
+        throw new Error(`MCP UI entry escapes package: ${declaration.packageName}`);
+      uiSources.push({ file, widgets: declaration.ui.widgets });
+    }
     entries.push({
       packageName: declaration.packageName,
+      ...(declaration.ui === undefined ? {} : { widgets: declaration.ui.widgets }),
       entry: declaration.entry,
       module: `./${path.relative(input.outputDirectory, module).split(path.sep).join('/')}`,
       sha256: crypto.createHash('sha256').update(fs.readFileSync(module)).digest('hex'),
       owners,
     });
   }
+  const ui = await bundleMcpApp(uiSources, input.outputDirectory);
   const descriptor = parseDoomMcpBundle({
     version: DOOM_MCP_BUNDLE_VERSION,
     generation: input.generation,
     fingerprint: input.fingerprint,
     entries,
+    ...(ui === undefined ? {} : { ui }),
   });
   writeFileAtomic(descriptorPath, `${JSON.stringify(descriptor, null, 2)}\n`);
   return { descriptor, compilerManifests };
