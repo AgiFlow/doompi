@@ -8,10 +8,12 @@ describe('Config MCP widget contributions', () => {
     const scope = typeof mcp.session === 'function' ? await mcp.session({} as DoomMcpPluginContext) : mcp.session;
     expect(scope.tools?.map((tool) => [tool.name, tool._meta?.['doompi/widget']])).toEqual([
       ['load_context', '@agimon-ai/doompi-config/load_context'],
+      ['rename_thread', '@agimon-ai/doompi-config/rename_thread'],
       ['show_session', '@agimon-ai/doompi-config/show_session'],
     ]);
     expect(scope.uiResources ?? []).toEqual([]);
     expect(scope.tools?.find((tool) => tool.name === 'show_session')?._meta?.ui?.visibility).toEqual(['model', 'app']);
     expect(scope.tools?.find((tool) => tool.name === 'load_context')?._meta?.ui).toBeUndefined();
+    expect(scope.tools?.find((tool) => tool.name === 'rename_thread')?._meta?.ui).toBeUndefined();
   });
 });

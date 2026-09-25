@@ -190,6 +190,7 @@
       "dist": "./dist/extensions/mcp-ui.mjs",
       "widgets": [
         "@agimon-ai/doompi-config/load_context",
+        "@agimon-ai/doompi-config/rename_thread",
         "@agimon-ai/doompi-config/show_session"
       ]
     }
