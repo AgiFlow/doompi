@@ -1,3 +1,18 @@
+## 0.0.1-alpha.87 (2026-09-25)
+
+### 🩹 Fixes
+
+- **doompi-git:** scope activity worktrees to owner ([#191](https://github.com/AgiFlow/doompi/pull/191))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.81
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.44
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.86 (2026-09-25)
 
 ### 🚀 Features
