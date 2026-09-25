@@ -49,14 +49,14 @@ export const Playground = {
         <span className="text-2xs text-doom-dim uppercase tracking-widest">
           a finished run · listing unavailable without a backend
         </span>
-        <div className="w-96 rounded-md border border-doom-border bg-doom-panel">
+        <div className="w-full max-w-96 rounded-md border border-doom-border bg-doom-panel">
           <ArtifactsPane run={run} sessionId="artifacts-pane" onOpen={() => undefined} />
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">no session</span>
-        <div className="w-96 rounded-md border border-doom-border bg-doom-panel">
+        <div className="w-full max-w-96 rounded-md border border-doom-border bg-doom-panel">
           <ArtifactsPane run={run} sessionId={null} onOpen={() => undefined} />
         </div>
       </div>

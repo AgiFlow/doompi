@@ -289,7 +289,10 @@ export function MessageItemStatus({
         data-slot="message-item-status"
         data-testid="tool-more"
         onClick={toggle}
-        className={cn('flex cursor-pointer items-center gap-1.5 text-doom-faint hover:text-doom-blue', className)}
+        className={cn(
+          'flex min-h-6 min-w-6 cursor-pointer items-center gap-1.5 text-doom-faint hover:text-doom-blue',
+          className,
+        )}
       >
         {content}
       </button>

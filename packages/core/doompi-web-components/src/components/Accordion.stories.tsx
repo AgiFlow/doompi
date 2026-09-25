@@ -16,7 +16,7 @@ const meta = {
 
 export default meta;
 
-const SHELL = 'w-96 rounded-md border border-doom-border bg-doom-panel px-3';
+const SHELL = 'w-full max-w-96 rounded-md border border-doom-border bg-doom-panel px-3';
 
 export const Playground = {
   render: () => (

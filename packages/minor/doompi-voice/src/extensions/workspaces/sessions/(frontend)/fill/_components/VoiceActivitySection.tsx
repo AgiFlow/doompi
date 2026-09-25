@@ -71,7 +71,7 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
           <Dot tone={realtime.connection === 'failed' ? 'yellow' : live ? 'cyan' : 'muted'} pulse={live} />
           <span
             data-testid="voice-label"
-            className={`flex-1 truncate text-[11px] font-bold ${TONE_TEXT[live ? 'live' : 'attention']}`}
+            className={`flex-1 truncate text-sm font-bold ${TONE_TEXT[live ? 'live' : 'attention']}`}
           >
             {realtime.connection === 'failed'
               ? 'realtime voice failed'
@@ -105,10 +105,10 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
             </Button>
           ) : null}
         </span>
-        <span data-testid="voice-detail" className="text-[9px] leading-relaxed text-doom-faint">
+        <span data-testid="voice-detail" className="text-2xs leading-relaxed text-doom-faint">
           {detail}
         </span>
-        <span className="text-[8px] font-bold tracking-[0.14em] text-doom-faint/70 uppercase">browser realtime</span>
+        <span className="text-2xs font-bold tracking-wider text-doom-faint uppercase">browser realtime</span>
       </div>
     );
   }
@@ -163,7 +163,7 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
         </span>
       ) : null}
       {view.mode !== 'off' ? (
-        <span className="text-2xs font-bold tracking-wider text-doom-faint/70 uppercase">
+        <span className="text-2xs font-bold tracking-wider text-doom-faint uppercase">
           {view.mode === 'auto' ? 'autonomous capture' : 'one-shot dictation'}
         </span>
       ) : null}

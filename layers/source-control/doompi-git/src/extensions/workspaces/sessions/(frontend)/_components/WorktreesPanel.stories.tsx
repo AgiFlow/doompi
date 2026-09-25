@@ -70,27 +70,27 @@ export default meta;
 export const Playground = {
   render: () => (
     <div className="flex flex-col gap-6 bg-doom-bg p-6">
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">empty</span>
         <WorktreesPanel {...slot('panel-empty')} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">three worktrees</span>
         <WorktreesPanel {...slot('panel-live')} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">work in flight</span>
         <WorktreesPanel {...slot('panel-busy')} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">create failure</span>
         <WorktreesPanel {...slot('panel-create-error')} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">close failure on one card</span>
         <WorktreesPanel {...slot('panel-close-error')} />
       </div>

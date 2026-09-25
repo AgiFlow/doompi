@@ -1,3 +1,4 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 /*
  * Plain CSF objects; the style-system renderer parses these files statically
  * and mounts the exported `render`, so no Storybook runtime is imported and the
@@ -49,7 +50,7 @@ const realFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = String(input instanceof Request ? input.url : input);
   if (!url.includes('/plugins/file-edits/preview')) return realFetch(input, init);
-  const filePath = new URL(url, globalThis.location.origin).searchParams.get('path') ?? '';
+  const filePath = new URL(url, 'https://story.invalid').searchParams.get('path') ?? '';
   if (filePath === PENDING_PATH) return new Promise<Response>(() => {});
   const preview = PREVIEWS[filePath];
   if (preview === undefined) {
@@ -61,6 +62,9 @@ globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Respo
 };
 
 const slot = slotPropsFixture({ sessionId: 's1' }).props;
+
+// Each preview runs in an isolated document without the cockpit's workspace registry.
+bindSessionApiWorkspace(() => 'story-workspace');
 
 const meta = {
   title: 'Files/FilePreviewPanel',

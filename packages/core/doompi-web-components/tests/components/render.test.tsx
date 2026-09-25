@@ -105,6 +105,19 @@ describe('primitives', () => {
     ).toContain('<a');
   });
 
+  it.each([
+    ['xs', 'h-6'],
+    ['sm', 'h-7'],
+    ['md', 'h-8'],
+    ['lg', 'h-9'],
+    ['icon', 'h-6'],
+    ['icon-md', 'h-8'],
+  ] as const)('keeps the %s button on the target-size ladder', (size, height) => {
+    const out = html(<Button size={size}>go</Button>);
+    expect(out).toContain('min-h-6');
+    expect(out).toContain('min-w-6');
+    expect(out).toContain(height);
+  });
   it('badges, dots and status pills carry their tone', () => {
     expect(html(<Badge tone="green">ok</Badge>)).toContain('text-doom-green');
     expect(html(<Dot tone="yellow" pulse />)).toContain('animate-pulse');
@@ -112,6 +125,17 @@ describe('primitives', () => {
     expect(STATUS_EDGE.error).toBe('border-doom-edge-red');
   });
 
+  it.each([
+    ['xs', 'min-h-6'],
+    ['sm', 'min-h-7'],
+    ['md', 'min-h-8'],
+    ['lg', 'min-h-9'],
+  ] as const)('aligns the %s field with its button without sizing bare composers', (size, minimum) => {
+    expect(html(<Input size={size} />)).toContain(minimum);
+    expect(html(<Textarea size={size} />)).toContain(minimum);
+    expect(html(<Input variant="bare" size={size} />)).toContain('min-h-0');
+    expect(html(<Textarea variant="bare" size={size} />)).toContain('min-h-0');
+  });
   it('fields, labels and layout pieces render', () => {
     expect(html(<Input placeholder="p" />)).toContain('placeholder="p"');
     expect(html(<Textarea variant="bare" />)).toContain('bg-transparent');
@@ -219,6 +243,7 @@ describe('primitives', () => {
     expect(html(<MessageItemStatus tone="running">running</MessageItemStatus>)).toContain('◐');
     expect(html(<MessageItemStatus tone="running">running</MessageItemStatus>)).toContain('text-doom-yellow');
     expect(html(<MessageItemStatus expands>3 more line(s)</MessageItemStatus>)).toContain('data-testid="tool-more"');
+    expect(html(<MessageItemStatus expands>3 more line(s)</MessageItemStatus>)).toContain('min-h-6');
     expect(
       html(
         <MessageItemStatus glyph="●" tone="info">

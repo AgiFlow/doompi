@@ -21,10 +21,10 @@ export function EmptyState({ title, description, children, className, asChild = 
   return (
     <Component
       data-slot="empty-state"
-      className={cn('flex flex-1 items-center justify-center px-3 py-4 sm:px-4', className)}
+      className={cn('flex min-w-0 flex-1 items-center justify-center px-3 py-4 sm:px-4', className)}
       {...props}
     >
-      <div className="flex w-[520px] max-w-full flex-col items-center gap-3 text-center">
+      <div className="flex min-w-0 w-full max-w-[520px] flex-col items-center gap-3 text-center">
         <span className="text-base font-bold text-doom-hi">{title}</span>
         {description ? <span className="text-sm leading-relaxed text-doom-dim">{description}</span> : null}
         {children}

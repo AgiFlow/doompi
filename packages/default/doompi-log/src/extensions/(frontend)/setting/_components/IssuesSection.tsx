@@ -67,7 +67,7 @@ export function IssuesSection({ tools, focus }: IssuesSectionProps) {
       {/* Reading this scans the whole window in a subprocess, so the reader is
           told why it is behind a click rather than left wondering. */}
       {open ? null : (
-        <span className="text-2xs text-doom-faint/70">
+        <span className="text-2xs text-doom-faint">
           the log sink has no issues endpoint, so this is read separately and takes a moment
         </span>
       )}

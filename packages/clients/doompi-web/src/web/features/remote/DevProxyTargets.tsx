@@ -117,7 +117,7 @@ export function DevProxyTargets() {
       )}
 
       {state.error === undefined ? null : (
-        <span data-testid="dev-proxy-error" className="text-sm text-doom-warn">
+        <span data-testid="dev-proxy-error" className="text-sm text-doom-yellow">
           {state.error}
         </span>
       )}

@@ -71,7 +71,7 @@ export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
             beside it without this line reads as a breakdown that does not
             add up, which is worse than not showing them.
           */}
-        <span className="text-2xs text-doom-faint/70">
+        <span className="text-2xs text-doom-faint">
           total is what the providers reported and is dominated by cache traffic; the parts beside it are counted
           separately and do not sum to it
         </span>
@@ -85,7 +85,7 @@ export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
       <section className="flex flex-col gap-1">
         <span className="text-2xs font-bold text-doom-faint">tokens by {DIMENSION_LABELS[report.dimension]}</span>
         {DIMENSION_NOTES[report.dimension] === undefined ? null : (
-          <span className="text-2xs text-doom-faint/70">{DIMENSION_NOTES[report.dimension]}</span>
+          <span className="text-2xs text-doom-faint">{DIMENSION_NOTES[report.dimension]}</span>
         )}
         <GroupBars groups={report.groups} focus={report.focus} onFocus={onFocus} />
       </section>
@@ -97,7 +97,7 @@ export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
             attributes a turn's whole total to every tool that ran in that
             turn, so saying otherwise here would be a lie the chart repeats.
           */}
-        <span className="text-2xs text-doom-faint/70">
+        <span className="text-2xs text-doom-faint">
           only calls with recorded token attribution appear here; external MCP calls remain in the logs. The token
           column ranks tools by their turns, not each tool&apos;s own consumption.
         </span>
@@ -105,7 +105,7 @@ export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
           {/* Without heads the two right columns are just numbers; "1006" and
               "325.9k" do not say which is a call count and which is tokens. */}
           <thead>
-            <tr className="text-2xs text-doom-faint/70">
+            <tr className="text-2xs text-doom-faint">
               <th className="py-1 text-left font-normal">tool</th>
               <th className="w-20 py-1 text-right font-normal">sampled calls</th>
               <th className="w-20 py-1 text-right font-normal">tokens</th>
@@ -125,7 +125,7 @@ export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
 
       <IssuesSection tools={report.tools} focus={report.dimension === 'session' ? report.focus : undefined} />
 
-      <span className="text-2xs text-doom-faint/70" data-testid="metrics-provenance">
+      <span className="text-2xs text-doom-faint" data-testid="metrics-provenance">
         read over {report.transport ?? 'an unreported transport'} · generated {report.generatedAt}
       </span>
     </div>

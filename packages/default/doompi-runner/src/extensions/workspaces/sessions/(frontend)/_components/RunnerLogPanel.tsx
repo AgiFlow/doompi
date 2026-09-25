@@ -314,7 +314,7 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
           ref={body}
           onScroll={onScroll}
           data-testid="runner-log-body"
-          className="h-full overflow-auto bg-doom-panel-deep px-3 py-3 sm:px-[26px]"
+          className="h-full overflow-auto bg-doom-deep px-3 py-3 sm:px-[26px]"
         >
           {error !== undefined ? (
             <p data-testid="runner-log-error" className="text-xs text-doom-red">

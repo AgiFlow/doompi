@@ -31,7 +31,7 @@ export const Playground = {
 
       <div className="flex flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">sizes</span>
-        <div className="flex w-fit items-end gap-4 rounded-md bg-doom-on-selected p-3 text-doom-deep">
+        <div className="flex w-fit max-w-full flex-wrap items-end gap-4 rounded-md bg-doom-on-selected p-3 text-doom-deep">
           <QrCode value={PAIRING_URL} size={72} />
           <QrCode value={PAIRING_URL} size={120} />
           <QrCode value={PAIRING_URL} size={208} />

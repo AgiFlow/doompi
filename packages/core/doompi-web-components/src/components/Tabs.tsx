@@ -11,7 +11,7 @@ import { cn } from '../lib/cn';
  * panels, and a link that looks like a tab must not be a second implementation.
  */
 export const tabVariants = cva(
-  'flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors outline-none',
+  'flex min-h-6 min-w-6 cursor-pointer items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors outline-none',
   {
     variants: {
       active: {

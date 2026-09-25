@@ -114,7 +114,7 @@ export function TerminalView({
       ref={mount}
       data-slot="terminal-view"
       data-ready={ready}
-      className={cn('h-full w-full', className)}
+      className={cn('h-full min-w-0 w-full overflow-auto', className)}
       {...props}
     />
   );

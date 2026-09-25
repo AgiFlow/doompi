@@ -19,16 +19,16 @@ export const fieldVariants = cva(
       },
       /** The same rungs Button names, so a field and the button beside it line up. */
       size: {
-        xs: 'px-1.5 py-0.5 text-2xs',
-        sm: 'px-2 py-1 text-xs',
-        md: 'px-2.5 py-1.5 text-sm',
-        lg: 'px-3 py-2 text-base',
+        xs: 'min-h-6 px-1.5 py-0.5 text-2xs',
+        sm: 'min-h-7 px-2 py-1 text-xs',
+        md: 'min-h-8 px-2.5 py-1.5 text-sm',
+        lg: 'min-h-9 px-3 py-1.5 text-base',
       },
     },
     compoundVariants: [
       // A bare field sits inside a surface that already has its own padding,
       // so it keeps the size's type ramp and gives up the size's box.
-      { variant: 'bare', class: 'p-0' },
+      { variant: 'bare', class: 'min-h-0 p-0' },
     ],
     defaultVariants: { variant: 'default', size: 'md' },
   },

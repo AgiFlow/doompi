@@ -6,7 +6,7 @@ import { cn } from '../lib/cn';
 import { Spinner } from './Spinner';
 
 export const buttonVariants = cva(
-  'inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-mono transition-[color,background-color,border-color,filter] outline-none focus-visible:ring-2 focus-visible:ring-doom-blue/50 disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0',
+  'inline-flex min-h-6 min-w-6 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-mono transition-[color,background-color,border-color,filter] outline-none focus-visible:ring-2 focus-visible:ring-doom-blue/50 disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0',
   {
     variants: {
       variant: {
@@ -20,12 +20,12 @@ export const buttonVariants = cva(
         link: 'text-doom-blue hover:underline',
       },
       size: {
-        xs: 'h-5 rounded px-1.5 text-2xs',
-        sm: 'h-6 px-2.5 text-xs',
-        md: 'h-7 px-3 text-sm',
-        lg: 'h-8 px-3.5 text-base',
-        icon: 'h-5 w-5 rounded p-0',
-        'icon-md': 'h-7 w-7 p-0',
+        xs: 'h-6 rounded px-1.5 text-2xs',
+        sm: 'h-7 px-2.5 text-xs',
+        md: 'h-8 px-3 text-sm',
+        lg: 'h-9 px-3.5 text-base',
+        icon: 'h-6 w-6 rounded p-0',
+        'icon-md': 'h-8 w-8 p-0',
         /**
          * A whole card that is one click target: a session in the rail, a run
          * in a panel. It keeps the button's focus ring and cursor and gives up

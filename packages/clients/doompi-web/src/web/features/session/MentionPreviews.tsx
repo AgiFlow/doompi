@@ -32,7 +32,11 @@ export function MentionPreviewAsset({
     return (
       <div className="flex flex-col items-start gap-1">
         {image}
-        <Badge asChild size="md" className="bg-doom-panel text-doom-text hover:border-doom-blue/50">
+        <Badge
+          asChild
+          size="md"
+          className="max-w-full whitespace-normal break-all bg-doom-panel text-doom-text hover:border-doom-blue/50"
+        >
           <a href={asset.url} download={downloadName(mention.path)}>
             <FileIcon className="h-3 w-3 shrink-0 text-doom-faint" />
             Download {downloadName(mention.path)}
@@ -65,7 +69,11 @@ export function MentionPreviewAsset({
   }
   if (openFile) {
     return (
-      <Badge asChild size="md" className="self-start bg-doom-panel text-doom-text hover:border-doom-blue/50">
+      <Badge
+        asChild
+        size="md"
+        className="max-w-full self-start whitespace-normal break-all bg-doom-panel text-doom-text hover:border-doom-blue/50"
+      >
         <button type="button" onClick={openFile}>
           <FileIcon className="h-3 w-3 shrink-0 text-doom-faint" />
           {mention.path}
@@ -74,7 +82,11 @@ export function MentionPreviewAsset({
     );
   }
   return (
-    <Badge asChild size="md" className="self-start bg-doom-panel text-doom-text hover:border-doom-blue/50">
+    <Badge
+      asChild
+      size="md"
+      className="max-w-full self-start whitespace-normal break-all bg-doom-panel text-doom-text hover:border-doom-blue/50"
+    >
       <a href={asset.url} download={downloadName(mention.path)}>
         <FileIcon className="h-3 w-3 shrink-0 text-doom-faint" />
         {mention.path}
@@ -118,7 +130,7 @@ function MentionPreview({
 
   if (asset) return <MentionPreviewAsset mention={mention} asset={asset} openFile={onFileLink?.(mention.path, true)} />;
   return (
-    <Badge size="md" className="self-start bg-doom-panel text-doom-faint">
+    <Badge size="md" className="max-w-full self-start whitespace-normal break-all bg-doom-panel text-doom-faint">
       <FileIcon className="h-3 w-3 shrink-0" />
       {asset === null ? `Could not load ${mention.path}` : mention.path}
     </Badge>

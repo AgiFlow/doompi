@@ -83,7 +83,7 @@ export function VoiceMicrophoneDialog() {
             onSelect={pick}
             testIdPrefix="voice-microphone-option"
           />
-          <DialogFooter>
+          <DialogFooter className="flex-col items-stretch">
             <span className="w-full text-xs text-doom-faint">
               {optionListHint(options.length)} · esc uses the browser default once
             </span>

@@ -93,7 +93,12 @@ export function SheetHeader({
       {children}
       {dismissible ? (
         <SheetPrimitive.Close asChild>
-          <Button variant="ghost" size="icon" aria-label={closeLabel} className="text-doom-faint hover:text-doom-hi">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={closeLabel}
+            className="ml-auto text-doom-faint hover:text-doom-hi"
+          >
             <CloseIcon className="h-3 w-3" />
           </Button>
         </SheetPrimitive.Close>

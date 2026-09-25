@@ -28,7 +28,7 @@ export function GroupBars({ groups, focus, onFocus }: GroupBarsProps) {
       {/* The two right-hand columns were bare numbers. A row reading "11.0M  12"
           gave no way to know the second figure counted issues. Same widths and
           padding as a row, so the heads sit over their own columns. */}
-      <div aria-hidden className="flex items-center gap-2 px-1 text-2xs text-doom-faint/70">
+      <div aria-hidden className="flex items-center gap-2 px-1 text-2xs text-doom-faint">
         <span className="min-w-0 flex-1" />
         <span className="w-14 shrink-0 text-right">tokens</span>
         <span className="w-10 shrink-0 text-right">issues</span>
@@ -43,7 +43,7 @@ export function GroupBars({ groups, focus, onFocus }: GroupBarsProps) {
               <span className="w-14 shrink-0 text-right text-doom-hi">{formatTokens(group.totalTokens)}</span>
               <span className="w-10 shrink-0 text-right">
                 {group.issueCount === 0 ? (
-                  <span className="text-doom-faint/50">ok</span>
+                  <span className="text-doom-faint">ok</span>
                 ) : (
                   <span className="text-doom-red">{group.issueCount}</span>
                 )}
@@ -69,7 +69,7 @@ export function GroupBars({ groups, focus, onFocus }: GroupBarsProps) {
                   onClick={() => onFocus(selected ? '' : group.key)}
                   aria-pressed={selected}
                   data-testid={`metrics-group-${group.key}`}
-                  className="relative flex w-full items-center gap-2 rounded-xs px-1 py-[3px] text-xs hover:bg-doom-tint focus-visible:outline focus-visible:outline-1 focus-visible:outline-doom-blue"
+                  className="relative flex min-h-6 w-full items-center gap-2 rounded-xs px-1 py-[3px] text-xs hover:bg-doom-tint-blue focus-visible:outline focus-visible:outline-1 focus-visible:outline-doom-blue"
                 >
                   {row}
                 </button>

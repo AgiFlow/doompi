@@ -6,7 +6,7 @@
 import { Button } from './Button';
 
 const SIZES = ['xs', 'sm', 'md', 'lg'] as const;
-const VARIANTS = ['outline', 'primary', 'ghost', 'danger', 'danger-outline', 'success', 'link'] as const;
+const VARIANTS = ['outline', 'primary', 'ghost', 'subtle', 'danger', 'danger-outline', 'success', 'link'] as const;
 
 const meta = {
   title: 'Components/Button',
@@ -41,7 +41,14 @@ export const Playground = {
           <Button size="icon" aria-label="icon">
             +
           </Button>
+          <Button size="icon-md" aria-label="medium icon">
+            +
+          </Button>
         </div>
+        <Button size="card" className="max-w-sm">
+          <span className="font-bold">Card action</span>
+          <span>A multiline label keeps its padding and can wrap on a narrow screen.</span>
+        </Button>
       </div>
     </div>
   ),

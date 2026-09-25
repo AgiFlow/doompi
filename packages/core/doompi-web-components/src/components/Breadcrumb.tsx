@@ -15,15 +15,16 @@ export const BREADCRUMB_ELLIPSIS = '…';
 export function breadcrumbSegments(path: string, keep = 4): string[] {
   const segments = path.split('/').filter((segment) => segment !== '');
   if (segments.length === 0) return [path];
-  if (segments.length <= keep) return segments;
-  // One leading segment for orientation, then the tail that names the leaf.
-  return [segments[0] ?? '', BREADCRUMB_ELLIPSIS, ...segments.slice(segments.length - (keep - 2))];
+  const limit = Math.max(3, keep);
+  if (segments.length <= limit) return segments;
+  // Keep room for the first segment, the collapse marker, and the leaf.
+  return [segments[0] ?? '', BREADCRUMB_ELLIPSIS, ...segments.slice(segments.length - (limit - 2))];
 }
 
 export interface BreadcrumbProps {
   /** The path to show, separated by forward slashes. */
   path: string;
-  /** How many segments survive before the middle collapses. */
+  /** How many segments survive, with a minimum of three to retain the leaf. */
   keep?: number;
   /** Marks the trail so a test can find it. */
   'data-testid'?: string;
@@ -63,7 +64,7 @@ export function Breadcrumb({ path, keep, className, 'data-testid': testId }: Bre
                 {index > 0 ? <span className="shrink-0 text-doom-faint">/</span> : null}
                 <span
                   className={
-                    index === lastIndex ? 'truncate font-bold text-doom-hi' : 'shrink-0 truncate text-doom-faint'
+                    index === lastIndex ? 'truncate font-bold text-doom-hi' : 'min-w-0 truncate text-doom-faint'
                   }
                 >
                   {segment}

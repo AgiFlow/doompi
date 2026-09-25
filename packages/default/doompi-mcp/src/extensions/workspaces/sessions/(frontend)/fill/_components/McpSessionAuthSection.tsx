@@ -104,7 +104,7 @@ export function McpSessionAuthSection({
         <section data-testid="context-mcp-auth" className="flex flex-col gap-2 border-b border-doom-border px-3 py-3">
           <div className="flex flex-col gap-0.5">
             <p className="text-2xs font-bold uppercase tracking-wide text-doom-faint">MCP servers</p>
-            <p className="text-2xs leading-relaxed text-doom-muted">
+            <p className="text-2xs leading-relaxed text-doom-dim">
               Open sign-in in a new tab, or copy the link from the authorization dialog.
             </p>
           </div>
@@ -117,7 +117,7 @@ export function McpSessionAuthSection({
                 <li key={item.name} className="flex min-w-0 flex-col gap-1 px-1 py-0.5">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-xs text-doom-hi">{item.name}</span>
-                    <span className="text-2xs text-doom-muted">{item.state.replace(/-/g, ' ')}</span>
+                    <span className="text-2xs text-doom-dim">{item.state.replace(/-/g, ' ')}</span>
                     <Button
                       variant="subtle"
                       size="xs"
@@ -146,7 +146,7 @@ export function McpSessionAuthSection({
                       {tools.map((tool) => (
                         <li key={tool.name} className="flex min-w-0 items-center gap-2 py-px pl-3">
                           <span
-                            className={`min-w-0 flex-1 truncate text-2xs ${tool.active ? 'text-doom-muted' : 'text-doom-faint'}`}
+                            className={`min-w-0 flex-1 truncate text-2xs ${tool.active ? 'text-doom-dim' : 'text-doom-faint'}`}
                           >
                             {tool.name}
                           </span>
@@ -186,7 +186,7 @@ export function McpSessionAuthSection({
             </div>
           </DialogHeader>
           <DialogBody className="px-4 py-4 sm:px-5 sm:py-5">
-            <output className="text-sm text-doom-muted">
+            <output className="text-sm text-doom-dim">
               {server?.state === 'connected'
                 ? 'Authorization complete. This server is connected.'
                 : server?.state === 'closed'
@@ -200,7 +200,7 @@ export function McpSessionAuthSection({
                         : 'This server is no longer available in the session.'}
             </output>
             {popupBlocked ? (
-              <p className="text-xs text-doom-muted">
+              <p className="text-xs text-doom-dim">
                 The browser blocked the new tab. Open the link below when it is ready.
               </p>
             ) : null}
@@ -216,7 +216,7 @@ export function McpSessionAuthSection({
                   href={authorizationUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-doom-accent underline underline-offset-2"
+                  className="text-sm text-doom-blue underline underline-offset-2"
                 >
                   open authorization page
                 </a>
@@ -225,7 +225,7 @@ export function McpSessionAuthSection({
                 </Button>
               </div>
             ) : null}
-            {copyFeedback ? <output className="text-xs text-doom-muted">{copyFeedback}</output> : null}
+            {copyFeedback ? <output className="text-xs text-doom-dim">{copyFeedback}</output> : null}
           </DialogBody>
           <DialogFooter className="flex-wrap justify-end border-t border-doom-border-soft px-4 py-3 sm:px-5">
             {server?.state === 'connected' && selected ? (

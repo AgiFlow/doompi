@@ -9,6 +9,9 @@ describe('tool path links', () => {
     expect(out).toContain('<span data-slot="tool-path" data-testid="tool-path"');
     expect(out).toContain('src/file.ts</span>');
     expect(out).not.toContain('<button');
+    expect(out).toContain('inline-block');
+    expect(out).toContain('max-w-full');
+    expect(out).toContain('min-w-0');
   });
 
   it('renders an explicit button and forwards the host action without invoking it on render', () => {
@@ -24,6 +27,8 @@ describe('tool path links', () => {
     expect(out).toContain('data-testid="read-path"');
     expect(out).toContain('title="open src/&lt;file&gt;.ts"');
     expect(out).toContain('custom-path');
+    expect(out).toContain('min-h-6');
+    expect(out).toContain('max-w-full');
     expect(onOpen).not.toHaveBeenCalled();
     expect(element.props.onClick).toBe(onOpen);
   });

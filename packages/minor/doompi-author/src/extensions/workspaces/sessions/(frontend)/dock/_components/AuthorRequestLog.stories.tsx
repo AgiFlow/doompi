@@ -51,17 +51,17 @@ export default meta;
 export const Playground = {
   render: () => (
     <div className="flex flex-col gap-6 bg-doom-bg p-6">
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">empty</span>
         <AuthorRequestLog requests={[]} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">queued</span>
         <AuthorRequestLog requests={[request({})]} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">
           working · with earlier requests collapsed
         </span>
@@ -74,7 +74,7 @@ export const Playground = {
         />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">failed</span>
         <AuthorRequestLog
           requests={[request({ id: 'req-3', status: 'FAILED', error: 'The document changed under the request.' })]}
