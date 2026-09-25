@@ -59,6 +59,7 @@ export interface SessionMcpConversationStore {
   get(id: string, parentSessionId: string): SessionMcpConversation;
   prepare(id: string, parentSessionId: string, cwd: string): SessionMcpConversation;
   bind(id: string, parentSessionId: string, workspaceId: string): SessionMcpConversation;
+  recover(id: string, parentSessionId: string): SessionMcpConversation;
   closeSession(sessionId: string): void;
   closeClient(clientId: string): void;
 }
@@ -231,6 +232,12 @@ export function createSessionMcpConversationStore(stateDir: string): SessionMcpC
         return record;
       }
       return replace({ ...record, state: 'bound', workspaceId });
+    },
+    recover(id, parentSessionId) {
+      const record = list().find((entry) => entry.id === id && entry.parentSessionId === parentSessionId);
+      if (!record)
+        throw new SessionMcpConversationError('SESSION_UNAVAILABLE', 'This conversation binding is unavailable.');
+      return replace({ ...record, state: 'pending' });
     },
     closeSession(sessionId) {
       const next = list().map((record): SessionMcpConversation =>
