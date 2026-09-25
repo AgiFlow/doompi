@@ -191,6 +191,12 @@ function ContextGroupView({ group, onSelect }: { group: ContextGroup; onSelect: 
                 onClick={() => onSelect({ itemKind: item.itemKind, name: item.name, owner: item.owner })}
                 className="flex-row items-center gap-2 rounded-none py-px pr-1 pl-4"
               >
+                <abbr
+                  title={item.itemKind}
+                  className="w-4 shrink-0 text-center text-2xs font-bold text-doom-violet no-underline"
+                >
+                  {item.itemKind === 'skill' ? 'S' : 'T'}
+                </abbr>
                 <span className={`flex-1 truncate text-xs ${item.active ? 'text-doom-text' : 'text-doom-faint'}`}>
                   {item.name}
                 </span>

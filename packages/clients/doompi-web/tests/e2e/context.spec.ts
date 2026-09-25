@@ -256,6 +256,14 @@ test('opens a row and says so when the session cannot describe it', async ({ pag
                 tokens: 153,
                 active: true,
               },
+              {
+                name: 'doompi-development',
+                itemKind: 'skill',
+                source: 'extension',
+                owner: '@agimon-ai/doompi-read',
+                tokens: 0,
+                active: true,
+              },
             ],
           },
         ],
@@ -264,6 +272,10 @@ test('opens a row and says so when the session cannot describe it', async ({ pag
   });
   await page.getByTestId('dock-tab-context').click();
 
+  await expect(page.getByTestId('context-row-read').locator('abbr')).toHaveText('T');
+  await expect(page.getByTestId('context-row-read').locator('abbr')).toHaveAttribute('title', 'tool');
+  await expect(page.getByTestId('context-row-doompi-development').locator('abbr')).toHaveText('S');
+  await expect(page.getByTestId('context-row-doompi-development').locator('abbr')).toHaveAttribute('title', 'skill');
   await page.getByTestId('context-row-read').click();
 
   await expect(page.getByTestId('context-item-dialog')).toBeVisible();
