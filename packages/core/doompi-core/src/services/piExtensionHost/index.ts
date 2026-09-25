@@ -15,6 +15,7 @@ import type {
 import type { Api, Message, Model } from '@earendil-works/pi-ai';
 import {
   createEventBus,
+  DefaultPackageManager,
   discoverAndLoadExtensions,
   ExtensionRunner,
   ModelRegistry,
@@ -34,6 +35,7 @@ import {
   type ModelRuntime,
   type RegisteredTool,
   type SessionEntry,
+  type SettingsManager,
   type ToolInfo,
 } from '@earendil-works/pi-coding-agent';
 
@@ -64,6 +66,42 @@ export function resolvePiExtensionEntries(repoRoot: string): readonly string[] {
     return registration ? [registration.package.entry] : [];
   } catch {
     // A stale or mismatched registration is a normal unsynced state, not a session failure.
+    return [];
+  }
+}
+
+/**
+ * Extension entries of the packages listed under `packages` in Pi's settings.json.
+ *
+ * Interactive Pi expands that list through its resource loader, which this server does not run,
+ * so a provider package such as a local Claude Code bridge would load under `pi` and be missing
+ * here. Only `packages` entries are taken: Pi's top-level `extensions` list can name DoomPi
+ * itself, and the auto-discovered `extensions/` folders are already loaded by
+ * `discoverAndLoadExtensions`. A package that is not installed is skipped, never installed, so
+ * starting a session cannot trigger a network install.
+ */
+export async function resolvePiSettingsPackageEntries(options: {
+  readonly cwd: string;
+  readonly agentDir: string;
+  readonly settings: SettingsManager;
+  readonly onNotice?: (message: string) => void;
+}): Promise<readonly string[]> {
+  try {
+    const packages = new DefaultPackageManager({
+      cwd: options.cwd,
+      agentDir: options.agentDir,
+      settingsManager: options.settings,
+    });
+    const resolved = await packages.resolve(async (source) => {
+      options.onNotice?.(`Pi package ${source} is not installed; skipped. Install it with pi to load it here.`);
+      return 'skip';
+    });
+    return resolved.extensions
+      .filter((resource) => resource.enabled && resource.metadata.origin === 'package')
+      .map((resource) => resource.path);
+  } catch (error) {
+    // Settings packages are optional additions; a broken entry must not stop the session.
+    options.onNotice?.(`Pi settings packages: ${error instanceof Error ? error.message : String(error)}`);
     return [];
   }
 }
