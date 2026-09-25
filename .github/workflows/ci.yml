@@ -98,13 +98,13 @@ jobs:
   # the quality shards instead of waiting for them, trading some runner minutes
   # on an early failure for a shorter pull-request feedback loop.
   browser:
-    name: Browser E2E (${{ matrix.shard }}/4)
+    name: Browser E2E (${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - name: Check out materialized package snapshot
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -121,7 +121,7 @@ jobs:
         run: pnpm --filter @agimon-ai/doompi-web exec playwright install --with-deps chromium
 
       - name: Drive the cockpit in a browser
-        run: pnpm nx run @agimon-ai/doompi-web:test:e2e -- --shard=${{ matrix.shard }}/4
+        run: pnpm nx run @agimon-ai/doompi-web:test:e2e -- --shard=${{ matrix.shard }}/8
 
       - name: Keep the traces of a failed shard
         if: failure()
