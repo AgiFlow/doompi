@@ -81,7 +81,7 @@ const noop = () => {};
 
 export const Playground = {
   render: () => (
-    <div className="flex h-screen gap-6 bg-doom-bg p-6">
+    <div className="flex min-h-screen flex-wrap gap-6 bg-doom-bg p-3 sm:p-6">
       <AgentCatalogDrawer sessionId="catalog-full" onClose={noop} onLaunch={noop} />
       <AgentCatalogDrawer sessionId="catalog-empty" onClose={noop} onLaunch={noop} />
     </div>

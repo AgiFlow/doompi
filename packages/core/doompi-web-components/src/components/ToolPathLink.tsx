@@ -29,7 +29,12 @@ export function ToolPathLink({
 }: ToolPathLinkProps) {
   if (onOpen === undefined) {
     return (
-      <span data-slot="tool-path" data-testid={testId} className={cn('truncate text-doom-text', className)} {...props}>
+      <span
+        data-slot="tool-path"
+        data-testid={testId}
+        className={cn('inline-block max-w-full min-w-0 truncate align-bottom text-doom-text', className)}
+        {...props}
+      >
         {path}
       </span>
     );
@@ -41,7 +46,10 @@ export function ToolPathLink({
       data-testid={testId}
       title={`open ${path}`}
       onClick={onOpen}
-      className={cn('cursor-pointer truncate text-left text-doom-text hover:text-doom-blue hover:underline', className)}
+      className={cn(
+        'min-h-6 max-w-full min-w-0 cursor-pointer truncate text-left text-doom-text hover:text-doom-blue hover:underline',
+        className,
+      )}
       {...props}
     >
       {path}

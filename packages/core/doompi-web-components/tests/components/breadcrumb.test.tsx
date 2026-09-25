@@ -26,6 +26,9 @@ describe('breadcrumbSegments', () => {
     expect(breadcrumbSegments('a/b/c/d/e', 3)).toEqual(['a', BREADCRUMB_ELLIPSIS, 'e']);
   });
 
+  it.each([0, 1, 2])('retains the file name when the requested limit is %s', (keep) => {
+    expect(breadcrumbSegments('a/b/c/d/file.ts', keep)).toEqual(['a', BREADCRUMB_ELLIPSIS, 'file.ts']);
+  });
   it('reads a bare file name as one segment', () => {
     expect(breadcrumbSegments('README.md')).toEqual(['README.md']);
   });
@@ -57,6 +60,8 @@ describe('Breadcrumb', () => {
   it('truncates rather than wrapping in the trail itself', () => {
     const markup = renderToStaticMarkup(<Breadcrumb path="src/app.ts" />);
     expect(markup).toContain('truncate');
+    expect(markup).toContain('min-w-0 truncate text-doom-faint');
+    expect(markup).not.toContain('shrink-0 truncate');
   });
 
   it('takes a testid and extra classes for the surface that places it', () => {

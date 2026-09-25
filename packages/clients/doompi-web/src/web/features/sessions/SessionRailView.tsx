@@ -71,14 +71,14 @@ export function SessionCardView({
           className={`flex items-center gap-[7px] pt-0.5 text-xs ${active ? 'text-doom-on-selected/85' : 'text-doom-faint'}`}
         >
           <BranchIcon
-            className={`h-[10px] w-[10px] shrink-0 ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}
+            className={`h-[10px] w-[10px] shrink-0 ${active ? 'text-doom-on-selected' : 'text-doom-faint'}`}
           />
           {summary.git.branch}
           {summary.git.dirty ? '*' : ''}
         </span>
       ) : null}
       {nested ? null : (
-        <span className={`truncate text-xs ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}>
+        <span className={`truncate text-xs ${active ? 'text-doom-on-selected' : 'text-doom-faint'}`}>
           {abbreviateCwd(summary.cwd)}
         </span>
       )}
@@ -118,7 +118,7 @@ export function SessionCardView({
                     ? 'automatic per-conversation worktree'
                     : summary.sessionProvenance
                 }
-                className={`h-[11px] w-[11px] shrink-0 ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}
+                className={`h-[11px] w-[11px] shrink-0 ${active ? 'text-doom-on-selected' : 'text-doom-faint'}`}
               />
             ) : null}
             <span
@@ -130,7 +130,7 @@ export function SessionCardView({
               <span
                 title={`press ${String(ordinal)} to focus`}
                 className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-2xs font-bold transition-opacity group-focus-within:opacity-0 group-hover:opacity-0 ${
-                  active ? 'bg-doom-on-selected/20 text-doom-on-selected' : 'bg-doom-tint-magenta text-doom-magenta'
+                  active ? 'bg-doom-deep/20 text-doom-on-selected' : 'bg-doom-tint-magenta text-doom-magenta'
                 }`}
               >
                 {ordinal}

@@ -54,7 +54,7 @@ export default meta;
 export const Playground = {
   render: () => (
     <div className="flex flex-col gap-6 bg-doom-bg p-6">
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">text selection pending a comment</span>
         <AuthorRegionDrafts
           sessionId="s1"
@@ -71,7 +71,7 @@ export const Playground = {
         />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">video frame selection</span>
         <AuthorRegionDrafts
           sessionId="s1"
@@ -87,7 +87,7 @@ export const Playground = {
         />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-full max-w-96 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">unsent drafts only</span>
         <AuthorRegionDrafts
           sessionId="s1"

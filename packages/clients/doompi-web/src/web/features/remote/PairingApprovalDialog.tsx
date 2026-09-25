@@ -27,7 +27,7 @@ export function PairingApprovalDialog() {
   return (
     <Dialog open>
       <DialogContent data-testid="pairing-approval" className="max-w-md">
-        <DialogHeader>
+        <DialogHeader className="flex-col items-start">
           <DialogTitle>Pair this device?</DialogTitle>
           <DialogDescription>
             Something scanned your code. Approve it only if it is the device in your hand.
@@ -45,7 +45,7 @@ export function PairingApprovalDialog() {
             Approving grants the same access you have here, including running shell commands.
           </p>
         </DialogBody>
-        <DialogFooter>
+        <DialogFooter className="px-3 pb-3 sm:px-4 sm:pb-4">
           <Button variant="outline" data-testid="pairing-deny" onClick={() => void denyDevice(request.id)}>
             deny
           </Button>

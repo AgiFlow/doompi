@@ -1,3 +1,4 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 /*
  * Plain CSF objects; the style-system renderer resolves the default export by
  * finding a bare `const meta`, so it is not named at the point of definition.
@@ -49,6 +50,9 @@ globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Respo
 const slot = slotPropsFixture({ sessionId: 's1' }).props;
 
 requestPromptDialogOpen();
+
+// Each preview runs in an isolated document without the cockpit's workspace registry.
+bindSessionApiWorkspace(() => 'story-workspace');
 
 const meta = {
   title: 'Prompt/PromptsDialogHost',

@@ -130,7 +130,7 @@ export function RepositoryWorkspace({
             {repository.active ? 'active' : 'recent'}
           </Badge>
         )}
-        <span className="order-5 w-full min-w-0 truncate text-2xs text-doom-faint/70 sm:order-none sm:w-auto sm:flex-1">
+        <span className="order-5 w-full min-w-0 truncate text-2xs text-doom-faint sm:order-none sm:w-auto sm:flex-1">
           {repository?.path}
         </span>
         <Button

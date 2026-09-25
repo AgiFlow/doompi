@@ -25,7 +25,7 @@ export function WelcomePanel() {
         <PlusIcon className="h-3 w-3" />
         new session
       </Button>
-      <span className="flex items-center gap-1.5 text-xs text-doom-faint">
+      <span className="flex flex-wrap items-center justify-center gap-1.5 text-xs text-doom-faint">
         <Kbd>ctrl+t</Kbd> new session · <Kbd>ctrl+k</Kbd> commands
       </span>
     </EmptyState>

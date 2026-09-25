@@ -9,7 +9,7 @@ describe('TerminalView', () => {
 
     expect(out).toContain('data-slot="terminal-view"');
     expect(out).toContain('data-ready="false"');
-    expect(out).toContain('class="h-full w-full session-terminal"');
+    expect(out).toContain('class="h-full min-w-0 w-full overflow-auto session-terminal"');
     expect(out).toContain('aria-label="shell"');
   });
 });

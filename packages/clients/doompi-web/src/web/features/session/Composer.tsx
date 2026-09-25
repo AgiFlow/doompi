@@ -696,7 +696,7 @@ export function Composer() {
                       variant="ghost"
                       size="icon"
                       aria-label={`remove ${attachment.name}`}
-                      className="h-4 w-4 min-w-4 text-doom-faint hover:text-doom-text"
+                      className="text-doom-faint hover:text-doom-text"
                       onClick={() => {
                         updateComposerState(sessionId, (state) => ({
                           ...state,

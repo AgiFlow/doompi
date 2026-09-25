@@ -49,7 +49,7 @@ export default meta;
 
 export const Playground = {
   render: () => (
-    <div className="h-[720px] w-[1180px] bg-doom-bg">
+    <div className="h-[720px] w-full max-w-[1180px] bg-doom-bg">
       <AdvancedLayout
         view="conversation"
         slots={slots}

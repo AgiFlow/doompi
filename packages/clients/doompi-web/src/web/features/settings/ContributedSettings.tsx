@@ -183,7 +183,7 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
         {/* The config key earns its place on a page that writes a config file,
             but it is reference, not prose: it wraps instead of running off the
             edge, and never squeezes the sentence beside it. */}
-        <code className="min-w-0 max-w-full break-all text-2xs text-doom-faint/70 min-[480px]:shrink-0">
+        <code className="min-w-0 max-w-full break-all text-2xs text-doom-faint min-[480px]:shrink-0">
           {keyOf(field)}
         </code>
         {dirty ? (

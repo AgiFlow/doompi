@@ -107,7 +107,7 @@ export function RunnerShellPanel({ sessionId, runId }: WebPluginSlotProps & { ru
         ) : null}
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-hidden bg-doom-panel-deep px-3 py-2 sm:px-[26px]">
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-doom-deep px-3 py-2 sm:px-[26px]">
         <TerminalView
           ref={terminal}
           data-testid="runner-shell-terminal"

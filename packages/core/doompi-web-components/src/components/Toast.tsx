@@ -78,7 +78,10 @@ export function ToastClose({ className, ...props }: ComponentProps<typeof ToastP
     <ToastPrimitive.Close
       data-slot="toast-close"
       aria-label="dismiss"
-      className={cn('shrink-0 cursor-pointer text-doom-faint transition-colors hover:text-doom-hi', className)}
+      className={cn(
+        'inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-doom-faint transition-colors hover:text-doom-hi',
+        className,
+      )}
       {...props}
     >
       <CloseIcon className="h-3 w-3" />

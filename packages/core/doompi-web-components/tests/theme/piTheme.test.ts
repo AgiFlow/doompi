@@ -8,7 +8,7 @@ import { DEFAULT_THEME, themeFromPiTheme } from '../../src/exports/theme';
 const TUI_THEME = fileURLToPath(new URL('../../../../foundations/doompi-ui/themes/doom-pi-dark.json', import.meta.url));
 
 describe('themeFromPiTheme', () => {
-  it('turns the TUI theme DoomPi ships into the web palette the cockpit already uses', () => {
+  it('preserves the shipped TUI palette while deriving web surfaces', () => {
     const pi: unknown = JSON.parse(fs.readFileSync(TUI_THEME, 'utf8'));
     const theme = themeFromPiTheme(pi);
     expect(theme).not.toBeNull();
@@ -19,7 +19,6 @@ describe('themeFromPiTheme', () => {
       'rail',
       'text',
       'dim',
-      'faint',
       'blue',
       'green',
       'yellow',
@@ -32,6 +31,8 @@ describe('themeFromPiTheme', () => {
     ] as const) {
       expect(theme?.tokens[token], token).toBe(DEFAULT_THEME.tokens[token]);
     }
+    // Imported Pi palettes retain their dim value; web built-ins raise it for text contrast.
+    expect(theme?.tokens.faint).toBe('#5b6268');
     expect(theme?.tokens.deep).toContain('color-mix');
   });
 

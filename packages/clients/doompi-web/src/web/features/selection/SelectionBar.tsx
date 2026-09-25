@@ -77,7 +77,7 @@ const AGENT_COST_STATUS_KEY = 'doom-team-cost';
 const AVAILABILITY_TONE: Readonly<Record<MinorMode['availability'], string>> = {
   on: 'text-doom-hi',
   off: 'text-doom-dim',
-  unavailable: 'text-doom-faint/60',
+  unavailable: 'text-doom-faint',
 };
 
 /**
@@ -255,13 +255,13 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
             {mode.availability === 'unavailable' && mode.unavailableReason ? (
               <span
                 data-testid={`minor-reason-${mode.name}`}
-                className="min-w-0 flex-1 truncate text-right text-2xs text-doom-faint/70"
+                className="min-w-0 flex-1 truncate text-right text-2xs text-doom-faint"
               >
                 {mode.unavailableReason}
               </span>
             ) : null}
             {mode.availability === 'unavailable' ? (
-              <span className="shrink-0 text-2xs text-doom-faint/60">n/a</span>
+              <span className="shrink-0 text-2xs text-doom-faint">n/a</span>
             ) : (
               <Dot tone={mode.availability === 'on' ? 'magenta' : 'muted'} />
             )}

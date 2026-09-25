@@ -60,7 +60,7 @@ function TaskRow({
           data-testid={`activity-task-title-${task.id}`}
           title={task.subject}
           onClick={() => openDialog('view')}
-          className={`min-w-0 truncate text-left text-xs font-bold hover:underline ${task.status === 'failed' ? 'text-doom-red' : task.status === 'completed' ? 'text-doom-dim' : 'text-doom-hi'}`}
+          className={`min-h-6 min-w-0 truncate text-left text-xs font-bold hover:underline ${task.status === 'failed' ? 'text-doom-red' : task.status === 'completed' ? 'text-doom-dim' : 'text-doom-hi'}`}
         >
           <span className="text-doom-faint">#{task.id}</span> {task.subject}
         </button>

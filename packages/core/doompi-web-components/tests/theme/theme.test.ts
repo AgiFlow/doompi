@@ -26,6 +26,22 @@ describe('shipped themes', () => {
     expect(builtinTheme('nope')).toBeUndefined();
   });
 
+  it.each(BUILTIN_THEMES)('keeps quiet text readable on the $name surfaces', (theme) => {
+    const luminance = (hex: string): number => {
+      const channels = [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255);
+      const linear = channels.map((channel) =>
+        channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+      );
+      return linear[0]! * 0.2126 + linear[1]! * 0.7152 + linear[2]! * 0.0722;
+    };
+    for (const foreground of ['text', 'dim', 'faint'] as const) {
+      for (const background of ['bg', 'rail', 'panel', 'deep'] as const) {
+        const values = [luminance(theme.tokens[foreground]), luminance(theme.tokens[background])];
+        const contrast = (Math.max(...values) + 0.05) / (Math.min(...values) + 0.05);
+        expect(contrast, `${foreground} on ${background}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
   it('has unique names and a complete palette in every theme', () => {
     const names = BUILTIN_THEMES.map((theme) => theme.name);
     expect(new Set(names).size).toBe(names.length);

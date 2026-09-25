@@ -83,7 +83,7 @@ export function AddWorkspaceDialog({
         <DialogBody>
           <label htmlFor="add-workspace-root" className="flex flex-col gap-1">
             <span className="text-xs text-doom-faint">
-              folder <span className="text-doom-faint/70">(type a folder name or paste a path)</span>
+              folder <span className="text-doom-faint">(type a folder name or paste a path)</span>
             </span>
             <Input
               id="add-workspace-root"

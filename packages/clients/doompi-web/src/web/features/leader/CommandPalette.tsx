@@ -309,7 +309,7 @@ export function CommandPalette() {
                   <Kbd
                     className={cn(
                       'w-5 text-center',
-                      index === cursor ? 'bg-doom-magenta/25 text-doom-magenta' : 'bg-doom-deep text-doom-dim',
+                      index === cursor ? 'bg-doom-deep text-doom-magenta' : 'bg-doom-deep text-doom-dim',
                     )}
                   >
                     {option.key}

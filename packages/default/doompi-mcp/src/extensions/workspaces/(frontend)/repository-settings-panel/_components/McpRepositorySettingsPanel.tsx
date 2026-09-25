@@ -64,7 +64,7 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
     <div className="flex flex-col gap-3" data-testid="mcp-repository-settings">
       <div className="flex flex-col items-stretch gap-2 rounded border border-doom-border bg-doom-panel px-3 py-2 min-[560px]:flex-row min-[560px]:items-center">
         <Badge>{catalog?.sync.fresh ? 'synced' : 'sync required'}</Badge>
-        <span className="min-w-0 text-xs leading-relaxed text-doom-muted min-[560px]:flex-1">
+        <span className="min-w-0 text-xs leading-relaxed text-doom-dim min-[560px]:flex-1">
           {catalog?.sync.fresh
             ? 'Cached inspection is local. Discovery contacts the configured servers.'
             : catalog
@@ -94,7 +94,7 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
       </div>
 
       {!confirmDiscovery ? null : (
-        <div className="flex flex-col items-stretch gap-2 rounded border border-doom-accent/50 bg-doom-accent/5 px-3 py-2 min-[560px]:flex-row min-[560px]:items-center">
+        <div className="flex flex-col items-stretch gap-2 rounded border border-doom-blue/50 bg-doom-blue/5 px-3 py-2 min-[560px]:flex-row min-[560px]:items-center">
           <span className="min-w-0 text-xs leading-relaxed text-doom-hi min-[560px]:flex-1">
             Discovery starts configured processes and contacts remote MCP servers. Continue?
           </span>
@@ -148,7 +148,7 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
               href={authorization.authorizationUrl}
               target="_blank"
               rel="noreferrer noopener"
-              className="w-fit text-xs text-doom-accent underline underline-offset-2"
+              className="w-fit text-xs text-doom-blue underline underline-offset-2"
             >
               open authorization page
             </a>
@@ -187,7 +187,7 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
               </div>
               {confirmAuthorization !== server.name ? null : (
                 <div className="flex flex-col items-stretch gap-2 border-t border-doom-border pt-2 min-[560px]:flex-row min-[560px]:items-center">
-                  <span className="min-w-0 text-2xs leading-relaxed text-doom-muted min-[560px]:flex-1">
+                  <span className="min-w-0 text-2xs leading-relaxed text-doom-dim min-[560px]:flex-1">
                     Start a bounded OAuth attempt for this server? A passkey may be required.
                   </span>
                   <Button
@@ -212,7 +212,7 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
                 </div>
               )}
               <details>
-                <summary className="cursor-pointer text-2xs text-doom-muted">
+                <summary className="cursor-pointer text-2xs text-doom-dim">
                   {String(server.tools.length)} cached {server.tools.length === 1 ? 'tool' : 'tools'}
                 </summary>
                 <div className="mt-2 flex flex-col gap-1 border-t border-doom-border pt-2">

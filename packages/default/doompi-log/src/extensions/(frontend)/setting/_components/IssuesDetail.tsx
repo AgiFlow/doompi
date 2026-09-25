@@ -47,7 +47,7 @@ function IssueRow({ group, max, tools }: IssueRowProps) {
           onClick={() => setOpen(!open)}
           aria-expanded={open}
           data-testid={`metrics-issue-${group.key}`}
-          className="relative flex w-full items-center gap-2 rounded-xs px-1 py-[3px] text-left text-xs hover:bg-doom-tint focus-visible:outline focus-visible:outline-1 focus-visible:outline-doom-blue"
+          className="relative flex min-h-6 w-full items-center gap-2 rounded-xs px-1 py-[3px] text-left text-xs hover:bg-doom-tint-blue focus-visible:outline focus-visible:outline-1 focus-visible:outline-doom-blue"
         >
           <span className="w-8 shrink-0 text-right font-bold text-doom-red">{group.occurrences}</span>
           <span className="w-24 shrink-0 truncate text-doom-hi">{titleOf(group)}</span>

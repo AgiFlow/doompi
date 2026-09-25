@@ -177,7 +177,7 @@ export function WorkflowCatalogDrawer({
       data-testid="workflow-catalog-drawer"
       tabIndex={0}
       onKeyDown={onKeyDown}
-      className="flex w-[min(440px,calc(100vw-24px))] shrink-0 flex-col overflow-hidden border-l border-doom-border bg-doom-rail outline-none"
+      className="flex w-[min(440px,calc(100vw-24px))] max-w-full shrink-0 flex-col overflow-hidden border-l border-doom-border bg-doom-rail outline-none"
     >
       <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-doom-border px-4">
         <span className="text-base font-bold text-doom-hi">workflow catalog</span>

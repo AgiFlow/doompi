@@ -91,7 +91,7 @@ export function AuthorToolPalette({
             aria-label={tool.label === 'Region' ? 'mark region' : tool.label}
             aria-pressed={tool.active}
             onClick={tool.action}
-            className={`min-h-11 min-w-11 gap-1.5 rounded border text-base [@media(pointer:fine)]:min-h-8 sm:text-sm ${tool.active ? 'border-doom-red bg-doom-red/10 text-doom-red hover:bg-doom-red/15' : 'border-doom-border bg-doom-panel text-doom-dim'}`}
+            className={`min-h-11 min-w-11 gap-1.5 rounded border text-base [@media(pointer:fine)]:min-h-8 sm:text-sm ${tool.active ? 'border-doom-red bg-doom-red/10 text-doom-hi hover:bg-doom-red/15' : 'border-doom-border bg-doom-panel text-doom-dim'}`}
           >
             <span aria-hidden="true">{tool.glyph}</span>
             {tool.label}

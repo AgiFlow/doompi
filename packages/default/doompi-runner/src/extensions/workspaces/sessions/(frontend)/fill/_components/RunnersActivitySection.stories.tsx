@@ -1,3 +1,4 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 /*
  * Plain CSF objects; the style-system renderer resolves the default export by
  * looking for a bare `const meta`, so the export is not named at the point of
@@ -48,6 +49,12 @@ runners.update(SESSION_ID, () => ({
 }));
 
 const props = (sessionId: string) => slotPropsFixture({ sessionId }).props;
+
+// Each preview runs in an isolated document without the cockpit's workspace registry.
+bindSessionApiWorkspace(() => 'story-workspace');
+
+// No preview request is forwarded to a live session.
+globalThis.fetch = async () => Response.json({ error: 'No live session in this preview.' }, { status: 503 });
 
 const meta = {
   title: 'Runner/RunnersActivitySection',
