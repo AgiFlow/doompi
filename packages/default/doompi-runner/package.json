@@ -231,7 +231,7 @@
     "build": "tsdown && tsdown --config tsdown.mcp.config.ts",
     "build:mcp": "tsdown --config tsdown.mcp.config.ts",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.mcp.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -293,7 +293,14 @@
     "dist": "./dist/extensions/mcp.mjs",
     "scopes": [
       "session"
-    ]
+    ],
+    "ui": {
+      "entry": "./generated/mcp-ui.ts",
+      "dist": "./dist/extensions/mcp-ui.mjs",
+      "widgets": [
+        "@agimon-ai/doompi-runner/bash"
+      ]
+    }
   },
   "doompiServer": {
     "entry": "./generated/server.ts",

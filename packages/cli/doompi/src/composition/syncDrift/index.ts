@@ -176,6 +176,23 @@ function mcpBundleIsUsable(
       const relative = path.relative(root, fs.realpathSync(target));
       return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
     };
+    if (descriptor.ui) {
+      const uiFile = path.resolve(path.dirname(descriptorPath), descriptor.ui.file);
+      if (
+        !inside(uiFile) ||
+        crypto.createHash('sha256').update(fs.readFileSync(uiFile)).digest('hex') !== descriptor.ui.sha256
+      )
+        return false;
+      if (
+        requireFreshSources &&
+        descriptor.ui.inputs.some(
+          (input) =>
+            !fs.existsSync(input.path) ||
+            crypto.createHash('sha256').update(fs.readFileSync(input.path)).digest('hex') !== input.sha256,
+        )
+      )
+        return false;
+    }
     if (Object.keys(bundle.compilerManifests).length !== descriptor.entries.length) return false;
     for (const entry of descriptor.entries) {
       const manifestPath = bundle.compilerManifests[entry.packageName];

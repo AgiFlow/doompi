@@ -530,7 +530,12 @@
       "import": "./dist/webTesting.mjs",
       "require": "./dist/webTesting.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./mcpWidget": {
+      "types": "./dist/mcpWidget.d.mts",
+      "import": "./dist/mcpWidget.mjs",
+      "require": "./dist/mcpWidget.cjs"
+    }
   },
   "publishConfig": {
     "access": "public",

@@ -1048,7 +1048,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           resource.mimeType !== 'text/html;profile=mcp-app'
         )
           throw new Error(`Invalid MCP UI resource '${resource.uri}'`);
-        if (nextUiResources.has(resource.uri)) throw new Error(`Duplicate MCP UI resource '${resource.uri}'`);
+        if (nextUiResources.has(resource.uri) && nextUiResources.get(resource.uri)!.resource !== resource)
+          throw new Error(`Duplicate MCP UI resource '${resource.uri}'`);
         const descriptor: SessionUiResourceDescriptor = {
           uri: resource.uri,
           name: resource.name,

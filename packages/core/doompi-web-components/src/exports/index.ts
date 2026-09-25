@@ -61,6 +61,7 @@ export { EmptyState, type EmptyStateProps } from '../components/EmptyState';
 export { HashlineLines, type HashlineLinesProps } from '../components/HashlineLines';
 export { type FieldSize, type FieldVariant, fieldVariants, Input, type InputProps } from '../components/Input';
 export { Kbd } from '../components/Kbd';
+export { McpToolFrame, McpToolFields, McpToolOutput } from '../components/McpToolWidget';
 export { Label } from '../components/Label';
 export { Markdown } from '../components/Markdown';
 export {

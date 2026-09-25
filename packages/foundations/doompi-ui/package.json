@@ -173,7 +173,7 @@
     "build": "tsdown && tsdown --config tsdown.mcp.config.ts",
     "build:mcp": "tsdown --config tsdown.mcp.config.ts",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.mcp.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -182,6 +182,7 @@
     "@agimon-ai/doompi-hashline": "workspace:*",
     "@agimon-ai/doompi-minor-mode": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "@earendil-works/pi-tui": "0.87.1",
     "yaml": "2.9.1"
@@ -223,7 +224,16 @@
     "dist": "./dist/extensions/mcp.mjs",
     "scopes": [
       "session"
-    ]
+    ],
+    "ui": {
+      "entry": "./generated/mcp-ui.ts",
+      "dist": "./dist/extensions/mcp-ui.mjs",
+      "widgets": [
+        "@agimon-ai/doompi-ui/find",
+        "@agimon-ai/doompi-ui/ls",
+        "@agimon-ai/doompi-ui/write"
+      ]
+    }
   },
   "doompiServer": {
     "entry": "./generated/server.ts",

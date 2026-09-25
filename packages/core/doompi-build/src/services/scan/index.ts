@@ -206,11 +206,15 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
     if (parsed === undefined) return;
     if (
       parsed.platform === 'mcp' &&
-      (state.side !== 'backend' ||
-        state.scope !== 'session' ||
-        (state.surface !== 'tool' && state.surface !== 'skill' && state.surface !== 'resource'))
+      (state.scope !== 'session' ||
+        (state.side === 'frontend'
+          ? state.surface !== 'tool' || !fileName.endsWith('.mcp.tsx')
+          : state.surface !== 'tool' && state.surface !== 'skill' && state.surface !== 'resource'))
     ) {
-      return note(relative, 'MCP declarations belong in a session backend tool/, skill/, or resource/ surface');
+      return note(
+        relative,
+        'MCP declarations belong in a session backend tool/, skill/, resource/, or frontend tool/*.mcp.tsx surface',
+      );
     }
     const source = fs.readFileSync(path.join(options.packageDir, relative), 'utf8');
     const cardinality = routedCardinality(source);

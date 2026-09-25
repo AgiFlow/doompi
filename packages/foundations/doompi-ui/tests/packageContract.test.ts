@@ -78,13 +78,13 @@ describe('doom Pi UI package boundary', () => {
     expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBeUndefined();
   });
 
-  it('keeps browser UI dependencies optional while preserving the web client entry', async () => {
+  it('installs MCP widget dependencies while preserving the web client entry', async () => {
     const manifest = await readJsonFile<PackageManifest>(manifestPath);
     const webDependencies = ['@agimon-ai/doompi-web-components'];
     expect(manifest.dependencies?.['@agimon-ai/doompi-core']).toBe('workspace:*');
 
     for (const dependency of webDependencies) {
-      expect(manifest.dependencies?.[dependency], dependency).toBeUndefined();
+      expect(manifest.dependencies?.[dependency], dependency).toBe('workspace:*');
       expect(manifest.devDependencies?.[dependency], dependency).toBe('workspace:*');
       expect(manifest.peerDependencies?.[dependency], dependency).toBe('workspace:*');
       expect(manifest.peerDependenciesMeta?.[dependency], dependency).toEqual({ optional: true });

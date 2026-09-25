@@ -4,6 +4,7 @@ import path from 'node:path';
 import { GENERATED_DIR } from '../../constants/layout';
 import { generateExtension } from '../generate';
 import type { GenerateOptions } from '../generate/type';
+import { renderMcpWidgets } from '../renderMcpWidgets';
 import { writeManifest, writeMcpManifest } from '../syncManifest';
 
 interface EmittedFile {
@@ -158,9 +159,9 @@ function queryAssetPlugin(): QueryAssetPlugin {
 }
 
 /** The separately bundled browser half of a routed extension. */
-function browserConfig(): BrowserPresetConfig {
+function browserConfig(target: 'web' | 'mcp-ui' = 'web'): BrowserPresetConfig {
   return {
-    entry: { 'extensions/web': `${GENERATED_DIR}/web.ts` },
+    entry: { [`extensions/${target}`]: `${GENERATED_DIR}/${target}.ts` },
     clean: false,
     // No declarations. Nothing imports this as a typed module: it has no
     // export subpath, and the cockpit consumes it as a bundle. The browser
@@ -189,7 +190,7 @@ function browserConfig(): BrowserPresetConfig {
     unbundle: false,
     // Browser routes are excluded from the node tsconfig. Every browser-capable
     // extension owns this focused config for its matching typecheck.
-    tsconfig: 'tsconfig.web.json',
+    tsconfig: target === 'web' ? 'tsconfig.web.json' : 'tsconfig.mcp.json',
   };
 }
 
@@ -199,7 +200,7 @@ function cleanMcpOutput(packageDir: string): void {
   if (!fs.existsSync(dist)) return;
   for (const relative of fs.readdirSync(dist, { recursive: true, encoding: 'utf8' })) {
     const normalized = relative.split(path.sep).join('/');
-    if (!/^(?:extensions\/mcp|.+\.mcp)\.(?:mjs|cjs|d\.mts|d\.cts)(?:\.map)?$/u.test(normalized)) continue;
+    if (!/^(?:extensions\/mcp(?:-ui)?|.+\.mcp)\.(?:mjs|cjs|d\.mts|d\.cts)(?:\.map)?$/u.test(normalized)) continue;
     const absolute = path.join(dist, relative);
     if (fs.lstatSync(absolute).isFile()) fs.rmSync(absolute);
   }
@@ -281,7 +282,11 @@ export function doompiExtension(
     hooks: {
       'build:done': () => {
         if (mcpOnly) {
-          writeMcpManifest(packageDir, result.targets.includes('mcp'));
+          writeMcpManifest(
+            packageDir,
+            result.targets.includes('mcp'),
+            renderMcpWidgets(result.graph, result.packageName, GENERATED_DIR).names,
+          );
           return;
         }
         writeManifest({
@@ -309,6 +314,7 @@ export function doompiExtension(
           node(Object.fromEntries(Object.entries(entry).filter(([name]) => name !== API_CONTRACTS_ENTRY)), true),
         ]
       : [node(entry, !mcpOnly)];
+  if (mcpOnly && result.files.has(`${GENERATED_DIR}/mcp-ui.ts`)) return [...configs, browserConfig('mcp-ui')];
   if (!mcpOnly && result.targets.includes('web')) return [...configs, browserConfig()];
   return configs.length === 1 ? configs[0]! : configs;
 }

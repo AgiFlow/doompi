@@ -65,6 +65,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
   const readUiResource = vi.fn(async () => '<!doctype html><title>Session</title>');
   const onNotice = vi.fn();
   let uiEnabled = false;
+  let widgetEnabled = false;
   let revision = 12;
   let includeNewCapabilities = false;
   const toolSurface: SessionToolSurface = {
@@ -78,6 +79,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
           parameters: Type.Object({}),
           annotations: { readOnlyHint: true, openWorldHint: false },
           outputSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+          ...(widgetEnabled ? { _meta: { 'doompi/widget': '@test/tools/allowed_tool' } } : {}),
           ...(uiEnabled
             ? {
                 _meta: {
@@ -182,6 +184,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
     readSkill,
     readUiResource,
     setUiEnabled: (value: boolean) => (uiEnabled = value),
+    setWidgetEnabled: (value: boolean) => (widgetEnabled = value),
     grantId: tokens.grantId,
     setGeneration: (value: number) => (generation = value),
     enableNewCapabilities: () => {
@@ -610,6 +613,28 @@ describe('session MCP Streamable HTTP handler', () => {
       const result = await (await f.request('resources/read', { uri: UI_RESOURCE.uri })).json();
       expect(result).toHaveProperty('error');
       expect(JSON.stringify(result)).not.toContain('must-not-leak');
+    },
+  );
+});
+
+describe('composed widget result identity', () => {
+  it.each([false, true])(
+    'preserves native results and derives widget identity from the approved tool: error=%s',
+    async (isError) => {
+      const f = fixture();
+      f.setWidgetEnabled(true);
+      const native = {
+        content: [{ type: 'text' as const, text: 'unchanged output' }],
+        structuredContent: { status: 'unchanged structured result' },
+        _meta: { custom: 'preserved', 'doompi/widget': 'untrusted-widget', 'doompi/toolName': 'untrusted-name' },
+        isError,
+      };
+      f.invokeTool.mockResolvedValue(native);
+      const result = rpcResult(await (await f.request('tools/call', { name: 'allowed_tool' })).json());
+      expect(result).toEqual({
+        ...native,
+        _meta: { custom: 'preserved', 'doompi/widget': '@test/tools/allowed_tool', 'doompi/toolName': 'allowed_tool' },
+      });
     },
   );
 });

@@ -21,11 +21,12 @@ describe('package contract', () => {
       .map((file) => (file === 'index.ts' ? '.' : `./${file.replace(/\.ts$/, '')}`))
       .sort();
     const subpaths = Object.keys(manifest.exports)
-      .filter((key) => key !== './package.json' && key !== './styles.css' && key !== './themes/*.json')
+      .filter((key) => !['./package.json', './styles.css', './mcp.css', './themes/*.json'].includes(key))
       .sort();
     expect(subpaths).toEqual(modules);
     expect(manifest.exports['./styles.css']).toBe('./styles/tokens.css');
     expect(fs.existsSync(path.join(root, 'styles', 'tokens.css'))).toBe(true);
+    expect(manifest.exports['./mcp.css']).toBe('./styles/mcp.css');
   });
 
   it('ships the stylesheet and themes, keeps React a peer, and names its template', () => {

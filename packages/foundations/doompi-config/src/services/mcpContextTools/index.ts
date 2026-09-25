@@ -38,10 +38,8 @@ export function createRenameThreadTool(context: DoomMcpPluginContext): DoomHeadl
     },
   };
 }
-export function createShowSessionTool(
-  context: DoomMcpPluginContext,
-  resourceUri: string,
-): DoomHeadlessTool<typeof loadContextParameters> {
+
+export function createShowSessionTool(context: DoomMcpPluginContext): DoomHeadlessTool<typeof loadContextParameters> {
   return {
     // web-plugin-tool-renderers: ignore show_session (remote MCP only)
     name: 'show_session',
@@ -52,8 +50,7 @@ export function createShowSessionTool(
     outputSchema: { ...sessionViewSchema },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     _meta: {
-      ui: { resourceUri, visibility: ['model', 'app'] },
-      'openai/outputTemplate': resourceUri,
+      ui: { visibility: ['model', 'app'] },
       'openai/toolInvocation/invoking': 'Loading session',
       'openai/toolInvocation/invoked': 'Session ready',
     },

@@ -17,7 +17,7 @@ import {
 
 import type { SessionMcpAccessGrant, SessionMcpAuthorizationService } from '../services/sessionMcpAuthorization';
 import { sessionMcpConversationDigest, SessionMcpConversationError } from '../services/sessionMcpConversations';
-import type { SessionToolSurface } from '../types/server/sessionToolSurface';
+import type { SessionToolDescriptor, SessionToolSurface } from '../types/server/sessionToolSurface';
 
 export interface SessionMcpTarget {
   readonly generation: number;
@@ -93,6 +93,17 @@ function grantedSurface(grant: SessionMcpAccessGrant, surface: SessionToolSurfac
     skills: grant.scope === 'session' ? snapshot.skills : snapshot.skills.filter((skill) => skillNames.has(skill.name)),
     uiResources: (snapshot.uiResources ?? []).filter((resource) => resourceUris.has(resource.uri)),
   };
+}
+
+/** Identity is supplied by the approved tool descriptor, never by upstream result metadata. */
+function widgetResult(tool: SessionToolDescriptor | undefined, result: CallToolResult): CallToolResult {
+  const widget = tool?._meta?.['doompi/widget'];
+  return typeof widget !== 'string'
+    ? result
+    : {
+        ...result,
+        _meta: { ...result._meta, 'doompi/widget': widget, 'doompi/toolName': tool!.name },
+      };
 }
 
 /** Creates a stateless Streamable HTTP MCP request handler for session capabilities. */
@@ -213,6 +224,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       const signal = AbortSignal.any([request.signal, extra.signal, controller.signal]);
       const invocationId = randomUUID();
       let skillAccessOpen = true;
+      let widgetTool: SessionToolDescriptor | undefined;
       try {
         const parent = await authorizeOperation();
         const advertised = grantedSurface(parent.grant, parent.target.toolSurface).tools.find(
@@ -220,6 +232,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         );
         if (!advertised)
           throw new McpError(ErrorCode.InvalidParams, `Tool '${message.params.name}' is not granted or active.`);
+        widgetTool = advertised;
         // A binding must not outlive an unpersisted registration when tools/call precedes tools/list.
         await options.onVerified?.(parent.grant);
         options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=started`);
@@ -308,16 +321,16 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         });
         await recheck();
         options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
-        return {
+        return widgetResult(selected, {
           content: result.content,
           ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
           ...(result._meta === undefined ? {} : { _meta: result._meta }),
           isError: result.isError ?? false,
-        };
+        });
       } catch (error) {
         options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=failed`);
         if (!(error instanceof SessionMcpConversationError)) throw error;
-        return {
+        return widgetResult(widgetTool, {
           content: [{ type: 'text', text: error.message }],
           isError: true,
           structuredContent: {
@@ -325,7 +338,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             message: error.message,
             ...(error.bindingId === undefined ? {} : { bindingId: error.bindingId }),
           },
-        };
+        });
       } finally {
         skillAccessOpen = false;
         operations.delete(key);
