@@ -1,3 +1,22 @@
+## 0.0.1-alpha.23 (2026-09-25)
+
+### 🩹 Fixes
+
+- **doompi-git:** scope activity worktrees to owner ([#191](https://github.com/AgiFlow/doompi/pull/191))
+- **root:** add component stories and visual fixes ([#189](https://github.com/AgiFlow/doompi/pull/189))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.13
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.87
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.11
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.45
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.79
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.22 (2026-09-25)
 
 ### 🧱 Updated Dependencies

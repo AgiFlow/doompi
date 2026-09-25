@@ -1,3 +1,23 @@
+## 0.0.1-alpha.53 (2026-09-25)
+
+### 🩹 Fixes
+
+- **root:** add component stories and visual fixes ([#189](https://github.com/AgiFlow/doompi/pull/189))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.90
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.86
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.87
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.7
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.44
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.78
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.52 (2026-09-25)
 
 ### 🚀 Features
