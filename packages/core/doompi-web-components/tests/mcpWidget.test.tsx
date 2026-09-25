@@ -45,7 +45,7 @@ describe('MCP widget presentation primitives', () => {
     const html = renderToStaticMarkup(
       <McpToolOutput result={{ content: [{ type: 'text', text: '<script>bad()</script>' + 'a'.repeat(9000) }] }} />,
     );
-    expect(html).toContain('<details open="">');
+    expect(html).toContain('<details open=""');
     expect(html).toContain('&lt;script&gt;bad()&lt;/script&gt;');
     expect(html).not.toContain('<script>');
     expect(html).toContain('Preview truncated');
