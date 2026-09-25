@@ -1,19 +1,19 @@
 import { join } from 'node:path';
 
 import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
-import type { DoomServerPluginContext, DoomServerRegistration } from '@agimon-ai/doompi-core/serverFacet';
 import type { DoomApi } from '@agimon-ai/doompi-core/packageApi';
+import type { DoomServerPluginContext, DoomServerRegistration } from '@agimon-ai/doompi-core/serverFacet';
 
 import { VoiceMediaBroker } from '../../services/clientMediaApi';
 import { GlobalLiveCompanion } from '../../services/globalLiveCompanion';
 import type { GlobalLiveReceipts } from '../../services/globalLiveCompanion/type';
 import { createRealtimeRuntime } from '../../services/realtimeRuntime';
-import { voiceReadinessApi } from '../../services/voiceReadinessApi';
 import { createVoiceMediaWakeChannel } from '../../services/voiceMediaHubChannel';
+import { voiceReadinessApi } from '../../services/voiceReadinessApi';
 import { VOICE_MEDIA_API_BASE_PATH } from '../../types/clientMedia';
 
 /** Recreated at narrower mounts by the entry generator; only the global mount owns a companion. */
-export default defineRoot(({ host }: DoomServerPluginContext) => {
+export default defineRoot<{ voiceApi?: DoomApi; mediaApi?: DoomApi }, DoomServerPluginContext>(({ host }) => {
   if (host.scope !== 'global') return { value: { voiceApi: undefined, mediaApi: undefined } };
   const context = host.context;
   if (!context.homeDirectory) throw new Error('Global Voice requires the configured server home.');
@@ -24,7 +24,7 @@ export default defineRoot(({ host }: DoomServerPluginContext) => {
     sessionId: 'global-live-companion',
     realtimeProvider: createRealtimeRuntime({ stateDirectory: join(context.homeDirectory, '.pi', '.doom') }).provider,
   });
-  companion = new GlobalLiveCompanion({ broker, receipts, onNotice: context.onNotice });
+  companion = new GlobalLiveCompanion({ broker, receipts, onNotice: (message) => context.onNotice(message) });
   const mediaApi: DoomApi = { basePath: VOICE_MEDIA_API_BASE_PATH, start: () => broker };
   const voiceApi: DoomApi = {
     basePath: 'voice',

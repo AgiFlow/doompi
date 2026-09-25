@@ -1,5 +1,7 @@
 import type { WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 
+import { voice } from '../../../../../../../generated/client';
+import type { VoiceMediaDevice } from '../../../../../../types/clientMedia';
 import type { RealtimeBrowserState } from '../../../../../../types/realtime';
 import {
   activeVoiceSession,
@@ -24,6 +26,7 @@ class PageVoiceMediaRuntime {
   private selectionGeneration = 0;
   private focusedSessionId: string | undefined;
   private client: VoiceMediaClient | undefined;
+  private globalClient: VoiceMediaClient | undefined;
   private boundSessionId: string | undefined;
   private operation: Promise<void> = Promise.resolve();
   private readonly unsubscribe: () => void;
@@ -42,6 +45,7 @@ class PageVoiceMediaRuntime {
       handoff.unsubscribe();
     };
     window.addEventListener('pagehide', this.closeOnPageHide, { once: true });
+    void this.startGlobalClient();
     this.select(activeVoiceSession.store.state);
   }
 
@@ -58,9 +62,12 @@ class PageVoiceMediaRuntime {
     window.removeEventListener('pagehide', this.closeOnPageHide);
     this.unsubscribe();
     this.client?.endRealtime();
+    this.globalClient?.endRealtime();
     const dispose = async (): Promise<void> => {
       try {
         await this.detach();
+        await this.globalClient?.stop(false);
+        this.globalClient = undefined;
       } finally {
         await this.device.close();
       }
@@ -69,6 +76,114 @@ class PageVoiceMediaRuntime {
       () => undefined,
       () => undefined,
     );
+  }
+
+  /** Global browser lease and WebRTC peer outlive every agent route and session focus change. */
+  private async startGlobalClient(): Promise<void> {
+    try {
+      const status = await voice.global.liveStatus();
+      if (this.closed) return;
+      if (!status.ok || status.data.version !== 1) throw new Error('The host does not support global live Voice.');
+      const device: VoiceMediaDevice = {
+        capabilities: {
+          capture: false,
+          playback: false,
+          captureActivity: false,
+          autonomousOrchestration: false,
+          realtime: true,
+        },
+        async startCapture() {
+          throw new Error('Global live Voice does not accept PCM capture.');
+        },
+        speak() {
+          throw new Error('Global live Voice does not accept PCM playback.');
+        },
+        async close() {},
+      };
+      let client!: VoiceMediaClient;
+      const onConnection = (phase: VoiceMediaClientConnectionState): void => {
+        if (this.globalClient !== client) return;
+        const current = voiceMediaBrowserState.store.state;
+        if (current?.sessionId !== null) return;
+        if (phase === 'disconnected' && current.realtime?.connection !== 'failed') {
+          voiceMediaBrowserState.reset();
+          return;
+        }
+        if (phase !== 'disconnected') voiceMediaBrowserState.update(() => ({ ...current, phase }));
+      };
+      const onRealtime = (realtime: RealtimeBrowserState | undefined): void => {
+        if (this.globalClient !== client) return;
+        if (realtime === undefined) {
+          if (voiceMediaBrowserState.store.state?.sessionId === null) voiceMediaBrowserState.reset();
+          if (voiceRealtimeBrowserControls.store.state?.sessionId === null) voiceRealtimeBrowserControls.reset();
+          return;
+        }
+        const current = voiceMediaBrowserState.store.state;
+        voiceMediaBrowserState.update(() => ({
+          sessionId: null,
+          phase: current?.sessionId === null ? current.phase : 'connected',
+          realtime,
+          realtimeOutputInterrupted: current?.sessionId === null ? current.realtimeOutputInterrupted : undefined,
+        }));
+        voiceRealtimeBrowserControls.update(() => ({
+          sessionId: null,
+          mute: (muted) => this.controlGlobal(muted ? 'mute' : 'unmute'),
+          interrupt: () => {
+            client.interruptRealtime();
+            this.controlGlobal('interrupt');
+            const state = voiceMediaBrowserState.store.state;
+            if (state?.sessionId === null)
+              voiceMediaBrowserState.update(() => ({ ...state, realtimeOutputInterrupted: true }));
+          },
+          end: () => {
+            client.endRealtime();
+            this.controlGlobal('end');
+          },
+        }));
+      };
+      client = new VoiceMediaClient(
+        this.clientId,
+        this.connectionId,
+        new BrowserVoiceMediaTransport(null),
+        device,
+        onConnection,
+        onRealtime,
+        (options) => new BrowserRealtimeSession(options, voiceMicrophoneConstraints),
+      );
+      this.globalClient = client;
+      client.start();
+    } catch (error) {
+      if (this.closed || voiceMediaBrowserState.store.state?.sessionId) return;
+      const message = error instanceof Error ? error.message : String(error);
+      voiceMediaBrowserState.update(() => ({
+        sessionId: null,
+        phase: 'conflict',
+        realtime: { connection: 'failed', listening: false, speaking: false, muted: false, error: message },
+      }));
+    }
+  }
+
+  private controlGlobal(action: 'mute' | 'unmute' | 'interrupt' | 'end'): void {
+    void voice.global
+      .liveControl({ body: { action } })
+      .then((result) => {
+        if (!result.ok) throw new Error(result.error);
+      })
+      .catch((error: unknown) => {
+        const state = voiceMediaBrowserState.store.state;
+        if (state !== undefined && state.sessionId !== null) return;
+        voiceMediaBrowserState.update(() => ({
+          sessionId: null,
+          phase: 'conflict',
+          realtime: {
+            connection: 'failed',
+            listening: false,
+            speaking: false,
+            muted: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        }));
+      });
   }
 
   private select(sessionId: string | null): void {
@@ -114,7 +229,11 @@ class PageVoiceMediaRuntime {
         return;
       }
       voiceMediaBrowserState.update((current) =>
-        current?.sessionId === sessionId ? { ...current, phase } : { sessionId, phase },
+        current?.sessionId === null && current.realtime !== undefined && current.realtime.connection !== 'failed'
+          ? current
+          : current?.sessionId === sessionId
+            ? { ...current, phase }
+            : { sessionId, phase },
       );
     };
     const reportRealtimeState = (realtime: RealtimeBrowserState | undefined): void => {
@@ -138,17 +257,18 @@ class PageVoiceMediaRuntime {
     );
     this.client = client;
     this.boundSessionId = sessionId;
-    voiceRealtimeBrowserControls.update(() => ({
-      sessionId,
-      mute: (muted) => client.muteRealtime(muted),
-      interrupt: () => {
-        client.interruptRealtime();
-        const current = voiceMediaBrowserState.store.state;
-        if (current?.sessionId === sessionId)
-          voiceMediaBrowserState.update(() => ({ ...current, realtimeOutputInterrupted: true }));
-      },
-      end: () => client.endRealtime(),
-    }));
+    if (voiceRealtimeBrowserControls.store.state?.sessionId !== null)
+      voiceRealtimeBrowserControls.update(() => ({
+        sessionId,
+        mute: (muted) => client.muteRealtime(muted),
+        interrupt: () => {
+          client.interruptRealtime();
+          const current = voiceMediaBrowserState.store.state;
+          if (current?.sessionId === sessionId)
+            voiceMediaBrowserState.update(() => ({ ...current, realtimeOutputInterrupted: true }));
+        },
+        end: () => client.endRealtime(),
+      }));
     client.start();
   }
 

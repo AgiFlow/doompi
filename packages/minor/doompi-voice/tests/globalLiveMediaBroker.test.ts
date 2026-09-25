@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { VoiceMediaBroker } from '../src/services/clientMediaApi';
-import { VOICE_MEDIA_PROTOCOL_VERSION, VOICE_MEDIA_ROUTES } from '../src/types/clientMedia';
+import {
+  VOICE_MEDIA_EVENT_WAIT_NONE,
+  VOICE_MEDIA_PROTOCOL_VERSION,
+  VOICE_MEDIA_ROUTES,
+} from '../src/types/clientMedia';
 import { REALTIME_ROUTES } from '../src/types/realtime';
 
 function post(path: string, value: object): Request {
@@ -30,10 +34,10 @@ function fixture() {
         clientKind: 'browser',
         controlLocation: 'remote',
         capabilities: {
-          capture: true,
-          playback: true,
-          captureActivity: true,
-          autonomousOrchestration: true,
+          capture: false,
+          playback: false,
+          captureActivity: false,
+          autonomousOrchestration: false,
           realtime: true,
         },
       }),
@@ -53,7 +57,9 @@ describe('global live media lease', () => {
     setReady(true);
     await broker.live.start('activation', 'instruction', new AbortController().signal);
     const event = await broker.fetch(
-      new Request(`http://voice.test${VOICE_MEDIA_ROUTES.clientEvents}?clientId=${client.clientId}&connectionId=${client.connectionId}&after=0&wait=none`),
+      new Request(
+        `http://voice.test${VOICE_MEDIA_ROUTES.clientEvents}?clientId=${client.clientId}&connectionId=${client.connectionId}&after=0&wait=${VOICE_MEDIA_EVENT_WAIT_NONE}`,
+      ),
     );
     expect((await event.json()) as object).toMatchObject({ type: 'realtime-start', activationId: 'activation' });
     expect(createCall).not.toHaveBeenCalled();

@@ -63,6 +63,14 @@ const RealtimeSnapshot = Type.Object({
   browser: O(Browser),
 });
 const Wake = Type.Object({ eventEpoch: S, sequence: N });
+const GlobalLiveStatus = Type.Object({
+  version: Type.Literal(1),
+  state: values(['disabled', 'starting', 'active', 'draining', 'shuttingDown']),
+  activeSessionId: Type.Union([S, Type.Null()]),
+  muted: B,
+  error: O(S),
+  media: Type.Object({ client: B, realtime: B }),
+});
 const Version = { version: Type.Literal(3) };
 const Targets = Type.Array(Type.Object({ handle: S, label: S, order: N }), { maxItems: 32 });
 const OwnershipAction = values(['catalog', 'prepare', 'activate', 'deactivate', 'readiness', 'fence']);
@@ -349,6 +357,34 @@ export const apiContracts = defineApiContract({
       parameters: [{ name: 'binding', in: 'query', required: true, schema: S }],
       body: { required: true, contentType: 'application/json', schema: Type.Unknown() },
       responses: jsonApiResponses(Type.Unknown()),
+    },
+    {
+      id: 'voice.liveStatus',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/live/status',
+      method: 'GET',
+      authentication: 'owner',
+      description: 'Read the host-global live companion state without activating media.',
+      responses: jsonApiResponses(GlobalLiveStatus),
+    },
+    {
+      id: 'voice.liveControl',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/live/control',
+      method: 'POST',
+      authentication: 'owner',
+      description: 'Explicitly activate, mute, interrupt or end the host-global live companion.',
+      body: {
+        required: true,
+        contentType: 'application/json',
+        schema: Type.Object({
+          action: values(['activate', 'mute', 'unmute', 'interrupt', 'end']),
+          sessionId: O(S),
+        }),
+      },
+      responses: jsonApiResponses(GlobalLiveStatus),
     },
     {
       id: 'voice.readiness',

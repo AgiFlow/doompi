@@ -62,7 +62,7 @@ export interface GlobalLiveControl {
 
 export interface GlobalLiveStatus {
   version: 1;
-  state: 'disabled' | 'starting' | 'active' | 'shuttingDown';
+  state: 'disabled' | 'starting' | 'active' | 'draining' | 'shuttingDown';
   activeSessionId: string | null;
   muted: boolean;
   error?: string;

@@ -153,7 +153,8 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
   private controlLocation: 'local' | 'remote' | undefined;
   private binding: { id: string; connectionId: string; expiresAt: number } | undefined;
 
-  public constructor(private readonly sessionId: string) {}
+  /** A null session binds the single host-global companion, never a Pi agent session. */
+  public constructor(private readonly sessionId: string | null) {}
 
   /**
    * This session's `voice-media` mount, resolved per call.
@@ -162,11 +163,15 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
    * binding, and a held client would outlive a rebinding.
    */
   private media(): ReturnType<typeof voiceMedia.session> {
+    if (this.sessionId === null) throw new Error('PCM routes are session-scoped, not global live media.');
     return voiceMedia.session(this.sessionId);
   }
 
   private remote(): boolean {
-    return /^peer\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(this.sessionId);
+    return (
+      this.sessionId !== null &&
+      /^peer\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(this.sessionId)
+    );
   }
 
   private async fetch(path: string, directUrl: string, init: RequestInit = {}): Promise<Response> {
@@ -252,7 +257,8 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     if (!result.ok) throw resultError(result);
     const connected = result.data;
     this.controlLocation = controlLocation;
-    this.push = pushConnection(connected);
+    // Global media has no session-addressed wake channel; use authenticated bounded HTTP polling.
+    this.push = this.sessionId === null ? undefined : pushConnection(connected);
     return connected;
   }
 
@@ -270,9 +276,12 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
   public async disconnect(clientId: string, connectionId: string): Promise<void> {
     try {
       const body = { clientId, connectionId };
-      const result = this.remote()
-        ? await this.remoteResult(VOICE_MEDIA_ROUTES.clientDisconnect, '', jsonBody(body))
-        : await this.media().clientDisconnect({ body });
+      const result =
+        this.sessionId === null
+          ? await voiceMedia.global.clientDisconnect({ body })
+          : this.remote()
+            ? await this.remoteResult(VOICE_MEDIA_ROUTES.clientDisconnect, '', jsonBody(body))
+            : await this.media().clientDisconnect({ body });
       if (!result.ok && result.status !== 409) throw resultError(result);
     } finally {
       this.push = undefined;
@@ -288,9 +297,10 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     signal: AbortSignal,
   ): Promise<VoiceMediaClientEvent | undefined> {
     const push = this.push;
-    if (push === undefined) return this.fetchEvent(clientId, connectionId, after, signal, false);
+    const sessionId = this.sessionId;
+    if (push === undefined || sessionId === null) return this.fetchEvent(clientId, connectionId, after, signal, false);
     while (!signal.aborted) {
-      const channelWake = await waitForVoiceMediaWake(this.sessionId, push.eventEpoch, after, push.heartbeatMs, signal);
+      const channelWake = await waitForVoiceMediaWake(sessionId, push.eventEpoch, after, push.heartbeatMs, signal);
       if (signal.aborted) return undefined;
       const wake = channelWake ?? (await this.heartbeat(clientId, connectionId));
       if (wake.eventEpoch !== push.eventEpoch) throw new Error('Voice media broker changed.');
@@ -316,9 +326,11 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
       controlLocation,
       capabilities,
     };
-    return this.remote()
-      ? this.remoteResult(VOICE_MEDIA_ROUTES.clientConnect, '', jsonBody(body))
-      : this.media().clientConnect({ body });
+    return this.sessionId === null
+      ? voiceMedia.global.clientConnect({ body })
+      : this.remote()
+        ? this.remoteResult(VOICE_MEDIA_ROUTES.clientConnect, '', jsonBody(body))
+        : this.media().clientConnect({ body });
   }
 
   private async fetchEvent(
@@ -334,11 +346,13 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
       after,
       ...(nonblocking ? { wait: VOICE_MEDIA_EVENT_WAIT_NONE } : {}),
     });
-    const directUrl = this.remote()
-      ? ''
-      : this.media().clientEvents.url({
-          query: { clientId, connectionId, after, ...(nonblocking ? { wait: VOICE_MEDIA_EVENT_WAIT_NONE } : {}) },
-        });
+    const query = { clientId, connectionId, after, ...(nonblocking ? { wait: VOICE_MEDIA_EVENT_WAIT_NONE } : {}) };
+    const directUrl =
+      this.sessionId === null
+        ? voiceMedia.global.clientEvents.url({ query })
+        : this.remote()
+          ? ''
+          : this.media().clientEvents.url({ query });
     return boundedControlRequest(
       directUrl,
       {},
@@ -355,7 +369,12 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
 
   private heartbeat(clientId: string, connectionId: string): Promise<VoiceMediaWake> {
     const path = VOICE_MEDIA_ROUTES.clientHeartbeat;
-    const directUrl = this.remote() ? '' : this.media().clientHeartbeat.url();
+    const directUrl =
+      this.sessionId === null
+        ? voiceMedia.global.clientHeartbeat.url()
+        : this.remote()
+          ? ''
+          : this.media().clientHeartbeat.url();
     return boundedControlRequest(
       directUrl,
       jsonBody({ clientId, connectionId }),
@@ -479,7 +498,12 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     signal: AbortSignal,
   ): Promise<string> {
     const path = REALTIME_ROUTES.clientNegotiate;
-    const directUrl = this.remote() ? '' : this.media().realtimeNegotiate.url();
+    const directUrl =
+      this.sessionId === null
+        ? voiceMedia.global.realtimeNegotiate.url()
+        : this.remote()
+          ? ''
+          : this.media().realtimeNegotiate.url();
     return boundedControlRequest(
       directUrl,
       jsonBody({ clientId, connectionId, activationId, sdp }),
@@ -502,7 +526,13 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     activationId: string,
     event: string,
   ): Promise<void> {
-    await this.postRealtime(REALTIME_ROUTES.clientEvent, this.remote() ? '' : this.media().realtimeEvent.url(), {
+    const directUrl =
+      this.sessionId === null
+        ? voiceMedia.global.realtimeEvent.url()
+        : this.remote()
+          ? ''
+          : this.media().realtimeEvent.url();
+    await this.postRealtime(REALTIME_ROUTES.clientEvent, directUrl, {
       clientId,
       connectionId,
       activationId,
@@ -516,7 +546,13 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     activationId: string,
     state: RealtimeBrowserState,
   ): Promise<void> {
-    await this.postRealtime(REALTIME_ROUTES.clientState, this.remote() ? '' : this.media().realtimeState.url(), {
+    const directUrl =
+      this.sessionId === null
+        ? voiceMedia.global.realtimeState.url()
+        : this.remote()
+          ? ''
+          : this.media().realtimeState.url();
+    await this.postRealtime(REALTIME_ROUTES.clientState, directUrl, {
       clientId,
       connectionId,
       activationId,

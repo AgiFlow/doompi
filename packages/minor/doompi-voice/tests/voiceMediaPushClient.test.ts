@@ -59,6 +59,40 @@ afterEach(() => {
 });
 
 describe('browser voice media push transport', () => {
+  it('uses only the global lease and long poll for live media without session PCM or wake routing', async () => {
+    vi.mocked(sealedTransport.fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/client/connect'))
+        return jsonResponse({ version: 6, cursor: 0, eventEpoch: 'global-epoch', heartbeatMs: 15_000 });
+      if (url.includes('/client/events'))
+        return jsonResponse({ sequence: 1, type: 'realtime-start', activationId: 'activation' });
+      if (url.endsWith('/client/realtime/negotiate')) return jsonResponse({ sdp: 'answer' });
+      if (url.endsWith('/client/realtime/event') || url.endsWith('/client/realtime/state') || url.endsWith('/client/disconnect'))
+        return new Response(null, { status: 204 });
+      throw new Error(`Unexpected global live media request: ${url}`);
+    });
+    const transport = new BrowserVoiceMediaTransport(null);
+    await transport.connect('browser', 'lease', { ...capabilities, realtime: true });
+    expect(await transport.nextEvent('browser', 'lease', 0, new AbortController().signal)).toEqual({
+      sequence: 1,
+      type: 'realtime-start',
+      activationId: 'activation',
+    });
+    expect(await transport.realtimeNegotiate('browser', 'lease', 'activation', 'offer', new AbortController().signal))
+      .toBe('answer');
+    await transport.realtimeEvent('browser', 'lease', 'activation', '{"type":"session.update"}');
+    await transport.realtimeState('browser', 'lease', 'activation', {
+      connection: 'connected', listening: true, speaking: false, muted: false,
+    });
+    await expect(transport.sendAudio('browser', 'lease', 'capture', new Uint8Array([1]))).rejects.toThrow('session-scoped');
+    await transport.disconnect('browser', 'lease');
+    const urls = vi.mocked(sealedTransport.fetch).mock.calls.map(requestUrl);
+    expect(urls).toHaveLength(6);
+    expect(urls.every((url) => url.startsWith('/api/plugins/voice-media/'))).toBe(true);
+    expect(urls.find((url) => url.includes('/client/events'))).not.toContain('wait=0');
+    expect(urls.some((url) => url.includes('/client/heartbeat'))).toBe(false);
+  });
+
   it.each([
     { sealed: false, location: 'local' },
     { sealed: true, location: 'remote' },

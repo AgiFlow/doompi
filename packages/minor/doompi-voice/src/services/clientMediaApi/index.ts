@@ -1067,7 +1067,7 @@ export class VoiceMediaBroker implements DoomApiHandler {
     if (this.realtime?.active) throw new VoiceMediaRequestError('Live voice is already active.', 409);
     if (this.realtimeProvider === undefined)
       throw new VoiceMediaRequestError('Live voice is unavailable on this host.', 503);
-    await this.clientAvailableAfterWait('capture');
+    if (this.globalLive === undefined) await this.clientAvailableAfterWait('capture');
     if (this.closed) throw new VoiceMediaRequestError('Voice media transport is closed.', 503);
     if (this.realtime?.active) throw new VoiceMediaRequestError('Live voice is already active.', 409);
     const client = this.client;
@@ -1076,8 +1076,9 @@ export class VoiceMediaBroker implements DoomApiHandler {
       !client ||
       client.kind !== 'browser' ||
       !client.realtime ||
-      !this.clientAvailable('capture') ||
-      (this.globalLive === undefined ? !registration?.eligible : !this.globalLive.ready())
+      (this.globalLive === undefined
+        ? !this.clientAvailable('capture') || !registration?.eligible
+        : this.now() - client.lastSeenAt > CLIENT_LEASE_MS || !this.globalLive.ready())
     )
       throw new VoiceMediaRequestError('Live voice requires the active browser media owner.', 503);
     if (

@@ -23,7 +23,11 @@ export interface LiveVoiceControllerDependencies {
   contextText(): string;
   isBusy(): boolean;
   send(text: string, intent: 'immediate' | 'follow-up'): void | Promise<void>;
-  sendRequest?(requestId: string, transcript: string, intent: 'immediate' | 'follow-up'): Promise<RealtimeDeliveryOutcome>;
+  sendRequest?(
+    requestId: string,
+    transcript: string,
+    intent: 'immediate' | 'follow-up',
+  ): Promise<RealtimeDeliveryOutcome>;
   /** Only a durable provider-ID ledger makes hot-cache retirement replay safe. */
   durableReplay?: boolean;
   onActivationStateChange?(state: AutoCaptureActivationState): void;
@@ -130,7 +134,11 @@ export class LiveVoiceController {
   }
 
   /** Publishes Pi's settled visible response, never tool output or a playback receipt. */
-  public async publishAgentResult(messageId: string, text?: string, matchingRequestIds?: readonly string[]): Promise<boolean> {
+  public async publishAgentResult(
+    messageId: string,
+    text?: string,
+    matchingRequestIds?: readonly string[],
+  ): Promise<boolean> {
     const host = this.dependencies.host;
     const key = this.activeKey;
     const controller = this.controller;
@@ -214,7 +222,12 @@ export class LiveVoiceController {
       isBusy: () => this.dependencies.isBusy(),
       isBlocked: () => this.blocked,
       send: (text, intent) => this.dependencies.send(text, intent),
-      ...(this.dependencies.sendRequest ? { sendRequest: this.dependencies.sendRequest } : {}),
+      ...(this.dependencies.sendRequest
+        ? {
+            sendRequest: (requestId: string, transcript: string, intent: 'immediate' | 'follow-up') =>
+              this.dependencies.sendRequest!(requestId, transcript, intent),
+          }
+        : {}),
       durableReplay: this.dependencies.durableReplay,
     });
 

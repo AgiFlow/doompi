@@ -890,12 +890,12 @@ export class AutonomousVoiceSession {
         this.dependencies.ui.notify('Voice composition was not accepted; the draft was retained.', 'warning');
       }
     }
-    if (result.kind === 'delivered' || result.kind === 'buffered') {
-      // Buffer acceptance rearms ordinary capture. It is not an agent admission receipt.
-      this.actor.send({ type: 'DELIVERY_SUCCEEDED', ...result });
+    if (result.kind === 'failed') {
+      this.actor.send({ type: 'DELIVERY_FAILED', ...result });
       return;
     }
-    this.actor.send({ type: 'DELIVERY_FAILED', ...result });
+    // Buffer acceptance rearms ordinary capture. It is not an agent admission receipt.
+    this.actor.send({ type: 'DELIVERY_SUCCEEDED', ...result });
   }
 
   private stop(mode: 'graceful' | 'hard'): Promise<void> {

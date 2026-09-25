@@ -2,12 +2,12 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { DoomApi } from '@agimon-ai/doompi-core/packageApi';
 
+import type { AutoCaptureUi } from '../../types';
+import type { RealtimeDeliveryOutcome } from '../../types/realtime';
 import { VoiceMediaBroker } from '../clientMediaApi';
 import { SystemClock } from '../infrastructure';
 import { LiveVoiceController } from '../liveVoiceController';
 import { buildDelegationResultMessages } from '../realtimeProtocol';
-import type { AutoCaptureUi } from '../../types';
-import type { RealtimeDeliveryOutcome } from '../../types/realtime';
 import type {
   GlobalLiveAgentHost,
   GlobalLiveControl,
@@ -40,7 +40,9 @@ interface HeldRequest {
 
 interface Transfer {
   source: LiveAgentRoute;
-  target: LiveAgentRoute;
+  targetSessionId: string;
+  transactionId: string;
+  target?: LiveAgentRoute;
   held: HeldRequest[];
   heldBytes: number;
   failure?: string;
@@ -103,7 +105,10 @@ export class GlobalLiveCompanion {
         if (state === 'disabled') {
           this.stopPolling();
           this.route = undefined;
-          this.transfer = undefined;
+          if (this.transfer?.held.length) {
+            this.error = `Global Voice disconnected with ${this.transfer.held.length} held requests for ${this.transfer.targetSessionId}; they were not admitted.`;
+            this.options.onNotice(this.error);
+          } else this.transfer = undefined;
           this.admitted.clear();
           this.activationId = undefined;
         }
@@ -119,7 +124,9 @@ export class GlobalLiveCompanion {
   public unbind(host: GlobalLiveAgentHost): void {
     if (this.hub === host) {
       this.hub = undefined;
-      void this.stop().catch((error: unknown) => this.options.onNotice(`Global Voice shutdown failed: ${errorMessage(error)}`));
+      void this.stop().catch((error: unknown) =>
+        this.options.onNotice(`Global Voice shutdown failed: ${errorMessage(error)}`),
+      );
     }
   }
 
@@ -129,7 +136,7 @@ export class GlobalLiveCompanion {
       state: this.live.state,
       activeSessionId: this.route?.scope.sessionId ?? null,
       muted: this.live.microphoneMuted,
-      ...(this.error ?? this.live.activationError ? { error: this.error ?? this.live.activationError } : {}),
+      ...((this.error ?? this.live.activationError) ? { error: this.error ?? this.live.activationError } : {}),
       media: { client: this.options.broker.browserConnected, realtime: this.options.broker.realtimeActive },
     };
   }
@@ -166,7 +173,10 @@ export class GlobalLiveCompanion {
       if (this.route?.scope.sessionId === sessionId) return;
       throw new Error('Use a prepared Voice transfer rather than starting a second companion.');
     }
-    if (!this.options.receipts) throw new Error('Live Voice receipt storage is unavailable. No agent admission was attempted.');
+    if (this.transfer)
+      throw new Error('Held Voice transfer requests require explicit cancellation before a new activation.');
+    if (!this.options.receipts)
+      throw new Error('Live Voice receipt storage is unavailable. No agent admission was attempted.');
     if (!this.options.broker.browserConnected) throw new Error('An authenticated browser media lease is required.');
     const activationId = randomUUID();
     const generation = ++this.routeGeneration;
@@ -182,17 +192,17 @@ export class GlobalLiveCompanion {
   /** A transfer changes the fenced agent adapter, never the activation, lease, or provider call. */
   public async handoff(sourceSessionId: string, targetSessionId: string, transactionId: string): Promise<boolean> {
     const source = this.route;
-    if (!source || source.scope.sessionId !== sourceSessionId || this.transfer || this.live.state !== 'active') return false;
+    if (!source || source.scope.sessionId !== sourceSessionId || this.transfer || this.live.state !== 'active')
+      return false;
     const generation = ++this.routeGeneration;
-    const transfer: Transfer = {
-      source,
-      target: await this.prepare(targetSessionId, source.activationId, generation, transactionId),
-      held: [],
-      heldBytes: 0,
-    };
-    if (this.stopped || this.route !== source || this.live.state !== 'active') return false;
+    // Hold requests as soon as the transfer starts, including while the target prepares.
+    const transfer: Transfer = { source, targetSessionId, transactionId, held: [], heldBytes: 0 };
     this.transfer = transfer;
     try {
+      const target = await this.prepare(targetSessionId, source.activationId, generation, transactionId);
+      if (this.stopped || this.route !== source || this.transfer !== transfer || this.live.state !== 'active')
+        return false;
+      transfer.target = target;
       while (this.route === source && this.transfer === transfer && !this.stopped) {
         const running = await this.pollAgentResults(source);
         if (this.admitted.size === 0 && !running) break;
@@ -207,24 +217,25 @@ export class GlobalLiveCompanion {
         sessionIncarnation: source.sessionIncarnation,
       });
       if (this.route !== source || this.transfer !== transfer || this.stopped) return false;
-      this.route = transfer.target;
+      this.route = target;
       for (const item of transfer.held) {
         if (this.transfer !== transfer || this.stopped) return false;
-        const outcome = await this.admitToRoute(transfer.target, item.requestId, item.transcript);
-        if (outcome === 'submitted') {
-          this.live.trackAgentRequest(item.requestId);
-          await this.options.broker.live.send(
-            transfer.target.activationId,
-            buildDelegationResultMessages(item.requestId, 'submitted', 'commentary'),
-            new AbortController().signal,
-          );
-        } else this.options.onNotice(`Held Voice request ${item.requestId} could not be admitted: ${outcome}.`);
+        const outcome = await this.admitToRoute(target, item.requestId, item.transcript);
+        if (outcome !== 'submitted')
+          throw new Error(`Held Voice request ${item.requestId} could not be admitted: ${outcome}.`);
+        this.live.trackAgentRequest(item.requestId);
+        await this.options.broker.live.send(
+          target.activationId,
+          buildDelegationResultMessages(item.requestId, 'submitted', 'commentary'),
+          new AbortController().signal,
+        );
       }
       this.transfer = undefined;
       return true;
     } catch (error) {
       transfer.failure = errorMessage(error);
-      this.error = `Voice transfer failed: ${transfer.failure}. Held requests remain for the target.`;
+      if (this.transfer === transfer && transfer.held.length === 0) this.transfer = undefined;
+      this.error = `Voice transfer failed: ${transfer.failure}. ${transfer.held.length} held requests remain for ${targetSessionId}.`;
       this.options.onNotice(this.error);
       return false;
     }
@@ -232,6 +243,10 @@ export class GlobalLiveCompanion {
 
   public async stop(): Promise<void> {
     // Revoke route and pending work synchronously, before any media teardown await.
+    if (this.transfer?.held.length)
+      this.options.onNotice(
+        `Explicit Voice stop discarded ${this.transfer.held.length} held requests for ${this.transfer.targetSessionId}.`,
+      );
     this.routeGeneration += 1;
     this.route = undefined;
     this.transfer = undefined;
@@ -248,24 +263,43 @@ export class GlobalLiveCompanion {
     this.hub = undefined;
   }
 
-  private async prepare(sessionId: string, activationId: string, generation: number, transactionId: string): Promise<LiveAgentRoute> {
+  private async prepare(
+    sessionId: string,
+    activationId: string,
+    generation: number,
+    transactionId: string,
+  ): Promise<LiveAgentRoute> {
     const hub = this.hub;
     const scope = hub?.sessions().find((candidate) => candidate.sessionId === sessionId);
     if (!hub || !scope) throw new Error('The selected native Pi agent is not available on this host.');
     const readiness = object(await this.agentRequest({ scope }, AGENT_READINESS, 'GET'));
-    if (readiness?.available !== true || typeof readiness.sessionIncarnation !== 'string' || readiness.sourceSessionId !== sessionId)
+    if (
+      readiness?.available !== true ||
+      typeof readiness.sessionIncarnation !== 'string' ||
+      readiness.sourceSessionId !== sessionId
+    )
       throw new Error('The selected Pi agent cannot accept live Voice requests.');
-    const prepared = object(await this.agentRequest({ scope }, AGENT_PREPARE, 'POST', {
-      activationId,
-      routeGeneration: generation,
-      transactionId,
-    }));
+    const prepared = object(
+      await this.agentRequest({ scope }, AGENT_PREPARE, 'POST', {
+        activationId,
+        routeGeneration: generation,
+        transactionId,
+      }),
+    );
     if (
       prepared?.sourceSessionId !== sessionId ||
       prepared.sessionIncarnation !== readiness.sessionIncarnation ||
       prepared.routeGeneration !== generation
-    ) throw new Error('Pi Voice target preparation lost its session incarnation.');
-    return { scope, activationId, sessionIncarnation: readiness.sessionIncarnation, generation, transactionId, cursor: 0 };
+    )
+      throw new Error('Pi Voice target preparation lost its session incarnation.');
+    return {
+      scope,
+      activationId,
+      sessionIncarnation: readiness.sessionIncarnation,
+      generation,
+      transactionId,
+      cursor: 0,
+    };
   }
 
   private async admit(requestId: string, transcript: string): Promise<RealtimeDeliveryOutcome> {
@@ -273,7 +307,12 @@ export class GlobalLiveCompanion {
     if (transfer) {
       const bytes = Buffer.byteLength(transcript, 'utf8');
       if (transfer.held.length >= MAX_HELD || transfer.heldBytes + bytes > MAX_HELD_BYTES) return 'rejected';
-      transfer.held.push({ requestId, transcript, transactionId: transfer.target.transactionId, destination: transfer.target.scope.sessionId });
+      transfer.held.push({
+        requestId,
+        transcript,
+        transactionId: transfer.transactionId,
+        destination: transfer.targetSessionId,
+      });
       transfer.heldBytes += bytes;
       return 'buffered';
     }
@@ -281,10 +320,16 @@ export class GlobalLiveCompanion {
     return route ? this.admitToRoute(route, requestId, transcript) : 'rejected';
   }
 
-  private async admitToRoute(route: LiveAgentRoute, requestId: string, transcript: string): Promise<RealtimeDeliveryOutcome> {
+  private async admitToRoute(
+    route: LiveAgentRoute,
+    requestId: string,
+    transcript: string,
+  ): Promise<RealtimeDeliveryOutcome> {
     const receipts = this.options.receipts;
     if (!receipts || this.stopped || (this.route !== route && this.transfer?.target !== route)) return 'rejected';
-    const fingerprint = createHash('sha256').update(JSON.stringify([requestId, transcript])).digest('hex');
+    const fingerprint = createHash('sha256')
+      .update(JSON.stringify([requestId, transcript]))
+      .digest('hex');
     const reservation = await receipts.reserve({
       namespace: ADMISSION_NAMESPACE,
       activationId: route.activationId,
@@ -295,22 +340,34 @@ export class GlobalLiveCompanion {
     });
     if (reservation.kind === 'conflict') return 'rejected';
     if (reservation.kind === 'existing')
-      return reservation.receipt.outcome === 'admitted' ? 'submitted' : reservation.receipt.outcome === 'rejected' ? 'rejected' : 'uncertain';
-    const receipt = { namespace: ADMISSION_NAMESPACE, activationId: route.activationId, requestId, token: reservation.token };
+      return reservation.receipt.outcome === 'admitted'
+        ? 'submitted'
+        : reservation.receipt.outcome === 'rejected'
+          ? 'rejected'
+          : 'uncertain';
+    const receipt = {
+      namespace: ADMISSION_NAMESPACE,
+      activationId: route.activationId,
+      requestId,
+      token: reservation.token,
+    };
     if (this.stopped || (this.route !== route && this.transfer?.target !== route)) {
       await receipts.finish({ ...receipt, outcome: 'rejected' });
       return 'rejected';
     }
     try {
-      const result = object(await this.agentRequest(route, AGENT_ADMIT, 'POST', {
-        activationId: route.activationId,
-        routeGeneration: route.generation,
-        sessionIncarnation: route.sessionIncarnation,
-        requestId,
-        transcript,
-        intent: 'immediate',
-      }));
-      if (result?.admitted !== true || result.requestId !== requestId) throw new Error('Pi agent admission is uncertain.');
+      const result = object(
+        await this.agentRequest(route, AGENT_ADMIT, 'POST', {
+          activationId: route.activationId,
+          routeGeneration: route.generation,
+          sessionIncarnation: route.sessionIncarnation,
+          requestId,
+          transcript,
+          intent: 'immediate',
+        }),
+      );
+      if (result?.admitted !== true || result.requestId !== requestId)
+        throw new Error('Pi agent admission is uncertain.');
       await receipts.finish({ ...receipt, outcome: 'admitted' });
       if (this.route === route && !this.stopped) this.admitted.set(requestId, route);
       return this.stopped ? 'uncertain' : 'submitted';
@@ -332,7 +389,9 @@ export class GlobalLiveCompanion {
       this.polling = true;
       void this.pollAgentResults(route)
         .catch((error: unknown) => this.options.onNotice(`Voice agent result poll failed: ${errorMessage(error)}`))
-        .finally(() => { this.polling = false; });
+        .finally(() => {
+          this.polling = false;
+        });
     }, POLL_MS);
   }
 
@@ -349,16 +408,28 @@ export class GlobalLiveCompanion {
       after: String(route.cursor),
     }).toString()}`;
     const snapshot = object(await this.agentRequest(route, path, 'GET'));
-    if (!snapshot || !Array.isArray(snapshot.activeRuns) || !Array.isArray(snapshot.events) || !Number.isSafeInteger(snapshot.cursor))
+    if (
+      !snapshot ||
+      !Array.isArray(snapshot.activeRuns) ||
+      !Array.isArray(snapshot.events) ||
+      !Number.isSafeInteger(snapshot.cursor)
+    )
       throw new Error('Voice agent results are invalid.');
     const result = snapshot as unknown as LiveAgentResults;
     for (const event of result.events) {
       if (this.stopped || (this.route !== route && this.transfer?.source !== route)) return true;
-      if (event.sourceSessionId !== route.scope.sessionId || event.sessionIncarnation !== route.sessionIncarnation ||
-          !event.runId || !event.resultId || !Array.isArray(event.requestIds) || !Number.isSafeInteger(event.sequence))
+      if (
+        event.sourceSessionId !== route.scope.sessionId ||
+        event.sessionIncarnation !== route.sessionIncarnation ||
+        !event.runId ||
+        !event.resultId ||
+        !Array.isArray(event.requestIds) ||
+        !Number.isSafeInteger(event.sequence)
+      )
         throw new Error('Voice agent result identity is invalid.');
       await this.publishResult(route, event);
-      for (const requestId of event.requestIds) if (this.admitted.get(requestId) === route) this.admitted.delete(requestId);
+      for (const requestId of event.requestIds)
+        if (this.admitted.get(requestId) === route) this.admitted.delete(requestId);
     }
     if (result.cursor > route.cursor) {
       await this.agentRequest(route, AGENT_ACK, 'POST', {
@@ -376,7 +447,16 @@ export class GlobalLiveCompanion {
     const receipts = this.options.receipts;
     if (!receipts) throw new Error('Live Voice receipt storage is unavailable.');
     const fingerprint = createHash('sha256')
-      .update(JSON.stringify([event.sourceSessionId, event.sessionIncarnation, event.runId, event.resultId, event.assistantText, event.status]))
+      .update(
+        JSON.stringify([
+          event.sourceSessionId,
+          event.sessionIncarnation,
+          event.runId,
+          event.resultId,
+          event.assistantText,
+          event.status,
+        ]),
+      )
       .digest('hex');
     const reservation = await receipts.reserve({
       namespace: PUBLICATION_NAMESPACE,
@@ -386,7 +466,8 @@ export class GlobalLiveCompanion {
       destination: `${route.scope.sessionId}:${route.sessionIncarnation}`,
       transactionId: route.transactionId,
     });
-    if (reservation.kind === 'conflict') throw new Error('Voice result identity conflicts with a previous publication.');
+    if (reservation.kind === 'conflict')
+      throw new Error('Voice result identity conflicts with a previous publication.');
     if (reservation.kind === 'existing') {
       if (reservation.receipt.outcome !== 'admitted') throw new Error('Voice result publication is uncertain.');
       return;
@@ -429,10 +510,14 @@ export class GlobalLiveCompanion {
       fetch: async (request) => {
         const path = new URL(request.url).pathname;
         if (request.method === 'GET' && path === '/live/status') return Response.json(this.status);
-        if (request.method !== 'POST' || path !== '/live/control') return Response.json({ error: 'Not found.' }, { status: 404 });
+        if (request.method !== 'POST' || path !== '/live/control')
+          return Response.json({ error: 'Not found.' }, { status: 404 });
         const body = object(await request.json().catch(() => undefined));
-        if (!body || !['activate', 'end', 'mute', 'unmute', 'interrupt'].includes(String(body.action)) ||
-            (body.action === 'activate' && typeof body.sessionId !== 'string'))
+        if (
+          !body ||
+          !['activate', 'end', 'mute', 'unmute', 'interrupt'].includes(String(body.action)) ||
+          (body.action === 'activate' && typeof body.sessionId !== 'string')
+        )
           return Response.json({ error: 'Invalid global Voice control.' }, { status: 400 });
         try {
           return Response.json(await this.control(body as unknown as GlobalLiveControl));

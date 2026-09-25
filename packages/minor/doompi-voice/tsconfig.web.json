@@ -19,5 +19,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["src/types", "src/constants", "src/extensions/**/(frontend)/**/*", "generated/web.ts"]
+  "include": ["src/types", "src/constants", "src/extensions/**/(frontend)/**/*", "generated/web.ts", "tests/globalVoicePageLease.test.ts"]
 }
