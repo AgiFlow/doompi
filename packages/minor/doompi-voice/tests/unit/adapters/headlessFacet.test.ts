@@ -224,6 +224,41 @@ it('activates live voice through the native ownership broker and exposes tools o
       state: 'active',
       mode: 'live',
     });
+    const snapshots: Array<{ handoff?: unknown }> = [];
+    const syncOwnership = broker.syncOwnership.bind(broker);
+    vi.spyOn(broker, 'syncOwnership').mockImplementation(async (snapshot) => {
+      snapshots.push(snapshot);
+      return syncOwnership(snapshot);
+    });
+    const fire = async (event: string, value: unknown) => {
+      const hook = facet.hooks?.find((candidate) => candidate.event === event);
+      if (!hook) throw new Error(`Missing ${event} hook.`);
+      await hook.handle(value as never, host.context);
+    };
+    await post(VOICE_OWNERSHIP_ROUTES.command, {
+      version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+      commandId: 'catalog-live',
+      action: 'catalog',
+      targets: [{ handle: 'target', label: 'Target', order: 1 }],
+      catalogRevision: 'catalog-live',
+    });
+    await fire('before_agent_start', {});
+    const transfer = await headlessTool(facet.tools, 'transfer_voice').execute(
+      'transfer-call',
+      { target: 1, revision: 'catalog-live' },
+      undefined,
+      undefined,
+      host.context,
+    );
+    expect(transfer.isError).not.toBe(true);
+    expect(snapshots.every((snapshot) => snapshot.handoff === undefined)).toBe(true);
+    expect(await (await api.fetch(new Request('http://voice/status'))).json()).toMatchObject({ state: 'active' });
+    await fire('message_end', {
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Source agent finished.' }] },
+    });
+    await fire('agent_settled', {});
+    expect(snapshots.at(-1)?.handoff).toMatchObject({ handle: 'target' });
+
     const stopped = await api.fetch(
       new Request('http://voice/control', { method: 'POST', body: JSON.stringify({ action: 'deactivate' }) }),
     );

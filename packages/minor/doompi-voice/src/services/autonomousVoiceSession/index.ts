@@ -110,10 +110,9 @@ function workerConfiguration(config: ResolvedVoiceConfig): VoiceWorkerCaptureCon
 
 function activationState(snapshot: AutonomousVoiceSnapshot): AutoCaptureActivationState {
   if (snapshot.matches('off')) return 'disabled';
-  if (snapshot.matches('enabling') || snapshot.matches({ active: { capture: 'startingCapture' } })) return 'starting';
   if (snapshot.matches('failed')) return 'shuttingDown';
   if (snapshot.matches('stopping') || snapshot.context.stopRequested) return 'draining';
-  return 'active';
+  return snapshot.context.activationReady ? 'active' : 'starting';
 }
 
 function narrationDeferred(snapshot: AutonomousVoiceSnapshot): boolean {

@@ -1,9 +1,17 @@
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import { loadHarnessState } from '@agimon-ai/doompi-config/harnessStore';
 import type {
   DoomHeadlessActivity,
   DoomHeadlessCommand,
   DoomHeadlessExecutionContext,
+  DoomHeadlessSelection,
   DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
+import { isDoomMcpProjection } from '@agimon-ai/doompi-core/mcpProjection';
+import type { DoomMcpSessionConfig } from '@agimon-ai/doompi-core/mcpSession';
 
 import { COMMAND_NAME, SERVER_COMMAND_DESCRIPTION } from '../../constants/mcp';
 import { MCP_STATUS_KEY } from '../../constants/piMcp';
@@ -12,10 +20,65 @@ import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../t
 import { formatStatus } from '../mcpCommand';
 import { McpSession } from '../mcpSession';
 import { createMcpChildTool } from '../mcpSessionTools';
+import { mcpSessionConfigFromProjection } from '../projection';
 import { readSessionConfig } from '../sessionConfig';
 
-export function createMcpServerRuntime(environment: Readonly<Record<string, string | undefined>> = {}) {
+function sessionConfiguration(execution: DoomHeadlessExecutionContext, workspaceRoot?: string): DoomMcpSessionConfig {
+  if (workspaceRoot !== undefined) {
+    const loaded = loadHarnessState({ ...execution.environment });
+    const projection = loaded.state.mcpProjection;
+    if (
+      loaded.filePath &&
+      loaded.state.root === workspaceRoot &&
+      execution.repoRoot === workspaceRoot &&
+      loaded.state.mcp &&
+      loaded.state.majorMode === execution.selection.majorMode &&
+      JSON.stringify(loaded.state.domains) === JSON.stringify(execution.selection.domains) &&
+      JSON.stringify(loaded.state.layers) === JSON.stringify(execution.selection.activeLayers) &&
+      isDoomMcpProjection(projection) &&
+      projection.repoRoot === workspaceRoot
+    ) {
+      const configuration = mcpSessionConfigFromProjection(projection);
+      if (execution.cwd === workspaceRoot || !projection.enabled) return { ...configuration, repoRoot: execution.cwd };
+      const configPath = path.join(execution.cwd, '.mcp.json');
+      let repositorySource: (typeof projection.sources)[number] | undefined;
+      try {
+        const content = fs.readFileSync(configPath);
+        repositorySource = {
+          sourceId: 'repository:.mcp.json',
+          owner: 'repository',
+          format: 'native',
+          configPath,
+          contentDigest: createHash('sha256').update(content).digest('hex'),
+        };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      return {
+        ...configuration,
+        repoRoot: execution.cwd,
+        sources: [
+          ...projection.sources.filter((source) => source.owner !== 'repository'),
+          ...(repositorySource ? [repositorySource] : []),
+        ],
+      };
+    }
+    return {
+      enabled: false,
+      repoRoot: execution.cwd,
+      stagingDirectory: path.join(execution.cwd, '.doom', 'mcp-disabled'),
+      sources: [],
+    };
+  }
+  return readSessionConfig(execution.environment, execution.cwd);
+}
+
+export function createMcpServerRuntime(
+  environment: Readonly<Record<string, string | undefined>> = {},
+  workspaceRoot?: string,
+) {
   let active: DoomHeadlessExecutionContext | undefined;
+  let staleSelection = false;
   const authorizing = new Map<string, symbol>();
   const session = new McpSession({
     environment: { ...environment },
@@ -32,6 +95,7 @@ export function createMcpServerRuntime(environment: Readonly<Record<string, stri
     name: 'doompi-mcp-runtime',
     async start(execution) {
       active = execution;
+      staleSelection = false;
       const reported = new Set<string>();
       const publish = () => {
         execution.client.setStatus(
@@ -50,7 +114,7 @@ export function createMcpServerRuntime(environment: Readonly<Record<string, stri
       };
       const stopPublishing = session.onChange(publish);
       try {
-        await session.reconfigure(readSessionConfig(execution.environment, execution.cwd));
+        await session.reconfigure(sessionConfiguration(execution, workspaceRoot));
         publish();
       } catch (error) {
         await execution.client.notify({
@@ -63,6 +127,7 @@ export function createMcpServerRuntime(environment: Readonly<Record<string, stri
         stopPublishing();
         if (active !== execution) return;
         active = undefined;
+        staleSelection = false;
         authorizing.clear();
         try {
           await session.dispose();
@@ -78,6 +143,7 @@ export function createMcpServerRuntime(environment: Readonly<Record<string, stri
 
   const invoke: Parameters<typeof createMcpChildTool>[0] = async (parameters, signal) => {
     if (!active) throw new Error('The MCP runtime has not started yet.');
+    if (staleSelection) throw new Error('The MCP projection is stale for the current selection.');
     const selected = session
       .activeToolDefinitions()
       .find((candidate) => candidate.serverName === parameters.server && candidate.toolName === parameters.tool);
@@ -120,6 +186,7 @@ export function createMcpServerRuntime(environment: Readonly<Record<string, stri
           return;
         }
         if (!active) throw new Error('The MCP runtime has not started yet.');
+        if (staleSelection) throw new Error('The MCP projection is stale for the current selection.');
         if (subcommand === 'auth' || subcommand === 'disconnect') {
           if (!serverName) throw new Error(`Name the server, for example /mcp ${subcommand} <server>.`);
           const server = session.getServers().find((candidate) => candidate.name === serverName);
@@ -164,7 +231,7 @@ export function createMcpServerRuntime(environment: Readonly<Record<string, stri
             // Reset the catalog even when paths are unchanged or teardown fails.
             session.install({ enabled: false, repoRoot: execution.cwd, stagingDirectory: execution.cwd });
           }
-          await session.reconfigure(readSessionConfig(execution.environment, execution.cwd));
+          await session.reconfigure(sessionConfiguration(execution, workspaceRoot));
           await notify('Reconnecting MCP servers.');
           return;
         }
@@ -174,5 +241,24 @@ export function createMcpServerRuntime(environment: Readonly<Record<string, stri
       }
     },
   };
-  return { session, activities: [activity], commands: [command], tools: [tool], childTool };
+  return {
+    session,
+    activities: [activity],
+    commands: [command],
+    tools: [tool],
+    childTool,
+    async onSelectionChange(selection: DoomHeadlessSelection) {
+      if (!active || workspaceRoot === undefined) return;
+      const initial = active.selection;
+      if (!initial || JSON.stringify(initial.domains) === JSON.stringify(selection.domains)) return;
+      staleSelection = true;
+      authorizing.clear();
+      await session.reconfigure({
+        enabled: false,
+        repoRoot: active.cwd,
+        stagingDirectory: path.join(active.cwd, '.doom', 'mcp-disabled'),
+        sources: [],
+      });
+    },
+  };
 }

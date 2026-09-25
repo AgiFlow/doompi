@@ -51,13 +51,13 @@ function realPath(target: string): string {
   }
 }
 
-function resolveAgentDirectory(env: NodeJS.ProcessEnv): string {
+function resolveAgentDirectory(env: Readonly<Record<string, string | undefined>>, cwd: string): string {
   const configured = env[PI_CODING_AGENT_DIR_ENV]?.trim();
   if (configured === HOME_ALIAS) return os.homedir();
   if (configured?.startsWith(HOME_ALIAS_PREFIX)) {
     return path.join(os.homedir(), configured.slice(HOME_ALIAS_PREFIX.length));
   }
-  return configured ? path.resolve(configured) : path.join(os.homedir(), DEFAULT_CONFIG_DIR_NAME, AGENT_DIR_NAME);
+  return configured ? path.resolve(cwd, configured) : path.join(os.homedir(), DEFAULT_CONFIG_DIR_NAME, AGENT_DIR_NAME);
 }
 
 /**
@@ -207,8 +207,11 @@ async function isEmptySessionAsync(directory: string): Promise<boolean> {
  * another process, such as the cockpit hub, resolves the same root from its
  * own environment.
  */
-export function resolveRunnerStoreDirectory(env: NodeJS.ProcessEnv): string {
-  return path.join(resolveAgentDirectory(env), STORE_DIR_NAME);
+export function resolveRunnerStoreDirectory(
+  env: Readonly<Record<string, string | undefined>>,
+  cwd: string = process.cwd(),
+): string {
+  return path.join(resolveAgentDirectory(env, cwd), STORE_DIR_NAME);
 }
 
 /** Durable metadata directory for one session. Used by APIs and history reads, not live transport. */
@@ -221,8 +224,13 @@ export class RunnerPaths implements IRunnerPaths {
   private adoptedSessionId: string | undefined;
   private repository: string | undefined;
 
+  constructor(
+    private readonly cwd: string = process.cwd(),
+    private readonly env: Readonly<Record<string, string | undefined>> = { ...process.env },
+  ) {}
+
   repositoryPath(): string {
-    this.repository ??= realPath(git(['rev-parse', '--show-toplevel'], process.cwd()) ?? process.cwd());
+    this.repository ??= realPath(git(['rev-parse', '--show-toplevel'], this.cwd) ?? this.cwd);
     return this.repository;
   }
 
@@ -233,14 +241,14 @@ export class RunnerPaths implements IRunnerPaths {
   }
 
   logDirectory(sessionId?: string): string {
-    const override = process.env[LOG_DIR_ENV]?.trim();
-    if (override) return path.resolve(override);
+    const override = this.env[LOG_DIR_ENV]?.trim();
+    if (override) return path.resolve(this.cwd, override);
     return path.join(this.sessionDirectory(sessionId), LOG_DIR_NAME);
   }
 
   stateDirectory(sessionId?: string): string {
-    const override = process.env[LOG_DIR_ENV]?.trim();
-    if (override) return path.join(path.resolve(override), '..', STATE_DIR_NAME);
+    const override = this.env[LOG_DIR_ENV]?.trim();
+    if (override) return path.join(path.resolve(this.cwd, override), '..', STATE_DIR_NAME);
     return path.join(this.sessionDirectory(sessionId), STATE_DIR_NAME);
   }
 
@@ -269,7 +277,7 @@ export class RunnerPaths implements IRunnerPaths {
     const result: LogSweepResult = { removed: [], errors: [] };
     // A pinned log directory belongs to whoever pinned it, so that branch only
     // ever removes the files this package put there.
-    if (process.env[LOG_DIR_ENV]?.trim()) {
+    if (this.env[LOG_DIR_ENV]?.trim()) {
       this.sweepStateDirectory(this.stateDirectory(), this.sessionId(), ttlMs, now, result);
       return result;
     }
@@ -299,7 +307,7 @@ export class RunnerPaths implements IRunnerPaths {
 
   async sweepHistoryAsync(ttlMs: number, now: number = Date.now()): Promise<LogSweepResult> {
     const result: LogSweepResult = { removed: [], errors: [] };
-    if (process.env[LOG_DIR_ENV]?.trim()) {
+    if (this.env[LOG_DIR_ENV]?.trim()) {
       await this.sweepStateDirectoryAsync(this.stateDirectory(), this.sessionId(), ttlMs, now, result);
       return result;
     }
@@ -326,8 +334,9 @@ export class RunnerPaths implements IRunnerPaths {
   }
 
   legacyDirectory(): string | undefined {
-    const commonDirectory = git(['rev-parse', '--path-format=absolute', '--git-common-dir'], process.cwd());
-    return commonDirectory ? path.join(commonDirectory, STORE_DIR_NAME) : undefined;
+    const commonDirectory = git(['rev-parse', '--path-format=absolute', '--git-common-dir'], this.cwd);
+    if (!commonDirectory || !git(['rev-parse', '--show-toplevel'], this.cwd)) return undefined;
+    return path.join(realPath(commonDirectory), STORE_DIR_NAME);
   }
 
   removeLegacyStore(): string | undefined {
@@ -420,15 +429,15 @@ export class RunnerPaths implements IRunnerPaths {
   }
 
   private sessionId(explicit?: string): string {
-    const sessionId = explicit?.trim() || this.adoptedSessionId || inheritedSessionId();
+    const sessionId = explicit?.trim() || this.adoptedSessionId || inheritedSessionId(this.env);
     if (!sessionId) throw new Error('PI_SESSION_ID is required for doom-runner storage');
     return sessionId;
   }
 
   private storeDirectory(): string {
-    const override = process.env[LOG_DIR_ENV]?.trim();
-    if (override) return path.dirname(path.resolve(override));
-    return resolveRunnerStoreDirectory(process.env);
+    const override = this.env[LOG_DIR_ENV]?.trim();
+    if (override) return path.dirname(path.resolve(this.cwd, override));
+    return resolveRunnerStoreDirectory(this.env, this.cwd);
   }
 
   private sessionDirectory(sessionId?: string): string {
@@ -466,7 +475,7 @@ export class RunnerPaths implements IRunnerPaths {
       }
     }
 
-    for (const record of expiredCompletedRecords(completed, ttlMs, now, getMaxCompletedRunners())) {
+    for (const record of expiredCompletedRecords(completed, ttlMs, now, getMaxCompletedRunners(this.env))) {
       this.removeHistoryFiles(sessionId, record.id, record.statePath, result);
     }
   }
@@ -502,7 +511,7 @@ export class RunnerPaths implements IRunnerPaths {
       }
     }
 
-    for (const record of expiredCompletedRecords(completed, ttlMs, now, getMaxCompletedRunners())) {
+    for (const record of expiredCompletedRecords(completed, ttlMs, now, getMaxCompletedRunners(this.env))) {
       await this.removeHistoryFilesAsync(sessionId, record.id, record.statePath, result);
     }
   }

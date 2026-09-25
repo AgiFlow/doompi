@@ -126,8 +126,8 @@ export async function cleanupLegacyRunnerStore(
   for (const record of legacyRecords) {
     const childAlive = dependencies.processControl.isAlive(record.pid);
     const ownerAlive = dependencies.processControl.isAlive(record.hostPid);
-    const ownedByPreviousRuntime = record.hostPid === dependencies.currentHostPid;
-    if (childAlive && ownerAlive && !ownedByPreviousRuntime) continue;
+    // Multiple sessions share the host PID; it does not establish ownership.
+    if (childAlive && ownerAlive) continue;
     try {
       if (childAlive) {
         const stopped = await stopRunnerProcess(record, dependencies.launcher, dependencies.rmuxBackend);
@@ -152,6 +152,10 @@ export async function cleanupLegacyRunnerStore(
     result.errors.push(`Could not verify legacy runner dependencies: ${String(error)}`);
     return result;
   }
-  if (liveDependencies.length === 0) result.removed = dependencies.paths.removeLegacyStore();
+  // A failed stop or release leaves the store's ownership unverified. Never
+  // recursively remove it merely because the registry no longer reports a pid.
+  if (result.errors.length === 0 && liveDependencies.length === 0) {
+    result.removed = dependencies.paths.removeLegacyStore();
+  }
   return result;
 }

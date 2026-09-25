@@ -16,7 +16,10 @@ declare module '@deepseek-ai/cordis' {
 
 export const createRunnerServerRoot = ({ host }: DoomServerPluginContext) => {
   if (!host.context.directEvents) throw new Error('Runner headless facet requires the session direct event bus.');
-  const dependencies = createRunnerDependencies({ environment: Object.freeze({ ...process.env }) });
+  if (!host.context.cwd || !host.context.environment) {
+    throw new Error('Runner headless facet requires session cwd and environment.');
+  }
+  const dependencies = createRunnerDependencies({ cwd: host.context.cwd, environment: host.context.environment });
   const runtime = createRunnerServerRuntime(dependencies, host.context.directEvents);
   const value = {
     tool: createHeadlessBashTool(

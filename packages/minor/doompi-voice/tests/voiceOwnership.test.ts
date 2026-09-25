@@ -629,7 +629,11 @@ describe('SessionVoiceOwnership', () => {
     expect(ownership.snapshot().handoff).toEqual(handoff);
     ownership.clearHandoffRequest(handoff.requestId);
     expect(ownership.snapshot().handoff).toBeUndefined();
-
+    expect(ownership.handoff(1, 'catalog-requests')).toBeDefined();
+    state = 'disabled';
+    expect(ownership.snapshot().handoff).toBeUndefined();
+    state = 'active';
+    expect(ownership.snapshot().handoff).toBeUndefined();
     const reused = command('reused-command', 'activate');
     await ownership.command(reused);
     await expect(ownership.command(command('reused-command', 'deactivate'))).resolves.toMatchObject({
@@ -706,6 +710,78 @@ describe('SessionVoiceOwnership', () => {
       { setTimeout, clear: clearTimeout },
     );
     await expect(bounded.synchronize()).rejects.toThrow('synchronization limit exceeded');
+  });
+  it('keeps the source selected until its response finishes speaking, then hands off', async () => {
+    const source = new SessionVoiceOwnership();
+    const target = new SessionVoiceOwnership();
+    let sourceState: 'active' | 'disabled' = 'active';
+    let targetState: 'active' | 'disabled' = 'disabled';
+    source.register({
+      label: 'Source',
+      eligible: true,
+      controller: {
+        get state() {
+          return sourceState;
+        },
+        activateVoice: async () => {
+          sourceState = 'active';
+        },
+        deactivateVoice: async () => {
+          sourceState = 'disabled';
+        },
+      },
+    });
+    target.register({
+      label: 'Target',
+      eligible: true,
+      controller: {
+        get state() {
+          return targetState;
+        },
+        activateVoice: async () => {
+          targetState = 'active';
+        },
+        deactivateVoice: async () => {
+          targetState = 'disabled';
+        },
+      },
+    });
+    const coordinator = new VoiceOwnershipCoordinator(
+      { send: (sessionId, value) => (sessionId === 'source' ? source : target).command(value) },
+      vi.fn(),
+      { now: () => 0, createId: () => globalThis.crypto.randomUUID() },
+    );
+    coordinator.update('source', source.registration()!);
+    coordinator.update('target', target.registration()!);
+    await coordinator.publishCatalogs();
+    expect(source.handoff(1, source.snapshot().catalogRevision)).toBeDefined();
+
+    let speaking = true;
+    const bridge = new SessionVoiceOwnershipBridge(
+      source,
+      {
+        syncOwnership: async (snapshot) => {
+          coordinator.update('source', snapshot.registration!);
+          if (snapshot.handoff)
+            await coordinator.handoff('source', snapshot.handoff.handle, snapshot.handoff.catalogRevision);
+          return undefined;
+        },
+      },
+      { setTimeout, clear: clearTimeout },
+      250,
+      () => undefined,
+      () => speaking,
+    );
+    await bridge.synchronize();
+    expect(sourceState).toBe('active');
+    expect(targetState).toBe('disabled');
+    expect(coordinator.payload().activeSessionId).toBe('source');
+
+    speaking = false;
+    await bridge.synchronize();
+    expect(sourceState).toBe('disabled');
+    expect(targetState).toBe('active');
+    expect(coordinator.payload().activeSessionId).toBe('target');
   });
 });
 

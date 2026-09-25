@@ -85,6 +85,7 @@ export class SessionVoiceOwnership {
   public registration(): VoiceOwnershipRegistration | undefined {
     const binding = this.binding;
     if (binding === undefined) return undefined;
+    if (binding.controller.state === 'disabled') this.handoffRequest = undefined;
     const active = isOwnershipActive(binding.controller.state);
     const label =
       binding.labelSource === undefined ? binding.label : ownershipLabel(binding.labelSource, binding.label);
@@ -264,6 +265,7 @@ export class SessionVoiceOwnershipBridge {
     private readonly clock: Pick<IClock, 'setTimeout' | 'clear'>,
     private readonly intervalMs = 250,
     private readonly onError: (error: unknown) => void = () => undefined,
+    private readonly deferHandoff: () => boolean = () => false,
   ) {}
 
   public start(): void {
@@ -298,11 +300,18 @@ export class SessionVoiceOwnershipBridge {
     }, delay);
   }
 
+  // ponytail: Settled turns protect legacy playback, but live WebRTC still belongs to a
+  // session. Move the live companion and agent routing to global scope for uninterrupted transfer.
+  private syncSnapshot(): VoiceOwnershipSessionSnapshot {
+    const snapshot = this.ownership.snapshot();
+    return this.deferHandoff() ? { ...snapshot, handoff: undefined } : snapshot;
+  }
+
   private async performSync(): Promise<void> {
-    let command = await this.host.syncOwnership(this.ownership.snapshot());
+    let command = await this.host.syncOwnership(this.syncSnapshot());
     for (let count = 0; command !== undefined && count < 8; count += 1) {
       await this.ownership.command(command);
-      command = await this.host.syncOwnership(this.ownership.snapshot());
+      command = await this.host.syncOwnership(this.syncSnapshot());
     }
     if (command !== undefined) throw new Error('Voice ownership command synchronization limit exceeded.');
   }

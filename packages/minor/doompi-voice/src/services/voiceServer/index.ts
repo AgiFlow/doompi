@@ -155,6 +155,7 @@ export function createVoiceServer(
     }),
   });
   let busy = false;
+  let agentRunning = false;
   const live = new LiveVoiceController({
     host: broker.live,
     clock,
@@ -220,8 +221,13 @@ export function createVoiceServer(
       },
     },
   });
-  const bridge = new SessionVoiceOwnershipBridge(ownership, broker, clock, 250, (error) =>
-    notify(String(error), 'error'),
+  const bridge = new SessionVoiceOwnershipBridge(
+    ownership,
+    broker,
+    clock,
+    250,
+    (error) => notify(String(error), 'error'),
+    () => agentRunning,
   );
   const status = () => ({
     state: mode.state,
@@ -480,6 +486,7 @@ export function createVoiceServer(
         event: 'before_agent_start',
         handle() {
           busy = true;
+          agentRunning = true;
           narrated = false;
           finalText = '';
         },
@@ -502,9 +509,14 @@ export function createVoiceServer(
         event: 'agent_settled',
         async handle() {
           busy = false;
-          if (finalText && mode.state === 'active') {
-            if (mode.selectedMode === 'live') await live.publishAgentResult(String(clock.now()), finalText);
-            else if (!narrated) await mode.narrateFallback(finalText);
+          try {
+            if (finalText && mode.state === 'active') {
+              if (mode.selectedMode === 'live') await live.publishAgentResult(String(clock.now()), finalText);
+              else if (!narrated) await mode.narrateFallback(finalText);
+            }
+          } finally {
+            agentRunning = false;
+            if (ownership.snapshot().handoff && mode.state === 'active') await bridge.synchronize();
           }
         },
       },

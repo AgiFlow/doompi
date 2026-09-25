@@ -65,6 +65,8 @@ export interface RunnerLogApiOptions {
   sessionId: string;
   /** The store root; defaults to this environment's agent directory. */
   storeDir?: string;
+  environment?: Readonly<Record<string, string | undefined>>;
+  cwd?: string;
   logReader?: ILogReader;
   logTail?: ILogTail;
   /**
@@ -144,7 +146,7 @@ function logQueryOf(url: URL): LogQuery {
 export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
   const logReader = options.logReader ?? new LogReader();
   const logTail = options.logTail ?? new LogTail();
-  const storeDir = options.storeDir ?? resolveRunnerStoreDirectory(process.env);
+  const storeDir = options.storeDir ?? resolveRunnerStoreDirectory(options.environment ?? process.env, options.cwd);
   const sessionId = options.sessionId;
   const app = new Hono();
 
@@ -153,7 +155,7 @@ export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
   let paneBackend: IRmuxBackend | undefined = options.pane;
   const pane = (): IRmuxBackend => {
     paneBackend ??= (() => {
-      const paths = new RunnerPaths();
+      const paths = new RunnerPaths(options.cwd, options.environment);
       return new PtyBackendChain(new RmuxBackend(paths), new TmuxBackend(paths));
     })();
     return paneBackend;
@@ -349,7 +351,11 @@ export const api: DoomApi = {
   start(context: DoomApiContext): DoomApiHandler {
     // The host is one session's server, so its id is the whole scope; a hub
     // would have handed no session at all, and there is nothing to answer.
-    const app = createRunnerLogApi({ sessionId: context.sessionId ?? '' });
+    const app = createRunnerLogApi({
+      sessionId: context.sessionId ?? '',
+      cwd: context.cwd,
+      environment: context.environment,
+    });
     return {
       fetch: (request) => app.fetch(request),
       // Nothing outlives a request: a follow's watch and its poll are both

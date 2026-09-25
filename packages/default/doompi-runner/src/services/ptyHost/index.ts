@@ -34,6 +34,7 @@ export class PtyHost implements IPtyHost {
     private readonly logFile: ILogFile,
     private readonly processControl: IProcessControl,
     private readonly clock: IClock,
+    private readonly environment: Readonly<Record<string, string | undefined>> = process.env,
   ) {}
 
   async launch(request: PtyLaunchRequest): Promise<PtyRun> {
@@ -41,12 +42,12 @@ export class PtyHost implements IPtyHost {
     const rows = request.rows ?? DEFAULT_ROWS;
     const writer = this.logFile.open(request.id);
     const terminal = new HeadlessTerminal({ cols, rows, scrollback: SCROLLBACK, allowProposedApi: true });
-    const memoryLimit = getResultMaxBytes() * MEMORY_BUFFER_FACTOR;
+    const memoryLimit = getResultMaxBytes(this.environment) * MEMORY_BUFFER_FACTOR;
 
     const child = await this.spawner.spawn({
       command: request.command,
       cwd: request.cwd,
-      env: { ...process.env, ...NO_TERMINAL_INPUT_ENV, [PI_SESSION_ID_ENV]: request.sessionId },
+      env: { ...this.environment, ...NO_TERMINAL_INPUT_ENV, [PI_SESSION_ID_ENV]: request.sessionId },
       cols,
       rows,
     });

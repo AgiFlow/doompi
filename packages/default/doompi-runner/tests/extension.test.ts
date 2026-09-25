@@ -281,30 +281,31 @@ describe('legacy runner cleanup', () => {
     expect(result).toEqual({ reclaimed: [legacy.id], errors: [], removed: '/repo/.git/doom-runner' });
   });
 
-  it('keeps a live legacy entry when it cannot be stopped', async () => {
+  it('does not stop or remove another live session even when it shares the host PID', async () => {
     const legacy = { ...active, hostPid: 99, logPath: '/repo/.git/doom-runner/logs/api.log' };
+    const stop = vi.fn();
+    const removeLegacyStore = vi.fn();
     const result = await cleanupLegacyRunnerStore({
       registry: {
         list: vi.fn(async () => [legacy]),
         listAcrossRepositories: vi.fn(async () => [legacy]),
         release: vi.fn(),
       } as never,
-      launcher: { stop: vi.fn(async () => false) } as never,
-      rmuxBackend: { stop: vi.fn(async () => false) } as never,
+      launcher: { stop } as never,
+      rmuxBackend: { stop } as never,
       processControl: { isAlive: vi.fn(() => true) } as never,
       currentHostPid: 99,
-      paths: {
-        legacyDirectory: () => '/repo/.git/doom-runner',
-        removeLegacyStore: vi.fn(),
-      } as never,
+      paths: { legacyDirectory: () => '/repo/.git/doom-runner', removeLegacyStore } as never,
     });
 
-    expect(result.errors[0]).toContain('Could not stop legacy runner');
-    expect(result.reclaimed).toEqual([]);
+    expect(stop).not.toHaveBeenCalled();
+    expect(removeLegacyStore).not.toHaveBeenCalled();
+    expect(result).toEqual({ reclaimed: [], errors: [] });
   });
 
-  it('reports a failure while releasing a legacy entry', async () => {
+  it('reports a failure while releasing a legacy entry without deleting the store', async () => {
     const legacy = { ...active, logPath: '/repo/.git/doom-runner/logs/api.log' };
+    const removeLegacyStore = vi.fn();
     const result = await cleanupLegacyRunnerStore({
       registry: {
         list: vi.fn(async () => [legacy]),
@@ -315,10 +316,11 @@ describe('legacy runner cleanup', () => {
       rmuxBackend: { stop: vi.fn() } as never,
       processControl: { isAlive: vi.fn(() => false) } as never,
       currentHostPid: 99,
-      paths: { legacyDirectory: () => '/repo/.git/doom-runner', removeLegacyStore: vi.fn() } as never,
+      paths: { legacyDirectory: () => '/repo/.git/doom-runner', removeLegacyStore } as never,
     });
 
     expect(result.errors[0]).toContain('registry locked');
+    expect(removeLegacyStore).not.toHaveBeenCalled();
   });
 });
 

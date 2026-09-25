@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { IVoiceCommandCorrector, VoiceCommandContext } from '../src/services/commandCorrection';
 import type { IVoiceTurnFallbackNarrator } from '../src/services/fallbackNarration';
+import { SessionVoiceOwnership } from '../src/services/sessionVoiceOwnership';
 import type { IVoiceTranscriptAdjudicator, VoiceTranscriptSignalEvidence } from '../src/services/transcriptAdmission';
+import { VoiceOwnershipCoordinator } from '../src/services/voiceOwnershipCoordinator';
 import {
   VoiceWorkerAutoCaptureController,
   type VoiceWorkerAutoCaptureTelemetrySink,
@@ -15,7 +17,7 @@ import {
   type VoiceWorkerEventPayload,
 } from '../src/services/voiceWorkerProtocol';
 import type { VoiceWorkerSessionClient } from '../src/services/voiceWorkerSessionController';
-import type { AutoCaptureUi, IClock, ITtsAdapter, TtsPlaybackResult } from '../src/types';
+import type { AutoCaptureActivationState, AutoCaptureUi, IClock, ITtsAdapter, TtsPlaybackResult } from '../src/types';
 
 const config: ResolvedVoiceConfig = {
   mode: 'legacy',
@@ -85,6 +87,7 @@ function harness(
     adjudicator?: IVoiceTranscriptAdjudicator;
     fallbackNarrator?: IVoiceTurnFallbackNarrator;
     commandContext?: () => VoiceCommandContext | undefined;
+    onActivationStateChange?: (state: AutoCaptureActivationState) => void;
   } = {},
 ) {
   let options: VoiceWorkerClientOptions | undefined;
@@ -163,6 +166,7 @@ function harness(
       return client;
     },
     ...(overrides.telemetrySink ? { telemetrySink: overrides.telemetrySink } : {}),
+    ...(overrides.onActivationStateChange ? { onActivationStateChange: overrides.onActivationStateChange } : {}),
   });
   const emit = (payload: VoiceWorkerEventPayload): void => {
     options?.onEvent({
@@ -432,6 +436,167 @@ describe('VoiceWorkerAutoCaptureController', () => {
     await expect(narration).resolves.toBe('interrupted');
     expect(generationSignal?.aborted).toBe(true);
     expect(h.tts.speak).not.toHaveBeenCalled();
+  });
+
+  it('keeps activation and ownership ready while the next capture is starting', async () => {
+    const activationStates: AutoCaptureActivationState[] = [];
+    const h = harness({ onActivationStateChange: (state) => activationStates.push(state) });
+    await h.controller.toggle(h.ui);
+    expect(h.controller.state).toBe('starting');
+    h.ready();
+    expect(h.controller.state).toBe('active');
+    activationStates.length = 0;
+
+    const ownership = new SessionVoiceOwnership();
+    ownership.register({
+      label: 'session',
+      eligible: true,
+      controller: {
+        get state() {
+          return h.controller.state;
+        },
+        activateVoice: async () => undefined,
+        deactivateVoice: async () => undefined,
+      },
+    });
+    const selections: Array<string | null> = [];
+    const coordinator = new VoiceOwnershipCoordinator(
+      {
+        send: async () => {
+          throw new Error('Unexpected voice ownership command.');
+        },
+      },
+      ({ activeSessionId }) => selections.push(activeSessionId),
+      { now: () => Date.now(), createId: () => crypto.randomUUID() },
+    );
+    const synchronize = () => {
+      const registration = ownership.registration();
+      if (!registration) throw new Error('Voice ownership registration is unavailable.');
+      coordinator.update('session', registration);
+    };
+    synchronize();
+    expect(coordinator.payload().activeSessionId).toBe('session');
+    const first = await finishTurn(h, 'computer run check one');
+    expect(first.outcome).toBe('committed');
+    h.acknowledge(first.identity, 1, first.outcome);
+    await flush();
+    const second = h.current();
+    expect(second.captureId).not.toBe(first.identity.captureId);
+    expect(h.controller.state).toBe('active');
+    expect(activationStates).not.toContain('starting');
+    synchronize();
+    expect(coordinator.payload().activeSessionId).toBe('session');
+    expect(selections).toEqual(['session']);
+    const firstReply = h.controller.narrateFallback('Agent response to the first request.');
+    await flush();
+    expect(h.tts.speak).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'final', text: 'Agent response to the first request.' }),
+    );
+    expect(h.controller.state).toBe('active');
+    h.finishPlayback();
+    await expect(firstReply).resolves.toBe('completed');
+    h.ready(first.identity);
+    expect(h.controller.state).toBe('active');
+    h.ready(second);
+    const next = await finishTurn(h, 'computer run check two', 2);
+    expect(next.outcome).toBe('committed');
+    expect(h.deliver).toHaveBeenCalledTimes(2);
+    h.acknowledge(next.identity, 2, next.outcome);
+    await flush();
+    expect(h.controller.state).toBe('active');
+    const secondReply = h.controller.narrateFallback('Agent response to the second request.');
+    await flush();
+    expect(h.tts.speak).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'final', text: 'Agent response to the second request.' }),
+    );
+    h.finishPlayback();
+    await expect(secondReply).resolves.toBe('completed');
+    expect(h.controller.state).toBe('active');
+    await h.controller.shutdown(h.ui);
+    expect(h.controller.state).toBe('disabled');
+  });
+
+  it('hands an active voice conversation to another session and continues capturing and narrating there', async () => {
+    const source = harness();
+    const target = harness();
+    await enable(source);
+
+    const sourceOwnership = new SessionVoiceOwnership();
+    sourceOwnership.register({
+      label: 'Source',
+      eligible: true,
+      controller: {
+        get state() {
+          return source.controller.state;
+        },
+        activateVoice: async () => {
+          await source.controller.activate(source.ui);
+          source.ready();
+        },
+        deactivateVoice: () => source.controller.deactivate(source.ui),
+      },
+    });
+    const targetOwnership = new SessionVoiceOwnership();
+    targetOwnership.register({
+      label: 'Target',
+      eligible: true,
+      controller: {
+        get state() {
+          return target.controller.state;
+        },
+        activateVoice: async () => {
+          await target.controller.activate(target.ui);
+          target.ready();
+        },
+        deactivateVoice: () => target.controller.deactivate(target.ui),
+      },
+    });
+    const selections: Array<string | null> = [];
+    let nextCommand = 0;
+    const coordinator = new VoiceOwnershipCoordinator(
+      {
+        send: (sessionId, command) => (sessionId === 'source' ? sourceOwnership : targetOwnership).command(command),
+      },
+      ({ activeSessionId }) => selections.push(activeSessionId),
+      { now: () => Date.now(), createId: () => `command-${++nextCommand}` },
+    );
+    coordinator.update('source', sourceOwnership.registration()!);
+    coordinator.update('target', targetOwnership.registration()!);
+    const [choice] = coordinator.catalog('source');
+    expect(choice).toBeDefined();
+
+    expect(await coordinator.handoff('source', choice!.handle)).toBe(true);
+    expect(coordinator.payload().activeSessionId).toBe('target');
+    expect(selections).toEqual(['source', 'target']);
+    expect(source.controller.state).not.toBe('active');
+    expect(target.controller.state).toBe('active');
+    await expect(source.controller.narrateAgent('Stale source response')).resolves.toBe('interrupted');
+
+    const first = await finishTurn(target, 'computer continue in target');
+    expect(first.outcome).toBe('committed');
+    target.acknowledge(first.identity, 1, first.outcome);
+    await flush();
+    expect(target.controller.state).toBe('active');
+    expect(coordinator.payload().activeSessionId).toBe('target');
+    const narration = target.controller.narrateFallback('Target response.');
+    await flush();
+    expect(target.tts.speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Target response.' }));
+    target.finishPlayback();
+    await expect(narration).resolves.toBe('completed');
+    target.ready();
+    const second = await finishTurn(target, 'computer another target request', 2);
+    expect(second.outcome).toBe('committed');
+    expect(target.deliver).toHaveBeenNthCalledWith(1, 'continue in target');
+    expect(target.deliver).toHaveBeenNthCalledWith(2, 'another target request');
+    expect(source.deliver).not.toHaveBeenCalled();
+    target.acknowledge(second.identity, 2, second.outcome);
+    await flush();
+    expect(target.controller.state).toBe('active');
+    await target.controller.shutdown(target.ui);
+    coordinator.update('target', targetOwnership.registration()!);
+    expect(coordinator.payload().activeSessionId).toBeNull();
+    expect(selections).toEqual(['source', 'target', null]);
+    await source.controller.shutdown(source.ui);
   });
 
   it('processes twenty automatic endpoints, delivers exact text once, and restarts exactly once per turn', async () => {
@@ -971,7 +1136,8 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.client.beginCapture).toHaveBeenCalledTimes(2);
     expect(h.client.finalizeCapture).not.toHaveBeenCalled();
     expect(h.ui.notify).not.toHaveBeenCalledWith(expect.stringContaining('capture_duration_limit'), 'error');
-    expect(h.controller.state).toBe('starting');
+    expect(h.controller.state).toBe('active');
+    expect(h.ui.setStatus).toHaveBeenLastCalledWith('voice auto: starting');
 
     const speechIdentity = h.current();
     h.ready(speechIdentity);

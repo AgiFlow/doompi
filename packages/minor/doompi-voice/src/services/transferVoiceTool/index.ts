@@ -46,7 +46,7 @@ function definition(): ToolDefinition<typeof TransferVoiceInputSchema, { accepte
       if (catalogTarget === undefined || sessionVoiceOwnership.handoff(target as number, revision) === undefined)
         return result('Voice handoff rejected: the target is unavailable or no longer eligible.', false);
       return result(
-        `Voice handoff to "${catalogTarget.label}" requested. The current agent continues working while the server switches autonomous voice.`,
+        `Voice handoff to "${catalogTarget.label}" requested. The server switches sessions after the current agent turn settles.`,
         true,
       );
     },

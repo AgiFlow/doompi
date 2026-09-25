@@ -797,7 +797,7 @@ export function createVoiceRuntime(
   }).createOwner(undefined);
   let ownershipDispose: (() => void) | undefined;
   let ownershipBridge: SessionVoiceOwnershipBridge | undefined;
-
+  let agentRunning = false;
   const fallback = createVoiceTurnFallback({
     activeGeneration: (context) =>
       active && autoController.selectedMode !== 'live' && isNarrationRuntimeActive(narrationToolRuntime, context)
@@ -1017,7 +1017,14 @@ export function createVoiceRuntime(
         lastUi.setIndicator(undefined);
         lastUi.setStatus(STATUS_KEY, undefined);
         if (ownershipHost !== undefined) {
-          ownershipBridge = new SessionVoiceOwnershipBridge(sessionVoiceOwnership, ownershipHost, dependencies.clock);
+          ownershipBridge = new SessionVoiceOwnershipBridge(
+            sessionVoiceOwnership,
+            ownershipHost,
+            dependencies.clock,
+            250,
+            () => undefined,
+            () => agentRunning,
+          );
           ownershipBridge.start();
         }
         if (reloadHandoff && lastAutoUi && configuredMode() !== 'live') {
@@ -1028,6 +1035,7 @@ export function createVoiceRuntime(
       before_agent_start: async (event, context) => {
         ((_event, ctx) => {
           if (!active) return;
+          agentRunning = true;
           activeContext = ctx;
           const sessionId = (ctx as unknown as VoiceSessionContextLike).sessionManager?.getSessionId();
           narrationToolRuntime =
@@ -1039,19 +1047,27 @@ export function createVoiceRuntime(
         await fallback.events.before_agent_start?.(event, context);
       },
       agent_settled: async (event, context) => {
-        await (async (_event, ctx) => {
-          if (!active || autoController.selectedMode !== 'live' || liveController.state !== 'active') return;
-          if (ctx.sessionManager !== activeContext?.sessionManager) return;
-          const lastMessage = ctx.sessionManager.getBranch().findLast((entry) => entry.type === 'message');
-          if (!lastMessage || lastMessage.type !== 'message') return;
-          const message = lastMessage.message;
-          const text =
-            message.role === 'assistant' && message.stopReason !== 'error' && message.stopReason !== 'aborted'
-              ? extractTerminalAssistantText(message)
-              : undefined;
-          await liveController.publishAgentResult(lastMessage.id, text);
-        })(event, context);
-        await fallback.events.agent_settled?.(event, context);
+        try {
+          await (async (_event, ctx) => {
+            if (!active || autoController.selectedMode !== 'live' || liveController.state !== 'active') return;
+            if (ctx.sessionManager !== activeContext?.sessionManager) return;
+            const lastMessage = ctx.sessionManager.getBranch().findLast((entry) => entry.type === 'message');
+            if (!lastMessage || lastMessage.type !== 'message') return;
+            const message = lastMessage.message;
+            const text =
+              message.role === 'assistant' && message.stopReason !== 'error' && message.stopReason !== 'aborted'
+                ? extractTerminalAssistantText(message)
+                : undefined;
+            await liveController.publishAgentResult(lastMessage.id, text);
+          })(event, context);
+          await fallback.events.agent_settled?.(event, context);
+        } finally {
+          agentRunning = false;
+          if (active && sessionVoiceOwnership.snapshot().handoff)
+            void ownershipBridge?.synchronize().catch((error: unknown) => {
+              if (context.hasUI) context.ui.notify(String(error), ERROR_NOTIFICATION);
+            });
+        }
       },
     },
     async onStop() {

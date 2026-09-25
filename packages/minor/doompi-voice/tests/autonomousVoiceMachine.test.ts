@@ -45,6 +45,35 @@ function completeAcceptedTurn(h: ReturnType<typeof harness>): void {
 afterEach(() => vi.useRealTimers());
 
 describe('autonomous voice XState lifecycle', () => {
+  it('latches activation readiness only for an accepted capture and resets it on a new activation', () => {
+    const h = harness();
+    h.actor.send({ type: 'ENABLE_REQUESTED', sessionId: firstTurn.sessionId });
+    h.actor.send({ type: 'ENABLE_SUCCEEDED', ...firstTurn });
+    h.actor.send({ type: 'CAPTURE_READY', ...firstTurn, captureId: 'stale-capture' });
+    expect(h.actor.getSnapshot().context.activationReady).toBe(false);
+    h.actor.send({ type: 'CAPTURE_READY', ...firstTurn });
+    expect(h.actor.getSnapshot().context.activationReady).toBe(true);
+    h.actor.send({ type: 'MICROPHONE_MUTE_REQUESTED' });
+    expect(h.actor.getSnapshot().context.activationReady).toBe(true);
+    h.actor.send({ type: 'HARD_STOP_REQUESTED' });
+    h.actor.send({ type: 'STOP_COMPLETED' });
+    expect(h.actor.getSnapshot().context.activationReady).toBe(false);
+    h.actor.send({ type: 'ENABLE_REQUESTED', sessionId: 'session-2' });
+    expect(h.actor.getSnapshot().context.activationReady).toBe(false);
+  });
+
+  it('does not activate from readiness received while the initial capture is muted', () => {
+    const h = harness();
+    h.actor.send({ type: 'ENABLE_REQUESTED', sessionId: firstTurn.sessionId });
+    h.actor.send({ type: 'ENABLE_SUCCEEDED', ...firstTurn });
+    h.actor.send({ type: 'MICROPHONE_MUTE_REQUESTED' });
+    h.actor.send({ type: 'CAPTURE_READY', ...firstTurn });
+    expect(h.actor.getSnapshot().context.activationReady).toBe(false);
+    h.actor.send({ type: 'MICROPHONE_UNMUTE_REQUESTED' });
+    h.actor.send({ type: 'NEXT_TURN_READY', sessionId: firstTurn.sessionId, captureId: 'capture-2', turnId: 'turn-2' });
+    expect(h.actor.getSnapshot().context.activationReady).toBe(false);
+  });
+
   it('processes an endpoint once and starts exactly one next turn', () => {
     const h = harness();
     enable(h);

@@ -44,12 +44,14 @@ export class BashRunService implements IBashRunService {
     private readonly registry: IRunnerRegistry,
     private readonly clock: IClock,
     private readonly rtkProcessor: IRtkProcessor,
+    private readonly cwd: string = process.cwd(),
+    private readonly env: Readonly<Record<string, string | undefined>> = process.env,
   ) {}
 
   async run(request: BashRunRequest): Promise<BashRunResult> {
     const id = runnerId();
     const name = await this.namer.allocate(request.command, request.sessionId, request.name);
-    const cwd = request.cwd ?? process.cwd();
+    const cwd = request.cwd ?? this.cwd;
     const interactive = request.interactive === true;
     if (request.signal?.aborted) return { kind: FAILED, id, name, error: 'Operation aborted' };
 
@@ -232,7 +234,7 @@ export class BashRunService implements IBashRunService {
 
     racers.push(
       new Promise((resolve) => {
-        cancels.push(this.clock.after(getBackgroundThresholdMs(), () => resolve(TIMED_OUT)));
+        cancels.push(this.clock.after(getBackgroundThresholdMs(this.env), () => resolve(TIMED_OUT)));
       }),
     );
     if (timeoutMs !== undefined && timeoutMs > 0) {

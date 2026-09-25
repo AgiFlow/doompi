@@ -99,6 +99,7 @@ export class McpSession {
   /** Invalidates deferred startup work when a session reloads or shuts down. */
   private lifecycleGeneration = 0;
   private configurationFingerprint: string | undefined;
+  private workspaceRoot: string | undefined;
   /** Pi wrappers survive configuration changes because the host cannot unregister them. */
   private readonly retainedTools = new Map<string, CatalogTool>();
   private readonly registeredToolFingerprints = new Map<string, string>();
@@ -173,6 +174,7 @@ export class McpSession {
   }
 
   private bindConfiguration(configuration: McpSessionConfig): void {
+    this.workspaceRoot = configuration.repoRoot;
     this.configurationFingerprint = mcpConfigurationFingerprint(configuration);
     this.groups = buildMcpConfigGroups(configuration);
     this.disconnectedServers.clear();
@@ -316,6 +318,8 @@ export class McpSession {
     this.tokenStore = tokenStore;
     await runtime.start({
       configSources,
+      workspaceRoot: this.workspaceRoot,
+      environment: this.options.environment,
       tokenStore,
       onAuthorizationUrl: (url, serverName) => this.onAuthorizationUrl(url, serverName, generation),
       onServerStateChange: (change) => this.onServerStateChange(change, generation),

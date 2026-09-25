@@ -91,6 +91,7 @@ export class RtkProcessor implements IRtkProcessor {
   constructor(
     private readonly resolveBinary: BinaryResolver = bundledBinary,
     private readonly timeoutMs = DEFAULT_RTK_TIMEOUT_MS,
+    private readonly env: Readonly<Record<string, string | undefined>> = process.env,
   ) {}
 
   async process(request: RtkProcessRequest): Promise<RtkProcessResult> {
@@ -109,7 +110,7 @@ export class RtkProcessor implements IRtkProcessor {
 
     let binary: string | undefined;
     try {
-      binary = this.resolveBinary();
+      binary = this.resolveBinary === bundledBinary ? bundledBinary(this.env) : this.resolveBinary();
       if (!binary) return { kind: 'fallback', warning: RTK_UNAVAILABLE_WARNING };
       if ((fs.statSync(binary).mode & 0o111) === 0) fs.chmodSync(binary, EXECUTABLE_MODE);
     } catch {
@@ -131,7 +132,7 @@ export class RtkProcessor implements IRtkProcessor {
       }
 
       const input = fs.createReadStream(logPath);
-      const outputLimit = getResultMaxBytes() * OUTPUT_BUFFER_FACTOR;
+      const outputLimit = getResultMaxBytes(this.env) * OUTPUT_BUFFER_FACTOR;
       let head: Buffer<ArrayBufferLike> = Buffer.alloc(0);
       let output: Buffer<ArrayBufferLike> = Buffer.alloc(0);
       let outputBytes = 0;
@@ -287,8 +288,8 @@ export function rtkPackageForTarget(platform: string, architecture: string): str
   return packageName;
 }
 
-function bundledBinary(): string | undefined {
-  const configured = process.env[RTK_BINARY_ENV];
+function bundledBinary(env: Readonly<Record<string, string | undefined>> = process.env): string | undefined {
+  const configured = env[RTK_BINARY_ENV];
   if (configured !== undefined && configured !== '') return configured;
   const packageName = rtkPackageForTarget(process.platform, process.arch);
   if (!packageName) return undefined;
