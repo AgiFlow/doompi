@@ -93,6 +93,7 @@ export async function listSavedSessionRecords(
       if (typeof owner?.value !== 'string') continue;
       const context = await storage.getValue(value('doompi.session', 'execution'), BACKGROUND_CONTEXT);
       const execution = readExecution(context?.value, owner.value);
+      if (context?.value !== undefined && !execution) continue;
       if (execution) {
         if (execution.groupingRoot !== workspaceRoot || (workspaceId && execution.workspaceId !== workspaceId)) continue;
       } else {
