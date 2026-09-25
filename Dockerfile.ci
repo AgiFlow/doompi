@@ -1,4 +1,4 @@
-FROM node:22.22.1-bookworm
+FROM node:22.22.1-bookworm@sha256:f90672bf4c76dfc077d17be4c115b1ae7731d2e8558b457d86bca42aeb193866
 
 ARG PNPM_VERSION=11.1.3
 

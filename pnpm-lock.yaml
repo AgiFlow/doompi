@@ -10,7 +10,7 @@ overrides:
   '@opentelemetry/core@2.0.0 - 2.7.999': 2.8.0
   brace-expansion@5.0.0 - 5.0.8: ^5.0.9
   fast-uri@3.0.0 - 3.1.5: ^3.1.6
-  hono@4.0.0 - 4.12.33: ^4.12.34
+  hono@4.0.0 - 4.13.7: 4.13.8
   js-yaml@4.0.0 - 4.3.1: ^4.3.2
   js-yaml@5.0.0 - 5.2.1: ^5.2.2
   liquidjs@10.0.0 - 10.27.1: ^10.27.2
@@ -4333,24 +4333,24 @@ packages:
     resolution: {integrity: sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
-      hono: ^4.12.34
+      hono: 4.13.8
 
   '@hono/node-server@2.0.10':
     resolution: {integrity: sha512-ZcnNVhKTmyDJeg0UlnZjvM73JBsTAuhrH/J4fjwGOw59PwOW51r4J+p6CsKZWXdKSme4MFqU62CZMOsdDrU4CA==}
     engines: {node: '>=20'}
     peerDependencies:
-      hono: ^4.12.34
+      hono: 4.13.8
 
   '@hono/node-server@2.1.1':
     resolution: {integrity: sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg==}
     engines: {node: '>=20'}
     peerDependencies:
-      hono: ^4.12.34
+      hono: 4.13.8
 
   '@hono/zod-validator@0.7.6':
     resolution: {integrity: sha512-Io1B6d011Gj1KknV4rXYz4le5+5EubcWEU/speUjuw9XMMIaP3n78yXLhjd2A3PXaXaUwEAluOiAyLqhBEJgsw==}
     peerDependencies:
-      hono: ^4.12.34
+      hono: 4.13.8
       zod: ^3.25.0 || ^4.0.0
 
   '@iconify/types@2.0.0':
@@ -8783,19 +8783,11 @@ packages:
   hono-rate-limiter@0.5.3:
     resolution: {integrity: sha512-M0DxbVMpPELEzLi0AJg1XyBHLGJXz7GySjsPoK+gc5YeeBsdGDGe+2RvVuCAv8ydINiwlbxqYMNxUEyYfRji/A==}
     peerDependencies:
-      hono: ^4.12.34
+      hono: 4.13.8
       unstorage: ^1.17.3
     peerDependenciesMeta:
       unstorage:
         optional: true
-
-  hono@4.12.34:
-    resolution: {integrity: sha512-GqXJqY/xJkJmuloTrnV1ZEXG3fqte+VjkUqoRNZXcrUidiUOP4fMSIHHY4tsqZBK++kVyWmt/AAfSUuy57/eSA==}
-    engines: {node: '>=16.9.0'}
-
-  hono@4.13.7:
-    resolution: {integrity: sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ==}
-    engines: {node: '>=16.9.0'}
 
   hono@4.13.8:
     resolution: {integrity: sha512-/Gng7NfoykZl2pjukW5Z6+8Yxm3BPRf86GTbQnt0SbySkvax4fyL4H3HhY1cCpBGmiW9XDRFzRV+CXK2W8QudQ==}
@@ -11409,8 +11401,8 @@ snapshots:
       '@agimon-ai/foundation-port-registry': 0.29.27(zod@4.4.3)
       '@agimon-ai/foundation-process-registry': 0.29.27(zod@4.4.3)
       '@agimon-ai/foundation-validator': 0.26.27(zod@4.4.3)
-      '@hono/node-server': 2.0.10(hono@4.12.34)
-      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.4.3)
+      '@hono/node-server': 2.0.10(hono@4.13.8)
+      '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.4.3)
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/api-logs': 0.219.0
@@ -11423,8 +11415,8 @@ snapshots:
       chalk: 5.6.2
       commander: 14.0.3
       drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
-      hono: 4.12.34
-      hono-rate-limiter: 0.5.3(hono@4.12.34)
+      hono: 4.13.8
+      hono-rate-limiter: 0.5.3(hono@4.13.8)
       inversify: 8.1.0(reflect-metadata@0.2.2)
       reflect-metadata: 0.2.2
       ruvector-onnx-embeddings-wasm: 0.1.2
@@ -11472,8 +11464,8 @@ snapshots:
       '@agimon-ai/foundation-port-registry': 0.29.27(zod@4.6.5)
       '@agimon-ai/foundation-process-registry': 0.29.27(zod@4.6.5)
       '@agimon-ai/foundation-validator': 0.26.27(zod@4.6.5)
-      '@hono/node-server': 2.0.10(hono@4.12.34)
-      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.6.5)
+      '@hono/node-server': 2.0.10(hono@4.13.8)
+      '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.6.5)
       '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.5)
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/api-logs': 0.219.0
@@ -11486,8 +11478,8 @@ snapshots:
       chalk: 5.6.2
       commander: 14.0.3
       drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
-      hono: 4.12.34
-      hono-rate-limiter: 0.5.3(hono@4.12.34)
+      hono: 4.13.8
+      hono-rate-limiter: 0.5.3(hono@4.13.8)
       inversify: 8.1.0(reflect-metadata@0.2.2)
       reflect-metadata: 0.2.2
       ruvector-onnx-embeddings-wasm: 0.1.2
@@ -11535,8 +11527,8 @@ snapshots:
       '@agimon-ai/foundation-port-registry': 0.29.28(zod@4.6.5)
       '@agimon-ai/foundation-process-registry': 0.29.28(zod@4.6.5)
       '@agimon-ai/foundation-validator': 0.26.28(zod@4.6.5)
-      '@hono/node-server': 2.0.10(hono@4.12.34)
-      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.6.5)
+      '@hono/node-server': 2.0.10(hono@4.13.8)
+      '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.6.5)
       '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.5)
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/api-logs': 0.219.0
@@ -11549,8 +11541,8 @@ snapshots:
       chalk: 5.6.2
       commander: 14.0.3
       drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
-      hono: 4.12.34
-      hono-rate-limiter: 0.5.3(hono@4.12.34)
+      hono: 4.13.8
+      hono-rate-limiter: 0.5.3(hono@4.13.8)
       inversify: 8.1.0(reflect-metadata@0.2.2)
       reflect-metadata: 0.2.2
       ruvector-onnx-embeddings-wasm: 0.1.2
@@ -11599,12 +11591,12 @@ snapshots:
       '@agimon-ai/foundation-process-registry': 0.29.27(zod@4.6.5)
       '@agimon-ai/foundation-validator': 0.26.27(zod@4.6.5)
       '@agimon-ai/log-sink-mcp': 0.29.27(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)
-      '@hono/node-server': 2.0.10(hono@4.12.34)
+      '@hono/node-server': 2.0.10(hono@4.13.8)
       '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.5)
       chalk: 5.6.2
       commander: 14.0.3
       gray-matter: 4.0.3
-      hono: 4.12.34
+      hono: 4.13.8
       js-yaml: 4.3.2
       liquidjs: 10.29.0
       zod: 4.6.5
@@ -11711,7 +11703,7 @@ snapshots:
       '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.4.3)
       chalk: 5.6.2
       commander: 14.0.3
-      hono: 4.13.7
+      hono: 4.13.8
       inversify: 8.2.1(reflect-metadata@0.2.2)
       js-yaml: 5.4.1
       minimatch: 10.2.5
@@ -13330,22 +13322,22 @@ snapshots:
     dependencies:
       hono: 4.13.8
 
-  '@hono/node-server@2.0.10(hono@4.12.34)':
+  '@hono/node-server@2.0.10(hono@4.13.8)':
     dependencies:
-      hono: 4.12.34
+      hono: 4.13.8
 
   '@hono/node-server@2.1.1(hono@4.13.8)':
     dependencies:
       hono: 4.13.8
 
-  '@hono/zod-validator@0.7.6(hono@4.12.34)(zod@4.4.3)':
+  '@hono/zod-validator@0.7.6(hono@4.13.8)(zod@4.4.3)':
     dependencies:
-      hono: 4.12.34
+      hono: 4.13.8
       zod: 4.4.3
 
-  '@hono/zod-validator@0.7.6(hono@4.12.34)(zod@4.6.5)':
+  '@hono/zod-validator@0.7.6(hono@4.13.8)(zod@4.6.5)':
     dependencies:
-      hono: 4.12.34
+      hono: 4.13.8
       zod: 4.6.5
 
   '@iconify/types@2.0.0': {}
@@ -17561,13 +17553,9 @@ snapshots:
 
   highlight.js@10.7.3: {}
 
-  hono-rate-limiter@0.5.3(hono@4.12.34):
+  hono-rate-limiter@0.5.3(hono@4.13.8):
     dependencies:
-      hono: 4.12.34
-
-  hono@4.12.34: {}
-
-  hono@4.13.7: {}
+      hono: 4.13.8
 
   hono@4.13.8: {}
 
