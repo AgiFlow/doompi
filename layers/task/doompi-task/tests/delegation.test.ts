@@ -387,6 +387,13 @@ describe('assign context pack', () => {
 });
 
 describe('assign', () => {
+  it('uses the active session pwd after switching sessions', async () => {
+    manager.setCwd('/external/worktree/subdir');
+    const task = await seed('Inspect the checkout');
+    await manager.assign(task.id, { agent: 'reviewer' });
+    expect(bus.lastRequest().cwd).toBe('/external/worktree/subdir');
+  });
+
   it('emits a v1 delegation request carrying the task brief', async () => {
     const task = await seed('Add reducer tests');
 

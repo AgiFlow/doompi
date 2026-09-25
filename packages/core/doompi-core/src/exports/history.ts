@@ -19,7 +19,8 @@ export type {
   ProtectedHistoryImportResult,
 } from '../services/historyImport';
 export { exportV4ToV3 } from '../services/v3Export';
-export { listSavedSessions } from '../services/sqliteSessionHistory';
+export { listSavedSessions, listSavedSessionRecords } from '../services/sqliteSessionHistory';
+export type { SavedSessionExecution, SavedSessionRecord } from '../services/sqliteSessionHistory';
 export { readSqliteTranscript } from '../services/sqliteTranscriptReader';
 export type { SqliteTranscriptOwnership } from '../services/sqliteTranscriptReader';
 export { createOpenSessionRegistry } from '../services/openSessionRegistry';

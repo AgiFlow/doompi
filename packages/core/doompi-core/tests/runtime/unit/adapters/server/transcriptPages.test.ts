@@ -106,3 +106,46 @@ it('keeps indexed pages bounded at 1k, 10k and 100k entries, with bidirectional 
     await fs.rm(sessionsRoot, { recursive: true, force: true });
   }
 }, 120_000);
+
+it('checks the grouped workspace without treating a worktree journal as parent-root-owned', async () => {
+  const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-worktree-transcript-'));
+  const storage = await openSqliteSessionStorage(
+    { sessionsRoot, sessionId: 'child', historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }) },
+    BACKGROUND_CONTEXT,
+  );
+  try {
+    await storage.session.setValue(value('doompi.session', 'workspaceRoot'), '/external/worktree', BACKGROUND_CONTEXT);
+    await storage.session.setValue(
+      value('doompi.session', 'execution'),
+      JSON.stringify({
+        cwd: '/external/worktree/subdir',
+        repoRoot: '/external/worktree',
+        workspaceId: 'parent-id',
+        groupingRoot: '/parent',
+        sessionProvenance: 'worktree',
+      }),
+      BACKGROUND_CONTEXT,
+    );
+    await expect(
+      readSqliteTranscript(storage.sessionFile, {}, BACKGROUND_CONTEXT, {
+        sessionId: 'child',
+        workspaceRoot: '/external/worktree',
+        workspaceId: 'parent-id',
+        groupingRoot: '/parent',
+      }),
+    ).resolves.toMatchObject({ entries: [] });
+    await expect(
+      readSqliteTranscript(storage.sessionFile, {}, BACKGROUND_CONTEXT, {
+        sessionId: 'child',
+        workspaceRoot: '/external/worktree',
+        workspaceId: 'foreign',
+        groupingRoot: '/parent',
+      }),
+    ).rejects.toThrow('Saved transcript does not belong');
+  } finally {
+    await storage.session.close(BACKGROUND_CONTEXT);
+    await storage.repository.close(BACKGROUND_CONTEXT);
+    await storage.historyLease.release();
+    await fs.rm(sessionsRoot, { recursive: true, force: true });
+  }
+});

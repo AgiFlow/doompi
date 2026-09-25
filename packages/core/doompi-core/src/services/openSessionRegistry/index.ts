@@ -167,7 +167,8 @@ export function createOpenSessionRegistry(options: OpenSessionRegistryOptions): 
     add(record) {
       if (!SESSION_ID_PATTERN.test(record.sessionId)) throw new Error(`Invalid session id '${record.sessionId}'.`);
       for (const directory of [record.cwd, record.repoRoot, record.groupingRoot]) {
-        if (directory !== undefined && !path.isAbsolute(directory)) throw new Error('Session directories must be absolute.');
+        if (directory !== undefined && !path.isAbsolute(directory))
+          throw new Error('Session directories must be absolute.');
       }
       if (record.artifact !== undefined)
         validateSyncRegistration(record.artifact, resolveSyncLocation(record.artifact.root, options.homeDirectory));

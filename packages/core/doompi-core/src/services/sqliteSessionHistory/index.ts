@@ -34,7 +34,7 @@ export interface SavedSessionRecord {
   execution: SavedSessionExecution;
 }
 
-function readExecution(raw: unknown, owner: string): SavedSessionExecution | undefined {
+export function readSavedExecution(raw: unknown, owner: string): SavedSessionExecution | undefined {
   if (typeof raw !== 'string') return undefined;
   let parsed: unknown;
   try {
@@ -54,7 +54,8 @@ function readExecution(raw: unknown, owner: string): SavedSessionExecution | und
     record.workspaceId === '' ||
     typeof record.groupingRoot !== 'string' ||
     !path.isAbsolute(record.groupingRoot)
-  ) return undefined;
+  )
+    return undefined;
   if (record.parentSessionId !== undefined && typeof record.parentSessionId !== 'string') return undefined;
   if (record.sessionProvenance !== undefined && typeof record.sessionProvenance !== 'string') return undefined;
   return {
@@ -92,10 +93,11 @@ export async function listSavedSessionRecords(
       const owner = await storage.getValue(value('doompi.session', 'workspaceRoot'), BACKGROUND_CONTEXT);
       if (typeof owner?.value !== 'string') continue;
       const context = await storage.getValue(value('doompi.session', 'execution'), BACKGROUND_CONTEXT);
-      const execution = readExecution(context?.value, owner.value);
+      const execution = readSavedExecution(context?.value, owner.value);
       if (context?.value !== undefined && !execution) continue;
       if (execution) {
-        if (execution.groupingRoot !== workspaceRoot || (workspaceId && execution.workspaceId !== workspaceId)) continue;
+        if (execution.groupingRoot !== workspaceRoot || (workspaceId && execution.workspaceId !== workspaceId))
+          continue;
       } else {
         // Legacy journals have only an execution root. Never infer worktree grouping
         // or a subdirectory pwd from their parent workspace.

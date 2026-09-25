@@ -15,14 +15,15 @@ const { modelGuidanceEvents } =
 
 type Handler = (
   event: { systemPrompt: string },
-  ctx: { model?: { id: string } },
+  ctx: { model?: { id: string }; cwd?: string },
 ) => { systemPrompt: string } | undefined;
 
 let workspace: string;
 let handler: Handler;
 
 function registerHandler(): Handler {
-  return (event, context) => modelGuidanceEvents.before_agent_start(event as never, context as never);
+  return (event, context) =>
+    modelGuidanceEvents.before_agent_start(event as never, { cwd: workspace, ...context } as never);
 }
 
 function writeRepositoryGuidance(contents: string): void {
@@ -59,10 +60,14 @@ describe('before_agent_start', () => {
     );
   });
 
-  it('is inert when the harness root is unset', () => {
+  it('uses the session cwd even when the harness root is unset', () => {
     writeRepositoryGuidance('modelGuidance:\n  claude-opus-5: Stay focused.\n');
     harnessState.root = undefined;
-    expect(handler({ systemPrompt: 'base' }, { model: { id: 'claude-opus-5' } })).toBeUndefined();
+    const nested = path.join(workspace, 'src');
+    fs.mkdirSync(nested);
+    expect(handler({ systemPrompt: 'base' }, { cwd: nested, model: { id: 'claude-opus-5' } })).toEqual({
+      systemPrompt: 'base\n\nStay focused.',
+    });
   });
 
   it('appends guidance for a matching model id', () => {

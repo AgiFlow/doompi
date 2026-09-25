@@ -20,7 +20,6 @@ import {
   renderReadResult,
   renderWriteCall,
 } from './builtinToolRender';
-
 /**
  * Keep Pi's native schemas, prompt metadata, execution, and result formatting;
  * replace only the broad status-background shell and call heading.
@@ -31,6 +30,7 @@ export function createBuiltinTools(cwd: string): PiToolDeclaration[] {
   tools.push(
     definePiTool({
       ...read,
+      execute: (...args: Parameters<typeof read.execute>) => createReadToolDefinition(args[4].cwd).execute(...args),
       renderShell: 'self',
       renderCall: (args, theme) => renderReadCall(args, theme),
       renderResult: (result, options, theme, context) => {
@@ -49,6 +49,7 @@ export function createBuiltinTools(cwd: string): PiToolDeclaration[] {
   tools.push(
     definePiTool({
       ...edit,
+      execute: (...args: Parameters<typeof edit.execute>) => createEditToolDefinition(args[4].cwd).execute(...args),
       renderShell: 'self',
       renderCall: (args, theme) => renderEditCall(args, theme),
       // Doom bands the diff on the background and keeps syntax highlighting on
@@ -70,6 +71,7 @@ export function createBuiltinTools(cwd: string): PiToolDeclaration[] {
   tools.push(
     definePiTool({
       ...write,
+      execute: (...args: Parameters<typeof write.execute>) => createWriteToolDefinition(args[4].cwd).execute(...args),
       renderShell: 'self',
       renderCall: (args, theme, context) =>
         renderWriteCall(args, theme, {
@@ -92,6 +94,7 @@ export function createBuiltinTools(cwd: string): PiToolDeclaration[] {
   tools.push(
     definePiTool({
       ...grep,
+      execute: (...args: Parameters<typeof grep.execute>) => createGrepToolDefinition(args[4].cwd).execute(...args),
       renderShell: 'self',
       renderCall: (args, theme) => renderGrepCall(args, theme),
       renderResult: (result, options, theme, context) => {
@@ -109,6 +112,7 @@ export function createBuiltinTools(cwd: string): PiToolDeclaration[] {
   tools.push(
     definePiTool({
       ...find,
+      execute: (...args: Parameters<typeof find.execute>) => createFindToolDefinition(args[4].cwd).execute(...args),
       renderShell: 'self',
       renderCall: (args, theme) => renderFindCall(args, theme),
       renderResult: (result, options, theme, context) => {
@@ -126,6 +130,7 @@ export function createBuiltinTools(cwd: string): PiToolDeclaration[] {
   tools.push(
     definePiTool({
       ...ls,
+      execute: (...args: Parameters<typeof ls.execute>) => createLsToolDefinition(args[4].cwd).execute(...args),
       renderShell: 'self',
       renderCall: (args, theme) => renderLsCall(args, theme),
       renderResult: (result, options, theme, context) => {

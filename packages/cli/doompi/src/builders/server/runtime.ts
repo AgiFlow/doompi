@@ -12,10 +12,11 @@ import { createHeadlessSessionManager } from '@agimon-ai/doompi-core/headlessSes
 import {
   createOpenSessionRegistry,
   createWorkspaceRegistry,
+  listSavedSessionRecords,
   listSavedSessions,
   readSqliteTranscript,
 } from '@agimon-ai/doompi-core/history';
-import type { OpenSessionRecord } from '@agimon-ai/doompi-core/history';
+import type { OpenSessionRecord, SavedSessionExecution } from '@agimon-ai/doompi-core/history';
 import type {
   DoomHubSessionApiRequest,
   DoomHubSessionCreateRequest,
@@ -30,7 +31,12 @@ import { createHarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTel
 import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/serverFacet';
 import { createServerTelemetry } from '@agimon-ai/doompi-core/serverTelemetry';
 import { resolveSyncLocation } from '@agimon-ai/doompi-core/syncLocation';
-import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
+import {
+  parseSyncRegistration,
+  readSyncRegistration,
+  validateSyncRegistration,
+  type SyncRegistration,
+} from '@agimon-ai/doompi-core/syncRegistration';
 import { createWebCompositions } from '@agimon-ai/doompi-core/webCompositions';
 import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import WebSocket from 'ws';
@@ -191,6 +197,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     request: DoomHubSessionCreateRequest,
     sessionId?: string,
     pinnedArtifact?: SyncRegistration,
+    groupingWorkspaceId?: string,
   ) => Promise<DoomHubSessionScope> = async () => {
     throw new Error('The cockpit session service is not ready.');
   };
@@ -399,9 +406,13 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       for (const record of openSessions.list()) {
         if (workspaces.list().some((workspace) => workspace.id === record.workspaceId)) continue;
         try {
-          const root = fs.realpathSync(findRepositoryRoot(record.cwd));
+          const candidate =
+            record.groupingRoot ?? (record.sessionProvenance === 'worktree' ? record.artifact?.root : record.cwd);
+          if (!candidate) throw new Error('Parent workspace location is unavailable.');
+          const root = fs.realpathSync(findRepositoryRoot(candidate));
           const id = resolveSyncLocation(root, homeDirectory).identity.worktreeId;
-          if (id === record.workspaceId) workspaces.add({ id, root });
+          if ((record.groupingRoot === undefined || root === candidate) && id === record.workspaceId)
+            workspaces.add({ id, root });
           else
             notice(
               `Session '${record.sessionId}' no longer resolves to its recorded workspace; skipping registration.`,
@@ -462,6 +473,11 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           repoRoot: policyOptions.repoRoot,
           sessionId: identity.sessionId,
           workspaceId: workspaceId ?? resolveSyncLocation(policyOptions.repoRoot, homeDirectory).identity.worktreeId,
+          groupingRoot:
+            workspaceId === undefined
+              ? policyOptions.repoRoot
+              : hub.workspaces().find((workspace) => workspace.id === workspaceId)?.root,
+          ...(identity.sessionProvenance === 'worktree' ? { inheritedArtifact: registration } : {}),
           sessionName: identity.sessionName,
           webComposition: webCompositions?.publish(
             { scope: 'session', sessionId: identity.sessionId },
@@ -615,7 +631,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       }
 
       const reservedOpens = new Map<string, Promise<DoomHubSessionScope>>();
-      openSession = async (request, sessionId, pinnedArtifact) => {
+      openSession = async (request, sessionId, pinnedArtifact, groupingWorkspaceId) => {
         request.signal?.throwIfAborted();
         if (request.reservationId !== undefined) {
           if (!request.parentSessionId || !cockpit) throw new Error('A reserved session requires its owning parent.');
@@ -648,7 +664,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         const isWorktree = request.sessionProvenance === 'worktree';
         const inheritedWorkspaceId =
           isWorktree && request.parentSessionId
-            ? (hub.session(request.parentSessionId)?.workspaceId ??
+            ? (groupingWorkspaceId ??
+              hub.session(request.parentSessionId)?.workspaceId ??
               openSessions.list().find((record) => record.sessionId === request.parentSessionId)?.workspaceId)
             : undefined;
         if (isWorktree && inheritedWorkspaceId === undefined)
@@ -726,6 +743,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
                 sessionId: created.id,
                 workspaceId: created.workspaceId,
                 cwd: created.cwd,
+                repoRoot: childContext.options.repoRoot,
+                groupingRoot: hub.workspaces().find((workspace) => workspace.id === created.workspaceId)?.root,
                 name: created.name,
                 createdAt: created.createdAt,
                 ...(created.parentSessionId === undefined ? {} : { parentSessionId: created.parentSessionId }),
@@ -754,6 +773,34 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     });
 
     const workspaceResumes = new Map<string, Promise<string>>();
+    const savedHistory = async (workspaceId: string) => {
+      const root = hub
+        .workspaces()
+        .find((workspace) => workspace.id === workspaceId && workspace.available !== false)?.root;
+      if (!root) throw new Error('Workspace not found.');
+      return listSavedSessionRecords(
+        path.join(serverDirectory, 'sessions'),
+        root,
+        new Set(hub.snapshot().map((active) => active.id)),
+        workspaceId,
+      );
+    };
+    const validatedExecution = (target: SavedSessionExecution, workspaceId: string): SyncRegistration | undefined => {
+      const root = hub
+        .workspaces()
+        .find((workspace) => workspace.id === workspaceId && workspace.available !== false)?.root;
+      if (!root || target.groupingRoot !== root || (target.workspaceId && target.workspaceId !== workspaceId))
+        throw new Error('Saved session does not belong to this workspace.');
+      if (fs.realpathSync(findRepositoryRoot(target.cwd)) !== target.repoRoot)
+        throw new Error('Saved session checkout is unavailable.');
+      if (target.sessionProvenance !== 'worktree') return undefined;
+      if (!target.parentSessionId || target.inheritedArtifact === undefined)
+        throw new Error('Saved worktree generation is unavailable.');
+      const artifact = parseSyncRegistration(target.inheritedArtifact, 'saved worktree generation');
+      validateSyncRegistration(artifact, resolveSyncLocation(artifact.root, homeDirectory));
+      if (artifact.root !== root) throw new Error('Saved worktree generation belongs to another workspace.');
+      return artifact;
+    };
     cockpit = await serveHeadlessServer({
       port: options.webPort,
       headlessHub: hub,
@@ -763,35 +810,27 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       sessionMcpPublicOriginRevision: () => remoteRuntime?.remote.publicOriginRevision() ?? 0,
       isSessionPersisted: (sessionId, cwd) =>
         openSessions.list().some((record) => record.sessionId === sessionId && record.cwd === cwd),
-      workspaceHistory: (workspaceId) => {
-        const workspaceRoot = hub
-          .workspaces()
-          .find((workspace) => workspace.id === workspaceId && workspace.available !== false)?.root;
-        if (!workspaceRoot) throw new Error('Workspace not found.');
-        return listSavedSessions(
-          path.join(serverDirectory, 'sessions'),
-          workspaceRoot,
-          new Set(hub.snapshot().map((active) => active.id)),
-        );
-      },
+      workspaceHistory: async (workspaceId) => (await savedHistory(workspaceId)).map((record) => record.summary),
       resumeWorkspaceSession: async (workspaceId, targetSessionId) => {
         const key = `${workspaceId}\0${targetSessionId}`;
         const pending = workspaceResumes.get(key);
         if (pending) return pending;
         const resume = (async () => {
-          const workspaceRoot = hub
-            .workspaces()
-            .find((workspace) => workspace.id === workspaceId && workspace.available !== false)?.root;
-          if (!workspaceRoot) throw new Error('Workspace not found.');
-          const saved = await listSavedSessions(
-            path.join(serverDirectory, 'sessions'),
-            workspaceRoot,
-            new Set(hub.snapshot().map((active) => active.id)),
-          );
-          const target = saved.find((item) => item.id === targetSessionId);
+          const target = (await savedHistory(workspaceId)).find((item) => item.summary.id === targetSessionId);
           if (!target) throw new Error('Saved Pi thread not found in this workspace.');
-          await openSession({ cwd: workspaceRoot, name: target.name ?? 'untitled' }, target.id);
-          return target.id;
+          const artifact = validatedExecution(target.execution, workspaceId);
+          await openSession(
+            {
+              cwd: target.execution.cwd,
+              name: target.summary.name ?? 'untitled',
+              ...(target.execution.parentSessionId ? { parentSessionId: target.execution.parentSessionId } : {}),
+              ...(target.execution.sessionProvenance ? { sessionProvenance: target.execution.sessionProvenance } : {}),
+            },
+            target.summary.id,
+            artifact,
+            target.execution.sessionProvenance === 'worktree' ? workspaceId : undefined,
+          );
+          return target.summary.id;
         })();
         workspaceResumes.set(key, resume);
         try {
@@ -807,16 +846,26 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           path.join(piAgentDirectory(baseEnvironment), 'server', 'sessions'),
           workspaceRoot,
           new Set(hub.snapshot().map((active) => active.id)),
+          session.workspaceId,
         );
       },
       readDormantTranscript: (record, request, context) => {
         const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === record.workspaceId)?.root;
-        if (!workspaceRoot) throw new Error('Saved transcript unavailable.');
+        if (!workspaceRoot || (record.groupingRoot !== undefined && record.groupingRoot !== workspaceRoot))
+          throw new Error('Saved transcript unavailable.');
+        const owner = fs.realpathSync(findRepositoryRoot(record.cwd));
+        if (record.repoRoot !== undefined && record.repoRoot !== owner)
+          throw new Error('Saved transcript checkout has changed.');
         return readSqliteTranscript(
           path.join(piAgentDirectory(baseEnvironment), 'server', 'sessions', `${record.sessionId}.sqlite`),
           request,
           context,
-          { sessionId: record.sessionId, workspaceRoot },
+          {
+            sessionId: record.sessionId,
+            workspaceRoot: owner,
+            workspaceId: record.workspaceId,
+            groupingRoot: workspaceRoot,
+          },
         );
       },
       restartSession: async (session) => {
@@ -824,6 +873,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         const artifact =
           sessionArtifacts.get(session.id)?.registration ??
           openSessions.list().find((record) => record.sessionId === session.id)?.artifact;
+        if (worktree && !artifact) throw new Error('Worktree generation is unavailable; the session is still running.');
         if (!worktree) {
           const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
           if (!workspaceRoot) throw new Error('Session workspace not found.');
@@ -849,31 +899,25 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         );
       },
       resumeSession: async (session, targetSessionId) => {
-        const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
-        if (!workspaceRoot) throw new Error('Session workspace not found.');
-        const saved = await listSavedSessions(
-          path.join(piAgentDirectory(baseEnvironment), 'server', 'sessions'),
-          workspaceRoot,
-          new Set(hub.snapshot().map((active) => active.id)),
-        );
-        const target = saved.find((item) => item.id === targetSessionId);
+        const workspaceId = session.workspaceId;
+        if (!workspaceId || !hub.workspaces().some((workspace) => workspace.id === workspaceId))
+          throw new Error('Session workspace not found.');
+        const target = (await savedHistory(workspaceId)).find((item) => item.summary.id === targetSessionId);
         if (!target) throw new Error('Saved Pi thread not found in this workspace.');
-        const worktree = session.sessionProvenance === 'worktree';
-        const artifact =
-          sessionArtifacts.get(session.id)?.registration ??
-          openSessions.list().find((record) => record.sessionId === session.id)?.artifact;
+        const artifact = validatedExecution(target.execution, workspaceId);
         await hub.closeSession(session.id);
         await openSession(
           {
-            cwd: session.cwd,
-            name: target.name ?? 'untitled',
-            ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
-            ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
+            cwd: target.execution.cwd,
+            name: target.summary.name ?? 'untitled',
+            ...(target.execution.parentSessionId ? { parentSessionId: target.execution.parentSessionId } : {}),
+            ...(target.execution.sessionProvenance ? { sessionProvenance: target.execution.sessionProvenance } : {}),
           },
-          target.id,
-          worktree ? artifact : undefined,
+          target.summary.id,
+          artifact,
+          target.execution.sessionProvenance === 'worktree' ? workspaceId : undefined,
         );
-        return target.id;
+        return target.summary.id;
       },
       dormantSessions: () => openSessions.list(),
       removeDormantSession: (record: OpenSessionRecord) => openSessions.remove(record.sessionId),
@@ -881,6 +925,15 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         // A failed wake may be transient, for example while another server still
         // owns the journal. Keep the record so the user can retry after resolving
         // the conflict instead of losing the session from the cockpit.
+        const groupingRoot = hub
+          .workspaces()
+          .find((workspace) => workspace.id === record.workspaceId && workspace.available !== false)?.root;
+        if (!groupingRoot || (record.groupingRoot !== undefined && groupingRoot !== record.groupingRoot))
+          throw new Error('The session workspace is unavailable.');
+        if (record.repoRoot !== undefined && fs.realpathSync(findRepositoryRoot(record.cwd)) !== record.repoRoot)
+          throw new Error('The session checkout has changed.');
+        if (record.sessionProvenance === 'worktree' && record.artifact?.root !== groupingRoot)
+          throw new Error('The inherited worktree generation is unavailable.');
         await openSession(
           {
             cwd: record.cwd,
@@ -890,6 +943,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           },
           record.sessionId,
           record.sessionProvenance === 'worktree' ? record.artifact : undefined,
+          record.sessionProvenance === 'worktree' ? record.workspaceId : undefined,
         );
       },
       requestAsset: (request) => webCompositions?.request(request) ?? Promise.resolve(undefined),

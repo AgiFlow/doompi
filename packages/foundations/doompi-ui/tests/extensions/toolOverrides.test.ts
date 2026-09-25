@@ -116,10 +116,13 @@ describe('createBuiltinTools', () => {
     expect(restoredOutput).not.toContain('live tail');
   });
 
-  it('retains Pi native execution instead of substituting a UI-owned implementation', async () => {
+  it('executes native tools from the session cwd rather than registration cwd', async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-ui-tools-'));
+    const registrationCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-ui-registration-'));
     fs.writeFileSync(path.join(cwd, 'sample.txt'), 'native read output');
-    const read = captureTools(cwd).find((tool) => tool.name === 'read') as ReturnType<typeof createReadToolDefinition>;
+    const read = captureTools(registrationCwd).find((tool) => tool.name === 'read') as ReturnType<
+      typeof createReadToolDefinition
+    >;
 
     const result = await read.execute('call-1', { path: 'sample.txt' }, undefined, undefined, {
       cwd,

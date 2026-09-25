@@ -7,10 +7,8 @@ import type { DoomMcpProjection } from '@agimon-ai/doompi-core/mcpProjection';
 import type { McpSessionConfig } from '../../types/mcpConfig';
 
 /**
- * Converts the immutable cross-package projection into the MCP session's input.
- *
- * The projection is authoritative even when disabled or empty. In particular,
- * this adapter never fills an empty Doom projection from cwd or process env.
+ * Uses the selected plugin sources from the projection and the exact session
+ * directory for repository MCP. A disabled projection never discovers sources.
  */
 export function mcpSessionConfigFromProjection(
   projection: DoomMcpProjection,

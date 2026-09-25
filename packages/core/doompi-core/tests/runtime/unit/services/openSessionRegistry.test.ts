@@ -117,7 +117,9 @@ describe('createOpenSessionRegistry', () => {
     const record = {
       sessionId: 'child',
       workspaceId: 'workspace',
-      cwd: '/worktree',
+      cwd: '/worktree/subdir',
+      repoRoot: '/worktree',
+      groupingRoot: root,
       name: 'Child',
       createdAt: '2026-09-25',
       parentSessionId: 'parent',
@@ -168,6 +170,14 @@ describe('createOpenSessionRegistry', () => {
         // A traversal id would be joined into a journal filename.
         { sessionId: '../escape', workspaceId: 'w', cwd: '/repo', name: 'Bad', createdAt: '2025-01-01' },
         { sessionId: 'relative', workspaceId: 'w', cwd: 'repo', name: 'Bad', createdAt: '2025-01-01' },
+        {
+          sessionId: 'relative-parent',
+          workspaceId: 'w',
+          cwd: '/repo',
+          groupingRoot: 'repo',
+          name: 'Bad',
+          createdAt: '2025-01-01',
+        },
         { sessionId: 'no-workspace', workspaceId: '', cwd: '/repo', name: 'Bad', createdAt: '2025-01-01' },
         { sessionId: 'good', workspaceId: 'w', cwd: '/repo', name: 'Good', createdAt: '2025-01-01' },
       ]),
@@ -178,7 +188,7 @@ describe('createOpenSessionRegistry', () => {
         .list()
         .map((record) => record.sessionId),
     ).toEqual(['good']);
-    expect(onNotice).toHaveBeenCalledTimes(3);
+    expect(onNotice).toHaveBeenCalledTimes(4);
   });
   it('does not publish an unpersisted session when durable recording fails', () => {
     const directory = temporary();

@@ -52,6 +52,7 @@ export interface ComputerScriptExecutor {
     input: unknown,
     signal?: AbortSignal,
     options?: ComputerScriptExecutionOptions,
+    cwd?: string,
   ): Promise<ComputerScriptExecutionResult>;
 }
 

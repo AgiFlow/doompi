@@ -85,6 +85,7 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
   private readonly telemetry: ReturnType<typeof createDoomTelemetry>;
 
   private activeUi: VoiceUi | undefined;
+  private sessionCwd: string | undefined;
 
   public constructor(
     private readonly configs: IDoomConfigLoader,
@@ -107,6 +108,10 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
 
   public get state(): VoiceState {
     return this.currentState;
+  }
+
+  public setSessionCwd(cwd: string): void {
+    this.sessionCwd = cwd;
   }
 
   public async toggle(ui: VoiceUi): Promise<void> {
@@ -136,7 +141,7 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
   }
 
   private loadTerminalConfig(): ResolvedVoiceConfig {
-    const loaded = this.configs.load(process.env.PI_PROJECT_ROOT ?? process.cwd()).voice;
+    const loaded = this.configs.load(this.sessionCwd ?? process.env.PI_PROJECT_ROOT ?? process.cwd()).voice;
     if (!loaded) throw new Error('Voice is not configured in the Pi agent configuration.');
     return resolveVoiceConfig(loaded, getHarnessState().profileVoice);
   }

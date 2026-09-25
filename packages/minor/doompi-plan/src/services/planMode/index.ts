@@ -41,7 +41,6 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ToolCallEvent } from '@earendil-works/pi-coding-agent';
 
 import {
-  getHarnessState,
   loadDoomConfig,
   loadHarnessState,
   type PlanningAgentConfig,
@@ -680,12 +679,26 @@ function resolvePlanningModel(
 
 export type PlanningConfigProvider = () => PlanningModeConfig | undefined;
 
+function planningRepositoryRoot(cwd: string): string {
+  let directory = path.resolve(cwd);
+  while (true) {
+    if (fs.existsSync(path.join(directory, '.git')) || fs.existsSync(path.join(directory, '.doom'))) return directory;
+    const parent = path.dirname(directory);
+    if (parent === directory) return cwd;
+    directory = parent;
+  }
+}
+
 /** Reads Doom settings from disk so each plan-mode activation sees current configuration. */
 export function loadPlanningModeConfig(
   environment: NodeJS.ProcessEnv = process.env,
-  currentDirectory = process.cwd(),
+  currentDirectory?: string,
 ): PlanningModeConfig | undefined {
-  return loadDoomConfig(loadHarnessState(environment).state.root ?? currentDirectory).modes?.planning;
+  const root =
+    currentDirectory === undefined
+      ? (loadHarnessState(environment).state.root ?? process.cwd())
+      : planningRepositoryRoot(currentDirectory);
+  return loadDoomConfig(root).modes?.planning;
 }
 
 /**
@@ -730,7 +743,7 @@ function planLeaderBindings(active: boolean): LeaderBinding[] {
 
 export function createPlanModeRuntime(
   pi: ExtensionAPI,
-  planningConfigProvider: PlanningConfigProvider = loadPlanningModeConfig,
+  planningConfigProvider?: PlanningConfigProvider,
   telemetry: PlanTelemetry = createPlanTelemetry(),
   options: PlanModeExtensionOptions = {},
 ): Omit<PiPluginContributions, 'tools'> & { tools: Parameters<ExtensionAPI['registerTool']>[0][] } {
@@ -744,6 +757,8 @@ export function createPlanModeRuntime(
   let planConfigNotice: string | undefined;
   /** The session context, kept only to read its model registry for the config panel. */
   let configSessionCtx: ExtensionContext | undefined;
+  const readPlanningConfig = (): PlanningModeConfig | undefined =>
+    planningConfigProvider ? planningConfigProvider() : loadPlanningModeConfig(process.env, configSessionCtx?.cwd);
   const sessionModels = (): PlanModelChoice[] => {
     const registry = configSessionCtx?.modelRegistry;
     if (!registry) return [];
@@ -1208,7 +1223,7 @@ export function createPlanModeRuntime(
 
     let nextPlanningConfig: PlanningModeConfig | undefined;
     try {
-      nextPlanningConfig = planningConfigProvider();
+      nextPlanningConfig = readPlanningConfig();
     } catch (error) {
       void telemetry.recordError(PLAN_EVENT.configLoadFailed, error, { [PLAN_TRIGGER_ATTRIBUTE]: trigger });
       throw error;
@@ -1469,7 +1484,7 @@ export function createPlanModeRuntime(
                 // can actually switch to, not a table compiled into the package.
                 const models = sessionModels();
                 try {
-                  return planConfigSections(planningConfigProvider(), planConfigNotice, models);
+                  return planConfigSections(readPlanningConfig(), planConfigNotice, models);
                 } catch (error) {
                   // A malformed config file must not take session start down with it. The
                   // panel is where someone would go to repair it, so it has to still draw.
@@ -1760,7 +1775,7 @@ export function createPlanModeRuntime(
           }
 
           const startedAt = Date.now();
-          const repoRoot = getHarnessState().root ?? ctx.cwd;
+          const repoRoot = planningRepositoryRoot(ctx.cwd);
           const plansDirectory = resolvePlanningPlansDirectory(
             activePlanningConfig?.plansDirectory,
             repoRoot,
@@ -2034,7 +2049,7 @@ export function createPlanModeRuntime(
         if (!active) return undefined;
         const sections: string[] = [];
         if (enabled) {
-          const repoRoot = getHarnessState().root ?? ctx.cwd;
+          const repoRoot = planningRepositoryRoot(ctx.cwd);
           const plansDirectory = resolvePlanningPlansDirectory(
             activePlanningConfig?.plansDirectory,
             repoRoot,

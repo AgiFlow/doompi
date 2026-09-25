@@ -19,7 +19,7 @@ export function createComputerUseDependencies(
     service: overrides.service ?? new DefaultComputerUseExtensionService(client),
     enabled:
       overrides.enabled ??
-      (() => loadDoomConfig(process.env.PI_PROJECT_ROOT ?? process.cwd()).computerUse?.enabled === true),
+      ((cwd) => loadDoomConfig(cwd ?? process.env.PI_PROJECT_ROOT ?? process.cwd()).computerUse?.enabled === true),
     ...(client === undefined ? {} : { client }),
     ...(overrides.scriptRunner !== undefined
       ? { scriptRunner: overrides.scriptRunner }

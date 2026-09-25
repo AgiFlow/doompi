@@ -1,4 +1,6 @@
-import { getHarnessState } from '@agimon-ai/doompi-config';
+import fs from 'node:fs';
+import path from 'node:path';
+
 import type { PiEventHandlers, PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 
 import { applyModelGuidance, guidanceForModel } from '../../../../../../services/modelGuidance';
@@ -9,7 +11,13 @@ export const modelGuidanceEvents = {
   before_agent_start(event, context) {
     const modelId = context.model?.id;
     if (!modelId) return undefined;
-    const guidance = guidanceForModel(loadModelGuidance(getHarnessState().root), modelId);
+    let root = path.resolve(context.cwd);
+    while (!fs.existsSync(path.join(root, '.git')) && !fs.existsSync(path.join(root, '.doom'))) {
+      const parent = path.dirname(root);
+      if (parent === root) break;
+      root = parent;
+    }
+    const guidance = guidanceForModel(loadModelGuidance(root), modelId);
     const systemPrompt = applyModelGuidance(event.systemPrompt, guidance);
     return systemPrompt ? { systemPrompt } : undefined;
   },

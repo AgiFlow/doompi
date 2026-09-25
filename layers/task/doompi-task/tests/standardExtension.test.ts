@@ -78,6 +78,7 @@ vi.mock('../src/services/delegation', async (importOriginal) => ({
       runtimeMocks.createDelegation();
     }
     bind = runtimeMocks.delegationBind;
+    setCwd = vi.fn();
     dispose = runtimeMocks.delegationDispose;
     listActiveWork = runtimeMocks.delegationListActiveWork;
     reconcile = runtimeMocks.delegationReconcile;

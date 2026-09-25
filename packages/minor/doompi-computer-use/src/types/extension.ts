@@ -16,5 +16,5 @@ export interface ComputerUseExtensionDependencies {
   service: ComputerUseExtensionService;
   client?: ComputerUseSessionClient;
   scriptRunner?: ComputerScriptExecutor;
-  enabled?: () => boolean | Promise<boolean>;
+  enabled?: (cwd?: string) => boolean | Promise<boolean>;
 }

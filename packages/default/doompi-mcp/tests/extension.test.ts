@@ -331,7 +331,7 @@ describe('doom mcp extension', () => {
     );
     const extension = registerExtension({ host: { service: projectionService(nativeProjection(projectedConfig)) } });
 
-    await extension.startSession();
+    await extension.startSession(projectedRoot);
     await vi.waitFor(() => expect(createProxyContainer).toHaveBeenCalledOnce());
 
     expect(createProxyContainer).toHaveBeenCalledWith(
@@ -428,7 +428,7 @@ describe('doom mcp extension', () => {
     expect(containerDispose).toHaveBeenCalledTimes(1);
   });
 
-  it('retains the synchronized environment projection in the standard factory', async () => {
+  it('uses the session cwd instead of the synchronized repository MCP path', async () => {
     const contextRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-mcp-context-'));
     fs.writeFileSync(
       path.join(contextRoot, '.mcp.json'),
@@ -443,7 +443,8 @@ describe('doom mcp extension', () => {
 
     expect(createProxyContainer).toHaveBeenCalledWith(
       expect.objectContaining({
-        configSources: [{ path: path.join(repoRoot, '.mcp.json'), format: 'claude' }],
+        configSources: [{ path: path.join(contextRoot, '.mcp.json'), format: 'claude' }],
+        workspaceRoot: contextRoot,
       }),
     );
     fs.rmSync(contextRoot, { recursive: true, force: true });

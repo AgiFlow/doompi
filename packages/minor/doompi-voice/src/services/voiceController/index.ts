@@ -594,7 +594,9 @@ export function createVoiceRuntime(
     refreshVoiceToolFacades();
   };
   const configuredMode = (): 'legacy' | 'live' =>
-    configs.load(process.env.PI_PROJECT_ROOT ?? process.cwd()).voice?.mode === 'live' ? 'live' : 'legacy';
+    configs.load(activeContext?.cwd ?? process.env.PI_PROJECT_ROOT ?? process.cwd()).voice?.mode === 'live'
+      ? 'live'
+      : 'legacy';
   const publishActivation = (state: AutoCaptureActivationState): void => {
     if (!active) return;
     reconcileVoiceTools(state);
@@ -603,7 +605,7 @@ export function createVoiceRuntime(
   };
   const legacyController = new VoiceWorkerAutoCaptureController({
     loadConfig: () => {
-      const root = process.env.PI_PROJECT_ROOT ?? process.cwd();
+      const root = activeContext?.cwd ?? process.env.PI_PROJECT_ROOT ?? process.cwd();
       const loaded = configs.load(root).voice;
       if (!loaded) throw new Error('Voice is not configured in the Pi agent configuration.');
       // Read on every enable(), so the profile's voice lands on the next
@@ -954,6 +956,7 @@ export function createVoiceRuntime(
         }
         if (!active || ownGeneration !== sessionGeneration) return;
         activeContext = ctx;
+        dependencies.sessionController.setSessionCwd?.(ctx.cwd);
         lastUi = undefined;
         lastAutoUi = undefined;
         narrationToolRuntime = undefined;
@@ -990,7 +993,7 @@ export function createVoiceRuntime(
         publishMode(voiceModeState('disabled', canRunVoice(ctx)));
         if (!ctx.hasUI) return;
         ownershipDispose = registerSessionVoiceOwnership({
-          label: () => pi.getSessionName() ?? voiceOwnershipLabel(process.env.PI_PROJECT_ROOT ?? process.cwd()),
+          label: () => pi.getSessionName() ?? voiceOwnershipLabel(ctx.cwd),
           eligible: true,
           controller: {
             get state() {
