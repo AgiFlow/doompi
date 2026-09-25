@@ -380,7 +380,8 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         response.destroy();
         return;
       }
-      json(response, 500, { error: error instanceof Error ? error.message : String(error) });
+      options.onNotice?.(`Headless request failed: ${String(error)}`);
+      json(response, 500, { error: 'Internal server error.' });
     });
   });
 
@@ -802,7 +803,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         const message = error instanceof Error ? error.message : String(error);
         const status = message === 'STALE_TRANSCRIPT_CURSOR' ? 409 : 422;
         json(response, status, {
-          error: status === 409 ? message : 'Saved transcript is unavailable.',
+          error: status === 409 ? 'STALE_TRANSCRIPT_CURSOR' : 'Saved transcript is unavailable.',
         });
       }
       return;

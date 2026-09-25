@@ -839,6 +839,14 @@ describe('serveHeadlessServer', () => {
     expect(
       (await fetch(`${server.url}/api/workspaces/test-workspace/sessions/asleep/transcript?limit=101`)).status,
     ).toBe(400);
+    readDormantTranscript.mockRejectedValueOnce(new Error('STALE_TRANSCRIPT_CURSOR'));
+    const stale = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/asleep/transcript`);
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toEqual({ error: 'STALE_TRANSCRIPT_CURSOR' });
+    readDormantTranscript.mockRejectedValueOnce(new Error('private path /home/user/.pi'));
+    const failed = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/asleep/transcript`);
+    expect(failed.status).toBe(422);
+    expect(await failed.json()).toEqual({ error: 'Saved transcript is unavailable.' });
     await hub.close();
   });
   it('serves compositions, assets, remote requests, and directory suggestions', async () => {
@@ -1622,7 +1630,7 @@ describe('serveHeadlessServer', () => {
     await hub.close();
   });
 
-  it('returns JSON failures for malformed channel payloads and backend API errors', async () => {
+  it('returns opaque JSON failures for malformed channel payloads and backend API errors', async () => {
     const session = host();
     const requestSessionApi = vi.fn(async () => {
       throw new Error('package API unavailable');
@@ -1654,13 +1662,13 @@ describe('serveHeadlessServer', () => {
       body: 'not-json',
     });
     expect(malformed.status).toBe(500);
-    expect(await malformed.json()).toEqual({ error: expect.any(String) });
+    expect(await malformed.json()).toEqual({ error: 'Internal server error.' });
 
     const backendFailure = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/plugins/test/value`, {
       headers: { authorization: 'Bearer secret' },
     });
     expect(backendFailure.status).toBe(500);
-    expect(await backendFailure.json()).toEqual({ error: 'package API unavailable' });
+    expect(await backendFailure.json()).toEqual({ error: 'Internal server error.' });
 
     await server.close();
     await server.close();
