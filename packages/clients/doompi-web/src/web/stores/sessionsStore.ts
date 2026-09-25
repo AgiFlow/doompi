@@ -53,7 +53,13 @@ function asSummary(value: unknown): SessionSummary | undefined {
  */
 export function resolveParentId(byId: Record<string, SessionMeta>, id: string): string | undefined {
   const parent = byId[id]?.summary.parentSessionId;
-  if (parent === undefined || parent === id || byId[parent] === undefined) return undefined;
+  if (
+    parent === undefined ||
+    parent === id ||
+    byId[parent] === undefined ||
+    byId[parent].summary.workspaceId !== byId[id].summary.workspaceId
+  )
+    return undefined;
   let hops = 0;
   const limit = Object.keys(byId).length;
   for (let at: string | undefined = parent; at !== undefined; at = byId[at]?.summary.parentSessionId) {

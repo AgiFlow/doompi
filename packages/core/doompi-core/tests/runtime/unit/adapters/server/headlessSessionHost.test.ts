@@ -203,6 +203,40 @@ describe('request-private auxiliary model tools', () => {
     );
   });
 
+  it('preserves a model error as a native assistant message without presenting a successful reply', async () => {
+    const streamSimple = vi.fn<ModelRuntime['streamSimple']>(() => {
+      const stream = createAssistantMessageEventStream();
+      const message: AssistantMessage = {
+        ...response('error'),
+        content: [],
+        errorMessage: 'Model request blocked: headless capability preparation is not ready.',
+      };
+      stream.push({ type: 'start', partial: message });
+      stream.push({ type: 'error', reason: 'error', error: message });
+      stream.end();
+      return stream;
+    });
+    const current = await fixture([], { streamSimple });
+    await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
+    const frames: Array<{ type?: string; message?: unknown }> = [];
+    current.runtime.onPresentationFrame((frame) => frames.push(frame));
+
+    await current.session.admitPrompt!('Voice transcript');
+    await vi.waitFor(() => expect(frames).toContainEqual(expect.objectContaining({ type: 'agent_settled' })));
+    expect(streamSimple).toHaveBeenCalledOnce();
+    expect(frames).toContainEqual(
+      expect.objectContaining({
+        type: 'message_end',
+        message: expect.objectContaining({
+          role: 'assistant',
+          content: [],
+          stopReason: 'error',
+          errorMessage: 'Model request blocked: headless capability preparation is not ready.',
+        }),
+      }),
+    );
+  });
+
   it('passes private tools through the auxiliary model request without registering them on either agent surface', async () => {
     const current = await fixture();
     const auxiliary = current.host.host!.context.toolCompletion!;
