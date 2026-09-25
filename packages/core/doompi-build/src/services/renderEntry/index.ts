@@ -225,11 +225,14 @@ function bind(resolution: TargetResolution, options: RenderOptions): Binding[] {
       // with the tool rather than going to whichever file sorted earlier.
       const identifier = identifierFor(contribution, taken);
       const paired = contribution.renderers;
+      const mcpWidget = resolution.target === 'mcp' ? options.mcpWidgets?.[contribution.entry.file] : undefined;
+      if (mcpWidget !== undefined && !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*\/[a-z0-9_]+$/u.test(mcpWidget))
+        throw new Error(`Invalid MCP widget key '${mcpWidget}'`);
       return {
         identifier,
         contribution,
         identity: identityFor(contribution, resolution.target, options),
-        mcpWidget: resolution.target === 'mcp' ? options.mcpWidgets?.[contribution.entry.file] : undefined,
+        mcpWidget,
         renderers:
           paired === undefined
             ? undefined

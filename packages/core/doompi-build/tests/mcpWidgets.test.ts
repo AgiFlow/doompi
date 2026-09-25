@@ -74,6 +74,13 @@ describe('package-owned MCP widgets', () => {
     expect(() => generateExtension({ packageDir: duplicates, target: 'mcp' })).toThrow('Duplicate MCP widget');
   });
 
+  it('rejects unsafe widget keys before embedding them in generated code', () => {
+    const root = fixture({ '(backend)/tool/read.mcp.ts': backend, '(frontend)/tool/read.mcp.tsx': widget });
+    expect(() =>
+      generateExtension({ packageDir: root, target: 'mcp', packageName: '@test/tools");globalThis.injected=1;//' }),
+    ).toThrow('Invalid MCP widget key');
+  });
+
   it('removes obsolete browser registries and emits no empty UI bundle', () => {
     const root = fixture({ '(backend)/tool/read.mcp.ts': backend, '(frontend)/tool/read.mcp.tsx': widget });
     generateExtension({ packageDir: root, target: 'mcp' });

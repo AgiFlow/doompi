@@ -4,7 +4,10 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createSkillReadiness } from '../../src/extensions/workspaces/sessions/(backend)/_lib/skillReadiness';
+import {
+  createSkillReadiness,
+  loadedSkillCommandNames,
+} from '../../src/extensions/workspaces/sessions/(backend)/_lib/skillReadiness';
 
 type Handler = (event: never, ctx: ExtensionContext) => unknown;
 
@@ -44,6 +47,17 @@ afterEach(() => {
 });
 
 describe('skill readiness edges', () => {
+  it('selects only skill-prefixed Pi commands for the inventory', () => {
+    const pi = {
+      getCommands: () => [
+        { source: 'skill', name: 'skill:review' },
+        { source: 'skill', name: 'plain' },
+        { source: 'extension', name: 'skill:unrelated' },
+      ],
+    } as unknown as ExtensionAPI;
+    expect(loadedSkillCommandNames(pi)).toEqual(['review']);
+  });
+
   it('reports discovery failure as a diagnostic rather than throwing', async () => {
     const { api, ctx, handlers, cordis } = harness({});
     const loadDeferredSkills = vi.fn(async () => {
