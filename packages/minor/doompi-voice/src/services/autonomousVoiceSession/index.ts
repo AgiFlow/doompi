@@ -19,7 +19,12 @@ import {
   type VoiceTranscriptAdmissionAssessment,
 } from '../transcriptAdmission';
 import { applyTranscriptPolicy } from '../transcriptPolicy';
-import { VoiceDelivery, type VoiceDeliveryIntent, type VoiceDeliveryResult } from '../voiceDelivery';
+import {
+  VoiceDelivery,
+  type VoiceDeliveryIntent,
+  type VoiceDeliveryRequest,
+  type VoiceDeliveryResult,
+} from '../voiceDelivery';
 import type {
   VoiceCandidateOutcome,
   VoiceFinalizeReason,
@@ -82,7 +87,12 @@ export interface AutonomousVoiceSessionDependencies {
   client: AutonomousVoiceWorkerPort;
   clock: IClock;
   ui: AutoCaptureUi;
-  deliver(this: void, text: string, intent?: VoiceDeliveryIntent): void | Promise<void>;
+  deliver(
+    this: void,
+    text: string,
+    intent?: VoiceDeliveryIntent,
+    request?: VoiceDeliveryRequest,
+  ): void | 'buffered' | Promise<void | 'buffered'>;
   narrationReferences(): readonly string[];
   correctTranscript?(this: void, transcript: string, signal: AbortSignal): Promise<string>;
   adjudicateTranscript?(
@@ -110,10 +120,9 @@ function workerConfiguration(config: ResolvedVoiceConfig): VoiceWorkerCaptureCon
 
 function activationState(snapshot: AutonomousVoiceSnapshot): AutoCaptureActivationState {
   if (snapshot.matches('off')) return 'disabled';
-  if (snapshot.matches('enabling') || snapshot.matches({ active: { capture: 'startingCapture' } })) return 'starting';
   if (snapshot.matches('failed')) return 'shuttingDown';
   if (snapshot.matches('stopping') || snapshot.context.stopRequested) return 'draining';
-  return 'active';
+  return snapshot.context.activationReady ? 'active' : 'starting';
 }
 
 function narrationDeferred(snapshot: AutonomousVoiceSnapshot): boolean {
@@ -873,19 +882,25 @@ export class AutonomousVoiceSession {
       result.turnId === pending.turnId &&
       result.revision === pending.revision;
     if (matchesPending) {
-      if (result.kind === 'delivered') {
+      if (result.kind === 'delivered' || result.kind === 'buffered') {
         this.clearCompositionDraft();
-        this.dependencies.ui.notify('Voice composition was accepted by Pi.', 'info');
+        this.dependencies.ui.notify(
+          result.kind === 'buffered'
+            ? 'Voice composition was buffered for the target session, not yet accepted by Pi.'
+            : 'Voice composition was accepted by Pi.',
+          'info',
+        );
       } else {
         this.pendingCompositionSubmission = undefined;
         this.dependencies.ui.notify('Voice composition was not accepted; the draft was retained.', 'warning');
       }
     }
-    if (result.kind === 'delivered') {
-      this.actor.send({ type: 'DELIVERY_SUCCEEDED', ...result });
+    if (result.kind === 'failed') {
+      this.actor.send({ type: 'DELIVERY_FAILED', ...result });
       return;
     }
-    this.actor.send({ type: 'DELIVERY_FAILED', ...result });
+    // Buffer acceptance rearms ordinary capture. It is not an agent admission receipt.
+    this.actor.send({ type: 'DELIVERY_SUCCEEDED', ...result });
   }
 
   private stop(mode: 'graceful' | 'hard'): Promise<void> {

@@ -316,7 +316,7 @@ describe('LiveVoiceController', () => {
     expect(errored.host.stop).toHaveBeenCalledOnce();
   });
 
-  it('fails and stops when the cumulative context update budget is exhausted', async () => {
+  it('retains one live activation across repeated bounded context updates', async () => {
     vi.useFakeTimers();
     try {
       let contextRevision = 0;
@@ -329,11 +329,11 @@ describe('LiveVoiceController', () => {
       await vi.advanceTimersByTimeAsync(2_000);
       await settle();
 
-      expect(controller.activationError).toBe(
-        'Live voice context update budget was exhausted. Start a fresh activation.',
-      );
-      expect(controller.state).toBe('disabled');
-      expect(host.stop).toHaveBeenCalledWith('activation-live');
+      expect(contextRevision).toBeGreaterThan(1);
+      expect(controller.activationError).toBeUndefined();
+      expect(controller.state).toBe('active');
+      expect(host.stop).not.toHaveBeenCalled();
+      await controller.deactivate(ui);
     } finally {
       vi.useRealTimers();
     }

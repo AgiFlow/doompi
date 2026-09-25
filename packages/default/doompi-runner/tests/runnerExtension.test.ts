@@ -63,7 +63,7 @@ vi.mock('@agimon-ai/doompi-core/runtimeCordisHost', () => ({
 }));
 
 vi.mock('../src/services/runnerDependencies', () => ({
-  createRunnerDependencies: () => extensionMocks.container(),
+  createRunnerDependencies: (...args: unknown[]) => extensionMocks.container(...args),
 }));
 vi.mock('../src/services/bashTool', () => ({
   createBashTool: extensionMocks.createBashTool,
@@ -527,7 +527,9 @@ describe('runnerExtension refresh', () => {
       },
     }));
 
-    await expect(runnerExtension(harness.pi)).rejects.toThrow('service graph failed');
+    await runnerExtension(harness.pi);
+    expect(() => harness.handlers.get('session_start')?.({}, harness.context)).toThrow('service graph failed');
+    await harness.handlers.get('session_shutdown')?.({}, harness.context);
     expect(harness.registry.close).toHaveBeenCalledOnce();
   });
 
@@ -539,6 +541,7 @@ describe('runnerExtension refresh', () => {
 
     await expect(runnerExtension(harness.pi)).resolves.toBeUndefined();
     await flushPromises();
+    await startSession(harness);
     await expect(harness.handlers.get('session_shutdown')?.({}, harness.context)).resolves.toBeUndefined();
 
     expect(extensionMocks.footerDispose).toHaveBeenCalledOnce();

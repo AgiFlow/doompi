@@ -47,7 +47,12 @@ async function mountedApis(): Promise<MountedApi[]> {
   const host = {
     scope: 'session',
     sessionId: SESSION_ID,
-    context: { locality: 'local', directEvents } as unknown as DoomServerHostService['context'],
+    context: {
+      locality: 'local',
+      cwd: '/repo',
+      environment: { PI_CODING_AGENT_DIR: process.env[PI_CODING_AGENT_DIR_ENV] },
+      directEvents,
+    } as unknown as DoomServerHostService['context'],
     registerApi(candidate: MountedApi) {
       registered.push(candidate);
       return { dispose() {} };

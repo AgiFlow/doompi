@@ -77,6 +77,8 @@ function hostContext(
     scope,
     context: {
       locality: 'local',
+      cwd: '/repo',
+      environment: { SESSION_ONLY: 'runner' },
       directEvents,
     } as unknown as DoomServerHostService['context'],
     registerApi(api) {
@@ -218,6 +220,10 @@ describe('runnerServerFacet', () => {
 
     const secondStop = await activity.start(harness.execution);
     expect(lifecycleMocks.createContainer).toHaveBeenCalledOnce();
+    expect(lifecycleMocks.createContainer).toHaveBeenCalledWith({
+      cwd: '/repo',
+      environment: { SESSION_ONLY: 'runner' },
+    });
     expect(lifecycleMocks.container.lifeline.arm).toHaveBeenCalledTimes(2);
     await secondStop();
 

@@ -97,6 +97,24 @@ describe('McpSettingsManager projections', () => {
     await manager.dispose();
   });
 
+  it('runs repository discovery with the admitted checkout as its execution directory', async () => {
+    const start = vi.spyOn(McpRuntimeOwner.prototype, 'start').mockResolvedValue(undefined);
+    vi.spyOn(McpRuntimeOwner.prototype, 'dispose').mockResolvedValue();
+    const repositoryRoot = temporaryDirectory();
+    const manager = new McpSettingsManager({ tokenStore });
+
+    await manager.discover(
+      REPOSITORY_ID,
+      repositoryRoot,
+      projectedSync(repositoryRoot, { github: { type: 'stdio', command: 'github-mcp' } }),
+    );
+
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceRoot: repositoryRoot, executionCwd: repositoryRoot }),
+    );
+    await manager.dispose();
+  });
+
   it('rejects authorization for stale or unconfigured repositories', async () => {
     const repositoryRoot = temporaryDirectory();
     const manager = new McpSettingsManager({ tokenStore });
@@ -111,7 +129,7 @@ describe('McpSettingsManager projections', () => {
   });
 
   it('retains a completed authorization flow for polling', async () => {
-    vi.spyOn(McpRuntimeOwner.prototype, 'start').mockResolvedValue(undefined);
+    const start = vi.spyOn(McpRuntimeOwner.prototype, 'start').mockResolvedValue(undefined);
     vi.spyOn(McpRuntimeOwner.prototype, 'dispose').mockResolvedValue();
     const repositoryRoot = temporaryDirectory();
     const manager = new McpSettingsManager({ tokenStore });
@@ -122,6 +140,9 @@ describe('McpSettingsManager projections', () => {
     await vi.waitFor(() => {
       expect(manager.getAuthorization(started.id, REPOSITORY_ID)?.status).toBe('completed');
     });
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceRoot: repositoryRoot, executionCwd: repositoryRoot }),
+    );
     expect(manager.getAuthorization(started.id, 'another-repository')).toBeUndefined();
     expect(await manager.cancelAuthorization('missing-flow', REPOSITORY_ID)).toBeUndefined();
     await expect(manager.cancelAuthorization(started.id, REPOSITORY_ID)).resolves.toEqual(

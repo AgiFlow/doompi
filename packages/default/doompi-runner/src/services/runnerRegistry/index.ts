@@ -39,8 +39,10 @@ export type ProcessRegistryPort = Pick<
 >;
 
 /** Opens the SQLite-backed registry the rest of the monorepo already shares. */
-export function createDefaultProcessRegistry(): ProcessRegistryPort {
-  return createProcessRegistryService(process.env[REGISTRY_PATH_ENV]);
+export function createDefaultProcessRegistry(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): ProcessRegistryPort {
+  return createProcessRegistryService(env[REGISTRY_PATH_ENV]);
 }
 
 function sessionTag(sessionId: string): string {

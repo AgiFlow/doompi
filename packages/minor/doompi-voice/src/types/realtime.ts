@@ -29,7 +29,7 @@ export type RealtimeEvent =
   | { type: 'request'; requestId: string; text: string }
   | { type: 'error'; code: string };
 
-export type RealtimeDeliveryOutcome = 'submitted' | 'busy' | 'uncertain' | 'rejected';
+export type RealtimeDeliveryOutcome = 'submitted' | 'buffered' | 'busy' | 'uncertain' | 'rejected';
 
 export interface RealtimeActionRequest {
   activationId: string;

@@ -228,6 +228,10 @@ export class DelegationManager {
     this.options = options;
   }
 
+  setCwd(cwd: string): void {
+    this.options.cwd = cwd;
+  }
+
   private now(): string {
     return this.options.now?.() ?? new Date().toISOString();
   }

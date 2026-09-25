@@ -38,6 +38,16 @@ export interface VoiceReadinessView {
 /** What `POST /control` answers: the session's voice state after the action. */
 export type VoiceControlView = Omit<VoiceStatusView, 'media' | 'readiness'>;
 
+/** Host-owned live companion status; deliberately independent of server service imports. */
+export interface GlobalLiveStatusView {
+  version: 1;
+  state: 'disabled' | 'starting' | 'active' | 'draining' | 'shuttingDown';
+  activeSessionId: string | null;
+  muted: boolean;
+  error?: string;
+  media: { client: boolean; realtime: boolean };
+}
+
 export interface VoiceRelayBindingResponse {
   binding: string;
   expiresAt: number;
@@ -78,6 +88,9 @@ export default defineApiRoutes({
   status: { method: 'GET', path: '/status', response: apiResponse<VoiceStatusView>() },
   control: { method: 'POST', path: '/control', response: apiResponse<VoiceControlView>() },
   readiness: { method: 'GET', path: '/readiness', response: apiResponse<VoiceReadinessView>() },
+  liveStatus: { method: 'GET', path: '/live/status', response: apiResponse<GlobalLiveStatusView>() },
+  /** Explicit user action; the authenticated global owner controls its single companion. */
+  liveControl: { method: 'POST', path: '/live/control', response: apiResponse<GlobalLiveStatusView>() },
   relayBinding: { method: 'POST', path: '/relay-binding', response: apiResponse<VoiceRelayBindingResponse>() },
   relay: { method: 'POST', path: '/relay', query: ['binding'], response: apiResponse<VoiceRelayResponse>() },
 

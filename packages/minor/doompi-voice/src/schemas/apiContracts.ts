@@ -63,6 +63,14 @@ const RealtimeSnapshot = Type.Object({
   browser: O(Browser),
 });
 const Wake = Type.Object({ eventEpoch: S, sequence: N });
+const GlobalLiveStatus = Type.Object({
+  version: Type.Literal(1),
+  state: values(['disabled', 'starting', 'active', 'draining', 'shuttingDown']),
+  activeSessionId: Type.Union([S, Type.Null()]),
+  muted: B,
+  error: O(S),
+  media: Type.Object({ client: B, realtime: B }),
+});
 const Version = { version: Type.Literal(3) };
 const Targets = Type.Array(Type.Object({ handle: S, label: S, order: N }), { maxItems: 32 });
 const OwnershipAction = values(['catalog', 'prepare', 'activate', 'deactivate', 'readiness', 'fence']);
@@ -305,6 +313,72 @@ export const apiContracts = defineApiContract({
       body: { required: true, contentType: 'audio/webm', contentTypes: ['audio/webm', 'audio/mp4'], schema: S },
       responses: { ...Errors, '200': { description: 'Transcript.', schema: Type.Object({ transcript: S }) } },
     },
+    ...(
+      [
+        ['readiness', '/live/agent', 'GET'],
+        ['prepare', '/live/agent/prepare', 'POST'],
+        ['admit', '/live/agent/admit', 'POST'],
+        ['results', '/live/agent/results', 'GET'],
+        ['ack', '/live/agent/results/ack', 'POST'],
+        ['fence', '/live/agent/fence', 'POST'],
+        ['select', '/live/agent/select', 'POST'],
+        ['revoke', '/live/agent/revoke', 'POST'],
+      ] as const
+    ).map(([name, path, method]): DoomHttpContract => ({
+      id: `voice.agent.${name}`,
+      scope: 'session',
+      basePath: 'voice',
+      path,
+      method,
+      authentication: 'owner',
+      description: `Native Voice agent ${name}. Only the host-issued hub bearer can access this route.`,
+      parameters: [
+        { name: 'Authorization', in: 'header', required: true, schema: Type.String({ pattern: '^Bearer .+' }) },
+        ...(name === 'results'
+          ? ['activationId', 'routeGeneration', 'sessionIncarnation', 'after'].map((key) => ({
+              name: key,
+              in: 'query' as const,
+              required: key !== 'after',
+              schema: S,
+            }))
+          : []),
+      ],
+      ...(method === 'POST'
+        ? {
+            body: {
+              required: true,
+              contentType: 'application/json',
+              schema:
+                name === 'select'
+                  ? Type.Object({
+                      activationId: S,
+                      routeGeneration: Type.Integer({ minimum: 1 }),
+                      transactionId: S,
+                      sessionIncarnation: S,
+                      nativeTransferAllowed: B,
+                      catalog: Type.Object({
+                        revision: S,
+                        targets: Type.Array(Type.Object({ order: Type.Integer({ minimum: 1 }), label: S }), {
+                          maxItems: 256,
+                        }),
+                      }),
+                    })
+                  : name === 'revoke'
+                    ? Type.Object({
+                        activationId: S,
+                        routeGeneration: Type.Integer({ minimum: 1 }),
+                        transactionId: S,
+                        sessionIncarnation: S,
+                      })
+                    : Type.Unknown(),
+            },
+          }
+        : {}),
+      responses: {
+        ...jsonApiResponses(Type.Unknown()),
+        '204': { description: 'Agent result acknowledged or route fenced.' },
+      },
+    })),
     {
       id: 'voice.peer',
       scope: 'global',
@@ -324,6 +398,17 @@ export const apiContracts = defineApiContract({
       method: 'POST',
       authentication: 'none',
       description: 'Discover and stage Voice ownership through an HMAC-authenticated paired host.',
+      body: { required: true, contentType: 'application/json', schema: Type.Unknown() },
+      responses: jsonApiResponses(Type.Unknown()),
+    },
+    {
+      id: 'voice.peerAgent',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/peer-agent',
+      method: 'POST',
+      authentication: 'none',
+      description: 'Accept a signed, replay-guarded, grant-scoped native Voice agent request from a configured peer.',
       body: { required: true, contentType: 'application/json', schema: Type.Unknown() },
       responses: jsonApiResponses(Type.Unknown()),
     },
@@ -349,6 +434,66 @@ export const apiContracts = defineApiContract({
       parameters: [{ name: 'binding', in: 'query', required: true, schema: S }],
       body: { required: true, contentType: 'application/json', schema: Type.Unknown() },
       responses: jsonApiResponses(Type.Unknown()),
+    },
+    {
+      id: 'voice.nativeTransfer',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/live/native-transfer',
+      method: 'POST',
+      authentication: 'owner',
+      description: 'Host-only revision-bound native Live transfer. Requires the host hub bearer.',
+      parameters: [
+        { name: 'Authorization', in: 'header', required: true, schema: Type.String({ pattern: '^Bearer .+' }) },
+      ],
+      body: {
+        required: true,
+        contentType: 'application/json',
+        schema: Type.Object({
+          sourceSessionId: S,
+          activationId: S,
+          routeGeneration: Type.Integer({ minimum: 0 }),
+          sessionIncarnation: S,
+          ordinal: Type.Integer({ minimum: 1 }),
+          catalogRevision: S,
+        }),
+      },
+      responses: {
+        ...Errors,
+        '202': {
+          description: 'Transfer requested; source work drains before commit.',
+          schema: Type.Object({ requested: Type.Literal(true) }),
+        },
+      },
+    },
+    {
+      id: 'voice.liveStatus',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/live/status',
+      method: 'GET',
+      authentication: 'owner',
+      description: 'Read the host-global live companion state without activating media.',
+      responses: jsonApiResponses(GlobalLiveStatus),
+    },
+    {
+      id: 'voice.liveControl',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/live/control',
+      method: 'POST',
+      authentication: 'owner',
+      description: 'Explicitly activate, transfer, mute, interrupt or end the host-global live companion.',
+      body: {
+        required: true,
+        contentType: 'application/json',
+        schema: Type.Object({
+          action: values(['activate', 'transfer', 'mute', 'unmute', 'interrupt', 'end']),
+          sessionId: O(S),
+          expectedSourceSessionId: O(S),
+        }),
+      },
+      responses: jsonApiResponses(GlobalLiveStatus),
     },
     {
       id: 'voice.readiness',

@@ -4,7 +4,7 @@ import { createVoiceMediaApi } from '../src/services/clientMediaApi';
 import { RealtimeMediaBroker } from '../src/services/realtimeMediaBroker';
 import { VOICE_MEDIA_PROTOCOL_VERSION, VOICE_MEDIA_ROUTES } from '../src/types/clientMedia';
 import { REALTIME_ROUTES as routes } from '../src/types/realtime';
-import { VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership';
+import { VOICE_OWNERSHIP_PROTOCOL_VERSION, VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -53,7 +53,7 @@ function fixture(fakeTimers = false) {
   const syncOwnership = () =>
     post(VOICE_OWNERSHIP_ROUTES.sync, {
       registration: {
-        version: 3,
+        version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
         leaseId: 'lease',
         revision: 1,
         label: 'Voice',

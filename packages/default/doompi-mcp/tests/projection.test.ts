@@ -54,6 +54,50 @@ describe('mcpSessionConfigFromProjection', () => {
     });
   });
 
+  it('uses the exact session directory for repository MCP while preserving selected plugin sources', () => {
+    const repoRoot = temporaryDirectory();
+    const cwd = path.join(repoRoot, 'subdir');
+    fs.mkdirSync(cwd);
+    const rootConfig = path.join(repoRoot, '.mcp.json');
+    const sessionConfig = path.join(cwd, '.mcp.json');
+    const pluginConfig = path.join(repoRoot, 'plugin.mcp.json');
+    const rootContents = JSON.stringify({ mcpServers: { parentOnly: { command: 'parent' } } });
+    const sessionContents = JSON.stringify({ mcpServers: { sessionOnly: { command: 'session' } } });
+    const pluginContents = JSON.stringify({ mcpServers: { pluginOnly: { command: 'plugin' } } });
+    fs.writeFileSync(rootConfig, rootContents);
+    fs.writeFileSync(sessionConfig, sessionContents);
+    fs.writeFileSync(pluginConfig, pluginContents);
+    const configuration = mcpSessionConfigFromProjection(
+      {
+        version: 1,
+        enabled: true,
+        fingerprint: 'initial',
+        repoRoot,
+        stagingDirectory: path.join(repoRoot, 'staging'),
+        generatedConfigPath: path.join(repoRoot, 'staging', 'mcp.json'),
+        sources: [
+          {
+            sourceId: 'repository:root',
+            owner: 'repository',
+            format: 'native',
+            configPath: rootConfig,
+            contentDigest: createHash('sha256').update(rootContents).digest('hex'),
+          },
+          {
+            sourceId: 'plugin:selected',
+            owner: 'plugin',
+            format: 'native',
+            configPath: pluginConfig,
+            contentDigest: createHash('sha256').update(pluginContents).digest('hex'),
+          },
+        ],
+      },
+      cwd,
+    );
+    expect(configuration.repoRoot).toBe(cwd);
+    expect(configuration.generatedConfigPath).toBeUndefined();
+    expect(buildMcpConfigGroups(configuration).sessionLocal.serverNames).toEqual(['pluginOnly', 'sessionOnly']);
+  });
   it('does not fall back to a repository config for an explicit disabled projection', () => {
     const repoRoot = temporaryDirectory();
     fs.writeFileSync(

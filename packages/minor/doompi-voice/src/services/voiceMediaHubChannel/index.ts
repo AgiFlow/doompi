@@ -81,7 +81,11 @@ export function createVoiceMediaWakeChannel(): DoomHubChannel {
 }
 
 /** Coordinates browser voice ownership from session lifecycle events. */
-export function createVoiceOwnershipChannel(): DoomHubChannel {
+export function createVoiceOwnershipChannel(
+  onStart?: (coordinator: VoiceOwnershipCoordinator) => void,
+  onClose?: () => void,
+  onCatalogChange?: (coordinator: VoiceOwnershipCoordinator) => void,
+): DoomHubChannel {
   return {
     frameType: VOICE_OWNERSHIP_FRAME_TYPE,
     lifecycle: 'hub',
@@ -121,6 +125,7 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
         now: () => Date.now(),
         createId: () => globalThis.crypto.randomUUID(),
       });
+      onStart?.(coordinator);
       const unregisterPeerOwnership = registerVoicePeerOwnership({
         discover: () => [...localRegistrations].map(([sessionId, registration]) => ({ sessionId, registration })),
         command: (sessionId, command) => sendCommand(sessionId, command),
@@ -156,6 +161,7 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
         if (nextSignature === catalogSignature) return;
         await coordinator.publishCatalogs([...scopes.keys()]);
         catalogSignature = nextSignature;
+        onCatalogChange?.(coordinator);
       };
 
       /**
@@ -273,6 +279,7 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
           if (peerRefreshTimer !== undefined) clearInterval(peerRefreshTimer);
           peerRefreshTimer = undefined;
           unregisterPeerOwnership();
+          onClose?.();
         },
       };
       return source;

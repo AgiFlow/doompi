@@ -42,11 +42,12 @@ export class Launcher implements ILauncher {
     private readonly clock: IClock,
     private readonly paths: IRunnerPaths,
     private readonly lifeline?: ILifeline,
+    private readonly environment: Readonly<Record<string, string | undefined>> = process.env,
   ) {}
 
   launch(request: LaunchRequest): RunHandle {
     const writer = this.logFile.open(request.id);
-    const memoryLimit = getResultMaxBytes() * MEMORY_BUFFER_FACTOR;
+    const memoryLimit = getResultMaxBytes(this.environment) * MEMORY_BUFFER_FACTOR;
 
     let buffer = '';
     let buffering = true;
@@ -60,7 +61,7 @@ export class Launcher implements ILauncher {
 
     this.paths.ensureDirectories(request.sessionId);
     const supervisor = supervisorPaths(this.paths.stateDirectory(request.sessionId), request.id);
-    const { [LIFELINE_ENV]: _inheritedLifeline, ...environment } = process.env;
+    const { [LIFELINE_ENV]: _inheritedLifeline, ...environment } = this.environment;
     const env = {
       ...environment,
       ...NON_INTERACTIVE_ENV,
@@ -164,6 +165,6 @@ export class Launcher implements ILauncher {
 }
 
 /** The spec is JSON, which has no way to carry an unset variable. */
-function defined(env: NodeJS.ProcessEnv): Record<string, string> {
+function defined(env: Readonly<Record<string, string | undefined>>): Record<string, string> {
   return Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined));
 }

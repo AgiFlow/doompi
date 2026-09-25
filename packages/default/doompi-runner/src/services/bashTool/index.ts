@@ -46,7 +46,7 @@ export function createBashTool(
     // toolSuccessBg, which overwhelms long logs and diffs.
     renderShell: 'self',
 
-    async execute(_toolCallId, params, signal, onUpdate, _ctx): Promise<ToolResult> {
+    async execute(_toolCallId, params, signal, onUpdate, ctx): Promise<ToolResult> {
       const { command, timeout, background, interactive, name } = params as BashParams;
       let onOutput: ((output: string) => void) | undefined;
       if (onUpdate) {
@@ -68,6 +68,7 @@ export function createBashTool(
           ...(onOutput ? { onOutput } : {}),
           ...(signal ? { signal } : {}),
           sessionId: await dependencies.getSessionId(),
+          cwd: ctx.cwd,
         });
         if (signal?.aborted) throw new Error('Operation aborted');
       } catch (error) {

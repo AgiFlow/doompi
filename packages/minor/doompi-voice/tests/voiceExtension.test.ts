@@ -308,7 +308,7 @@ describe('turn-end narration fallback', () => {
     const h = fallbackHarness();
     const ctx = context('session-1');
 
-    h.fire('before_agent_start', {}, ctx);
+    h.fire('agent_start', { runId: 'run-first' }, ctx);
     h.fire('tool_execution_start', { toolName: 'read' }, ctx);
     h.fire('turn_end', { message: terminalMessage('Short final answer.') }, ctx);
     await h.fire('agent_settled', {}, ctx);
@@ -321,7 +321,7 @@ describe('turn-end narration fallback', () => {
     const h = fallbackHarness();
     const ctx = context('session-1');
 
-    h.fire('before_agent_start', {}, ctx);
+    h.fire('agent_start', { runId: 'run-narrate' }, ctx);
     h.fire('tool_execution_start', { toolName: 'narrate' }, ctx);
     h.fire('turn_end', { message: terminalMessage('Already narrated.') }, ctx);
     await h.fire('agent_settled', {}, ctx);
@@ -333,26 +333,26 @@ describe('turn-end narration fallback', () => {
     const inactive = fallbackHarness();
     const ctx = context('session-1');
     inactive.setGeneration(undefined);
-    inactive.fire('before_agent_start', {}, ctx);
+    inactive.fire('agent_start', { runId: 'run-inactive' }, ctx);
     inactive.fire('turn_end', { message: terminalMessage('Silent.') }, ctx);
     await inactive.fire('agent_settled', {}, ctx);
     expect(inactive.runtime.narrate).not.toHaveBeenCalled();
 
     const replaced = fallbackHarness();
-    replaced.fire('before_agent_start', {}, ctx);
+    replaced.fire('agent_start', { runId: 'run-replaced' }, ctx);
     replaced.fire('turn_end', { message: terminalMessage('Stale.') }, ctx);
     replaced.setGeneration(8);
     await replaced.fire('agent_settled', {}, ctx);
     expect(replaced.runtime.narrate).not.toHaveBeenCalled();
 
     const replacedSession = fallbackHarness();
-    replacedSession.fire('before_agent_start', {}, ctx);
+    replacedSession.fire('agent_start', { runId: 'run-replaced-session' }, ctx);
     replacedSession.fire('turn_end', { message: terminalMessage('Cross-session stale.') }, ctx);
     await replacedSession.fire('agent_settled', {}, context('session-2'));
     expect(replacedSession.runtime.narrate).not.toHaveBeenCalled();
 
     const toolTurn = fallbackHarness();
-    toolTurn.fire('before_agent_start', {}, ctx);
+    toolTurn.fire('agent_start', { runId: 'run-tool' }, ctx);
     toolTurn.fire(
       'turn_end',
       { message: { role: 'assistant', stopReason: 'toolUse', content: [{ type: 'text', text: 'Working.' }] } },
@@ -362,11 +362,43 @@ describe('turn-end narration fallback', () => {
     expect(toolTurn.runtime.narrate).not.toHaveBeenCalled();
 
     const disposed = fallbackHarness();
-    disposed.fire('before_agent_start', {}, ctx);
+    disposed.fire('agent_start', { runId: 'run-disposed' }, ctx);
     disposed.fire('turn_end', { message: terminalMessage('Stale after reload.') }, ctx);
     disposed.dispose();
     await disposed.fire('agent_settled', {}, ctx);
     expect(disposed.runtime.narrate).not.toHaveBeenCalled();
+  });
+
+  it('tracks overlapping run identities and releases a fallback only after playback settles', async () => {
+    let finishPlayback!: (outcome: 'completed') => void;
+    const narration = new Promise<'completed'>((resolve) => {
+      finishPlayback = resolve;
+    });
+    const runtime: VoiceTurnFallbackRuntime = {
+      activeGeneration: () => 9,
+      narrate: vi.fn(() => narration),
+      onDrainChange: vi.fn(),
+    };
+    const fallback = createVoiceTurnFallback(runtime);
+    const ctx = context('session-overlap');
+    await fallback.events.agent_start?.({ runId: 'run-a' } as never, ctx);
+    await fallback.events.turn_end?.({ runId: 'run-a', message: terminalMessage('First response') } as never, ctx);
+    await fallback.events.agent_start?.({ runId: 'run-b' } as never, ctx);
+    await fallback.events.tool_execution_start?.({ runId: 'run-b', toolName: 'narrate' } as never, ctx);
+    await fallback.events.turn_end?.({ runId: 'run-b', message: terminalMessage('Second response') } as never, ctx);
+    await fallback.events.agent_start?.({ runId: 'run-a' } as never, ctx); // Native resume is idempotent.
+    expect(fallback.hasPendingWork()).toBe(true);
+    await fallback.events.agent_settled?.({ runId: 'run-a' } as never, ctx);
+    await Promise.resolve();
+    expect(runtime.narrate).toHaveBeenCalledExactlyOnceWith('First response', undefined);
+    expect(fallback.hasPendingWork()).toBe(true);
+    await fallback.events.agent_settled?.({ runId: 'run-b' } as never, ctx);
+    expect(runtime.narrate).toHaveBeenCalledOnce();
+    expect(fallback.hasPendingWork()).toBe(true);
+    finishPlayback('completed');
+    await vi.waitFor(() => expect(fallback.hasPendingWork()).toBe(false));
+    expect(runtime.onDrainChange).toHaveBeenCalled();
+    fallback.dispose();
   });
 
   it('extracts only terminal assistant text without tool calls', () => {

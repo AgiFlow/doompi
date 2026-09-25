@@ -117,6 +117,85 @@ afterEach(() => {
 });
 
 describe('voice media hub channels', () => {
+  it('resolves only the current catalog per host, including a session-inactive source', async () => {
+    const left = ownershipHarness({
+      source: { leaseId: 'left-source', label: 'Source', active: true },
+      target: { leaseId: 'left-target', label: 'Target', active: false },
+    });
+    const right = ownershipHarness({
+      source: { leaseId: 'right-source', label: 'Source', active: true },
+      target: { leaseId: 'right-target', label: 'Target', active: false },
+    });
+    let leftCoordinator: VoiceOwnershipCoordinator | undefined;
+    let rightCoordinator: VoiceOwnershipCoordinator | undefined;
+    const leftSource = createVoiceOwnershipChannel((owner) => {
+      leftCoordinator = owner;
+    }).start(left.host);
+    const rightSource = createVoiceOwnershipChannel((owner) => {
+      rightCoordinator = owner;
+    }).start(right.host);
+    for (const [source, harness] of [
+      [leftSource, left],
+      [rightSource, right],
+    ] as const) {
+      source.sessionAdded?.(scope('source'));
+      source.sessionAdded?.(scope('target'));
+      harness.emit('source');
+      harness.emit('target');
+      await vi.waitFor(() => expect(harness.states.get('source')?.catalog).toHaveLength(1));
+    }
+    const revision = left.states.get('source')!.catalogRevision!;
+    expect(leftCoordinator!.resolveLiveTarget('source', 1, revision)).toBe('target');
+    expect(leftCoordinator!.resolveLiveTarget('source', 2, revision)).toBeUndefined();
+    expect(leftCoordinator!.resolveLiveTarget('source', 257, revision)).toBeUndefined();
+    expect(leftCoordinator!.resolveLiveTarget('source', 0, revision)).toBeUndefined();
+    expect(leftCoordinator!.resolveLiveTarget('source', 1, 'stale')).toBeUndefined();
+    expect(rightCoordinator!.resolveLiveTarget('source', 1, 'stale')).toBeUndefined();
+    left.states.get('source')!.active = false;
+    left.emit('source');
+    expect(leftCoordinator!.resolveLiveTarget('source', 1, revision)).toBeUndefined();
+    const changedRevision = leftCoordinator!.catalogRevision();
+    expect(leftCoordinator!.resolveLiveTarget('source', 1, changedRevision)).toBe('target');
+    leftSource.sessionRemoved?.('source');
+    expect(leftCoordinator!.resolveLiveTarget('source', 1, revision)).toBeUndefined();
+    expect(rightCoordinator!.resolveLiveTarget('source', 1, right.states.get('source')!.catalogRevision!)).toBe(
+      'target',
+    );
+    leftSource.close();
+    rightSource.close();
+  });
+
+  it('includes granted paired targets and invalidates their ordinal on grant removal', () => {
+    const coordinator = new VoiceOwnershipCoordinator({ send: vi.fn() }, vi.fn(), {
+      now: () => Date.now(),
+      createId: () => 'id',
+    });
+    coordinator.update('source', {
+      version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+      leaseId: 'source',
+      revision: 1,
+      label: 'Source',
+      eligible: true,
+      active: false,
+    });
+    coordinator.update('peer/remote/target', {
+      version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+      leaseId: 'peer',
+      revision: 1,
+      label: 'Peer',
+      eligible: true,
+      active: false,
+    });
+    const revision = coordinator.catalogRevision();
+    expect(coordinator.liveCatalog('source')).toEqual({
+      revision,
+      targets: [{ order: 1, label: 'Peer' }],
+    });
+    expect(coordinator.resolveLiveTarget('source', 1, revision)).toBe('peer/remote/target');
+    coordinator.remove('peer/remote/target');
+    expect(coordinator.resolveLiveTarget('source', 1, revision)).toBeUndefined();
+    expect(coordinator.liveCatalog('source').targets).toEqual([]);
+  });
   it('delivers media wake events through the direct session bus', () => {
     const directEvents = createDirectEvents();
     const publish = vi.fn();

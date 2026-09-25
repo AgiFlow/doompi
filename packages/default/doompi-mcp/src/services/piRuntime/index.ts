@@ -91,7 +91,7 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
           publishServerStatus();
 
           if (mode === 'standalone') {
-            await session.reconfigure(readSessionConfig(process.env, context.cwd));
+            await session.reconfigure(readSessionConfig(process.env, context.cwd), context.cwd);
           } else {
             await session.reconfigure(failClosedSessionConfig(context.cwd));
             sessionContext.inject([DOOM_MCP_PROJECTION_SERVICE], async (projectionContext) => {
@@ -105,7 +105,12 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
                   );
                 }
               } else {
-                await session.reconfigure(mcpSessionConfigFromProjection(projection.getSnapshot()));
+                const snapshot = projection.getSnapshot();
+                await session.reconfigure(
+                  mcpSessionConfigFromProjection(snapshot, context.cwd),
+                  context.cwd,
+                  snapshot.repoRoot,
+                );
               }
               return async () => {
                 if (sessionActive && !disposed) await session.reconfigure(failClosedSessionConfig(context.cwd));

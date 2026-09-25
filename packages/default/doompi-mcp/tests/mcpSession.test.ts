@@ -252,6 +252,22 @@ describe('McpSession', () => {
     );
   });
 
+  it('replaces the container when the exact session cwd changes under the same MCP projection', async () => {
+    const { pi } = fakePi();
+    const active = await session(pi);
+    const config = configuration();
+    const firstCwd = path.join(repoRoot, 'first');
+    const secondCwd = path.join(repoRoot, 'second');
+
+    await active.reconfigure(config, firstCwd);
+    await vi.waitFor(() => expect(createProxyContainer).toHaveBeenCalledTimes(1));
+    await active.reconfigure(config, secondCwd);
+    await vi.waitFor(() => expect(createProxyContainer).toHaveBeenCalledTimes(2));
+    expect(createProxyContainer.mock.calls.map(([options]) => options.executionCwd)).toEqual([firstCwd, secondCwd]);
+    expect(createProxyContainer.mock.calls.map(([options]) => options.workspaceRoot)).toEqual([repoRoot, repoRoot]);
+    await active.dispose();
+  });
+
   describe('session-only disconnect', () => {
     it('closes the connection, deactivates tools, keeps credentials and allows reauthorization', async () => {
       const { pi, activeTools, definitions } = fakePi();

@@ -1,4 +1,4 @@
-export const VOICE_OWNERSHIP_PROTOCOL_VERSION = 3;
+export const VOICE_OWNERSHIP_PROTOCOL_VERSION = 4;
 export const VOICE_OWNERSHIP_LEASE_MS = 15_000;
 /** Allow browser permission and device selection to finish before ownership is acknowledged. */
 export const VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS = 75_000;
@@ -110,6 +110,12 @@ export interface BrowserVoiceOwnershipPayload {
   type: 'browser-media-session';
   version: typeof VOICE_OWNERSHIP_PROTOCOL_VERSION;
   activeSessionId: string | null;
+  handoff?: {
+    id: string;
+    phase: 'preparing' | 'rebinding' | 'failed';
+    sourceSessionId: string;
+    targetSessionId?: string;
+  };
 }
 
 const ID_PATTERN = /^[A-Za-z0-9._:-]+$/u;
@@ -274,18 +280,36 @@ export function parseVoiceOwnershipHandoffRequest(value: unknown): VoiceOwnershi
   return input as unknown as VoiceOwnershipHandoffRequest;
 }
 
+function browserSessionId(value: unknown): value is string {
+  return (
+    id(value, 200) ||
+    (typeof value === 'string' &&
+      /^peer\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(value))
+  );
+}
+
 export function parseBrowserVoiceOwnershipPayload(value: unknown): BrowserVoiceOwnershipPayload | undefined {
   const input = record(value);
   if (
     input === undefined ||
-    !exact(input, ['type', 'version', 'activeSessionId']) ||
+    !exact(input, ['type', 'version', 'activeSessionId', 'handoff']) ||
     input.type !== 'browser-media-session' ||
     input.version !== VOICE_OWNERSHIP_PROTOCOL_VERSION ||
-    (input.activeSessionId !== null &&
-      (typeof input.activeSessionId !== 'string' ||
-        (!id(input.activeSessionId, 200) &&
-          !/^peer\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(input.activeSessionId))))
+    (input.activeSessionId !== null && !browserSessionId(input.activeSessionId))
   )
     return undefined;
+  if (input.handoff !== undefined) {
+    const handoff = record(input.handoff);
+    if (
+      handoff === undefined ||
+      !exact(handoff, ['id', 'phase', 'sourceSessionId', 'targetSessionId']) ||
+      !id(handoff.id) ||
+      !['preparing', 'rebinding', 'failed'].includes(handoff.phase as string) ||
+      !browserSessionId(handoff.sourceSessionId) ||
+      (handoff.targetSessionId !== undefined && !browserSessionId(handoff.targetSessionId)) ||
+      (handoff.phase === 'rebinding' && handoff.targetSessionId === undefined)
+    )
+      return undefined;
+  }
   return input as unknown as BrowserVoiceOwnershipPayload;
 }

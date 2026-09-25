@@ -1,10 +1,11 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   doomApiCallerFrom,
   type DoomApi,
   type DoomApiContext,
   type DoomApiHandler,
+  type DoomPeerAgentRegistry,
 } from '@agimon-ai/doompi-core/packageApi';
 import {
   createPeerReplayGuard,
@@ -27,6 +28,19 @@ import {
 
 const PEER_PATH = '/peer';
 const PEER_OWNERSHIP_PATH = '/peer-ownership';
+const PEER_AGENT_PATH = '/peer-agent';
+const PEER_AGENT_ROUTE = '/api/plugins/voice/peer-agent';
+const AGENT_ROUTES = new Map<string, 'GET' | 'POST'>([
+  ['/live/agent', 'GET'],
+  ['/live/agent/prepare', 'POST'],
+  ['/live/agent/admit', 'POST'],
+  ['/live/agent/results', 'GET'],
+  ['/live/agent/results/ack', 'POST'],
+  ['/live/agent/fence', 'POST'],
+  ['/live/agent/select', 'POST'],
+  ['/live/agent/revoke', 'POST'],
+]);
+const MAX_AGENT_RESPONSE_BYTES = 128 * 1024;
 const PEER_ROUTE = '/api/plugins/voice/peer';
 const PEER_OWNERSHIP_ROUTE = '/api/plugins/voice/peer-ownership';
 const MAX_REQUEST_BYTES = 128 * 1024;
@@ -77,6 +91,17 @@ export function registerVoicePeerOwnership(endpoint: VoicePeerOwnershipEndpoint)
   return () => {
     if (ownershipEndpoint === endpoint) ownershipEndpoint = undefined;
   };
+}
+
+export function isPairedVoiceTargetGranted(homeDirectory: string, reference: string): boolean {
+  const target = parseRemoteSessionReference(reference);
+  const config = readSessionPeerConfig(homeDirectory);
+  return (
+    target !== undefined &&
+    config?.peers.some(
+      (peer) => peer.hostId === target.hostId && peer.allowedVoiceSessionIds.includes(target.sessionId),
+    ) === true
+  );
 }
 
 export function discoverPairedVoiceTargets(): Promise<PairedVoiceOwnershipTarget[]> {
@@ -171,8 +196,245 @@ function relayRequest(value: unknown): RelayRequest | undefined {
 }
 
 async function boundedBody(request: Request): Promise<string | undefined> {
-  const body = await request.text();
-  return Buffer.byteLength(body) <= MAX_REQUEST_BYTES ? body : undefined;
+  if (Number(request.headers.get('content-length')) > MAX_REQUEST_BYTES) return undefined;
+  const reader = request.body?.getReader();
+  if (!reader) return '';
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_REQUEST_BYTES) {
+        await reader.cancel();
+        return undefined;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function boundedResponse(response: Response): Promise<Response> {
+  if (Number(response.headers.get('content-length')) > MAX_AGENT_RESPONSE_BYTES)
+    return error(502, 'Pi Voice agent response exceeded the relay limit.');
+  const reader = response.body?.getReader();
+  if (!reader) return new Response(null, { status: response.status });
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_AGENT_RESPONSE_BYTES) {
+        await reader.cancel();
+        return error(502, 'Pi Voice agent response exceeded the relay limit.');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return new Response(Buffer.concat(chunks), {
+    status: response.status,
+    headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' },
+  });
+}
+
+export function registerVoicePeerAgent(
+  registry: DoomPeerAgentRegistry | undefined,
+  sessionId: string,
+  agent: { fetch(request: Request): Promise<Response> },
+  hubToken: string,
+): () => void {
+  if (!registry) throw new Error('Voice peer agent host registry is unavailable.');
+  return registry.register(sessionId, agent, hubToken);
+}
+
+export async function requestPairedVoiceAgent(
+  homeDirectory: string,
+  reference: string,
+  path: string,
+  method: 'GET' | 'POST',
+  body?: string,
+): Promise<Response> {
+  const target = parseRemoteSessionReference(reference);
+  const config = readSessionPeerConfig(homeDirectory);
+  const peer = config?.peers.find((candidate) => candidate.hostId === target?.hostId);
+  if (!target || !config || !peer?.allowedVoiceSessionIds.includes(target.sessionId))
+    throw new Error('Remote Voice agent target is not granted.');
+  let url: URL;
+  try {
+    url = new URL(path, 'http://doompi.local');
+  } catch {
+    throw new Error('Invalid paired Voice agent request.');
+  }
+  if (
+    !path.startsWith('/') ||
+    path.startsWith('//') ||
+    url.origin !== 'http://doompi.local' ||
+    AGENT_ROUTES.get(url.pathname) !== method ||
+    (method === 'GET' && body !== undefined) ||
+    Buffer.byteLength(body ?? '') > MAX_REQUEST_BYTES
+  )
+    throw new Error('Invalid paired Voice agent request.');
+  const payload = JSON.stringify({
+    nonce: randomUUID(),
+    sessionId: target.sessionId,
+    path: `${url.pathname}${url.search}`,
+    method,
+    body: body ?? '',
+  });
+  if (Buffer.byteLength(payload) > MAX_REQUEST_BYTES) throw new Error('Paired Voice agent request is too large.');
+  const response = await fetch(new URL(PEER_AGENT_ROUTE, peer.url), {
+    method: 'POST',
+    headers: peerRequestHeaders(config.hostId, peer, 'POST', PEER_AGENT_PATH, payload),
+    body: payload,
+    redirect: 'error',
+    signal: AbortSignal.timeout(7_000),
+  });
+  return boundedResponse(response);
+}
+
+async function inboundAgent(
+  context: DoomApiContext,
+  request: Request,
+  replayGuard: ReturnType<typeof createPeerReplayGuard> | undefined,
+): Promise<Response> {
+  if (!context.homeDirectory) return error(503, 'Paired Voice is not configured.');
+  const config = readSessionPeerConfig(context.homeDirectory);
+  if (!config) return error(503, 'Paired Voice is not configured.');
+  const body = await boundedBody(request);
+  if (body === undefined) return error(413, 'Voice agent request is too large.');
+  const peer = authenticatePeer(config, request, body, replayGuard);
+  if (!peer) return error(401, 'Paired Voice request is unauthorized or replayed.');
+  let input: Record<string, unknown> | undefined;
+  try {
+    input = record(JSON.parse(body) as unknown);
+  } catch {
+    return error(400, 'Invalid paired Voice agent request.');
+  }
+  if (typeof input?.sessionId !== 'string' || !peer.allowedVoiceSessionIds.includes(input.sessionId))
+    return error(403, 'Peer has no Voice grant.');
+  if (
+    typeof input.path !== 'string' ||
+    typeof input.body !== 'string' ||
+    (input.method !== 'GET' && input.method !== 'POST')
+  )
+    return error(400, 'Invalid paired Voice agent request.');
+  let url: URL;
+  try {
+    url = new URL(input.path, 'http://doompi.local');
+  } catch {
+    return error(400, 'Invalid paired Voice agent request.');
+  }
+  if (
+    url.origin !== 'http://doompi.local' ||
+    !input.path.startsWith('/') ||
+    input.path.startsWith('//') ||
+    AGENT_ROUTES.get(url.pathname) !== input.method ||
+    (input.method === 'GET' && input.body !== '') ||
+    Buffer.byteLength(input.body) > MAX_REQUEST_BYTES
+  )
+    return error(400, 'Invalid paired Voice agent request.');
+  const agent = context.peerAgents?.get(input.sessionId);
+  if (!agent) return error(404, 'Target Pi Voice agent is unavailable.');
+  let admission: Record<string, unknown> | undefined;
+  if (url.pathname === '/live/agent/admit') {
+    try {
+      admission = record(JSON.parse(input.body) as unknown);
+    } catch {
+      return error(400, 'Invalid paired Voice agent request.');
+    }
+  }
+  if (url.pathname === '/live/agent/admit' && !admission) return error(400, 'Invalid paired Voice agent request.');
+  const receipts = context.requestReceipts;
+  if (admission && !receipts) return error(503, 'Paired Voice admission receipts are unavailable.');
+  const activationId = admission?.activationId;
+  const requestId = admission?.requestId;
+  const incarnation = admission?.sessionIncarnation;
+  if (
+    admission &&
+    (typeof activationId !== 'string' ||
+      !activationId ||
+      typeof requestId !== 'string' ||
+      !requestId ||
+      typeof incarnation !== 'string' ||
+      !incarnation ||
+      typeof admission.transcript !== 'string' ||
+      !admission.transcript.trim())
+  )
+    return error(400, 'Invalid paired Voice admission receipt identity.');
+  const key = admission
+    ? {
+        namespace: 'voice.peer-admission',
+        activationId: createHash('sha256')
+          .update(JSON.stringify([peer.hostId, activationId, incarnation]))
+          .digest('hex'),
+        requestId: requestId as string,
+      }
+    : undefined;
+  let token: string | undefined;
+  if (key && receipts) {
+    try {
+      const reserved = await receipts.reserve({
+        ...key,
+        fingerprint: createHash('sha256')
+          .update(
+            JSON.stringify([
+              peer.hostId,
+              input.sessionId,
+              incarnation,
+              admission?.transcript,
+              admission?.routeGeneration,
+              admission?.intent,
+            ]),
+          )
+          .digest('hex'),
+        destination: `${input.sessionId}:${incarnation as string}`,
+        transactionId: createHash('sha256')
+          .update(JSON.stringify([peer.hostId, activationId, admission?.routeGeneration]))
+          .digest('hex'),
+      });
+      if (reserved.kind !== 'reserved') return error(409, 'Paired Voice admission already received or conflicted.');
+      token = reserved.token;
+    } catch {
+      return error(503, 'Paired Voice admission receipts are unavailable.');
+    }
+  }
+  let response: Response;
+  try {
+    response = await boundedResponse(
+      await agent.fetch(
+        new Request(url, {
+          method: input.method,
+          headers: { authorization: `Bearer ${agent.hubToken}`, 'content-type': 'application/json' },
+          ...(input.method === 'POST' ? { body: input.body } : {}),
+        }),
+      ),
+    );
+  } catch {
+    if (key && token && receipts) {
+      try {
+        await receipts.finish({ ...key, token, outcome: 'uncertain' });
+      } catch (receiptError) {
+        context.onNotice(`Paired Voice admission receipt finish failed: ${String(receiptError)}`);
+      }
+    }
+    return error(503, 'Paired Voice admission is uncertain.');
+  }
+  if (key && token && receipts) {
+    try {
+      await receipts.finish({ ...key, token, outcome: response.ok ? 'admitted' : 'uncertain' });
+    } catch {
+      return error(503, 'Paired Voice admission receipts are unavailable.');
+    }
+  }
+  return response;
 }
 
 async function dispatchLocal(input: RelayRequest): Promise<Response> {
@@ -425,6 +687,7 @@ export const voicePeerRelayApi: DoomApi = {
         if (request.method === 'POST' && path === PEER_PATH) return inboundMedia(context, request, replayGuard);
         if (request.method === 'POST' && path === PEER_OWNERSHIP_PATH)
           return inboundOwnership(context, request, replayGuard);
+        if (request.method === 'POST' && path === PEER_AGENT_PATH) return inboundAgent(context, request, replayGuard);
         if (request.method === 'POST' && path === '/relay-binding') return createBinding(context, request);
         if (request.method === 'POST' && path === '/relay') return outbound(context, request);
         return error(404, 'Not found.');

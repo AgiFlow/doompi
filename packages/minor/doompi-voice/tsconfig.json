@@ -29,6 +29,7 @@
     "dist",
     "coverage",
     "tests/browserMediaDeviceRecovery.test.ts",
+    "tests/globalVoicePageLease.test.ts",
     "src/extensions/**/(frontend)/**/*",
     "generated/web.ts"
   ]

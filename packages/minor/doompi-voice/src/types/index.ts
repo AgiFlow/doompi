@@ -225,6 +225,7 @@ export interface AutoCaptureUi {
 }
 export interface IVoiceSessionController {
   readonly state: VoiceState;
+  setSessionCwd?(cwd: string): void;
   toggle(ui: VoiceUi): Promise<void>;
   shutdown(ui?: VoiceUi): Promise<void>;
 }

@@ -9,6 +9,8 @@ import {
   type VoiceOwnershipTarget,
 } from '../../types/voiceOwnership';
 
+const MAX_LIVE_TARGETS = 256;
+
 interface Participant {
   sessionId: string;
   label: string;
@@ -41,6 +43,8 @@ export class VoiceOwnershipCoordinator {
   private selectedSessionId: string | null = null;
   private operation: Promise<unknown> = Promise.resolve();
   private catalogGeneration = 0;
+  private handoffState: BrowserVoiceOwnershipPayload['handoff'];
+  private handoffGeneration = 0;
 
   public constructor(
     private readonly delivery: VoiceOwnershipCommandDelivery,
@@ -105,21 +109,60 @@ export class VoiceOwnershipCoordinator {
   public payload(): BrowserVoiceOwnershipPayload {
     this.prune();
     this.reconcileSelection();
-    return {
-      type: 'browser-media-session',
-      version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
-      activeSessionId: this.selectedSessionId,
-    };
+    return this.selectionPayload();
+  }
+
+  /** Explicit stop invalidates a transfer before any asynchronous commands settle. */
+  public cancelHandoff(): void {
+    this.handoffGeneration += 1;
+    this.handoffState = undefined;
+    this.reconcileSelection();
+    this.publishSelection(this.selectionPayload());
   }
 
   public activate(sessionId: string): Promise<boolean> {
     return this.enqueue(() => this.activateNow(sessionId));
   }
 
+  /** Current eligible catalog, including discovered paired targets. */
+  public liveCatalog(sourceSessionId: string): { revision: string; targets: { order: number; label: string }[] } {
+    this.prune();
+    return {
+      revision: this.catalogRevision(),
+      targets: this.targetsFor(sourceSessionId)
+        .slice(0, MAX_LIVE_TARGETS)
+        .map(({ order, label }) => ({ order, label })),
+    };
+  }
+
+  /** Resolve an eligible ordinal only from the current source catalog. */
+  public resolveLiveTarget(sourceSessionId: string, ordinal: number, catalogRevision: string): string | undefined {
+    this.prune();
+    if (
+      catalogRevision !== this.catalogRevision() ||
+      !this.participants.has(sourceSessionId) ||
+      !Number.isSafeInteger(ordinal) ||
+      ordinal < 1 ||
+      ordinal > MAX_LIVE_TARGETS
+    )
+      return undefined;
+    const target = this.targetsFor(sourceSessionId).find((candidate) => candidate.order === ordinal);
+    return target?.sessionId;
+  }
+
+  /** Resolve only the revision-bound target currently advertised to this source. */
+  public resolveTarget(sourceSessionId: string, targetHandle: string, catalogRevision: string): string | undefined {
+    this.prune();
+    const source = this.participants.get(sourceSessionId);
+    if (!source?.active || catalogRevision !== this.catalogRevision()) return undefined;
+    return this.targetsFor(sourceSessionId).find((target) => target.handle === targetHandle)?.sessionId;
+  }
+
   public handoff(
     sourceSessionId: string,
     targetHandle: string,
     catalogRevision = this.catalogRevision(),
+    sourceRequestId?: string,
   ): Promise<boolean> {
     return this.enqueue(async () => {
       this.prune();
@@ -130,37 +173,57 @@ export class VoiceOwnershipCoordinator {
       const participant = this.participants.get(target.sessionId);
       if (participant === undefined) return false;
       const handoffId = this.createId();
+      const generation = ++this.handoffGeneration;
+      this.setHandoff({
+        id: handoffId,
+        phase: 'preparing',
+        sourceSessionId,
+        targetSessionId: target.sessionId,
+      });
       const staged = {
         handoffId,
         controllerId: this.controllerId,
         leaseId: participant.leaseId,
         revision: participant.revision,
       };
-      if (!(await this.sendAction(target.sessionId, 'prepare', staged))) return false;
-      if (!this.matches(target.sessionId, participant)) {
+      const current = () => this.handoffGeneration === generation;
+      const fail = async (restoreSource = false): Promise<boolean> => {
+        if (!current()) {
+          await this.sendAction(target.sessionId, 'fence', staged);
+          return false;
+        }
+        // The target may be activated when readiness fails. Fence it before
+        // returning to source, and keep the staged browser lease throughout.
         await this.sendAction(target.sessionId, 'fence', staged);
+        if (!current()) return false;
+        this.setHandoff({ ...this.handoffState!, phase: 'failed' });
+        if (this.matches(sourceSessionId, source) && (source.active || restoreSource)) {
+          this.setSelected(sourceSessionId);
+          if (!source.active) await this.sendAction(sourceSessionId, 'activate');
+        } else this.setSelected(null);
         return false;
-      }
-      if (!(await this.sendAction(sourceSessionId, 'deactivate'))) {
-        await this.sendAction(target.sessionId, 'fence', staged);
-        return false;
-      }
-      if (!this.matches(target.sessionId, participant)) {
-        await this.sendAction(target.sessionId, 'fence', staged);
-        this.reconcileSelection();
-        return false;
-      }
+      };
+      if (!(await this.sendAction(target.sessionId, 'prepare', staged)) || !current()) return fail();
+      if (!this.matches(target.sessionId, participant) || !this.matches(sourceSessionId, source)) return fail();
+      // The source remains selected while its accepted reply and physical
+      // narration drain. The browser never sees an unstaged null owner.
+      const sourceStaged =
+        sourceRequestId === undefined
+          ? undefined
+          : {
+              handoffId: sourceRequestId,
+              controllerId: this.controllerId,
+              leaseId: source.leaseId,
+              revision: source.revision,
+            };
+      if (!(await this.sendAction(sourceSessionId, 'deactivate', sourceStaged)) || !current()) return fail();
+      if (!this.matches(target.sessionId, participant) || !current()) return fail(true);
+      this.setHandoff({ ...this.handoffState!, phase: 'rebinding' });
       this.setSelected(target.sessionId);
-      if (!(await this.sendAction(target.sessionId, 'activate', staged))) {
-        await this.sendAction(target.sessionId, 'fence', staged);
-        this.reconcileSelection();
-        return false;
-      }
-      if (!(await this.sendAction(target.sessionId, 'readiness', staged))) {
-        await this.sendAction(target.sessionId, 'fence', staged);
-        this.reconcileSelection();
-        return false;
-      }
+      if (!(await this.sendAction(target.sessionId, 'activate', staged)) || !current()) return fail(true);
+      if (!(await this.sendAction(target.sessionId, 'readiness', staged)) || !current()) return fail(true);
+      this.handoffState = undefined;
+      this.publishSelection(this.selectionPayload());
       return true;
     });
   }
@@ -302,6 +365,10 @@ export class VoiceOwnershipCoordinator {
   }
 
   private reconcileSelection(): void {
+    if (this.handoffState?.phase === 'preparing' && this.participants.has(this.handoffState.sourceSessionId)) {
+      this.setSelected(this.handoffState.sourceSessionId);
+      return;
+    }
     const selected =
       (this.selectedSessionId === null ? undefined : this.participants.get(this.selectedSessionId))?.active === true
         ? this.selectedSessionId
@@ -314,10 +381,20 @@ export class VoiceOwnershipCoordinator {
   private setSelected(sessionId: string | null): void {
     if (this.selectedSessionId === sessionId) return;
     this.selectedSessionId = sessionId;
-    this.publishSelection({
+    this.publishSelection(this.selectionPayload());
+  }
+
+  private setHandoff(state: NonNullable<BrowserVoiceOwnershipPayload['handoff']>): void {
+    this.handoffState = state;
+    this.publishSelection(this.selectionPayload());
+  }
+
+  private selectionPayload(): BrowserVoiceOwnershipPayload {
+    return {
       type: 'browser-media-session',
       version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
-      activeSessionId: sessionId,
-    });
+      activeSessionId: this.selectedSessionId,
+      ...(this.handoffState ? { handoff: this.handoffState } : {}),
+    };
   }
 }

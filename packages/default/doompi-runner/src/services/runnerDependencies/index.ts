@@ -43,16 +43,18 @@ function memoize<T>(build: () => T): () => T {
 export function createRunnerDependencies(
   overrides: Partial<RunnerDependencies> & {
     environment: Readonly<Record<string, string | undefined>>;
+    cwd?: string;
   },
 ): RunnerDependencies {
-  const environment = overrides.environment;
+  const environment = { ...overrides.environment };
+  const cwd = overrides.cwd ?? process.cwd();
   const clock = memoize(() => overrides.clock ?? new SystemClock());
   const spawner = memoize(() => overrides.spawner ?? new NodeSpawner());
   const processControl = memoize(() => overrides.processControl ?? new NodeProcessControl());
   const ptySpawner = memoize(() => overrides.ptySpawner ?? new NodePtySpawner());
-  const paths = memoize(() => overrides.paths ?? new RunnerPaths());
+  const paths = memoize(() => overrides.paths ?? new RunnerPaths(cwd, environment));
   const lifeline = memoize(() => overrides.lifeline ?? new NodeLifeline(paths()));
-  const processRegistry = memoize(() => overrides.processRegistry ?? createDefaultProcessRegistry());
+  const processRegistry = memoize(() => overrides.processRegistry ?? createDefaultProcessRegistry(environment));
   const runnerRegistry = memoize(
     () => overrides.runnerRegistry ?? new RunnerRegistry(paths(), processControl(), processRegistry(), environment),
   );
@@ -60,17 +62,32 @@ export function createRunnerDependencies(
   const logFile = memoize(() => overrides.logFile ?? new LogFile(paths()));
   const logReader = memoize(() => overrides.logReader ?? new LogReader());
   const launcher = memoize(
-    () => overrides.launcher ?? new Launcher(spawner(), processControl(), logFile(), clock(), paths(), lifeline()),
+    () =>
+      overrides.launcher ??
+      new Launcher(spawner(), processControl(), logFile(), clock(), paths(), lifeline(), environment),
   );
   const rmuxBackend = memoize(
-    () => overrides.rmuxBackend ?? new PtyBackendChain(new RmuxBackend(paths()), new TmuxBackend(paths())),
+    () =>
+      overrides.rmuxBackend ??
+      new PtyBackendChain(new RmuxBackend(paths(), environment), new TmuxBackend(paths(), undefined, environment)),
   );
-  const rtkProcessor = memoize(() => overrides.rtkProcessor ?? new RtkProcessor());
-  const ptyHost = memoize(() => overrides.ptyHost ?? new PtyHost(ptySpawner(), logFile(), processControl(), clock()));
+  const rtkProcessor = memoize(() => overrides.rtkProcessor ?? new RtkProcessor(undefined, undefined, environment));
+  const ptyHost = memoize(
+    () => overrides.ptyHost ?? new PtyHost(ptySpawner(), logFile(), processControl(), clock(), environment),
+  );
   const bashRunService = memoize(
     () =>
       overrides.bashRunService ??
-      new BashRunService(launcher(), rmuxBackend(), namer(), runnerRegistry(), clock(), rtkProcessor()),
+      new BashRunService(
+        launcher(),
+        rmuxBackend(),
+        namer(),
+        runnerRegistry(),
+        clock(),
+        rtkProcessor(),
+        cwd,
+        environment,
+      ),
   );
 
   return {

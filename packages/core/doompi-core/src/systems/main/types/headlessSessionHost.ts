@@ -6,6 +6,7 @@ import type { DoomWebComposition } from '../../../exports/packageApi';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
 import type { DoomServerBundleEntry } from '../../../exports/serverFacet';
 import type { ContextProjectionInput } from '../../../services/contextProjection';
+import type { SyncRegistration } from '../../../services/syncRegistration';
 import type { DirectHarnessRuntime } from '../../../types/server/directHarnessRuntime';
 import type { SessionToolSurface } from '../../../types/server/sessionToolSurface';
 import type { HeadlessHost } from '../adapters/headlessHost';
@@ -16,6 +17,10 @@ export interface HeadlessSessionHostOptions {
   repoRoot: string;
   sessionId: string;
   workspaceId?: string;
+  /** Parent workspace location used for grouping, not for session execution. */
+  groupingRoot?: string;
+  /** Pinned parent generation required to reopen an inherited worktree journal. */
+  inheritedArtifact?: SyncRegistration;
   webComposition?: DoomWebComposition;
   sessionName: string;
   parentSessionId?: string;

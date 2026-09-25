@@ -116,6 +116,29 @@ describe('doom voice extension boundaries', () => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
+  it('uses the nearest checkout config from a subdirectory without inheriting a parent workspace', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-voice-checkout-'));
+    const parent = path.join(home, 'parent');
+    const worktree = path.join(home, 'external-worktree');
+    const nestedWorktree = path.join(parent, 'nested-worktree');
+    fs.mkdirSync(path.join(parent, '.doom'), { recursive: true });
+    fs.mkdirSync(path.join(worktree, '.doom'), { recursive: true });
+    fs.mkdirSync(path.join(worktree, 'src', 'nested'), { recursive: true });
+    fs.mkdirSync(path.join(nestedWorktree, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(parent, '.doom', 'config.yaml'), 'voice:\n  language: en\n');
+    fs.writeFileSync(path.join(worktree, '.doom', 'config.yaml'), 'voice:\n  language: auto\n');
+    fs.writeFileSync(path.join(worktree, '.git'), 'gitdir: /tmp/external-git');
+    fs.writeFileSync(path.join(nestedWorktree, '.git'), 'gitdir: /tmp/nested-git');
+    vi.stubEnv('PI_PROJECT_TRUST', 'trusted');
+    try {
+      const loader = new PiVoiceConfigService();
+      expect(loader.load(path.join(worktree, 'src', 'nested'), home).voice?.language).toBe('auto');
+      expect(loader.load(path.join(nestedWorktree, 'src'), home).voice).toBeUndefined();
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it('loads trusted project voice config through the Pi agent directory', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-voice-trusted-'));
     const agentDirectory = path.join(home, 'agent');

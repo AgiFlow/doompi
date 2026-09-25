@@ -54,6 +54,7 @@ export class TmuxBackend implements IRmuxBackend {
   constructor(
     private readonly paths: IRunnerPaths,
     private readonly createClient: (socket: string) => ITmuxClient = (socket) => new TmuxClient(socket),
+    private readonly env: Readonly<Record<string, string | undefined>> = process.env,
   ) {}
 
   async launch(request: RmuxLaunchRequest): Promise<RunHandle | undefined> {
@@ -95,7 +96,7 @@ export class TmuxBackend implements IRmuxBackend {
         logPath,
         backend: 'tmux',
         backendTarget: target,
-        output: () => (buffering ? readTail(logPath, getResultMaxBytes() * 2) : ''),
+        output: () => (buffering ? readTail(logPath, getResultMaxBytes(this.env) * 2) : ''),
         completion: () => completion,
         detach: () => {
           buffering = false;
@@ -220,7 +221,7 @@ export class TmuxBackend implements IRmuxBackend {
   private prepareFiles(request: RmuxLaunchRequest, logPath: string, aux: SupervisorPaths): void {
     cleanupSupervisorFiles(aux);
     fs.writeFileSync(logPath, '', { mode: 0o600 });
-    const env = environment(request.sessionId, request.interactive);
+    const env = environment(request.sessionId, request.interactive, this.env);
     const spec: CommandSpec = { command: request.command, cwd: request.cwd, env };
     writeCommandSpec(aux.spec, spec);
   }
@@ -244,7 +245,7 @@ export class TmuxBackend implements IRmuxBackend {
       runtimeEntry('logSink'),
       logPath,
       this.paths.rotatedLogPathFor(id),
-      String(getLogMaxBytes()),
+      String(getLogMaxBytes(this.env)),
       donePath,
       ...(request.interactive ? [this.paths.rawLogPathFor(id)] : []),
     ]);
@@ -318,9 +319,13 @@ function socketName(repositoryPath: string): string {
   return `${SOCKET_PREFIX}${hash}`;
 }
 
-function environment(sessionId: string, interactive: boolean): Record<string, string> {
+function environment(
+  sessionId: string,
+  interactive: boolean,
+  env: Readonly<Record<string, string | undefined>>,
+): Record<string, string> {
   const values: NodeJS.ProcessEnv = {
-    ...process.env,
+    ...env,
     ...(interactive ? {} : NON_INTERACTIVE_ENV),
     ...NO_TERMINAL_INPUT_ENV,
     PI_SESSION_ID: sessionId,

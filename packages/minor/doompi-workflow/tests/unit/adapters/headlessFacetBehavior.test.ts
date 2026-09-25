@@ -332,6 +332,13 @@ describe('workflow headless facet', () => {
       content: [{ type: 'text', text: 'workflow launched' }],
       details: { content: [{ type: 'text', text: 'workflow launched' }] },
     });
+    await launch.execute('launch', { workflowPath: 'automations/build.yml' }, undefined, undefined, {
+      ...test.execution,
+      cwd: '/external/worktree/subdir',
+    });
+    expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith(
+      expect.objectContaining({ workflowPath: '/external/worktree/subdir/automations/build.yml' }),
+    );
     expect(
       await run.execute('run-status', { action: 'status', runKey: 'run-1' }, undefined, undefined, test.execution),
     ).toEqual({

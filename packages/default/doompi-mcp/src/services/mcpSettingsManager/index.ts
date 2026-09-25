@@ -245,6 +245,8 @@ export class McpSettingsManager {
     try {
       const handle = await owner.start({
         configSources: prepared.configSources,
+        workspaceRoot: repositoryRoot,
+        executionCwd: repositoryRoot,
         tokenStore: await this.tokenStore(),
         onAuthorizationUrl: (_url, serverName) => {
           liveStates.set(serverName, { serverName, state: 'needs-auth' });
@@ -333,7 +335,7 @@ export class McpSettingsManager {
     };
     this.flows.set(flow.id, flow);
     this.busyRepositories.add(repositoryId);
-    void this.runAuthorization(flow, prepared.configSources, redirect);
+    void this.runAuthorization(flow, prepared.configSources, repositoryRoot, redirect);
     return publicFlow(flow);
   }
 
@@ -356,6 +358,7 @@ export class McpSettingsManager {
   private async runAuthorization(
     flow: InternalAuthorizationFlow,
     sources: McpConfigSource[],
+    repositoryRoot: string,
     redirect?: DoomOAuthRedirect,
   ): Promise<void> {
     const owner = new McpRuntimeOwner();
@@ -370,6 +373,8 @@ export class McpSettingsManager {
     try {
       const handle = await owner.start({
         configSources: sources,
+        workspaceRoot: repositoryRoot,
+        executionCwd: repositoryRoot,
         tokenStore: await this.tokenStore(),
         ...(redirect ? { callbackServer: hubCallbackSink(redirect) } : {}),
         onAuthorizationUrl: (url, serverName) => {

@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { createHarnessSession } from '@agimon-ai/doompi-config/harnessStore';
 import { DOOM_CHILD_SESSION_MCP_TOOL_SERVICE, type DoomChildSessionTool } from '@agimon-ai/doompi-core/childSession';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
@@ -12,6 +14,8 @@ import {
   type DoomHeadlessResource,
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
+import type { DoomMcpProjection } from '@agimon-ai/doompi-core/mcpProjection';
+import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-core/mcpSession';
 import { DOOM_MCP_STATUS_SERVICE, type DoomMcpStatusService } from '@agimon-ai/doompi-core/mcpStatus';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/serverFacet';
 import { Context } from '@deepseek-ai/cordis';
@@ -94,13 +98,42 @@ afterEach(async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-async function setup(enabled = true) {
+async function setup(enabled = true, projection?: DoomMcpProjection, managed = false, cwd = root) {
   const statuses: Record<string, string> = {};
+  const environment = sessionConfigEnvironment({
+    enabled,
+    repoRoot: root,
+    stagingDirectory: path.join(root, 'staging'),
+  });
+  if (managed) delete environment[DOOM_MCP_SESSION_ENV_VAR];
+  if (managed && projection)
+    createHarnessSession(
+      {
+        root,
+        majorMode: 'doom',
+        domains: ['initial'],
+        layers: [],
+        profileEnvironment: {},
+        skillDirectories: [],
+        agentDirectories: [],
+        additionalDirectories: [],
+        childExtensions: [],
+        pluginDirectories: [],
+        pluginHooks: [],
+        allowProtectedWrites: false,
+        hooks: false,
+        agents: false,
+        mcp: enabled,
+        mcpProjection: projection,
+      },
+      { directory: root, environment },
+    );
   const execution = {
-    cwd: root,
+    cwd,
     repoRoot: root,
     sessionId: crypto.randomUUID(),
-    environment: sessionConfigEnvironment({ enabled, repoRoot: root, stagingDirectory: path.join(root, 'staging') }),
+    selection: { majorMode: 'doom', activeLayers: [], domains: ['initial'] },
+    environment,
     client: {
       notify: vi.fn(),
       request: vi.fn(),
@@ -115,8 +148,13 @@ async function setup(enabled = true) {
   const commands: DoomHeadlessCommand[] = [];
   const tools: DoomHeadlessTool[] = [];
   const registration = () => ({ dispose: vi.fn() });
+  const selectionListeners = new Set<(selection: DoomHeadlessExecutionContext['selection']) => void | Promise<void>>();
   const host = {
     context: execution,
+    subscribeSelection: (listener: (selection: DoomHeadlessExecutionContext['selection']) => void | Promise<void>) => {
+      selectionListeners.add(listener);
+      return () => selectionListeners.delete(listener);
+    },
     registerResource: (value: DoomHeadlessResource) => {
       resources.push(value);
       return registration();
@@ -135,7 +173,11 @@ async function setup(enabled = true) {
     },
   } as unknown as DoomHeadlessHostService;
   const context = new Context();
-  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session', registerApi: registration });
+  context.provide(DOOM_SERVER_HOST_SERVICE, {
+    scope: 'session',
+    context: { workspaceRoot: managed ? root : undefined },
+    registerApi: registration,
+  });
   context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
   const close = await mcpHeadlessFacet.apply(context);
   cleanups.push(async () => {
@@ -155,7 +197,22 @@ async function setup(enabled = true) {
   };
   const service = () => context.get(MCP_SESSION_TOOLS_SERVICE) as McpSessionToolsService;
   const childTool = () => context.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionTool | undefined;
-  return { context, execution, statuses, resources, command: commands[0]!, tool: tools[0]!, start, service, childTool };
+  const select = async (domains: readonly string[]) => {
+    const selection = { majorMode: 'doom', activeLayers: [], domains };
+    for (const listener of selectionListeners) await listener(selection);
+  };
+  return {
+    context,
+    execution,
+    statuses,
+    resources,
+    command: commands[0]!,
+    tool: tools[0]!,
+    start,
+    service,
+    childTool,
+    select,
+  };
 }
 
 async function connected() {
@@ -301,6 +358,154 @@ describe('MCP server facet contracts', () => {
       { name: 'replacement', state: 'not-connected' },
     ]);
     expect(current.service().snapshot()).toEqual([]);
+  });
+
+  it('discovers repository MCP from exact session cwd while retaining selected projection policy', async () => {
+    const configPath = path.join(root, '.mcp.json');
+    const contents = fs.readFileSync(configPath);
+    const projection: DoomMcpProjection = {
+      version: 1,
+      enabled: true,
+      fingerprint: 'selected',
+      repoRoot: root,
+      stagingDirectory: path.join(root, 'projection-stage'),
+      sources: [
+        {
+          sourceId: 'repository:selected',
+          owner: 'repository',
+          format: 'native',
+          configPath,
+          contentDigest: createHash('sha256').update(contents).digest('hex'),
+        },
+      ],
+    };
+    const sessionCwd = path.join(root, 'nested');
+    fs.mkdirSync(sessionCwd);
+    const sessionConfigPath = path.join(sessionCwd, '.mcp.json');
+    fs.writeFileSync(sessionConfigPath, JSON.stringify({ mcpServers: { selected: { command: 'selected-server' } } }));
+    const current = await setup(true, projection, true, sessionCwd);
+    expect(current.execution.cwd).toBe(sessionCwd);
+    expect(current.execution.repoRoot).toBe(root);
+    await current.start();
+    expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])).toEqual([
+      { name: 'selected', state: 'not-connected' },
+    ]);
+    await vi.waitFor(() => expect(mock.options).toHaveLength(1));
+    expect(mock.options[0]?.configSources).toEqual([
+      expect.objectContaining({ path: sessionConfigPath, format: 'claude' }),
+    ]);
+    expect(mock.options[0]?.workspaceRoot).toBe(root);
+    expect(mock.options[0]?.executionCwd).toBe(sessionCwd);
+    expect(mock.options[0]?.environment).toMatchObject(current.execution.environment);
+    await current.command.execute('reload', current.execution);
+    expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])).toEqual([
+      { name: 'selected', state: 'not-connected' },
+    ]);
+  });
+
+  it('loads a domain-selected plugin MCP source without broadening to repository servers', async () => {
+    const configPath = path.join(root, 'plugin.mcp.json');
+    const content = JSON.stringify({ mcpServers: { pluginOnly: { command: 'plugin-server' } } });
+    fs.writeFileSync(configPath, content);
+    const sessionCwd = path.join(root, 'plugin-session');
+    fs.mkdirSync(sessionCwd);
+    const current = await setup(
+      true,
+      {
+        version: 1,
+        enabled: true,
+        fingerprint: 'selected-plugin',
+        repoRoot: root,
+        stagingDirectory: path.join(root, 'projection-stage'),
+        sources: [
+          {
+            sourceId: 'plugin:selected',
+            owner: 'plugin',
+            format: 'native',
+            configPath,
+            contentDigest: createHash('sha256').update(content).digest('hex'),
+          },
+        ],
+      },
+      true,
+      sessionCwd,
+    );
+    await current.start();
+    expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])).toEqual([
+      { name: 'pluginOnly', state: 'not-connected' },
+    ]);
+    await vi.waitFor(() =>
+      expect(mock.options[0]?.configSources).toEqual([expect.objectContaining({ path: configPath })]),
+    );
+  });
+  it('withdraws managed tools when selection domains change and refuses stale reload', async () => {
+    const configPath = path.join(root, '.mcp.json');
+    const contents = fs.readFileSync(configPath);
+    const current = await setup(
+      true,
+      {
+        version: 1,
+        enabled: true,
+        fingerprint: 'initial',
+        repoRoot: root,
+        stagingDirectory: path.join(root, 'projection-stage'),
+        sources: [
+          {
+            sourceId: 'repository:mcp',
+            owner: 'repository',
+            format: 'native',
+            configPath,
+            contentDigest: createHash('sha256').update(contents).digest('hex'),
+          },
+        ],
+      },
+      true,
+    );
+    await current.start();
+    await vi.waitFor(() => expect(mock.options).toHaveLength(1));
+    mock.options[0]!.onServerStateChange?.({ serverName: 'example', state: 'connected' });
+    await vi.waitFor(() => expect(current.service().snapshot()).toHaveLength(1));
+    await current.select(['changed']);
+    await vi.waitFor(() => expect(current.service().snapshot()).toEqual([]));
+    expect(
+      await current.tool.execute('call', { server: 'example', tool: 'ping' }, undefined, undefined, current.execution),
+    ).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('stale') }] });
+    await expect(current.childTool()!.execute('call', { server: 'example', tool: 'ping' })).rejects.toThrow('stale');
+    await current.command.execute('reload', current.execution);
+    expect(current.service().snapshot()).toEqual([]);
+    expect(mock.options).toHaveLength(1);
+    expect(current.execution.client.notify).toHaveBeenLastCalledWith(
+      expect.objectContaining({ body: expect.stringContaining('stale'), level: 'warning' }),
+    );
+  });
+
+  it('fails closed when a managed projection is missing despite ambient repository and environment', async () => {
+    const current = await setup(true, undefined, true);
+    await current.start();
+    expect(current.service().snapshot()).toEqual([]);
+    expect(current.statuses[MCP_SESSION_AUTH_STATUS_KEY]).toBeUndefined();
+    expect(mock.start).not.toHaveBeenCalled();
+    await current.command.execute('reload', current.execution);
+    expect(current.service().snapshot()).toEqual([]);
+    expect(mock.start).not.toHaveBeenCalled();
+  });
+
+  it('honors an explicitly empty managed projection instead of the ambient repository', async () => {
+    const current = await setup(
+      true,
+      {
+        version: 1,
+        enabled: true,
+        fingerprint: 'empty',
+        repoRoot: root,
+        stagingDirectory: path.join(root, 'projection-stage'),
+        sources: [],
+      },
+      true,
+    );
+    await current.start();
+    expect(current.service().snapshot()).toEqual([]);
+    expect(mock.start).not.toHaveBeenCalled();
   });
 
   it('keeps explicitly disabled sessions empty and never creates a runtime', async () => {

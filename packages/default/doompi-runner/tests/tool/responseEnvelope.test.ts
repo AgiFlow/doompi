@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BashParams } from '../../src/exports/bashSchema';
@@ -28,7 +28,7 @@ type BashExecute = (
   params: BashParams,
   signal: AbortSignal | undefined,
   onUpdate: ((result: ToolResult) => void) | undefined,
-  context: never,
+  context: ExtensionContext,
 ) => Promise<ToolResult>;
 
 function captureBashExecute(bashRunService: IBashRunService): BashExecute {
@@ -414,7 +414,7 @@ describe('createBashTool', () => {
     const execute = captureBashExecute({ run });
     const onUpdate = vi.fn();
 
-    await execute('call-id', { command: 'echo live' }, undefined, onUpdate, undefined as never);
+    await execute('call-id', { command: 'echo live' }, undefined, onUpdate, { cwd: directory } as ExtensionContext);
 
     expect(onUpdate).toHaveBeenNthCalledWith(1, {
       content: [{ type: 'text', text: 'Starting command...' }],
@@ -443,7 +443,7 @@ describe('createBashTool', () => {
     const execute = captureBashExecute({ run });
     const onUpdate = vi.fn();
 
-    await execute('call-id', params, undefined, onUpdate, undefined as never);
+    await execute('call-id', params, undefined, onUpdate, { cwd: directory } as ExtensionContext);
 
     expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: 'text', text: message }], details: {} });
     expect(run.mock.calls[0]?.[0].onOutput).toBeUndefined();

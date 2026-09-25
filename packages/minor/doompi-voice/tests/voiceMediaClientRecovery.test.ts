@@ -221,6 +221,36 @@ async function reconnect(transport: FakeTransport): Promise<void> {
 }
 
 describe('voice media client browser recovery', () => {
+  it('preconnects a realtime-only global lease without preparing or opening PCM devices', async () => {
+    const transport = new FakeTransport();
+    transport.startsEveryConnection = false;
+    const startCapture = vi.fn();
+    const speak = vi.fn();
+    const device: VoiceMediaDevice = {
+      capabilities: {
+        capture: false,
+        playback: false,
+        captureActivity: false,
+        autonomousOrchestration: false,
+        realtime: true,
+      },
+      startCapture,
+      speak,
+      close: vi.fn(async () => undefined),
+    };
+    const client = new VoiceMediaClient('client', 'connection', transport, device);
+
+    client.start();
+    await eventually(() => expect(transport.longPolls).toHaveLength(1));
+
+    expect(transport.connections).toEqual([{ connectionId: 'connection:1', capabilities: device.capabilities }]);
+    expect(startCapture).not.toHaveBeenCalled();
+    expect(speak).not.toHaveBeenCalled();
+    expect(transport.audioSends).toHaveLength(0);
+    expect(transport.capabilityRefreshes).toHaveLength(0);
+    await client.stop(false);
+  });
+
   it('reports a competing browser lease instead of appearing connected', async () => {
     vi.useFakeTimers();
     const transport = new FakeTransport();

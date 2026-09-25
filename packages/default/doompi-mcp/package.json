@@ -86,7 +86,7 @@
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
-    "@agimon-ai/mcp-proxy": "0.31.27",
+    "@agimon-ai/mcp-proxy": "0.31.30",
     "@deepseek-ai/cordis": "4.0.2",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@napi-rs/keyring": "2.1.0",

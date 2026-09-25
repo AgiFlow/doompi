@@ -10,11 +10,14 @@ import {
 } from '@earendil-works/pi-session-backend-sqlite-node';
 
 import type { TranscriptPageRequest, TranscriptPage } from '../../exports/sessionProtocol';
+import { readSavedExecution } from '../sqliteSessionHistory';
 import { readTranscriptPage } from '../transcriptPages';
 
 export interface SqliteTranscriptOwnership {
   sessionId: string;
   workspaceRoot: string;
+  workspaceId?: string;
+  groupingRoot?: string;
 }
 
 /** A completed child is read through a separate read-only WAL connection, never a second writer. */
@@ -52,6 +55,16 @@ export async function readSqliteTranscript(
       const owner = await storage.getValue(value('doompi.session', 'workspaceRoot'), context);
       if (owner?.value !== ownership.workspaceRoot)
         throw new Error('Saved transcript does not belong to this workspace');
+      const contextValue = await storage.getValue(value('doompi.session', 'execution'), context);
+      if (contextValue?.value !== undefined) {
+        const execution = readSavedExecution(contextValue.value, ownership.workspaceRoot);
+        if (
+          !execution ||
+          (ownership.workspaceId !== undefined && execution.workspaceId !== ownership.workspaceId) ||
+          (ownership.groupingRoot !== undefined && execution.groupingRoot !== ownership.groupingRoot)
+        )
+          throw new Error('Saved transcript does not belong to this workspace');
+      }
     }
     const branches = await storage.scanValues(branchTip(''), context);
     const branch =

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createRunnerLogApi } from '../src/services/runnerLogApi';
-import { runnerStateDirFor } from '../src/services/runnerPaths';
+import { RunnerPaths, runnerStateDirFor } from '../src/services/runnerPaths';
 import type { ILogTail, LogTailHandle, LogTailOptions } from '../src/types/logTail';
 import type { IRmuxBackend } from '../src/types/rmuxBackend';
 import type { RunnerRecord } from '../src/types/runnerRegistry';
@@ -76,6 +76,38 @@ describe('the runner log API', () => {
     expect(body.exists).toBe(true);
     expect(body.totalLines).toBe(3);
     expect(body.text.split('\n').filter((line) => line !== '')).toEqual(['first', 'second', 'third']);
+  });
+
+  it('reads a session-relative log override without trusting another session record', async () => {
+    const cwd = freshStore();
+    const env = { DOOM_RUNNER_LOG_DIR: 'logs-output', PI_CODING_AGENT_DIR: path.join(cwd, 'agent') };
+    const paths = new RunnerPaths(cwd, env);
+    const logPath = paths.logPathFor(RUN, SESSION);
+    fs.mkdirSync(paths.logDirectory(SESSION), { recursive: true });
+    fs.mkdirSync(paths.stateDirectory(SESSION), { recursive: true });
+    fs.writeFileSync(logPath, 'worktree output\n');
+    fs.writeFileSync(
+      paths.statePathFor(RUN, SESSION),
+      JSON.stringify({
+        id: RUN,
+        name: 'task',
+        pid: 42,
+        command: 'pwd',
+        cwd,
+        logPath,
+        interactive: false,
+        sessionId: SESSION,
+        startedAt: new Date().toISOString(),
+        state: 'running',
+        promoted: true,
+        backend: 'native',
+        hostPid: 7,
+      }),
+    );
+    const app = createRunnerLogApi({ cwd, environment: env, sessionId: SESSION });
+    expect((await app.fetch(new Request(logUrl(RUN)))).status).toBe(200);
+    const foreign = createRunnerLogApi({ cwd, environment: env, sessionId: 'foreign-session' });
+    expect((await foreign.fetch(new Request(logUrl(RUN)))).status).toBe(404);
   });
 
   it('greps a literal substring with context, case-folded on request', async () => {

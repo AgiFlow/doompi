@@ -298,9 +298,9 @@ export function activityGroups(
     const placement = source.placement === undefined ? {} : { placement: source.placement };
     if (source.statusKey !== undefined && statuses[source.statusKey] !== undefined) {
       const summary = stripAnsi(statuses[source.statusKey] ?? '').trim();
-      if (summary.length === 0 && source.hideWhenEmpty === true) continue;
       const active =
         source.activeSource?.isActive(sessionId) ?? (source.marksBackgroundWork !== false && summary.length > 0);
+      if (summary.length === 0 && source.hideWhenEmpty === true && !active) continue;
       groups.push({ name: source.name, keys: source.keys, summary, active, ...tab, ...placement });
       continue;
     }

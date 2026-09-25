@@ -87,7 +87,7 @@ describe('extracted voice service boundaries', () => {
     const contextA = { sessionManager: managerA } as unknown as ExtensionContext;
     const contextB = { sessionManager: managerB } as unknown as ExtensionContext;
 
-    await fallback.events.before_agent_start?.({} as never, contextA);
+    await fallback.events.agent_start?.({ runId: 'run-voice-boundary' } as never, contextA);
     await fallback.events.tool_execution_start?.({ toolName: 'narrate' } as never, contextB);
     await fallback.events.turn_end?.(
       {
@@ -103,7 +103,7 @@ describe('extracted voice service boundaries', () => {
     expect(narrate).not.toHaveBeenCalled();
 
     fallback.dispose();
-    await fallback.events.before_agent_start?.({} as never, contextA);
+    await fallback.events.agent_start?.({ runId: 'run-late' } as never, contextA);
     await fallback.events.tool_execution_start?.({ toolName: 'narrate' } as never, contextA);
     await fallback.events.turn_end?.({ message: {} } as never, contextA);
     await fallback.events.agent_settled?.({} as never, contextA);

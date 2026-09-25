@@ -1,7 +1,7 @@
 import type { LogMetricsReport } from '@agimon-ai/log-sink-mcp';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createLogHubApi } from '../src/services/hubApi';
+import { api, createLogHubApi } from '../src/services/hubApi';
 import type { IssuesSource } from '../src/types/issuesSource';
 import type { MetricsSource } from '../src/types/metricsSource';
 import type { IssuesView, MetricsReport, MetricsUnavailable } from '../src/types/webMetrics';
@@ -66,6 +66,17 @@ describe('the log hub API', () => {
       packageName: '@agimon-ai/doompi-log',
       serviceName: 'pi',
     });
+  });
+  it('uses the admitted hub environment for both global metrics and issues', async () => {
+    const env = { LOG_SINK_INSTANCE: 'global' };
+    createMetricsSourceMock.mockReturnValue(sourceReturning(reportWith()));
+    createIssuesSourceMock.mockReturnValue({ query: vi.fn() } as unknown as IssuesSource);
+
+    const handler = api.start({ scope: 'global', environment: env, onNotice: vi.fn() });
+    await handler.fetch(new Request('http://hub/metrics'));
+    expect(createMetricsSourceMock).toHaveBeenLastCalledWith(expect.objectContaining({ env }));
+    expect(createIssuesSourceMock).toHaveBeenLastCalledWith(expect.objectContaining({ env }));
+    handler.close();
   });
   it('projects the sink report onto the wire shape the page reads', async () => {
     const source = sourceReturning(reportWith());

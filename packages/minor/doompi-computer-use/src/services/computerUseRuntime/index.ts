@@ -66,7 +66,7 @@ export function createComputerUseRuntime(
     if (signal.aborted) return;
     let nextGloballyEnabled = false;
     try {
-      nextGloballyEnabled = (await dependencies.enabled?.()) === true;
+      nextGloballyEnabled = (await dependencies.enabled?.(activeContext?.cwd)) === true;
     } catch {
       nextGloballyEnabled = false;
     }
@@ -141,7 +141,7 @@ export function createComputerUseRuntime(
     async handleAction(_runtime, actionId, _argumentsValue, execution) {
       activeContext = execution.context;
       if (actionId === 'activate') {
-        if ((await dependencies.enabled?.()) !== true) {
+        if ((await dependencies.enabled?.(execution.context.cwd)) !== true) {
           await refresh();
           throw new Error('Enable computer use in global settings first.');
         }
@@ -237,14 +237,14 @@ export function createComputerUseRuntime(
           required: ['scriptPath', 'input'],
           additionalProperties: false,
         },
-        async execute(_toolCallId, params, signal) {
+        async execute(_toolCallId, params, signal, _onUpdate, context) {
           if (!globallyEnabled || client === undefined || state?.phase !== 'active')
             throw new Error('Computer use is not active for this session.');
           if (dependencies.scriptRunner === undefined) throw new Error('Computer script execution is unavailable.');
           const input = params as { scriptPath: string; input: unknown } & ComputerScriptExecutionOptions;
           try {
             return computerScriptOutput(
-              await dependencies.scriptRunner.execute(input.scriptPath, input.input, signal, input),
+              await dependencies.scriptRunner.execute(input.scriptPath, input.input, signal, input, context.cwd),
             );
           } catch (error) {
             return computerScriptFailure(error);

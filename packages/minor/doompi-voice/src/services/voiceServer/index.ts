@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { loadDoomConfig, resolveVoiceConfig } from '@agimon-ai/doompi-config';
 import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import type { DoomApiContext, DoomPeerAgentRegistry } from '@agimon-ai/doompi-core/packageApi';
 import {
   defineServerMethod,
   readPackageResource,
@@ -44,8 +45,11 @@ import { VoiceWorkerClient } from '../../services/voiceWorkerClient';
 import { VoiceWorkerSessionController } from '../../services/voiceWorkerSessionController';
 import type { AutoCaptureUi, VoiceUi } from '../../types';
 import type { VoiceMediaBroker } from '../clientMediaApi';
+import type { GlobalLiveControl, GlobalLiveStatus } from '../globalLiveCompanion/type';
+import { LiveAgentSession } from '../liveAgentSession';
 import { LiveVoiceController } from '../liveVoiceController';
 import { VoiceModeController } from '../voiceModeController';
+import { registerVoicePeerAgent } from '../voicePeerRelay';
 
 const SOURCE = '@agimon-ai/doompi-voice';
 const when = {
@@ -58,6 +62,9 @@ export function createVoiceServer(
   host: DoomHeadlessHostService,
   broker?: VoiceMediaBroker,
   homeDirectory?: string,
+  hubToken?: string,
+  peerAgents?: DoomPeerAgentRegistry,
+  requestApi?: DoomApiContext['requestApi'],
 ): DoomServerSessionPlugin {
   const execution = host.context;
   if (!broker || !homeDirectory) throw new Error('Voice requires the session media broker and configured server home.');
@@ -107,22 +114,38 @@ export function createVoiceServer(
   let closed = false;
   let owner: MinorModeOwner | undefined;
   let toolRegistrations: Array<{ dispose(): void }> = [];
+  let registeredTools: 'none' | 'session' | 'global' = 'none';
+  let registeredCatalogRevision: string | undefined;
   const activationWaiters = new Set<() => void>();
   const changed = () => {
     for (const wake of activationWaiters) wake();
     owner?.publish();
-    if (
-      !closed &&
-      mode.state === 'disabled' &&
-      host.context.selection.state?.['minor-mode']?.includes(DOOM_VOICE_AUTO_MODE_ID)
-    )
-      void select(false).catch((error: unknown) => notify(String(error), 'error'));
-    if (mode.state === 'active' && toolRegistrations.length === 0)
-      toolRegistrations = exposedTools.map((tool) => host.registerTool(tool));
-    if (mode.state !== 'active') {
-      for (const registration of toolRegistrations) registration.dispose();
-      toolRegistrations = [];
+    const selectedGlobal = !closed && liveAgent.selectedRoute !== undefined;
+    if (!closed && mode.state === 'disabled') {
+      const selected = host.context.selection.state?.['minor-mode']?.includes(DOOM_VOICE_AUTO_MODE_ID) ?? false;
+      if (selected !== selectedGlobal)
+        void select(selectedGlobal).catch((error: unknown) => notify(String(error), 'error'));
     }
+    const catalog = selectedGlobal ? liveAgent.selectedCatalog : undefined;
+    const next: typeof registeredTools = closed
+      ? 'none'
+      : mode.state === 'active'
+        ? 'session'
+        : catalog?.targets.length && liveAgent.nativeTransferAllowed
+          ? 'global'
+          : 'none';
+    if (next === registeredTools && (next !== 'global' || registeredCatalogRevision === catalog?.revision)) return;
+    for (const registration of toolRegistrations) registration.dispose();
+    const transferTool = exposedTools.find((tool) => tool.name === 'transfer_voice');
+    if (next === 'global' && !transferTool) throw new Error('Global Voice transfer tool is unavailable.');
+    toolRegistrations =
+      next === 'session'
+        ? exposedTools.map((tool) => host.registerTool(tool))
+        : next === 'global'
+          ? [host.registerTool(transferTool!)]
+          : [];
+    registeredTools = next;
+    registeredCatalogRevision = next === 'global' ? catalog?.revision : undefined;
   };
   const deliver = async (text: string, queued = false): Promise<void> => {
     host.assertActive();
@@ -130,6 +153,22 @@ export function createVoiceServer(
     const activity = await execution.session.activity();
     await execution.session.admitPrompt(text, queued || !activity.isIdle ? 'followUp' : 'prompt');
   };
+  const liveAgent = new LiveAgentSession(
+    execution.sessionId,
+    hubToken,
+    (text) => deliver(text),
+    async () => {
+      try {
+        if (!closed && mode.state === 'disabled') {
+          const selected = liveAgent.selectedRoute !== undefined;
+          const current = host.context.selection.state?.['minor-mode']?.includes(DOOM_VOICE_AUTO_MODE_ID) ?? false;
+          if (selected !== current) await select(selected);
+        }
+      } finally {
+        changed();
+      }
+    },
+  );
   const legacy = new VoiceWorkerAutoCaptureController({
     loadConfig: config,
     spoolDirectory,
@@ -154,13 +193,30 @@ export function createVoiceServer(
       enableTraces: true,
     }),
   });
-  let busy = false;
+  interface NativeVoiceRun {
+    runId: string;
+    turnId?: string;
+    generation: number;
+    narrationAttempted: boolean;
+    narrationCompleted: boolean;
+    finalText?: string;
+  }
+  const nativeRuns = new Map<string, NativeVoiceRun>();
+  const narrationDrains = new Set<Promise<void>>();
+  const narrationToolRuns = new Map<string, string>();
+  let voiceGeneration = 0;
+  const hasSourceWork = () => nativeRuns.size > 0 || narrationDrains.size > 0;
+  const reportFailure = (error: unknown) => notify(error instanceof Error ? error.message : String(error), 'error');
+  const runIdFrom = (event: unknown): string | undefined =>
+    typeof event === 'object' && event !== null && 'runId' in event && typeof event.runId === 'string'
+      ? event.runId
+      : undefined;
   const live = new LiveVoiceController({
     host: broker.live,
     clock,
     manualState: () => manual.state,
     contextText: () => `Session ${execution.sessionId}. Workspace ${execution.repoRoot}.`,
-    isBusy: () => busy,
+    isBusy: () => nativeRuns.size > 0,
     send: (text, intent) => deliver(text, intent === 'follow-up'),
     onActivationStateChange: changed,
   });
@@ -203,6 +259,8 @@ export function createVoiceServer(
         return mode.activationError;
       },
       async activateVoice() {
+        if (load().voice?.mode === 'live')
+          throw new Error('Live Voice uses the host-global companion, not session media.');
         await mode.activate(autoUi);
         try {
           if (mode.state === 'starting' || mode.state === 'active') await select(true);
@@ -213,34 +271,92 @@ export function createVoiceServer(
         }
         tools.setActive(mode.state === 'active');
       },
-      async deactivateVoice() {
+      async deactivateVoice(reason) {
+        if (reason !== 'handoff') {
+          voiceGeneration += 1;
+          ownership.cancelPending();
+        }
         await mode.deactivate(autoUi);
         tools.setActive(false);
         await select(false);
       },
     },
   });
-  const bridge = new SessionVoiceOwnershipBridge(ownership, broker, clock, 250, (error) =>
-    notify(String(error), 'error'),
+  const bridge = new SessionVoiceOwnershipBridge(
+    ownership,
+    broker,
+    clock,
+    250,
+    (error) => notify(String(error), 'error'),
+    hasSourceWork,
   );
-  const status = () => ({
-    state: mode.state,
-    mode: mode.selectedMode,
-    manual: manual.state,
-    muted: mode.microphoneMuted,
-    ...(mode.activationError ? { error: mode.activationError } : {}),
-  });
+  const globalRequest = async (action?: GlobalLiveControl['action'], sessionId?: string): Promise<GlobalLiveStatus> => {
+    if (!requestApi) throw new Error('The host-global Live Voice service is unavailable.');
+    const response = await requestApi(
+      { scope: 'global' },
+      'voice',
+      new Request(
+        `http://voice.internal/live/${action === undefined ? 'status' : 'control'}`,
+        action === undefined
+          ? undefined
+          : {
+              method: 'POST',
+              body: JSON.stringify({
+                action,
+                ...(sessionId === undefined ? {} : { sessionId }),
+                ...(action === 'activate' ? {} : { expectedSourceSessionId: execution.sessionId }),
+              }),
+            },
+      ),
+    );
+    const value = (await response.json()) as GlobalLiveStatus & { error?: string };
+    if (!response.ok) throw new Error(value.error ?? `Global Live Voice returned HTTP ${String(response.status)}.`);
+    return value;
+  };
+  const status = async () => {
+    const selectedGlobal = liveAgent.selectedRoute !== undefined;
+    const liveStatus =
+      load().voice?.mode === 'live' && (!selectedGlobal || liveAgent.nativeTransferAllowed)
+        ? await globalRequest()
+        : undefined;
+    return {
+      state: selectedGlobal
+        ? 'active'
+        : liveStatus
+          ? liveStatus.activeSessionId === execution.sessionId
+            ? liveStatus.state
+            : 'disabled'
+          : mode.state,
+      mode: selectedGlobal || liveStatus ? 'live' : mode.selectedMode,
+      manual: manual.state,
+      muted: liveStatus?.muted ?? mode.microphoneMuted,
+      ...((liveStatus?.error ?? mode.activationError) ? { error: liveStatus?.error ?? mode.activationError } : {}),
+    };
+  };
   const control = async (action: string, target?: number, revision?: string) => {
     host.assertActive();
+    if (liveAgent.selectedRoute && !liveAgent.nativeTransferAllowed && action !== 'status')
+      throw new Error('Use the owner browser controls to manage a paired Live Voice route.');
     if (action === 'manual') {
       if (mode.state !== 'disabled') throw new Error('Stop autonomous voice before manual dictation.');
       // Manual capture also needs the browser attached, without activating autonomous capture.
       await manual.toggle(manualUi);
+    } else if (load().voice?.mode === 'live' && mode.state === 'disabled') {
+      if (action === 'activate') {
+        config();
+        await globalRequest('activate', execution.sessionId);
+      } else if (action === 'deactivate') await globalRequest('end');
+      else if (action === 'mute' || action === 'unmute' || action === 'interrupt') await globalRequest(action);
+      else if (action === 'transfer')
+        throw new Error('Global Live Voice transfer requires a current, revision-bound agent target.');
+      else if (action !== 'status') throw new Error(`Unknown voice action: ${action}`);
     } else if (action === 'activate') {
       config();
       ownership.requestActivation();
       await bridge.synchronize();
     } else if (action === 'deactivate') {
+      voiceGeneration += 1;
+      ownership.cancelPending();
       await mode.deactivate(autoUi);
       tools.setActive(false);
       await select(false);
@@ -279,19 +395,20 @@ export function createVoiceServer(
       ],
     },
     state: () => ({
-      activation:
-        mode.state === 'disabled'
+      activation: liveAgent.selectedRoute
+        ? 'active'
+        : mode.state === 'disabled'
           ? 'inactive'
           : mode.state === 'active'
             ? 'active'
             : mode.state === 'starting'
               ? 'activating'
               : 'deactivating',
-      condition: mode.activationError ? 'failed' : 'ready',
-      detail: mode.activationError ?? mode.state,
+      condition: liveAgent.selectedRoute ? 'ready' : mode.activationError ? 'failed' : 'ready',
+      detail: liveAgent.selectedRoute ? 'Live Voice agent route selected.' : (mode.activationError ?? mode.state),
       actions: [
-        { id: 'activate', enabled: mode.state === 'disabled' },
-        { id: 'deactivate', enabled: mode.state !== 'disabled' },
+        { id: 'activate', enabled: mode.state === 'disabled' && !liveAgent.selectedRoute },
+        { id: 'deactivate', enabled: mode.state !== 'disabled' || liveAgent.nativeTransferAllowed },
       ],
     }),
     async handleAction(_runtime, action, _args, context) {
@@ -320,11 +437,67 @@ export function createVoiceServer(
     if (mode.state !== 'active') return refusal(VOICE_TOOL_ERROR_CODE.inactive, 'Autonomous Voice is not active.');
     return undefined;
   };
-  let narrated = false;
-  let finalText = '';
+  const transferGlobal = async (target: number, revision: string) => {
+    if (closed) return refusal(VOICE_TOOL_ERROR_CODE.sessionShutdown, 'The Voice session is shutting down.');
+    const route = liveAgent.selectedRoute;
+    const catalog = liveAgent.selectedCatalog;
+    if (!route || !catalog)
+      return refusal(VOICE_TOOL_ERROR_CODE.inactive, 'This Pi agent no longer owns global Live Voice.');
+    if (!liveAgent.nativeTransferAllowed)
+      return refusal(VOICE_TOOL_ERROR_CODE.inactive, 'Use the owner browser controls to transfer a paired Pi agent.');
+    if (
+      !Number.isSafeInteger(target) ||
+      target < 1 ||
+      revision !== catalog.revision ||
+      !catalog.targets.some((item) => item.order === target)
+    )
+      return refusal(VOICE_TOOL_ERROR_CODE.staleCatalog, 'Choose a target from the current Live Voice catalog.');
+    if (!requestApi || !hubToken)
+      return refusal(VOICE_TOOL_ERROR_CODE.hostUnavailable, 'The global Live Voice host is unavailable.');
+    try {
+      const response = await requestApi(
+        { scope: 'global' },
+        'voice',
+        new Request('http://voice.internal/live/native-transfer', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${hubToken}` },
+          body: JSON.stringify({
+            sourceSessionId: execution.sessionId,
+            activationId: route.activationId,
+            routeGeneration: route.routeGeneration,
+            sessionIncarnation: route.sessionIncarnation,
+            ordinal: target,
+            catalogRevision: revision,
+          }),
+        }),
+      );
+      if (!response.ok) {
+        const failure: unknown = await response.json().catch(() => undefined);
+        const message =
+          typeof failure === 'object' && failure !== null && 'error' in failure && typeof failure.error === 'string'
+            ? failure.error
+            : `Global Live Voice returned HTTP ${String(response.status)}.`;
+        return refusal(
+          response.status === 409 ? VOICE_TOOL_ERROR_CODE.staleCatalog : VOICE_TOOL_ERROR_CODE.hostUnavailable,
+          message,
+        );
+      }
+      return result('Voice handoff requested. The server switches agent routes after this turn settles.');
+    } catch {
+      return refusal(
+        VOICE_TOOL_ERROR_CODE.hostUnavailable,
+        'Voice handoff status is uncertain. Check Live Voice before retrying.',
+      );
+    }
+  };
   const close = async () => {
     if (closed) return;
     closed = true;
+    liveAgent.close();
+    voiceGeneration += 1;
+    ownership.cancelPending();
+    nativeRuns.clear();
+    narrationToolRuns.clear();
     for (const registration of toolRegistrations) registration.dispose();
     toolRegistrations = [];
     bridge.stop();
@@ -369,20 +542,26 @@ export function createVoiceServer(
         required: ['text'],
         additionalProperties: false,
       },
-      async execute(_id, input, signal) {
+      async execute(toolCallId, input, signal) {
         const refused = voiceInactive();
         if (refused) return refused;
-        narrated = true;
-        return result(await mode.narrateAgent((input as { text: string }).text, signal));
+        const runId = narrationToolRuns.get(toolCallId);
+        const run = runId === undefined ? undefined : nativeRuns.get(runId);
+        if (run) run.narrationAttempted = true;
+        const outcome = await mode.narrateAgent((input as { text: string }).text, signal);
+        if (run && outcome === 'completed') run.narrationCompleted = true;
+        return result(outcome);
       },
     },
     {
       when,
       name: 'transfer_voice',
       get description() {
-        const snapshot = ownership.snapshot();
+        const globalCatalog = liveAgent.selectedCatalog;
+        const snapshot = globalCatalog ?? ownership.snapshot();
         const targets = snapshot.targets.map((target) => `${String(target.order)}. ${target.label}`).join('\n');
-        return `Transfer voice using catalog revision ${snapshot.catalogRevision ?? '(unavailable)'}.\n${targets || '(no eligible targets)'}`;
+        const revision = 'revision' in snapshot ? snapshot.revision : (snapshot.catalogRevision ?? '(unavailable)');
+        return `Transfer voice using catalog revision ${revision}.\n${targets || '(no eligible targets)'}`;
       },
       parameters: {
         type: 'object',
@@ -394,9 +573,11 @@ export function createVoiceServer(
         additionalProperties: false,
       },
       async execute(_id: string, input: unknown) {
+        const transfer = input as { target: number; revision: string };
+        if (closed) return refusal(VOICE_TOOL_ERROR_CODE.sessionShutdown, 'The Voice session is shutting down.');
+        if (liveAgent.selectedRoute) return transferGlobal(transfer.target, transfer.revision);
         const refused = voiceInactive();
         if (refused) return refused;
-        const transfer = input as { target: number; revision: string };
         return result(await control('transfer', transfer.target, transfer.revision));
       },
     },
@@ -405,6 +586,9 @@ export function createVoiceServer(
     tools: exposedTools,
     services: [
       serverMinorModes([owner]),
+      ...(peerAgents && hubToken
+        ? [() => registerVoicePeerAgent(peerAgents, execution.sessionId, liveAgent, hubToken)]
+        : []),
       (context) => {
         context.plugin((providerContext) => {
           providerContext.provide(DOOM_VOICE_TOOLS_SERVICE, registry);
@@ -420,12 +604,18 @@ export function createVoiceServer(
         start: () => ({
           async fetch(request) {
             const path = new URL(request.url).pathname;
-            if (request.method === 'GET' && path === '/status')
-              return Response.json({
-                ...status(),
-                media: broker.readiness(),
-                readiness: voiceReadiness(execution.repoRoot, homeDirectory, execution.environment),
-              });
+            if (path === '/live/agent' || path.startsWith('/live/agent/')) return liveAgent.fetch(request);
+            if (request.method === 'GET' && path === '/status') {
+              try {
+                return Response.json({
+                  ...(await status()),
+                  media: broker.readiness(),
+                  readiness: voiceReadiness(execution.repoRoot, homeDirectory, execution.environment),
+                });
+              } catch (error) {
+                return Response.json({ error: String(error) }, { status: 503 });
+              }
+            }
             if (request.method === 'POST' && path === '/control') {
               try {
                 const body: unknown = await request.json();
@@ -477,35 +667,85 @@ export function createVoiceServer(
     ],
     hooks: [
       {
-        event: 'before_agent_start',
-        handle() {
-          busy = true;
-          narrated = false;
-          finalText = '';
+        event: 'agent_start',
+        handle(event) {
+          liveAgent.onRunStart(event);
+          const runId = runIdFrom(event);
+          if (!runId || closed || mode.state !== 'active' || nativeRuns.has(runId)) return;
+          // A resumed native run has the same runId. Prompt composition is not a run start.
+          nativeRuns.set(runId, {
+            runId,
+            generation: voiceGeneration,
+            narrationAttempted: false,
+            narrationCompleted: false,
+          });
         },
       },
       {
-        event: 'message_end',
+        event: 'turn_end',
         handle(event) {
-          const message = event.message as
-            | { role?: string; content?: Array<{ type: string; text?: string }> }
-            | undefined;
-          if (message?.role === 'assistant')
-            finalText =
-              message.content
-                ?.filter((part) => part.type === 'text')
-                .map((part) => part.text ?? '')
-                .join('') ?? '';
+          liveAgent.onTurnEnd(event);
+          const run = nativeRuns.get(runIdFrom(event) ?? '');
+          if (!run || run.generation !== voiceGeneration) return;
+          const turn = event as {
+            turnId?: string;
+            message?: { role?: string; stopReason?: string; content?: Array<{ type: string; text?: string }> };
+          };
+          if (turn.message?.role !== 'assistant' || turn.message.stopReason === 'toolUse') return;
+          run.turnId = turn.turnId;
+          run.finalText =
+            turn.message.content
+              ?.filter((part) => part.type === 'text')
+              .map((part) => part.text ?? '')
+              .join('') ?? '';
+        },
+      },
+      {
+        event: 'tool_execution_start',
+        handle(event) {
+          const start = event as { toolCallId?: string; toolName?: string };
+          const runId = runIdFrom(event);
+          if (start.toolName === 'narrate' && start.toolCallId && runId && nativeRuns.has(runId)) {
+            narrationToolRuns.set(start.toolCallId, runId);
+          }
         },
       },
       {
         event: 'agent_settled',
-        async handle() {
-          busy = false;
-          if (finalText && mode.state === 'active') {
-            if (mode.selectedMode === 'live') await live.publishAgentResult(String(clock.now()), finalText);
-            else if (!narrated) await mode.narrateFallback(finalText);
-          }
+        handle(event) {
+          liveAgent.onSettled(event);
+          const run = nativeRuns.get(runIdFrom(event) ?? '');
+          if (!run || run.generation !== voiceGeneration) return;
+          nativeRuns.delete(run.runId);
+          for (const [callId, runId] of narrationToolRuns) if (runId === run.runId) narrationToolRuns.delete(callId);
+          // Native drive awaits settled hooks. Own the Voice response and physical
+          // playback separately so capture and another native prompt cannot deadlock.
+          const draining = Promise.resolve()
+            .then(async () => {
+              if (closed || run.generation !== voiceGeneration || mode.state !== 'active') return;
+              if (mode.selectedMode === 'live') {
+                await live.publishAgentResult(`${run.runId}:${run.turnId ?? 'final'}`, run.finalText);
+                return;
+              }
+              if (!run.narrationAttempted && run.finalText) {
+                const outcome = await mode.narrateFallback(run.finalText);
+                run.narrationCompleted = outcome === 'completed';
+              }
+              if (ownership.snapshot().handoff && !run.narrationCompleted) {
+                ownership.cancelPending();
+                notify('Voice transfer was cancelled because source narration did not complete.', 'warning');
+              }
+            })
+            .catch((error: unknown) => {
+              ownership.cancelPending();
+              reportFailure(error);
+            })
+            .finally(() => {
+              narrationDrains.delete(draining);
+              if (!closed && run.generation === voiceGeneration && !hasSourceWork() && ownership.snapshot().handoff)
+                void bridge.synchronize().catch(reportFailure);
+            });
+          narrationDrains.add(draining);
         },
       },
       { event: 'session_shutdown', handle: close },

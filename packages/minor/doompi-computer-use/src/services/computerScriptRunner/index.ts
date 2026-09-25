@@ -58,9 +58,10 @@ export class ComputerScriptRunner {
     input: unknown,
     signal?: AbortSignal,
     options: ComputerScriptExecutionOptions = {},
+    cwd?: string,
   ): Promise<ComputerScriptExecutionResult> {
     signal?.throwIfAborted();
-    const resolvedPath = await realpath(path.resolve(this.scriptRoot ?? process.cwd(), scriptPath));
+    const resolvedPath = await realpath(path.resolve(this.scriptRoot ?? cwd ?? process.cwd(), scriptPath));
     const allowedPaths = await Promise.all(
       this.allowedScriptPaths.map(async (candidate) => realpath(candidate).catch(() => '')),
     );

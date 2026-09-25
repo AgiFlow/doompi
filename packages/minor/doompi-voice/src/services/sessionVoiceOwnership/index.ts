@@ -14,7 +14,7 @@ export interface SessionVoiceOwnershipController {
   state: AutoCaptureActivationState;
   readonly activationError?: string;
   activateVoice(): Promise<void>;
-  deactivateVoice(): Promise<void>;
+  deactivateVoice(reason?: 'stop' | 'handoff'): Promise<void>;
 }
 
 interface RuntimeBinding {
@@ -53,6 +53,7 @@ export class SessionVoiceOwnership {
   private activationRequest: VoiceOwnershipActivationRequest | undefined;
   private handoffRequest: VoiceOwnershipHandoffRequest | undefined;
   private lastAcknowledgement: VoiceOwnershipAcknowledgement | undefined;
+  private generation = 0;
 
   public register(input: RuntimeBindingInput): () => void {
     const { label, ...runtime } = input;
@@ -64,11 +65,9 @@ export class SessionVoiceOwnership {
       revision: 1,
       active: isOwnershipActive(input.controller.state),
     };
+    this.cancelPending();
     this.targets = [];
     this.catalogRevision = undefined;
-    this.prepared = undefined;
-    this.activationRequest = undefined;
-    this.handoffRequest = undefined;
     this.lastAcknowledgement = undefined;
     this.binding = binding;
     return () => {
@@ -76,15 +75,14 @@ export class SessionVoiceOwnership {
       this.binding = undefined;
       this.targets = [];
       this.catalogRevision = undefined;
-      this.prepared = undefined;
-      this.activationRequest = undefined;
-      this.handoffRequest = undefined;
+      this.cancelPending();
     };
   }
 
   public registration(): VoiceOwnershipRegistration | undefined {
     const binding = this.binding;
     if (binding === undefined) return undefined;
+    if (binding.controller.state === 'disabled') this.handoffRequest = undefined;
     const active = isOwnershipActive(binding.controller.state);
     const label =
       binding.labelSource === undefined ? binding.label : ownershipLabel(binding.labelSource, binding.label);
@@ -125,6 +123,17 @@ export class SessionVoiceOwnership {
     return this.activationRequest;
   }
 
+  /** Stop or session replacement withdraws authority before any asynchronous cleanup begins. */
+  public cancelPending(): void {
+    this.generation += 1;
+    // Commands stamped before stop must not apply after a rapid reactivation.
+    if (this.binding) this.binding.revision += 1;
+    this.prepared = undefined;
+    this.activationRequest = undefined;
+    this.handoffRequest = undefined;
+    this.lastAcknowledgement = undefined;
+  }
+
   public clearActivationRequest(requestId: string): void {
     if (this.activationRequest?.requestId === requestId) this.activationRequest = undefined;
   }
@@ -148,6 +157,7 @@ export class SessionVoiceOwnership {
   }
 
   public async command(command: VoiceOwnershipCommand): Promise<VoiceOwnershipAcknowledgement> {
+    const generation = this.generation;
     const previous = this.lastAcknowledgement;
     if (previous?.commandId === command.commandId) {
       return previous.action === command.action
@@ -174,6 +184,8 @@ export class SessionVoiceOwnership {
           };
     if (staged !== undefined && (staged.leaseId !== binding.leaseId || staged.revision !== binding.revision))
       return this.ack(command, false, 'Voice target incarnation changed.');
+    if (command.action === 'deactivate' && staged !== undefined && this.handoffRequest?.requestId !== staged.handoffId)
+      return this.ack(command, false, 'Voice handoff was cancelled.');
     try {
       if (command.action === 'prepare') {
         if (!binding.eligible || controller.state !== 'disabled')
@@ -203,13 +215,21 @@ export class SessionVoiceOwnership {
         if (staged === undefined && this.prepared !== undefined)
           return this.ack(command, false, 'Voice target is reserved by another controller.');
         if (!isOwnershipActive(controller.state)) await controller.activateVoice();
+        if (generation !== this.generation) {
+          await controller.deactivateVoice();
+          return this.ack(command, false, 'Voice activation was cancelled.');
+        }
         if (!isOwnershipActive(controller.state))
           return this.ack(command, false, controller.activationError ?? 'Autonomous voice did not activate.');
       } else {
-        this.activationRequest = undefined;
-        this.handoffRequest = undefined;
-        this.prepared = undefined;
-        await controller.deactivateVoice();
+        if (staged) this.activationRequest = undefined;
+        else this.cancelPending();
+        await controller.deactivateVoice(staged ? 'handoff' : 'stop');
+        if (staged && generation !== this.generation) return this.ack(command, false, 'Voice handoff was cancelled.');
+        if (staged) {
+          this.handoffRequest = undefined;
+          this.prepared = undefined;
+        }
         if (isOwnershipActive(controller.state))
           return this.ack(command, false, 'Autonomous voice did not deactivate.');
       }
@@ -264,6 +284,7 @@ export class SessionVoiceOwnershipBridge {
     private readonly clock: Pick<IClock, 'setTimeout' | 'clear'>,
     private readonly intervalMs = 250,
     private readonly onError: (error: unknown) => void = () => undefined,
+    private readonly deferHandoff: () => boolean = () => false,
   ) {}
 
   public start(): void {
@@ -298,11 +319,16 @@ export class SessionVoiceOwnershipBridge {
     }, delay);
   }
 
+  private syncSnapshot(): VoiceOwnershipSessionSnapshot {
+    const snapshot = this.ownership.snapshot();
+    return this.deferHandoff() ? { ...snapshot, handoff: undefined } : snapshot;
+  }
+
   private async performSync(): Promise<void> {
-    let command = await this.host.syncOwnership(this.ownership.snapshot());
+    let command = await this.host.syncOwnership(this.syncSnapshot());
     for (let count = 0; command !== undefined && count < 8; count += 1) {
       await this.ownership.command(command);
-      command = await this.host.syncOwnership(this.ownership.snapshot());
+      command = await this.host.syncOwnership(this.syncSnapshot());
     }
     if (command !== undefined) throw new Error('Voice ownership command synchronization limit exceeded.');
   }

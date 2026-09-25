@@ -151,6 +151,7 @@ describe('doompi-computer-use Pi extension', () => {
       scriptInput.input,
       undefined,
       scriptInput,
+      '/repo',
     );
     const prompts = await host.emit('before_agent_start', { systemPrompt: 'base' });
     expect(prompts).toEqual(

@@ -19,7 +19,8 @@ export type {
   ProtectedHistoryImportResult,
 } from '../services/historyImport';
 export { exportV4ToV3 } from '../services/v3Export';
-export { listSavedSessions } from '../services/sqliteSessionHistory';
+export { listSavedSessions, listSavedSessionRecords } from '../services/sqliteSessionHistory';
+export type { SavedSessionExecution, SavedSessionRecord } from '../services/sqliteSessionHistory';
 export { readSqliteTranscript } from '../services/sqliteTranscriptReader';
 export type { SqliteTranscriptOwnership } from '../services/sqliteTranscriptReader';
 export { createOpenSessionRegistry } from '../services/openSessionRegistry';
@@ -30,4 +31,5 @@ export type {
 } from '../services/openSessionRegistry';
 export { createWorkspaceRegistry } from '../services/workspaceRegistry';
 export type { WorkspaceRecord, WorkspaceRegistry, WorkspaceRegistryOptions } from '../services/workspaceRegistry';
+export { createRequestReceipts } from '../services/requestReceipts';
 export type { V3ExportLoss, V3ExportLossReport, V3ExportOptions, V3ExportResult } from '../services/v3Export';

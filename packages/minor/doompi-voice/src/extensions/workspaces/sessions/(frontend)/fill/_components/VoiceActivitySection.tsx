@@ -1,7 +1,9 @@
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
+import { useState } from 'react';
 
+import { voice } from '../../../../../../../generated/client';
 import { voiceMediaBrowserState, voiceRealtimeBrowserControls } from '../../_lib/voiceMediaWakeStore';
 import { type VoiceTone, voiceActivityView } from '../_lib/voiceActivityView';
 
@@ -44,10 +46,27 @@ function Meter({ tone }: { tone: VoiceTone }) {
  */
 export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: WebPluginSlotProps) {
   const view = voiceActivityView(statuses['doom-voice']);
+  const [liveStartPending, setLiveStartPending] = useState(false);
+  const [liveStartError, setLiveStartError] = useState<string | null>(null);
+  const controlGlobalLive = async (action: 'activate' | 'transfer'): Promise<void> => {
+    if (sessionId === null || liveStartPending) return;
+    setLiveStartPending(true);
+    setLiveStartError(null);
+    try {
+      const result = await voice.global.liveControl({ body: { action, sessionId } });
+      if (!result.ok) throw new Error(result.error);
+    } catch (error) {
+      setLiveStartError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLiveStartPending(false);
+    }
+  };
   const browserState = useStore(voiceMediaBrowserState.store);
   const realtimeControls = useStore(voiceRealtimeBrowserControls.store);
-  const realtime = browserState?.sessionId === sessionId ? browserState.realtime : undefined;
-  const controls = realtimeControls?.sessionId === sessionId ? realtimeControls : undefined;
+  const realtime =
+    browserState?.sessionId === null || browserState?.sessionId === sessionId ? browserState?.realtime : undefined;
+  const controls =
+    realtimeControls?.sessionId === null || realtimeControls?.sessionId === sessionId ? realtimeControls : undefined;
   if (realtime !== undefined) {
     const live = realtime.connection === 'connected';
     const detail = browserState?.realtimeOutputInterrupted
@@ -99,6 +118,18 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
               </Button>
             </>
           ) : null}
+          {/* ponytail: Route identity is not in browser state. Same-route clicks are server no-ops; hide this once status includes it. */}
+          {browserState?.sessionId === null && sessionId !== null && live ? (
+            <Button
+              variant="subtle"
+              size="xs"
+              data-testid="voice-global-live-transfer"
+              disabled={liveStartPending}
+              onClick={() => void controlGlobalLive('transfer')}
+            >
+              {liveStartPending ? 'transferring Live' : 'route Live here'}
+            </Button>
+          ) : null}
           {controls !== undefined ? (
             <Button variant="subtle" size="xs" onClick={() => controls.end()}>
               end
@@ -108,6 +139,11 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
         <span data-testid="voice-detail" className="text-2xs leading-relaxed text-doom-faint">
           {detail}
         </span>
+        {liveStartError !== null ? (
+          <span role="alert" className="text-2xs leading-relaxed text-doom-yellow">
+            Live control failed: {liveStartError}
+          </span>
+        ) : null}
         <span className="text-2xs font-bold tracking-wider text-doom-faint uppercase">browser realtime</span>
       </div>
     );
@@ -140,6 +176,17 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
             {view.elapsed}
           </span>
         ) : null}
+        {sessionId !== null && view.mode === 'off' && browserState?.sessionId !== null ? (
+          <Button
+            variant="subtle"
+            size="xs"
+            data-testid="voice-global-live-start"
+            disabled={liveStartPending}
+            onClick={() => void controlGlobalLive('activate')}
+          >
+            {liveStartPending ? 'starting Live' : 'start Live'}
+          </Button>
+        ) : null}
         {showAutonomousMicrophoneControl ? (
           <Button
             variant="subtle"
@@ -155,6 +202,11 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
         ) : null}
         {!mediaConflict && view.active ? <Meter tone={view.tone} /> : null}
       </span>
+      {liveStartError !== null ? (
+        <span role="alert" className="text-2xs leading-relaxed text-doom-yellow">
+          Live control failed: {liveStartError}
+        </span>
+      ) : null}
       {mediaConflict || view.detail ? (
         <span data-testid="voice-detail" className="text-2xs leading-relaxed text-doom-faint">
           {mediaConflict

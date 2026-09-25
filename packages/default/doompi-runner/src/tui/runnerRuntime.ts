@@ -80,9 +80,8 @@ function loadRunnerSettings(context: ExtensionContext): void {
  */
 export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
   let cordis: Context | undefined;
-  let initialized = false;
   const environment = Object.freeze({ ...process.env });
-  const container = createRunnerDependencies({ environment });
+  // The service graph is created after session_start supplies the Pi cwd.
   let registry!: RunnerDependencies['runnerRegistry'];
   let launcher!: RunnerDependencies['launcher'];
   let rmuxBackend!: RunnerDependencies['rmuxBackend'];
@@ -318,8 +317,8 @@ export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
       if (disposed) return;
       const execution = (async () => {
         const sweep = paths.sweepHistoryAsync
-          ? await paths.sweepHistoryAsync(getLogTtlMs())
-          : paths.sweepHistory(getLogTtlMs());
+          ? await paths.sweepHistoryAsync(getLogTtlMs(environment))
+          : paths.sweepHistory(getLogTtlMs(environment));
         for (const error of sweep.errors) process.emitWarning(error);
       })()
         .catch((error) => process.emitWarning(`Could not sweep doom-runner history: ${String(error)}`))
@@ -475,6 +474,16 @@ export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
         unsubscribeRegistry = undefined;
         const context = ctx as ExtensionContext;
         loadRunnerSettings(context);
+        const sessionContainer = createRunnerDependencies({ environment, cwd: context.cwd });
+        registry = sessionContainer.runnerRegistry;
+        launcher = sessionContainer.launcher;
+        rmuxBackend = sessionContainer.rmuxBackend;
+        logReader = sessionContainer.logReader;
+        ptyHost = sessionContainer.ptyHost;
+        bashRunService = sessionContainer.bashRunService;
+        paths = sessionContainer.paths;
+        processControl = sessionContainer.processControl;
+        lifeline = sessionContainer.lifeline;
         const activeSessionId = context.sessionManager.getSessionId();
         const previousSessionId = sessionId;
         const previousContext = sessionContext;
@@ -629,7 +638,7 @@ export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
               command: request.command,
               sessionId: activeSessionId,
               background: true,
-              ...(request.cwd ? { cwd: request.cwd } : {}),
+              cwd: request.cwd ?? ctx.cwd,
               ...(request.name ? { name: request.name } : {}),
               ...(request.interactive ? { interactive: true } : {}),
             });
@@ -719,24 +728,19 @@ export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
       });
     },
     start() {
-      registry = container.runnerRegistry;
-      launcher = container.launcher;
-      rmuxBackend = container.rmuxBackend;
-      logReader = container.logReader;
-      ptyHost = container.ptyHost;
-      bashRunService = container.bashRunService;
-      paths = container.paths;
-      processControl = container.processControl;
-      lifeline = container.lifeline;
-      initialized = true;
+      // No storage or registry is opened until the Pi session provides its cwd.
       statusPoll = setInterval(() => scheduleRefresh(true), RUNNER_STATUS_POLL_MS);
       statusPoll.unref?.();
       historySweepPoll = setInterval(() => scheduleHistorySweep(), HISTORY_SWEEP_INTERVAL_MS);
       historySweepPoll.unref?.();
     },
     async stop() {
-      if (initialized) await shutdownRuntime();
-      else registry?.close();
+      if (registry && launcher) await shutdownRuntime();
+      else {
+        if (statusPoll) clearInterval(statusPoll);
+        if (historySweepPoll) clearInterval(historySweepPoll);
+        registry?.close();
+      }
       cordis = undefined;
     },
   };

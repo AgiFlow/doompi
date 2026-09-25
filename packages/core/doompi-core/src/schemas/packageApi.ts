@@ -136,6 +136,53 @@ export interface DoomOAuthRedirect {
   cancel(state: string): void;
 }
 
+/** An exact, host-owned receipt address. Provider IDs are not event cursor positions. */
+export interface DoomRequestReceiptKey {
+  namespace: string;
+  activationId: string;
+  requestId: string;
+}
+
+export interface DoomRequestReceipt extends DoomRequestReceiptKey {
+  fingerprint: string;
+  destination: string;
+  transactionId: string;
+  outcome: 'reserved' | 'admitted' | 'rejected' | 'uncertain';
+}
+
+export interface DoomRequestReceiptReservation extends DoomRequestReceiptKey {
+  /** Lowercase SHA-256 of the authoritative request text, never the full transcript. */
+  fingerprint: string;
+  destination: string;
+  transactionId: string;
+}
+
+export type DoomRequestReceiptReserveResult =
+  | { kind: 'reserved'; token: string }
+  | { kind: 'existing'; receipt: DoomRequestReceipt }
+  | { kind: 'conflict'; receipt: DoomRequestReceipt };
+
+/** A global-only receipt capability. A reservation is not an execution receipt. */
+export interface DoomRequestReceipts {
+  reserve(request: DoomRequestReceiptReservation): Promise<DoomRequestReceiptReserveResult>;
+  lookup(key: DoomRequestReceiptKey): Promise<DoomRequestReceipt | undefined>;
+  finish(
+    request: DoomRequestReceiptKey & { token: string; outcome: 'admitted' | 'rejected' | 'uncertain' },
+  ): Promise<DoomRequestReceipt>;
+}
+
+/** Synchronous host-owned exclusion across media APIs mounted at different scopes. */
+export interface DoomHostMediaArbitration {
+  register(busy: () => boolean): () => void;
+  available(busy: () => boolean): boolean;
+}
+
+/** One host's paired agent registrations, shared across its global and session mounts. */
+export interface DoomPeerAgentRegistry {
+  register(sessionId: string, agent: { fetch(request: Request): Promise<Response> }, hubToken: string): () => void;
+  get(sessionId: string): { fetch(request: Request): Promise<Response>; hubToken: string } | undefined;
+}
+
 /** What the host tells an API about itself when it starts. */
 export interface DoomApiContext {
   scope: DoomApiScope;
@@ -177,10 +224,18 @@ export interface DoomApiContext {
   sessionCommunication?: DoomSessionCommunicationEndpoint;
   /** Same-process events shared by session APIs and hub channels. */
   directEvents?: DoomDirectEventBus;
+  /** Trusted in-process dispatch to an explicitly selected mounted API. No browser authentication is performed here. */
+  requestApi?(mount: DoomApiMount, basePath: string, request: Request): Promise<Response>;
   /** Present only on a session mounted by an authenticated Desktop host. */
   computerUse?: DoomComputerUseSessionAccess;
   /** Deliver a typed method to a channel on this exact hub mount, retaining the caller's connection identity. */
   receiveChannel?(sessionId: string, frameType: string, payload: unknown, connectionId: string): boolean;
+  /** Host-owned replay evidence, supplied only on the global mount. Never exposed to browsers or agents. */
+  requestReceipts?: DoomRequestReceipts;
+  /** One host's exclusive media activity, shared across global and session scopes. */
+  mediaArbitration?: DoomHostMediaArbitration;
+  /** Paired agents belonging to this host only. */
+  peerAgents?: DoomPeerAgentRegistry;
   /** Machine-owned Remote Control service, mounted only by the global core facet. */
   remoteControl?: { fetch(request: Request): Promise<Response> };
   onNotice(message: string): void;

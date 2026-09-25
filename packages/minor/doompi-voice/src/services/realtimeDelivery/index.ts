@@ -6,6 +6,14 @@ export interface RealtimeDeliveryOptions {
   isBusy(): boolean;
   isBlocked(): boolean;
   send(text: string, intent: 'immediate' | 'follow-up'): void | Promise<void>;
+  /** Global delivery identifies the source request before it can reach another Pi agent. */
+  sendRequest?(
+    requestId: string,
+    transcript: string,
+    intent: 'immediate' | 'follow-up',
+  ): Promise<RealtimeDeliveryOutcome>;
+  /** Only set when sendRequest checks every provider ID against durable receipts. */
+  durableReplay?: boolean;
 }
 
 export interface RealtimeDeliveryRequest {
@@ -57,7 +65,12 @@ export class RealtimeDelivery {
     if (event.type !== 'request' || !validIdentifier(event.requestId) || !validText(event.text)) return;
 
     const retained = this.retained.get(event.requestId);
-    if (retained || this.pending || this.retained.size >= REALTIME_LIMITS.retainedRequests) return;
+    if (
+      retained ||
+      this.pending ||
+      (!this.options.durableReplay && this.retained.size >= REALTIME_LIMITS.retainedRequests)
+    )
+      return;
     this.pending = {
       requestId: event.requestId,
       text: event.text,
@@ -81,7 +94,7 @@ export class RealtimeDelivery {
     if (pending.requestId !== request.requestId) return 'busy';
     if (pending.text !== request.text) return 'rejected';
     if (pending.authorizedText === undefined) return 'busy';
-    if (this.retained.size >= REALTIME_LIMITS.retainedRequests) return 'rejected';
+    if (!this.options.durableReplay && this.retained.size >= REALTIME_LIMITS.retainedRequests) return 'rejected';
     if (this.dispatching) {
       this.retain(request, 'busy');
       this.pending = undefined;
@@ -99,13 +112,15 @@ export class RealtimeDelivery {
     let outcome: RealtimeDeliveryOutcome;
     let asynchronous = false;
     try {
-      const admission = this.options.send(pending.authorizedText, 'immediate');
+      const admission = this.options.sendRequest
+        ? this.options.sendRequest(request.requestId, pending.authorizedText, 'immediate')
+        : this.options.send(pending.authorizedText, 'immediate');
       if (admission) {
         asynchronous = true;
         return admission
           .then(
-            () => {
-              const outcome = this.options.isOwned(this.options.activationId) ? 'submitted' : 'uncertain';
+            (value) => {
+              const outcome = this.options.isOwned(this.options.activationId) ? (value ?? 'submitted') : 'uncertain';
               this.retain(request, outcome);
               return outcome;
             },
@@ -143,5 +158,9 @@ export class RealtimeDelivery {
 
   private retain(request: RealtimeDeliveryRequest, outcome: RealtimeDeliveryOutcome): void {
     this.retained.set(request.requestId, { text: request.text, outcome });
+    if (this.options.durableReplay && this.retained.size > REALTIME_LIMITS.retainedRequests) {
+      const oldest = this.retained.keys().next().value;
+      if (oldest !== undefined) this.retained.delete(oldest);
+    }
   }
 }

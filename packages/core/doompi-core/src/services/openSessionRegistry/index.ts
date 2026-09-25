@@ -15,6 +15,10 @@ export interface OpenSessionRecord {
   sessionId: string;
   workspaceId: string;
   cwd: string;
+  /** Child checkout root, distinct from the parent grouping root for worktrees. */
+  repoRoot?: string;
+  /** Parent workspace path used only to restore the workspace identity. */
+  groupingRoot?: string;
   name: string;
   createdAt: string;
   parentSessionId?: string;
@@ -61,6 +65,10 @@ function parseRecord(value: unknown, recordPath: string, homeDirectory?: string)
   if (typeof name !== 'string' || typeof createdAt !== 'string') return undefined;
   const parentSessionId = optionalText(value.parentSessionId);
   const sessionProvenance = optionalText(value.sessionProvenance);
+  const repoRoot = optionalText(value.repoRoot);
+  const groupingRoot = optionalText(value.groupingRoot);
+  if (value.repoRoot !== undefined && (!repoRoot || !path.isAbsolute(repoRoot))) return undefined;
+  if (value.groupingRoot !== undefined && (!groupingRoot || !path.isAbsolute(groupingRoot))) return undefined;
   let artifact: SyncRegistration | undefined;
   if (value.artifact !== undefined) {
     try {
@@ -74,6 +82,8 @@ function parseRecord(value: unknown, recordPath: string, homeDirectory?: string)
     sessionId,
     workspaceId,
     cwd,
+    ...(repoRoot === undefined ? {} : { repoRoot }),
+    ...(groupingRoot === undefined ? {} : { groupingRoot }),
     name,
     createdAt,
     ...(parentSessionId === undefined ? {} : { parentSessionId }),
@@ -156,6 +166,10 @@ export function createOpenSessionRegistry(options: OpenSessionRegistryOptions): 
     list: () => current,
     add(record) {
       if (!SESSION_ID_PATTERN.test(record.sessionId)) throw new Error(`Invalid session id '${record.sessionId}'.`);
+      for (const directory of [record.cwd, record.repoRoot, record.groupingRoot]) {
+        if (directory !== undefined && !path.isAbsolute(directory))
+          throw new Error('Session directories must be absolute.');
+      }
       if (record.artifact !== undefined)
         validateSyncRegistration(record.artifact, resolveSyncLocation(record.artifact.root, options.homeDirectory));
       return persist([...current.filter((held) => held.sessionId !== record.sessionId), record]);

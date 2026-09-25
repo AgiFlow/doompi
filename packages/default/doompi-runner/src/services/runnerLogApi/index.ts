@@ -65,6 +65,8 @@ export interface RunnerLogApiOptions {
   sessionId: string;
   /** The store root; defaults to this environment's agent directory. */
   storeDir?: string;
+  environment?: Readonly<Record<string, string | undefined>>;
+  cwd?: string;
   logReader?: ILogReader;
   logTail?: ILogTail;
   /**
@@ -92,8 +94,8 @@ function isSafeSegment(value: string): boolean {
  * session's own logs directory. Without that check a doctored record would
  * turn this route into an arbitrary file read.
  */
-function resolveLogFile(storeDir: string, sessionId: string, runId: string): RunnerRecord | undefined {
-  const statePath = path.join(runnerStateDirFor(storeDir, sessionId), `${runId}${STATE_EXTENSION}`);
+function resolveLogFile(stateDir: string, logsDir: string, sessionId: string, runId: string): RunnerRecord | undefined {
+  const statePath = path.join(stateDir, `${runId}${STATE_EXTENSION}`);
   let raw: string;
   try {
     raw = fs.readFileSync(statePath, 'utf8');
@@ -102,7 +104,6 @@ function resolveLogFile(storeDir: string, sessionId: string, runId: string): Run
   }
   const record = parseRunnerRecord(raw);
   if (record === undefined || record.id !== runId || record.sessionId !== sessionId) return undefined;
-  const logsDir = path.resolve(storeDir, sessionId, LOG_DIR_NAME);
   const resolved = path.resolve(record.logPath);
   if (resolved !== logsDir && !resolved.startsWith(`${logsDir}${path.sep}`)) return undefined;
   return record;
@@ -144,8 +145,13 @@ function logQueryOf(url: URL): LogQuery {
 export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
   const logReader = options.logReader ?? new LogReader();
   const logTail = options.logTail ?? new LogTail();
-  const storeDir = options.storeDir ?? resolveRunnerStoreDirectory(process.env);
   const sessionId = options.sessionId;
+  const paths = new RunnerPaths(options.cwd, options.environment);
+  const storeDir = options.storeDir ?? resolveRunnerStoreDirectory(options.environment ?? process.env, options.cwd);
+  const stateDir =
+    options.storeDir === undefined ? paths.stateDirectory(sessionId) : runnerStateDirFor(storeDir, sessionId);
+  const logsDir =
+    options.storeDir === undefined ? paths.logDirectory(sessionId) : path.join(storeDir, sessionId, LOG_DIR_NAME);
   const app = new Hono();
 
   // Built on first use, not on mount: most sessions never attach to a pane,
@@ -153,7 +159,7 @@ export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
   let paneBackend: IRmuxBackend | undefined = options.pane;
   const pane = (): IRmuxBackend => {
     paneBackend ??= (() => {
-      const paths = new RunnerPaths();
+      const paths = new RunnerPaths(options.cwd, options.environment);
       return new PtyBackendChain(new RmuxBackend(paths), new TmuxBackend(paths));
     })();
     return paneBackend;
@@ -161,7 +167,7 @@ export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
 
   /** The record behind a request, or undefined when this session has no such run. */
   const runnerOf = (runId: string): RunnerRecord | undefined =>
-    isSafeSegment(runId) ? resolveLogFile(storeDir, sessionId, runId) : undefined;
+    isSafeSegment(runId) ? resolveLogFile(stateDir, logsDir, sessionId, runId) : undefined;
 
   /**
    * The pane a request may attach to.
@@ -349,7 +355,11 @@ export const api: DoomApi = {
   start(context: DoomApiContext): DoomApiHandler {
     // The host is one session's server, so its id is the whole scope; a hub
     // would have handed no session at all, and there is nothing to answer.
-    const app = createRunnerLogApi({ sessionId: context.sessionId ?? '' });
+    const app = createRunnerLogApi({
+      sessionId: context.sessionId ?? '',
+      cwd: context.cwd,
+      environment: context.environment,
+    });
     return {
       fetch: (request) => app.fetch(request),
       // Nothing outlives a request: a follow's watch and its poll are both

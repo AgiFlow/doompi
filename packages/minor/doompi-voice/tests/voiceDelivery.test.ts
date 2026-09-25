@@ -203,7 +203,7 @@ describe('VoiceDelivery', () => {
     delivery.setBlocked(false);
 
     expect(deliver).toHaveBeenCalledOnce();
-    expect(deliver).toHaveBeenCalledWith(request.text);
+    expect(deliver).toHaveBeenCalledWith(request.text, undefined, request);
     expect(results).toEqual([
       { kind: 'delivered', sessionId: 'session-1', captureId: 'capture-1', turnId: 'turn-1', revision: 1 },
     ]);
@@ -215,7 +215,24 @@ describe('VoiceDelivery', () => {
     delivery.setBlocked(true);
     delivery.submit({ ...request, intent: 'queuedFollowUp' });
     delivery.setBlocked(false);
-    expect(deliver).toHaveBeenCalledWith(request.text, 'queuedFollowUp');
+    expect(deliver).toHaveBeenCalledWith(request.text, 'queuedFollowUp', { ...request, intent: 'queuedFollowUp' });
+  });
+
+  it('distinguishes fast target buffering from real Pi admission', async () => {
+    const results: VoiceDeliveryResult[] = [];
+    const delivery = new VoiceDelivery({
+      deliver: async (_text, _intent, captured) => {
+        expect(captured).toEqual(request);
+        return 'buffered' as const;
+      },
+      onResult: (result) => results.push(result),
+    });
+    delivery.submit(request);
+    await vi.waitFor(() =>
+      expect(results).toEqual([
+        { kind: 'buffered', sessionId: 'session-1', captureId: 'capture-1', turnId: 'turn-1', revision: 1 },
+      ]),
+    );
   });
 
   it('rejects blank text without invoking delivery', () => {

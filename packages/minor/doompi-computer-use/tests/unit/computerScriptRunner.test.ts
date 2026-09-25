@@ -81,6 +81,12 @@ describe('computer functions', () => {
     expect(session.stop).not.toHaveBeenCalled();
   });
 
+  it('resolves allowlisted relative scripts from the invoking session pwd', async () => {
+    const { directory, scriptPath } = await fixture('export function run() { return "worktree"; }');
+    const runner = new ComputerScriptRunner({ client: client(), allowedScriptPaths: [scriptPath] });
+    expect((await runner.execute('script.ts', {}, undefined, { trusted: true }, directory)).result).toBe('worktree');
+  });
+
   it('does not expose Node globals, credentials, or host constructors to generated functions', async () => {
     const { directory, scriptPath } = await fixture(`
       export function run() {

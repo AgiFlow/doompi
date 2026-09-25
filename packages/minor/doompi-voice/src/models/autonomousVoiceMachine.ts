@@ -31,6 +31,7 @@ export interface AutonomousVoiceContext {
   revision?: number;
   candidateOutcome?: AutonomousCandidateOutcome;
   finalizationReason?: AutonomousFinalizationReason;
+  activationReady: boolean;
   confirmedSpeech: boolean;
   narrationOverlapPromoted: boolean;
   stopRequested: boolean;
@@ -145,6 +146,7 @@ export type AutonomousVoiceEffect =
 
 function initialContext(): AutonomousVoiceContext {
   return {
+    activationReady: false,
     confirmedSpeech: false,
     narrationOverlapPromoted: false,
     stopRequested: false,
@@ -300,6 +302,7 @@ export const autonomousVoiceMachine = setup({
         failure: undefined,
       };
     }),
+    markActivationReady: assign({ activationReady: true }),
     markSpeech: assign({ confirmedSpeech: true }),
     markEndpointFinalization: assign({ finalizationReason: 'endpoint' as const }),
     markDurationFinalization: assign({ finalizationReason: 'duration-limit' as const }),
@@ -538,7 +541,7 @@ export const autonomousVoiceMachine = setup({
             startingCapture: {
               entry: 'requestCapture',
               on: {
-                CAPTURE_READY: { guard: 'isCurrentCapture', target: 'listening' },
+                CAPTURE_READY: { guard: 'isCurrentCapture', target: 'listening', actions: 'markActivationReady' },
                 CAPTURE_START_FAILED: {
                   guard: 'isCurrentCapture',
                   target: '#autonomousVoice.failed',

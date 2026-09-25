@@ -90,7 +90,7 @@ export function createVoicePiRuntime(
       resolver: dependencies.executables,
       spawner: dependencies.spawner,
       loadVoice: () => {
-        const root = process.env.PI_PROJECT_ROOT ?? process.cwd();
+        const root = configSessionCtx?.cwd ?? process.env.PI_PROJECT_ROOT ?? process.cwd();
         const loaded = configs.load(root).voice;
         return loaded ? resolveVoiceConfig(loaded) : undefined;
       },

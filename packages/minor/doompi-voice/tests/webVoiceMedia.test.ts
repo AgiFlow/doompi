@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   activeVoiceSession,
+  voiceGlobalActivitySource,
   voiceMediaBrowserState,
   voiceRealtimeBrowserControls,
   voiceMediaWakes,
@@ -39,10 +40,12 @@ describe('browser voice media', () => {
 
     expect(second.activeVoiceSession).toBe(first.activeVoiceSession);
     expect(second.voiceMediaBrowserState).toBe(first.voiceMediaBrowserState);
+    expect(second.voiceRealtimeBrowserControls).toBe(first.voiceRealtimeBrowserControls);
     expect(second.voiceMediaWakes).toBe(first.voiceMediaWakes);
 
     first.activeVoiceSession.reset();
     first.voiceMediaBrowserState.reset();
+    first.voiceRealtimeBrowserControls.reset();
     first.voiceMediaWakes.reset();
   });
   it('publishes both controls and page-lifetime media channels', async () => {
@@ -325,6 +328,49 @@ describe('browser voice media', () => {
     expect(source).toContain("`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`");
   });
 
+  it('offers explicit global Live start only for an idle session, without changing the legacy mode', async () => {
+    const idle = renderPlugin(VoiceActivitySection, slotPropsFixture({ sessionId: 'session-a' }).props);
+    expect(idle.error).toBeUndefined();
+    expect(idle.html).toContain('data-testid="voice-global-live-start"');
+    expect(idle.html).toContain('start Live');
+    expect(idle.html).not.toContain('microphone live');
+
+    for (const props of [
+      { sessionId: null },
+      { sessionId: 'session-a', statuses: { 'doom-voice': 'voice auto: listening' } },
+    ]) {
+      expect(renderPlugin(VoiceActivitySection, slotPropsFixture(props).props).html).not.toContain(
+        'voice-global-live-start',
+      );
+    }
+    voiceMediaBrowserState.update(() => ({
+      sessionId: null,
+      phase: 'connected',
+      realtime: { connection: 'connected', listening: true, speaking: false, muted: false },
+    }));
+    const globalLive = renderPlugin(VoiceActivitySection, slotPropsFixture({ sessionId: 'session-a' }).props).html;
+    expect(globalLive).not.toContain('voice-global-live-start');
+    expect(globalLive).toContain('data-testid="voice-global-live-transfer"');
+    expect(globalLive).toContain('route Live here');
+    expect(renderPlugin(VoiceActivitySection, slotPropsFixture({ sessionId: null }).props).html).not.toContain(
+      'voice-global-live-transfer',
+    );
+
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    expect(source).toContain('voice.global.liveControl({ body: { action, sessionId } })');
+    expect(source).toContain("controlGlobalLive('activate')");
+    expect(source).toContain("controlGlobalLive('transfer')");
+    expect(source).toContain('role="alert"');
+    expect(source).not.toContain('getUserMedia');
+    expect(source).not.toContain("sendSessionFrame(sessionId, { type: 'prompt', message: '/voice-auto");
+  });
+
   it('shows an accessible autonomous microphone toggle only while autonomous voice is applicable', async () => {
     const active = renderPlugin(
       VoiceActivitySection,
@@ -395,6 +441,45 @@ describe('browser voice media', () => {
     expect(rendered.html).toContain('>interrupt<');
     expect(rendered.html).toContain('>end<');
     expect(rendered.html).toContain('will stay silent until this realtime session ends');
+  });
+
+  it('blocks manual recording in another focused session while global live voice owns media', () => {
+    voiceMediaBrowserState.update(() => ({
+      sessionId: null,
+      phase: 'connected',
+      realtime: { connection: 'connected', listening: true, speaking: false, muted: false },
+    }));
+    const fixture = slotPropsFixture({ sessionId: 'session-b', statuses: {} });
+    const composer = renderPlugin(VoiceComposerAction, fixture.props);
+    expect(composer.error).toBeUndefined();
+    expect(composer.html).toContain('aria-label="manual voice is unavailable while autonomous voice is active"');
+    expect(composer.html).toContain('disabled=""');
+  });
+
+  it('keeps global realtime controls available with another or no session focused', () => {
+    voiceMediaBrowserState.update(() => ({
+      sessionId: null,
+      phase: 'connected',
+      realtime: { connection: 'connected', listening: true, speaking: false, muted: false },
+    }));
+    voiceRealtimeBrowserControls.update(() => ({
+      sessionId: null,
+      mute: () => undefined,
+      interrupt: () => undefined,
+      end: () => undefined,
+    }));
+
+    for (const sessionId of ['session-b', null]) {
+      const rendered = renderPlugin(VoiceActivitySection, slotPropsFixture({ sessionId }).props);
+      expect(rendered.error).toBeUndefined();
+      expect(rendered.html).toContain('data-voice-phase="realtime-connected"');
+      expect(rendered.html).toContain('>mute<');
+      expect(rendered.html).toContain('>interrupt<');
+      expect(rendered.html).toContain('>end<');
+      expect(voiceGlobalActivitySource.isActive(sessionId)).toBe(true);
+    }
+    voiceMediaBrowserState.reset();
+    expect(voiceGlobalActivitySource.isActive('session-b')).toBe(false);
   });
 
   it('keeps browser media page-global while route-scoped plugin runtimes remount', async () => {
