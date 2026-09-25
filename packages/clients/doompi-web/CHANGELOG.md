@@ -1,3 +1,27 @@
+## 0.0.1-alpha.55 (2026-09-25)
+
+### 🚀 Features
+
+- expose worktree-only tools through session MCP ([#200](https://github.com/AgiFlow/doompi/pull/200))
+
+### 🩹 Fixes
+
+- stabilize runner session identity and voice handoff ([#194](https://github.com/AgiFlow/doompi/pull/194))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.92
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.89
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.9
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.47
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.46
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.80
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.54 (2026-09-25)
 
 ### 🚀 Features
