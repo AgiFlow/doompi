@@ -1,3 +1,33 @@
+## 0.0.1-alpha.91 (2026-09-25)
+
+### 🚀 Features
+
+- **doompi-core:** add remote MCP activity widgets ([#185](https://github.com/AgiFlow/doompi/pull/185))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.87
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.12
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.82
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.88
+- Updated @agimon-ai/vibe-lint-plugin-doom-cli to 0.0.1-alpha.17
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.90 (2026-09-25)
 
 ### 🧱 Updated Dependencies
