@@ -1,3 +1,13 @@
+## 0.0.1-alpha.14 (2026-09-25)
+
+### 🚀 Features
+
+- **doompi-core:** add remote MCP activity widgets ([#185](https://github.com/AgiFlow/doompi/pull/185))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.13 (2026-09-25)
 
 This was a version bump only for @agimon-ai/doompi-build to align it with other projects, there were no code changes.

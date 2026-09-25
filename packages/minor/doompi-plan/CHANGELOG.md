@@ -1,3 +1,26 @@
+## 0.0.1-alpha.88 (2026-09-25)
+
+### 🚀 Features
+
+- **doompi-core:** add remote MCP activity widgets ([#185](https://github.com/AgiFlow/doompi/pull/185))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.14
+- Updated @agimon-ai/doompi-author to 0.0.1-alpha.26
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.87
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-team to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.82
+- Updated @agimon-ai/doompi-voice to 0.0.1-alpha.89
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.88
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.87 (2026-09-25)
 
 ### 🧱 Updated Dependencies
