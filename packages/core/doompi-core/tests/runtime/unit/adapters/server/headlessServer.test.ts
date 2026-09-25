@@ -313,7 +313,7 @@ describe('serveHeadlessServer', () => {
     await expect(config.json()).resolves.toMatchObject({
       audience: `${publicOrigin}${root}`,
       authorizationEndpoint: `${publicOrigin}/oauth/authorize`,
-      tools: [{ name: 'read' }],
+      tools: [{ name: 'read' }, { name: 'load_extra_tools' }, { name: 'use_extra_tools' }],
       skills: [{ name: 'review' }],
     });
     expect(
@@ -399,7 +399,11 @@ describe('serveHeadlessServer', () => {
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
     });
-    await expect(mcp.json()).resolves.toMatchObject({ result: { tools: [{ name: 'read' }] } });
+    const mcpCatalog = (await mcp.json()) as { result: { tools: { name: string }[] } };
+    expect(mcpCatalog.result.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'read' })]));
+    expect(mcpCatalog.result.tools.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['load_extra_tools', 'use_extra_tools']),
+    );
     expect(
       (
         await fetch(`${server.url}${root}`, {
@@ -515,7 +519,12 @@ describe('serveHeadlessServer', () => {
         },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
       });
-    expect((await rpc(first.url, client.clientSecret)).status).toBe(200);
+    const listed = await rpc(first.url, client.clientSecret);
+    expect(listed.status).toBe(200);
+    const catalog = (await listed.json()) as { result: { tools: { name: string }[] } };
+    expect(catalog.result.tools.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['read', 'load_extra_tools', 'use_extra_tools']),
+    );
     expect((await rpc(first.url, 'wrong')).status).toBe(401);
     expect((await fetch(`${first.url}/oauth/authorize?client_id=${client.clientId}&redirect_uri=`)).status).toBe(401);
     await first.close();
@@ -583,7 +592,12 @@ describe('serveHeadlessServer', () => {
         },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
       });
-    expect((await rpc(first.url, signedPath)).status).toBe(200);
+    const listed = await rpc(first.url, signedPath);
+    expect(listed.status).toBe(200);
+    const catalog = (await listed.json()) as { result: { tools: { name: string }[] } };
+    expect(catalog.result.tools.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['read', 'load_extra_tools', 'use_extra_tools']),
+    );
 
     const token = signedPath.slice(signedPath.lastIndexOf('/') + 1);
     const [header, payload] = token.split('.');

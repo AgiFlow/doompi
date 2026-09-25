@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createSessionMcpHttpHandler } from '../../../../../src/server/sessionMcpHandler';
 import { createSessionMcpAuthorizationService } from '../../../../../src/services/sessionMcpAuthorization';
-import type { SessionToolSurface } from '../../../../../src/types/server/sessionToolSurface';
+import type { SessionToolDescriptor, SessionToolSurface } from '../../../../../src/types/server/sessionToolSurface';
 
 const AUDIENCE = 'https://host.example/sessions/alpha/mcp';
 const VERIFIER = 'v'.repeat(43);
@@ -26,7 +26,7 @@ function rpcResult(body: unknown) {
   return response.result;
 }
 
-function fixture(scope: 'restricted' | 'session' = 'restricted') {
+function fixture(scope: 'restricted' | 'session' = 'restricted', toolGrants: readonly string[] = ['allowed_tool']) {
   const authorization = createSessionMcpAuthorizationService();
   const mint = (generation = 7) => {
     const client = authorization.createClient({ name: 'MCP client', redirectUri: 'https://client.example/callback' });
@@ -39,7 +39,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
     authorization.createAuthorizationBinding(
       scope === 'session'
         ? { ...binding, scope: 'session' }
-        : { ...binding, tools: ['allowed_tool'], skills: ['allowed-skill'] },
+        : { ...binding, tools: toolGrants, skills: ['allowed-skill'] },
     );
     const code = authorization.issueAuthorizationCode({
       clientId: client.clientId,
@@ -68,6 +68,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
   let widgetEnabled = false;
   let revision = 12;
   let includeNewCapabilities = false;
+  let childSurface: SessionToolSurface | undefined;
   const toolSurface: SessionToolSurface = {
     readSurface: () => ({
       revision,
@@ -125,7 +126,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
       if (resolveCount === revokeAtResolve) authorization.revokeGrant(tokens.grantId);
       return { generation, toolSurface };
     },
-    resolveConversation: async () => ({ generation, toolSurface }),
+    resolveConversation: async () => ({ generation, toolSurface: childSurface ?? toolSurface }),
   });
   const request = (
     method: string,
@@ -185,6 +186,9 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
     readUiResource,
     setUiEnabled: (value: boolean) => (uiEnabled = value),
     setWidgetEnabled: (value: boolean) => (widgetEnabled = value),
+    setChildTools: (tools: readonly SessionToolDescriptor[]) => {
+      childSurface ??= { ...toolSurface, readSurface: () => ({ ...toolSurface.readSurface(), tools }) };
+    },
     grantId: tokens.grantId,
     setGeneration: (value: number) => (generation = value),
     enableNewCapabilities: () => {
@@ -310,7 +314,9 @@ describe('session MCP Streamable HTTP handler', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('www-authenticate')).toBeNull();
-    await expect(response.json()).resolves.toMatchObject({ result: { tools: [] } });
+    await expect(response.json()).resolves.toMatchObject({
+      result: { tools: [{ name: 'load_extra_tools' }, { name: 'use_extra_tools' }] },
+    });
 
     const wrongPath = await handler(
       new Request(AUDIENCE, {
@@ -475,12 +481,27 @@ describe('session MCP Streamable HTTP handler', () => {
 
     const initial = await session.request('tools/list');
     await expect(initial.json()).resolves.toMatchObject({
-      result: { tools: [{ name: 'allowed_tool' }, { name: 'hidden_tool' }] },
+      result: {
+        tools: [
+          { name: 'allowed_tool' },
+          { name: 'hidden_tool' },
+          { name: 'load_extra_tools' },
+          { name: 'use_extra_tools' },
+        ],
+      },
     });
     session.enableNewCapabilities();
     const updated = await session.request('tools/list');
     await expect(updated.json()).resolves.toMatchObject({
-      result: { tools: [{ name: 'allowed_tool' }, { name: 'hidden_tool' }, { name: 'new_tool' }] },
+      result: {
+        tools: [
+          { name: 'allowed_tool' },
+          { name: 'hidden_tool' },
+          { name: 'new_tool' },
+          { name: 'load_extra_tools' },
+          { name: 'use_extra_tools' },
+        ],
+      },
     });
     const called = await session.request('tools/call', { name: 'new_tool', arguments: {} });
     await expect(called.json()).resolves.toMatchObject({ result: { content: [{ type: 'text', text: 'called' }] } });
@@ -488,6 +509,192 @@ describe('session MCP Streamable HTTP handler', () => {
     const resources = await session.request('resources/list');
     await expect(resources.json()).resolves.toMatchObject({ result: { resources: [] } });
   });
+  it('requires a parent catalog refresh before calling either extra-tool wrapper', async () => {
+    const f = fixture('session');
+    for (const [name, args] of [
+      ['load_extra_tools', {}],
+      ['use_extra_tools', { name: 'hidden_tool' }],
+    ] as const) {
+      const result = rpcResult(await (await f.request('tools/call', { name, arguments: args })).json());
+      expect(result).toMatchObject({
+        isError: true,
+        structuredContent: { code: 'SESSION_MCP_BASELINE_REQUIRED' },
+      });
+    }
+    expect(f.invokeTool).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {},
+    { name: '' },
+    { name: 'hidden_tool', arguments: null },
+    { name: 'hidden_tool', arguments: [] },
+    { name: 'hidden_tool', unexpected: true },
+  ])('rejects malformed use_extra_tools arguments without invoking a tool: %j', async (args) => {
+    const f = fixture('session');
+    await f.request('tools/list');
+    const response = await f.request('tools/call', { name: 'use_extra_tools', arguments: args });
+    expect(await response.json()).toMatchObject({ error: { code: -32602 } });
+    expect(f.invokeTool).not.toHaveBeenCalled();
+  });
+
+  it('enforces grants on both wrappers and their requested targets', async () => {
+    const restricted = fixture();
+    await restricted.request('tools/list');
+    for (const name of ['load_extra_tools', 'use_extra_tools']) {
+      expect(
+        await (await restricted.request('tools/call', { name, arguments: { name: 'allowed_tool' } })).json(),
+      ).toMatchObject({ error: { code: -32602 } });
+    }
+    expect(restricted.invokeTool).not.toHaveBeenCalled();
+
+    const session = fixture('session');
+    await session.request('tools/list');
+    session.setChildTools([
+      { name: 'child_only', label: 'Child only', description: 'Child contract', parameters: Type.Object({}) },
+    ]);
+    const discovered = rpcResult(
+      await (
+        await session.request('tools/call', {
+          name: 'load_extra_tools',
+          arguments: {},
+        })
+      ).json(),
+    );
+    expect(discovered).toMatchObject({
+      isError: false,
+      structuredContent: { tools: [{ name: 'child_only' }], skills: [] },
+    });
+    expect(session.invokeTool).not.toHaveBeenCalled();
+    expect(
+      await (
+        await session.request('tools/call', {
+          name: 'use_extra_tools',
+          arguments: { name: 'hidden_tool' },
+        })
+      ).json(),
+    ).toMatchObject({ error: { code: -32602 } });
+    expect(session.invokeTool).not.toHaveBeenCalled();
+    const called = rpcResult(
+      await (
+        await session.request('tools/call', {
+          name: 'use_extra_tools',
+          arguments: { name: 'child_only', arguments: { value: 'ok' } },
+        })
+      ).json(),
+    );
+    expect(called).toMatchObject({ isError: false, content: [{ text: 'called' }] });
+    expect(session.invokeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'child_only',
+        arguments: { value: 'ok' },
+      }),
+    );
+  });
+  it('does not let a granted wrapper invoke an ungranted child tool', async () => {
+    const f = fixture('restricted', ['load_extra_tools', 'use_extra_tools', 'allowed_tool']);
+    await f.request('tools/list');
+    f.setChildTools([
+      { name: 'allowed_tool', label: 'Allowed tool', description: 'Changed contract', parameters: Type.Object({}) },
+      { name: 'hidden_tool', label: 'Hidden tool', description: 'Changed but ungranted', parameters: Type.Object({}) },
+    ]);
+    const discovered = rpcResult(
+      await (await f.request('tools/call', { name: 'load_extra_tools', arguments: {} })).json(),
+    );
+    expect(discovered).toMatchObject({ structuredContent: { tools: [{ name: 'allowed_tool' }], skills: [] } });
+    const denied = await f.request('tools/call', { name: 'use_extra_tools', arguments: { name: 'hidden_tool' } });
+    expect(await denied.json()).toMatchObject({ error: { code: -32602 } });
+    expect(f.invokeTool).not.toHaveBeenCalled();
+    const allowed = await f.request('tools/call', { name: 'use_extra_tools', arguments: { name: 'allowed_tool' } });
+    expect(rpcResult(await allowed.json())).toMatchObject({ isError: false, content: [{ text: 'called' }] });
+  });
+
+  it('discovers a changed same-name child contract while rejecting a normal call to that name', async () => {
+    const f = fixture('session');
+    await f.request('tools/list');
+    f.setChildTools([
+      {
+        name: 'allowed_tool',
+        label: 'Allowed tool',
+        description: 'May run',
+        parameters: Type.Object({ changed: Type.String() }),
+        annotations: { readOnlyHint: true, openWorldHint: false },
+        outputSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+      },
+    ]);
+    const discovery = rpcResult(
+      await (
+        await f.request('tools/call', {
+          name: 'load_extra_tools',
+          arguments: {},
+        })
+      ).json(),
+    );
+    expect(discovery).toMatchObject({
+      structuredContent: { tools: [{ name: 'allowed_tool', inputSchema: Type.Object({ changed: Type.String() }) }] },
+    });
+    expect(
+      await (
+        await f.request('tools/call', {
+          name: 'allowed_tool',
+          arguments: { changed: 'ok' },
+        })
+      ).json(),
+    ).toMatchObject({
+      result: { isError: true, structuredContent: { code: 'SESSION_TOOL_SURFACE_CHANGED' } },
+    });
+    expect(f.invokeTool).not.toHaveBeenCalled();
+    const extra = rpcResult(
+      await (
+        await f.request('tools/call', {
+          name: 'use_extra_tools',
+          arguments: { name: 'allowed_tool', arguments: { changed: 'ok' } },
+        })
+      ).json(),
+    );
+    expect(extra).toMatchObject({ isError: false, content: [{ text: 'called' }] });
+    expect(f.invokeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'allowed_tool',
+        arguments: { changed: 'ok' },
+      }),
+    );
+  });
+  it('returns the result when an extra tool withdraws itself during execution', async () => {
+    const f = fixture('session');
+    await f.request('tools/list');
+    f.setChildTools([
+      { name: 'switch_mode', label: 'Switch mode', description: 'Change selection', parameters: Type.Object({}) },
+    ]);
+    f.invokeTool.mockImplementationOnce(async (invocation) => {
+      await invocation.authorize?.();
+      f.setChildTools([]);
+      return { content: [{ type: 'text' as const, text: 'mode changed' }] };
+    });
+    const response = await f.request('tools/call', { name: 'use_extra_tools', arguments: { name: 'switch_mode' } });
+    expect(rpcResult(await response.json())).toMatchObject({ isError: false, content: [{ text: 'mode changed' }] });
+  });
+
+  it('still calls an unchanged granted tool by its normal name after a catalog refresh', async () => {
+    const f = fixture('session');
+    await f.request('tools/list');
+    const result = rpcResult(
+      await (
+        await f.request('tools/call', {
+          name: 'allowed_tool',
+          arguments: { value: 'normal' },
+        })
+      ).json(),
+    );
+    expect(result).toMatchObject({ isError: false, content: [{ text: 'called' }] });
+    expect(f.invokeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'allowed_tool',
+        arguments: { value: 'normal' },
+      }),
+    );
+  });
+
   it('lists and reads only granted active skill resources', async () => {
     const { request, readSkill } = fixture();
 

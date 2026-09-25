@@ -16,9 +16,12 @@ This is an inbound connection. It is separate from outbound MCP servers, remote 
 
 DoomPi also supports a host-created OAuth client with an exact HTTPS redirect URL supplied by the connecting client. Select **OAuth (callback required)** and register that URL, then paste the client ID and one-time secret into the client. Use `client_secret_post` with S256 PKCE. The new ChatGPT MCP App form does not show a callback URL, so do not guess one or use the DoomPi MCP URL as a redirect. This manual OAuth registration flow is not currently usable from that form without an independently confirmed redirect URL.
 
-## Skills
+## Skills and worktree-only tools
 
-Remote clients can use `search_skills` to discover repository and active-domain skills, then `load_skill` with an exact skill name to retrieve its Markdown. Both tools see only skills granted to the connection. Existing skill resources remain available for clients that support MCP resources.
+Remote clients can use `search_skills` to discover repository and active-domain skills, then `load_skill` with an exact skill name to retrieve its current Markdown. Both tools see only skills granted to the connection. Existing skill resources remain available for clients that support MCP resources.
+
+Refresh the MCP tool catalog after deploying these tools, or after reconnecting to a restarted host. Each successful `tools/list` refresh captures the parent session's then-current, grant-filtered tools and skill summaries as the baseline for that credential. After changing a conversation worktree's major mode, minor modes, domains, or profile, call `load_context` and `load_extra_tools` without refreshing the catalog. `load_extra_tools` takes `{}` and returns full tool descriptors plus skill names and descriptions that differ from the cached parent baseline. Invoke an extra tool with `use_extra_tools` using `{ "name": "tool_name", "arguments": {} }`; read a newly available skill with the existing `load_skill`. The target must still be active and separately granted at execution time. An empty diff returns empty arrays. Refreshing the parent catalog rebases every conversation sharing the credential. If the host restarts, refresh before using either extra-tool operation.
+
 The client name is generated from the trusted Remote Control domain. OAuth callbacks must be exact absolute HTTPS URLs supplied by the client. They are not derived from the DoomPi domain.
 
 Access follows the active major mode, minor modes, domains, and profile, including later changes. Session tools run with the session process's permissions. Granting shell access can reach the filesystem, environment, network, and operating system privileges available to that session. Authentication is not a sandbox. Third-party packages must ship their own explicit MCP declarations to expose capabilities remotely.
@@ -51,8 +54,10 @@ Validate the refreshed catalog in a new conversation; a source build does not up
 an already-running session generation.
 
 `load_context` includes active minor modes and returns public structured data along
-with ordinary readable text. `search_skills` and `load_skill` remain the supported
-way to discover and load current guidance. No companion plugin or widget is required.
+with ordinary readable text. `load_extra_tools` discovers worktree capabilities
+relative to the last parent catalog refresh. `search_skills` and `load_skill` remain
+the supported way to discover and load current guidance. No companion plugin or
+widget is required.
 Repository instructions reflect the files loaded at session startup; reloading
 context is not proof that newly edited instruction files were reloaded.
 
