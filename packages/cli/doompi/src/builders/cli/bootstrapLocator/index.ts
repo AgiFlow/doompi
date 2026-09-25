@@ -3,13 +3,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
+import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/syncStateContract';
 
 import { inputsAreFresh, parseInputFingerprint, type InputFingerprint } from '../../../compiler/inputs';
 import { EXTENSION_COMPILER_VERSION } from '../../../compiler/version';
 import { resolveDoomConfigurationRoot } from '../../../composition/repository';
-import { readSyncState } from '../../../composition/syncState';
+import { readRegisteredSyncState } from '../../../composition/syncState';
 import { ownEntry } from '../entryResolution';
 
 const BOOTSTRAP_ENTRY_ENV = 'DOOMPI_BOOTSTRAP_ENTRY';
@@ -51,13 +51,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function stringRecord(value: unknown): Record<string, string> {
-  if (!isRecord(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-  );
-}
-
 function canonicalPath(target: string): string {
   const absolute = path.resolve(target);
   try {
@@ -97,13 +90,13 @@ export function findSyncedRoot(cwd: string, homeDirectory: string = os.homedir()
   return locationHasState(root, homeDirectory) ? canonicalPath(root) : undefined;
 }
 
-function readBootstrapState(repoRoot: string, homeDirectory: string = os.homedir()): BootstrapState | undefined {
-  const registration = readSyncRegistration(repoRoot, homeDirectory);
-  if (!registration) return undefined;
+function readBootstrapStateFromRegistration(
+  registration: SyncRegistration,
+  homeDirectory: string = os.homedir(),
+): BootstrapState {
   const statePath = registration.statePath;
   const generatedDirectory = registration.generationRoot;
-  const state = readSyncState(repoRoot, homeDirectory);
-  if (!state) return undefined;
+  const state = readRegisteredSyncState(registration, homeDirectory);
   const bootstrap = typeof state.bootstrap === 'string' ? state.bootstrap : undefined;
   if (bootstrap && !isInside(generatedDirectory, bootstrap)) {
     throw new Error(`Doom bootstrap must stay inside ${generatedDirectory}: ${bootstrap}`);
@@ -113,8 +106,7 @@ function readBootstrapState(repoRoot: string, homeDirectory: string = os.homedir
   if (state.precompile !== undefined) {
     const value = state.precompile;
     if (
-      !isRecord(value) ||
-      typeof value.version !== 'number' ||
+      value.version !== PRECOMPILE_STATE_VERSION ||
       value.strategy !== BUNDLED_PRECOMPILE_STRATEGY ||
       typeof value.bootstrapEntry !== 'string' ||
       typeof value.bootstrapManifest !== 'string' ||
@@ -128,7 +120,7 @@ function readBootstrapState(repoRoot: string, homeDirectory: string = os.homedir
       strategy: value.strategy,
       bootstrapEntry: value.bootstrapEntry,
       bootstrapManifest: value.bootstrapManifest,
-      bundleManifests: value.bundleManifests as Record<string, string>,
+      bundleManifests: value.bundleManifests,
     };
   }
 
@@ -136,9 +128,14 @@ function readBootstrapState(repoRoot: string, homeDirectory: string = os.homedir
     statePath,
     generatedDirectory,
     bootstrap,
-    bundles: stringRecord(state.bundles),
+    bundles: state.bundles ?? {},
     precompile,
   };
+}
+
+function readBootstrapState(repoRoot: string, homeDirectory: string = os.homedir()): BootstrapState | undefined {
+  const registration = readSyncRegistration(repoRoot, homeDirectory);
+  return registration ? readBootstrapStateFromRegistration(registration, homeDirectory) : undefined;
 }
 
 function readCompilerManifest(manifestPath: string, generatedDirectory: string): CompilerManifest | undefined {
@@ -246,6 +243,20 @@ export function readStartupBootstrapStatus(
   const state = readBootstrapState(repoRoot, homeDirectory);
   const expected = expectedBootstrapEntry ?? packagedDoomEntry();
   if (!state) return { bootstrap: undefined, fresh: false };
+  return {
+    bootstrap: state.bootstrap,
+    fresh: usableBootstrapRecord(state, expected) !== undefined,
+  };
+}
+
+/** Validates the bootstrap owned by one exact immutable registration. */
+export function readRegisteredBootstrapStatus(
+  registration: SyncRegistration,
+  expectedBootstrapEntry?: string,
+  homeDirectory: string = os.homedir(),
+): BootstrapStatus {
+  const state = readBootstrapStateFromRegistration(registration, homeDirectory);
+  const expected = expectedBootstrapEntry ?? packagedDoomEntry();
   return {
     bootstrap: state.bootstrap,
     fresh: usableBootstrapRecord(state, expected) !== undefined,

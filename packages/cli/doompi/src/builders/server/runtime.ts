@@ -30,7 +30,7 @@ import { createHarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTel
 import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/serverFacet';
 import { createServerTelemetry } from '@agimon-ai/doompi-core/serverTelemetry';
 import { resolveSyncLocation } from '@agimon-ai/doompi-core/syncLocation';
-import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
+import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
 import { createWebCompositions } from '@agimon-ai/doompi-core/webCompositions';
 import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import WebSocket from 'ws';
@@ -39,10 +39,12 @@ import { HARNESS_STATE_KEYS, HARNESS_STATE_POINTER } from '../../composition/har
 import { findRepositoryRoot } from '../../composition/repository';
 import { readSyncDrift } from '../../composition/syncDrift';
 import { readSyncState } from '../../composition/syncState';
+import { readRegisteredBootstrapStatus } from '../cli/bootstrapLocator';
 import { buildHarnessContext } from '../cli/harnessContext';
 import { createComputerUseBinding } from './computerUseBinding';
 import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { resolveSessionIdentity } from './sessionArguments';
+import { resolveSessionArtifact } from './sessionArtifact';
 import type { ServeOptions, ServerRuntimeEnvironment } from './types';
 const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -65,12 +67,14 @@ async function bounded(operation: Promise<unknown>, label: string, notice: (mess
 export async function runServerRuntime(options: ServeOptions, runtime: ServerRuntimeEnvironment): Promise<number> {
   const { cwd: baseCwd, environment: baseEnvironment, notice, resolveHarnessOptions, signal, syncWorkspace } = runtime;
   const telemetry = createServerTelemetry({ cwd: baseCwd, env: baseEnvironment, warn: notice });
+  const homeDirectory = baseEnvironment.HOME ?? os.homedir();
   const serverDirectory = path.join(piAgentDirectory(baseEnvironment), 'server');
   const workspaces = createWorkspaceRegistry({ directory: serverDirectory, onNotice: notice });
   // Beside the journals it names, because a record pointing at a sessions
   // directory it is not stored next to is a record that can outlive its target.
   const openSessions = createOpenSessionRegistry({
     directory: serverDirectory,
+    homeDirectory,
     onNotice: notice,
   });
   let nextEventLoopTick = performance.now() + 1_000;
@@ -101,6 +105,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     cleanup: () => Promise<void>;
     bundle: Awaited<ReturnType<typeof loadServerBundle>>;
     mcpBundle: LoadedMcpBundle;
+    registration: SyncRegistration;
   };
   type SessionArtifacts = SessionSetup & { apis: PackageApiServer };
   const pendingSessions = new Map<string, SessionSetup>();
@@ -185,6 +190,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   let openSession: (
     request: DoomHubSessionCreateRequest,
     sessionId?: string,
+    pinnedArtifact?: SyncRegistration,
   ) => Promise<DoomHubSessionScope> = async () => {
     throw new Error('The cockpit session service is not ready.');
   };
@@ -243,15 +249,15 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         sessionName: options.sessionName,
       });
 
-      const homeDirectory = baseEnvironment.HOME ?? os.homedir();
       const globalRoot = globalDoomConfigDirectory(homeDirectory);
       webCompositions = createWebCompositions(path.join(globalRoot, 'server'), notice);
       const loadComposition = async (
         root: string,
         scope: 'global' | 'workspace' | 'session',
         selection?: { root: string; majorMode: string; activeLayers: string[] },
+        pinnedRegistration?: SyncRegistration,
       ) => {
-        const registration = readSyncRegistration(root, homeDirectory);
+        const registration = pinnedRegistration ?? readSyncRegistration(root, homeDirectory);
         const source = resolveServerBundleSource({ registration });
         if (source.kind !== 'descriptor')
           throw new Error(`Run the scoped DoomPi sync for '${root}' before opening it.`);
@@ -272,8 +278,9 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       const loadSessionMcp = async (
         root: string,
         selection: { majorMode: string; activeLayers: readonly string[] },
+        pinnedRegistration?: SyncRegistration,
       ): Promise<LoadedMcpBundle> => {
-        const registration = readSyncRegistration(root, homeDirectory);
+        const registration = pinnedRegistration ?? readSyncRegistration(root, homeDirectory);
         if (registration?.mcpBundle === undefined)
           throw new Error(`Run the scoped DoomPi sync for '${root}' before opening its MCP runtime.`);
         return loadMcpBundle({
@@ -428,6 +435,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         context: Awaited<ReturnType<typeof buildHarnessContext>>,
         bundle: Awaited<ReturnType<typeof loadServerBundle>>,
         mcpBundle: LoadedMcpBundle,
+        registration: SyncRegistration,
         identity: {
           sessionId: string;
           sessionName: string;
@@ -445,6 +453,10 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           profile: context.profile,
           state: { 'minor-mode': [] },
         };
+        const piBootstrap = readRegisteredBootstrapStatus(registration, undefined, homeDirectory);
+        if (!piBootstrap.fresh || piBootstrap.bootstrap === undefined) {
+          throw new Error(`The admitted DoomPi bootstrap for generation '${registration.generation}' is unavailable.`);
+        }
         return {
           cwd: policyOptions.cwd,
           repoRoot: policyOptions.repoRoot,
@@ -453,13 +465,14 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           sessionName: identity.sessionName,
           webComposition: webCompositions?.publish(
             { scope: 'session', sessionId: identity.sessionId },
-            readSyncRegistration(policyOptions.repoRoot, homeDirectory)!,
+            registration,
             hub.channelTypes(),
           ),
           ...(identity.parentSessionId === undefined ? {} : { parentSessionId: identity.parentSessionId }),
           ...(identity.sessionProvenance === undefined ? {} : { sessionProvenance: identity.sessionProvenance }),
           agentArgs: policyOptions.piArgs,
           environment: Object.freeze({ ...context.environment }),
+          piExtensionPaths: [piBootstrap.bootstrap],
           selection: sessionSelection,
           selectionOverrides: (['majorMode', 'domains', 'profile'] as const).filter((axis) => {
             const flag = axis === 'majorMode' ? '--major-mode' : `--${axis}`;
@@ -563,21 +576,36 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         const activeHarnessContext = harnessContext;
         try {
           await admitWorkspace(harnessContext.options.repoRoot);
-          const initialBundle = await loadComposition(harnessContext.options.repoRoot, 'session', {
-            root: harnessContext.options.repoRoot,
-            majorMode: harnessContext.options.majorMode,
-            activeLayers: harnessContext.selectedLayers,
-          });
-          const initialMcpBundle = await loadSessionMcp(harnessContext.options.repoRoot, {
-            majorMode: harnessContext.options.majorMode,
-            activeLayers: harnessContext.selectedLayers,
-          });
+          const initialRegistration = readSyncRegistration(harnessContext.options.repoRoot, homeDirectory);
+          if (initialRegistration === undefined)
+            throw new Error(`Run the scoped DoomPi sync for '${harnessContext.options.repoRoot}' before opening it.`);
+          const initialBundle = await loadComposition(
+            harnessContext.options.repoRoot,
+            'session',
+            {
+              root: harnessContext.options.repoRoot,
+              majorMode: harnessContext.options.majorMode,
+              activeLayers: harnessContext.selectedLayers,
+            },
+            initialRegistration,
+          );
+          const initialMcpBundle = await loadSessionMcp(
+            harnessContext.options.repoRoot,
+            {
+              majorMode: harnessContext.options.majorMode,
+              activeLayers: harnessContext.selectedLayers,
+            },
+            initialRegistration,
+          );
           pendingSessions.set(resolved.identity.sessionId, {
             cleanup: () => activeHarnessContext.cleanup(),
             bundle: initialBundle,
             mcpBundle: initialMcpBundle,
+            registration: initialRegistration,
           });
-          await hub.create(sessionHostOptions(harnessContext, initialBundle, initialMcpBundle, resolved.identity));
+          await hub.create(
+            sessionHostOptions(harnessContext, initialBundle, initialMcpBundle, initialRegistration, resolved.identity),
+          );
         } catch (error) {
           pendingSessions.delete(resolved.identity.sessionId);
           await activeHarnessContext.cleanup().catch((cleanupError: unknown) => notice(String(cleanupError)));
@@ -587,7 +615,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       }
 
       const reservedOpens = new Map<string, Promise<DoomHubSessionScope>>();
-      openSession = async (request, sessionId) => {
+      openSession = async (request, sessionId, pinnedArtifact) => {
         request.signal?.throwIfAborted();
         if (request.reservationId !== undefined) {
           if (!request.parentSessionId || !cockpit) throw new Error('A reserved session requires its owning parent.');
@@ -617,13 +645,20 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           parentSessionId: request.parentSessionId,
           sessionProvenance: request.sessionProvenance,
         };
+        const isWorktree = request.sessionProvenance === 'worktree';
         const inheritedWorkspaceId =
-          request.sessionProvenance === 'worktree' && request.parentSessionId
+          isWorktree && request.parentSessionId
             ? (hub.session(request.parentSessionId)?.workspaceId ??
               openSessions.list().find((record) => record.sessionId === request.parentSessionId)?.workspaceId)
             : undefined;
-        if (request.sessionProvenance === 'worktree' && inheritedWorkspaceId === undefined)
+        if (isWorktree && inheritedWorkspaceId === undefined)
           throw new Error('Worktree session requires its parent workspace.');
+        const parentArtifact =
+          request.parentSessionId === undefined
+            ? undefined
+            : (sessionArtifacts.get(request.parentSessionId)?.registration ??
+              pendingSessions.get(request.parentSessionId)?.registration ??
+              openSessions.list().find((record) => record.sessionId === request.parentSessionId)?.artifact);
         const start = (async (): Promise<DoomHubSessionScope> => {
           const childIdentity = resolveSessionIdentity([], identity);
           const childEnvironment = { ...baseEnvironment };
@@ -637,34 +672,53 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             harnessTelemetry,
           );
           try {
-            if (inheritedWorkspaceId === undefined) {
-              await admitWorkspace(childContext.options.repoRoot);
-            } else {
+            if (inheritedWorkspaceId !== undefined) {
               const inheritedWorkspace = hub
                 .workspaces()
                 .find((workspace) => workspace.id === inheritedWorkspaceId && workspace.available !== false);
               if (inheritedWorkspace === undefined) throw new Error('Worktree parent workspace is unavailable.');
-              const syncEnvironment: NodeJS.ProcessEnv = {
-                ...baseEnvironment,
-                DOOMPI_ROOT: childContext.options.repoRoot,
-              };
-              for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)])
-                delete syncEnvironment[key];
-              await syncWorkspace(childContext.options.repoRoot, syncEnvironment, true);
             }
-            const bundle = await loadComposition(childContext.options.repoRoot, 'session', {
-              root: childContext.options.repoRoot,
-              majorMode: childContext.options.majorMode,
-              activeLayers: childContext.selectedLayers,
+            const registration = await resolveSessionArtifact({
+              worktree: isWorktree,
+              pinned: pinnedArtifact,
+              parent: parentArtifact,
+              prepareCurrent: async () => {
+                await admitWorkspace(childContext.options.repoRoot);
+                const current = readSyncRegistration(childContext.options.repoRoot, homeDirectory);
+                if (current === undefined)
+                  throw new Error(
+                    `Run the scoped DoomPi sync for '${childContext.options.repoRoot}' before opening it.`,
+                  );
+                return current;
+              },
             });
-            const mcpBundle = await loadSessionMcp(childContext.options.repoRoot, {
-              majorMode: childContext.options.majorMode,
-              activeLayers: childContext.selectedLayers,
-            });
+            const bundle = await loadComposition(
+              childContext.options.repoRoot,
+              'session',
+              {
+                root: childContext.options.repoRoot,
+                majorMode: childContext.options.majorMode,
+                activeLayers: childContext.selectedLayers,
+              },
+              registration,
+            );
+            const mcpBundle = await loadSessionMcp(
+              childContext.options.repoRoot,
+              {
+                majorMode: childContext.options.majorMode,
+                activeLayers: childContext.selectedLayers,
+              },
+              registration,
+            );
             request.signal?.throwIfAborted();
-            pendingSessions.set(identity.sessionId, { cleanup: () => childContext.cleanup(), bundle, mcpBundle });
+            pendingSessions.set(identity.sessionId, {
+              cleanup: () => childContext.cleanup(),
+              bundle,
+              mcpBundle,
+              registration,
+            });
             const created = await hub.create(
-              sessionHostOptions(childContext, bundle, mcpBundle, identity, inheritedWorkspaceId),
+              sessionHostOptions(childContext, bundle, mcpBundle, registration, identity, inheritedWorkspaceId),
             );
             request.signal?.throwIfAborted();
             if (created.workspaceId !== undefined) {
@@ -676,6 +730,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
                 createdAt: created.createdAt,
                 ...(created.parentSessionId === undefined ? {} : { parentSessionId: created.parentSessionId }),
                 ...(created.sessionProvenance === undefined ? {} : { sessionProvenance: created.sessionProvenance }),
+                ...(isWorktree ? { artifact: registration } : {}),
               });
               if (saved === false) throw new Error('The new session could not be durably recorded.');
             }
@@ -765,15 +820,21 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         );
       },
       restartSession: async (session) => {
-        const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
-        if (!workspaceRoot) throw new Error('Session workspace not found.');
-        const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: workspaceRoot };
-        for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete syncEnvironment[key];
-        try {
-          await syncWorkspace(workspaceRoot, syncEnvironment);
-        } catch (error) {
-          notice(`Workspace sync failed before restart: ${error instanceof Error ? error.message : String(error)}`);
-          throw new Error('Workspace sync failed; the session is still running.', { cause: error });
+        const worktree = session.sessionProvenance === 'worktree';
+        const artifact =
+          sessionArtifacts.get(session.id)?.registration ??
+          openSessions.list().find((record) => record.sessionId === session.id)?.artifact;
+        if (!worktree) {
+          const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
+          if (!workspaceRoot) throw new Error('Session workspace not found.');
+          const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: workspaceRoot };
+          for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete syncEnvironment[key];
+          try {
+            await syncWorkspace(workspaceRoot, syncEnvironment);
+          } catch (error) {
+            notice(`Workspace sync failed before restart: ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error('Workspace sync failed; the session is still running.', { cause: error });
+          }
         }
         await hub.closeSession(session.id);
         await openSession(
@@ -784,6 +845,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
           },
           session.id,
+          worktree ? artifact : undefined,
         );
       },
       resumeSession: async (session, targetSessionId) => {
@@ -796,8 +858,21 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         );
         const target = saved.find((item) => item.id === targetSessionId);
         if (!target) throw new Error('Saved Pi thread not found in this workspace.');
+        const worktree = session.sessionProvenance === 'worktree';
+        const artifact =
+          sessionArtifacts.get(session.id)?.registration ??
+          openSessions.list().find((record) => record.sessionId === session.id)?.artifact;
         await hub.closeSession(session.id);
-        await openSession({ cwd: session.cwd, name: target.name ?? 'untitled' }, target.id);
+        await openSession(
+          {
+            cwd: session.cwd,
+            name: target.name ?? 'untitled',
+            ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
+            ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
+          },
+          target.id,
+          worktree ? artifact : undefined,
+        );
         return target.id;
       },
       dormantSessions: () => openSessions.list(),
@@ -814,6 +889,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             ...(record.sessionProvenance === undefined ? {} : { sessionProvenance: record.sessionProvenance }),
           },
           record.sessionId,
+          record.sessionProvenance === 'worktree' ? record.artifact : undefined,
         );
       },
       requestAsset: (request) => webCompositions?.request(request) ?? Promise.resolve(undefined),

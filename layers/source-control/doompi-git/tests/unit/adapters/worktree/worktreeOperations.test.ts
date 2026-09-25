@@ -51,6 +51,7 @@ function fakeGit(overrides: Partial<WorktreeGit> = {}): WorktreeGit {
     dirtyFiles: vi.fn().mockResolvedValue([]),
     repositoryRoot: vi.fn().mockResolvedValue(repository),
     currentBranch: vi.fn().mockResolvedValue('main'),
+    remoteBaseRef: vi.fn().mockResolvedValue('origin/main'),
     mergeBranch: vi.fn().mockResolvedValue(undefined),
     deleteBranch: vi.fn().mockResolvedValue(true),
     ...overrides,
@@ -83,7 +84,7 @@ function operations(
 ) {
   const sessionService = fakeSessionService([], createSession);
   return {
-    ops: createWorktreeOperations({ git, sessionService, homeDir: home }),
+    ops: createWorktreeOperations({ git, sessionService, cleanupStorage: vi.fn(), homeDir: home }),
     createSession,
     sessionService,
   };
@@ -92,6 +93,7 @@ function operations(
 beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-git-ops-'));
   repository = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-git-repo-'));
+  fs.mkdirSync(path.join(repository, '.git'));
 });
 
 afterEach(() => {
@@ -107,7 +109,7 @@ describe('spawn', () => {
     const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
 
     expect(git.addWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ repositoryRoot: repository, branch: 'wt/one', baseRef: 'main' }),
+      expect.objectContaining({ repositoryRoot: repository, branch: 'wt/one', baseRef: 'origin/main' }),
     );
     expect(createSession).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: record.path, parentSessionId: 'parent-1', name: 'wt/one' }),
@@ -123,11 +125,21 @@ describe('spawn', () => {
     expect(record.path).toContain('.doom/git/worktrees');
   });
 
-  it('uses an explicit baseRef over the current branch', async () => {
+  it('uses an explicit baseRef over the remote base', async () => {
     const git = fakeGit();
     const { ops } = operations(git);
     await ops.spawn(CONTEXT, { branch: 'wt/one', baseRef: 'v1.0' });
     expect(git.addWorktree).toHaveBeenCalledWith(expect.objectContaining({ baseRef: 'v1.0' }));
+    expect(git.remoteBaseRef).not.toHaveBeenCalled();
+  });
+
+  it('refuses to inherit the local branch when no remote base is available', async () => {
+    const git = fakeGit({ remoteBaseRef: vi.fn().mockResolvedValue(undefined) });
+    const { ops } = operations(git);
+
+    await expect(ops.spawn(CONTEXT, { branch: 'wt/one' })).rejects.toThrow(/No remote base branch is available/u);
+    expect(git.currentBranch).not.toHaveBeenCalled();
+    expect(git.addWorktree).not.toHaveBeenCalled();
   });
 
   it('durably delivers the task after the worktree session is recorded', async () => {
@@ -321,6 +333,43 @@ describe('close', () => {
     expect(await ops.list(CONTEXT)).toEqual([]);
   });
 
+  it('removes generated storage after removing the checkout', async () => {
+    const cleanupStorage = vi.fn();
+    const git = fakeGit();
+    const ops = createWorktreeOperations({
+      git,
+      sessionService: fakeSessionService(),
+      cleanupStorage,
+      homeDir: home,
+    });
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/storage' });
+
+    await ops.close(CONTEXT, record.id, false);
+
+    expect(git.removeWorktree).toHaveBeenCalledWith(expect.objectContaining({ path: record.path }));
+    expect(cleanupStorage).toHaveBeenCalledWith(repository, record.path);
+  });
+
+  it('keeps the registry record when generated storage cleanup fails', async () => {
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/storage' });
+    const git = fakeGit();
+    const reopened = createWorktreeOperations({
+      git,
+      sessionService: fakeSessionService(),
+      cleanupStorage: () => {
+        throw new Error('permission denied');
+      },
+      homeDir: home,
+    });
+
+    await expect(reopened.close(CONTEXT, record.id, false)).rejects.toMatchObject({
+      code: 'worktree_cleanup_failed',
+      retryable: true,
+    });
+    expect(git.removeWorktree).toHaveBeenCalledWith(expect.objectContaining({ path: record.path }));
+    expect(await reopened.list(CONTEXT)).toEqual([expect.objectContaining({ id: record.id })]);
+  });
   it('refuses a dirty worktree and names the files', async () => {
     const { ops } = operations(fakeGit());
     const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
@@ -456,6 +505,22 @@ describe('prune', () => {
     expect(await reopened.list(CONTEXT)).toEqual([]);
   });
 
+  it('removes generated storage for pruned worktrees', async () => {
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/storage' });
+    fs.mkdirSync(record.path, { recursive: true });
+    const cleanupStorage = vi.fn();
+    const reopened = createWorktreeOperations({
+      git: fakeGit({ listWorktreePaths: vi.fn().mockResolvedValue([record.path]) }),
+      sessionService: fakeSessionService(),
+      cleanupStorage,
+      homeDir: home,
+    });
+
+    await reopened.prune(CONTEXT, false);
+
+    expect(cleanupStorage).toHaveBeenCalledWith(repository, record.path);
+  });
   // The checkout goes with the prune; a branch holding commits does not.
   it('names a branch git refused to delete', async () => {
     const { ops } = operations(fakeGit());

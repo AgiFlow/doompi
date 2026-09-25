@@ -63,14 +63,20 @@ function scan(root: string): Found {
       return;
     }
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
       const child = relative === '' ? entry.name : `${relative}/${entry.name}`;
       if (entry.name === GIT_DIRECTORY) continue;
-      // Both of these are destinations, not places to look inside.
+      // Module trees may already be links inherited from an earlier worktree.
       if (entry.name === MODULES_DIRECTORY) {
-        found.modules.push(child);
+        try {
+          if (entry.isDirectory() || (entry.isSymbolicLink() && fs.statSync(path.join(root, child)).isDirectory())) {
+            found.modules.push(child);
+          }
+        } catch {
+          // A broken inherited link is not useful to the next worktree.
+        }
         continue;
       }
+      if (!entry.isDirectory()) continue;
       if (entry.name === OUTPUT_DIRECTORY) {
         found.outputs.push(child);
         continue;
@@ -100,7 +106,7 @@ export function mirrorComposition(source: string, target: string): MirrorOutcome
     if (fs.existsSync(destination)) continue;
     try {
       fs.mkdirSync(path.dirname(destination), { recursive: true });
-      fs.symlinkSync(path.join(source, relative), destination, 'dir');
+      fs.symlinkSync(fs.realpathSync(path.join(source, relative)), destination, 'dir');
       linked += 1;
     } catch {
       // A link the filesystem refuses costs this package one resolution, not

@@ -73,8 +73,10 @@ export interface WorktreeGit {
   dirtyFiles(path: string): Promise<string[]>;
   /** The repository root for a directory, or undefined when it is not a repository. */
   repositoryRoot(cwd: string): Promise<string | undefined>;
-  /** The branch currently checked out, used as the default base ref. */
+  /** The branch currently checked out, used to verify recovered worktrees. */
   currentBranch(cwd: string): Promise<string | undefined>;
+  /** Remote-tracking ref to branch new worktrees from without inheriting local work in progress. */
+  remoteBaseRef(cwd: string): Promise<string | undefined>;
   /** Merges a worktree's branch into whatever the given root has checked out. */
   mergeBranch(input: { repositoryRoot: string; branch: string; message?: string }): Promise<void>;
 }

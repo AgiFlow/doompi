@@ -133,6 +133,33 @@ export function createWorktreeGit(): WorktreeGit {
       return branch === '' ? undefined : branch;
     },
 
+    async remoteBaseRef(cwd) {
+      const upstream = await git(
+        cwd,
+        ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+        READ_TIMEOUT_MS,
+      );
+      if (upstream.code === 0) {
+        const branch = upstream.stdout.trim();
+        if (branch !== '') return branch;
+      }
+      const origin = await git(
+        cwd,
+        ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
+        READ_TIMEOUT_MS,
+      );
+      if (origin.code === 0) {
+        const branch = origin.stdout.trim();
+        if (branch !== '') return branch;
+      }
+      const defaults = await git(cwd, ['for-each-ref', '--format=%(symref:short)', 'refs/remotes'], READ_TIMEOUT_MS);
+      if (defaults.code !== 0) return undefined;
+      return defaults.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .find((line) => line !== '');
+    },
+
     async mergeBranch({ repositoryRoot, branch, message }) {
       // --no-ff so the worktree's work stays identifiable as a unit after the
       // fact. A fast-forward would erase the fact that it was ever separate,

@@ -7,6 +7,7 @@ import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-
 import {
   DOOMPI_API_VERSION,
   publishSyncRegistration,
+  readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
 } from '@agimon-ai/doompi-core/syncRegistration';
@@ -21,6 +22,7 @@ import {
   readBootstrapPointer,
   readBootstrapStatus,
   readBundleStatus,
+  readRegisteredBootstrapStatus,
   readStartupBootstrapStatus,
 } from '../../src/builders/cli/bootstrapLocator';
 import { EXTENSION_COMPILER_VERSION } from '../../src/compiler/version';
@@ -232,6 +234,16 @@ describe('readBootstrapStatus freshness', () => {
     expect(readBootstrapStatus(root, entry, homeFor(root))).toEqual({ bootstrap, fresh: true });
   });
 
+  it('keeps an admitted bootstrap usable after the current registration is removed', () => {
+    const root = temporaryRoot();
+    const { bootstrap } = bundledState(root);
+    const registration = readSyncRegistration(root, homeFor(root));
+    expect(registration).toBeDefined();
+    fs.rmSync(resolveSyncLocation(root, homeFor(root)).registrationPath);
+
+    expect(readStartupBootstrapStatus(root, entry, homeFor(root))).toEqual({ bootstrap: undefined, fresh: false });
+    expect(readRegisteredBootstrapStatus(registration!, entry, homeFor(root))).toEqual({ bootstrap, fresh: true });
+  });
   it('rejects an intact bootstrap produced under an obsolete compiler policy', () => {
     const root = temporaryRoot();
     const { bootstrapManifest } = bundledState(root);

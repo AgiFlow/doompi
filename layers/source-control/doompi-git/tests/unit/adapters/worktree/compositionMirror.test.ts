@@ -53,6 +53,24 @@ describe('mirrorComposition', () => {
     expect(fs.lstatSync(path.join(target, 'packages/one/node_modules')).isSymbolicLink()).toBe(true);
   });
 
+  it('links nested worktrees to the original module tree', () => {
+    write(source, 'node_modules/left-pad/index.js', 'dependency');
+    write(source, 'packages/one/dist/index.mjs', 'built');
+    const nested = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-git-mirror-nested-'));
+
+    try {
+      expect(mirrorComposition(source, target)).toEqual({ kind: 'mirrored', copied: 1, linked: 1 });
+      expect(mirrorComposition(target, nested)).toEqual({ kind: 'mirrored', copied: 1, linked: 1 });
+      expect(fs.realpathSync(path.join(nested, 'node_modules'))).toBe(
+        fs.realpathSync(path.join(source, 'node_modules')),
+      );
+
+      fs.rmSync(target, { recursive: true, force: true });
+      expect(fs.readFileSync(path.join(nested, 'node_modules/left-pad/index.js'), 'utf8')).toBe('dependency');
+    } finally {
+      fs.rmSync(nested, { recursive: true, force: true });
+    }
+  });
   it('never walks into a module tree looking for build output', () => {
     write(source, 'node_modules/a-package/dist/index.js');
 

@@ -40,6 +40,8 @@ export interface HeadlessSessionHostOptions {
    * a no-op when the worktree has no valid sync registration.
    */
   piExtensions?: boolean;
+  /** Exact admitted bootstrap paths, used when a child inherits another worktree's generation. */
+  piExtensionPaths?: readonly string[];
 }
 
 export interface HeadlessSessionHost {

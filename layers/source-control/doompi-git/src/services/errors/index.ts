@@ -16,6 +16,7 @@ export type DoomGitErrorCode =
   | 'worktree_not_owned'
   | 'worktree_peer_unavailable'
   | 'worktree_dirty'
+  | 'worktree_cleanup_failed'
   | 'hub_unavailable'
   | 'spawn_cancelled'
   | 'registry_write_failed'

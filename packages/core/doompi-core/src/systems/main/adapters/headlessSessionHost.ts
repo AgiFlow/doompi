@@ -452,7 +452,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     cwd: options.cwd,
     agentDir,
     models: modelRuntime,
-    extensionPaths: options.piExtensions === false ? [] : resolvePiExtensionEntries(options.repoRoot),
+    extensionPaths:
+      options.piExtensions === false ? [] : (options.piExtensionPaths ?? resolvePiExtensionEntries(options.repoRoot)),
     ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
   });
   const resolved = await resolveModel(parsed, modelRuntime, settings);

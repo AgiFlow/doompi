@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 
 import type { DoomHubSessionService } from '@agimon-ai/doompi-core/hubChannel';
+import { removeSyncLocation, resolveWorktreeSyncLocation } from '@agimon-ai/doompi-core/syncLocation';
 import type { DoomSessionDeliveryService } from '@agimon-ai/doompi-session';
 
 import { WORKTREE_RECORD_VERSION } from '../../types/worktreeRegistry';
@@ -61,6 +62,8 @@ export interface WorktreeOperationsDeps {
   sessionDelivery?: () => DoomSessionDeliveryService | undefined;
   /** Injected so a test never copies a real dependency tree. */
   mirror?: typeof mirrorComposition;
+  /** Injected so tests can observe generated-storage cleanup without touching real sync state. */
+  cleanupStorage?: (repositoryRoot: string, worktreeRoot: string) => void;
   homeDir?: string;
   /** Injected so a record's createdAt is reproducible in a test. */
   now?: () => Date;
@@ -70,6 +73,23 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
   const { git } = deps;
   const sessionService = deps.sessionService;
   const mirror = deps.mirror ?? mirrorComposition;
+  const removeStorage =
+    deps.cleanupStorage ??
+    ((repositoryRoot: string, worktreeRoot: string): void => {
+      removeSyncLocation(resolveWorktreeSyncLocation(repositoryRoot, worktreeRoot, deps.homeDir));
+    });
+  const cleanupStorage = (repositoryRoot: string, worktreeRoot: string): void => {
+    try {
+      removeStorage(repositoryRoot, worktreeRoot);
+    } catch (error) {
+      throw new DoomGitExpectedError(
+        'worktree_cleanup_failed',
+        `The worktree checkout was removed, but its generated storage could not be deleted (${error instanceof Error ? error.message : String(error)}).`,
+        true,
+        'Retry close or prune after fixing the storage permissions.',
+      );
+    }
+  };
   const now = deps.now ?? (() => new Date());
   const requireSessionService = (): DoomHubSessionService => {
     if (sessionService === undefined)
@@ -209,7 +229,15 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
         throw new DoomGitExpectedError('worktree_exists', refusal, false, 'Pick another branch name, or close it.');
       }
       const taskDelivery = request.task === undefined ? undefined : requireSessionDelivery();
-      const baseRef = request.baseRef ?? (await git.currentBranch(root)) ?? 'HEAD';
+      const baseRef = request.baseRef ?? (await git.remoteBaseRef(root));
+      if (baseRef === undefined) {
+        throw new DoomGitExpectedError(
+          'git_failed',
+          'No remote base branch is available for this repository.',
+          false,
+          'Fetch a remote branch or pass an explicit baseRef.',
+        );
+      }
       const id = shortId(reserved?.sessionId ?? randomUUID());
       let path = worktreeDirectory({
         worktreesRoot: worktreesRoot(deps.homeDir),
@@ -386,6 +414,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       // worktree and a stale git administrative entry are made.
       await requireSessionService().close(record.sessionId);
       await git.removeWorktree({ repositoryRoot: root, path: record.path, force });
+      cleanupStorage(root, record.path);
       store.replace(records.filter((entry) => entry.id !== id));
       return record;
     },
@@ -532,7 +561,9 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       }
       for (const record of plan.remove) {
         await git.removeWorktree({ repositoryRoot: root, path: record.path, force: false });
+        cleanupStorage(root, record.path);
       }
+      for (const record of plan.forget) cleanupStorage(root, record.path);
       // The checkout goes, so the branch it was made for goes with it. Safe
       // delete only: git keeps anything holding commits, and the plan says
       // which ones it kept rather than leaving the reader to notice later.
