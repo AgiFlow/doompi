@@ -216,6 +216,11 @@ interface Binding {
   readonly renderers: { readonly identifier: string; readonly file: string } | undefined;
 }
 
+/** Encode data for generated JavaScript, including the HTML script boundary. */
+function widgetLiteral(key: string): string {
+  return JSON.stringify(key).replaceAll('<', '\\u003c').replaceAll('\u2028', '\\u2028').replaceAll('\u2029', '\\u2029');
+}
+
 function bind(resolution: TargetResolution, options: RenderOptions): Binding[] {
   const taken = new Set<string>();
   return [...resolution.contributions]
@@ -335,7 +340,7 @@ function member(binding: Binding, contextExpression: string, target: BuildTarget
   // A channel array holds factories, so the identity is applied inside one.
   if (isFactory) return `() => via({ ${identity} }, ${binding.identifier}())`;
   const value = `via({ ${identity} }, ${resolved})`;
-  return binding.mcpWidget === undefined ? value : `withWidget(${JSON.stringify(binding.mcpWidget)}, ${value})`;
+  return binding.mcpWidget === undefined ? value : `withWidget(${widgetLiteral(binding.mcpWidget)}, ${value})`;
 }
 
 /**
@@ -446,7 +451,7 @@ function bodyFor(
     }
     const renderedMembers = members.map((entry) =>
       entry.contribution.entry.cardinality === 'many'
-        ? `...many(${entry.identifier}, ${contextOf(entry)})${entry.mcpWidget === undefined ? '' : `.map((tool) => withWidget(${JSON.stringify(entry.mcpWidget)}, tool))`}`
+        ? `...many(${entry.identifier}, ${contextOf(entry)})${entry.mcpWidget === undefined ? '' : `.map((tool) => withWidget(${widgetLiteral(entry.mcpWidget)}, tool))`}`
         : member(entry, contextOf(entry), target),
     );
     const entries = `[${renderedMembers.join(', ')}]`;
