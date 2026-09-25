@@ -1,7 +1,7 @@
 import type { SyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveSessionArtifact } from '../../src/builders/server/runtime';
+import { resolveSessionArtifact } from '../../src/builders/server/sessionArtifact';
 
 function registration(generation: string): SyncRegistration {
   return { generation } as SyncRegistration;

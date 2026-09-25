@@ -44,6 +44,7 @@ import { buildHarnessContext } from '../cli/harnessContext';
 import { createComputerUseBinding } from './computerUseBinding';
 import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { resolveSessionIdentity } from './sessionArguments';
+import { resolveSessionArtifact } from './sessionArtifact';
 import type { ServeOptions, ServerRuntimeEnvironment } from './types';
 const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -61,18 +62,6 @@ async function bounded(operation: Promise<unknown>, label: string, notice: (mess
   } finally {
     if (timeout) clearTimeout(timeout);
   }
-}
-
-export async function resolveSessionArtifact(input: {
-  readonly worktree: boolean;
-  readonly pinned?: SyncRegistration;
-  readonly parent?: SyncRegistration;
-  readonly prepareCurrent: () => Promise<SyncRegistration>;
-}): Promise<SyncRegistration> {
-  if (!input.worktree) return input.prepareCurrent();
-  const artifact = input.pinned ?? input.parent;
-  if (artifact === undefined) throw new Error('Worktree session requires its parent compiled artifact.');
-  return artifact;
 }
 
 export async function runServerRuntime(options: ServeOptions, runtime: ServerRuntimeEnvironment): Promise<number> {

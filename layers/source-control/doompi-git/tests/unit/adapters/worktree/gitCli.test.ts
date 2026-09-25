@@ -261,6 +261,17 @@ describe('remoteBaseRef', () => {
 
     await expect(worktreeGit.remoteBaseRef(repository)).resolves.toBe('origin/main');
   });
+
+  it('finds a remote default when origin/HEAD is absent', async () => {
+    git(repository, 'update-ref', 'refs/remotes/upstream/main', 'HEAD');
+    git(repository, 'symbolic-ref', 'refs/remotes/upstream/HEAD', 'refs/remotes/upstream/main');
+
+    await expect(worktreeGit.remoteBaseRef(repository)).resolves.toBe('upstream/main');
+  });
+
+  it('returns undefined when no remote base exists', async () => {
+    await expect(worktreeGit.remoteBaseRef(repository)).resolves.toBeUndefined();
+  });
 });
 
 describe('mergeBranch', () => {
