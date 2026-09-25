@@ -338,6 +338,66 @@ jobs:
       - name: Run package-test shard
         run: node scripts/run-release-test-shard.mjs run "${{ matrix.shard }}" 4
 
+  validate-browser-e2e:
+    needs: prepare
+    if: needs.prepare.outputs.has_release == 'true'
+    name: Browser E2E (${{ matrix.shard }}/16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen release candidate
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-cut-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ${{ needs.prepare.outputs.release_projects }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the cockpit and the servers it spawns
+        run: pnpm cockpit:build
+
+      - name: Install Chromium
+        run: pnpm --filter @agimon-ai/doompi-web exec playwright install --with-deps chromium
+
+      - name: Drive the cockpit in a browser
+        run: pnpm nx run @agimon-ai/doompi-web:test:e2e -- --shard=${{ matrix.shard }}/16
+
+      - name: Keep the traces of a failed shard
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-cut-playwright-report-web-${{ matrix.shard }}
+          path: |
+            packages/clients/doompi-web/playwright-report
+            packages/clients/doompi-web/test-results
+          retention-days: 7
+
   validate-system-tests:
     needs: prepare
     if: needs.prepare.outputs.has_release == 'true'
@@ -425,6 +485,7 @@ jobs:
       - validate-lint
       - validate-typecheck
       - validate-package-tests
+      - validate-browser-e2e
       - validate-system-tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -440,6 +501,7 @@ jobs:
           TYPECHECK_RESULT: ${{ needs.validate-typecheck.result }}
           PACKAGE_RESULT: ${{ needs.validate-package-tests.result }}
           SYSTEM_RESULT: ${{ needs.validate-system-tests.result }}
+          BROWSER_RESULT: ${{ needs.validate-browser-e2e.result }}
         run: |
           set -euo pipefail
           if [[ "${PREPARE_RESULT}" != "success" ]]; then
@@ -450,7 +512,7 @@ jobs:
             echo "No release projects were selected."
             exit 0
           fi
-          for result in "${BUILD_RESULT}" "${LINT_RESULT}" "${TYPECHECK_RESULT}" "${PACKAGE_RESULT}" "${SYSTEM_RESULT}"; do
+          for result in "${BUILD_RESULT}" "${LINT_RESULT}" "${TYPECHECK_RESULT}" "${PACKAGE_RESULT}" "${BROWSER_RESULT}" "${SYSTEM_RESULT}"; do
             if [[ "${result}" != "success" ]]; then
               echo "A release validation lane finished with: ${result}" >&2
               exit 1
