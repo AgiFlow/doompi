@@ -19,6 +19,8 @@ const AUTHORIZATION_SERVER_DISCOVERY = '/.well-known/oauth-authorization-server'
 const AUTHORIZE_ROUTE = '/oauth/authorize';
 const TOKEN_ROUTE = '/oauth/token';
 const SESSION_MCP_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp$/u;
+const SESSION_MCP_URL_TOKEN_PATTERN =
+  /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/u;
 const SESSION_MCP_CONFIG_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/config$/u;
 const SESSION_MCP_CLIENTS_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/clients(?:\/([^/]+))?$/u;
 const SESSION_MCP_CONVERSATIONS_PATTERN =
@@ -89,7 +91,11 @@ function formString(form: FormData, name: string): string {
 
 function publicClient(client: SessionMcpClient, binding: SessionMcpAuthorizationBinding): Record<string, unknown> {
   return {
-    ...client,
+    clientId: client.clientId,
+    name: client.name,
+    redirectUri: client.redirectUri,
+    tokenEndpointAuthMethod: client.tokenEndpointAuthMethod,
+    createdAt: client.createdAt,
     scope: binding.scope,
     routing: sessionMcpRouting(binding.routing),
     tools: binding.tools,
@@ -383,21 +389,27 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
   const publicRoutes = async (request: Request): Promise<Response | undefined> => {
     const url = new URL(request.url);
     const configuredOrigin = origin();
-    const mcpMatch = SESSION_MCP_PATTERN.exec(url.pathname);
+    const signedMcpMatch = SESSION_MCP_URL_TOKEN_PATTERN.exec(url.pathname);
+    const mcpMatch = SESSION_MCP_PATTERN.exec(url.pathname) ?? signedMcpMatch;
     if (mcpMatch !== null) {
       if (configuredOrigin === undefined) return json(503, { error: 'Session MCP public origin is unavailable.' });
       const workspaceId = decodeURIComponent(mcpMatch[1]);
       const sessionId = decodeURIComponent(mcpMatch[2]);
-      const exactPath = sessionPath(workspaceId, sessionId);
+      const pathToken = signedMcpMatch?.[3];
+      const basePath = sessionPath(workspaceId, sessionId);
+      const exactPath = pathToken === undefined ? basePath : `${basePath}/${pathToken}`;
       if (url.pathname !== exactPath || url.search !== '') return json(404, { error: 'Not found.' });
-      const audience = `${configuredOrigin}${exactPath}`;
+      const audience = `${configuredOrigin}${basePath}`;
+      const resource = pathToken === undefined ? audience : `${audience}/${pathToken}`;
       const handlers = target(workspaceId, sessionId) === undefined ? undefined : incarnations.get(sessionId)?.handlers;
+      const cachedHandler = pathToken === undefined ? handlers?.get(resource) : undefined;
       const handler =
-        handlers?.get(audience) ??
+        cachedHandler ??
         createSessionMcpHttpHandler({
           audience,
           authorization,
           onNotice: options.onNotice,
+          ...(pathToken === undefined ? {} : { pathToken }),
           resolveConversation: async (grant, digest, reserve, signal) => {
             const store = requireStore();
             let record = reserve
@@ -438,13 +450,15 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
             if (active === undefined || grant.sessionGeneration !== active.generation || grant.clientId === '') {
               throw new Error('The session grant is no longer active.');
             }
-            if (authorization.readClient(grant.clientId)?.tokenEndpointAuthMethod === 'api_key') return;
+            if (authorization.readClient(grant.clientId)?.tokenEndpointAuthMethod !== 'client_secret_post') return;
             const registration = authorization.persistentRegistration(grant.clientId, workspaceId, Date.now());
             if (registration === undefined || !options.registrationStore.save(registration)) {
               throw new Error('The verified Session MCP client could not be saved.');
             }
           },
-          resourceMetadataUrl: `${configuredOrigin}/.well-known/oauth-protected-resource${exactPath}`,
+          ...(pathToken === undefined
+            ? { resourceMetadataUrl: `${configuredOrigin}/.well-known/oauth-protected-resource${basePath}` }
+            : {}),
           resolveSession: (grantedSessionId) => {
             if (grantedSessionId !== sessionId) return undefined;
             const resolved = target(workspaceId, sessionId);
@@ -453,8 +467,8 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
               : { sessionId, generation: resolved.generation, toolSurface: resolved.session.host.mcpSurface };
           },
         });
-      handlers?.set(audience, handler);
-      return handler(new Request(audience, request));
+      if (pathToken === undefined) handlers?.set(resource, handler);
+      return handler(new Request(resource, request));
     }
 
     const protectedMatch = PROTECTED_RESOURCE_PATTERN.exec(url.pathname);
@@ -677,12 +691,16 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         const hasSkills = Object.hasOwn(input, 'skills');
         const tools = parseStringArray(input.tools);
         const skills = parseStringArray(input.skills);
-        const apiKey = input.authMethod === 'api_key';
-        if (input.authMethod !== undefined && input.authMethod !== 'oauth' && !apiKey)
+        const authMethod = input.authMethod;
+        const apiKey = authMethod === 'api_key';
+        const urlToken = authMethod === 'url_token';
+        const nonOAuthCredential = apiKey || urlToken;
+        if (authMethod !== undefined && authMethod !== 'oauth' && !nonOAuthCredential)
           return json(400, { error: 'Authentication method is not supported.' });
-        if (apiKey && (scope !== 'session' || Object.hasOwn(input, 'redirectUri')))
-          return json(400, { error: 'API keys require session scope and no redirectUri.' });
-        if (!apiKey && typeof input.redirectUri !== 'string') return json(400, { error: 'A redirectUri is required.' });
+        if (nonOAuthCredential && (scope !== 'session' || Object.hasOwn(input, 'redirectUri')))
+          return json(400, { error: 'Signed URLs and API keys require session scope and no redirectUri.' });
+        if (!nonOAuthCredential && typeof input.redirectUri !== 'string')
+          return json(400, { error: 'A redirectUri is required.' });
         if (scope === 'session' && (hasTools || hasSkills)) {
           return json(400, { error: 'Session scope cannot include capability grants.' });
         }
@@ -703,12 +721,14 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         }
         try {
           const client = authorization.createClient(
-            apiKey
-              ? { name: typeof input.name === 'string' ? input.name : 'API key', authMethod: 'api_key' }
-              : {
-                  name: scope === 'session' ? defaultClientName(configuredOrigin) : (input.name as string),
-                  redirectUri: input.redirectUri as string,
-                },
+            urlToken
+              ? { name: defaultClientName(configuredOrigin), authMethod: 'url_token' }
+              : apiKey
+                ? { name: typeof input.name === 'string' ? input.name : 'API key', authMethod: 'api_key' }
+                : {
+                    name: scope === 'session' ? defaultClientName(configuredOrigin) : (input.name as string),
+                    redirectUri: input.redirectUri as string,
+                  },
           );
           const audience = `${configuredOrigin}${sessionPath(workspaceId, sessionId)}`;
           try {
@@ -732,14 +752,20 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
                     tools: [...new Set(tools!)],
                     skills: [...new Set(skills!)],
                   });
-            if (apiKey) {
+            const connectionUrl = urlToken ? `${audience}/${authorization.issueUrlToken(client.clientId)}` : undefined;
+            if (nonOAuthCredential) {
               const registration = authorization.persistentRegistration(client.clientId, workspaceId, Date.now());
               if (registration === undefined || !options.registrationStore.save(registration)) {
                 authorization.revokeClient(client.clientId);
-                return json(500, { error: 'API key could not be saved.' });
+                return json(500, { error: 'Session MCP credential could not be saved.' });
               }
             }
-            return json(201, { client: { ...publicClient(client, binding), clientSecret: client.clientSecret } });
+            return json(201, {
+              client: {
+                ...publicClient(client, binding),
+                ...(connectionUrl === undefined ? { clientSecret: client.clientSecret } : { connectionUrl }),
+              },
+            });
           } catch (error) {
             authorization.revokeClient(client.clientId);
             throw error;
@@ -772,6 +798,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
 export function isPublicSessionMcpRoute(method: string, pathname: string): boolean {
   return (
     SESSION_MCP_PATTERN.test(pathname) ||
+    SESSION_MCP_URL_TOKEN_PATTERN.test(pathname) ||
     (method === 'GET' && PROTECTED_RESOURCE_PATTERN.test(pathname)) ||
     (method === 'GET' && (pathname === AUTHORIZATION_SERVER_DISCOVERY || pathname === AUTHORIZE_ROUTE)) ||
     (method === 'POST' && pathname === TOKEN_ROUTE)

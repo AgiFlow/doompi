@@ -109,16 +109,25 @@ test('a pending approval takes over the remote access dialog until it is resolve
     },
   ];
   let reads = 0;
+  let denied = false;
+  let releasePending!: () => void;
+  const dialogOpened = new Promise<void>((resolve) => {
+    releasePending = resolve;
+  });
   await page.route('**/api/remote', async (route) => {
     reads += 1;
-    await route.fulfill({ json: liveState([], reads === 1 ? [] : pending) });
+    if (reads > 1) await dialogOpened;
+    await route.fulfill({ json: liveState([], reads === 1 || denied ? [] : pending) });
   });
   await page.route('**/api/remote/pairing/req-1/deny', async (route) => {
+    denied = true;
     await route.fulfill({ json: liveState() });
   });
 
   await page.goto(cockpit.url);
   await page.getByTestId('remote-access-open').click();
+  await expect(page.getByTestId('remote-access-dialog')).toBeVisible();
+  releasePending();
   await expect(page.getByTestId('pairing-approval')).toBeVisible();
   await expect(page.getByTestId('remote-access-dialog')).toBeHidden();
   await page.getByTestId('pairing-deny').click();

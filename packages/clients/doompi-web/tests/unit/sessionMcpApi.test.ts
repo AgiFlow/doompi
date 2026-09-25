@@ -95,6 +95,32 @@ describe('session MCP management API', () => {
       clients: [{ ...client, redirectUri: '', tokenEndpointAuthMethod: 'api_key' }],
     });
   });
+  it('creates a signed URL client and keeps the JWT out of later client lists', async () => {
+    const connectionUrl = `${config.audience}/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature`;
+    const signed = {
+      ...client,
+      redirectUri: '',
+      tokenEndpointAuthMethod: 'url_token' as const,
+      connectionUrl,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(respond(201, { client: signed }))
+      .mockResolvedValueOnce(respond(200, { clients: [signed] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      createSessionMcpClient('w', 's', { authMethod: 'url_token', scope: 'session', routing: 'conversation' }),
+    ).resolves.toEqual({ client: signed });
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      authMethod: 'url_token',
+      scope: 'session',
+      routing: 'conversation',
+    });
+    await expect(listSessionMcpClients('w', 's')).resolves.toEqual({
+      clients: [{ ...client, redirectUri: '', tokenEndpointAuthMethod: 'url_token' }],
+    });
+  });
 
   it('revokes an encoded client id and reports host errors', async () => {
     const fetchMock = vi

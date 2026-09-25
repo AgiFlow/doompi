@@ -28,9 +28,11 @@ export interface SessionMcpTarget {
 export interface SessionMcpHttpHandlerOptions {
   /** Exact HTTPS resource indicator minted into access grants. */
   readonly audience: string;
-  readonly authorization: Pick<SessionMcpAuthorizationService, 'authenticateAccessToken'>;
+  readonly authorization: Pick<SessionMcpAuthorizationService, 'authenticateAccessToken' | 'authenticateUrlToken'>;
   readonly onVerified?: (grant: SessionMcpAccessGrant) => void | Promise<void>;
   readonly resourceMetadataUrl?: string;
+  /** Signed JWT carried as the final URL path segment instead of an Authorization header. */
+  readonly pathToken?: string;
   readonly resolveSession: (sessionId: string) => SessionMcpTarget | undefined | Promise<SessionMcpTarget | undefined>;
   readonly resolveConversation?: (
     grant: SessionMcpAccessGrant,
@@ -93,7 +95,7 @@ function grantedSurface(grant: SessionMcpAccessGrant, surface: SessionToolSurfac
   };
 }
 
-/** Creates a Bearer-only, stateless Streamable HTTP MCP request handler for session capabilities. */
+/** Creates a stateless Streamable HTTP MCP request handler for session capabilities. */
 export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOptions): SessionMcpHttpHandler {
   const audience = new URL(options.audience);
   if (
@@ -106,28 +108,38 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
     throw new Error('Session MCP audience must be an absolute HTTPS URL without credentials, a query, or a fragment.');
   }
   const exactAudience = audience.href;
+  if (options.pathToken !== undefined && !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u.test(options.pathToken)) {
+    throw new Error('Session MCP path token must be a compact JWT.');
+  }
+  const exactResource = options.pathToken === undefined ? exactAudience : `${exactAudience}/${options.pathToken}`;
+  const authenticate =
+    options.pathToken === undefined
+      ? options.authorization.authenticateAccessToken
+      : options.authorization.authenticateUrlToken;
   const operations = new Map<string, { controller: AbortController; owner: string; conversation?: string }>();
   const operationOwner = (grant: SessionMcpAccessGrant, requestId: string | number): string =>
     JSON.stringify([grant.clientId, grant.sessionId, grant.sessionGeneration, grant.id, requestId]);
 
   return async (request) => {
-    if (currentUrl(request) !== exactAudience) return jsonError(404, 'MCP resource not found.');
-    const token = bearerToken(request);
+    if (currentUrl(request) !== exactResource) return jsonError(404, 'MCP resource not found.');
+    const token = options.pathToken ?? bearerToken(request);
     if (token === undefined)
       return jsonError(401, 'A Bearer access token is required.', true, options.resourceMetadataUrl);
-    const grant = options.authorization.authenticateAccessToken(token, exactAudience);
+    const grant = authenticate(token, exactAudience);
     if (grant === undefined)
-      return jsonError(401, 'The Bearer access token is invalid or expired.', true, options.resourceMetadataUrl);
+      return options.pathToken === undefined
+        ? jsonError(401, 'The Bearer access token is invalid or expired.', true, options.resourceMetadataUrl)
+        : jsonError(401, 'The signed MCP URL is invalid or revoked.');
     const authorizeOperation = async (): Promise<{
       grant: SessionMcpAccessGrant;
       target: SessionMcpTarget;
     }> => {
-      const activeGrant = options.authorization.authenticateAccessToken(token, exactAudience);
+      const activeGrant = authenticate(token, exactAudience);
       if (activeGrant === undefined || activeGrant.id !== grant.id) {
         throw new McpError(ErrorCode.InvalidRequest, 'The session grant is no longer active.');
       }
       const target = await options.resolveSession(activeGrant.sessionId);
-      const recheckedGrant = options.authorization.authenticateAccessToken(token, exactAudience);
+      const recheckedGrant = authenticate(token, exactAudience);
       if (
         recheckedGrant === undefined ||
         recheckedGrant.id !== activeGrant.id ||
@@ -141,7 +153,9 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
     try {
       await authorizeOperation();
     } catch {
-      return jsonError(401, 'The session grant is no longer active.', true, options.resourceMetadataUrl);
+      return options.pathToken === undefined
+        ? jsonError(401, 'The session grant is no longer active.', true, options.resourceMetadataUrl)
+        : jsonError(401, 'The signed MCP URL is invalid or revoked.');
     }
 
     const server = new Server(
@@ -384,7 +398,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
               ? ['session']
               : [...grant.tools.map((name) => `tool:${name}`), ...grant.skills.map((name) => `skill:${name}`)],
           expiresAt: Math.floor(grant.expiresAt / 1000),
-          resource: new URL(exactAudience),
+          resource: new URL(exactResource),
         },
       });
     } catch {

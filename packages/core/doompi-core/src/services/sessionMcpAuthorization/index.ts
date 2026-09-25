@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const ACCESS_TOKEN_TTL_MS = 15 * 60_000;
 const AUTHORIZATION_CODE_TTL_MS = 5 * 60_000;
@@ -8,6 +8,9 @@ const DEFAULT_MAX_RECORDS = 10_000;
 const GRANT_ID_BYTES = 18;
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60_000;
 const TOKEN_BYTES = 32;
+const URL_TOKEN_HEADER = Buffer.from('{"alg":"HS256","typ":"JWT"}').toString('base64url');
+const URL_TOKEN_ISSUER = 'doompi-session-mcp';
+const URL_TOKEN_MAX_LENGTH = 4096;
 
 export type SessionMcpOAuthErrorCode =
   | 'invalid_client'
@@ -41,7 +44,7 @@ export interface SessionMcpClient {
   readonly clientId: string;
   readonly name: string;
   readonly redirectUri: string;
-  readonly tokenEndpointAuthMethod: 'client_secret_post' | 'api_key';
+  readonly tokenEndpointAuthMethod: 'client_secret_post' | 'api_key' | 'url_token';
   readonly createdAt: number;
 }
 
@@ -99,7 +102,7 @@ export interface SessionMcpAuthorizationServiceOptions {
 
 export type CreateSessionMcpClientInput =
   | { readonly name: string; readonly redirectUri: string; readonly authMethod?: 'oauth' }
-  | { readonly name: string; readonly authMethod: 'api_key'; readonly redirectUri?: never };
+  | { readonly name: string; readonly authMethod: 'api_key' | 'url_token'; readonly redirectUri?: never };
 
 export interface IssueSessionMcpAuthorizationCodeInput {
   readonly clientId: string;
@@ -153,6 +156,8 @@ export interface SessionMcpAuthorizationService {
   restorePersistentRegistration(registration: SessionMcpPersistentRegistration, sessionGeneration: number): boolean;
   issueAuthorizationCode(input: IssueSessionMcpAuthorizationCodeInput): SessionMcpAuthorizationCode;
   exchangeToken(request: SessionMcpTokenRequest): SessionMcpTokenResponse;
+  issueUrlToken(clientId: string): string;
+  authenticateUrlToken(token: string, audience: string): SessionMcpAccessGrant | undefined;
   authenticateAccessToken(token: string, audience: string): SessionMcpAccessGrant | undefined;
   revokeGrant(grantId: string): boolean;
   revokeSessionGeneration(sessionId: string, sessionGeneration: number): number;
@@ -202,6 +207,62 @@ function opaque(bytes = TOKEN_BYTES): string {
 
 function exactSecret(actual: string, expectedHash: Buffer): boolean {
   return timingSafeEqual(digest(actual), expectedHash);
+}
+
+interface SessionMcpUrlTokenClaims {
+  readonly aud: string;
+  readonly iat: number;
+  readonly iss: typeof URL_TOKEN_ISSUER;
+  readonly sid: string;
+  readonly sub: string;
+}
+
+function urlTokenSignature(input: string, key: Buffer): Buffer {
+  return createHmac('sha256', key).update(input).digest();
+}
+
+function parseUrlToken(
+  token: string,
+): { readonly claims: SessionMcpUrlTokenClaims; readonly input: string; readonly signature: Buffer } | undefined {
+  if (token.length > URL_TOKEN_MAX_LENGTH) return undefined;
+  const parts = token.split('.');
+  if (parts.length !== 3) return undefined;
+  const [header, payload, encodedSignature] = parts;
+  if (
+    header !== URL_TOKEN_HEADER ||
+    !/^[A-Za-z0-9_-]{1,2048}$/u.test(payload!) ||
+    !/^[A-Za-z0-9_-]{43}$/u.test(encodedSignature!)
+  )
+    return undefined;
+  try {
+    const payloadBytes = Buffer.from(payload!, 'base64url');
+    const signature = Buffer.from(encodedSignature!, 'base64url');
+    if (
+      payloadBytes.toString('base64url') !== payload ||
+      signature.length !== 32 ||
+      signature.toString('base64url') !== encodedSignature
+    )
+      return undefined;
+    const value: unknown = JSON.parse(payloadBytes.toString('utf8'));
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+    const claims = value as Partial<SessionMcpUrlTokenClaims>;
+    if (
+      Object.keys(value).sort().join(',') !== 'aud,iat,iss,sid,sub' ||
+      claims.iss !== URL_TOKEN_ISSUER ||
+      typeof claims.sub !== 'string' ||
+      claims.sub === '' ||
+      typeof claims.sid !== 'string' ||
+      claims.sid === '' ||
+      typeof claims.aud !== 'string' ||
+      claims.aud === '' ||
+      typeof claims.iat !== 'number' ||
+      !Number.isSafeInteger(claims.iat)
+    )
+      return undefined;
+    return { claims: claims as SessionMcpUrlTokenClaims, input: `${header}.${payload}`, signature };
+  } catch {
+    return undefined;
+  }
 }
 
 function requireHttpsUrl(value: string, label: string, allowQuery: boolean): string {
@@ -341,11 +402,20 @@ export function createSessionMcpAuthorizationService(
       const createdAt = now();
       const clientId = opaque(CLIENT_ID_BYTES);
       const clientSecret = opaque(CLIENT_SECRET_BYTES);
+      const urlCredential = input.authMethod === 'url_token';
+      const headerCredential = input.authMethod === 'api_key';
+      let redirectUri = '';
+      if (!urlCredential && !headerCredential) {
+        if (typeof input.redirectUri !== 'string') {
+          throw new SessionMcpOAuthError('invalid_request', 'Redirect URI must be an absolute HTTPS URL.');
+        }
+        redirectUri = requireHttpsUrl(input.redirectUri, 'Redirect URI', true);
+      }
       const client: StoredClient = {
         clientId,
         name: requireName(input.name, 'Client name'),
-        redirectUri: input.authMethod === 'api_key' ? '' : requireHttpsUrl(input.redirectUri, 'Redirect URI', true),
-        tokenEndpointAuthMethod: input.authMethod === 'api_key' ? 'api_key' : 'client_secret_post',
+        redirectUri,
+        tokenEndpointAuthMethod: urlCredential ? 'url_token' : headerCredential ? 'api_key' : 'client_secret_post',
         createdAt,
         secretHash: digest(clientSecret),
       };
@@ -443,8 +513,9 @@ export function createSessionMcpAuthorizationService(
           return false;
         if (
           (registration.client.tokenEndpointAuthMethod !== 'client_secret_post' &&
-            registration.client.tokenEndpointAuthMethod !== 'api_key') ||
-          (registration.client.tokenEndpointAuthMethod === 'api_key' &&
+            registration.client.tokenEndpointAuthMethod !== 'api_key' &&
+            registration.client.tokenEndpointAuthMethod !== 'url_token') ||
+          (registration.client.tokenEndpointAuthMethod !== 'client_secret_post' &&
             (registration.client.redirectUri !== '' || registration.binding.scope !== 'session'))
         )
           return false;
@@ -452,9 +523,9 @@ export function createSessionMcpAuthorizationService(
           clientId: requireName(registration.client.clientId, 'Client ID'),
           name: requireName(registration.client.name, 'Client name'),
           redirectUri:
-            registration.client.tokenEndpointAuthMethod === 'api_key'
-              ? registration.client.redirectUri
-              : requireHttpsUrl(registration.client.redirectUri, 'Redirect URI', true),
+            registration.client.tokenEndpointAuthMethod === 'client_secret_post'
+              ? requireHttpsUrl(registration.client.redirectUri, 'Redirect URI', true)
+              : registration.client.redirectUri,
           tokenEndpointAuthMethod: registration.client.tokenEndpointAuthMethod,
           createdAt: registration.client.createdAt,
           secretHash: Buffer.from(registration.secretHash, 'hex'),
@@ -588,6 +659,45 @@ export function createSessionMcpAuthorizationService(
         'unsupported_grant_type',
         'Only authorization_code and refresh_token are supported.',
       );
+    },
+    issueUrlToken(clientId) {
+      const client = clients.get(clientId);
+      if (client === undefined || client.tokenEndpointAuthMethod !== 'url_token') {
+        throw new SessionMcpOAuthError('invalid_client', 'This client does not support signed MCP URLs.');
+      }
+      const binding = bindings.get(clientId);
+      if (binding === undefined) {
+        throw new SessionMcpOAuthError('invalid_request', 'Client authorization has not been preauthorized.');
+      }
+      const payload = Buffer.from(
+        JSON.stringify({
+          aud: binding.audience,
+          iat: Math.floor(client.createdAt / 1000),
+          iss: URL_TOKEN_ISSUER,
+          sid: binding.sessionId,
+          sub: client.clientId,
+        } satisfies SessionMcpUrlTokenClaims),
+      ).toString('base64url');
+      const input = `${URL_TOKEN_HEADER}.${payload}`;
+      return `${input}.${urlTokenSignature(input, client.secretHash).toString('base64url')}`;
+    },
+    authenticateUrlToken(token, audience) {
+      const parsed = parseUrlToken(token);
+      if (parsed === undefined) return undefined;
+      const client = clients.get(parsed.claims.sub);
+      if (client === undefined || client.tokenEndpointAuthMethod !== 'url_token') return undefined;
+      const binding = bindings.get(client.clientId);
+      if (
+        binding === undefined ||
+        binding.audience !== audience ||
+        parsed.claims.aud !== audience ||
+        parsed.claims.sid !== binding.sessionId ||
+        parsed.claims.iat !== Math.floor(client.createdAt / 1000)
+      )
+        return undefined;
+      const expected = urlTokenSignature(parsed.input, client.secretHash);
+      if (!timingSafeEqual(expected, parsed.signature)) return undefined;
+      return { id: client.clientId, ...binding, createdAt: client.createdAt, expiresAt: Number.MAX_SAFE_INTEGER };
     },
     authenticateAccessToken(token, audience) {
       sweep();

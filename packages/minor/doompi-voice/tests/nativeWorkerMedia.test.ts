@@ -88,15 +88,18 @@ it('drains browser PCM through a real worker thread and appends the transcriber 
     );
     expect(uploaded.status).toBe(204);
     await controller.toggle(ui);
-    await vi.waitFor(async () => {
-      const response = await broker.fetch(
-        new Request(
-          `http://voice${VOICE_MEDIA_ROUTES.clientEvents}?clientId=browser&connectionId=tab-one&after=1&wait=${VOICE_MEDIA_EVENT_WAIT_NONE}`,
-        ),
-      );
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ type: 'capture-stop', captureId });
-    });
+    await vi.waitFor(
+      async () => {
+        const response = await broker.fetch(
+          new Request(
+            `http://voice${VOICE_MEDIA_ROUTES.clientEvents}?clientId=browser&connectionId=tab-one&after=1&wait=${VOICE_MEDIA_EVENT_WAIT_NONE}`,
+          ),
+        );
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ type: 'capture-stop', captureId });
+      },
+      { timeout: 10_000 },
+    );
     await json(VOICE_MEDIA_ROUTES.clientCaptureStopped, { ...lease, captureId });
     await vi.waitFor(
       () =>

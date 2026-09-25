@@ -273,6 +273,69 @@ describe('session MCP Streamable HTTP handler', () => {
       }),
     ).toThrow('without credentials, a query, or a fragment');
   });
+  it('accepts an exact signed URL JWT without an Authorization header', async () => {
+    const authorization = createSessionMcpAuthorizationService();
+    const client = authorization.createClient({ name: 'ChatGPT signed URL', authMethod: 'url_token' });
+    authorization.createAuthorizationBinding({
+      clientId: client.clientId,
+      sessionId: 'alpha',
+      sessionGeneration: 7,
+      audience: AUDIENCE,
+      scope: 'session',
+      routing: 'conversation',
+    });
+    const token = authorization.issueUrlToken(client.clientId);
+    const resource = `${AUDIENCE}/${token}`;
+    const toolSurface: SessionToolSurface = {
+      readSurface: () => ({ revision: 1, tools: [], skills: [] }),
+      invokeTool: vi.fn(),
+      readSkill: vi.fn(),
+    };
+    const handler = createSessionMcpHttpHandler({
+      audience: AUDIENCE,
+      authorization,
+      pathToken: token,
+      resolveSession: () => ({ generation: 7, toolSurface }),
+    });
+    const response = await handler(
+      new Request(resource, {
+        method: 'POST',
+        headers: { accept: 'application/json, text/event-stream', 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('www-authenticate')).toBeNull();
+    await expect(response.json()).resolves.toMatchObject({ result: { tools: [] } });
+
+    const wrongPath = await handler(
+      new Request(AUDIENCE, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      }),
+    );
+    expect(wrongPath.status).toBe(404);
+
+    const parts = token.split('.');
+    const invalidToken = `${parts[0]}.${parts[1]}.${'A'.repeat(43)}`;
+    const invalidHandler = createSessionMcpHttpHandler({
+      audience: AUDIENCE,
+      authorization,
+      pathToken: invalidToken,
+      resolveSession: () => ({ generation: 7, toolSurface }),
+    });
+    const invalid = await invalidHandler(
+      new Request(`${AUDIENCE}/${invalidToken}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      }),
+    );
+    expect(invalid.status).toBe(401);
+    expect(invalid.headers.get('www-authenticate')).toBeNull();
+  });
 
   it('lists and calls only granted active tools', async () => {
     const { request, invokeTool } = fixture();

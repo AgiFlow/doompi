@@ -86,7 +86,7 @@ test('saves a named tunnel on the remote control settings page and reuses it aft
   await expect(page.getByTestId('remote-tunnel-name')).toHaveValue('doompi');
 });
 
-test('creates and revokes a host-only session-scoped MCP client with ChatGPT callback', async ({ page, cockpit }) => {
+test('creates and revokes signed URL and OAuth session MCP clients', async ({ page, cockpit }) => {
   const config = {
     audience: 'https://doom.example.com/api/workspaces/workspace/sessions/s1/mcp',
     authorizationEndpoint: 'https://doom.example.com/oauth/authorize',
@@ -100,7 +100,7 @@ test('creates and revokes a host-only session-scoped MCP client with ChatGPT cal
     if (route.request().method() === 'POST') {
       const input = route.request().postDataJSON() as {
         redirectUri?: string;
-        authMethod?: 'api_key';
+        authMethod?: 'api_key' | 'url_token';
         scope: string;
         routing: 'conversation';
       };
@@ -109,14 +109,25 @@ test('creates and revokes a host-only session-scoped MCP client with ChatGPT cal
         redirectUri: input.redirectUri ?? '',
         name: 'ChatGPT · doom.example.com',
         clientId: 'chatgpt-client',
-        tokenEndpointAuthMethod: input.authMethod === 'api_key' ? 'api_key' : 'client_secret_post',
+        tokenEndpointAuthMethod:
+          input.authMethod === 'url_token'
+            ? 'url_token'
+            : input.authMethod === 'api_key'
+              ? 'api_key'
+              : 'client_secret_post',
         createdAt: Date.now(),
         tools: [],
         skills: [],
         audience: config.audience,
       };
       clients = [metadata];
-      await route.fulfill({ status: 201, json: { client: { ...metadata, clientSecret: 'one-time-secret' } } });
+      const credential =
+        input.authMethod === 'url_token'
+          ? {
+              connectionUrl: `${config.audience}/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature`,
+            }
+          : { clientSecret: 'one-time-secret' };
+      await route.fulfill({ status: 201, json: { client: { ...metadata, ...credential } } });
       return;
     }
     await route.fulfill({ json: { clients } });
@@ -137,12 +148,12 @@ test('creates and revokes a host-only session-scoped MCP client with ChatGPT cal
   );
   await page.getByTestId('session-mcp-create-button').click();
   expect((await keyRequest).postDataJSON()).toEqual({
-    authMethod: 'api_key',
+    authMethod: 'url_token',
     scope: 'session',
     routing: 'conversation',
   });
-  await expect(page.getByTestId('session-mcp-created-secret')).toHaveText('one-time-secret');
-  await expect(page.getByTestId('session-mcp-secret')).toContainText('Bearer');
+  await expect(page.getByTestId('session-mcp-created-url')).toContainText('/mcp/eyJ');
+  await expect(page.getByTestId('session-mcp-secret')).toContainText('no additional authentication');
   await page.getByRole('button', { name: 'revoke' }).click();
   await expect(page.getByTestId('session-mcp-secret')).toHaveCount(0);
   await page.getByTestId('session-mcp-auth-method').click();
