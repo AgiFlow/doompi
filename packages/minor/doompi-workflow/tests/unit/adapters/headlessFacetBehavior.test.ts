@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import { DOOM_BACKGROUND_WORK_SERVICE, type BackgroundWorkProvider } from '@agimon-ai/doompi-core/backgroundWork';
 import {
   DOOM_HEADLESS_OWNER as TEST_OWNER,
@@ -246,6 +248,38 @@ function operation(execution: DoomHeadlessExecutionContext) {
 }
 
 describe('workflow headless facet', () => {
+  it('resolves discovery against each invocation cwd, including a worktree sharing its workspace', async () => {
+    const test = await fixture();
+    try {
+      const list = test.tools.find(({ name }) => name === 'list_workflows');
+      if (!list) throw new Error('Missing list_workflows tool');
+      const workspace = { ...test.execution, cwd: '/tmp/workspace', repoRoot: '/tmp/workspace' };
+      const worktree = { ...workspace, cwd: '/tmp/worktree' };
+      const execute = embeddedFeature.feature.listWorkflowsTool.execute;
+      await list.execute('workspace', {}, undefined, undefined, workspace);
+      expect(execute).toHaveBeenLastCalledWith({ directory: workspace.cwd });
+      await list.execute(
+        'worktree',
+        { directory: 'automations', filter: 'blog', page: 2 },
+        undefined,
+        undefined,
+        worktree,
+      );
+      expect(execute).toHaveBeenLastCalledWith({
+        directory: resolve(worktree.cwd, 'automations'),
+        filter: 'blog',
+        page: 2,
+      });
+      await list.execute('absolute', { directory: workspace.cwd }, undefined, undefined, worktree);
+      expect(execute).toHaveBeenLastCalledWith({ directory: workspace.cwd });
+      await list.execute('worktree-again', {}, undefined, undefined, worktree);
+      expect(execute).toHaveBeenLastCalledWith({ directory: worktree.cwd });
+      await list.execute('workspace-again', {}, undefined, undefined, workspace);
+      expect(execute).toHaveBeenLastCalledWith({ directory: workspace.cwd });
+    } finally {
+      await test.close?.();
+    }
+  });
   it('adds workflow tools without restricting other packages', async () => {
     const test = await fixture();
     try {
