@@ -148,8 +148,10 @@ export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
   const sessionId = options.sessionId;
   const paths = new RunnerPaths(options.cwd, options.environment);
   const storeDir = options.storeDir ?? resolveRunnerStoreDirectory(options.environment ?? process.env, options.cwd);
-  const stateDir = options.storeDir === undefined ? paths.stateDirectory(sessionId) : runnerStateDirFor(storeDir, sessionId);
-  const logsDir = options.storeDir === undefined ? paths.logDirectory(sessionId) : path.join(storeDir, sessionId, LOG_DIR_NAME);
+  const stateDir =
+    options.storeDir === undefined ? paths.stateDirectory(sessionId) : runnerStateDirFor(storeDir, sessionId);
+  const logsDir =
+    options.storeDir === undefined ? paths.logDirectory(sessionId) : path.join(storeDir, sessionId, LOG_DIR_NAME);
   const app = new Hono();
 
   // Built on first use, not on mount: most sessions never attach to a pane,

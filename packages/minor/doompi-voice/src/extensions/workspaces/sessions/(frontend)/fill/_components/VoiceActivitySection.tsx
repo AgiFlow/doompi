@@ -46,8 +46,10 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
   const view = voiceActivityView(statuses['doom-voice']);
   const browserState = useStore(voiceMediaBrowserState.store);
   const realtimeControls = useStore(voiceRealtimeBrowserControls.store);
-  const realtime = browserState?.sessionId === sessionId ? browserState.realtime : undefined;
-  const controls = realtimeControls?.sessionId === sessionId ? realtimeControls : undefined;
+  const realtime =
+    browserState?.sessionId === null || browserState?.sessionId === sessionId ? browserState?.realtime : undefined;
+  const controls =
+    realtimeControls?.sessionId === null || realtimeControls?.sessionId === sessionId ? realtimeControls : undefined;
   if (realtime !== undefined) {
     const live = realtime.connection === 'connected';
     const detail = browserState?.realtimeOutputInterrupted

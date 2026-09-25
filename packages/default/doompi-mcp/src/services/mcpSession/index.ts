@@ -100,6 +100,7 @@ export class McpSession {
   private lifecycleGeneration = 0;
   private configurationFingerprint: string | undefined;
   private workspaceRoot: string | undefined;
+  private executionCwd: string | undefined;
   /** Pi wrappers survive configuration changes because the host cannot unregister them. */
   private readonly retainedTools = new Map<string, CatalogTool>();
   private readonly registeredToolFingerprints = new Map<string, string>();
@@ -146,15 +147,24 @@ export class McpSession {
    * with before anything connected.
    */
   install(configuration: McpSessionConfig = readSessionConfig(this.options.environment)): McpStatusSnapshot {
+    this.executionCwd = configuration.repoRoot;
     this.bindConfiguration(configuration);
     this.emitChange();
     return this.catalog.toSnapshot();
   }
 
   /** Replaces the complete MCP projection and retires the previous live owner. */
-  async reconfigure(configuration: McpSessionConfig): Promise<void> {
+  async reconfigure(
+    configuration: McpSessionConfig,
+    executionCwd = configuration.repoRoot,
+    workspaceRoot = configuration.repoRoot,
+  ): Promise<void> {
     const fingerprint = mcpConfigurationFingerprint(configuration);
-    if (fingerprint === this.configurationFingerprint) {
+    if (
+      fingerprint === this.configurationFingerprint &&
+      executionCwd === this.executionCwd &&
+      workspaceRoot === this.workspaceRoot
+    ) {
       if (!this.runtime?.getServices()) this.startDetached();
       return;
     }
@@ -167,7 +177,9 @@ export class McpSession {
     this.resourceCache.clear();
     this.authorizationUrls.clear();
     this.browserAuthorizationRequests.clear();
+    this.executionCwd = executionCwd;
     this.bindConfiguration(configuration);
+    this.workspaceRoot = workspaceRoot;
     this.emitChange();
     this.updateToolVisibility();
     this.startDetached();
@@ -319,6 +331,7 @@ export class McpSession {
     await runtime.start({
       configSources,
       workspaceRoot: this.workspaceRoot,
+      executionCwd: this.executionCwd,
       environment: this.options.environment,
       tokenStore,
       onAuthorizationUrl: (url, serverName) => this.onAuthorizationUrl(url, serverName, generation),

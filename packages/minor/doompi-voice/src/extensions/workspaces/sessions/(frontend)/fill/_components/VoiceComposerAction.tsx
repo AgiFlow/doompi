@@ -3,7 +3,7 @@ import { AlertIcon, Button, LoaderIcon, MicIcon, StopIcon } from '@agimon-ai/doo
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 
-import { activeVoiceSession } from '../../_lib/voiceMediaWakeStore';
+import { activeVoiceSession, voiceMediaBrowserState } from '../../_lib/voiceMediaWakeStore';
 import { ManualComposerRecorder, type ManualComposerRecorderState } from '../_lib/manualComposerRecorder';
 import { voiceActivityView } from '../_lib/voiceActivityView';
 
@@ -12,6 +12,7 @@ const MANUAL_UNAVAILABLE_LABEL = 'manual voice is unavailable while autonomous v
 /** Voice control in the composer action slot on desktop and mobile. */
 export function VoiceComposerAction({ sessionId, appendComposerDraft, statuses }: WebPluginSlotProps) {
   const ownedSession = useStore(activeVoiceSession.store, (state) => state);
+  const browserMedia = useStore(voiceMediaBrowserState.store);
   const view = voiceActivityView(statuses['doom-voice']);
   // The recorder publishes into state rather than being read during render, so the
   // button re-renders from the phase it last announced.
@@ -22,7 +23,11 @@ export function VoiceComposerAction({ sessionId, appendComposerDraft, statuses }
   });
   const manualPhase = manualState.phase;
   const manualError = manualState.error;
-  const autonomous = view.mode === 'auto' || ownedSession !== null;
+  const globalLive =
+    browserMedia?.sessionId === null &&
+    browserMedia.realtime !== undefined &&
+    browserMedia.realtime.connection !== 'closed';
+  const autonomous = view.mode === 'auto' || ownedSession !== null || globalLive;
 
   useEffect(() => {
     const recorder = manualRecorder.current;

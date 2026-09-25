@@ -9,11 +9,12 @@ import {
 } from '../../../../../types/voiceOwnership';
 
 const MAX_EVENT_EPOCH_LENGTH = 200;
-const VOICE_MEDIA_PAGE_STATE_VERSION = 1;
-const VOICE_MEDIA_PAGE_STATE = Symbol.for('@agimon-ai/doompi-voice:web-media-page-state.v1');
+const VOICE_MEDIA_PAGE_STATE_VERSION = 3;
+const VOICE_MEDIA_PAGE_STATE = Symbol.for('@agimon-ai/doompi-voice:web-media-page-state.v3');
 
 export interface VoiceMediaBrowserState {
-  sessionId: string;
+  /** Null identifies the host-global live companion, not an absent browser lease. */
+  sessionId: string | null;
   phase: 'connecting' | 'connected' | 'conflict';
   realtime?: RealtimeBrowserState;
   realtimeOutputInterrupted?: boolean;
@@ -23,7 +24,9 @@ interface VoiceMediaPageState {
   version: typeof VOICE_MEDIA_PAGE_STATE_VERSION;
   wakes: SessionStore<VoiceMediaWake | undefined>;
   activeSession: GlobalStore<string | null>;
+  handoff: GlobalStore<BrowserVoiceOwnershipPayload['handoff']>;
   browserState: GlobalStore<VoiceMediaBrowserState | undefined>;
+  realtimeControls: GlobalStore<VoiceRealtimeBrowserControls | undefined>;
   runtime: GlobalStore<unknown>;
 }
 
@@ -32,7 +35,9 @@ function createVoiceMediaPageState(): VoiceMediaPageState {
     version: VOICE_MEDIA_PAGE_STATE_VERSION,
     wakes: defineSessionStore<VoiceMediaWake | undefined>(undefined),
     activeSession: defineGlobalStore<string | null>(null),
+    handoff: defineGlobalStore<BrowserVoiceOwnershipPayload['handoff']>(undefined),
     browserState: defineGlobalStore<VoiceMediaBrowserState | undefined>(undefined),
+    realtimeControls: defineGlobalStore<VoiceRealtimeBrowserControls | undefined>(undefined),
     runtime: defineGlobalStore<unknown>(undefined),
   };
 }
@@ -49,16 +54,30 @@ function voiceMediaPageState(): VoiceMediaPageState {
 const pageState = voiceMediaPageState();
 export const voiceMediaWakes = pageState.wakes;
 export const activeVoiceSession = pageState.activeSession;
+export const voiceMediaHandoff = pageState.handoff;
 export const voiceMediaBrowserState = pageState.browserState;
 export const voiceMediaPageRuntime = pageState.runtime;
 
 export interface VoiceRealtimeBrowserControls {
-  sessionId: string;
+  /** Null identifies the host-global live companion. */
+  sessionId: string | null;
   mute(muted: boolean): void;
   interrupt(): void;
   end(): void;
 }
-export const voiceRealtimeBrowserControls = defineGlobalStore<VoiceRealtimeBrowserControls | undefined>(undefined);
+export const voiceRealtimeBrowserControls = pageState.realtimeControls;
+
+/** Global live controls remain discoverable even when another or no Pi session is focused. */
+export const voiceGlobalActivitySource = {
+  subscribe(listener: () => void): () => void {
+    const subscription = voiceMediaBrowserState.store.subscribe(listener);
+    return () => subscription.unsubscribe();
+  },
+  isActive(_sessionId: string | null): boolean {
+    const state = voiceMediaBrowserState.store.state;
+    return state?.sessionId === null && state.realtime !== undefined && state.realtime.connection !== 'closed';
+  },
+};
 
 export function parseVoiceMediaWakePayload(input: unknown): VoiceMediaWake | null {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return null;
@@ -95,9 +114,11 @@ export const voiceOwnershipChannel = {
     return parseBrowserVoiceOwnershipPayload(input) ?? null;
   },
   apply(_sessionId: string, payload: BrowserVoiceOwnershipPayload) {
+    voiceMediaHandoff.update(() => payload.handoff);
     activeVoiceSession.update((current) => (current === payload.activeSessionId ? current : payload.activeSessionId));
   },
   drop(sessionId: string) {
+    if (voiceMediaHandoff.store.state !== undefined) return;
     activeVoiceSession.update((current) => (current === sessionId ? null : current));
   },
 };

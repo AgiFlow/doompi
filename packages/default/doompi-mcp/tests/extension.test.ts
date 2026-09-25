@@ -444,7 +444,8 @@ describe('doom mcp extension', () => {
     expect(createProxyContainer).toHaveBeenCalledWith(
       expect.objectContaining({
         configSources: [{ path: path.join(contextRoot, '.mcp.json'), format: 'claude' }],
-        workspaceRoot: contextRoot,
+        workspaceRoot: repoRoot,
+        executionCwd: contextRoot,
       }),
     );
     fs.rmSync(contextRoot, { recursive: true, force: true });

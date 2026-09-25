@@ -181,14 +181,22 @@ describe('createBashTool', () => {
 
   it('runs commands in the invoking session pwd', async () => {
     const run = vi.fn(async (): Promise<BashRunResult> => ({
-      kind: 'completed', id: 'run', name: 'pwd', output: '/external/worktree/subdir',
-      exitCode: 0, signal: null, logPath: '/tmp/pwd.log', backend: 'native',
+      kind: 'completed',
+      id: 'run',
+      name: 'pwd',
+      output: '/external/worktree/subdir',
+      exitCode: 0,
+      signal: null,
+      logPath: '/tmp/pwd.log',
+      backend: 'native',
     }));
     const pi = { registerTool: vi.fn() } as unknown as ExtensionAPI;
     createBashTool({ bashRunService: { run }, getSessionId: () => 'session-b', onRunnerStarted: vi.fn() }).register(pi);
     const tool = vi.mocked(pi.registerTool).mock.calls[0]?.[0] as RegisteredTool;
     await tool.execute('call-b', { command: 'pwd' }, undefined, undefined, { cwd: '/external/worktree/subdir' });
-    expect(run).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/external/worktree/subdir', sessionId: 'session-b' }));
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/external/worktree/subdir', sessionId: 'session-b' }),
+    );
   });
 
   it('does not monitor a runner that completed in the foreground', async () => {

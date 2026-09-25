@@ -9,11 +9,15 @@ export interface VoiceDeliveryRequest extends AutonomousTurnIdentity {
 }
 
 export type VoiceDeliveryResult =
-  | ({ kind: 'delivered' } & Omit<VoiceDeliveryRequest, 'text'>)
+  | ({ kind: 'delivered' | 'buffered' } & Omit<VoiceDeliveryRequest, 'text'>)
   | ({ kind: 'failed'; code: string } & Omit<VoiceDeliveryRequest, 'text'>);
 
 export interface VoiceDeliveryDependencies {
-  deliver(text: string, intent?: VoiceDeliveryIntent): void | Promise<void>;
+  deliver(
+    text: string,
+    intent?: VoiceDeliveryIntent,
+    request?: VoiceDeliveryRequest,
+  ): void | 'buffered' | Promise<void | 'buffered'>;
   onResult(result: VoiceDeliveryResult): void;
 }
 
@@ -61,8 +65,9 @@ export class VoiceDelivery {
       return;
     }
     const generation = this.generation;
-    const succeeded = (): void => {
-      if (generation === this.generation) this.dependencies.onResult({ kind: 'delivered', ...identity });
+    const succeeded = (outcome?: void | 'buffered'): void => {
+      if (generation === this.generation)
+        this.dependencies.onResult({ kind: outcome === 'buffered' ? 'buffered' : 'delivered', ...identity });
     };
     const failed = (error: unknown): void => {
       if (generation === this.generation)
@@ -73,11 +78,9 @@ export class VoiceDelivery {
         });
     };
     try {
-      const admitted = request.intent
-        ? this.dependencies.deliver(request.text, request.intent)
-        : this.dependencies.deliver(request.text);
-      if (admitted) void admitted.then(succeeded, failed);
-      else succeeded();
+      const admitted = this.dependencies.deliver(request.text, request.intent, request);
+      if (admitted instanceof Promise) void admitted.then(succeeded, failed);
+      else succeeded(admitted);
     } catch (error) {
       this.dependencies.onResult({
         kind: 'failed',

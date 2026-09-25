@@ -154,14 +154,30 @@ export function createVoiceServer(
       enableTraces: true,
     }),
   });
-  let busy = false;
-  let agentRunning = false;
+  interface NativeVoiceRun {
+    runId: string;
+    turnId?: string;
+    generation: number;
+    narrationAttempted: boolean;
+    narrationCompleted: boolean;
+    finalText?: string;
+  }
+  const nativeRuns = new Map<string, NativeVoiceRun>();
+  const narrationDrains = new Set<Promise<void>>();
+  const narrationToolRuns = new Map<string, string>();
+  let voiceGeneration = 0;
+  const hasSourceWork = () => nativeRuns.size > 0 || narrationDrains.size > 0;
+  const reportFailure = (error: unknown) => notify(error instanceof Error ? error.message : String(error), 'error');
+  const runIdFrom = (event: unknown): string | undefined =>
+    typeof event === 'object' && event !== null && 'runId' in event && typeof event.runId === 'string'
+      ? event.runId
+      : undefined;
   const live = new LiveVoiceController({
     host: broker.live,
     clock,
     manualState: () => manual.state,
     contextText: () => `Session ${execution.sessionId}. Workspace ${execution.repoRoot}.`,
-    isBusy: () => busy,
+    isBusy: () => nativeRuns.size > 0,
     send: (text, intent) => deliver(text, intent === 'follow-up'),
     onActivationStateChange: changed,
   });
@@ -214,7 +230,11 @@ export function createVoiceServer(
         }
         tools.setActive(mode.state === 'active');
       },
-      async deactivateVoice() {
+      async deactivateVoice(reason) {
+        if (reason !== 'handoff') {
+          voiceGeneration += 1;
+          ownership.cancelPending();
+        }
         await mode.deactivate(autoUi);
         tools.setActive(false);
         await select(false);
@@ -227,7 +247,7 @@ export function createVoiceServer(
     clock,
     250,
     (error) => notify(String(error), 'error'),
-    () => agentRunning,
+    hasSourceWork,
   );
   const status = () => ({
     state: mode.state,
@@ -247,6 +267,8 @@ export function createVoiceServer(
       ownership.requestActivation();
       await bridge.synchronize();
     } else if (action === 'deactivate') {
+      voiceGeneration += 1;
+      ownership.cancelPending();
       await mode.deactivate(autoUi);
       tools.setActive(false);
       await select(false);
@@ -326,11 +348,13 @@ export function createVoiceServer(
     if (mode.state !== 'active') return refusal(VOICE_TOOL_ERROR_CODE.inactive, 'Autonomous Voice is not active.');
     return undefined;
   };
-  let narrated = false;
-  let finalText = '';
   const close = async () => {
     if (closed) return;
     closed = true;
+    voiceGeneration += 1;
+    ownership.cancelPending();
+    nativeRuns.clear();
+    narrationToolRuns.clear();
     for (const registration of toolRegistrations) registration.dispose();
     toolRegistrations = [];
     bridge.stop();
@@ -375,11 +399,15 @@ export function createVoiceServer(
         required: ['text'],
         additionalProperties: false,
       },
-      async execute(_id, input, signal) {
+      async execute(toolCallId, input, signal) {
         const refused = voiceInactive();
         if (refused) return refused;
-        narrated = true;
-        return result(await mode.narrateAgent((input as { text: string }).text, signal));
+        const runId = narrationToolRuns.get(toolCallId);
+        const run = runId === undefined ? undefined : nativeRuns.get(runId);
+        if (run) run.narrationAttempted = true;
+        const outcome = await mode.narrateAgent((input as { text: string }).text, signal);
+        if (run && outcome === 'completed') run.narrationCompleted = true;
+        return result(outcome);
       },
     },
     {
@@ -483,41 +511,78 @@ export function createVoiceServer(
     ],
     hooks: [
       {
-        event: 'before_agent_start',
-        handle() {
-          busy = true;
-          agentRunning = true;
-          narrated = false;
-          finalText = '';
+        event: 'agent_start',
+        handle(event) {
+          const runId = runIdFrom(event);
+          if (!runId || closed || mode.state !== 'active' || nativeRuns.has(runId)) return;
+          // A resumed native run has the same runId. Prompt composition is not a run start.
+          nativeRuns.set(runId, {
+            runId,
+            generation: voiceGeneration,
+            narrationAttempted: false,
+            narrationCompleted: false,
+          });
         },
       },
       {
-        event: 'message_end',
+        event: 'turn_end',
         handle(event) {
-          const message = event.message as
-            | { role?: string; content?: Array<{ type: string; text?: string }> }
-            | undefined;
-          if (message?.role === 'assistant')
-            finalText =
-              message.content
-                ?.filter((part) => part.type === 'text')
-                .map((part) => part.text ?? '')
-                .join('') ?? '';
+          const run = nativeRuns.get(runIdFrom(event) ?? '');
+          if (!run || run.generation !== voiceGeneration) return;
+          const turn = event as { turnId?: string; message?: { role?: string; stopReason?: string; content?: Array<{ type: string; text?: string }> } };
+          if (turn.message?.role !== 'assistant' || turn.message.stopReason === 'toolUse') return;
+          run.turnId = turn.turnId;
+          run.finalText = turn.message.content
+            ?.filter((part) => part.type === 'text')
+            .map((part) => part.text ?? '')
+            .join('') ?? '';
+        },
+      },
+      {
+        event: 'tool_execution_start',
+        handle(event) {
+          const start = event as { toolCallId?: string; toolName?: string };
+          const runId = runIdFrom(event);
+          if (start.toolName === 'narrate' && start.toolCallId && runId && nativeRuns.has(runId)) {
+            narrationToolRuns.set(start.toolCallId, runId);
+          }
         },
       },
       {
         event: 'agent_settled',
-        async handle() {
-          busy = false;
-          try {
-            if (finalText && mode.state === 'active') {
-              if (mode.selectedMode === 'live') await live.publishAgentResult(String(clock.now()), finalText);
-              else if (!narrated) await mode.narrateFallback(finalText);
-            }
-          } finally {
-            agentRunning = false;
-            if (ownership.snapshot().handoff && mode.state === 'active') await bridge.synchronize();
-          }
+        handle(event) {
+          const run = nativeRuns.get(runIdFrom(event) ?? '');
+          if (!run || run.generation !== voiceGeneration) return;
+          nativeRuns.delete(run.runId);
+          for (const [callId, runId] of narrationToolRuns) if (runId === run.runId) narrationToolRuns.delete(callId);
+          // Native drive awaits settled hooks. Own the Voice response and physical
+          // playback separately so capture and another native prompt cannot deadlock.
+          const draining = Promise.resolve()
+            .then(async () => {
+              if (closed || run.generation !== voiceGeneration || mode.state !== 'active') return;
+              if (mode.selectedMode === 'live') {
+                await live.publishAgentResult(`${run.runId}:${run.turnId ?? 'final'}`, run.finalText);
+                return;
+              }
+              if (!run.narrationAttempted && run.finalText) {
+                const outcome = await mode.narrateFallback(run.finalText);
+                run.narrationCompleted = outcome === 'completed';
+              }
+              if (ownership.snapshot().handoff && !run.narrationCompleted) {
+                ownership.cancelPending();
+                notify('Voice transfer was cancelled because source narration did not complete.', 'warning');
+              }
+            })
+            .catch((error: unknown) => {
+              ownership.cancelPending();
+              reportFailure(error);
+            })
+            .finally(() => {
+              narrationDrains.delete(draining);
+              if (!closed && run.generation === voiceGeneration && !hasSourceWork() && ownership.snapshot().handoff)
+                void bridge.synchronize().catch(reportFailure);
+            });
+          narrationDrains.add(draining);
         },
       },
       { event: 'session_shutdown', handle: close },

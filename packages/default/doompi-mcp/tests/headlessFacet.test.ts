@@ -394,7 +394,8 @@ describe('MCP server facet contracts', () => {
     expect(mock.options[0]?.configSources).toEqual([
       expect.objectContaining({ path: sessionConfigPath, format: 'claude' }),
     ]);
-    expect(mock.options[0]?.workspaceRoot).toBe(sessionCwd);
+    expect(mock.options[0]?.workspaceRoot).toBe(root);
+    expect(mock.options[0]?.executionCwd).toBe(sessionCwd);
     expect(mock.options[0]?.environment).toMatchObject(current.execution.environment);
     await current.command.execute('reload', current.execution);
     expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])).toEqual([

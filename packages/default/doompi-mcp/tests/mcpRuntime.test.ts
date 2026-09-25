@@ -78,11 +78,12 @@ describe('McpRuntimeOwner', () => {
     const environment = { WORKSPACE_MARKER: 'one' };
     await owner.start({
       configSources: [configSource('/worktree/.mcp.json')],
-      workspaceRoot: '/worktree/nested',
+      workspaceRoot: '/worktree',
+      executionCwd: '/worktree/nested',
       environment,
     });
     expect(createProxyContainer).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceRoot: '/worktree/nested', environment }),
+      expect.objectContaining({ workspaceRoot: '/worktree', executionCwd: '/worktree/nested', environment }),
     );
   });
   it('passes the ordered layers through as one config', async () => {

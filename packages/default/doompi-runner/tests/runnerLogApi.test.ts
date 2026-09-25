@@ -86,11 +86,24 @@ describe('the runner log API', () => {
     fs.mkdirSync(paths.logDirectory(SESSION), { recursive: true });
     fs.mkdirSync(paths.stateDirectory(SESSION), { recursive: true });
     fs.writeFileSync(logPath, 'worktree output\n');
-    fs.writeFileSync(paths.statePathFor(RUN, SESSION), JSON.stringify({
-      id: RUN, name: 'task', pid: 42, command: 'pwd', cwd, logPath,
-      interactive: false, sessionId: SESSION, startedAt: new Date().toISOString(),
-      state: 'running', promoted: true, backend: 'native', hostPid: 7,
-    }));
+    fs.writeFileSync(
+      paths.statePathFor(RUN, SESSION),
+      JSON.stringify({
+        id: RUN,
+        name: 'task',
+        pid: 42,
+        command: 'pwd',
+        cwd,
+        logPath,
+        interactive: false,
+        sessionId: SESSION,
+        startedAt: new Date().toISOString(),
+        state: 'running',
+        promoted: true,
+        backend: 'native',
+        hostPid: 7,
+      }),
+    );
     const app = createRunnerLogApi({ cwd, environment: env, sessionId: SESSION });
     expect((await app.fetch(new Request(logUrl(RUN)))).status).toBe(200);
     const foreign = createRunnerLogApi({ cwd, environment: env, sessionId: 'foreign-session' });

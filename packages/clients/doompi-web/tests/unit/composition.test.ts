@@ -409,6 +409,37 @@ describe('activityGroups', () => {
     }
   });
 
+  it('shows a global active source even when the focused session reports an empty status', () => {
+    let globalVoiceActive = false;
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'voice',
+        activityGroups: [
+          {
+            name: 'voice',
+            keys: 'v e',
+            statusKey: 'doom-voice',
+            hideWhenEmpty: true,
+            activeSource: {
+              subscribe: () => () => undefined,
+              isActive: () => globalVoiceActive,
+            },
+          },
+        ],
+      }),
+    ]);
+    try {
+      expect(activityGroups({ 'doom-voice': '' }, [], 'other-session')).toEqual([]);
+      globalVoiceActive = true;
+      expect(activityGroups({ 'doom-voice': '' }, [], 'other-session')).toEqual([
+        { name: 'voice', keys: 'v e', summary: '', active: true },
+      ]);
+      expect(activityGroups({}, [], null)).toEqual([{ name: 'voice', keys: 'v e', summary: '', active: true }]);
+    } finally {
+      resetWebPlugins();
+    }
+  });
+
   it('drops a hideWhenEmpty group while its session reports nothing, and brings it back after', () => {
     // A cleared status arrives as an empty string rather than an absent key,
     // because the same map tells the selection bar which minor modes exist. A

@@ -4,6 +4,7 @@ import type { RealtimeBrowserState } from '../../../../../../types/realtime';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,
+  voiceMediaHandoff,
   voiceMediaPageRuntime,
   voiceRealtimeBrowserControls,
 } from '../../_lib/voiceMediaWakeStore';
@@ -19,6 +20,8 @@ class PageVoiceMediaRuntime {
   private readonly clientId = browserVoiceMediaClientId(window.sessionStorage, () => crypto.randomUUID());
   private readonly connectionId = `connection-${crypto.randomUUID()}`;
   private ownedSessionId: string | null = null;
+  private handoffActive = false;
+  private selectionGeneration = 0;
   private focusedSessionId: string | undefined;
   private client: VoiceMediaClient | undefined;
   private boundSessionId: string | undefined;
@@ -31,15 +34,20 @@ class PageVoiceMediaRuntime {
     // Ownership arrives after the command round trip. Arm now so the tap that
     // requested voice can unlock Web Audio on mobile Safari before that reply.
     this.device.armUserGesture();
-    const subscription = activeVoiceSession.store.subscribe(() => this.select(activeVoiceSession.store.state));
-    this.unsubscribe = () => subscription.unsubscribe();
+    const selection = (): void => this.select(activeVoiceSession.store.state);
+    const ownership = activeVoiceSession.store.subscribe(selection);
+    const handoff = voiceMediaHandoff.store.subscribe(selection);
+    this.unsubscribe = () => {
+      ownership.unsubscribe();
+      handoff.unsubscribe();
+    };
     window.addEventListener('pagehide', this.closeOnPageHide, { once: true });
     this.select(activeVoiceSession.store.state);
   }
 
   public focus(sessionId: string): void {
     this.focusedSessionId = sessionId;
-    if (activeVoiceSession.store.state === null) this.select(sessionId);
+    if (activeVoiceSession.store.state === null && voiceMediaHandoff.store.state === undefined) this.select(sessionId);
   }
 
   public close(): void {
@@ -64,18 +72,28 @@ class PageVoiceMediaRuntime {
   }
 
   private select(sessionId: string | null): void {
-    const releaseAudio = this.ownedSessionId !== null && activeVoiceSession.store.state === null;
-    this.ownedSessionId = activeVoiceSession.store.state;
-    sessionId ??= this.focusedSessionId ?? null;
-    if (sessionId !== this.boundSessionId) this.client?.endRealtime();
+    const handoff = voiceMediaHandoff.store.state;
+    const owner = activeVoiceSession.store.state;
+    const releaseAudio =
+      (this.ownedSessionId !== null || this.handoffActive) && owner === null && handoff === undefined;
+    this.ownedSessionId = owner;
+    this.handoffActive = handoff !== undefined;
+    const generation = ++this.selectionGeneration;
+    sessionId ??=
+      (handoff?.phase === 'rebinding' ? handoff.targetSessionId : undefined) ??
+      handoff?.sourceSessionId ??
+      this.focusedSessionId ??
+      null;
+    if (sessionId !== this.boundSessionId && handoff === undefined) this.client?.endRealtime();
     const switchSession = async (): Promise<void> => {
-      if (this.closed) return;
+      if (this.closed || generation !== this.selectionGeneration) return;
       if (releaseAudio) {
         await this.detach();
         await this.device.close();
       }
+      if (this.closed || generation !== this.selectionGeneration) return;
       if (sessionId === null) await this.detach();
-      else await this.attach(sessionId);
+      else await this.attach(sessionId, generation);
     };
     this.operation = this.operation.then(switchSession, switchSession).then(
       () => undefined,
@@ -83,9 +101,10 @@ class PageVoiceMediaRuntime {
     );
   }
 
-  private async attach(sessionId: string): Promise<void> {
+  private async attach(sessionId: string, generation: number): Promise<void> {
     if (this.client !== undefined && this.boundSessionId === sessionId) return;
     await this.detach();
+    if (this.closed || generation !== this.selectionGeneration) return;
     let client!: VoiceMediaClient;
     const reportConnectionState = (phase: VoiceMediaClientConnectionState): void => {
       if (this.client !== client || this.boundSessionId !== sessionId) return;

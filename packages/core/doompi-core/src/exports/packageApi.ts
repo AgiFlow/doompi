@@ -19,5 +19,10 @@ export {
   type DoomApiHandler,
   type DoomOAuthRedirect,
   type DoomRepositorySyncView,
+  type DoomRequestReceipt,
+  type DoomRequestReceiptKey,
+  type DoomRequestReceiptReservation,
+  type DoomRequestReceiptReserveResult,
+  type DoomRequestReceipts,
   type DoomApiScope,
 } from '../schemas/packageApi';

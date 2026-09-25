@@ -11,6 +11,7 @@ import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '@agimon-ai
 import { createHeadlessSessionManager } from '@agimon-ai/doompi-core/headlessSessionManager';
 import {
   createOpenSessionRegistry,
+  createRequestReceipts,
   createWorkspaceRegistry,
   listSavedSessionRecords,
   listSavedSessions,
@@ -48,6 +49,7 @@ import { readSyncState } from '../../composition/syncState';
 import { readRegisteredBootstrapStatus } from '../cli/bootstrapLocator';
 import { buildHarnessContext } from '../cli/harnessContext';
 import { createComputerUseBinding } from './computerUseBinding';
+import { ensureGlobalLogSink } from './logSink';
 import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { resolveSessionIdentity } from './sessionArguments';
 import { resolveSessionArtifact } from './sessionArtifact';
@@ -71,10 +73,25 @@ async function bounded(operation: Promise<unknown>, label: string, notice: (mess
 }
 
 export async function runServerRuntime(options: ServeOptions, runtime: ServerRuntimeEnvironment): Promise<number> {
-  const { cwd: baseCwd, environment: baseEnvironment, notice, resolveHarnessOptions, signal, syncWorkspace } = runtime;
+  const {
+    cwd: baseCwd,
+    environment: incomingEnvironment,
+    notice,
+    resolveHarnessOptions,
+    signal,
+    syncWorkspace,
+  } = runtime;
+  // Keep this selection local to this server and its admitted sessions. The
+  // process environment may also serve unrelated hosts and must not be changed.
+  const baseEnvironment: NodeJS.ProcessEnv = { ...incomingEnvironment, LOG_SINK_INSTANCE: 'global' };
+  await ensureGlobalLogSink({ cwd: baseCwd, env: baseEnvironment, notice }).catch((error: unknown) =>
+    notice(`Global log sink unavailable: ${error instanceof Error ? error.message : String(error)}`),
+  );
   const telemetry = createServerTelemetry({ cwd: baseCwd, env: baseEnvironment, warn: notice });
   const homeDirectory = baseEnvironment.HOME ?? os.homedir();
   const serverDirectory = path.join(piAgentDirectory(baseEnvironment), 'server');
+  // This native history has no agent lane and is deliberately outside the session-history catalog.
+  const requestReceipts = createRequestReceipts({ directory: path.join(serverDirectory, 'request-receipts') });
   const workspaces = createWorkspaceRegistry({ directory: serverDirectory, onNotice: notice });
   // Beside the journals it names, because a record pointing at a sessions
   // directory it is not stored next to is a record that can outlive its target.
@@ -352,6 +369,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       await hub.mountFacets(globalBundle.facets, {
         ...sharedApiContext,
         scope: 'global',
+        requestReceipts: requestReceipts.receipts,
         remoteControl: { fetch: (request: Request) => remoteRuntime!.fetchLocal(request) },
       });
       webCompositions.publish(
@@ -981,6 +999,11 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     await bounded(remoteRuntime?.close() ?? Promise.resolve(), 'remote control shutdown', notice);
     try {
       await hub.close();
+    } catch (error) {
+      notice(error instanceof Error ? error.message : String(error));
+    }
+    try {
+      await requestReceipts.close();
     } catch (error) {
       notice(error instanceof Error ? error.message : String(error));
     }

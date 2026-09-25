@@ -35,7 +35,7 @@ const PUBLIC_HOST_DEPENDENCIES: Readonly<Record<string, string>> = {
   '@earendil-works/pi-ai': '0.87.1',
   '@earendil-works/pi-coding-agent': '0.87.1',
   '@earendil-works/pi-tui': '0.87.1',
-  '@agimon-ai/vibe-lint': '0.0.1-alpha.26',
+  '@agimon-ai/vibe-lint': '0.0.1-alpha.40',
 };
 const RUNTIME_SHUTDOWN_TIMEOUT_MS = 10_000;
 const RUNTIME_RECORD_TIMEOUT_MS = 20_000;

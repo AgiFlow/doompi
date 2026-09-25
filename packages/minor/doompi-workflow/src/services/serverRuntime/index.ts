@@ -290,7 +290,14 @@ export function createWorkflowServerRuntime(
         async execute(_toolCallId, parameters, signal, _onUpdate, context) {
           signal?.throwIfAborted();
           const input = parameters as Parameters<typeof feature.runTool.execute>[0];
-          return callResult(await launch({ ...input, workflowPath: resolve(context.cwd, input.workflowPath) }));
+          return callResult(
+            await launch({
+              ...input,
+              ...(typeof input.workflowPath === 'string'
+                ? { workflowPath: resolve(context.cwd, input.workflowPath) }
+                : {}),
+            }),
+          );
         },
       },
       {

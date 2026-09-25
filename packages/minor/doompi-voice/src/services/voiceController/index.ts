@@ -270,9 +270,12 @@ export function registerAutoCaptureCordisEventHandlers(
 export interface VoiceTurnFallbackRuntime {
   activeGeneration(context: ExtensionContext): number | undefined;
   narrate(finalResponse: string, signal?: AbortSignal): Promise<NarrationPlaybackOutcome>;
+  onDrainChange?(): void;
+  onError?(error: unknown): void;
 }
 
 interface VoiceTurnFallbackState {
+  runId: string;
   sessionId: string;
   sessionManager: ExtensionContext['sessionManager'];
   activationId: number;
@@ -285,6 +288,10 @@ function sameFallbackTurn(state: VoiceTurnFallbackState, context: ExtensionConte
     state.sessionManager === context.sessionManager &&
     state.sessionId === (context as unknown as VoiceSessionContextLike).sessionManager?.getSessionId()
   );
+}
+
+function lifecycleRunId(event: unknown): string | undefined {
+  return isRecord(event) && typeof event.runId === 'string' ? event.runId : undefined;
 }
 
 export function extractTerminalAssistantText(message: unknown): string | undefined {
@@ -306,51 +313,91 @@ export function extractTerminalAssistantText(message: unknown): string | undefin
 
 export function createVoiceTurnFallback(runtime: VoiceTurnFallbackRuntime): {
   events: PiEventHandlers;
+  hasPendingWork(): boolean;
   dispose(): void;
 } {
-  let turn: VoiceTurnFallbackState | undefined;
+  const runs = new Map<string, VoiceTurnFallbackState>();
+  const drains = new Set<Promise<void>>();
+  let currentRunId: string | undefined;
+  let piRunCounter = 0;
   let active = true;
+
+  const matching = (event: unknown, context: ExtensionContext): VoiceTurnFallbackState | undefined => {
+    const run = runs.get(lifecycleRunId(event) ?? currentRunId ?? '');
+    return run && sameFallbackTurn(run, context) ? run : undefined;
+  };
 
   return {
     events: {
-      before_agent_start: (_event, context) => {
+      agent_start: (event, context) => {
         if (!active) return;
+        const runId = lifecycleRunId(event) ?? `pi-run-${String(++piRunCounter)}`;
+        const existing = runs.get(runId);
+        if (existing) {
+          if (sameFallbackTurn(existing, context)) currentRunId = runId; // Native resume is not a new run.
+          return;
+        }
         const activationId = runtime.activeGeneration(context);
         const sessionId = (context as unknown as VoiceSessionContextLike).sessionManager?.getSessionId();
-        turn =
-          activationId !== undefined && sessionId
-            ? {
-                sessionId,
-                sessionManager: context.sessionManager,
-                activationId,
-                narrateAttempted: false,
-              }
-            : undefined;
+        if (activationId === undefined || !sessionId) return;
+        runs.set(runId, {
+          runId,
+          sessionId,
+          sessionManager: context.sessionManager,
+          activationId,
+          narrateAttempted: false,
+        });
+        currentRunId = runId;
+        runtime.onDrainChange?.();
       },
       tool_execution_start: (event, context) => {
-        if (!active) return;
-        if (event.toolName === VOICE_NARRATE_TOOL_NAME && turn && sameFallbackTurn(turn, context)) {
-          turn.narrateAttempted = true;
-        }
+        if (!active || event.toolName !== VOICE_NARRATE_TOOL_NAME) return;
+        const run = matching(event, context);
+        if (run) run.narrateAttempted = true;
       },
       turn_end: (event, context) => {
-        if (!active || !turn || !sameFallbackTurn(turn, context)) return;
-        const finalResponse = extractTerminalAssistantText(event.message);
-        if (finalResponse) turn.finalResponse = finalResponse;
-      },
-      agent_settled: async (_event, context) => {
         if (!active) return;
-        const settled = turn;
-        turn = undefined;
-        if (!settled || settled.narrateAttempted || !settled.finalResponse || !sameFallbackTurn(settled, context))
+        const run = matching(event, context);
+        if (!run) return;
+        const finalResponse = extractTerminalAssistantText(event.message);
+        if (finalResponse) run.finalResponse = finalResponse;
+      },
+      agent_settled: (event, context) => {
+        if (!active) return;
+        const settled = matching(event, context);
+        if (!settled) return;
+        runs.delete(settled.runId);
+        if (currentRunId === settled.runId) currentRunId = undefined;
+        if (
+          settled.narrateAttempted ||
+          !settled.finalResponse ||
+          runtime.activeGeneration(context) !== settled.activationId
+        ) {
+          runtime.onDrainChange?.();
           return;
-        if (runtime.activeGeneration(context) !== settled.activationId) return;
-        await runtime.narrate(settled.finalResponse, context.signal);
+        }
+        // Native drive awaits its run_end hooks. Playback must instead be owned by Voice,
+        // so a slow browser cannot block the next native prompt or capture heartbeat.
+        const draining = Promise.resolve()
+          .then(() => runtime.narrate(settled.finalResponse!, context.signal))
+          .then(
+            () => undefined,
+            (error: unknown) => runtime.onError?.(error),
+          )
+          .finally(() => {
+            drains.delete(draining);
+            if (active) runtime.onDrainChange?.();
+          });
+        drains.add(draining);
+        runtime.onDrainChange?.();
       },
     },
+    hasPendingWork: () => runs.size > 0 || drains.size > 0,
     dispose() {
       active = false;
-      turn = undefined;
+      runs.clear();
+      drains.clear();
+      currentRunId = undefined;
     },
   };
 }

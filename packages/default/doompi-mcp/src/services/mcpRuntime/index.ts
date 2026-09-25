@@ -38,6 +38,8 @@ export interface McpRuntimeOptions {
   /** Ordered config layers. Later layers override earlier ones. */
   configSources: McpConfigSource[];
   workspaceRoot?: string;
+  /** Exact session directory, independent of the checkout used for configuration. */
+  executionCwd?: string;
   environment?: Readonly<Record<string, string | undefined>>;
   tokenStore?: TokenStore;
   /**
@@ -182,6 +184,7 @@ export class McpRuntimeOwner {
     const services = await createProxyContainer({
       configSources: options.configSources.map(toProxyConfigSource),
       workspaceRoot: options.workspaceRoot,
+      executionCwd: options.executionCwd,
       environment: options.environment,
       definitionsCachePath: cachePath,
       // Never blocking: an unreachable server must not delay Pi's first prompt.

@@ -242,7 +242,7 @@ it('activates live voice through the native ownership broker and exposes tools o
       targets: [{ handle: 'target', label: 'Target', order: 1 }],
       catalogRevision: 'catalog-live',
     });
-    await fire('before_agent_start', {});
+    await fire('agent_start', { runId: 'run-source' });
     const transfer = await headlessTool(facet.tools, 'transfer_voice').execute(
       'transfer-call',
       { target: 1, revision: 'catalog-live' },
@@ -253,11 +253,13 @@ it('activates live voice through the native ownership broker and exposes tools o
     expect(transfer.isError).not.toBe(true);
     expect(snapshots.every((snapshot) => snapshot.handoff === undefined)).toBe(true);
     expect(await (await api.fetch(new Request('http://voice/status'))).json()).toMatchObject({ state: 'active' });
-    await fire('message_end', {
-      message: { role: 'assistant', content: [{ type: 'text', text: 'Source agent finished.' }] },
+    await fire('turn_end', {
+      runId: 'run-source',
+      turnId: 'turn-source',
+      message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'Source agent finished.' }] },
     });
-    await fire('agent_settled', {});
-    expect(snapshots.at(-1)?.handoff).toMatchObject({ handle: 'target' });
+    await fire('agent_settled', { runId: 'run-source' });
+    await vi.waitFor(() => expect(snapshots.at(-1)?.handoff).toMatchObject({ handle: 'target' }));
 
     const stopped = await api.fetch(
       new Request('http://voice/control', { method: 'POST', body: JSON.stringify({ action: 'deactivate' }) }),

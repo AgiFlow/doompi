@@ -88,7 +88,7 @@ export function createMcpServerRuntime(
       };
       const stopPublishing = session.onChange(publish);
       try {
-        await session.reconfigure(sessionConfiguration(execution, workspaceRoot));
+        await session.reconfigure(sessionConfiguration(execution, workspaceRoot), execution.cwd, execution.repoRoot);
         publish();
       } catch (error) {
         await execution.client.notify({
@@ -205,7 +205,7 @@ export function createMcpServerRuntime(
             // Reset the catalog even when paths are unchanged or teardown fails.
             session.install({ enabled: false, repoRoot: execution.cwd, stagingDirectory: execution.cwd });
           }
-          await session.reconfigure(sessionConfiguration(execution, workspaceRoot));
+          await session.reconfigure(sessionConfiguration(execution, workspaceRoot), execution.cwd, execution.repoRoot);
           await notify('Reconnecting MCP servers.');
           return;
         }

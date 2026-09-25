@@ -136,6 +136,41 @@ export interface DoomOAuthRedirect {
   cancel(state: string): void;
 }
 
+/** An exact, host-owned receipt address. Provider IDs are not event cursor positions. */
+export interface DoomRequestReceiptKey {
+  namespace: string;
+  activationId: string;
+  requestId: string;
+}
+
+export interface DoomRequestReceipt extends DoomRequestReceiptKey {
+  fingerprint: string;
+  destination: string;
+  transactionId: string;
+  outcome: 'reserved' | 'admitted' | 'rejected' | 'uncertain';
+}
+
+export interface DoomRequestReceiptReservation extends DoomRequestReceiptKey {
+  /** Lowercase SHA-256 of the authoritative request text, never the full transcript. */
+  fingerprint: string;
+  destination: string;
+  transactionId: string;
+}
+
+export type DoomRequestReceiptReserveResult =
+  | { kind: 'reserved'; token: string }
+  | { kind: 'existing'; receipt: DoomRequestReceipt }
+  | { kind: 'conflict'; receipt: DoomRequestReceipt };
+
+/** A global-only receipt capability. A reservation is not an execution receipt. */
+export interface DoomRequestReceipts {
+  reserve(request: DoomRequestReceiptReservation): Promise<DoomRequestReceiptReserveResult>;
+  lookup(key: DoomRequestReceiptKey): Promise<DoomRequestReceipt | undefined>;
+  finish(
+    request: DoomRequestReceiptKey & { token: string; outcome: 'admitted' | 'rejected' | 'uncertain' },
+  ): Promise<DoomRequestReceipt>;
+}
+
 /** What the host tells an API about itself when it starts. */
 export interface DoomApiContext {
   scope: DoomApiScope;
@@ -181,6 +216,8 @@ export interface DoomApiContext {
   computerUse?: DoomComputerUseSessionAccess;
   /** Deliver a typed method to a channel on this exact hub mount, retaining the caller's connection identity. */
   receiveChannel?(sessionId: string, frameType: string, payload: unknown, connectionId: string): boolean;
+  /** Host-owned replay evidence, supplied only on the global mount. Never exposed to browsers or agents. */
+  requestReceipts?: DoomRequestReceipts;
   /** Machine-owned Remote Control service, mounted only by the global core facet. */
   remoteControl?: { fetch(request: Request): Promise<Response> };
   onNotice(message: string): void;

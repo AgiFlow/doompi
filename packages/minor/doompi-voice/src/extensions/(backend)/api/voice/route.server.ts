@@ -1,7 +1,9 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extensionFile';
+import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 
-import { voiceReadinessApi } from '../../../../services/voiceReadinessApi';
+import type root from '../../root.server';
+
+type Context = WithRoot<DoomServerPluginContext, Awaited<ReturnType<typeof root>>['value']>;
 
 /**
  * The global half of the `voice` mount: readiness, and nothing else.
@@ -19,6 +21,6 @@ import { voiceReadinessApi } from '../../../../services/voiceReadinessApi';
  * session tree's status and control routes answer instead.
  */
 export default defineRoutedContribution(
-  ({ host }: DoomServerPluginContext) => (host.scope === 'global' ? voiceReadinessApi : undefined),
+  (context: Context) => (context.host.scope === 'global' ? context.root.voiceApi : undefined),
   { cardinality: 'optional' },
 );
