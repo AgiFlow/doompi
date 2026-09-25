@@ -422,10 +422,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
         if (!canClose(mount, session)) throw new Error('Session is outside this mount.');
         await sessionService.close(id);
       },
-      isLive: (id) => {
-        const session = sessions.get(id);
-        return session !== undefined && belongs(mount, session);
-      },
+      isLive: (id) => sessionService.isLive(id),
       registerReservedWorktreeProvisioner: (provisioner) => registerReservedWorktreeProvisioner(mount, provisioner),
       canCommunicate: (sourceId, targetId) => {
         const source = sessions.get(sourceId);

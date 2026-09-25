@@ -149,19 +149,28 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
           git: createWorktreeGit(),
           sessionService,
         });
+      /** Announces a successful mutation to this session's lifecycle subscribers. */
+      const publishLifecycle = (scope: DoomHubSessionScope, repositoryRoot: string): void => {
+        host.directEvents.publish(GIT_WORKTREE_LIFECYCLE_EVENT, scope.sessionId, {
+          version: 1,
+          repositoryRoot,
+        });
+      };
       const unregisterWorktreeProvisioner = sessionService.registerReservedWorktreeProvisioner?.(
         async ({ reservationId, parentSessionId, signal }) => {
           const parent = host.sessions().find((scope) => scope.sessionId === parentSessionId);
           if (parent === undefined) throw new Error('The conversation parent session is unavailable.');
           const branch = `doompi/conversation-${reservationId.slice(0, 12)}`;
-          await worktrees.spawn(
+          const record = await worktrees.spawn(
             { cwd: parent.cwd, sessionId: parent.sessionId },
             { branch, name: `conversation ${reservationId.slice(0, 8)}`, reservationId },
             { signal },
           );
           const reservations = sessionService.reservations;
           if (reservations === undefined) throw new Error('Conversation reservations are unavailable.');
-          return reservations.complete(reservationId, parentSessionId);
+          const session = await reservations.complete(reservationId, parentSessionId);
+          publishLifecycle(parent, record.repositoryRoot);
+          return session;
         },
       );
       const views: ViewDeps = { homeDir: options.homeDir, sessionService };
@@ -212,14 +221,6 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
           errorTarget,
         });
         publish(scope, true);
-      };
-
-      /** Announces a successful mutation to this session's lifecycle subscribers. */
-      const publishLifecycle = (scope: DoomHubSessionScope, repositoryRoot: string): void => {
-        host.directEvents.publish(GIT_WORKTREE_LIFECYCLE_EVENT, scope.sessionId, {
-          version: 1,
-          repositoryRoot,
-        });
       };
 
       const run = async (
