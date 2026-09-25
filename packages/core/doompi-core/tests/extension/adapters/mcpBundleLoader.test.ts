@@ -248,8 +248,8 @@ describe('composed MCP UI resources', () => {
     fs.writeFileSync(f.descriptorPath, JSON.stringify(f.descriptor));
     const loaded = await loadMcpBundle({ ...f.options, descriptorSha256: descriptorHash(f.directory) });
     const scopes = await Promise.all(
-      loaded.plugins.map(({ plugin }) =>
-        typeof plugin.session === 'function' ? plugin.session({} as never) : plugin.session,
+      loaded.plugins.map(async ({ plugin }) =>
+        typeof plugin.session === 'function' ? await plugin.session({} as never) : plugin.session,
       ),
     );
     expect(scopes[0]!.uiResources?.[0]).toBe(scopes[1]!.uiResources?.[0]);

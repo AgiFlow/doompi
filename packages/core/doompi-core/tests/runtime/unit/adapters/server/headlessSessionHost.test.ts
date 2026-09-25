@@ -568,7 +568,7 @@ describe('MCP execution boundary', () => {
               },
             ],
             skills: [{ name: 'guide', description: 'Guide', read }],
-            uiResources: ui.duplicate ? [resource, resource] : [resource],
+            uiResources: ui.duplicate ? [resource, { ...resource }] : [resource],
           },
         },
       },

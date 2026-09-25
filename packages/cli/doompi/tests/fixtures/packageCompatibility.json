@@ -736,6 +736,7 @@
       "./mcpSession": "tir",
       "./mcpStatus": "tir",
       "./mcpToolResolver": "tir",
+      "./mcpWidget": "tir",
       "./moduleResolution": "tir",
       "./narration": "tir",
       "./notification": "tir",
@@ -1014,6 +1015,11 @@
         "types": "./dist/mcpToolResolver.d.mts",
         "import": "./dist/mcpToolResolver.mjs",
         "require": "./dist/mcpToolResolver.cjs"
+      },
+      "./mcpWidget": {
+        "types": "./dist/mcpWidget.d.mts",
+        "import": "./dist/mcpWidget.mjs",
+        "require": "./dist/mcpWidget.cjs"
       },
       "./moduleResolution": {
         "types": "./dist/moduleResolution.d.mts",
@@ -3545,6 +3551,8 @@
     "exports": {
       ".": "tir",
       "./theme": "tir",
+      "./mcpWidget": "tir",
+      "./mcp.css": "esm",
       "./styles.css": "esm",
       "./themes/*.json": "esm",
       "./package.json": "esm"
@@ -3560,6 +3568,12 @@
         "import": "./dist/theme.mjs",
         "require": "./dist/theme.cjs"
       },
+      "./mcpWidget": {
+        "types": "./dist/mcpWidget.d.mts",
+        "import": "./dist/mcpWidget.mjs",
+        "require": "./dist/mcpWidget.cjs"
+      },
+      "./mcp.css": "./styles/mcp.css",
       "./styles.css": "./styles/tokens.css",
       "./themes/*.json": "./themes/*.json",
       "./package.json": "./package.json"

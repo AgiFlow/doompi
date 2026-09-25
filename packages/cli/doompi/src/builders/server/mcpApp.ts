@@ -103,12 +103,15 @@ export async function bundleMcpApp(
       },
     ],
     resolve: {
-      alias: ['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-dom', 'react-dom/client'].map(
-        (specifier) => ({
-          find: new RegExp(`^${specifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'u'),
-          replacement: reactRequire.resolve(specifier),
-        }),
-      ),
+      alias: [
+        { find: /^@agimon-ai\/doompi-web-components$/u, replacement: appEntry },
+        ...['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-dom', 'react-dom/client'].map(
+          (specifier) => ({
+            find: new RegExp(`^${specifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'u'),
+            replacement: reactRequire.resolve(specifier),
+          }),
+        ),
+      ],
     },
     build: {
       write: false,
@@ -125,11 +128,13 @@ export async function bundleMcpApp(
   const styles = output.filter((item) => item.type === 'asset').filter((item) => item.fileName.endsWith('.css'));
   if (
     scripts.length !== 1 ||
-    scripts[0]!.imports.length ||
+    scripts[0]!.imports.some((file) => file !== scripts[0]!.fileName) ||
     scripts[0]!.dynamicImports.length ||
     output.length !== scripts.length + styles.length
   )
-    throw new Error('The composed MCP app must contain one self-contained script and inline CSS only.');
+    throw new Error(
+      `The composed MCP app must contain one self-contained script and inline CSS only: ${output.map((item) => item.fileName).join(', ')}; imports: ${scripts.flatMap((item) => [...item.imports, ...item.dynamicImports]).join(', ')}`,
+    );
   const script = scripts[0]!.code.replace(/<\/script/giu, '<\\/script');
   const style = styles
     .map((item) => (typeof item.source === 'string' ? item.source : Buffer.from(item.source).toString('utf8')))

@@ -605,7 +605,7 @@ async function stageSync(
     // Directory age and an open-file check cannot establish that a lazy import is finished.
     return result;
   } catch (error) {
-    await fs.promises.rm(directory, { recursive: true, force: true });
+    await fs.promises.rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     throw error;
   }
 }

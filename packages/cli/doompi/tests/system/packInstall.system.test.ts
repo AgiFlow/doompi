@@ -1604,14 +1604,13 @@ describe('conventional Pi discovery', () => {
     expect(result.stdout).toContain('PACKED_MCP_MARKDOWN_OK');
   });
 
-  it('loads the packed session MCP App without implementation sources or browser runtime dependencies', async () => {
+  it('loads the packed session MCP tool without implementation sources or browser runtime dependencies', async () => {
     assertConsumerInstall();
     const probe = path.join(consumer.root, 'packed-session-app-probe.mjs');
     fs.writeFileSync(
       probe,
       [
         "import assert from 'node:assert/strict';",
-        "import { createHash } from 'node:crypto';",
         "import fs from 'node:fs';",
         "import path from 'node:path';",
         "import { pathToFileURL } from 'node:url';",
@@ -1628,18 +1627,10 @@ describe('conventional Pi discovery', () => {
         '};',
         'const session = await mcp.session({ loadContext: () => snapshot });',
         "const tool = session.tools.find(({ name }) => name === 'show_session');",
-        'const resource = session.uiResources.find(({ uri }) => uri === tool._meta.ui.resourceUri);',
-        'assert.ok(resource);',
+        'assert.ok(tool);',
+        "assert.equal(tool._meta['doompi/widget'], '@agimon-ai/doompi-config/show_session');",
         "assert.deepEqual(tool._meta.ui.visibility, ['model', 'app']);",
-        "assert.equal(tool._meta['openai/outputTemplate'], resource.uri);",
-        "assert.equal(resource.mimeType, 'text/html;profile=mcp-app');",
-        'assert.deepEqual(resource._meta.ui.csp, { connectDomains: [], resourceDomains: [] });',
-        'const html = await resource.read();',
-        "const digest = createHash('sha256').update(html).digest('hex').slice(0, 24);",
-        'assert.equal(resource.uri, `ui://doompi/session/${digest}/index.html`);',
-        "assert.ok(html.includes('<script>'));",
-        "assert.ok(!html.includes('<!--APP_SCRIPT-->'));",
-        'assert.ok(!/<script[^>]+src=/u.test(html));',
+        'assert.equal(session.uiResources?.length ?? 0, 0);',
         'const result = await tool.execute();',
         "assert.equal(result.structuredContent.sessionId, 'packed-session');",
         "assert.equal(result.structuredContent.repositoryName, 'doompi');",
@@ -1647,11 +1638,9 @@ describe('conventional Pi discovery', () => {
         "assert.deepEqual(result._meta, { widgetType: 'session' });",
         "for (const secret of ['/private/workspace', 'PACKED_PRIVATE_INSTRUCTIONS', 'PACKED_PRIVATE_PERSONA']) {",
         '  assert.ok(!JSON.stringify(result).includes(secret));',
-        '  assert.ok(!html.includes(secret));',
         '}',
         'snapshot.session.revision = 2;',
         'assert.equal((await tool.execute()).structuredContent.revision, 2);',
-        'assert.equal(await resource.read(), html);',
         "process.stdout.write('PACKED_MCP_APP_OK\\n');",
         '',
       ].join('\n'),
