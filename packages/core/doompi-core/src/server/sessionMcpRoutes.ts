@@ -316,6 +316,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     },
   };
   const provision = new Map<string, Promise<DoomHubSessionScope>>();
+  const recoveries = new Map<string, Promise<DoomHubSessionScope>>();
   const setupDirectory = async (
     id: string,
     parentSessionId: string,
@@ -415,14 +416,53 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
             let record = reserve
               ? store.reserve(grant.clientId, sessionId, workspaceId, digest)
               : store.find(grant.clientId, sessionId, digest);
-            if (!record || record.state === 'closed')
+            if (!record)
               throw new SessionMcpConversationError(
                 'SESSION_UNAVAILABLE',
                 'This conversation binding is unavailable. It will not be recreated automatically.',
               );
+            const restoring = recoveries.get(record.id);
+            if (restoring) await restoring;
+            else {
+              const existing = record.workspaceId === undefined ? undefined : target(record.workspaceId, record.id);
+              if (record.state === 'closed' || (record.state === 'bound' && !existing)) {
+                if (
+                  options.headlessHub.session(record.id) ||
+                  !record.cwd ||
+                  options.isSessionPersisted?.(record.id, record.cwd) !== false
+                )
+                  throw new SessionMcpConversationError(
+                    'SESSION_UNAVAILABLE',
+                    'The bound session is unavailable. Resume it in DoomPi; no other session will be used.',
+                    record.id,
+                  );
+                record = store.recover(record.id, sessionId);
+                const recovery =
+                  record.cwd && fs.existsSync(record.cwd)
+                    ? setupDirectory(record.id, sessionId, record.cwd)
+                    : provisionConversationWorktree(record, signal);
+                recoveries.set(record.id, recovery);
+                try {
+                  await recovery;
+                } finally {
+                  if (recoveries.get(record.id) === recovery) recoveries.delete(record.id);
+                }
+              }
+            }
+            record = store.find(grant.clientId, sessionId, digest)!;
             if (record.state === 'pending') {
               publishPending();
-              await provisionConversationWorktree(record, signal);
+              if (record.workspaceId !== undefined && options.isSessionPersisted?.(record.id, record.cwd!) !== false)
+                throw new SessionMcpConversationError(
+                  'SESSION_UNAVAILABLE',
+                  'The bound session is unavailable. Resume it in DoomPi; no other session will be used.',
+                  record.id,
+                );
+              const pending = provision.get(record.id);
+              if (pending) await pending;
+              else if (record.workspaceId !== undefined && record.cwd && fs.existsSync(record.cwd))
+                await setupDirectory(record.id, sessionId, record.cwd);
+              else await provisionConversationWorktree(record, signal);
               record = store.find(grant.clientId, sessionId, digest);
               if (!record || record.state !== 'bound')
                 throw new SessionMcpConversationError(

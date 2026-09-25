@@ -367,6 +367,38 @@ describe('conversation-bound Session MCP routing', () => {
     expect(fs.existsSync(cwd)).toBe(true);
   });
 
+  it('restores a deleted child in the same checkout and keeps other conversations isolated', async () => {
+    const f = fixture();
+    await f.call('a');
+    await f.call('b');
+    const [a, b] = f.store.list();
+    const cwd = await f.setup(a.id);
+    await f.setup(b.id);
+    fs.writeFileSync(path.join(cwd, 'keep.txt'), 'existing work');
+    f.routes.closeSessionBinding(a.id);
+    f.sessions.delete(a.id);
+    f.persisted.delete(a.id);
+    const [recovered, duplicate] = await Promise.all([f.call('a'), f.call('a', 'load_context', {}, 2)]);
+    expect(recovered.result?.structuredContent).toMatchObject({ sessionId: a.id, cwd });
+    expect(duplicate.result?.structuredContent?.sessionId).toBe(a.id);
+    expect(fs.readFileSync(path.join(cwd, 'keep.txt'), 'utf8')).toBe('existing work');
+    expect((await f.call('b')).result?.structuredContent?.sessionId).toBe(b.id);
+    expect(f.create).toHaveBeenCalledTimes(3);
+    expect(f.store.list()).toHaveLength(2);
+    expect(f.store.get(a.id, 'parent').state).toBe('bound');
+  });
+
+  it('recovers a missing bound session without requiring an explicit binding closure', async () => {
+    const f = fixture();
+    await f.call('a');
+    const record = f.store.list()[0];
+    const cwd = await f.setup(record.id);
+    f.sessions.delete(record.id);
+    f.persisted.delete(record.id);
+    expect((await f.call('a')).result?.structuredContent).toMatchObject({ sessionId: record.id, cwd });
+    expect(f.create).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects changed target contracts and revoked registrations', async () => {
     const f = fixture();
     await f.call('a');
