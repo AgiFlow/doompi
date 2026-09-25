@@ -37,6 +37,8 @@ const AGENT_ROUTES = new Map<string, 'GET' | 'POST'>([
   ['/live/agent/results', 'GET'],
   ['/live/agent/results/ack', 'POST'],
   ['/live/agent/fence', 'POST'],
+  ['/live/agent/select', 'POST'],
+  ['/live/agent/revoke', 'POST'],
 ]);
 const MAX_AGENT_RESPONSE_BYTES = 128 * 1024;
 const PEER_ROUTE = '/api/plugins/voice/peer';
@@ -89,6 +91,17 @@ export function registerVoicePeerOwnership(endpoint: VoicePeerOwnershipEndpoint)
   return () => {
     if (ownershipEndpoint === endpoint) ownershipEndpoint = undefined;
   };
+}
+
+export function isPairedVoiceTargetGranted(homeDirectory: string, reference: string): boolean {
+  const target = parseRemoteSessionReference(reference);
+  const config = readSessionPeerConfig(homeDirectory);
+  return (
+    target !== undefined &&
+    config?.peers.some(
+      (peer) => peer.hostId === target.hostId && peer.allowedVoiceSessionIds.includes(target.sessionId),
+    ) === true
+  );
 }
 
 export function discoverPairedVoiceTargets(): Promise<PairedVoiceOwnershipTarget[]> {

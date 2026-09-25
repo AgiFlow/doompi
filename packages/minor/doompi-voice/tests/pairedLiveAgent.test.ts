@@ -12,7 +12,12 @@ import type { VoiceMediaBroker } from '../src/services/clientMediaApi';
 import { GlobalLiveCompanion } from '../src/services/globalLiveCompanion';
 import type { GlobalLiveAgentHost, LiveAgentRoute } from '../src/services/globalLiveCompanion/type';
 import { LiveAgentSession } from '../src/services/liveAgentSession';
-import { registerVoicePeerAgent, requestPairedVoiceAgent, voicePeerRelayApi } from '../src/services/voicePeerRelay';
+import {
+  isPairedVoiceTargetGranted,
+  registerVoicePeerAgent,
+  requestPairedVoiceAgent,
+  voicePeerRelayApi,
+} from '../src/services/voicePeerRelay';
 
 const directories: string[] = [];
 function registry(): DoomPeerAgentRegistry {
@@ -58,6 +63,16 @@ afterEach(() => {
 });
 
 describe('paired live agent relay', () => {
+  it('rechecks the current paired grant before a host resolves a remote Live target', () => {
+    const directory = home();
+    expect(isPairedVoiceTargetGranted(directory, 'peer/remote-host/agent-session')).toBe(true);
+    expect(isPairedVoiceTargetGranted(directory, 'peer/remote-host/ungranted')).toBe(false);
+    const configPath = sessionPeerConfigPath(directory);
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as { peers: SessionPeer[] };
+    config.peers = config.peers.map((entry) => ({ ...entry, allowedVoiceSessionIds: [] }));
+    fs.writeFileSync(configPath, JSON.stringify(config));
+    expect(isPairedVoiceTargetGranted(directory, 'peer/remote-host/agent-session')).toBe(false);
+  });
   it('routes only granted, signed agent requests with a host-local token and rejects replays', async () => {
     const directory = home('remote-host');
     const agent = new LiveAgentSession(
@@ -331,6 +346,8 @@ describe('paired live agent relay', () => {
       await vi.waitFor(() => expect(companion.status.state).toBe('active'));
       expect(await companion.handoff('local-source', 'peer/remote-host/agent-session', 'transfer-1')).toBe(true);
       expect(companion.status.activeSessionId).toBe('peer/remote-host/agent-session');
+      expect(remote.selectedRoute).toBeDefined();
+      expect(remote.nativeTransferAllowed).toBe(false);
       const internal = companion as unknown as {
         admit(requestId: string, text: string): Promise<string>;
         pollAgentResults(route: LiveAgentRoute): Promise<boolean>;

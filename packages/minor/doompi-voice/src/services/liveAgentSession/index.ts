@@ -8,6 +8,11 @@ interface Route {
   transactionId: string;
 }
 
+export interface LiveAgentCatalog {
+  revision: string;
+  targets: Array<{ order: number; label: string }>;
+}
+
 interface Run {
   requestId: string;
   route: Route;
@@ -26,6 +31,9 @@ const reject = (message: string, status = 409): Response => Response.json({ erro
 export class LiveAgentSession {
   public readonly sessionIncarnation = randomUUID();
   private route: Route | undefined;
+  private selected = false;
+  private catalog: LiveAgentCatalog | undefined;
+  private nativeTransferPermitted = false;
   private readonly pending: Array<{ requestId: string; route: Route }> = [];
   private readonly runs = new Map<string, Run>();
   private readonly events: LiveAgentResult[] = [];
@@ -36,8 +44,18 @@ export class LiveAgentSession {
     private readonly sessionId: string,
     private readonly hubToken: string | undefined,
     private readonly admitPrompt: (text: string) => Promise<void>,
+    private readonly onSelectionChange?: () => void | Promise<void>,
   ) {}
+  public get selectedRoute(): Readonly<Route & { sessionIncarnation: string }> | undefined {
+    return this.selected && this.route ? { ...this.route, sessionIncarnation: this.sessionIncarnation } : undefined;
+  }
 
+  public get selectedCatalog(): Readonly<LiveAgentCatalog> | undefined {
+    return this.selected ? this.catalog : undefined;
+  }
+  public get nativeTransferAllowed(): boolean {
+    return this.selected && this.nativeTransferPermitted;
+  }
   public onRunStart(value: unknown): void {
     const runId = record(value)?.runId;
     if (!validId(runId) || this.closed || this.runs.has(runId)) return;
@@ -85,6 +103,9 @@ export class LiveAgentSession {
 
   public close(): void {
     this.closed = true;
+    this.selected = false;
+    this.catalog = undefined;
+    this.nativeTransferPermitted = false;
     this.route = undefined;
     this.pending.length = 0;
     this.runs.clear();
@@ -114,6 +135,12 @@ export class LiveAgentSession {
         return reject('Invalid live agent route.', 400);
       if (this.pending.length || this.runs.size || this.events.length)
         return reject('The Pi agent still has live Voice work.');
+      if (this.selected) {
+        this.selected = false;
+        this.catalog = undefined;
+        this.nativeTransferPermitted = false;
+        await this.onSelectionChange?.();
+      }
       this.route = {
         activationId: body.activationId,
         routeGeneration: body.routeGeneration as number,
@@ -134,6 +161,47 @@ export class LiveAgentSession {
       requested.sessionIncarnation !== this.sessionIncarnation
     )
       return reject('The live Pi agent route is stale.');
+    if (request.method === 'POST' && path === '/live/agent/select') {
+      if (body?.transactionId !== route.transactionId) return reject('The selected Voice route is stale.');
+      const catalog = record(body?.catalog);
+      if (
+        typeof body?.nativeTransferAllowed !== 'boolean' ||
+        !validId(catalog?.revision) ||
+        !Array.isArray(catalog.targets) ||
+        catalog.targets.length > 256 ||
+        catalog.targets.some((target: unknown) => {
+          const item = record(target);
+          return (
+            !item ||
+            !Number.isSafeInteger(item.order) ||
+            (item.order as number) < 1 ||
+            (item.order as number) > 256 ||
+            typeof item.label !== 'string' ||
+            item.label.length > 80
+          );
+        })
+      )
+        return reject('Invalid live Voice target catalog.', 400);
+      const next = { revision: catalog.revision, targets: catalog.targets as LiveAgentCatalog['targets'] };
+      const changed =
+        !this.selected ||
+        this.catalog?.revision !== next.revision ||
+        this.nativeTransferPermitted !== body.nativeTransferAllowed;
+      this.catalog = next;
+      this.nativeTransferPermitted = body.nativeTransferAllowed;
+      this.selected = true;
+      if (changed) await this.onSelectionChange?.();
+      return Response.json({ selected: true });
+    }
+    if (request.method === 'POST' && path === '/live/agent/revoke') {
+      if (body?.transactionId !== route.transactionId) return reject('The revoked Voice route is stale.');
+      this.selected = false;
+      this.catalog = undefined;
+      this.nativeTransferPermitted = false;
+      this.route = undefined;
+      await this.onSelectionChange?.();
+      return new Response(null, { status: 204 });
+    }
     if (request.method === 'POST' && path === '/live/agent/admit') {
       const requestId = body?.requestId;
       const transcript = body?.transcript;
@@ -187,7 +255,11 @@ export class LiveAgentSession {
     if (request.method === 'POST' && path === '/live/agent/fence') {
       if (body?.transactionId !== route.transactionId || this.pending.length || this.runs.size || this.events.length)
         return reject('The source Pi agent has not drained.');
+      this.selected = false;
+      this.catalog = undefined;
+      this.nativeTransferPermitted = false;
       this.route = undefined;
+      await this.onSelectionChange?.();
       return new Response(null, { status: 204 });
     }
     return reject('Not found.', 404);

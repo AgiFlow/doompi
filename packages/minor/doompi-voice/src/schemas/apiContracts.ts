@@ -321,6 +321,8 @@ export const apiContracts = defineApiContract({
         ['results', '/live/agent/results', 'GET'],
         ['ack', '/live/agent/results/ack', 'POST'],
         ['fence', '/live/agent/fence', 'POST'],
+        ['select', '/live/agent/select', 'POST'],
+        ['revoke', '/live/agent/revoke', 'POST'],
       ] as const
     ).map(([name, path, method]): DoomHttpContract => ({
       id: `voice.agent.${name}`,
@@ -342,7 +344,35 @@ export const apiContracts = defineApiContract({
           : []),
       ],
       ...(method === 'POST'
-        ? { body: { required: true, contentType: 'application/json', schema: Type.Unknown() } }
+        ? {
+            body: {
+              required: true,
+              contentType: 'application/json',
+              schema:
+                name === 'select'
+                  ? Type.Object({
+                      activationId: S,
+                      routeGeneration: Type.Integer({ minimum: 1 }),
+                      transactionId: S,
+                      sessionIncarnation: S,
+                      nativeTransferAllowed: B,
+                      catalog: Type.Object({
+                        revision: S,
+                        targets: Type.Array(Type.Object({ order: Type.Integer({ minimum: 1 }), label: S }), {
+                          maxItems: 256,
+                        }),
+                      }),
+                    })
+                  : name === 'revoke'
+                    ? Type.Object({
+                        activationId: S,
+                        routeGeneration: Type.Integer({ minimum: 1 }),
+                        transactionId: S,
+                        sessionIncarnation: S,
+                      })
+                    : Type.Unknown(),
+            },
+          }
         : {}),
       responses: {
         ...jsonApiResponses(Type.Unknown()),
@@ -406,6 +436,37 @@ export const apiContracts = defineApiContract({
       responses: jsonApiResponses(Type.Unknown()),
     },
     {
+      id: 'voice.nativeTransfer',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/live/native-transfer',
+      method: 'POST',
+      authentication: 'owner',
+      description: 'Host-only revision-bound native Live transfer. Requires the host hub bearer.',
+      parameters: [
+        { name: 'Authorization', in: 'header', required: true, schema: Type.String({ pattern: '^Bearer .+' }) },
+      ],
+      body: {
+        required: true,
+        contentType: 'application/json',
+        schema: Type.Object({
+          sourceSessionId: S,
+          activationId: S,
+          routeGeneration: Type.Integer({ minimum: 0 }),
+          sessionIncarnation: S,
+          ordinal: Type.Integer({ minimum: 1 }),
+          catalogRevision: S,
+        }),
+      },
+      responses: {
+        ...Errors,
+        '202': {
+          description: 'Transfer requested; source work drains before commit.',
+          schema: Type.Object({ requested: Type.Literal(true) }),
+        },
+      },
+    },
+    {
       id: 'voice.liveStatus',
       scope: 'global',
       basePath: 'voice',
@@ -429,6 +490,7 @@ export const apiContracts = defineApiContract({
         schema: Type.Object({
           action: values(['activate', 'transfer', 'mute', 'unmute', 'interrupt', 'end']),
           sessionId: O(S),
+          expectedSourceSessionId: O(S),
         }),
       },
       responses: jsonApiResponses(GlobalLiveStatus),

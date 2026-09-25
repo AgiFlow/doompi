@@ -351,6 +351,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         mediaArbitration,
         peerAgents,
         directEvents: hub.directEvents,
+        requestApi: (mount: Parameters<HeadlessHub['requestApi']>[0], basePath: string, request: Request) =>
+          hub.requestApi(mount, basePath, request),
         repositories: () =>
           hub.workspaces().map((workspace) => ({
             id: workspace.id,
@@ -575,6 +577,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           cwd: sessionOptions.cwd,
           environment: sessionOptions.environment,
           directEvents: hub.directEvents,
+          requestApi: (mount, basePath, request) => hub.requestApi(mount, basePath, request),
           ...(computerUse === undefined
             ? {}
             : {

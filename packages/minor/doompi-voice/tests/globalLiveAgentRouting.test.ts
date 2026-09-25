@@ -118,6 +118,11 @@ describe('global live companion and native agent route', () => {
       expect(await transferred.json()).toMatchObject({ activeSessionId: 'target' });
       expect((await companion.control({ action: 'transfer', sessionId: 'target' })).activeSessionId).toBe('target');
       expect(await companion.handoff('source', 'target', 'stale')).toBe(false);
+      await expect(companion.control({ action: 'end', expectedSourceSessionId: 'source' })).rejects.toThrow(
+        'no longer owns',
+      );
+      expect(companion.status.activeSessionId).toBe('target');
+      expect(stop).not.toHaveBeenCalled();
       const invalid = await api.fetch(
         new Request('http://voice.test/live/control', {
           method: 'POST',

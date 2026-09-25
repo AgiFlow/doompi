@@ -34,6 +34,7 @@ export interface PackageApiServerOptions {
   readonly computerUse?: DoomApiContext['computerUse'];
   readonly mediaArbitration?: DoomApiContext['mediaArbitration'];
   readonly peerAgents?: DoomApiContext['peerAgents'];
+  readonly requestApi?: DoomApiContext['requestApi'];
   internalToken?: string;
   hubToken?: string;
   /** Shared exact-scope dispatch table, so session facets can mount plugin methods. */
@@ -133,6 +134,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     ...(options.computerUse === undefined ? {} : { computerUse: options.computerUse }),
     ...(options.mediaArbitration === undefined ? {} : { mediaArbitration: options.mediaArbitration }),
     ...(options.peerAgents === undefined ? {} : { peerAgents: options.peerAgents }),
+    ...(options.requestApi === undefined ? {} : { requestApi: options.requestApi }),
     ...(options.internalToken === undefined ? {} : { internalToken: options.internalToken }),
     ...(options.hubToken === undefined ? {} : { hubToken: options.hubToken }),
     ...(exposedSessionService === undefined ? {} : { sessionService: exposedSessionService }),

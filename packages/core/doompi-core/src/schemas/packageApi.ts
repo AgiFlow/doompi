@@ -224,6 +224,8 @@ export interface DoomApiContext {
   sessionCommunication?: DoomSessionCommunicationEndpoint;
   /** Same-process events shared by session APIs and hub channels. */
   directEvents?: DoomDirectEventBus;
+  /** Trusted in-process dispatch to an explicitly selected mounted API. No browser authentication is performed here. */
+  requestApi?(mount: DoomApiMount, basePath: string, request: Request): Promise<Response>;
   /** Present only on a session mounted by an authenticated Desktop host. */
   computerUse?: DoomComputerUseSessionAccess;
   /** Deliver a typed method to a channel on this exact hub mount, retaining the caller's connection identity. */

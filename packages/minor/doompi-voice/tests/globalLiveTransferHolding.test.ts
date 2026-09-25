@@ -33,6 +33,8 @@ function fixture() {
   internals.transfer = undefined;
   internals.routeGeneration = 1;
   internals.stopped = false;
+  internals.selectedRoute = source;
+  internals.selecting = Promise.resolve();
   internals.admitted = new Map();
   internals.options = { broker: { live: { send } }, onNotice };
   internals.live = { state: 'active', trackAgentRequest: vi.fn(), deactivate: vi.fn(async () => undefined) };
@@ -47,6 +49,144 @@ function fixture() {
 }
 
 describe('global Voice transfer holding', () => {
+  it('waits for active route selection even before the first selection request starts', async () => {
+    const test = fixture();
+    test.internals.selectedRoute = undefined;
+    let release!: () => void;
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    test.internals.activationSelection = { route: test.source, promise, resolve: release };
+    const request = test.admit('first-live-request');
+    await Promise.resolve();
+    expect(test.admitToRoute).not.toHaveBeenCalled();
+    test.internals.selectedRoute = test.source;
+    release();
+    expect(await request).toBe('submitted');
+    test.internals.activationSelection = undefined;
+    expect(await test.admit('next-live-request')).toBe('submitted');
+  });
+
+  it('binds source selection to its catalog and serializes refresh before revocation', async () => {
+    const test = fixture();
+    const coordinator = {
+      liveCatalog: vi.fn(() => ({ revision: 'catalog-2', targets: [{ order: 1, label: 'Target' }] })),
+    };
+    test.internals.coordinator = coordinator;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const request = vi.fn(async (_route: unknown, path: string) => {
+      if (path === '/live/agent/select') await pending;
+      return {};
+    });
+    test.internals.agentRequest = request;
+    const select = (test.internals.selectRoute as (route: LiveAgentRoute) => Promise<void>).call(
+      test.companion,
+      test.source,
+    );
+    const refresh = test.companion.refreshSelectedCatalog();
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    const stop = test.companion.stop();
+    expect(test.internals.route).toBeUndefined();
+    release();
+    await select;
+    await refresh;
+    await stop;
+    expect(request.mock.calls.filter(([, path]) => path === '/live/agent/select')).toHaveLength(1);
+    expect(request).toHaveBeenCalledWith(
+      test.source,
+      '/live/agent/select',
+      'POST',
+      expect.objectContaining({ nativeTransferAllowed: true }),
+    );
+    expect(request).toHaveBeenLastCalledWith(test.source, '/live/agent/revoke', 'POST', expect.any(Object));
+    expect(coordinator.liveCatalog).toHaveBeenCalledWith('source');
+    expect(test.internals.selectedRoute).toBeUndefined();
+  });
+
+  it('rejects changed route identity and stale catalog before requesting a native transfer', () => {
+    const test = fixture();
+    const input = {
+      sourceSessionId: 'source',
+      activationId: test.source.activationId,
+      routeGeneration: test.source.generation,
+      sessionIncarnation: test.source.sessionIncarnation,
+      ordinal: 1,
+      catalogRevision: 'catalog-2',
+    };
+    const resolve = vi.fn(() => 'target');
+    expect(() => test.companion.nativeTransfer({ ...input, activationId: 'old' }, resolve)).toThrow('no longer owns');
+    expect(() => test.companion.nativeTransfer({ ...input, routeGeneration: 2 }, resolve)).toThrow('no longer owns');
+    expect(() => test.companion.nativeTransfer({ ...input, sessionIncarnation: 'old' }, resolve)).toThrow(
+      'no longer owns',
+    );
+    expect(resolve).not.toHaveBeenCalled();
+    expect(() => test.companion.nativeTransfer(input, () => undefined)).toThrow('catalog or source route is stale');
+    expect(() => test.companion.nativeTransfer(input, () => 'source')).toThrow('catalog or source route is stale');
+    expect(test.internals.transfer).toBeUndefined();
+  });
+
+  it('does not admit a source request until route selection acknowledges, and fails closed on rejection', async () => {
+    const test = fixture();
+    test.internals.selectedRoute = undefined;
+    let accept!: () => void;
+    test.internals.selecting = new Promise<void>((resolve) => {
+      accept = resolve;
+    });
+    const first = test.admit('before-selection');
+    await Promise.resolve();
+    expect(test.admitToRoute).not.toHaveBeenCalled();
+    test.internals.selectedRoute = test.source;
+    accept();
+    expect(await first).toBe('submitted');
+    expect(test.admitToRoute).toHaveBeenCalledOnce();
+    test.internals.selectedRoute = undefined;
+    test.internals.selecting = Promise.reject(new Error('selection failed'));
+    expect(await test.admit('failed-selection')).toBe('rejected');
+  });
+  it('acknowledges a native transfer before the source run settles, then commits after its ACK', async () => {
+    const test = fixture();
+    let releaseRun!: () => void;
+    const running = new Promise<void>((resolve) => {
+      releaseRun = resolve;
+    });
+    const poll = vi.fn(async () => {
+      await running;
+      return false;
+    });
+    test.internals.pollAgentResults = poll;
+    const input = {
+      sourceSessionId: 'source',
+      activationId: test.source.activationId,
+      routeGeneration: test.source.generation,
+      sessionIncarnation: test.source.sessionIncarnation,
+      ordinal: 1,
+      catalogRevision: 'catalog-1',
+    };
+    expect(test.companion.nativeTransfer(input, () => 'target')).toEqual({ requested: true });
+    expect(() => test.companion.nativeTransfer(input, () => 'target')).toThrow('no longer owns');
+    expect(test.internals.route).toBe(test.source);
+    test.resolveTarget(test.target);
+    await vi.waitFor(() => expect(poll).toHaveBeenCalled());
+    expect(test.internals.route).toBe(test.source);
+    releaseRun();
+    await vi.waitFor(() => expect(test.internals.route).toBe(test.target));
+    expect(test.internals.agentRequest).toHaveBeenCalledWith(
+      test.source,
+      '/live/agent/fence',
+      'POST',
+      expect.any(Object),
+    );
+    expect(test.internals.agentRequest).toHaveBeenCalledWith(
+      test.target,
+      '/live/agent/select',
+      'POST',
+      expect.any(Object),
+    );
+    expect(() => test.companion.nativeTransfer(input, () => 'target')).toThrow('no longer owns');
+  });
   it('holds requests for the intended target during preparation, then admits after the source fence', async () => {
     const test = fixture();
     const handoff = test.companion.handoff('source', 'target', 'transaction');

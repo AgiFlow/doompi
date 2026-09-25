@@ -22,7 +22,16 @@ export default defineRoot(({ agent, host }: DoomServerPluginContext) => {
     mediaArbitration: host.context.mediaArbitration,
     realtimeProvider: createRealtimeRuntime({ stateDirectory: join(homeDirectory, '.pi', '.doom') }).provider,
   });
-  const voice = createVoiceServer(agent, broker, homeDirectory, hubToken, host.context.peerAgents);
+  const voice = createVoiceServer(
+    agent,
+    broker,
+    homeDirectory,
+    hubToken,
+    host.context.peerAgents,
+    host.context.requestApi === undefined
+      ? undefined
+      : (mount, basePath, request) => host.context.requestApi!(mount, basePath, request),
+  );
   const value = {
     ...voice,
     api: [

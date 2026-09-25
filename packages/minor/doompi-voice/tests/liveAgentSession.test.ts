@@ -188,4 +188,71 @@ describe('native Pi live agent adapter', () => {
     expect((await agent.fetch(post('/live/agent/fence', route))).status).toBe(204);
     agent.close();
   });
+
+  it('selects only the prepared route and removes tool authority on fence or revoke', async () => {
+    const changed = vi.fn();
+    const agent = new LiveAgentSession(
+      'source',
+      'hub-secret',
+      vi.fn(async () => undefined),
+      changed,
+    );
+    const first = {
+      activationId: 'activation',
+      routeGeneration: 1,
+      transactionId: 'first',
+      sessionIncarnation: agent.sessionIncarnation,
+    };
+    const second = { ...first, routeGeneration: 2, transactionId: 'second' };
+    const catalog = { revision: 'catalog-1', targets: [{ order: 1, label: 'Target' }] };
+    expect((await agent.fetch(post('/live/agent/prepare', first))).status).toBe(200);
+    expect(agent.selectedRoute).toBeUndefined();
+    expect((await agent.fetch(post('/live/agent/select', { ...first, transactionId: 'stale' }))).status).toBe(409);
+    expect((await agent.fetch(post('/live/agent/select', first))).status).toBe(400);
+    for (const invalid of [
+      { revision: '', targets: [] },
+      { revision: 'catalog-1', targets: 'not a catalog' },
+      { revision: 'catalog-1', targets: Array(257).fill({ order: 1, label: 'Target' }) },
+      { revision: 'catalog-1', targets: [null] },
+      { revision: 'catalog-1', targets: [{ order: 1.5, label: 'Target' }] },
+      { revision: 'catalog-1', targets: [{ order: 0, label: 'Target' }] },
+      { revision: 'catalog-1', targets: [{ order: 257, label: 'Target' }] },
+      { revision: 'catalog-1', targets: [{ order: 1, label: 42 }] },
+      { revision: 'catalog-1', targets: [{ order: 1, label: 'a'.repeat(81) }] },
+    ]) {
+      expect(
+        (await agent.fetch(post('/live/agent/select', { ...first, nativeTransferAllowed: true, catalog: invalid })))
+          .status,
+      ).toBe(400);
+      expect(agent.selectedRoute).toBeUndefined();
+    }
+    expect((await agent.fetch(post('/live/agent/select', { ...first, catalog }))).status).toBe(400);
+    expect(
+      (await agent.fetch(post('/live/agent/select', { ...first, catalog, nativeTransferAllowed: true }))).status,
+    ).toBe(200);
+    expect(agent.selectedRoute).toMatchObject(first);
+    expect(agent.selectedCatalog).toEqual(catalog);
+    expect(agent.nativeTransferAllowed).toBe(true);
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(
+      (await agent.fetch(post('/live/agent/select', { ...first, catalog, nativeTransferAllowed: true }))).status,
+    ).toBe(200);
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect((await agent.fetch(post('/live/agent/prepare', second))).status).toBe(200);
+    expect(agent.selectedRoute).toBeUndefined();
+    expect((await agent.fetch(post('/live/agent/select', first))).status).toBe(409);
+    expect(
+      (await agent.fetch(post('/live/agent/select', { ...second, catalog, nativeTransferAllowed: false }))).status,
+    ).toBe(200);
+    expect(agent.nativeTransferAllowed).toBe(false);
+    expect((await agent.fetch(post('/live/agent/revoke', first))).status).toBe(409);
+    expect(agent.selectedRoute).toMatchObject(second);
+    expect((await agent.fetch(post('/live/agent/revoke', second))).status).toBe(204);
+    expect(agent.selectedRoute).toBeUndefined();
+    expect(agent.selectedCatalog).toBeUndefined();
+    expect(agent.nativeTransferAllowed).toBe(false);
+    expect(changed).toHaveBeenCalledTimes(4);
+    expect((await agent.fetch(post('/live/agent/select', second))).status).toBe(409);
+    agent.close();
+  });
 });

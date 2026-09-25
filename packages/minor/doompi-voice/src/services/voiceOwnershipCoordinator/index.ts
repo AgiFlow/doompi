@@ -9,6 +9,8 @@ import {
   type VoiceOwnershipTarget,
 } from '../../types/voiceOwnership';
 
+const MAX_LIVE_TARGETS = 256;
+
 interface Participant {
   sessionId: string;
   label: string;
@@ -120,6 +122,32 @@ export class VoiceOwnershipCoordinator {
 
   public activate(sessionId: string): Promise<boolean> {
     return this.enqueue(() => this.activateNow(sessionId));
+  }
+
+  /** Current eligible catalog, including discovered paired targets. */
+  public liveCatalog(sourceSessionId: string): { revision: string; targets: { order: number; label: string }[] } {
+    this.prune();
+    return {
+      revision: this.catalogRevision(),
+      targets: this.targetsFor(sourceSessionId)
+        .slice(0, MAX_LIVE_TARGETS)
+        .map(({ order, label }) => ({ order, label })),
+    };
+  }
+
+  /** Resolve an eligible ordinal only from the current source catalog. */
+  public resolveLiveTarget(sourceSessionId: string, ordinal: number, catalogRevision: string): string | undefined {
+    this.prune();
+    if (
+      catalogRevision !== this.catalogRevision() ||
+      !this.participants.has(sourceSessionId) ||
+      !Number.isSafeInteger(ordinal) ||
+      ordinal < 1 ||
+      ordinal > MAX_LIVE_TARGETS
+    )
+      return undefined;
+    const target = this.targetsFor(sourceSessionId).find((candidate) => candidate.order === ordinal);
+    return target?.sessionId;
   }
 
   /** Resolve only the revision-bound target currently advertised to this source. */

@@ -90,7 +90,7 @@ describe('voiceServerFacet', () => {
     const dispose = await voiceServerFacet.apply(harness.context);
 
     expect(harness.registered.map((api) => api.basePath)).toEqual(['voice-media', 'voice']);
-    expect(harness.channels.map((channel) => channel.frameType)).toEqual(['voice_ownership', 'voice_media_wake']);
+    expect(harness.channels.map((channel) => channel.frameType)).toEqual(['voice_media_wake']);
     expect(harness.peerAgents.get('fixture')?.hubToken).toBe('fixture-hub-token');
     expect(
       (
@@ -113,7 +113,46 @@ describe('voiceServerFacet', () => {
       await voiceServerFacet.apply(harness.context)
     )?.();
 
-    expect(harness.state.disposed).toBe(4);
+    expect(harness.state.disposed).toBe(3);
+  });
+
+  it('keeps the native transfer route hub-authenticated on the global mount', async () => {
+    const harness = hostContext('global');
+    const dispose = await voiceServerFacet.apply(harness.context);
+    const api = harness.registered
+      .find((candidate) => candidate.basePath === 'voice')
+      ?.start({
+        scope: 'global',
+        hubToken: 'fixture-hub-token',
+        homeDirectory: '/tmp/voice-facet-test-home',
+        onNotice: () => undefined,
+      });
+    if (!api) throw new Error('Global Voice API missing.');
+    const call = (token?: string, body: unknown = {}) =>
+      api.fetch(
+        new Request('http://voice.test/live/native-transfer', {
+          method: 'POST',
+          ...(token ? { headers: { authorization: `Bearer ${token}` } } : {}),
+          body: JSON.stringify(body),
+        }),
+      );
+    expect((await call()).status).toBe(401);
+    expect((await call('wrong')).status).toBe(401);
+    expect((await call('fixture-hub-token')).status).toBe(400);
+    expect(
+      (
+        await call('fixture-hub-token', {
+          sourceSessionId: 'fixture',
+          activationId: 'activation',
+          routeGeneration: 1,
+          sessionIncarnation: 'incarnation',
+          ordinal: 1,
+          catalogRevision: 'catalog-1',
+        })
+      ).status,
+    ).toBe(409);
+    api.close();
+    await dispose?.();
   });
 
   it('registers voice wake and ownership channels on the hub scope', async () => {
@@ -122,7 +161,7 @@ describe('voiceServerFacet', () => {
     const dispose = await voiceServerFacet.apply(harness.context);
 
     expect(harness.registered.map((api) => api.basePath)).toEqual(['voice-media', 'voice']);
-    expect(harness.channels.map((channel) => channel.frameType)).toEqual(['voice_ownership', 'voice_media_wake']);
+    expect(harness.channels.map((channel) => channel.frameType)).toEqual(['voice_media_wake', 'voice_ownership']);
     expect(typeof dispose).toBe('function');
     await dispose?.();
     expect(harness.state.disposed).toBe(4);

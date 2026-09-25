@@ -55,9 +55,20 @@ export interface GlobalLiveReceipts {
   }): Promise<{ outcome: 'reserved' | 'admitted' | 'rejected' | 'uncertain' }>;
 }
 
+export interface GlobalLiveNativeTransfer {
+  sourceSessionId: string;
+  activationId: string;
+  routeGeneration: number;
+  sessionIncarnation: string;
+  ordinal: number;
+  catalogRevision: string;
+}
+
 export interface GlobalLiveControl {
   action: 'activate' | 'transfer' | 'end' | 'mute' | 'unmute' | 'interrupt';
   sessionId?: string;
+  /** A native session may only control the route it still owns. */
+  expectedSourceSessionId?: string;
 }
 
 export interface GlobalLiveStatus {

@@ -9,10 +9,12 @@ import { VoiceMediaBroker } from '../clientMediaApi';
 import { SystemClock } from '../infrastructure';
 import { LiveVoiceController } from '../liveVoiceController';
 import { buildDelegationResultMessages } from '../realtimeProtocol';
+import type { VoiceOwnershipCoordinator } from '../voiceOwnershipCoordinator';
 import { requestPairedVoiceAgent } from '../voicePeerRelay';
 import type {
   GlobalLiveAgentHost,
   GlobalLiveControl,
+  GlobalLiveNativeTransfer,
   GlobalLiveReceipts,
   GlobalLiveStatus,
   LiveAgentResult,
@@ -27,6 +29,8 @@ const AGENT_ADMIT = '/live/agent/admit';
 const AGENT_RESULTS = '/live/agent/results';
 const AGENT_ACK = '/live/agent/results/ack';
 const AGENT_FENCE = '/live/agent/fence';
+const AGENT_SELECT = '/live/agent/select';
+const AGENT_REVOKE = '/live/agent/revoke';
 const POLL_MS = 250;
 const MAX_HELD = 16;
 const MAX_HELD_BYTES = 64 * 1024;
@@ -79,6 +83,11 @@ export class GlobalLiveCompanion {
   private pollTimer: ReturnType<typeof setInterval> | undefined;
   private error: string | undefined;
   private readonly admitted = new Map<string, LiveAgentRoute>();
+  private coordinator: VoiceOwnershipCoordinator | undefined;
+  private nativeTransferPending = false;
+  private selecting: Promise<void> = Promise.resolve();
+  private selectedRoute: LiveAgentRoute | undefined;
+  private activationSelection: { route: LiveAgentRoute; promise: Promise<void>; resolve(): void } | undefined;
   private readonly clock = new SystemClock();
   private readonly ui: AutoCaptureUi;
   private readonly live: LiveVoiceController;
@@ -105,9 +114,26 @@ export class GlobalLiveCompanion {
       durableReplay: options.receipts !== undefined,
       createId: () => this.activationId ?? randomUUID(),
       onActivationStateChange: (state) => {
+        if (state === 'active') {
+          const route = this.route;
+          if (route && !this.transfer) {
+            const pending = this.activationSelection;
+            void this.selectRoute(route)
+              .catch((error: unknown) =>
+                this.options.onNotice(`Global Voice route selection failed: ${errorMessage(error)}`),
+              )
+              .finally(() => {
+                if (this.activationSelection === pending) this.activationSelection = undefined;
+                pending?.resolve();
+              });
+          }
+        }
         if (state === 'disabled') {
           this.stopPolling();
           this.route = undefined;
+          this.selectedRoute = undefined;
+          this.activationSelection?.resolve();
+          this.activationSelection = undefined;
           if (this.transfer?.held.length) {
             this.error = `Global Voice disconnected with ${this.transfer.held.length} held requests for ${this.transfer.targetSessionId}; they were not admitted.`;
             this.options.onNotice(this.error);
@@ -117,6 +143,19 @@ export class GlobalLiveCompanion {
         }
       },
     });
+  }
+
+  public setCatalog(coordinator: VoiceOwnershipCoordinator | undefined): void {
+    this.coordinator = coordinator;
+    if (coordinator)
+      void this.refreshSelectedCatalog().catch((error: unknown) =>
+        this.options.onNotice(`Global Voice catalog update failed: ${errorMessage(error)}`),
+      );
+  }
+
+  public async refreshSelectedCatalog(): Promise<void> {
+    const route = this.route;
+    if (route && this.live.state === 'active' && !this.transfer) await this.selectRoute(route);
   }
 
   public bind(host: GlobalLiveAgentHost): void {
@@ -149,6 +188,8 @@ export class GlobalLiveCompanion {
   }
 
   public async control(input: GlobalLiveControl): Promise<GlobalLiveStatus> {
+    if (input.expectedSourceSessionId !== undefined && this.route?.scope.sessionId !== input.expectedSourceSessionId)
+      throw new Error('The native session no longer owns the live Voice route.');
     switch (input.action) {
       case 'activate':
         if (!input.sessionId) throw new Error('Select an admitted Pi session to start live voice.');
@@ -176,6 +217,35 @@ export class GlobalLiveCompanion {
     return this.status;
   }
 
+  /** Route identity is checked both before and after target resolution, and again by handoff. */
+  public nativeTransfer(
+    input: GlobalLiveNativeTransfer,
+    resolve: (sourceSessionId: string, ordinal: number, revision: string) => string | undefined,
+  ): { requested: true } {
+    const matches = () =>
+      this.route?.scope.sessionId === input.sourceSessionId &&
+      this.route.activationId === input.activationId &&
+      this.route.generation === input.routeGeneration &&
+      this.route.sessionIncarnation === input.sessionIncarnation &&
+      this.live.state === 'active' &&
+      this.transfer === undefined &&
+      !this.nativeTransferPending;
+    if (!matches()) throw new Error('The native session no longer owns the live Voice route.');
+    const target = resolve(input.sourceSessionId, input.ordinal, input.catalogRevision);
+    if (!target || !matches() || target === input.sourceSessionId)
+      throw new Error('The Voice transfer catalog or source route is stale.');
+    this.nativeTransferPending = true;
+    void this.handoff(input.sourceSessionId, target, randomUUID())
+      .then((committed) => {
+        if (!committed) this.options.onNotice(this.error ?? 'Live Voice transfer was rejected.');
+      })
+      .catch((error: unknown) => this.options.onNotice(`Live Voice transfer failed: ${errorMessage(error)}`))
+      .finally(() => {
+        this.nativeTransferPending = false;
+      });
+    return { requested: true };
+  }
+
   public async activate(sessionId: string): Promise<void> {
     if (this.stopped) throw new Error('Global Voice service is closed.');
     if (this.live.state !== 'disabled') {
@@ -194,6 +264,11 @@ export class GlobalLiveCompanion {
     this.activationId = activationId;
     this.route = route;
     this.error = undefined;
+    let resolveSelection!: () => void;
+    const selection = new Promise<void>((resolve) => {
+      resolveSelection = resolve;
+    });
+    this.activationSelection = { route, promise: selection, resolve: resolveSelection };
     this.startPolling();
     await this.live.activate(this.ui);
   }
@@ -219,12 +294,15 @@ export class GlobalLiveCompanion {
       }
       if (this.route !== source || this.transfer !== transfer || this.stopped) return false;
       // The target was prepared while the source was still authoritative. No media lifecycle runs here.
+      this.selectedRoute = undefined;
       await this.agentRequest(source, AGENT_FENCE, 'POST', {
         activationId: source.activationId,
         routeGeneration: source.generation,
         transactionId: source.transactionId,
         sessionIncarnation: source.sessionIncarnation,
       });
+      if (this.route !== source || this.transfer !== transfer || this.stopped) return false;
+      await this.selectRoute(target);
       if (this.route !== source || this.transfer !== transfer || this.stopped) return false;
       this.route = target;
       for (const item of transfer.held) {
@@ -257,11 +335,27 @@ export class GlobalLiveCompanion {
       this.options.onNotice(
         `Explicit Voice stop discarded ${this.transfer.held.length} held requests for ${this.transfer.targetSessionId}.`,
       );
+    const previousRoute = this.route;
     this.routeGeneration += 1;
     this.route = undefined;
+    this.selectedRoute = undefined;
+    this.activationSelection?.resolve();
+    this.activationSelection = undefined;
+    this.nativeTransferPending = false;
     this.transfer = undefined;
     this.admitted.clear();
     this.stopPolling();
+    if (previousRoute) {
+      await this.selecting.catch(() => undefined);
+      await this.agentRequest(previousRoute, AGENT_REVOKE, 'POST', {
+        activationId: previousRoute.activationId,
+        routeGeneration: previousRoute.generation,
+        transactionId: previousRoute.transactionId,
+        sessionIncarnation: previousRoute.sessionIncarnation,
+      }).catch((error: unknown) =>
+        this.options.onNotice(`Global Voice route revocation failed: ${errorMessage(error)}`),
+      );
+    }
     await this.live.deactivate(this.ui);
     this.activationId = undefined;
   }
@@ -271,6 +365,32 @@ export class GlobalLiveCompanion {
     await this.stop();
     this.options.broker.close();
     this.hub = undefined;
+  }
+
+  private selectRoute(route: LiveAgentRoute): Promise<void> {
+    // Serialize catalog refreshes and selection against stop/route replacement. A stale ACK
+    // must never authorize admission to a newly selected route.
+    const run = this.selecting
+      .catch(() => undefined)
+      .then(async () => {
+        if (this.stopped || (this.route !== route && this.transfer?.target !== route)) return;
+        const catalog = this.coordinator?.liveCatalog(route.scope.sessionId) ?? {
+          revision: 'catalog-unavailable',
+          targets: [],
+        };
+        await this.agentRequest(route, AGENT_SELECT, 'POST', {
+          catalog,
+          // ponytail: Paired Pi tools stay hidden until the signed relay can carry transfer intents back to this owner host.
+          nativeTransferAllowed: parseRemoteSessionReference(route.scope.sessionId) === undefined,
+          activationId: route.activationId,
+          routeGeneration: route.generation,
+          transactionId: route.transactionId,
+          sessionIncarnation: route.sessionIncarnation,
+        });
+        if (!this.stopped && (this.route === route || this.transfer?.target === route)) this.selectedRoute = route;
+      });
+    this.selecting = run;
+    return run;
   }
 
   private async prepare(
@@ -332,7 +452,17 @@ export class GlobalLiveCompanion {
       return 'buffered';
     }
     const route = this.route;
-    return route ? this.admitToRoute(route, requestId, transcript) : 'rejected';
+    if (!route) return 'rejected';
+    if (this.selectedRoute !== route) {
+      try {
+        await (this.activationSelection?.route === route ? this.activationSelection.promise : this.selecting);
+      } catch {
+        return 'rejected';
+      }
+    }
+    return this.selectedRoute === route && this.route === route
+      ? this.admitToRoute(route, requestId, transcript)
+      : 'rejected';
   }
 
   private async admitToRoute(
@@ -542,7 +672,9 @@ export class GlobalLiveCompanion {
         if (
           !body ||
           !['activate', 'transfer', 'end', 'mute', 'unmute', 'interrupt'].includes(String(body.action)) ||
-          ((body.action === 'activate' || body.action === 'transfer') && typeof body.sessionId !== 'string')
+          ((body.action === 'activate' || body.action === 'transfer') && typeof body.sessionId !== 'string') ||
+          (body.expectedSourceSessionId !== undefined &&
+            (typeof body.expectedSourceSessionId !== 'string' || body.expectedSourceSessionId.length > 256))
         )
           return Response.json({ error: 'Invalid global Voice control.' }, { status: 400 });
         try {
