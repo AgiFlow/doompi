@@ -103,7 +103,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       await page.close();
     }
   },
-  cockpit: async ({ sessionCount, dormantSessionCount, assets, assetPackageRoot }, use) => {
+  cockpit: async ({ context, sessionCount, dormantSessionCount, assets, assetPackageRoot }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-e2e-'));
     const syncedDist = process.env[SYNCED_DIST_ENV];
     if (assets === 'synced' && (syncedDist === undefined || syncedDist === ''))
@@ -428,6 +428,8 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         url: web.url,
       });
     } finally {
+      // Close pages opened through context.newPage() before stopping their HTTP server.
+      for (const page of context.pages()) await page.close();
       await web.close();
       for (const server of sessionApis.values()) await server.close();
       await headless.close();
