@@ -1,3 +1,17 @@
+## 0.0.1-alpha.80 (2026-09-25)
+
+### 🩹 Fixes
+
+- stabilize runner session identity and voice handoff ([#194](https://github.com/AgiFlow/doompi/pull/194))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.15
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.79 (2026-09-25)
 
 ### 🧱 Updated Dependencies

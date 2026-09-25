@@ -1,3 +1,24 @@
+## 0.0.1-alpha.89 (2026-09-25)
+
+### 🚀 Features
+
+- expose worktree-only tools through session MCP ([#200](https://github.com/AgiFlow/doompi/pull/200))
+
+### 🩹 Fixes
+
+- **doompi-core:** restore deleted remote MCP conversation session ([#198](https://github.com/AgiFlow/doompi/pull/198))
+- stabilize runner session identity and voice handoff ([#194](https://github.com/AgiFlow/doompi/pull/194))
+- address Hono and server security alerts ([#196](https://github.com/AgiFlow/doompi/pull/196))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.83
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.46
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.88 (2026-09-25)
 
 ### 🚀 Features

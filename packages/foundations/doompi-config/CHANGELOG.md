@@ -1,3 +1,12 @@
+## 0.0.1-alpha.88 (2026-09-25)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.89
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.83
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.47
+
 ## 0.0.1-alpha.87 (2026-09-25)
 
 ### 🚀 Features
