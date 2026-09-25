@@ -441,6 +441,36 @@ describe('browser media device recovery guards', () => {
     await device.close();
     expect(track.stop).toHaveBeenCalledOnce();
   });
+  it('uploads browser PCM again after an ordinary two-turn capture rebind', async () => {
+    const track = { stop: vi.fn(), onended: null as (() => void) | null };
+    const stream = { getTracks: () => [track] };
+    const getUserMedia = vi.fn().mockResolvedValue(stream);
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    vi.stubGlobal('AudioWorkletNode', undefined);
+    const device = new BrowserVoiceMediaDevice(true);
+    const firstUploads: Uint8Array[] = [];
+    const secondUploads: Uint8Array[] = [];
+    const first = await device.startCapture((pcm) => firstUploads.push(pcm));
+    const context = (device as unknown as { context: FakeAudioContext }).context;
+    const samples = new Float32Array(1_600).fill(0.25);
+    context.processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => samples }, playbackTime: 0 });
+    expect(firstUploads).toHaveLength(1);
+
+    await first.stop();
+    expect(track.stop).not.toHaveBeenCalled();
+    expect(track.onended).toBeNull();
+    const second = await device.startCapture((pcm) => secondUploads.push(pcm));
+    context.processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => samples }, playbackTime: 0.1 });
+
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    expect(firstUploads).toHaveLength(1);
+    expect(secondUploads).toEqual(firstUploads);
+    await second.stop();
+    await device.close();
+    expect(track.stop).toHaveBeenCalledOnce();
+  });
+
   it('rejects capture when microphone APIs are unavailable', async () => {
     vi.stubGlobal('navigator', {});
     const device = new BrowserVoiceMediaDevice();

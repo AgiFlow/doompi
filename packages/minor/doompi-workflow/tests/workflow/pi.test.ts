@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
@@ -774,6 +774,44 @@ async function chooseInOverlay(overlay: OverlayComponent, label: string): Promis
 }
 
 describe('workflow-mcp Pi extension', () => {
+  it('discovers workflows in the invoking workspace or worktree, never the parent checkout', async () => {
+    const root = mkdtempSync(resolve(tmpdir(), 'workflow-list-'));
+    try {
+      const workspace = resolve(root, 'workspace');
+      const worktree = resolve(root, 'worktree');
+      for (const [cwd, name] of [
+        [workspace, 'Workspace'],
+        [worktree, 'Worktree'],
+      ]) {
+        mkdirSync(resolve(cwd, 'automations'), { recursive: true });
+        writeFileSync(resolve(cwd, 'automations', `${name.toLowerCase()}.workflow.yml`), `name: ${name}\n`);
+      }
+      const tool = createWorkflowTools({
+        environment: TEST_ENVIRONMENT,
+        feature: createEmbeddedWorkflowFeature(),
+      }).find(({ name }) => name === 'list_workflows');
+      if (!tool) throw new Error('Missing list_workflows tool');
+      const list = async (cwd: string, params: Record<string, unknown> = {}) => {
+        const result = await tool.execute('list', params, undefined, undefined, { cwd } as ExtensionContext);
+        return JSON.parse(result.content.find((item) => item.type === 'text')?.text ?? '{}');
+      };
+      expect(
+        (await list(workspace, { directory: 'automations', filter: 'workspace', page: 1, pageSize: 1 })).workflows,
+      ).toMatchObject([{ name: 'Workspace' }]);
+      expect((await list(worktree, { directory: 'automations' })).workflows).toMatchObject([{ name: 'Worktree' }]);
+      expect((await list(workspace)).workflows).toMatchObject([{ name: 'Workspace' }]);
+      expect((await list(worktree)).workflows).toMatchObject([{ name: 'Worktree' }]);
+      expect((await list(worktree, { directory: resolve(workspace, 'automations') })).workflows).toMatchObject([
+        { name: 'Workspace' },
+      ]);
+      await expect(list(worktree, { directory: 'missing' })).rejects.toThrow('LIST_WORKFLOWS_TOOL_FAILED');
+      writeFileSync(resolve(worktree, 'automations', 'broken.workflow.yml'), 'name: [invalid\n');
+      await expect(list(worktree, { directory: 'automations' })).rejects.toThrow('LIST_WORKFLOWS_TOOL_FAILED');
+      expect((await list(workspace, { directory: 'automations' })).workflows).toMatchObject([{ name: 'Workspace' }]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
   it('uses feature defaults and rejects unavailable launcher views', async () => {
     const tools = new Map<string, { execute: (...args: unknown[]) => Promise<unknown> }>();
     const pi = {

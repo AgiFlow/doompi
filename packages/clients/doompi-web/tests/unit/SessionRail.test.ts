@@ -108,6 +108,34 @@ describe('SessionRail workspaces', () => {
     expect(card(markup, 'a')).toContain('press 1 to focus');
     expect(card(markup, 'b')).toContain('press 2 to focus');
   });
+
+  it('renders a child with a parent in another workspace as a root in its own group', () => {
+    applyWorkspacesSnapshot({
+      type: 'workspaces_snapshot',
+      workspaces: [
+        { id: 'one', root: '/one', available: true },
+        { id: 'two', root: '/two', available: true },
+      ],
+    });
+    applySessionsSnapshot({
+      type: 'sessions_snapshot',
+      sessions: [
+        summary('parent', '2026-08-24T00:00:10.000Z', { workspaceId: 'one' }),
+        summary('other', '2026-08-24T00:00:20.000Z', { workspaceId: 'two' }),
+        summary('child', '2026-08-24T00:00:30.000Z', {
+          workspaceId: 'two',
+          parentSessionId: 'parent',
+          sessionProvenance: 'worktree',
+        }),
+      ],
+    });
+
+    const markup = render();
+    expect(markup.match(/data-testid="session-card-child"/gu)).toHaveLength(1);
+    expect(markup.indexOf('workspace-group-two')).toBeLessThan(markup.indexOf('session-card-child'));
+    expect(card(markup, 'child')).toContain('data-nested="false"');
+    expect(card(markup, 'child')).not.toMatch(/class="[^"]*pl-3/u);
+  });
 });
 
 describe('SessionRail nesting', () => {

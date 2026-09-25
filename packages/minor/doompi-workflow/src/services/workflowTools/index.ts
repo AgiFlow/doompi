@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
 import {
   createEmbeddedWorkflowFeature,
@@ -71,12 +73,19 @@ export function createWorkflowTools(
       parameters: z.toJSONSchema(listWorkflowsTool.getInputSchema()),
       renderShell: 'self',
       ...renderers(LIST_WORKFLOWS_TOOL_NAME),
-      async execute(_toolCallId, params) {
+      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+        const input = params as Parameters<EmbeddedWorkflowFeature['listWorkflowsTool']['execute']>[0];
         return toAgentToolResult(
           LIST_WORKFLOWS_TOOL_NAME,
-          await listWorkflowsTool.execute(
-            params as Parameters<EmbeddedWorkflowFeature['listWorkflowsTool']['execute']>[0],
-          ),
+          await listWorkflowsTool.execute({
+            ...input,
+            directory:
+              input?.directory === undefined
+                ? ctx.cwd
+                : typeof input.directory === 'string'
+                  ? resolve(ctx.cwd, input.directory)
+                  : input.directory,
+          }),
         );
       },
     },

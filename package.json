@@ -50,7 +50,7 @@
     "@agimon-ai/vibe-lint-plugin-doom-core": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
-    "@agimon-ai/workflow-mcp": "0.23.28",
+    "@agimon-ai/workflow-mcp": "0.23.29",
     "@commitlint/cli": "21.2.2",
     "@commitlint/config-conventional": "21.2.2",
     "@commitlint/config-nx-scopes": "21.2.0",

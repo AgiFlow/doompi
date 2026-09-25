@@ -503,6 +503,38 @@ describe('McpSession', () => {
       expect(store.clear.mock.invocationCallOrder[0]).toBeLessThan(ensureConnected.mock.invocationCallOrder[0]);
     });
 
+    it('does not clear credentials or reconnect after a domain switch during disconnect', async () => {
+      const active = await session(fakePi().pi);
+      active.install();
+      await active.start();
+      const store = createProxyContainer.mock.calls[0]?.[0]?.auth.tokenStore;
+      let release!: () => void;
+      disconnectServer.mockImplementation(() => new Promise<void>((resolve) => (release = resolve)));
+
+      const authorization = active.reauthorize('pencil');
+      await active.reconfigure(configuration({ enabled: false }));
+      release();
+      await authorization;
+
+      expect(store.clear).not.toHaveBeenCalled();
+      expect(ensureConnected).not.toHaveBeenCalled();
+    });
+
+    it('does not deliver a queued OAuth URL to a retired session', async () => {
+      const onAuthorizationUrl = vi.fn();
+      const active = new McpSession({
+        onAuthorizationUrl,
+        tokenStore: { read: vi.fn(), write: vi.fn(), clear: vi.fn() },
+      });
+      active.install(configuration());
+      await active.start();
+      const authorize = createProxyContainer.mock.calls[0]?.[0]?.auth?.onAuthorizationUrl;
+      authorize(new URL('https://auth.example.test/waiting'), 'pencil');
+      await active.reconfigure(configuration({ enabled: false }));
+
+      expect(onAuthorizationUrl).not.toHaveBeenCalled();
+    });
+
     it('clears the previous URL before retry even when disconnect rejects without a state event', async () => {
       const active = await session(fakePi().pi);
       active.install();

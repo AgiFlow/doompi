@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessContent,
@@ -262,12 +264,19 @@ export function createWorkflowServerRuntime(
         description: 'List workflow definitions available in this repository.',
         parameters: z.toJSONSchema(feature.listWorkflowsTool.getInputSchema()),
         executionMode: 'serial',
-        async execute(_toolCallId, parameters, signal) {
+        async execute(_toolCallId, parameters, signal, _onUpdate, context) {
           signal?.throwIfAborted();
+          const input = parameters as Parameters<typeof feature.listWorkflowsTool.execute>[0];
           return callResult(
-            await feature.listWorkflowsTool.execute(
-              parameters as Parameters<typeof feature.listWorkflowsTool.execute>[0],
-            ),
+            await feature.listWorkflowsTool.execute({
+              ...input,
+              directory:
+                input?.directory === undefined
+                  ? context.cwd
+                  : typeof input.directory === 'string'
+                    ? resolve(context.cwd, input.directory)
+                    : input.directory,
+            }),
           );
         },
       },

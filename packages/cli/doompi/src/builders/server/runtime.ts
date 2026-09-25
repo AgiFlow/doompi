@@ -650,7 +650,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               };
               for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)])
                 delete syncEnvironment[key];
-              await syncWorkspace(childContext.options.repoRoot, syncEnvironment);
+              await syncWorkspace(childContext.options.repoRoot, syncEnvironment, true);
             }
             const bundle = await loadComposition(childContext.options.repoRoot, 'session', {
               root: childContext.options.repoRoot,

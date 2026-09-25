@@ -339,7 +339,10 @@ export class McpSession {
     this.emitChange();
     const openBrowser = this.browserAuthorizationRequests.has(serverName);
     void Promise.resolve()
-      .then(() => this.options.onAuthorizationUrl?.(url, serverName, { openBrowser }))
+      .then(() => {
+        if (generation !== this.lifecycleGeneration || this.disconnectedServers.has(serverName)) return;
+        return this.options.onAuthorizationUrl?.(url, serverName, { openBrowser });
+      })
       .catch((error: unknown) => {
         if (generation !== this.lifecycleGeneration) return;
         const detail = error instanceof Error ? error.message : String(error);
@@ -390,6 +393,8 @@ export class McpSession {
   async reauthorize(serverName: string): Promise<void> {
     const clientManager = this.getClientManager();
     if (!clientManager) throw new Error(RUNTIME_NOT_STARTED);
+    const generation = this.lifecycleGeneration;
+    const tokenStore = this.tokenStore;
     this.disconnectedServers.delete(serverName);
     // What this server offers is exactly what the reconnect is about to settle.
     this.resourceCache.delete(serverName);
@@ -397,10 +402,12 @@ export class McpSession {
     this.browserAuthorizationRequests.add(serverName);
     try {
       await clientManager.disconnectServer(serverName);
-      await this.tokenStore?.clear(serverName);
+      if (generation !== this.lifecycleGeneration) return;
+      await tokenStore?.clear(serverName);
+      if (generation !== this.lifecycleGeneration) return;
       await clientManager.ensureConnected(serverName);
     } finally {
-      this.browserAuthorizationRequests.delete(serverName);
+      if (generation === this.lifecycleGeneration) this.browserAuthorizationRequests.delete(serverName);
     }
   }
 
