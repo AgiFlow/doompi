@@ -1,3 +1,22 @@
+## 0.0.1-alpha.87 (2026-09-25)
+
+### 🚀 Features
+
+- add signed URL auth for session MCP ([#187](https://github.com/AgiFlow/doompi/pull/187))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.86
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.10
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.86
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.86
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.86 (2026-09-24)
 
 ### 🧱 Updated Dependencies
