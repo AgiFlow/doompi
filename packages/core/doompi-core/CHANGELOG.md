@@ -1,3 +1,13 @@
+## 0.0.1-alpha.90 (2026-09-26)
+
+### 🩹 Fixes
+
+- **doompi-core:** load Pi settings packages so custom providers reach sessions and settings ([#202](https://github.com/AgiFlow/doompi/pull/202))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.89 (2026-09-25)
 
 ### 🚀 Features
