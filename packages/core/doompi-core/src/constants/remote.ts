@@ -11,6 +11,15 @@
 /** REST surface for the remote-access control plane; local callers only, except turn-off and revoke. */
 export const REMOTE_API_ROUTE = '/api/remote';
 
+/** Dev proxy control plane: list targets anywhere, register or remove them only on the host. */
+export const DEV_PROXY_TARGETS_ROUTE = `${REMOTE_API_ROUTE}/dev-proxy/targets`;
+
+/**
+ * The path every proxied dev-server request lives under. Both slashes matter: the leading one
+ * anchors it at the root, and the trailing one keeps `/devproxyevil` from matching.
+ */
+export const DEV_PROXY_PREFIX = '/devproxy/';
+
 /** Direct endpoint that establishes one scoped end-to-end channel. */
 export const REMOTE_CHANNEL_ROUTE = `${REMOTE_API_ROUTE}/channel`;
 

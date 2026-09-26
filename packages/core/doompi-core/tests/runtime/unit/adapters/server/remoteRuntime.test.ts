@@ -580,3 +580,76 @@ describe('global remote control', () => {
     expect(control.remote.tunnelPort()).toBeUndefined();
   });
 });
+
+describe('dev proxy through remote control', () => {
+  async function pairedTunnel(control: RemoteRuntime): Promise<{ port: number; cookie: string }> {
+    await local(control, '/api/remote/settings', 'PUT', { tunnel: { kind: 'named', hostname: 'remote.example.com' } });
+    expect((await local(control, '/api/remote/enable', 'POST')).status).toBe(200);
+    const port = control.remote.tunnelPort()!;
+    const code = ((await (await local(control, '/api/remote/codes', 'POST')).json()) as { code: string }).code;
+    const requestId = (
+      (await (await tunnel(port, '/api/remote/pair', 'POST', { code })).json()) as { requestId: string }
+    ).requestId;
+    expect((await local(control, `/api/remote/pairing/${requestId}/approve`, 'POST')).status).toBe(200);
+    const redeemed = await tunnel(port, `/api/remote/pair/status?request=${requestId}`);
+    return { port, cookie: redeemed.headers.get('set-cookie')!.split(';')[0]! };
+  }
+
+  // The kernel server migration dropped these routes, so the cockpit's dev sites panel 404ed.
+  it('serves a registered dev site and its HMR socket to a paired device', async () => {
+    const devServer = createServer((request, response) => {
+      response.writeHead(200, { 'content-type': 'text/plain' });
+      response.end(`${request.method ?? ''} ${request.url ?? ''} host=${request.headers.host ?? ''}`);
+    });
+    frontends.push(devServer);
+    const hmr = new WebSocketServer({ server: devServer });
+    protocols.push(hmr);
+    hmr.on('connection', (socket, request) => {
+      socket.send(`protocol=${socket.protocol} path=${request.url ?? ''}`);
+      socket.on('message', (message) => socket.send(`echo:${Buffer.from(message as Buffer).toString('utf8')}`));
+    });
+    await new Promise<void>((resolve) => devServer.listen(0, '127.0.0.1', resolve));
+    const devAddress = devServer.address();
+    if (!devAddress || typeof devAddress === 'string') throw new Error('The dev server is not ready.');
+
+    const control = runtime();
+    const { port, cookie } = await pairedTunnel(control);
+
+    const created = await local(control, '/api/remote/dev-proxy/targets', 'POST', {
+      name: 'storefront',
+      port: devAddress.port,
+    });
+    expect(created.status).toBe(201);
+    expect((await local(control, '/api/remote/dev-proxy/targets', 'POST', { name: 'loop', port })).status).toBe(400);
+    expect(await (await local(control, '/api/remote/dev-proxy/targets')).json()).toMatchObject({
+      canRegister: true,
+      targets: [{ name: 'storefront', port: devAddress.port }],
+    });
+
+    expect((await tunnel(port, '/devproxy/storefront/')).status).toBe(401);
+    const page = await tunnel(port, '/devproxy/storefront/app?x=1', 'GET', undefined, cookie);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toMatch(/^GET \/devproxy\/storefront\/app\?x=1 host=127\.0\.0\.1:\d+$/u);
+    const posted = await tunnel(port, '/devproxy/storefront/form', 'POST', { a: 1 }, cookie);
+    expect(await posted.text()).toMatch(/^POST \/devproxy\/storefront\/form /u);
+    expect((await tunnel(port, '/devproxy/missing/', 'GET', undefined, cookie)).status).toBe(404);
+
+    const socket = new WebSocket(`ws://127.0.0.1:${String(port)}/devproxy/storefront/hmr`, ['vite-hmr'], {
+      headers: { host: 'remote.example.com', origin: PUBLIC_ORIGIN, cookie },
+    });
+    const messages: string[] = [];
+    await new Promise<void>((resolve, reject) => {
+      socket.on('message', (message) => {
+        messages.push(Buffer.from(message as Buffer).toString('utf8'));
+        if (messages.length === 1) socket.send('ping');
+        if (messages.length === 2) resolve();
+      });
+      socket.on('error', reject);
+    });
+    socket.close();
+    expect(messages).toEqual(['protocol=vite-hmr path=/devproxy/storefront/hmr', 'echo:ping']);
+
+    expect((await local(control, '/api/remote/dev-proxy/targets/storefront', 'DELETE')).status).toBe(204);
+    expect((await tunnel(port, '/devproxy/storefront/', 'GET', undefined, cookie)).status).toBe(404);
+  });
+});

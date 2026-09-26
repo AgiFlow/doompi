@@ -133,3 +133,13 @@ export type TunnelStartResult =
  * a layer to do it.
  */
 export type TunnelLauncher = (input: TunnelStartInput) => Promise<TunnelStartResult>;
+
+/**
+ * A registered dev proxy upstream. `name` is what the developer types into their build
+ * configuration as `base: '/devproxy/<name>/'`, so it is a readable label, not a generated id.
+ */
+export interface DevProxyTarget {
+  name: string;
+  port: number;
+  createdAt: number;
+}

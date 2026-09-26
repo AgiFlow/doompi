@@ -380,6 +380,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       remoteRuntime = createRemoteRuntime({
         homeDirectory,
         registrationToken: token,
+        reservedPorts: () => [options.webPort],
         bundleTrust: () => webCompositions?.shellTrust(),
         onNotice: notice,
         forward: async (request) => {
