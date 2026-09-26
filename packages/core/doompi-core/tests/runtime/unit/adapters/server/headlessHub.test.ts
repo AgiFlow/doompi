@@ -488,6 +488,23 @@ describe('createHeadlessHub', () => {
     await hub.close();
   });
 
+  // A reopened session with a whole history used to read as "fresh session, nothing sent yet".
+  it('shows a reopened session as prompted, from its journal settled marker', async () => {
+    const reopened = host().host;
+    const findEntry = vi.fn(async () => ({
+      type: 'custom',
+      customType: 'doompi.agent-settled',
+      data: { runId: 'run', timestamp: Date.parse('2026-09-26T10:00:00.000Z'), tools: 0 },
+    }));
+    const create = vi.fn(async () => ({ ...reopened, runtime: { ...reopened.runtime, lane: { findEntry } } }));
+    const hub = createHeadlessHub({ manager: { create, closeSession: vi.fn(async () => undefined) } as never });
+
+    await hub.create({ sessionId: 'old', workspaceId: 'ws', sessionName: 'Old', cwd: '/repo' } as never);
+
+    expect(hub.session('old')).toMatchObject({ everPrompted: true, lastSettledAt: '2026-09-26T10:00:00.000Z' });
+    await hub.close();
+  });
+
   it('refuses a duplicate create before building a host', async () => {
     const create = vi.fn(async () => host().host);
     const hub = createHeadlessHub({ manager: { create, closeSession: vi.fn(async () => undefined) } as never });

@@ -53,6 +53,8 @@ import type {
 const DEFAULT_LANE = 'main';
 const DEFAULT_SESSION_ROOT = '.pi/sessions';
 const FRAME_ERROR = 'error';
+/** Journaled at every run end, so a reopened session can tell when it last settled. */
+export const AGENT_SETTLED_ENTRY_TYPE = 'doompi.agent-settled';
 const EVENT_TYPES: readonly HarnessEvent['type'][] = [
   'run_start',
   'run_resume',
@@ -782,13 +784,13 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       // and frames below, or the run never reads as settled and the lane stays claimed.
       try {
         const latest = await lane.findEntry(
-          { type: 'custom', customType: 'doompi.agent-settled', order: 'newestFirst' },
+          { type: 'custom', customType: AGENT_SETTLED_ENTRY_TYPE, order: 'newestFirst' },
           eventContext,
         );
         const data = latest?.type === 'custom' && isRecord(latest.data) ? latest.data : undefined;
         if (data?.runId !== record.runId)
           await lane.appendCustomEntry(
-            'doompi.agent-settled',
+            AGENT_SETTLED_ENTRY_TYPE,
             { runId: String(record.runId), timestamp: Number(record.endedAt), tools: toolsThisRun },
             eventContext,
           );

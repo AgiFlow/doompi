@@ -1,3 +1,5 @@
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
+
 import type {
   DoomComputerUseHostBinding,
   DoomDirectEventBus,
@@ -31,6 +33,7 @@ import {
 } from '../exports/serverFacet';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../systems/main/types/headlessSessionHost';
 import type { HeadlessSessionManager } from '../systems/main/types/headlessSessionManager';
+import { AGENT_SETTLED_ENTRY_TYPE } from './directHarnessRuntime';
 
 const AUTHORIZATION_HEADER = 'authorization';
 const CHANNEL_PRIORITY = { global: 0, workspace: 1, session: 2 } as const;
@@ -133,6 +136,26 @@ interface StartedChannel {
   readonly channel: DoomHubChannel;
   readonly source: ReturnType<DoomHubChannel['start']>;
   readonly mount: DoomApiMount;
+}
+
+/**
+ * When a reopened session last settled, from the marker its runtime journals at every run end.
+ * Without it a session with a whole history would read as fresh until its next turn.
+ */
+async function lastSettledAt(host: HeadlessSessionHost): Promise<string | undefined> {
+  try {
+    const entry = await host.runtime.lane.findEntry(
+      { type: 'custom', customType: AGENT_SETTLED_ENTRY_TYPE, order: 'newestFirst' },
+      BACKGROUND_CONTEXT,
+    );
+    const data = entry?.type === 'custom' ? (entry.data as { timestamp?: unknown } | undefined) : undefined;
+    return typeof data?.timestamp === 'number' && Number.isFinite(data.timestamp)
+      ? new Date(data.timestamp).toISOString()
+      : undefined;
+  } catch {
+    // A runtime without a readable journal has no history to report; the rail shows it as fresh.
+    return undefined;
+  }
 }
 
 function scopeOf(session: HeadlessHubSession): DoomHubSessionScope {
@@ -819,6 +842,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       if (sessions.has(id)) throw new Error(`Session '${id}' is already registered.`);
       if (sessionShutdowns.get(id)?.pending) throw new Error(`Session '${id}' is still shutting down.`);
       const host = await options.manager.create(sessionOptions);
+      const settledAt = await lastSettledAt(host);
       const session: HeadlessHubSession = {
         id: sessionOptions.sessionId,
         workspaceId: sessionOptions.workspaceId,
@@ -831,6 +855,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
           ? {}
           : { sessionProvenance: sessionOptions.sessionProvenance }),
         environment: sessionOptions.environment,
+        ...(settledAt === undefined ? {} : { everPrompted: true, lastSettledAt: settledAt }),
         host,
       };
       try {
