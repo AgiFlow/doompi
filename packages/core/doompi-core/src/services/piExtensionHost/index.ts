@@ -677,13 +677,15 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       void deliverMessage(custom, sendOptions).catch((error: unknown) => report('send_message', error));
     },
     sendUserMessage: (content) => {
-      void runtime.prompt(typeof content === 'string' ? content : JSON.stringify(content));
+      void runtime
+        .prompt(typeof content === 'string' ? content : JSON.stringify(content))
+        .catch((error: unknown) => report('send_user_message', error));
     },
     appendEntry: (customType, data) => {
-      void runtime.appendCustomEntry(customType, data);
+      void runtime.appendCustomEntry(customType, data).catch((error: unknown) => report('append_entry', error));
     },
     setSessionName: (name) => {
-      void runtime.setName(name);
+      void runtime.setName(name).catch((error: unknown) => report('set_session_name', error));
     },
     // Harness SessionMetadata carries no display name, and Pi allows this to be absent.
     getSessionName: () => undefined,
@@ -712,7 +714,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       options.onActiveToolsChanged?.();
     },
     refreshTools: () => {
-      void runtime.replaceTools([...activeTools()]);
+      void runtime.replaceTools([...activeTools()]).catch((error: unknown) => report('refresh_tools', error));
     },
     getCommands: () => [],
     setModel: async (model) => {
@@ -721,7 +723,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     },
     getThinkingLevel: () => options.getThinkingLevel(),
     setThinkingLevel: (level) => {
-      void runtime.setThinkingLevel(level);
+      void runtime.setThinkingLevel(level).catch((error: unknown) => report('set_thinking_level', error));
     },
   };
 
@@ -734,7 +736,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     isProjectTrusted: () => true,
     getSignal: () => undefined,
     abort: () => {
-      void runtime.abort();
+      void runtime.abort().catch((error: unknown) => report('abort', error));
     },
     // Queued writes are excluded. An extension's own deferred append is not a message the
     // model is waiting on, and counting it would stall every extension that waits for a
@@ -745,7 +747,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     },
     getContextUsage: () => contextUsageOf(contextTokens, options.getModel()?.contextWindow),
     compact: () => {
-      void runtime.compact();
+      void runtime.compact().catch((error: unknown) => report('compact', error));
     },
     getSystemPrompt: () => '',
   };
