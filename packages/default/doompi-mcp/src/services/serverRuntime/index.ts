@@ -94,9 +94,6 @@ export function createMcpServerRuntime(
           loaded.state.root === workspaceRoot &&
           execution.repoRoot === workspaceRoot &&
           loaded.state.mcp &&
-          loaded.state.majorMode === selection.majorMode &&
-          JSON.stringify(loaded.state.domains) === JSON.stringify(execution.selection.domains) &&
-          JSON.stringify(loaded.state.layers) === JSON.stringify(selection.activeLayers) &&
           isDoomMcpProjection(loaded.state.mcpProjection) &&
           loaded.state.mcpProjection.repoRoot === workspaceRoot &&
           loaded.state.mcpProjection.enabled;

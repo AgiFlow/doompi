@@ -208,8 +208,8 @@ async function setup(
   };
   const service = () => context.get(MCP_SESSION_TOOLS_SERVICE) as McpSessionToolsService;
   const childTool = () => context.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionTool | undefined;
-  const select = async (domains: readonly string[]) => {
-    const selection = { majorMode: 'doom', activeLayers: [], domains };
+  const select = async (domains: readonly string[], majorMode = 'doom') => {
+    const selection = { majorMode, activeLayers: [], domains };
     for (const listener of selectionListeners) await listener(selection);
   };
   return {
@@ -449,6 +449,49 @@ describe('MCP server facet contracts', () => {
       expect(mock.options[0]?.configSources).toEqual([expect.objectContaining({ path: configPath })]),
     );
   });
+  it.each(['revived', 'switched'] as const)('resolves domain MCP for a %s session selection', async (scenario) => {
+    const configPath = path.join(root, 'plugin.mcp.json');
+    const content = JSON.stringify({ mcpServers: { pluginOnly: { command: 'plugin-server' } } });
+    fs.writeFileSync(configPath, content);
+    const initial: DoomMcpProjection = {
+      version: 1,
+      enabled: true,
+      fingerprint: 'initial',
+      repoRoot: root,
+      stagingDirectory: path.join(root, 'projection-stage'),
+      sources: [],
+    };
+    const resolve = vi.fn(async (domains: readonly string[]) => ({
+      projection: {
+        ...initial,
+        fingerprint: JSON.stringify(domains),
+        sources: domains.includes('staging')
+          ? [
+              {
+                sourceId: 'plugin:selected',
+                owner: 'plugin' as const,
+                format: 'native' as const,
+                configPath,
+                contentDigest: createHash('sha256').update(content).digest('hex'),
+              },
+            ]
+          : [],
+      },
+      cleanup: async () => {},
+    }));
+    const current = await setup(true, initial, true, root, { resolve });
+    if (scenario === 'revived') Object.assign(current.execution.selection, { domains: ['initial', 'staging'] });
+    await current.start();
+    if (scenario === 'switched') {
+      await current.select(['initial', 'staging']);
+      await current.select(['initial', 'staging'], 'other');
+    }
+    expect(resolve).toHaveBeenLastCalledWith(['initial', 'staging']);
+    expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])).toEqual([
+      { name: 'pluginOnly', state: 'not-connected' },
+    ]);
+  });
+
   it('publishes domain plugin servers before discovery and withdraws them when deselected', async () => {
     const pluginConfig = path.join(root, 'staging.mcp.json');
     const contents = JSON.stringify({
