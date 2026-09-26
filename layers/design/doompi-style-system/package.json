@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-style-system",
-  "version": "0.0.1-alpha.91",
+  "version": "0.0.1-alpha.92",
   "description": "Optional DoomPi story preview integration for the style-system package.",
   "keywords": [
     "ai",
