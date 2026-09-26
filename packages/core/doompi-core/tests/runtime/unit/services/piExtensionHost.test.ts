@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -9,14 +9,18 @@ import {
   ExtensionRunner,
   initTheme,
   ModelRegistry,
+  ModelRuntime,
   SessionManager,
+  SettingsManager,
 } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createBridgedSessionManager,
   createPiExtensionHost,
+  preloadPiExtensions,
   resolvePiExtensionEntries,
+  resolvePiSettingsPackageEntries,
 } from '../../../../src/services/piExtensionHost';
 import type { DirectHarnessRuntime } from '../../../../src/types/server/directHarnessRuntime';
 
@@ -103,6 +107,89 @@ describe('resolvePiExtensionEntries', () => {
     const root = temporaryRoot();
     writeFileSync(path.join(root, '.doompi-sync.json'), 'not json at all');
     expect(resolvePiExtensionEntries(root)).toEqual([]);
+  });
+});
+
+/** A provider extension, as a local package directory with a Pi manifest. */
+const PROVIDER_EXTENSION = `export default function (pi) {
+  pi.registerProvider('settings-bridge', {
+    baseUrl: 'settings-bridge',
+    apiKey: 'not-used',
+    api: 'settings-bridge',
+    models: [{ id: 'bridge-model', name: 'Bridge Model', reasoning: false, input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 1000, maxTokens: 100 }],
+    streamSimple: () => { throw new Error('not streamed in tests'); },
+  });
+}
+`;
+
+function writeSettingsFixture(): { cwd: string; agentDir: string; packageEntry: string } {
+  const cwd = temporaryRoot();
+  const agentDir = temporaryRoot();
+  const packageDir = path.join(agentDir, 'local', 'provider-package');
+  mkdirSync(packageDir, { recursive: true });
+  writeFileSync(
+    path.join(packageDir, 'package.json'),
+    JSON.stringify({ name: 'provider-package', pi: { extensions: ['./index.mjs'] } }),
+  );
+  writeFileSync(path.join(packageDir, 'index.mjs'), PROVIDER_EXTENSION);
+  // A top-level extension and an auto-discovered one: both are Pi's own loading paths, not packages.
+  writeFileSync(path.join(agentDir, 'top-level.mjs'), 'export default function () {}\n');
+  mkdirSync(path.join(agentDir, 'extensions'));
+  writeFileSync(path.join(agentDir, 'extensions', 'auto.mjs'), 'export default function () {}\n');
+  writeFileSync(
+    path.join(agentDir, 'settings.json'),
+    JSON.stringify({
+      packages: ['local/provider-package', 'npm:@doompi-test/not-installed-provider'],
+      extensions: ['top-level.mjs'],
+    }),
+  );
+  return { cwd, agentDir, packageEntry: path.join(packageDir, 'index.mjs') };
+}
+
+describe('resolvePiSettingsPackageEntries', () => {
+  it('returns only the extensions of settings packages', async () => {
+    const { cwd, agentDir, packageEntry } = writeSettingsFixture();
+    const entries = await resolvePiSettingsPackageEntries({
+      cwd,
+      agentDir,
+      settings: SettingsManager.create(cwd, agentDir),
+    });
+    expect(entries).toEqual([packageEntry]);
+  });
+
+  it('skips a package that is not installed instead of installing it', async () => {
+    const { cwd, agentDir } = writeSettingsFixture();
+    const notices: string[] = [];
+    await resolvePiSettingsPackageEntries({
+      cwd,
+      agentDir,
+      settings: SettingsManager.create(cwd, agentDir),
+      onNotice: (message) => notices.push(message),
+    });
+    expect(notices).toEqual([expect.stringContaining('@doompi-test/not-installed-provider is not installed')]);
+    expect(existsSync(path.join(agentDir, 'npm'))).toBe(false);
+  });
+
+  it('registers a settings package provider on the model runtime', async () => {
+    const { cwd, agentDir } = writeSettingsFixture();
+    const models = await ModelRuntime.create({
+      authPath: path.join(agentDir, 'auth.json'),
+      modelsPath: path.join(agentDir, 'models.json'),
+      refreshOnCreate: false,
+    });
+    await preloadPiExtensions({
+      cwd,
+      agentDir,
+      models,
+      extensionPaths: await resolvePiSettingsPackageEntries({
+        cwd,
+        agentDir,
+        settings: SettingsManager.create(cwd, agentDir),
+      }),
+    });
+    const available = await models.getAvailable();
+    expect(available.map((model) => `${model.provider}/${model.id}`)).toContain('settings-bridge/bridge-model');
   });
 });
 

@@ -44,6 +44,7 @@ import {
   createPiExtensionHost,
   preloadPiExtensions,
   resolvePiExtensionEntries,
+  resolvePiSettingsPackageEntries,
   type PiExtensionHost,
 } from '../../../services/piExtensionHost';
 import { formatToolPrompt, type ToolPromptEntry } from '../../../services/toolPrompt';
@@ -448,12 +449,25 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   // (a local Vertex or Bedrock bridge, say) must be in the runtime before the configured default
   // is looked up, or the lookup misses and the session silently falls back to whichever model
   // happens to be first in `getAvailable()`.
+  // Provider packages from Pi's settings.json `packages` load alongside the DoomPi entry, so a
+  // model that works under `pi` (a Claude Code bridge, say) is also selectable here.
+  const piExtensionPaths =
+    options.piExtensions === false
+      ? []
+      : [
+          ...(options.piExtensionPaths ?? resolvePiExtensionEntries(options.repoRoot)),
+          ...(await resolvePiSettingsPackageEntries({
+            cwd: options.cwd,
+            agentDir,
+            settings,
+            ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
+          })),
+        ];
   const piPreload = await preloadPiExtensions({
     cwd: options.cwd,
     agentDir,
     models: modelRuntime,
-    extensionPaths:
-      options.piExtensions === false ? [] : (options.piExtensionPaths ?? resolvePiExtensionEntries(options.repoRoot)),
+    extensionPaths: [...new Set(piExtensionPaths)],
     ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
   });
   const resolved = await resolveModel(parsed, modelRuntime, settings);

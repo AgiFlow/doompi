@@ -1,8 +1,10 @@
+import os from 'node:os';
 import path from 'node:path';
 
-import { ModelRuntime } from '@earendil-works/pi-coding-agent';
+import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 
 import type { DoomApi } from '../exports/packageApi';
+import { preloadPiExtensions, resolvePiSettingsPackageEntries } from '../services/piExtensionHost';
 import { piAgentDirectory } from '../services/piSettings';
 import { createProviderAuth } from '../services/providerAuth';
 
@@ -18,10 +20,29 @@ export const machineApi: DoomApi = {
       onNotice: (message) => context.onNotice(message),
       runtime: async () => {
         const directory = piAgentDirectory(context.environment, context.homeDirectory);
-        return ModelRuntime.create({
+        const runtime = await ModelRuntime.create({
           authPath: path.join(directory, 'auth.json'),
           modelsPath: path.join(directory, 'models.json'),
         });
+        // Providers registered by Pi settings packages (a Claude Code bridge, say) are
+        // listed and pickable here as they are in sessions, which load the same packages.
+        const onNotice = (message: string): void => context.onNotice(message);
+        // Machine scope has no project, so the home directory stands in for Pi's cwd.
+        const cwd = context.homeDirectory ?? os.homedir();
+        const settings = SettingsManager.create(cwd, directory);
+        await preloadPiExtensions({
+          cwd,
+          agentDir: directory,
+          models: runtime,
+          extensionPaths: await resolvePiSettingsPackageEntries({
+            cwd,
+            agentDir: directory,
+            settings,
+            onNotice,
+          }),
+          onNotice,
+        });
+        return runtime;
       },
     });
     let closed = false;
