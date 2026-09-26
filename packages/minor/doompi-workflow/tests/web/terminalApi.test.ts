@@ -18,21 +18,54 @@ vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fe
 
 const fetch = vi.mocked(sealedTransport.fetch);
 const eventSourceUrls: string[] = [];
+const eventSources: FakeEventSource[] = [];
 
 class FakeEventSource {
+  readonly listeners = new Map<string, (message: MessageEvent<string>) => void>();
+  closed = false;
+
   constructor(url: string | URL) {
     eventSourceUrls.push(String(url));
+    eventSources.push(this);
   }
 
-  addEventListener(): void {}
-  removeEventListener(): void {}
-  close(): void {}
+  addEventListener(type: string, listener: (message: MessageEvent<string>) => void): void {
+    this.listeners.set(type, listener);
+  }
+  removeEventListener(type: string): void {
+    this.listeners.delete(type);
+  }
+  close(): void {
+    this.closed = true;
+  }
+  emit(data: unknown): void {
+    for (const listener of this.listeners.values()) listener({ data: JSON.stringify(data) } as MessageEvent<string>);
+  }
 }
 
 beforeEach(() => {
   fetch.mockReset();
   eventSourceUrls.length = 0;
+  eventSources.length = 0;
   vi.stubGlobal('EventSource', FakeEventSource);
+});
+
+describe('followScreen', () => {
+  // EventSource reconnects on its own when the server ends a stream, so a finished run was
+  // replayed for as long as its tab stayed open.
+  it('closes the stream once the run settles', () => {
+    const events: unknown[] = [];
+    followScreen('repo/a', 'run', (event) => events.push(event), 'session/a');
+    const source = eventSources[0]!;
+
+    source.emit({ lines: ['working'], capabilities: {} });
+    expect(source.closed).toBe(false);
+    source.emit({ lines: ['done'], capabilities: {}, ended: true });
+
+    expect(events).toHaveLength(2);
+    expect(source.closed).toBe(true);
+    expect(source.listeners.size).toBe(0);
+  });
 });
 
 describe('workflow hub API bundle routing', () => {

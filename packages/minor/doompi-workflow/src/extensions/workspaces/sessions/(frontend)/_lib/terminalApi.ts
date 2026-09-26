@@ -96,6 +96,10 @@ export function followScreen(
   sessionId?: string | null,
 ): () => void {
   const source = new EventSource(scoped(sessionId).screen.url({ params: runParams(workspace, runKey) }));
+  const stop = (): void => {
+    source.removeEventListener(WORKFLOW_SCREEN_EVENT, handler as EventListener);
+    source.close();
+  };
   const handler = (message: MessageEvent<string>): void => {
     let parsed: unknown;
     try {
@@ -104,13 +108,14 @@ export function followScreen(
       return; // A torn frame; the next one repaints the whole screen anyway.
     }
     if (!isRecord(parsed) || !Array.isArray(parsed.lines)) return;
-    onEvent(parsed as unknown as WorkflowScreenEvent);
+    const event = parsed as unknown as WorkflowScreenEvent;
+    onEvent(event);
+    // The server ends the stream once the run settles. Left open, EventSource would reconnect
+    // and replay a finished run for as long as the tab stays open.
+    if (event.ended === true) stop();
   };
   source.addEventListener(WORKFLOW_SCREEN_EVENT, handler as EventListener);
-  return () => {
-    source.removeEventListener(WORKFLOW_SCREEN_EVENT, handler as EventListener);
-    source.close();
-  };
+  return stop;
 }
 
 /** Takes the keyboard for one run, renewing when this page already holds it. */

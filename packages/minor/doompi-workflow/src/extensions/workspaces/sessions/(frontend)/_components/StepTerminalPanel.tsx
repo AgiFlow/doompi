@@ -76,6 +76,16 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
   const [token, setToken] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const screenRef = useRef<HTMLDivElement>(null);
+  // The run the panel shows right now, cleared on unmount. A keyboard grant that comes back for
+  // any other run is released at once instead of being held for a panel that moved on.
+  const targetKey = `${sessionId ?? ''}\0${target.workspace}\0${target.runKey}`;
+  const currentTarget = useRef<string | undefined>(targetKey);
+  useEffect(() => {
+    currentTarget.current = targetKey;
+    return () => {
+      currentTarget.current = undefined;
+    };
+  }, [targetKey]);
 
   useEffect(() => {
     // A new run's screen has not ended yet; the subscription below is the external system.
@@ -107,19 +117,25 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
   }, [lines]);
 
   const arm = useCallback(async () => {
+    const requested = targetKey;
     const result = await takeControl(target.workspace, target.runKey, undefined, sessionId);
+    if (currentTarget.current !== requested) {
+      if (result.held && result.token !== undefined)
+        void releaseControl(target.workspace, target.runKey, result.token, sessionId);
+      return;
+    }
     if (result.held && result.token !== undefined) {
       setToken(result.token);
       setNotice(undefined);
       return;
     }
     setNotice(result.reason ?? 'The keyboard is not available for this run.');
-  }, [sessionId, target.workspace, target.runKey]);
+  }, [sessionId, target.workspace, target.runKey, targetKey]);
 
-  const disarm = useCallback(async () => {
-    if (token !== undefined) await releaseControl(target.workspace, target.runKey, token, sessionId);
+  // Dropping the token is the release: the lease effect's cleanup hands it back exactly once.
+  const disarm = useCallback(() => {
     setToken(undefined);
-  }, [sessionId, token, target.workspace, target.runKey]);
+  }, []);
 
   const type = async (data: string): Promise<void> => {
     if (token === undefined) return;
@@ -134,7 +150,7 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
     if (token === undefined) return;
     if (event.key === 'Escape' && !event.ctrlKey) {
       event.preventDefault();
-      void disarm();
+      disarm();
       return;
     }
     const control = CONTROL_KEYS[event.key];
@@ -192,7 +208,7 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
             variant={held ? 'outline' : 'primary'}
             size="xs"
             data-testid="step-terminal-arm"
-            onClick={() => void (held ? disarm() : arm())}
+            onClick={() => (held ? disarm() : void arm())}
           >
             {held ? 'release keyboard' : 'take control'}
           </Button>
