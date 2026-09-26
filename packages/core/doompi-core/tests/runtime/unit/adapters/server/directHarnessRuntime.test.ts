@@ -1046,6 +1046,8 @@ describe('direct AgentHarness runtime', () => {
       await first.settled.catch(() => undefined);
       expect((await runtime.readLifecycle()).queue.find((item) => item.id === id)?.disposition).toBe('pending');
       expect(streamSimple).toHaveBeenCalledTimes(1);
+      await expect(runtime.submitPrompt('must not skip queued work')).rejects.toThrow('queue is paused');
+      expect((await runtime.readLifecycle()).paused).toBe(true);
       await runtime.resumeQueue();
       await vi.waitFor(() => expect(streamSimple).toHaveBeenCalledTimes(2));
       await vi.waitFor(async () => expect((await runtime.readLifecycle()).operation).toBeNull());
@@ -1058,6 +1060,79 @@ describe('direct AgentHarness runtime', () => {
     }
   });
 
+  it('allows a prompt to resume an empty paused queue after reopening the runtime', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-empty-paused-'));
+    const environment = new NodeExecutionEnv({ cwd: root });
+    const repository = new JsonlSessionRepo({ fileSystem: environment, sessionsRoot: root });
+    const session = await repository.create({ id: 'empty-paused-abort', cwd: root }, BACKGROUND_CONTEXT);
+    await session.close(BACKGROUND_CONTEXT);
+    await repository.close(BACKGROUND_CONTEXT);
+    await environment.cleanup(BACKGROUND_CONTEXT);
+    let releaseFirst!: () => void;
+    let firstStarted!: () => void;
+    const firstDone = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
+    let calls = 0;
+    const streamSimple = vi.fn<Models['streamSimple']>(() => {
+      const stream = createAssistantMessageEventStream();
+      const message: AssistantMessage = {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'done' }],
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        timestamp: Date.now(),
+        stopReason: 'stop',
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      };
+      stream.push({ type: 'start', partial: message });
+      if (++calls === 1) {
+        firstStarted();
+        void firstDone.then(() => stream.push({ type: 'done', reason: 'stop', message }));
+      } else stream.push({ type: 'done', reason: 'stop', message });
+      return stream;
+    });
+    const options = {
+      cwd: root,
+      sessionsRoot: root,
+      sessionId: 'empty-paused-abort',
+      historyOwnership: createHistoryOwnership(),
+      model,
+      models: { ...models, streamSimple } as unknown as Models,
+    };
+    let runtime = await createDirectHarnessRuntime(options);
+    try {
+      const first = await runtime.submitPrompt('first');
+      await started;
+      const operationId = (await runtime.readLifecycle()).operation!.id;
+      await runtime.abort(operationId);
+      releaseFirst();
+      await first.settled.catch(() => undefined);
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [] });
+      await runtime.dispose();
+      runtime = await createDirectHarnessRuntime(options);
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [] });
+      const second = await runtime.submitPrompt('second');
+      await second.settled;
+      expect(streamSimple).toHaveBeenCalledTimes(2);
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: false, queue: [] });
+    } finally {
+      releaseFirst();
+      await runtime.dispose();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
   it('promotes one queued item into native steering without executing it as a separate turn', async () => {
     const repository = new MemorySessionRepo();
     const session = await repository.create({ id: 'promote-native-steer' }, BACKGROUND_CONTEXT);

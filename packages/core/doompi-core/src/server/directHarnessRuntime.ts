@@ -1299,7 +1299,23 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         ? ({ kind: 'prompt', prompt: text, ...(images === undefined ? {} : { images }) } as const)
         : ({ kind: 'prompt', prompt: text } as const);
     const admission = await serializeAdmission(async () => {
-      if ((await readRecord()).paused) throw new Error('The agent queue is paused; resume before starting a turn');
+      const lifecycle = await readRecord();
+      if (lifecycle.paused) {
+        // A person starting a new turn may release an empty pause left by an aborted turn.
+        // Retained inputs (including uncertain handoffs) still require an explicit resume.
+        if (
+          execution.current !== null ||
+          settlingOperationId !== undefined ||
+          lifecycle.queue.some((entry) => entry.disposition !== 'consumed' && entry.disposition !== 'removed')
+        )
+          throw new Error('The agent queue is paused; resume before starting a turn');
+        await changeRecord((record) => {
+          if (record.queue.some((entry) => entry.disposition !== 'consumed' && entry.disposition !== 'removed'))
+            throw new Error('The agent queue is paused; resume before starting a turn');
+          return { record: { ...record, paused: false, abortOperationId: undefined }, result: undefined };
+        });
+        await publishLifecycle();
+      }
       // Held native follow-ups never wake an idle session. Reattach them only when a
       // person starts a new turn, preserving their enqueue-only scheduling policy.
       for (const item of (await readRecord()).queue.filter(

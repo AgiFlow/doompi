@@ -125,7 +125,7 @@ describe('history-import CLI', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('recovers after a killed importer with explicit stale-lock cleanup', async () => {
+  it('recovers after a killed importer without manually deleting valid dead-owner locks', async () => {
     const sourcePath = path.join(root, 'legacy.jsonl');
     const destinationPath = path.join(root, 'canonical.jsonl');
     const originalPath = `${sourcePath}.original`;
@@ -154,12 +154,6 @@ describe('history-import CLI', () => {
 
     expect(fs.existsSync(historyOwnershipLockPath(sourcePath))).toBe(true);
     expect(fs.existsSync(historyOwnershipLockPath(destinationPath))).toBe(true);
-    const blocked = runHistoryImportCli(root, sourcePath, destinationPath);
-    expect(blocked.status).toBe(1);
-    expect(`${blocked.stdout}${blocked.stderr}`).toMatch(/lock|ambiguous/i);
-
-    fs.rmSync(historyOwnershipLockPath(sourcePath));
-    fs.rmSync(historyOwnershipLockPath(destinationPath));
     const resumed = runHistoryImportCli(root, sourcePath, destinationPath);
     expect(resumed.status).toBe(0);
     expect(JSON.parse(resumed.stdout.trim())).toMatchObject({ status: 'published' });
@@ -205,8 +199,6 @@ describe('history-import CLI', () => {
     expect(fs.existsSync(historyOwnershipLockPath(sourcePath))).toBe(true);
     expect(fs.existsSync(historyOwnershipLockPath(destinationPath))).toBe(true);
 
-    fs.rmSync(historyOwnershipLockPath(sourcePath));
-    fs.rmSync(historyOwnershipLockPath(destinationPath));
     const resumed = runHistoryImportCli(root, sourcePath, destinationPath);
     expect(resumed.status).toBe(0);
     expect(JSON.parse(resumed.stdout.trim())).toMatchObject({ status: 'already-published' });
