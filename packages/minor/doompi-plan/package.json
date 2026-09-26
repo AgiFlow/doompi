@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-plan",
-  "version": "0.0.1-alpha.91",
+  "version": "0.0.1-alpha.92",
   "description": "Reviewable Pi planning mode that removes file-editing tools and persists implementation plans.",
   "keywords": [
     "ai",
