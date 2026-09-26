@@ -166,6 +166,27 @@ describe('voice client media session API', () => {
     expect((await longPoll).status).toBe(204);
   });
 
+  // After a session restart the browser still heartbeats the old connection. A 409 there showed as
+  // an error in DevTools for what is only a new broker; its epoch already says "reconnect".
+  it('answers a heartbeat and disconnect with no client as a fresh broker, not a conflict', async () => {
+    const api = createVoiceMediaApi({
+      internalToken: INTERNAL_TOKEN,
+      eventEpoch: 'epoch-new',
+      clientConnectWaitMs: 0,
+      directEvents: wakeEvents([]),
+    });
+    const stale = json({ clientId: CLIENT_ID, connectionId: 'old-connection' });
+    const heartbeat = await api.fetch(request(VOICE_MEDIA_ROUTES.clientHeartbeat, stale));
+    expect(heartbeat.status).toBe(200);
+    expect(await heartbeat.json()).toEqual({ eventEpoch: 'epoch-new', sequence: 0 });
+    expect((await api.fetch(request(VOICE_MEDIA_ROUTES.clientDisconnect, stale))).status).toBe(204);
+
+    await connect(api);
+    const other = json({ clientId: 'other-client', connectionId: 'other-connection' });
+    expect((await api.fetch(request(VOICE_MEDIA_ROUTES.clientHeartbeat, other))).status).toBe(409);
+    api.close();
+  });
+
   it('heartbeats refresh the lease while only sequenced control events publish wakes', async () => {
     let now = 0;
     const wakes: VoiceMediaWake[] = [];
