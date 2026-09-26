@@ -279,13 +279,14 @@ function activitySourceFingerprint(sessionId: string | null): string {
 /**
  * The groups available in this plugin composition. Status and widget signals
  * reveal legacy groups. A package-owned active source also reveals its group,
- * including while idle, so the section can remain a stable launcher.
+ * including while idle, so the section can remain a stable launcher unless it
+ * opts into `hideWhenEmpty`.
  *
- * A group that declared `hideWhenEmpty` also goes away again once its session
- * stops reporting. Clearing a status reaches the page as an empty string
- * rather than as an absent key, because the same map tells the selection bar
- * which minor modes exist and an absent key means "not reported" there. So
- * emptiness is read here, where only the dock is looking.
+ * A group that declared `hideWhenEmpty` goes away once its session stops
+ * reporting. Clearing a status reaches the page as an empty string rather than
+ * an absent key, because the same map tells the selection bar which minor modes
+ * exist and an absent key means "not reported" there. Emptiness is read here,
+ * where only the dock is looking.
  */
 export function activityGroups(
   statuses: Record<string, string>,
@@ -313,11 +314,13 @@ export function activityGroups(
       continue;
     }
     if (source.activeSource !== undefined) {
+      const active = source.activeSource.isActive(sessionId);
+      if (source.hideWhenEmpty === true && !active) continue;
       groups.push({
         name: source.name,
         keys: source.keys,
         summary: '',
-        active: source.activeSource.isActive(sessionId),
+        active,
         ...tab,
         ...placement,
       });
