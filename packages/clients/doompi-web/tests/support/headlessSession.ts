@@ -375,6 +375,19 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
         ...(streamingBehavior === undefined ? {} : { streamingBehavior }),
       });
       await answer('prompt', undefined);
+      const entry = {
+        id: `user-${randomUUID()}`,
+        type: 'message',
+        seq: entries.length + 1,
+        parentId: entries.at(-1)?.id ?? null,
+        timestamp: Date.now(),
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: message }, ...(images ?? [])],
+        },
+      };
+      entries.push(entry);
+      for (const listener of listeners) listener({ type: 'entry_appended', entry });
       return { settled: Promise.resolve() };
     },
     prompt: async (message: string, images?: unknown[]) => {

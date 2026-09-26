@@ -1345,9 +1345,6 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         failures.push(error);
       }
       // Native close seals late model/tool effects while their extension hosts still exist.
-      client?.dispose();
-      unsubscribePresentation();
-      unsubscribeEvents();
       try {
         await runtime.dispose();
       } catch (error) {
@@ -1363,6 +1360,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       } catch (error) {
         failures.push(error);
       }
+      // Activity cleanup still needs its client to clear status during host close.
+      client?.dispose();
+      unsubscribePresentation();
+      unsubscribeEvents();
       try {
         await childSessionProvider.close();
       } catch (error) {
