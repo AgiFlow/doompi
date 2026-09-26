@@ -1016,7 +1016,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     mcpRefreshQueued = true;
     queueMicrotask(() => {
       mcpRefreshQueued = false;
-      if (disposed || !headlessReady) return;
+      // A selection change in flight also recomposes MCP once it is ready again.
+      if (disposed || !headlessReady || !headlessHost?.status.ready) return;
       void prepareMcpSurface().catch((error: unknown) =>
         options.onNotice?.(`MCP tool refresh failed: ${error instanceof Error ? error.message : String(error)}`),
       );
@@ -1198,6 +1199,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     toolReapplyQueued = true;
     queueMicrotask(() => {
       toolReapplyQueued = false;
+      if (disposed) return;
       void applyToolSurface(appliedFacetTools).catch((error: unknown) =>
         options.onNotice?.(
           `Pi extension tool refresh failed: ${error instanceof Error ? error.message : String(error)}`,

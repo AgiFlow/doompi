@@ -632,6 +632,11 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   const toolArguments = new Map<string, unknown>();
   /** Whether the compaction now running came from a Pi extension rather than the harness. */
   let compactionFromExtension = false;
+  /**
+   * Set once shutdown begins. The session disposes its runtime before extensions see
+   * session_shutdown, so tool changes made from that handler have no runtime to reach.
+   */
+  let shuttingDown = false;
 
   const report = (source: string, error: unknown): void =>
     options.onNotice?.(`Pi extension ${source}: ${error instanceof Error ? error.message : String(error)}`);
@@ -711,9 +716,10 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     setActiveTools: (names) => {
       const known = new Set(registered.map((tool) => tool.definition.name));
       activeNames = new Set(names.filter((name) => known.has(name)));
-      options.onActiveToolsChanged?.();
+      if (!shuttingDown) options.onActiveToolsChanged?.();
     },
     refreshTools: () => {
+      if (shuttingDown) return;
       void runtime.replaceTools([...activeTools()]).catch((error: unknown) => report('refresh_tools', error));
     },
     getCommands: () => [],
@@ -1085,6 +1091,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     },
 
     async shutdown(): Promise<void> {
+      shuttingDown = true;
       unsubscribeEvents?.();
       unsubscribeEvents = undefined;
       unsubscribeLifecycle?.();
