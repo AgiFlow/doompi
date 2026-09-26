@@ -374,6 +374,8 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     conversationStore: createSessionMcpConversationStore(sessionMcpStateDir),
     registrationStore: createSessionMcpRegistrationStore({ stateDir: sessionMcpStateDir, onNotice: options.onNotice }),
   });
+  /** Sessions being restarted, keyed by id, settled once the reopen succeeds or fails. */
+  const restarting = new Map<string, Promise<void>>();
   const server = createServer((request, response) => {
     void handleRequest(request, response).catch((error: unknown) => {
       if (response.headersSent) {
@@ -779,7 +781,14 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     }
     const sessionId = decodeURIComponent(sessionMatch[2]);
     const workspaceId = decodeURIComponent(sessionMatch[1]);
-    const session = options.headlessHub.session(sessionId);
+    let session = options.headlessHub.session(sessionId);
+    // A restart closes the session before reopening it under the same id. Requests that land in
+    // that gap, such as a plugin's poll, wait for the reopened session instead of failing.
+    const reopening = session === undefined ? restarting.get(sessionId) : undefined;
+    if (reopening !== undefined) {
+      await reopening;
+      session = options.headlessHub.session(sessionId);
+    }
     const suffix = sessionMatch[3] === undefined ? '' : `/${sessionMatch[3]}`;
     if (suffix === '/transcript' && request.method === 'GET' && options.readDormantTranscript) {
       const record = dormant().find(
@@ -855,7 +864,18 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       return;
     }
     if (suffix === '/restart' && request.method === 'POST' && options.restartSession) {
-      await options.restartSession(session);
+      const restart = options.restartSession(session);
+      // Settled either way: a failed restart leaves the session dormant, and waiters then see that.
+      const settled = restart.then(
+        () => undefined,
+        () => undefined,
+      );
+      restarting.set(sessionId, settled);
+      try {
+        await restart;
+      } finally {
+        if (restarting.get(sessionId) === settled) restarting.delete(sessionId);
+      }
       json(response, 200, { ok: true });
       return;
     }

@@ -722,6 +722,49 @@ describe('serveHeadlessServer', () => {
     await hub.close();
   });
 
+  // A plugin polling a session during its restart used to get a 404 in the gap between the
+  // old host closing and the new one registering.
+  it('holds a session request that arrives while the session restarts', async () => {
+    const closeSession = vi.fn(async () => undefined);
+    const hub = createHeadlessHub({ manager: { closeSession } as never });
+    const register = () =>
+      hub.register({
+        workspaceId: 'test-workspace',
+        id: 'current',
+        name: 'Current',
+        cwd: '/repo',
+        createdAt: '2025-01-01',
+        host: host().host,
+      });
+    register();
+    let reopen!: () => void;
+    const restartSession = vi.fn(async () => {
+      await hub.closeSession('current');
+      await new Promise<void>((resolve) => {
+        reopen = resolve;
+      });
+      register();
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, restartSession });
+    servers.push(server);
+
+    const restart = fetch(`${server.url}/api/workspaces/test-workspace/sessions/current/restart`, { method: 'POST' });
+    await vi.waitFor(() => expect(hub.session('current')).toBeUndefined());
+    const during = fetch(`${server.url}/api/workspaces/test-workspace/sessions/current`);
+    // Long enough for the request to reach the server while the session is still gone.
+    setTimeout(reopen, 200);
+
+    expect((await restart).status).toBe(200);
+    expect((await during).status).toBe(200);
+    await hub.close();
+  });
+
   it('lists dormant records beside live sessions and revives one on request', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
     hub.register({
