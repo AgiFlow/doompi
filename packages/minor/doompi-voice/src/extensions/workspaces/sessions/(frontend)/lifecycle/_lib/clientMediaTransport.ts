@@ -55,8 +55,11 @@ function pushConnection(result: VoiceMediaConnectResult): PushConnection | undef
  * catches that and reports it as a status, so the status is what is said.
  */
 function resultError(result: Extract<ApiResult<unknown>, { ok: false }>): Error {
-  return new Error(
-    result.error === '' ? `Voice media request failed with status ${String(result.status)}.` : result.error,
+  // The status travels with the error: a 409 means another client owns the media, which the
+  // client treats differently from a failure, and matching on message text was fragile.
+  return Object.assign(
+    new Error(result.error === '' ? `Voice media request failed with status ${String(result.status)}.` : result.error),
+    { status: result.status },
   );
 }
 
@@ -70,7 +73,7 @@ async function responseError(response: Response): Promise<Error> {
   } catch {
     // A response without JSON still carries its HTTP status above.
   }
-  return new Error(message);
+  return Object.assign(new Error(message), { status: response.status });
 }
 
 function jsonBody(value: object): RequestInit {

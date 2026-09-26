@@ -4,4 +4,4 @@ import type root from '../../root.server';
 
 type Context = WithRoot<unknown, Awaited<ReturnType<typeof root>>['value']>;
 
-export default defineRoute((context: Context) => context.root.api![1]!);
+export default defineRoute((context: Context) => context.root.mediaApi);

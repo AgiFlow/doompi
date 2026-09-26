@@ -254,7 +254,9 @@ describe('voice media client browser recovery', () => {
   it('reports a competing browser lease instead of appearing connected', async () => {
     vi.useFakeTimers();
     const transport = new FakeTransport();
-    transport.connectFailure = new Error('Another client owns voice media for this session.');
+    transport.connectFailure = Object.assign(new Error('Another client owns voice media for this session.'), {
+      status: 409,
+    });
     const states: string[] = [];
     const client = new VoiceMediaClient('client', 'connection', transport, new FakeDevice(), (state) =>
       states.push(state),
@@ -266,6 +268,39 @@ describe('voice media client browser recovery', () => {
     expect(states.slice(0, 2)).toEqual(['connecting', 'conflict']);
     await client.stop();
     expect(states.at(-1)).toBe('disconnected');
+  });
+
+  // A second tab used to poll every 2 seconds for as long as another tab held the media.
+  it('backs off while another client holds the media, capped near the lease', async () => {
+    vi.useFakeTimers();
+    const transport = new FakeTransport();
+    transport.connectFailure = Object.assign(new Error('Voice media client does not own this session.'), {
+      status: 409,
+    });
+    const connect = vi.spyOn(transport, 'connect');
+    const states: string[] = [];
+    const client = new VoiceMediaClient('client', 'connection', transport, new FakeDevice(), (state) =>
+      states.push(state),
+    );
+
+    client.start();
+    await eventually(() => expect(connect).toHaveBeenCalledTimes(1));
+    // Any 409 is a conflict, not only the one message the client used to match.
+    expect(states).toContain('conflict');
+    for (const [wait, attempts] of [
+      [2_000, 2],
+      [4_000, 3],
+      [8_000, 4],
+      [16_000, 5],
+      [16_000, 6],
+    ] as const) {
+      transport.connectFailure = Object.assign(new Error('held'), { status: 409 });
+      await vi.advanceTimersByTimeAsync(wait - 1);
+      expect(connect).toHaveBeenCalledTimes(attempts - 1);
+      await vi.advanceTimersByTimeAsync(1);
+      await eventually(() => expect(connect).toHaveBeenCalledTimes(attempts));
+    }
+    await client.stop();
   });
 
   it('registers baseline media and consumes capture while optional preparation is pending', async () => {
