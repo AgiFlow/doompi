@@ -1,6 +1,7 @@
 import type { CaptureStatusEvent, ComposerSubmission } from '@agimon-ai/doompi-core/web';
 
 import type { AuthorCapturePacket } from '../../_lib/authorCapture';
+import { validAuthorStroke } from '../../_lib/authorRegions';
 import type { AuthorRegionDraft } from '../../_lib/authorViewportTypes';
 import {
   authorSessionWorkspace,
@@ -19,7 +20,13 @@ function capturePacket(content: string): AuthorCapturePacket | undefined {
       typeof value.document?.path !== 'string' ||
       typeof value.document.revision !== 'number' ||
       !Array.isArray(value.regions) ||
-      value.regions.length === 0
+      value.regions.length === 0 ||
+      value.regions.length > 16 ||
+      value.regions.some(
+        (region) =>
+          region.stroke !== undefined &&
+          (!validAuthorStroke(region.stroke) || region.mode !== 'region' || !('rect' in region.anchor)),
+      )
     ) {
       return undefined;
     }
@@ -46,6 +53,7 @@ export function recordAuthorComposerSubmission(submission: ComposerSubmission): 
       mode: region.mode,
       quote: region.quote,
       anchor: structuredClone(region.anchor),
+      ...(region.stroke === undefined ? {} : { stroke: region.stroke.map((point) => ({ ...point })) }),
       viewport: { ...region.viewport },
       voiceGrid: region.voiceGrid && { ...region.voiceGrid },
       createdAt: packet.capturedAt,

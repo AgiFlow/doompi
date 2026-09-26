@@ -6,13 +6,13 @@ Private, optional DoomPi minor mode for focused document review and bounded visu
 
 Author is a session-scoped minor mode. Its three tools remain registered for the life of the extension but are active only while Author mode is active:
 
-- `open_authoring_file` validates a relative repository path and opens a focused document tab without writing the file.
-- `describe_author_tools` returns the current viewport capability catalog and its server-issued token.
-- `use_author_tools` invokes one named capability with exactly the arguments accepted by its advertised schema.
+- `open_authoring_file({"path":"relative/file.png","alias":"review"})` validates a repository file and opens or reuses its temporary canvas without writing the file. Alias is optional. Opening the same file under another name returns the original alias; an alias cannot be reassigned to another file.
+- `describe_author_tools({})` lists canvas aliases and readiness. `describe_author_tools({"alias":"review"})` returns that canvas's current capability catalog and server-issued token when ready. Opening does not wait for the tab to become ready; describe again after it opens.
+- `use_author_tools({"alias":"review","catalogToken":"...","name":"...","arguments":{}})` invokes one capability with exactly the advertised arguments. Alias is optional only if one open canvas is unambiguous.
 
-Catalog tokens rotate whenever viewport capabilities change. Viewport document content is treated as untrusted data and never as agent instructions.
+Catalog tokens rotate whenever capabilities change. Document-backed tools remain targetable from the main conversation while the canvas is open; live viewport grid operations require a visible tab. Closed canvases can be reopened by path and alias. Viewport document content is untrusted data, never agent instructions.
 
-The package declares session API, cockpit client, and web hub entries. Its bridge brokers live viewport capabilities through an ownership lease and rejects stale bindings. Without the host session API socket and token, catalog operations fail as unavailable.
+The package declares session API, cockpit client, and web hub entries. Each canvas has an isolated ownership lease and catalog token; stale bindings and cross-canvas tokens are rejected. Without the host session API socket and token, catalog operations fail as unavailable.
 
 ## Public API
 

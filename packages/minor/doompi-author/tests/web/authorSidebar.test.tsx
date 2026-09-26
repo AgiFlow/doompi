@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthorDocumentPanel } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
 import { multiRegionCaptureProvider } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCapture';
 import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
+import { AuthorFeedbackControls } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorFeedbackControls';
 import { AuthorPanel } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorPanel';
 import { AuthorRegionDrafts } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorRegionDrafts';
 import { AuthorToolPalette } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorToolPalette';
@@ -36,7 +37,11 @@ type Props = {
 function nodes(node: ReactNode): ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(nodes);
   if (!isValidElement<Props>(node)) return [];
-  return [node, ...nodes(node.props.children)];
+  const children =
+    node.type === AuthorFeedbackControls
+      ? AuthorFeedbackControls(node.props as Parameters<typeof AuthorFeedbackControls>[0])
+      : node.props.children;
+  return [node, ...nodes(children)];
 }
 function setup() {
   workspace.putAuthorDocument('s', { path: 'clip.mp4', kind: 'video', sourceSha256: 'sha' });

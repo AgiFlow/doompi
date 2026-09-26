@@ -3,15 +3,18 @@ import type { AuthorViewportCapabilityDescriptor } from './author';
 export const authorChannelType = 'author_webmcp';
 
 export interface AuthorRegisterMessage {
+  alias: string;
   kind: 'register';
   generation: number;
 }
 
 export interface AuthorReleaseMessage {
+  alias: string;
   kind: 'release';
   generation: number;
 }
 export interface AuthorCatalogMessage {
+  alias: string;
   kind: 'catalog';
   generation: number;
   ownerToken: string;
@@ -19,6 +22,7 @@ export interface AuthorCatalogMessage {
 }
 
 export interface AuthorResultMessage {
+  alias: string;
   kind: 'result';
   generation: number;
   ownerToken: string;
@@ -28,6 +32,7 @@ export interface AuthorResultMessage {
 }
 
 export interface AuthorCancelledMessage {
+  alias: string;
   kind: 'cancelled';
   generation: number;
   ownerToken: string;
@@ -43,6 +48,7 @@ export type AuthorBrowserMessage =
   | AuthorCancelledMessage;
 
 export interface AuthorAcceptedMessage {
+  alias?: string;
   kind: 'accepted';
   generation: number;
   ownerToken: string;
@@ -51,6 +57,7 @@ export interface AuthorAcceptedMessage {
 }
 
 export interface AuthorRequestMessage {
+  alias?: string;
   kind: 'request';
   generation: number;
   ownerToken: string;
@@ -61,6 +68,7 @@ export interface AuthorRequestMessage {
 }
 
 export interface AuthorCancelMessage {
+  alias?: string;
   kind: 'cancel';
   generation: number;
   ownerToken: string;
@@ -69,6 +77,7 @@ export interface AuthorCancelMessage {
 }
 
 export interface AuthorRejectedMessage {
+  alias?: string;
   kind: 'rejected';
   reason: string;
 }

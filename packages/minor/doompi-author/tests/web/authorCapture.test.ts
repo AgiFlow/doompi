@@ -64,6 +64,42 @@ describe('Author multi-region capture packet', () => {
     expect(new TextEncoder().encode(context.metadata!).byteLength).toBeLessThanOrEqual(AUTHOR_PACKET_MAX_BYTES);
   });
 
+  it('copies bounded freehand feedback geometry into immutable capture metadata without crop authority', () => {
+    const stroke = [
+      { x: 0.1, y: 0.2 },
+      { x: 0.9, y: 0.2 },
+    ];
+    const draft: AuthorRegionDraft = {
+      ...region('mark', 'Move this here'),
+      mode: 'region',
+      anchor: {
+        kind: 'image-rect',
+        rect: { x: 0.1, y: 0.2, width: 0.8, height: 0.001 },
+        naturalWidth: 500,
+        naturalHeight: 300,
+      },
+      stroke,
+    };
+    const packet = createAuthorCapturePacket('freehand', 10, document, [draft]);
+    stroke[0]!.x = 0.5;
+    expect(packet.regions[0]!.stroke).toEqual([
+      { x: 0.1, y: 0.2 },
+      { x: 0.9, y: 0.2 },
+    ]);
+    expect(authorCaptureContext(packet).content).toContain('Author document: notes.md');
+    expect(() =>
+      createAuthorCapturePacket('bad', 10, document, [
+        {
+          ...draft,
+          stroke: [
+            { x: 0, y: 0 },
+            { x: Infinity, y: 1 },
+          ],
+        },
+      ]),
+    ).toThrow('invalid feedback stroke');
+  });
+
   it('puts story source provenance and edit guidance in model-visible content', () => {
     const storyPreview = {
       version: 1 as const,

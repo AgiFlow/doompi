@@ -55,6 +55,22 @@ export function AuthorToolPalette({
     setError(undefined);
   };
   const tools = [
+    ...(['image', 'pdf', 'video', 'story-preview'].includes(kind)
+      ? [
+          {
+            label: 'Pan',
+            glyph: '✋',
+            action: () => setAuthorToolMode(sessionId, activeTool === 'pan' ? 'select' : 'pan'),
+            active: activeTool === 'pan',
+          },
+          {
+            label: 'Draw',
+            glyph: '✎',
+            action: () => setAuthorToolMode(sessionId, activeTool === 'draw' ? 'select' : 'draw'),
+            active: activeTool === 'draw',
+          },
+        ]
+      : []),
     {
       label: 'Region',
       glyph: '⌗',
@@ -99,11 +115,15 @@ export function AuthorToolPalette({
         ))}
       </div>
       <p className="text-base leading-normal text-doom-dim sm:text-sm">
-        {activeTool === 'mark'
-          ? 'Drag over the document to mark a region.'
-          : activeTool === 'comment'
-            ? 'Click the document to place a comment pin.'
-            : 'Choose Region to drag an area, or Comment to place a point.'}
+        {activeTool === 'draw'
+          ? 'Draw a location mark, then enter feedback text. Marks never edit the source.'
+          : activeTool === 'pan'
+            ? 'Drag to pan; pinch to zoom. Use Fit to reset the view.'
+            : activeTool === 'mark'
+              ? 'Drag over the document to mark a region.'
+              : activeTool === 'comment'
+                ? 'Click the document to place a comment pin.'
+                : 'Choose Region to drag an area, or Comment to place a point.'}
       </p>
       {error ? <output className="block text-base text-doom-red">{error}</output> : null}
     </section>

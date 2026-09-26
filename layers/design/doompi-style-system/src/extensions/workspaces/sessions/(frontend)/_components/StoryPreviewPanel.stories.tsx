@@ -33,6 +33,22 @@ export const UnsavedSource = {
   ),
 };
 
+export const DrawToolPendingBuild = {
+  render: () => (
+    <div className="h-screen bg-doom-bg">
+      <StoryPreviewPanel
+        {...slotPropsFixture({ sessionId: null }).props}
+        source={{
+          path: 'packages/core/doompi-web-components/src/components/Button.stories.tsx',
+          hasUnsavedChanges: false,
+        }}
+        activeTool="draw"
+        onAnnotationCandidate={() => undefined}
+      />
+    </div>
+  ),
+};
+
 export const LaunchedPreview = {
   render: () => {
     const Panel = storyPreviewTab().panel;

@@ -6,6 +6,7 @@ import type {
   DoomHubChannel,
 } from '@agimon-ai/doompi-core/hubChannel';
 
+import { AUTHOR_ALIAS_PATTERN } from '../../schemas/authorTools';
 import routes from '../../types/apiRoutes';
 import { API_BASE_PATH } from '../../types/authorApi';
 import { authorChannelType, type AuthorBrowserMessage, type AuthorHubMessage } from '../../types/webAuthor';
@@ -25,6 +26,7 @@ const BRIDGE_ROUTE: Readonly<Record<Exclude<AuthorBrowserMessage['kind'], 'relea
 };
 
 interface Binding {
+  alias: string;
   scope: DoomHubSessionScope;
   connectionId: string;
   generation: number;
@@ -37,7 +39,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function browserMessage(value: unknown): AuthorBrowserMessage | undefined {
-  if (!isRecord(value) || typeof value.kind !== 'string') return undefined;
+  if (
+    !isRecord(value) ||
+    typeof value.kind !== 'string' ||
+    typeof value.alias !== 'string' ||
+    !AUTHOR_ALIAS_PATTERN.test(value.alias)
+  )
+    return undefined;
   if (!['register', 'release', 'catalog', 'result', 'cancelled'].includes(value.kind)) return undefined;
   return value as unknown as AuthorBrowserMessage;
 }
@@ -54,7 +62,8 @@ export function createAuthorChannel(): DoomHubChannel {
   const bindings = new Map<string, Binding>();
   let host: DoomHubChannelHost | undefined;
   let closed = false;
-  const keyOf = (sessionId: string, connectionId: string): string => `${sessionId}\0${connectionId}`;
+  const keyOf = (sessionId: string, connectionId: string, alias: string): string =>
+    `${sessionId}\0${connectionId}\0${alias}`;
   const send = async (scope: DoomHubSessionScope, path: string, value: Record<string, unknown>, signal?: AbortSignal) =>
     await host!.requestSessionApi(scope, {
       basePath: API_BASE_PATH,
@@ -64,18 +73,20 @@ export function createAuthorChannel(): DoomHubChannel {
       ...(signal === undefined ? {} : { signal }),
     });
   const publish = (binding: Binding, payload: AuthorHubMessage): boolean =>
-    host?.publishToConnection?.(binding.connectionId, binding.scope.sessionId, payload) ?? false;
+    host?.publishToConnection?.(binding.connectionId, binding.scope.sessionId, { ...payload, alias: binding.alias }) ??
+    false;
 
   const poll = async (binding: Binding): Promise<void> => {
     binding.poll?.abort();
     const controller = new AbortController();
     binding.poll = controller;
-    while (!closed && bindings.get(keyOf(binding.scope.sessionId, binding.connectionId)) === binding) {
+    while (!closed && bindings.get(keyOf(binding.scope.sessionId, binding.connectionId, binding.alias)) === binding) {
       try {
         const response = await send(
           binding.scope,
           routes.bridgeNext.path,
           {
+            alias: binding.alias,
             bindingId: binding.connectionId,
             generation: binding.generation,
             ownerToken: binding.ownerToken,
@@ -105,6 +116,7 @@ export function createAuthorChannel(): DoomHubChannel {
             binding.poll?.abort();
             bindings.delete(key);
             void send(binding.scope, routes.bridgeDisconnect.path, {
+              alias: binding.alias,
               bindingId: binding.connectionId,
               generation: binding.generation,
             }).catch((error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)));
@@ -115,6 +127,7 @@ export function createAuthorChannel(): DoomHubChannel {
           for (const binding of bindings.values()) {
             binding.poll?.abort();
             void send(binding.scope, routes.bridgeDisconnect.path, {
+              alias: binding.alias,
               bindingId: binding.connectionId,
               generation: binding.generation,
             }).catch((error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)));
@@ -128,13 +141,14 @@ export function createAuthorChannel(): DoomHubChannel {
       const message = browserMessage(payload);
       if (message === undefined || host === undefined || closed) return;
       void (async () => {
-        const key = keyOf(scope.sessionId, connection.connectionId);
+        const key = keyOf(scope.sessionId, connection.connectionId, message.alias);
         const previous = bindings.get(key);
         if (message.kind === 'release') {
           if (previous === undefined || previous.generation !== message.generation) return;
           previous.poll?.abort();
           bindings.delete(key);
           await send(scope, routes.bridgeDisconnect.path, {
+            alias: message.alias,
             bindingId: connection.connectionId,
             generation: message.generation,
           });
@@ -145,6 +159,7 @@ export function createAuthorChannel(): DoomHubChannel {
         const reply = await responsePayload(response);
         if (reply.kind === 'accepted') {
           const binding: Binding = {
+            alias: message.alias,
             scope,
             connectionId: connection.connectionId,
             generation: reply.generation,
@@ -154,7 +169,11 @@ export function createAuthorChannel(): DoomHubChannel {
           bindings.set(key, binding);
           publish(binding, reply);
           void poll(binding);
-        } else if (reply.kind === 'rejected' && previous !== undefined) publish(previous, reply);
+        } else if (reply.kind === 'rejected') {
+          if (previous !== undefined) publish(previous, reply);
+          else
+            host?.publishToConnection?.(connection.connectionId, scope.sessionId, { ...reply, alias: message.alias });
+        }
       })().catch((error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)));
     },
     disconnected(connection: DoomHubChannelConnection) {
@@ -163,6 +182,7 @@ export function createAuthorChannel(): DoomHubChannel {
         binding.poll?.abort();
         bindings.delete(key);
         void send(binding.scope, routes.bridgeDisconnect.path, {
+          alias: binding.alias,
           bindingId: binding.connectionId,
           generation: binding.generation,
         }).catch((error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)));

@@ -9,6 +9,7 @@ import type {
 import {
   addAuthorRegion,
   authorDocument,
+  authorDocumentAnnotations,
   authorSessionWorkspace,
   putAuthorRequest,
   reviseAuthorDocument,
@@ -58,13 +59,17 @@ function checkedRegion(sessionId: string, path: string, value: Record<string, un
   const regionId = requiredString(value, 'regionId');
   const workspace = authorSessionWorkspace(sessionId);
   const region =
-    workspace.regions.find((candidate) => candidate.id === regionId) ??
+    authorDocumentAnnotations(sessionId, path)?.annotations.find((candidate) => candidate.id === regionId) ??
     workspace.requests
-      .filter((request) => request.status === 'REQUESTED' || request.status === 'CHANGING')
+      .filter(
+        (request) => request.documentPath === path && (request.status === 'REQUESTED' || request.status === 'CHANGING'),
+      )
       .flatMap((request) => request.pendingRegions ?? request.regions)
       .find((candidate) => candidate.id === regionId);
   if (region === undefined || region.documentPath !== path)
     throw new Error('STALE_REGION: The resolved Author region is unavailable.');
+  if (region.stroke !== undefined)
+    throw new Error('UNSUPPORTED_REGION: Freehand feedback cannot authorize a document mutation.');
   if (region.revision !== document.version || region.sourceSha256 !== document.sourceSha256) {
     throw new Error('STALE_REGION: The resolved Author region no longer matches the document.');
   }

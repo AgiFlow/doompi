@@ -22,23 +22,39 @@ export interface AuthorViewportCapability extends AuthorViewportCapabilityDescri
   execute(argumentsValue: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
 }
 
+export interface AuthorCanvasView {
+  alias: string;
+  path: string;
+  status: 'opening' | 'ready' | 'unavailable';
+}
+
 export interface AuthorViewportCatalogSnapshot {
   catalogToken: string;
   tools: AuthorViewportCapabilityDescriptor[];
+  canvases?: AuthorCanvasView[];
+  alias?: string;
+  path?: string;
+  status?: AuthorCanvasView['status'];
+  nextStep?: string;
 }
 
 export interface AuthorOpenFileResult {
   path: string;
   byteLength: number;
+  alias?: string;
+  status?: AuthorCanvasView['status'];
+  reused?: boolean;
 }
 
 export interface UseAuthorToolInput {
+  alias?: string;
   catalogToken: string;
   name: string;
   arguments: Record<string, unknown>;
 }
 
 export interface AuthorToolResult {
+  alias?: string;
   catalogToken: string;
   name: string;
   result: unknown;

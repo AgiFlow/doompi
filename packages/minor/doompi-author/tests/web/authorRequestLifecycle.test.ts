@@ -125,6 +125,44 @@ describe('Author request lifecycle', () => {
     ]);
   });
 
+  it('reconstructs drawn feedback from an immutable capture without changing the source', () => {
+    const document = putAuthorDocument('s1', { path: 'image.png', kind: 'image', sourceSha256: 'sha' });
+    focusAuthorDocument('s1', document.path, document.version, document.sourceSha256);
+    const region: AuthorRegionDraft = {
+      id: 'drawn',
+      documentPath: document.path,
+      revision: document.version,
+      sourceSha256: document.sourceSha256,
+      comment: 'Move this button',
+      mode: 'region',
+      stroke: [
+        { x: 0.2, y: 0.3 },
+        { x: 0.7, y: 0.3 },
+      ],
+      anchor: {
+        kind: 'image-rect',
+        rect: { x: 0.2, y: 0.3, width: 0.5, height: 0.001 },
+        naturalWidth: 200,
+        naturalHeight: 100,
+      },
+      viewport: { width: 200, height: 100 },
+      createdAt: 1,
+    };
+    addAuthorRegion('s1', region);
+    const context = authorCaptureContext(createAuthorCapturePacket('stroke-capture', 2, document, [region], 'image'));
+    recordAuthorComposerSubmission({
+      sessionId: 's1',
+      message: 'Update this position',
+      delivery: 'submit',
+      submittedAt: 3,
+      contextItems: [context],
+    });
+    expect(authorSessionWorkspace('s1').requests[0]?.regions[0]?.stroke).toEqual(region.stroke);
+    expect(authorSessionWorkspace('s1').regions).toEqual([]);
+    expect(authorDocument('s1', 'image.png')?.version).toBe(0);
+    expect(context.content).toContain('canvas image');
+  });
+
   it('keeps a multi-region request active and rebases untouched text anchors', async () => {
     const document = putAuthorDocument('s1', {
       path: 'notes.md',

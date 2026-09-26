@@ -55,18 +55,20 @@ interface StoryPreviewIdentity {
 interface StoryPreviewPanelProps extends WebPluginSlotProps {
   seed?: StoryPreviewSeed;
   source?: StoryPreviewSource;
-  activeTool?: 'select' | 'mark' | 'comment';
+  activeTool?: 'select' | 'mark' | 'comment' | 'draw' | 'pan';
   displayedAnnotations?: readonly {
     ordinal: number;
     mode: 'region' | 'point';
     point: PreviewPoint;
     rect?: PreviewAnnotationRect;
+    stroke?: readonly PreviewPoint[];
   }[];
   pendingCandidate?: boolean;
   onAnnotationCandidate?: (candidate: {
     mode: 'region' | 'point';
     point: PreviewPoint;
     rect?: PreviewAnnotationRect;
+    stroke?: readonly PreviewPoint[];
     preview: StoryPreviewIdentity;
     evidence: Blob;
     thumbnailUrl: string;
@@ -125,6 +127,13 @@ export function StoryPreviewPanel({
   const workingRef = useRef(false);
   const dirtyRef = useRef(sourceDirty);
   const annotationExportRef = useRef('');
+  const [stroke, setStroke] = useState<readonly PreviewPoint[]>([]);
+  const [zoom, setZoom] = useState(1);
+  const [gesture, setGesture] = useState<number>();
+  const pointers = useRef(new Map<number, PreviewPoint>());
+  const pinch = useRef<{ distance: number; zoom: number } | undefined>(undefined);
+  const pan = useRef<{ x: number; y: number; left: number; top: number } | undefined>(undefined);
+  const imageScroll = useRef<HTMLDivElement>(null);
 
   dirtyRef.current = sourceDirty;
 
@@ -155,6 +164,10 @@ export function StoryPreviewPanel({
     setAnnotationImage(undefined);
     setAnnotationStart(undefined);
     setAnnotationRect(undefined);
+    setStroke([]);
+    setZoom(1);
+    pointers.current.clear();
+    pinch.current = undefined;
 
     if (sessionId === null || sourcePath === '') {
       setPreview(undefined);
@@ -356,7 +369,11 @@ export function StoryPreviewPanel({
     setAnnotationRect(normalizedAnnotationRect(annotationStart, end));
   }
 
-  function authorCandidate(location: PreviewPoint, rect?: PreviewAnnotationRect): void {
+  function authorCandidate(
+    location: PreviewPoint,
+    rect?: PreviewAnnotationRect,
+    points?: readonly PreviewPoint[],
+  ): void {
     if (annotationImage === undefined || onAnnotationCandidate === undefined || builtRequest === undefined) return;
     const binary = atob(annotationImage.data);
     const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
@@ -367,6 +384,7 @@ export function StoryPreviewPanel({
         mode: rect === undefined ? 'point' : 'region',
         point: location,
         ...(rect === undefined ? {} : { rect }),
+        ...(points === undefined ? {} : { stroke: points.map((point) => ({ ...point })) }),
         preview: {
           version: 1,
           provider: 'style-system',
@@ -389,6 +407,13 @@ export function StoryPreviewPanel({
   const multipleExports = storyExports !== undefined && storyExports.length > 1;
   const previewVisible = preview !== undefined;
   const authorAnnotationActive = onAnnotationCandidate !== undefined && activeTool !== 'select';
+  useEffect(() => {
+    setStroke([]);
+    setAnnotationStart(undefined);
+    pointers.current.clear();
+    pinch.current = undefined;
+    pan.current = undefined;
+  }, [activeTool, annotationImage?.sourceSha256]);
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-3 p-3" data-testid="style-system-preview-panel">
@@ -521,84 +546,242 @@ export function StoryPreviewPanel({
           No preview built.
         </div>
       ) : authorAnnotationActive && annotationImage !== undefined ? (
-        <div className="grid min-h-0 flex-1 place-items-center overflow-hidden rounded border border-doom-border bg-doom-deep">
-          <div
-            className="relative max-h-full w-fit max-w-full touch-none overflow-hidden"
-            aria-label={
-              activeTool === 'comment' ? 'Click to place an annotation point' : 'Drag to mark an annotation region'
-            }
-            data-testid="style-system-author-annotation-overlay"
-            onPointerDown={(event) => {
-              if (pendingCandidate || (activeTool !== 'mark' && activeTool !== 'comment')) return;
-              event.currentTarget.setPointerCapture(event.pointerId);
-              const start = point(event);
-              setAnnotationStart(start);
-              setAnnotationRect(activeTool === 'mark' ? { ...start, width: 0, height: 0 } : undefined);
-            }}
-            onPointerMove={(event) => {
-              if (activeTool === 'mark') updateAnnotation(event);
-            }}
-            onPointerUp={(event) => {
-              const start = annotationStart;
-              if (start === undefined) return;
-              const end = point(event);
-              setAnnotationStart(undefined);
-              const location = previewAnnotationLocation(activeTool === 'comment' ? 'comment' : 'mark', start, end);
-              if (location === null) return;
-              setAnnotationRect(location.mode === 'region' ? location.rect : undefined);
-              authorCandidate(location.point, location.mode === 'region' ? location.rect : undefined);
-            }}
-            onPointerCancel={() => {
-              setAnnotationStart(undefined);
-              setAnnotationRect(undefined);
-            }}
-          >
-            <img
-              className="block max-h-full max-w-full select-none"
-              src={`data:${annotationImage.mimeType};base64,${annotationImage.data}`}
-              alt="Frozen source-backed story render for Author annotation"
-              draggable={false}
-            />
-            {displayedAnnotations.map((annotation) =>
-              annotation.mode === 'point' || annotation.rect === undefined ? (
-                <span
-                  key={annotation.ordinal}
-                  data-author-point={annotation.ordinal}
-                  className="pointer-events-none absolute z-10 flex h-5 min-w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-doom-deep bg-doom-yellow px-1 text-2xs font-bold text-doom-deep"
-                  style={{
-                    left: `${String(annotation.point.x * 100)}%`,
-                    top: `${String(annotation.point.y * 100)}%`,
-                  }}
-                >
-                  {annotation.ordinal}
-                </span>
-              ) : (
-                <div
-                  key={annotation.ordinal}
-                  data-author-region={annotation.ordinal}
-                  className="pointer-events-none absolute border border-doom-yellow bg-doom-yellow/10"
-                  style={{
-                    left: `${String(annotation.rect.x * 100)}%`,
-                    top: `${String(annotation.rect.y * 100)}%`,
-                    width: `${String(annotation.rect.width * 100)}%`,
-                    height: `${String(annotation.rect.height * 100)}%`,
-                  }}
-                >
-                  <span className="bg-doom-yellow text-doom-deep">{annotation.ordinal}</span>
-                </div>
-              ),
-            )}
-            {annotationRect === undefined ? null : (
-              <div
-                className="pointer-events-none absolute border-2 border-red-500 bg-red-500/10"
-                style={{
-                  left: `${String(annotationRect.x * 100)}%`,
-                  top: `${String(annotationRect.y * 100)}%`,
-                  width: `${String(annotationRect.width * 100)}%`,
-                  height: `${String(annotationRect.height * 100)}%`,
-                }}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-doom-border bg-doom-deep">
+          <div className="flex items-center gap-2 p-2" role="group" aria-label="Preview zoom">
+            <Button
+              variant="outline"
+              className="min-h-11 min-w-11"
+              aria-label="Zoom out"
+              onClick={() => setZoom((value) => Math.max(1, value / 1.5))}
+            >
+              −
+            </Button>
+            <output className="text-xs text-doom-dim">{Math.round(zoom * 100)}%</output>
+            <Button
+              variant="outline"
+              className="min-h-11 min-w-11"
+              aria-label="Zoom in"
+              onClick={() => setZoom((value) => Math.min(8, value * 1.5))}
+            >
+              +
+            </Button>
+            <Button variant="outline" className="min-h-11" aria-label="Fit preview" onClick={() => setZoom(1)}>
+              Fit
+            </Button>
+          </div>
+          <div ref={imageScroll} className="min-h-0 flex-1 overflow-auto">
+            <div
+              className="relative w-fit max-w-full overflow-hidden"
+              style={{ zoom, touchAction: 'none' }}
+              aria-label={
+                activeTool === 'comment'
+                  ? 'Click to place an annotation point'
+                  : activeTool === 'draw'
+                    ? 'Draw a feedback location mark'
+                    : activeTool === 'pan'
+                      ? 'Drag to pan preview'
+                      : 'Drag to mark an annotation region'
+              }
+              data-testid="style-system-author-annotation-overlay"
+              onPointerDown={(event) => {
+                if (pendingCandidate) return;
+                pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                event.currentTarget.setPointerCapture(event.pointerId);
+                if (pointers.current.size === 2) {
+                  setStroke([]);
+                  setAnnotationStart(undefined);
+                  const [a, b] = [...pointers.current.values()];
+                  pinch.current = { distance: Math.hypot(a!.x - b!.x, a!.y - b!.y), zoom };
+                  return;
+                }
+                if (activeTool === 'pan') {
+                  const container = imageScroll.current;
+                  if (container)
+                    pan.current = {
+                      x: event.clientX,
+                      y: event.clientY,
+                      left: container.scrollLeft,
+                      top: container.scrollTop,
+                    };
+                  return;
+                }
+                if (activeTool !== 'mark' && activeTool !== 'comment' && activeTool !== 'draw') return;
+                setGesture(event.pointerId);
+                if (activeTool === 'draw') setStroke([point(event)]);
+                const start = point(event);
+                setAnnotationStart(start);
+                setAnnotationRect(activeTool === 'mark' ? { ...start, width: 0, height: 0 } : undefined);
+              }}
+              onPointerMove={(event) => {
+                if (pointers.current.has(event.pointerId))
+                  pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                if (pinch.current !== undefined && pointers.current.size >= 2) {
+                  const [a, b] = [...pointers.current.values()];
+                  if (pinch.current.distance > 0)
+                    setZoom(
+                      Math.max(
+                        1,
+                        Math.min(
+                          8,
+                          (pinch.current.zoom * Math.hypot(a!.x - b!.x, a!.y - b!.y)) / pinch.current.distance,
+                        ),
+                      ),
+                    );
+                  return;
+                }
+                if (pan.current !== undefined && activeTool === 'pan') {
+                  const container = imageScroll.current;
+                  if (container) {
+                    container.scrollLeft = pan.current.left + pan.current.x - event.clientX;
+                    container.scrollTop = pan.current.top + pan.current.y - event.clientY;
+                  }
+                  return;
+                }
+                if (gesture !== event.pointerId) return;
+                if (activeTool === 'mark') updateAnnotation(event);
+                if (activeTool === 'draw')
+                  setStroke((points) => (points.length >= 128 ? points : [...points, point(event)]));
+              }}
+              onPointerUp={(event) => {
+                pointers.current.delete(event.pointerId);
+                if (pinch.current !== undefined || pan.current !== undefined) {
+                  if (pointers.current.size < 2) pinch.current = undefined;
+                  pan.current = undefined;
+                  return;
+                }
+                const start = annotationStart;
+                if (start === undefined || gesture !== event.pointerId) return;
+                if (activeTool === 'draw') {
+                  const points = stroke.length >= 128 ? stroke : [...stroke, point(event)];
+                  setStroke([]);
+                  setAnnotationStart(undefined);
+                  if (points.length < 2 || !points.some((item) => item.x !== points[0]?.x || item.y !== points[0]?.y))
+                    return;
+                  const x = Math.min(...points.map((item) => item.x));
+                  const y = Math.min(...points.map((item) => item.y));
+                  const rect = {
+                    x: Math.min(x, 0.999),
+                    y: Math.min(y, 0.999),
+                    width: Math.max(0.001, Math.max(...points.map((item) => item.x)) - x),
+                    height: Math.max(0.001, Math.max(...points.map((item) => item.y)) - y),
+                  };
+                  authorCandidate(points[0]!, rect, points);
+                  return;
+                }
+                const end = point(event);
+                setAnnotationStart(undefined);
+                const location = previewAnnotationLocation(activeTool === 'comment' ? 'comment' : 'mark', start, end);
+                if (location === null) return;
+                setAnnotationRect(location.mode === 'region' ? location.rect : undefined);
+                authorCandidate(location.point, location.mode === 'region' ? location.rect : undefined);
+              }}
+              onPointerCancel={() => {
+                setAnnotationStart(undefined);
+                setAnnotationRect(undefined);
+                setStroke([]);
+                pointers.current.clear();
+                pinch.current = undefined;
+                pan.current = undefined;
+              }}
+            >
+              <img
+                className="block max-h-full max-w-full select-none"
+                src={`data:${annotationImage.mimeType};base64,${annotationImage.data}`}
+                alt="Frozen source-backed story render for Author annotation"
+                draggable={false}
               />
-            )}
+              {displayedAnnotations.map((annotation) =>
+                annotation.stroke !== undefined ? (
+                  <div
+                    key={annotation.ordinal}
+                    data-author-stroke={annotation.ordinal}
+                    className="pointer-events-none absolute inset-0"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      className="absolute inset-0 h-full w-full text-doom-yellow"
+                      viewBox="0 0 1000 1000"
+                      preserveAspectRatio="none"
+                    >
+                      <polyline
+                        points={annotation.stroke
+                          .map((point) => `${String(point.x * 1000)},${String(point.y * 1000)}`)
+                          .join(' ')}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span
+                      className="absolute flex h-5 min-w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-doom-yellow px-1 text-2xs font-bold text-doom-deep"
+                      style={{
+                        left: `${String(annotation.stroke[0]!.x * 100)}%`,
+                        top: `${String(annotation.stroke[0]!.y * 100)}%`,
+                      }}
+                    >
+                      {annotation.ordinal}
+                    </span>
+                  </div>
+                ) : annotation.mode === 'point' || annotation.rect === undefined ? (
+                  <span
+                    key={annotation.ordinal}
+                    data-author-point={annotation.ordinal}
+                    className="pointer-events-none absolute z-10 flex h-5 min-w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-doom-deep bg-doom-yellow px-1 text-2xs font-bold text-doom-deep"
+                    style={{
+                      left: `${String(annotation.point.x * 100)}%`,
+                      top: `${String(annotation.point.y * 100)}%`,
+                    }}
+                  >
+                    {annotation.ordinal}
+                  </span>
+                ) : (
+                  <div
+                    key={annotation.ordinal}
+                    data-author-region={annotation.ordinal}
+                    className="pointer-events-none absolute border border-doom-yellow bg-doom-yellow/10"
+                    style={{
+                      left: `${String(annotation.rect.x * 100)}%`,
+                      top: `${String(annotation.rect.y * 100)}%`,
+                      width: `${String(annotation.rect.width * 100)}%`,
+                      height: `${String(annotation.rect.height * 100)}%`,
+                    }}
+                  >
+                    <span className="bg-doom-yellow text-doom-deep">{annotation.ordinal}</span>
+                  </div>
+                ),
+              )}
+              {stroke.length < 2 ? null : (
+                <svg
+                  aria-hidden="true"
+                  data-testid="style-system-author-stroke-selection"
+                  className="pointer-events-none absolute inset-0 h-full w-full text-doom-red"
+                  viewBox="0 0 1000 1000"
+                  preserveAspectRatio="none"
+                >
+                  <polyline
+                    points={stroke.map((point) => `${String(point.x * 1000)},${String(point.y * 1000)}`).join(' ')}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+              {annotationRect === undefined ? null : (
+                <div
+                  className="pointer-events-none absolute border-2 border-red-500 bg-red-500/10"
+                  style={{
+                    left: `${String(annotationRect.x * 100)}%`,
+                    top: `${String(annotationRect.y * 100)}%`,
+                    width: `${String(annotationRect.width * 100)}%`,
+                    height: `${String(annotationRect.height * 100)}%`,
+                  }}
+                />
+              )}
+            </div>
           </div>
         </div>
       ) : (

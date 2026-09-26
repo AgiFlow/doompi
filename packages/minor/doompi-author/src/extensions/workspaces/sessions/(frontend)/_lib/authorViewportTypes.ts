@@ -178,7 +178,7 @@ export interface AuthorVoiceGridEvidence {
 }
 
 export type AuthorAnnotationMode = 'region' | 'point';
-export type AuthorToolMode = 'select' | 'mark' | 'comment' | 'crop';
+export type AuthorToolMode = 'select' | 'mark' | 'comment' | 'draw' | 'pan' | 'crop';
 
 export interface AuthorAnnotationCandidate {
   documentPath: string;
@@ -187,6 +187,8 @@ export interface AuthorAnnotationCandidate {
   mode?: AuthorAnnotationMode;
   quote?: string;
   anchor: AuthorNativeAnchor;
+  /** Feedback-only source coordinates; never crop or mutation authority. */
+  stroke?: readonly AuthorNormalizedPoint[];
   viewport: AuthorViewportSnapshot;
   voiceGrid?: AuthorVoiceGridEvidence;
   thumbnailUrl?: string;

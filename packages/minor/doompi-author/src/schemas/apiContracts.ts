@@ -1,7 +1,12 @@
 import { defineApiContract, jsonApiResponses, type DoomHttpContract } from '@agimon-ai/doompi-core/apiContracts';
 import { Type } from 'typebox';
 
-import { AuthorBridgeMessageSchema, AuthorBridgeInputSchema, AuthorUseToolsInputSchema } from './authorFacade';
+import {
+  AuthorAliasSchema,
+  AuthorBridgeMessageSchema,
+  AuthorBridgeInputSchema,
+  AuthorUseToolsInputSchema,
+} from './authorFacade';
 
 const S = Type.String();
 const N = Type.Number();
@@ -13,22 +18,23 @@ const Json = Type.Unknown({
 const values = <T extends string>(items: T[]) => Type.Union(items.map((item) => Type.Literal(item)));
 const Capability = Type.Object({ name: S, label: S, description: S, inputSchema: Type.Record(S, Json) });
 const Accepted = Type.Object({
+  alias: AuthorAliasSchema,
   kind: Type.Literal('accepted'),
   generation: N,
   ownerToken: S,
   catalogToken: O(S),
   leaseMs: N,
 });
-const Identity = { generation: N, ownerToken: S, catalogToken: S, requestId: S };
+const Identity = { alias: AuthorAliasSchema, generation: N, ownerToken: S, catalogToken: S, requestId: S };
 const Request = Type.Object({ kind: Type.Literal('request'), ...Identity, name: S, arguments: Type.Record(S, Json) });
 const Cancel = Type.Object({ kind: Type.Literal('cancel'), ...Identity });
 export const AuthorHubMessageSchema = Type.Union([
   Accepted,
   Request,
   Cancel,
-  Type.Object({ kind: Type.Literal('rejected'), reason: S }),
+  Type.Object({ alias: AuthorAliasSchema, kind: Type.Literal('rejected'), reason: S }),
 ]);
-const Binding = { bindingId: S, generation: Type.Integer({ minimum: 0 }) };
+const Binding = { alias: AuthorAliasSchema, bindingId: S, generation: Type.Integer({ minimum: 0 }) };
 const Owner = { ...Binding, ownerToken: S };
 const ResultIdentity = { ...Owner, catalogToken: S, requestId: S };
 const Format = values(['markdown-slides', 'csv', 'pptx', 'xlsx']);
@@ -112,6 +118,12 @@ export const apiContracts = defineApiContract({
       Type.Object(Binding),
       Type.Object({ accepted: Type.Literal(true) }),
     ),
+    post(
+      'bridge.close',
+      '/bridge/close',
+      Type.Object({ alias: AuthorAliasSchema }),
+      Type.Object({ accepted: Type.Literal(true) }),
+    ),
     {
       id: 'bridge.describe',
       scope: 'session',
@@ -120,19 +132,34 @@ export const apiContracts = defineApiContract({
       method: 'GET',
       authentication: 'owner',
       description: 'Read runtime author capabilities.',
-      responses: jsonApiResponses(Type.Object({ catalogToken: S, tools: Type.Array(Capability) })),
+      responses: jsonApiResponses(
+        Type.Object({
+          catalogToken: S,
+          tools: Type.Array(Capability),
+          canvases: Type.Array(Type.Object({ alias: S, path: S, status: values(['opening', 'ready', 'unavailable']) })),
+        }),
+      ),
     },
     post(
       'bridge.invoke',
       '/bridge/invoke',
       AuthorUseToolsInputSchema,
-      Type.Object({ catalogToken: S, name: S, result: Json }),
+      Type.Object({ alias: AuthorAliasSchema, catalogToken: S, name: S, result: Json }),
     ),
     post(
       'documents.open',
       '/documents/open',
-      Type.Object({ ...Document, format: O(Format) }),
-      Type.Union([Type.Object({ path: S, byteLength: N }), ParsedDocument]),
+      Type.Object({ ...Document, format: O(Format), alias: O(AuthorAliasSchema) }),
+      Type.Union([
+        Type.Object({
+          path: S,
+          byteLength: N,
+          alias: AuthorAliasSchema,
+          status: values(['opening', 'ready', 'unavailable']),
+          reused: B,
+        }),
+        ParsedDocument,
+      ]),
     ),
     post(
       'documents.preflight',

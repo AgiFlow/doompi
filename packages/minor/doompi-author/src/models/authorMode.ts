@@ -13,20 +13,20 @@ export const authorMinorMode = defineMinorMode<AuthorModeBackend>({
     source: '@agimon-ai/doompi-author',
     id: AUTHOR_MODE_ID,
     label: 'Author',
-    description: 'Focused document review and bounded authoring through the current visual viewport.',
+    description: 'Named document canvases for focused review and bounded visual authoring.',
     order: 440,
     actions: [
       {
         id: 'activate',
         label: 'Activate',
-        description: 'Expose the current Author viewport capabilities to the agent.',
+        description: 'Expose Author canvas discovery and tools to the agent.',
         contexts: ['tui', 'headless'],
         parameters: [],
       },
       {
         id: 'deactivate',
         label: 'Deactivate',
-        description: 'Hide Author viewport capabilities from the agent.',
+        description: 'Hide Author canvas tools from the agent.',
         contexts: ['tui', 'headless'],
         parameters: [],
       },

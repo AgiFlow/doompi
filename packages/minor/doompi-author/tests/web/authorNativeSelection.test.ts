@@ -49,7 +49,7 @@ type Props = {
   onPointerMove?: (event: Pointer) => void;
   onPointerDownCapture?: (event: Pointer) => void;
   onPointerUp?: (event: Pointer) => void;
-  onPointerCancel?: () => void;
+  onPointerCancel?: (event: Pointer) => void;
   value?: string;
   text?: string;
 };
@@ -190,7 +190,7 @@ function mediaFixture(
     pdf?: unknown;
     blob?: Blob | null;
     context?: boolean;
-    activeTool?: 'mark' | 'comment';
+    activeTool?: 'mark' | 'comment' | 'draw' | 'pan';
     displayedRegions?: readonly AuthorDisplayedRegion[];
   } = {},
 ) {
@@ -236,6 +236,9 @@ function mediaFixture(
 describe('Author media selection integration', () => {
   it.each(['image', 'video'] as const)('renders the selected rectangle over %s', (kind) => {
     hooks.states = [
+      1,
+      undefined,
+      undefined,
       { playing: false, currentTime: 0, duration: 3 },
       true,
       { path: 'doc', rect: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 } },
@@ -256,7 +259,7 @@ describe('Author media selection integration', () => {
       path: 'doc',
       rect: { x: 0, y: 0, width: 0.5, height: 0.5 },
     });
-    root.props.onPointerCancel!();
+    root.props.onPointerCancel!(pointer(element, 400, 200));
     expect(hooks.setters.at(-3)).toHaveBeenLastCalledWith(undefined);
   });
   it('creates and renders point annotations from Comment clicks', async () => {
@@ -270,6 +273,9 @@ describe('Author media selection integration', () => {
       },
     };
     hooks.states = [
+      1,
+      undefined,
+      undefined,
       { playing: false, currentTime: 0, duration: 3 },
       true,
       undefined,
@@ -303,6 +309,32 @@ describe('Author media selection integration', () => {
     });
     expect(fixture.drawImage).toHaveBeenCalledWith(fixture.image, 0, 0, 1600, 800);
   });
+  it('records freehand image feedback without making the stroke an authored region', async () => {
+    const { root, image, pointer } = mediaFixture('image', { activeTool: 'draw' });
+    root.props.onPointerDownCapture!(pointer(image, 80, 80));
+    root.props.onPointerMove!(pointer(image, 160, 120));
+    root.props.onPointerUp!(pointer(image, 240, 160));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(workspace.authorSessionWorkspace('s').candidate).toMatchObject({
+      mode: 'region',
+      stroke: [
+        { x: 0.1, y: 0.2 },
+        { x: 0.2, y: 0.3 },
+        { x: 0.3, y: 0.4 },
+      ],
+    });
+  });
+  it('pinches to zoom without creating a feedback mark', () => {
+    const { root, image, pointer } = mediaFixture('image', { activeTool: 'pan' });
+    root.props.onPointerDownCapture!(pointer(image, 0, 0));
+    root.props.onPointerDownCapture!({ ...pointer(image, 100, 0), pointerId: 2 });
+    root.props.onPointerMove!({ ...pointer(image, 200, 0), pointerId: 2 });
+    expect(hooks.setters[0]).toHaveBeenCalledWith(2);
+    root.props.onPointerUp!({ ...pointer(image, 200, 0), pointerId: 2 });
+    root.props.onPointerUp!(pointer(image, 0, 0));
+    expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
+  });
   it('does not resolve image coordinates before load or outside the rendered image', () => {
     for (const image of [
       null,
@@ -323,7 +355,7 @@ describe('Author media selection integration', () => {
     await drag({});
     await drag(image, { x: 0, y: 0 });
     root.props.onPointerDownCapture!(pointer(image, 0, 0));
-    root.props.onPointerCancel!();
+    root.props.onPointerCancel!(pointer(image, 0, 0));
     root.props.onPointerUp!(pointer(image, 400, 200));
     expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
     hooks.refs = [null, image, null, null, undefined];
@@ -355,6 +387,8 @@ describe('Author media selection integration', () => {
     const video = mediaFixture('video', {
       video: {
         pause: vi.fn(),
+        getState: () => ({ currentTime: 12 }),
+        isFrameReady: () => true,
         captureFrame: async () => ({ timeSeconds: 12, width: 1920, height: 1080, blob: new Blob(['frame']) }),
       },
     });

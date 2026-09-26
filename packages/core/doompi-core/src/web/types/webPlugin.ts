@@ -62,6 +62,10 @@ export interface TransientTab {
   panel: ComponentType<WebPluginSlotProps>;
   /** Keeps the host composer below this panel. Defaults to false. */
   retainComposer?: boolean;
+  /** Called once when this tab is first added to its owning session. */
+  onOpen?: (sessionId: string) => void;
+  /** Called once when the tab is closed or its owning session/page is discarded. */
+  onClose?: (sessionId: string) => void;
 }
 /**
  * Which paths a message names can be opened, and what tab each one opens.

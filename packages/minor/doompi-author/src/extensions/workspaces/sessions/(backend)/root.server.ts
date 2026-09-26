@@ -21,6 +21,7 @@ export default defineRoot(({ agent }: DoomServerPluginContext) => {
             key: 'minor-mode',
             values: enabled ? [...modes, authorMinorMode.descriptor.id] : modes,
           });
+          if (!enabled) session?.closeCanvases();
         },
       })
     : undefined;

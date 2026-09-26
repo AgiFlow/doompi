@@ -29,33 +29,39 @@ export function findTransientTab(
 }
 
 export function openTransientTab(sessionId: string, tab: TransientTab): void {
-  transientTabsStore.setState((state) => {
-    const current = state[sessionId] ?? [];
-    if (current.some((existing) => existing.id === tab.id)) return state;
-    return { ...state, [sessionId]: [...current, tab] };
-  });
+  if (findTransientTab(transientTabsStore.state, sessionId, tab.id) !== undefined) return;
+  transientTabsStore.setState((state) => ({ ...state, [sessionId]: [...(state[sessionId] ?? []), tab] }));
+  tab.onOpen?.(sessionId);
 }
 
 export function closeTransientTab(sessionId: string, tabId: string): void {
-  transientTabsStore.setState((state) => {
-    const current = state[sessionId];
-    if (current === undefined || !current.some((tab) => tab.id === tabId)) return state;
-    return { ...state, [sessionId]: current.filter((tab) => tab.id !== tabId) };
-  });
+  const tab = findTransientTab(transientTabsStore.state, sessionId, tabId);
+  if (tab === undefined) return;
+  transientTabsStore.setState((state) => ({
+    ...state,
+    [sessionId]: (state[sessionId] ?? []).filter((candidate) => candidate.id !== tabId),
+  }));
+  tab.onClose?.(sessionId);
 }
 
 /** A session that left takes its tabs with it. */
 export function dropTransientTabs(sessionId: string): void {
+  const tabs = transientTabsStore.state[sessionId];
+  if (tabs === undefined) return;
   transientTabsStore.setState((state) => {
-    if (!(sessionId in state)) return state;
     const next = { ...state };
     delete next[sessionId];
     return next;
   });
+  for (const tab of tabs) tab.onClose?.(sessionId);
 }
 
 export function resetTransientTabs(): void {
+  const previous = transientTabsStore.state;
   transientTabsStore.setState(() => ({}));
+  for (const [sessionId, tabs] of Object.entries(previous)) {
+    for (const tab of tabs ?? []) tab.onClose?.(sessionId);
+  }
 }
 
 export function useTransientTabs(sessionId: string | null): readonly TransientTab[] {

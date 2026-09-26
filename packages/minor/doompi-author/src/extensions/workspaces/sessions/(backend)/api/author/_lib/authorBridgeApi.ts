@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 
-import { AuthorBridgeError, type AuthorBridgeState } from '../../../../../../../models/authorBridgeState';
+import { AuthorBridgeError } from '../../../../../../../models/authorBridgeState';
 import { parseUseAuthorToolInput } from '../../../../../../../schemas/authorTools';
+import type { AuthorCanvasRegistry } from '../../../../../../../services/authorCanvasRegistry';
 import routes from '../../../../../../../types/apiRoutes';
 import type { AuthorViewportCapabilityDescriptor } from '../../../../../../../types/author';
 
@@ -27,7 +28,7 @@ async function body(request: Request): Promise<Record<string, unknown>> {
   return record(await request.json());
 }
 
-export function createAuthorBridgeApi(state: AuthorBridgeState): Hono {
+export function createAuthorBridgeApi(registry: AuthorCanvasRegistry): Hono {
   const app = new Hono();
   app.onError((error, context) =>
     context.json(
@@ -37,59 +38,77 @@ export function createAuthorBridgeApi(state: AuthorBridgeState): Hono {
   );
   app.post(routes.bridgeRegister.path, async (context) => {
     const value = await body(context.req.raw);
-    return context.json(state.register(text(value, 'bindingId'), generation(value)));
+    const alias = text(value, 'alias');
+    return context.json({ ...registry.bridge(alias).register(text(value, 'bindingId'), generation(value)), alias });
   });
   app.post(routes.bridgeCatalog.path, async (context) => {
     const value = await body(context.req.raw);
     const tools = value.tools;
     if (!Array.isArray(tools)) throw new AuthorBridgeError('Invalid Author catalog.', 400);
-    return context.json(
-      state.catalog(
-        text(value, 'bindingId'),
-        generation(value),
-        text(value, 'ownerToken'),
-        tools as AuthorViewportCapabilityDescriptor[],
-      ),
-    );
+    const alias = text(value, 'alias');
+    return context.json({
+      ...registry
+        .bridge(alias)
+        .catalog(
+          text(value, 'bindingId'),
+          generation(value),
+          text(value, 'ownerToken'),
+          tools as AuthorViewportCapabilityDescriptor[],
+        ),
+      alias,
+    });
   });
   app.post(routes.bridgeNext.path, async (context) => {
     const value = await body(context.req.raw);
-    return context.json(
-      await state.next(text(value, 'bindingId'), generation(value), text(value, 'ownerToken'), context.req.raw.signal),
-    );
+    const alias = text(value, 'alias');
+    return context.json({
+      ...(await registry
+        .bridge(alias)
+        .next(text(value, 'bindingId'), generation(value), text(value, 'ownerToken'), context.req.raw.signal)),
+      alias,
+    });
   });
   app.post(routes.bridgeResult.path, async (context) => {
     const value = await body(context.req.raw);
-    state.result(
-      text(value, 'bindingId'),
-      generation(value),
-      text(value, 'ownerToken'),
-      text(value, 'catalogToken'),
-      text(value, 'requestId'),
-      value.result,
-    );
+    registry
+      .bridge(text(value, 'alias'))
+      .result(
+        text(value, 'bindingId'),
+        generation(value),
+        text(value, 'ownerToken'),
+        text(value, 'catalogToken'),
+        text(value, 'requestId'),
+        value.result,
+      );
     return context.json({ accepted: true });
   });
   app.post(routes.bridgeCancelled.path, async (context) => {
     const value = await body(context.req.raw);
-    state.cancelled(
-      text(value, 'bindingId'),
-      generation(value),
-      text(value, 'ownerToken'),
-      text(value, 'catalogToken'),
-      text(value, 'requestId'),
-    );
+    registry
+      .bridge(text(value, 'alias'))
+      .cancelled(
+        text(value, 'bindingId'),
+        generation(value),
+        text(value, 'ownerToken'),
+        text(value, 'catalogToken'),
+        text(value, 'requestId'),
+      );
     return context.json({ accepted: true });
   });
   app.post(routes.bridgeDisconnect.path, async (context) => {
     const value = await body(context.req.raw);
-    state.disconnect(text(value, 'bindingId'), generation(value));
+    registry.bridge(text(value, 'alias')).disconnect(text(value, 'bindingId'), generation(value));
     return context.json({ accepted: true });
   });
-  app.get(routes.bridgeDescribe.path, (context) => context.json(state.describe()));
+  app.post(routes.bridgeClose.path, async (context) => {
+    const value = await body(context.req.raw);
+    registry.close(text(value, 'alias'));
+    return context.json({ accepted: true });
+  });
+  app.get(routes.bridgeDescribe.path, (context) => context.json(registry.describe(context.req.query('alias'))));
   app.post(routes.bridgeInvoke.path, async (context) => {
     const value = parseUseAuthorToolInput(await context.req.raw.json());
-    return context.json(await state.invoke(value, context.req.raw.signal));
+    return context.json(await registry.invoke(value, context.req.raw.signal));
   });
   return app;
 }

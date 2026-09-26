@@ -52,8 +52,11 @@ describe('AuthorRuntime', () => {
     const { pluginRuntime, tools } = fixture();
     const runtime = new AuthorRuntime(pluginRuntime);
     await runtime.replaceProfiles([profile('first')]);
-    const stale = tools.get('author_test')!;
+    const registeredName = [...tools.keys()][0]!;
+    expect(registeredName).not.toBe('author_test');
+    const stale = tools.get(registeredName)!;
     await runtime.replaceProfiles([profile('second')]);
+    expect([...tools.keys()]).toEqual([registeredName]);
 
     await expect(stale.execute('{not json', { signal: new AbortController().signal })).rejects.toThrow('stale');
     await expect(runtime.execute('author_test', {}, new AbortController().signal)).resolves.toBe('second');

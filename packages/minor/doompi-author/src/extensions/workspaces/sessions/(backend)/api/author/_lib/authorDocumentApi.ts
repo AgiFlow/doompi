@@ -18,6 +18,7 @@ export { AUTHOR_DOCUMENT_MAX_BYTES } from '../../../../../../../services/structu
 
 interface DocumentRequest {
   path?: unknown;
+  alias?: unknown;
   format?: unknown;
   operations?: unknown;
   preflightDigest?: unknown;
@@ -26,6 +27,7 @@ interface DocumentRequest {
 
 export interface AuthorDocumentApiOptions {
   cwd?: string;
+  open?: (path: string, signal?: AbortSignal, alias?: string) => Promise<AuthorOpenFileResult>;
 }
 
 const FORMATS = new Set<StructuredDocumentFormat>(['markdown-slides', 'csv', 'pptx', 'xlsx']);
@@ -74,6 +76,11 @@ export function createAuthorDocumentApi(options: AuthorDocumentApiOptions = {}):
   app.post(routes.documentsOpen.path, async (context) => {
     try {
       const body = await bodyOf(context.req.raw);
+      if (body.format === undefined && options.open !== undefined) {
+        return context.json(
+          await options.open(body.path as string, context.req.raw.signal, body.alias as string | undefined),
+        );
+      }
       const bytes = await readDocument(cwd, body.path);
       if (body.format === undefined) {
         return context.json({ path: body.path as string, byteLength: bytes.byteLength } satisfies AuthorOpenFileResult);

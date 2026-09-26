@@ -129,6 +129,24 @@ describe('fenced Author native mutations', () => {
     expect(workspace.authorDocument('s', 'doc')?.crop).toEqual(rect);
     expect(workspace.authorSessionWorkspace('s').requests[0]?.after).toBe(JSON.stringify(rect));
   });
+  it('never treats a feedback stroke bounding rectangle as crop authority', async () => {
+    const rect = { x: 0.1, y: 0.2, width: 0.3, height: 0.4 };
+    const tool = setup({ kind: 'image' }, { kind: 'image-rect', rect, naturalWidth: 100, naturalHeight: 100 });
+    workspace.updateAuthorRequest('s', 'q', (current) => ({
+      ...current,
+      regions: current.regions.map((item) => ({
+        ...item,
+        stroke: [
+          { x: 0.1, y: 0.2 },
+          { x: 0.4, y: 0.6 },
+        ],
+      })),
+    }));
+    workspace.removeAuthorRegion('s', 'r');
+    await expect(tool.execute(args, signal)).rejects.toThrow('UNSUPPORTED_REGION');
+    expect(workspace.authorDocument('s', 'doc')?.crop).toBeUndefined();
+    expect(workspace.authorDocument('s', 'doc')?.version).toBe(0);
+  });
   it('refuses multi-region crops and capture-only anchors', async () => {
     const tool = setup(
       { kind: 'image' },

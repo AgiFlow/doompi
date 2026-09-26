@@ -109,6 +109,33 @@ describe('Author workspace boundary and retention contracts', () => {
     expect(workspace.authorSessionWorkspace(session).regions).toEqual([]);
     expect(revoke).toHaveBeenCalledTimes(3);
   });
+  it('invalidates a hidden document without clearing the currently visible canvas', () => {
+    workspace.addAuthorRegion(session, region);
+    workspace.putAuthorDocument(session, { path: 'b.md', kind: 'markdown', content: 'b', sourceSha256: 'second' });
+    workspace.focusAuthorDocument(session, 'b.md', 0, 'second');
+    expect(workspace.authorDocumentAnnotations(session, 'a.md')?.stale).toBe(false);
+    workspace.reviseAuthorDocument(session, 'a.md', 'changed');
+    expect(workspace.authorDocumentAnnotations(session, 'a.md')?.stale).toBe(true);
+    expect(workspace.authorDocumentAnnotations(session, 'a.md')?.annotations).toHaveLength(1);
+    expect(workspace.authorSessionWorkspace(session).focusedDocument?.path).toBe('b.md');
+    expect(workspace.authorSessionWorkspace(session).regions).toEqual([]);
+  });
+  it('deep-copies stroke feedback through candidate and request snapshots', () => {
+    const stroke = [
+      { x: 0.1, y: 0.2 },
+      { x: 0.3, y: 0.4 },
+    ];
+    workspace.setAuthorRegionCandidate(session, { ...region, stroke });
+    stroke[0]!.x = 0.9;
+    expect(workspace.authorSessionWorkspace(session).candidate?.stroke?.[0]?.x).toBe(0.1);
+    workspace.commitAuthorRegion(session, 'Mark here');
+    const stored = workspace.authorSessionWorkspace(session).regions[0]!;
+    workspace.putAuthorRequest(session, { ...request, regions: [stored] });
+    expect(workspace.authorSessionWorkspace(session).requests[0]?.regions[0]?.stroke).toEqual([
+      { x: 0.1, y: 0.2 },
+      { x: 0.3, y: 0.4 },
+    ]);
+  });
   it('treats missing documents, unchanged text and fragment edits as no-ops', () => {
     workspace.reviseAuthorDocument(session, 'missing', 'b');
     workspace.reviseAuthorDocument(session, 'a.md', 'a');

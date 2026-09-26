@@ -8,7 +8,7 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 
 import type { AuthorDocumentInput } from '../_lib/authorViewportTypes';
-import { putAuthorDocument, reviseAuthorDocument } from '../_lib/authorWorkspaceStore';
+import { focusAuthorDocument, putAuthorDocument, reviseAuthorDocument } from '../_lib/authorWorkspaceStore';
 import { AuthorDocumentPanel } from './AuthorDocumentPanel';
 
 const SPEC: AuthorDocumentInput = {
@@ -26,6 +26,16 @@ const NOTES: AuthorDocumentInput = {
   sourceSha256: 'def456',
 };
 
+const PICTURE: AuthorDocumentInput = {
+  path: 'assets/review.png',
+  kind: 'image',
+  mediaUrl:
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg==',
+  sourceSha256: 'image123',
+};
+
+putAuthorDocument('doc-image', PICTURE);
+focusAuthorDocument('doc-image', PICTURE.path, 0, PICTURE.sourceSha256);
 putAuthorDocument('doc-preview', SPEC);
 putAuthorDocument('doc-dirty', NOTES);
 reviseAuthorDocument('doc-dirty', NOTES.path, 'retry budget: 5\nbackoff: 2s\n');
@@ -45,6 +55,11 @@ export default meta;
 export const Playground = {
   render: () => (
     <div className="flex flex-col gap-6 bg-doom-bg p-6">
+      <div className="flex h-96 flex-col gap-2">
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">image · mobile controls and feedback</span>
+        <AuthorDocumentPanel {...props('doc-image', ['author'])} path={PICTURE.path} />
+      </div>
+
       <div className="flex h-64 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">markdown · preview</span>
         <AuthorDocumentPanel {...props('doc-preview', ['author'])} path={SPEC.path} />

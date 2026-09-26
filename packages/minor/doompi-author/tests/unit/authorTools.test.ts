@@ -31,9 +31,24 @@ describe('shared Author declarations', () => {
         update: () => undefined,
       },
     );
-    expect(catalog.open).toHaveBeenCalledWith('docs/report.md', signal);
+    expect(catalog.open).toHaveBeenCalledWith('docs/report.md', signal, undefined);
     expect(result.details).toEqual({ path: 'docs/report.md', byteLength: 12 });
   });
+  it('passes bounded canvas aliases to open and describe', async () => {
+    const { catalog, tools } = fixture();
+    const execution = {
+      cwd: '/repo',
+      toolCallId: 'call',
+      signal: new AbortController().signal,
+      notify: () => undefined,
+      update: () => undefined,
+    };
+    await tools[0]!.execute({ path: 'docs/report.md', alias: 'review' }, execution);
+    await tools[1]!.execute({ alias: 'review' }, execution);
+    expect(catalog.open).toHaveBeenCalledWith('docs/report.md', execution.signal, 'review');
+    expect(catalog.describe).toHaveBeenCalledWith(execution.signal, 'review');
+  });
+
   it('rejects invalid input before invoking the catalog', async () => {
     const { catalog } = fixture();
     const execution = {

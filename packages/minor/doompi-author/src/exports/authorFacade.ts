@@ -1,5 +1,6 @@
 export type { AuthorDescribeToolsInput, AuthorUseToolsInput } from '../schemas/authorFacade';
 export {
+  AuthorAliasSchema,
   AuthorDescribeToolsInputSchema,
   AuthorUseToolsInputSchema,
   AuthorBridgeMessageSchema,

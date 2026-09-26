@@ -9,8 +9,11 @@ describe('Author facade contracts', () => {
     expect(AUTHOR_FACADE_TOOL_NAMES).toEqual(['describe_author_tools', 'use_author_tools']);
   });
 
-  it('accepts only an empty describe request', () => {
+  it('accepts discovery or one bounded canvas alias, but no unknown properties', () => {
     expect(Check(AuthorDescribeToolsInputSchema, {})).toBe(true);
+    expect(Check(AuthorDescribeToolsInputSchema, { alias: 'homepage' })).toBe(true);
+    expect(Check(AuthorDescribeToolsInputSchema, { alias: 'Invalid Name' })).toBe(false);
+    expect(Check(AuthorDescribeToolsInputSchema, { '': '' })).toBe(false);
     expect(Check(AuthorDescribeToolsInputSchema, { extra: true })).toBe(false);
   });
 

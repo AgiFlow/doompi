@@ -5,127 +5,192 @@ import type { AuthorBrowserMessage, AuthorHubMessage } from '../../../../../type
 import { AuthorRuntime } from './authorRuntime';
 import type { AuthorTrustedProfile } from './authorViewportTypes';
 
-interface ActiveViewport {
+type Canvas = {
   sessionId: string;
+  alias: string;
   generation: number;
   profiles: readonly AuthorTrustedProfile[];
+  documentProfiles: readonly AuthorTrustedProfile[];
+  runtime: AuthorRuntime;
   release: () => void;
   ownerToken?: string;
   catalogToken?: string;
-}
+  pending: Map<string, AbortController>;
+  leaseTimer?: ReturnType<typeof setTimeout>;
+  visible: boolean;
+  focusId: number;
+  replacementId: number;
+};
+
+const canvasKey = (sessionId: string, alias: string): string => `${sessionId}\n${alias}`;
+const VISIBLE_ONLY = new Set(['author_describe_grid', 'author_resolve_grid_cell']);
+const documentProfiles = (profiles: readonly AuthorTrustedProfile[]): readonly AuthorTrustedProfile[] =>
+  profiles.map((profile) => ({ ...profile, tools: profile.tools.filter((tool) => !VISIBLE_ONLY.has(tool.name)) }));
 
 class AuthorBrowserBridge {
   readonly #host: WebPluginRuntime;
-  readonly #runtime: AuthorRuntime;
-  readonly #pending = new Map<string, AbortController>();
-  #active: ActiveViewport | undefined;
+  readonly #canvases = new Map<string, Canvas>();
+  readonly #opening = new Map<string, { promise: Promise<void>; runtime: AuthorRuntime }>();
   #generation = 0;
   #disposed = false;
   readonly #releaseConnected: () => void;
-  #leaseTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(host: WebPluginRuntime) {
     this.#host = host;
-    this.#runtime = new AuthorRuntime(host);
     this.#releaseConnected = host.onHubConnected(() => {
-      if (this.#active !== undefined) {
-        this.#active.ownerToken = undefined;
-        this.#active.catalogToken = undefined;
+      for (const canvas of this.#canvases.values()) {
+        canvas.ownerToken = undefined;
+        canvas.catalogToken = undefined;
+        this.#register(canvas);
       }
-      this.#register();
     });
   }
 
-  async focus(sessionId: string, profiles: readonly AuthorTrustedProfile[]): Promise<() => void> {
+  async open(sessionId: string, alias: string, profiles: readonly AuthorTrustedProfile[]): Promise<void> {
     if (this.#disposed) throw new Error('Author browser bridge is disposed');
+    const key = canvasKey(sessionId, alias);
+    if (this.#canvases.has(key)) return;
+    const pending = this.#opening.get(key);
+    if (pending !== undefined) return await pending.promise;
+    const runtime = new AuthorRuntime(this.#host);
     const generation = ++this.#generation;
-    const release = await this.#runtime.replaceProfiles(profiles);
-    if (this.#disposed || generation !== this.#generation) {
-      release();
-      return () => undefined;
+    const base = documentProfiles(profiles);
+    let opening!: Promise<void>;
+    opening = (async () => {
+      const release = await runtime.replaceProfiles(base);
+      if (this.#disposed || this.#canvases.has(key) || this.#opening.get(key)?.promise !== opening) {
+        release();
+        runtime.dispose();
+        return;
+      }
+      const canvas: Canvas = {
+        sessionId,
+        alias,
+        generation,
+        profiles: base,
+        documentProfiles: base,
+        runtime,
+        release,
+        pending: new Map(),
+        visible: false,
+        focusId: 0,
+        replacementId: 0,
+      };
+      this.#canvases.set(key, canvas);
+      this.#register(canvas);
+    })();
+    this.#opening.set(key, { promise: opening, runtime });
+    try {
+      await opening;
+    } finally {
+      if (this.#opening.get(key)?.promise === opening) this.#opening.delete(key);
     }
-    this.#clearActive();
-    this.#active = { sessionId, generation, profiles, release };
-    this.#register();
+  }
+
+  async focus(sessionId: string, alias: string, profiles: readonly AuthorTrustedProfile[]): Promise<() => void> {
+    await this.open(sessionId, alias, profiles);
+    const canvas = this.#canvases.get(canvasKey(sessionId, alias));
+    if (canvas === undefined) return () => undefined;
+    canvas.visible = true;
+    const focusId = ++canvas.focusId;
+    await this.#replace(canvas, profiles);
     return () => {
-      if (this.#active?.generation !== generation) return;
-      this.#clearActive();
-      this.#generation += 1;
+      if (this.#canvases.get(canvasKey(sessionId, alias)) !== canvas || canvas.focusId !== focusId) return;
+      canvas.visible = false;
+      canvas.focusId += 1;
+      void this.#replace(canvas, canvas.documentProfiles);
     };
   }
 
-  drop(sessionId: string): void {
-    if (this.#active?.sessionId !== sessionId) return;
-    this.#clearActive();
-    this.#generation += 1;
+  drop(sessionId: string, alias?: string): void {
+    for (const [key, entry] of this.#opening) {
+      if (key.startsWith(`${sessionId}\n`) && (alias === undefined || key === canvasKey(sessionId, alias))) {
+        this.#opening.delete(key);
+        entry.runtime.dispose();
+      }
+    }
+    for (const canvas of this.#canvases.values()) {
+      if (canvas.sessionId !== sessionId || (alias !== undefined && canvas.alias !== alias)) continue;
+      this.#canvases.delete(canvasKey(sessionId, canvas.alias));
+      this.#release(canvas);
+      canvas.runtime.dispose();
+    }
   }
 
   apply(sessionId: string, message: AuthorHubMessage): void {
-    const active = this.#active;
-    if (active === undefined || active.sessionId !== sessionId || message.kind === 'rejected') return;
+    if (message.alias === undefined) return;
+    const canvas = this.#canvases.get(canvasKey(sessionId, message.alias));
+    if (canvas === undefined || message.kind === 'rejected') return;
     if (
-      message.generation !== active.generation ||
-      (message.ownerToken !== active.ownerToken && active.ownerToken !== undefined)
+      message.generation !== canvas.generation ||
+      (message.ownerToken !== canvas.ownerToken && canvas.ownerToken !== undefined)
     )
       return;
     if (message.kind === 'accepted') {
-      active.ownerToken = message.ownerToken;
-      clearTimeout(this.#leaseTimer);
-      this.#leaseTimer = setTimeout(() => this.#register(), Math.max(1000, Math.floor(message.leaseMs / 2)));
-      if (message.catalogToken === undefined) this.#sendCatalog(active);
-      else active.catalogToken = message.catalogToken;
+      canvas.ownerToken = message.ownerToken;
+      clearTimeout(canvas.leaseTimer);
+      canvas.leaseTimer = setTimeout(() => this.#register(canvas), Math.max(1000, Math.floor(message.leaseMs / 2)));
+      if (message.catalogToken === undefined) this.#sendCatalog(canvas);
+      else canvas.catalogToken = message.catalogToken;
       return;
     }
-    if (message.catalogToken !== active.catalogToken) return;
+    if (message.catalogToken !== canvas.catalogToken) return;
     if (message.kind === 'cancel') {
-      this.#pending.get(message.requestId)?.abort(new Error('Author tool request cancelled'));
+      canvas.pending.get(message.requestId)?.abort(new Error('Author tool request cancelled'));
       return;
     }
-    if (message.kind !== 'request' || this.#pending.has(message.requestId)) return;
+    if (message.kind !== 'request' || canvas.pending.has(message.requestId)) return;
     const controller = new AbortController();
-    this.#pending.set(message.requestId, controller);
-    void this.#runtime
+    canvas.pending.set(message.requestId, controller);
+    void canvas.runtime
       .execute(message.name, message.arguments, controller.signal)
       .then((result) => {
-        if (!this.#current(active, message.requestId, controller)) return;
-        if (controller.signal.aborted) this.#sendCancelled(active, message.requestId);
+        if (!this.#current(canvas, message.requestId, controller)) return;
+        if (controller.signal.aborted) this.#sendCancelled(canvas, message.requestId);
         else
-          this.#send(active.sessionId, {
+          this.#send(canvas, {
             kind: 'result',
-            generation: active.generation,
-            ownerToken: active.ownerToken!,
-            catalogToken: active.catalogToken!,
+            alias: canvas.alias,
+            generation: canvas.generation,
+            ownerToken: canvas.ownerToken!,
+            catalogToken: canvas.catalogToken!,
             requestId: message.requestId,
             result,
           });
       })
       .catch((error: unknown) => {
-        if (!this.#current(active, message.requestId, controller)) return;
-        if (controller.signal.aborted) this.#sendCancelled(active, message.requestId);
+        if (!this.#current(canvas, message.requestId, controller)) return;
+        if (controller.signal.aborted) this.#sendCancelled(canvas, message.requestId);
         else {
           const messageText = error instanceof Error ? error.message : String(error);
           const code = /^([A-Z][A-Z_]+):/u.exec(messageText)?.[1] ?? 'AUTHOR_TOOL_ERROR';
-          this.#send(active.sessionId, {
+          this.#send(canvas, {
             kind: 'result',
-            generation: active.generation,
-            ownerToken: active.ownerToken!,
-            catalogToken: active.catalogToken!,
+            alias: canvas.alias,
+            generation: canvas.generation,
+            ownerToken: canvas.ownerToken!,
+            catalogToken: canvas.catalogToken!,
             requestId: message.requestId,
             result: { error: { code, message: messageText } },
           });
         }
       })
       .finally(() => {
-        if (this.#pending.get(message.requestId) === controller) this.#pending.delete(message.requestId);
+        if (canvas.pending.get(message.requestId) === controller) canvas.pending.delete(message.requestId);
       });
   }
 
   activeView(sessionId: string): { activation: 'inactive' | 'active'; capabilityCount: number } {
-    const active = this.#active;
-    return active?.sessionId === sessionId && active.catalogToken !== undefined
+    const active = [...this.#canvases.values()].filter(
+      (canvas) => canvas.sessionId === sessionId && canvas.catalogToken,
+    );
+    return active.length > 0
       ? {
           activation: 'active',
-          capabilityCount: active.profiles.reduce((count, profile) => count + profile.tools.length, 0),
+          capabilityCount: active.reduce(
+            (count, canvas) => count + canvas.profiles.reduce((total, profile) => total + profile.tools.length, 0),
+            0,
+          ),
         }
       : { activation: 'inactive', capabilityCount: 0 };
   }
@@ -133,23 +198,55 @@ class AuthorBrowserBridge {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    clearTimeout(this.#leaseTimer);
     this.#releaseConnected();
-    this.#clearActive();
-    this.#runtime.dispose();
+    for (const canvas of this.#canvases.values()) {
+      this.#release(canvas);
+      canvas.runtime.dispose();
+    }
+    this.#canvases.clear();
+    for (const entry of this.#opening.values()) entry.runtime.dispose();
+    this.#opening.clear();
   }
 
-  #register(): void {
-    const active = this.#active;
-    if (active !== undefined) this.#send(active.sessionId, { kind: 'register', generation: active.generation });
+  async #replace(canvas: Canvas, profiles: readonly AuthorTrustedProfile[]): Promise<void> {
+    const key = canvasKey(canvas.sessionId, canvas.alias);
+    if (this.#disposed || this.#canvases.get(key) !== canvas) return;
+    this.#release(canvas);
+    const generation = canvas.generation;
+    const replacementId = ++canvas.replacementId;
+    let release: () => void;
+    try {
+      release = await canvas.runtime.replaceProfiles(profiles);
+    } catch (error) {
+      if (canvas.replacementId !== replacementId || this.#canvases.get(key) !== canvas) return;
+      throw error;
+    }
+    if (
+      this.#disposed ||
+      this.#canvases.get(key) !== canvas ||
+      canvas.generation !== generation ||
+      canvas.replacementId !== replacementId
+    ) {
+      release();
+      return;
+    }
+    canvas.release = release;
+    canvas.profiles = profiles;
+    this.#register(canvas);
   }
 
-  #sendCatalog(active: ActiveViewport): void {
-    this.#send(active.sessionId, {
+  #register(canvas: Canvas): void {
+    if (this.#canvases.get(canvasKey(canvas.sessionId, canvas.alias)) === canvas)
+      this.#send(canvas, { kind: 'register', alias: canvas.alias, generation: canvas.generation });
+  }
+
+  #sendCatalog(canvas: Canvas): void {
+    this.#send(canvas, {
       kind: 'catalog',
-      generation: active.generation,
-      ownerToken: active.ownerToken!,
-      tools: active.profiles.flatMap((profile) =>
+      alias: canvas.alias,
+      generation: canvas.generation,
+      ownerToken: canvas.ownerToken!,
+      tools: canvas.profiles.flatMap((profile) =>
         profile.tools.map((tool) => ({
           name: tool.name,
           label: tool.label ?? tool.name,
@@ -160,70 +257,95 @@ class AuthorBrowserBridge {
     });
   }
 
-  #sendCancelled(active: ActiveViewport, requestId: string): void {
-    this.#send(active.sessionId, {
+  #sendCancelled(canvas: Canvas, requestId: string): void {
+    this.#send(canvas, {
       kind: 'cancelled',
-      generation: active.generation,
-      ownerToken: active.ownerToken!,
-      catalogToken: active.catalogToken!,
+      alias: canvas.alias,
+      generation: canvas.generation,
+      ownerToken: canvas.ownerToken!,
+      catalogToken: canvas.catalogToken!,
       requestId,
     });
   }
 
-  #send(sessionId: string, payload: AuthorBrowserMessage): void {
+  #send(canvas: Canvas, payload: AuthorBrowserMessage): void {
     const workspaceId = this.#host.mount?.scope === 'session' ? this.#host.mount.workspaceId : undefined;
     const mount = workspaceId ? { scope: 'workspace' as const, workspaceId } : { scope: 'global' as const };
     void this.#host
-      .invokeServerMethod({ mount, service: 'author.bridge', method: 'send', input: { sessionId, message: payload } })
+      .invokeServerMethod({
+        mount,
+        service: 'author.bridge',
+        method: 'send',
+        input: { sessionId: canvas.sessionId, message: payload },
+      })
       .catch(() => undefined);
   }
 
-  #current(active: ActiveViewport, requestId: string, controller: AbortController): boolean {
-    return this.#active === active && this.#pending.get(requestId) === controller;
+  #current(canvas: Canvas, requestId: string, controller: AbortController): boolean {
+    return (
+      this.#canvases.get(canvasKey(canvas.sessionId, canvas.alias)) === canvas &&
+      canvas.pending.get(requestId) === controller
+    );
   }
 
-  #clearActive(): void {
-    clearTimeout(this.#leaseTimer);
-    this.#leaseTimer = undefined;
-    const active = this.#active;
-    if (active !== undefined) {
-      this.#send(active.sessionId, { kind: 'release', generation: active.generation });
-      active.release();
-    }
-    this.#active = undefined;
-    for (const controller of this.#pending.values()) controller.abort(new Error('Author viewport changed'));
-    this.#pending.clear();
+  #release(canvas: Canvas): void {
+    clearTimeout(canvas.leaseTimer);
+    canvas.leaseTimer = undefined;
+    this.#send(canvas, { kind: 'release', alias: canvas.alias, generation: canvas.generation });
+    canvas.release();
+    for (const controller of canvas.pending.values()) controller.abort(new Error('Author viewport changed'));
+    canvas.pending.clear();
+    canvas.ownerToken = undefined;
+    canvas.catalogToken = undefined;
+    canvas.generation = ++this.#generation;
   }
 }
 
-const authorBridgeRuntime = new Store<AuthorBrowserBridge | undefined>(undefined);
+const authorBridgeRuntimes = new Store<ReadonlyMap<string, AuthorBrowserBridge>>(new Map());
+const bridgeFor = (sessionId: string): AuthorBrowserBridge | undefined =>
+  authorBridgeRuntimes.state.get(sessionId) ?? authorBridgeRuntimes.state.get('global');
 
 export function startAuthorBrowserBridge(runtime: WebPluginRuntime): () => void {
-  authorBridgeRuntime.state?.dispose();
+  const key = runtime.mount?.scope === 'session' ? runtime.mount.sessionId : 'global';
+  const previous = authorBridgeRuntimes.state.get(key);
+  previous?.dispose();
   const next = new AuthorBrowserBridge(runtime);
-  authorBridgeRuntime.setState(() => next);
+  authorBridgeRuntimes.setState((state) => new Map(state).set(key, next));
   return () => {
-    if (authorBridgeRuntime.state !== next) return;
+    if (authorBridgeRuntimes.state.get(key) !== next) return;
     next.dispose();
-    authorBridgeRuntime.setState(() => undefined);
+    authorBridgeRuntimes.setState((state) => {
+      const remaining = new Map(state);
+      remaining.delete(key);
+      return remaining;
+    });
   };
+}
+
+export async function openAuthorCanvas(
+  sessionId: string,
+  alias: string,
+  profiles: readonly AuthorTrustedProfile[],
+): Promise<void> {
+  await bridgeFor(sessionId)?.open(sessionId, alias, profiles);
 }
 
 export async function focusAuthorViewport(
   sessionId: string,
   profiles: readonly AuthorTrustedProfile[],
+  alias = 'default',
 ): Promise<() => void> {
-  return (await authorBridgeRuntime.state?.focus(sessionId, profiles)) ?? (() => undefined);
+  return (await bridgeFor(sessionId)?.focus(sessionId, alias, profiles)) ?? (() => undefined);
 }
 
 export function applyAuthorHubMessage(sessionId: string, message: AuthorHubMessage): void {
-  authorBridgeRuntime.state?.apply(sessionId, message);
+  bridgeFor(sessionId)?.apply(sessionId, message);
 }
 
-export function dropAuthorViewportSession(sessionId: string): void {
-  authorBridgeRuntime.state?.drop(sessionId);
+export function dropAuthorViewportSession(sessionId: string, alias?: string): void {
+  bridgeFor(sessionId)?.drop(sessionId, alias);
 }
 
 export function authorBridgeView(sessionId: string): { activation: 'inactive' | 'active'; capabilityCount: number } {
-  return authorBridgeRuntime.state?.activeView(sessionId) ?? { activation: 'inactive', capabilityCount: 0 };
+  return bridgeFor(sessionId)?.activeView(sessionId) ?? { activation: 'inactive', capabilityCount: 0 };
 }

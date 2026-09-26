@@ -1,8 +1,17 @@
 import { AuthorDescribeToolsInputSchema, AuthorUseToolsInputSchema, type AuthorUseToolsInput } from './authorFacade';
 
+export const AUTHOR_ALIAS_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/u;
+
+function validAlias(value: unknown): value is string {
+  return typeof value === 'string' && AUTHOR_ALIAS_PATTERN.test(value);
+}
+
 export const OpenAuthoringFileInputSchema = {
   type: 'object',
-  properties: { path: { type: 'string', minLength: 1, maxLength: 4096 } },
+  properties: {
+    path: { type: 'string', minLength: 1, maxLength: 4096 },
+    alias: { type: 'string', minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_-]{0,63}$' },
+  },
   required: ['path'],
   additionalProperties: false,
 } as const;
@@ -22,9 +31,9 @@ function decoded(value: unknown): unknown {
   }
 }
 
-export function parseOpenAuthoringFileInput(value: unknown): { path: string } {
+export function parseOpenAuthoringFileInput(value: unknown): { path: string; alias?: string } {
   const input = decoded(value);
-  if (!isRecord(input) || Object.keys(input).some((key) => key !== 'path')) {
+  if (!isRecord(input) || Object.keys(input).some((key) => key !== 'path' && key !== 'alias')) {
     throw new Error('open_authoring_file input is invalid.');
   }
   if (
@@ -35,17 +44,25 @@ export function parseOpenAuthoringFileInput(value: unknown): { path: string } {
   ) {
     throw new Error('A bounded relative document path is required.');
   }
-  return { path: input.path };
+  if (input.alias !== undefined && !validAlias(input.alias))
+    throw new Error('A bounded Author canvas alias is required.');
+  return { path: input.path, ...(input.alias === undefined ? {} : { alias: input.alias }) };
 }
-export function parseDescribeAuthorToolsInput(value: unknown): Record<string, never> {
+export function parseDescribeAuthorToolsInput(value: unknown): { alias?: string } {
   const input = decoded(value);
-  if (!isRecord(input) || Object.keys(input).length !== 0) throw new Error('describe_author_tools accepts no input.');
-  return {};
+  if (!isRecord(input) || Object.keys(input).some((key) => key !== 'alias'))
+    throw new Error('describe_author_tools accepts only an optional alias.');
+  if (input.alias !== undefined && !validAlias(input.alias))
+    throw new Error('A bounded Author canvas alias is required.');
+  return input.alias === undefined ? {} : { alias: input.alias };
 }
 
 export function parseUseAuthorToolInput(value: unknown): AuthorUseToolsInput {
   const input = decoded(value);
-  if (!isRecord(input) || Object.keys(input).some((key) => !['catalogToken', 'name', 'arguments'].includes(key))) {
+  if (
+    !isRecord(input) ||
+    Object.keys(input).some((key) => !['alias', 'catalogToken', 'name', 'arguments'].includes(key))
+  ) {
     throw new Error('use_author_tools input is invalid.');
   }
   if (typeof input.catalogToken !== 'string' || input.catalogToken.length === 0 || input.catalogToken.length > 256) {
@@ -55,5 +72,12 @@ export function parseUseAuthorToolInput(value: unknown): AuthorUseToolsInput {
     throw new Error('A valid Author capability name is required.');
   }
   if (!isRecord(input.arguments)) throw new Error('Author capability arguments must be an object.');
-  return { catalogToken: input.catalogToken, name: input.name, arguments: input.arguments };
+  if (input.alias !== undefined && !validAlias(input.alias))
+    throw new Error('A bounded Author canvas alias is required.');
+  return {
+    ...(input.alias === undefined ? {} : { alias: input.alias }),
+    catalogToken: input.catalogToken,
+    name: input.name,
+    arguments: input.arguments,
+  };
 }

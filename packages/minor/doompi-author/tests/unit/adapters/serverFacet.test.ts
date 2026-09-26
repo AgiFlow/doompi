@@ -124,7 +124,7 @@ describe('authorServerFacet', () => {
       mount: { scope: 'workspace', workspaceId: 'work-1' },
       service: 'author.bridge',
       method: 'send',
-      input: { sessionId: 'session-1', message: { kind: 'register', generation: 1 } },
+      input: { sessionId: 'session-1', message: { alias: 'review', kind: 'register', generation: 1 } },
     };
     await expect(registry.invoke(call, 'client-to-server', { connectionId: 'client-1' })).resolves.toEqual({});
     expect(received).toHaveBeenCalledWith('session-1', 'author_webmcp', call.input.message, 'client-1');

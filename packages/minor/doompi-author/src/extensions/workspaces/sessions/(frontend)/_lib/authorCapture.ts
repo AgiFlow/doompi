@@ -1,5 +1,6 @@
 import type { ComposerCapture, WebPluginContextItem } from '@agimon-ai/doompi-core/web';
 
+import { validAuthorStroke } from './authorRegions';
 import type { AuthorCrop, AuthorNativeAnchor, AuthorRegionDraft } from './authorViewportTypes';
 import type { AuthorWorkspaceDocument } from './authorWorkspaceStore';
 
@@ -42,6 +43,7 @@ export interface AuthorCapturePacketRegion {
   mode: 'region' | 'point';
   quote?: string;
   anchor: AuthorNativeAnchor;
+  stroke?: AuthorRegionDraft['stroke'];
   viewport: AuthorRegionDraft['viewport'];
   voiceGrid?: AuthorRegionDraft['voiceGrid'];
 }
@@ -52,6 +54,7 @@ export interface AuthorCapturePacket {
   capturedAt: number;
   document: {
     path: string;
+    alias?: string;
     kind: AuthorWorkspaceDocument['kind'];
     revision: number;
     sourceSha256?: string;
@@ -83,6 +86,7 @@ export function createAuthorCapturePacket(
   capturedAt: number,
   document: AuthorWorkspaceDocument,
   regions: readonly AuthorRegionDraft[],
+  alias?: string,
 ): AuthorCapturePacket {
   if (regions.length === 0 || regions.length > 16) throw new Error('Capture requires between 1 and 16 regions.');
   if (document.kind === 'story-preview' && document.storyPreview === undefined) {
@@ -94,6 +98,7 @@ export function createAuthorCapturePacket(
     capturedAt,
     document: {
       path: document.path,
+      ...(alias === undefined ? {} : { alias }),
       kind: document.kind,
       revision: document.version,
       ...(document.sourceSha256 === undefined ? {} : { sourceSha256: document.sourceSha256 }),
@@ -107,6 +112,12 @@ export function createAuthorCapturePacket(
       ) {
         throw new Error(`Region ${String(index + 1)} is stale for the focused document.`);
       }
+      if (
+        region.stroke !== undefined &&
+        (!validAuthorStroke(region.stroke) || !('rect' in region.anchor) || region.mode !== 'region')
+      ) {
+        throw new Error(`Region ${String(index + 1)} has invalid feedback stroke geometry.`);
+      }
       if (region.comment.trim() === '') throw new Error(`Region ${String(index + 1)} requires a comment.`);
       if (bytes(region.comment) > AUTHOR_COMMENT_MAX_BYTES) {
         throw new Error(`Region ${String(index + 1)} comment exceeds 2 KiB.`);
@@ -119,6 +130,7 @@ export function createAuthorCapturePacket(
         mode: region.mode ?? ('point' in region.anchor ? 'point' : 'region'),
         ...(region.quote === undefined ? {} : { quote: utf8Prefix(region.quote, AUTHOR_QUOTE_MAX_BYTES) }),
         anchor: structuredClone(region.anchor),
+        ...(region.stroke === undefined ? {} : { stroke: region.stroke.map((point) => ({ ...point })) }),
         viewport: { ...region.viewport },
         ...(region.voiceGrid === undefined ? {} : { voiceGrid: { ...region.voiceGrid } }),
       };
@@ -197,7 +209,7 @@ export function authorCaptureContext(packet: AuthorCapturePacket): WebPluginCont
     source: 'author',
     id: packet.captureId,
     label: `${packet.regions.length} annotation${packet.regions.length === 1 ? '' : 's'} · ${packet.document.path}`,
-    content,
+    content: `Author document: ${packet.document.path}${packet.document.alias === undefined ? '' : ` (canvas ${packet.document.alias})`}\n${content}`,
     metadata,
   };
 }
@@ -314,7 +326,23 @@ export function multiRegionCaptureProvider(regions: readonly AuthorRegionDraft[]
         let labelY = drawY;
         if (image !== undefined) {
           context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
-          if ('rect' in region.anchor) {
+          if (region.stroke !== undefined) {
+            if (!validAuthorStroke(region.stroke)) throw new Error('Invalid feedback stroke geometry.');
+            context.beginPath();
+            region.stroke.forEach((point, index) => {
+              const x = drawX + point.x * drawWidth;
+              const y = drawY + point.y * drawHeight;
+              if (index === 0) context.moveTo(x, y);
+              else context.lineTo(x, y);
+            });
+            context.strokeStyle = annotationColor;
+            context.lineWidth = Math.max(3, Math.min(drawWidth, drawHeight) / 150);
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            context.stroke();
+            labelX = drawX + region.stroke[0]!.x * drawWidth;
+            labelY = drawY + region.stroke[0]!.y * drawHeight;
+          } else if ('rect' in region.anchor) {
             const rect = region.anchor.rect;
             const rx = drawX + rect.x * drawWidth;
             const ry = drawY + rect.y * drawHeight;

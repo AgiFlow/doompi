@@ -34,7 +34,7 @@ export function createAuthorPiMode(catalog: AuthorCatalog, signal: AbortSignal):
   };
   const mode = authorMinorMode.createOwner({
     isActive: () => active,
-    detail: () => (monitor.snapshot() ? 'document viewport focused' : 'waiting for a focused document'),
+    detail: () => (monitor.snapshot()?.canvases?.length ? 'Author canvases available' : 'open a document canvas'),
     setActive(enabled) {
       signal.throwIfAborted();
       if (active === enabled) return;

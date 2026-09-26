@@ -4,8 +4,11 @@ import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-
 import { Hono } from 'hono';
 
 import { createAuthorBridgeState, type AuthorBridgeState } from '../../../../../../../models/authorBridgeState';
+import {
+  createAuthorCanvasRegistry,
+  type AuthorCanvasRegistry,
+} from '../../../../../../../services/authorCanvasRegistry';
 import type { AuthorCatalog } from '../../../../../../../services/authorCatalog/type';
-import { readDocument } from '../../../../../../../services/structuredDocuments/document';
 import routes from '../../../../../../../types/apiRoutes';
 import { API_BASE_PATH, type AuthorSessionView } from '../../../../../../../types/authorApi';
 import { createAuthorBridgeApi } from './authorBridgeApi';
@@ -15,7 +18,7 @@ export interface AuthorApiOptions {
   sessionId?: string;
   cwd?: string;
   readState?: () => Omit<AuthorSessionView, 'sessionId'>;
-  bridge?: AuthorBridgeState;
+  registry?: AuthorCanvasRegistry;
 }
 
 const inactiveState = (): Omit<AuthorSessionView, 'sessionId'> => ({ activation: 'inactive', capabilityCount: 0 });
@@ -32,52 +35,58 @@ const createBridge = (): AuthorBridgeState =>
 
 export function createAuthorApi(options: AuthorApiOptions = {}): Hono {
   const app = new Hono();
-  const bridge = options.bridge ?? createBridge();
+  const registry = options.registry ?? createAuthorCanvasRegistry(options.cwd ?? process.cwd(), createBridge);
   app.get(routes.state.path, (context) =>
     context.json({
       sessionId: options.sessionId ?? null,
       ...(options.readState ?? inactiveState)(),
     } satisfies AuthorSessionView),
   );
-  app.route('/', createAuthorBridgeApi(bridge));
-  app.route('/', createAuthorDocumentApi(options.cwd === undefined ? {} : { cwd: options.cwd }));
+  app.route('/', createAuthorBridgeApi(registry));
+  app.route(
+    '/',
+    createAuthorDocumentApi({
+      ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+      open: (path, signal, alias) => registry.open(path, signal, alias),
+    }),
+  );
   return app;
 }
 
 export const api: DoomApi = {
   basePath: API_BASE_PATH,
   start(context: DoomApiContext): DoomApiHandler {
-    const bridge = createBridge();
+    const registry = createAuthorCanvasRegistry(context.cwd ?? process.cwd(), createBridge);
     const app = createAuthorApi({
       ...(context.sessionId === undefined ? {} : { sessionId: context.sessionId }),
       ...(context.cwd === undefined ? {} : { cwd: context.cwd }),
-      bridge,
+      registry,
     });
-    return { fetch: (request) => app.fetch(request), close: () => bridge.close() };
+    return { fetch: (request) => app.fetch(request), close: () => registry.dispose() };
   },
 };
 
 /** The session API and tools share the same browser ownership and pending requests. */
-export function createAuthorSessionApi(cwd: string, sessionId: string): { api: DoomApi; catalog: AuthorCatalog } {
-  const bridge = createBridge();
+export function createAuthorSessionApi(
+  cwd: string,
+  sessionId: string,
+): { api: DoomApi; catalog: AuthorCatalog; closeCanvases: () => void } {
+  const registry = createAuthorCanvasRegistry(cwd, createBridge);
   return {
+    closeCanvases: () => registry.closeAll(),
     catalog: {
-      async open(path, signal) {
+      open: (path, signal, alias) => registry.open(path, signal, alias),
+      async describe(signal, alias) {
         signal?.throwIfAborted();
-        const bytes = await readDocument(cwd, path);
-        return { path, byteLength: bytes.byteLength };
+        return registry.describe(alias);
       },
-      async describe(signal) {
-        signal?.throwIfAborted();
-        return bridge.describe();
-      },
-      execute: (input, signal) => bridge.invoke(input, signal),
+      execute: (input, signal) => registry.invoke(input, signal),
     },
     api: {
       basePath: API_BASE_PATH,
       start() {
-        const app = createAuthorApi({ cwd, sessionId, bridge });
-        return { fetch: (request) => app.fetch(request), close: () => bridge.close() };
+        const app = createAuthorApi({ cwd, sessionId, registry });
+        return { fetch: (request) => app.fetch(request), close: () => registry.dispose() };
       },
     },
   };
