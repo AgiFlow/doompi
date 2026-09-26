@@ -347,10 +347,20 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     return endpoint;
   };
 
+  const queuedEvents: HeadlessHubEvent[] = [];
+  let publishing = false;
   const emit = (event: HeadlessHubEvent): void => {
     if (closed) return;
-    const projected = event.kind === 'upsert' ? { ...event, session: present(event.session) } : event;
-    for (const listener of listeners) listener(projected);
+    queuedEvents.push(event.kind === 'upsert' ? { ...event, session: present(event.session) } : event);
+    if (publishing) return;
+    publishing = true;
+    try {
+      for (let index = 0; index < queuedEvents.length; index += 1)
+        for (const listener of listeners) listener(queuedEvents[index]);
+    } finally {
+      queuedEvents.length = 0;
+      publishing = false;
+    }
   };
   const sessionScopes = (): readonly DoomHubSessionScope[] => [...sessions.values()].map(scopeOf);
   const publish = (frameType: string, sessionId: string, payload: unknown, connectionId?: string): void => {

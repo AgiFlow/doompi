@@ -40,6 +40,7 @@ test('shows worktree setup progress and recovery without parent runtime actions'
   await expect(page.getByRole('menuitem', { name: 'choose existing directory…' })).toHaveCount(0);
   await expect(page.getByTestId('session-worktree-reserved-child')).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: 'remove setup', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
 
   cockpit.publishPendingSetups('s2', [{ ...setup, status: 'failed', errorCode: 'SESSION_WORKTREE_PROVISION_FAILED' }]);
   await expect(pending.getByRole('alert')).toContainText('retry the authenticated conversation');

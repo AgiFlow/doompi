@@ -159,9 +159,9 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
   const revokeIncarnation = (sessionId: string, generation: number): void => {
     authorization.revokeSessionGeneration(sessionId, generation);
   };
-  const register = (session: HeadlessHubSession): void => {
+  const register = (session: HeadlessHubSession): boolean => {
     const current = incarnations.get(session.id);
-    if (current?.host === session.host) return;
+    if (current?.host === session.host) return false;
     if (current !== undefined) revokeIncarnation(session.id, current.generation);
     incarnations.set(session.id, {
       host: session.host,
@@ -169,13 +169,11 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       handlers: new Map(),
       baselines: new Map(),
     });
+    return true;
   };
   for (const session of options.headlessHub.snapshot()) register(session);
   const unsubscribe = options.headlessHub.onEvent((event) => {
-    if (event.kind === 'upsert') {
-      register(event.session);
-      publishPending();
-    }
+    if (event.kind === 'upsert' && register(event.session)) publishPending();
     if (event.kind === 'removed') {
       const current = incarnations.get(event.sessionId);
       if (current !== undefined) revokeIncarnation(event.sessionId, current.generation);
