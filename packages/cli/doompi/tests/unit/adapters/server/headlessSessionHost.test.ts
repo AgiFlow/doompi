@@ -382,6 +382,8 @@ describe('headless startup', () => {
         cwd: root,
         repoRoot: root,
         sessionId: 'startup-test',
+        workspaceId: 'workspace-test',
+        parentSessionId: 'parent-test',
         sessionName: 'Test',
         onNotice: resourceNotices,
         agentArgs: ['--session-dir', root],
@@ -429,6 +431,17 @@ describe('headless startup', () => {
         onNotice: vi.fn(),
       });
       expect(session.canDispatch()).toBe(true);
+      // One frozen baseline: the host and every capability it hands out see the same object.
+      expect(session.sessionContext).toEqual({
+        sessionId: 'startup-test',
+        workspaceId: 'workspace-test',
+        workspaceRoot: root,
+        checkoutRoot: root,
+        cwd: root,
+        parentSessionId: 'parent-test',
+      });
+      expect(Object.isFrozen(session.sessionContext)).toBe(true);
+      expect(session.host!.context.sessionContext).toBe(session.sessionContext);
       expect(frames).toEqual(
         expect.arrayContaining([
           expect.objectContaining({

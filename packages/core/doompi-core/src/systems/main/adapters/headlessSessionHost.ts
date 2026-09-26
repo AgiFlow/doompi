@@ -32,6 +32,7 @@ import type {
   DoomHeadlessTool,
   DoomHeadlessToolCompletionRequest,
 } from '../../../exports/headless';
+import type { DoomSessionContext } from '../../../exports/hubChannel';
 import type { DoomMcpContextSnapshot, DoomMcpSkill, DoomMcpUiResource } from '../../../exports/mcpFacet';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
 import { createDirectHarnessRuntime } from '../../../server/directHarnessRuntime';
@@ -781,6 +782,19 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     throw error;
   });
   let currentModel = opened.model;
+  // One frozen baseline, shared by every surface this session exposes.
+  const sessionContext: DoomSessionContext | undefined =
+    options.workspaceId === undefined
+      ? undefined
+      : Object.freeze({
+          sessionId: runtime.sessionId,
+          workspaceId: options.workspaceId,
+          workspaceRoot: options.groupingRoot ?? options.repoRoot,
+          checkoutRoot: options.repoRoot,
+          cwd: options.cwd,
+          ...(options.parentSessionId === undefined ? {} : { parentSessionId: options.parentSessionId }),
+          ...(options.sessionProvenance === undefined ? {} : { provenance: options.sessionProvenance }),
+        });
   const entries = opened.entries;
   const listeners = new Set<(frame: SessionFrame) => void>();
   const initialSelection = restoreHeadlessSelection(entries, options.selection);
@@ -894,6 +908,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     cwd: options.cwd,
     repoRoot: options.repoRoot,
     sessionId: runtime.sessionId,
+    ...(sessionContext === undefined ? {} : { sessionContext }),
     environment: options.environment,
     client: client!.client,
     model: currentModel === undefined ? undefined : modelIdentity(currentModel),
@@ -1619,6 +1634,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
 
   return {
     runtime,
+    ...(sessionContext === undefined ? {} : { sessionContext }),
     get host() {
       return headlessHost;
     },

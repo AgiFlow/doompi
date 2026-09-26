@@ -3,6 +3,7 @@ import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { Static, TSchema } from 'typebox';
 
+import type { DoomSessionContext } from './hubChannel';
 import type { DoomNotificationRequest } from './notification';
 import type { DoomServerBundleEntry } from './serverBundle';
 
@@ -125,9 +126,11 @@ export interface DoomHeadlessToolCompletionResult {
 
 export interface DoomHeadlessExecutionContext {
   readonly cwd: string;
-  /** Admitted configuration root, distinct from the tool execution directory. */
+  /** The checkout the session runs in, distinct from the tool execution directory. */
   readonly repoRoot: string;
   readonly sessionId: string;
+  /** The session's baseline context, when its host knows its workspace. */
+  readonly sessionContext?: DoomSessionContext;
   /** Immutable session configuration. Facets must not read or mutate process.env. */
   readonly environment: Readonly<Record<string, string | undefined>>;
   readonly client: DoomHeadlessClient;

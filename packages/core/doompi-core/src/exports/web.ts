@@ -157,6 +157,7 @@ export type {
   WebPluginContextItem,
   WebPluginDefinition,
   WebPluginRuntime,
+  WebPluginSessionContext,
   WebPluginSlotProps,
   WorkspaceRecords,
   WorkspaceStore,

@@ -3,14 +3,22 @@ import { useStore } from '@tanstack/react-store';
 import { useCallback, useMemo } from 'react';
 
 import { minorModes } from '../lib/composition';
-import { pluginSlotProps } from '../lib/pluginSlotProps';
+import { pluginSessionContext, pluginSlotProps } from '../lib/pluginSlotProps';
 import { submitCapture } from './captureStore';
 import { appendComposerDraft, attachComposerCapture, attachComposerContext } from './composerStore';
 import { holdSessionChannels } from './sessionChannelHoldsStore';
+import { sessionsStore } from './sessionsStore';
 import { sessionStoreFor } from './sessionStore';
 import { closeTransientTab, openTransientTab } from './transientTabsStore';
 import { useOpenTab } from './useOpenTab';
 import { useWebPluginRegistry } from './useWebPluginRegistry';
+function useSummaryField(
+  sessionId: string | null,
+  key: 'workspaceId' | 'parentSessionId' | 'sessionProvenance',
+): string | undefined {
+  return useStore(sessionsStore, (state) => (sessionId === null ? undefined : state.byId[sessionId]?.summary[key]));
+}
+
 /** The props a plugin component receives for a session, with the host's navigation and facts bound in. */
 export function usePluginSlotProps(
   sessionId: string | null,
@@ -23,6 +31,15 @@ export function usePluginSlotProps(
   const widgets = useStore(store, (state) => state.widgets);
   const context = useStore(store, (state) => state.context);
   const contextInventory = useMemo(() => context?.groups.flatMap((group) => group.items) ?? [], [context]);
+  // Selected field by field so a summary upsert that changes none of them keeps the same object.
+  const known = useStore(sessionsStore, (state) => sessionId !== null && state.byId[sessionId] !== undefined);
+  const workspaceId = useSummaryField(sessionId, 'workspaceId');
+  const parentSessionId = useSummaryField(sessionId, 'parentSessionId');
+  const sessionProvenance = useSummaryField(sessionId, 'sessionProvenance');
+  const sessionContext = useMemo(
+    () => pluginSessionContext(sessionId, known ? { workspaceId, parentSessionId, sessionProvenance } : undefined),
+    [known, parentSessionId, sessionId, sessionProvenance, workspaceId],
+  );
   const openTab = useOpenTab();
   const registryRevision = useWebPluginRegistry();
   const openPluginTab = useCallback(
@@ -83,6 +100,7 @@ export function usePluginSlotProps(
       sessionReservationId,
     );
     props.activeMinorModes = activeMinorModes;
+    if (sessionContext !== undefined) props.sessionContext = sessionContext;
     props.holdSessionChannels = holdSessionChannels;
     return props;
   }, [
@@ -97,6 +115,7 @@ export function usePluginSlotProps(
     openPluginTransientTab,
     registryRevision,
     sessionId,
+    sessionContext,
     sessionReservationId,
     statuses,
   ]);

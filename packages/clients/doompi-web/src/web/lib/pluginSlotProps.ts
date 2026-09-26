@@ -6,6 +6,7 @@ import type {
   WebPluginContextItem,
   WebPluginSlotProps,
   WebPluginContextInventoryItem,
+  WebPluginSessionContext,
 } from '@agimon-ai/doompi-core/web';
 import { createElement, type ReactNode } from 'react';
 
@@ -14,6 +15,20 @@ import { pluginContextActions, slotFills } from './pluginRegistry';
 import { renderSessionActivity } from './sessionActivityRenderer';
 import { renderThread } from './threadRenderer';
 import { sendFrame } from './transport';
+/** The id-only session context a plugin sees, from the hub's summary of the target session. */
+export function pluginSessionContext(
+  sessionId: string | null,
+  summary: { workspaceId?: string; parentSessionId?: string; sessionProvenance?: string } | undefined,
+): WebPluginSessionContext | undefined {
+  if (sessionId === null || summary === undefined) return undefined;
+  return {
+    sessionId,
+    ...(summary.workspaceId === undefined ? {} : { workspaceId: summary.workspaceId }),
+    ...(summary.parentSessionId === undefined ? {} : { parentSessionId: summary.parentSessionId }),
+    ...(summary.sessionProvenance === undefined ? {} : { provenance: summary.sessionProvenance }),
+  };
+}
+
 /** The host's hold on the focused session's runtime tabs, bound in by the caller that owns the store. */
 export interface TransientTabActions {
   open: (tab: TransientTab) => void;

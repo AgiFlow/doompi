@@ -10,7 +10,7 @@ import { createElement, isValidElement, type ReactElement } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry';
-import { pluginSlotProps } from '../../src/web/lib/pluginSlotProps';
+import { pluginSessionContext, pluginSlotProps } from '../../src/web/lib/pluginSlotProps';
 import { bindSessionActivityRenderer, releaseSessionActivityRenderer } from '../../src/web/lib/sessionActivityRenderer';
 import { bindThreadRenderer, releaseThreadRenderer } from '../../src/web/lib/threadRenderer';
 import { bindTransport, releaseTransport } from '../../src/web/lib/transport';
@@ -297,5 +297,19 @@ describe('the runtime tabs and threads a plugin component may open', () => {
     expect(isValidElement(rendered)).toBe(true);
     expect(rendered.key).toBe('s1');
     expect(pluginSlotProps(null, () => undefined, {}, noTabs, noAppend, noAttach).renderSessionActivity?.()).toBeNull();
+  });
+});
+
+describe('pluginSessionContext', () => {
+  it('projects the ids and relation a plugin can build on, never paths', () => {
+    expect(
+      pluginSessionContext('child', { workspaceId: 'ws', parentSessionId: 'parent', sessionProvenance: 'worktree' }),
+    ).toEqual({ sessionId: 'child', workspaceId: 'ws', parentSessionId: 'parent', provenance: 'worktree' });
+    expect(pluginSessionContext('solo', {})).toEqual({ sessionId: 'solo' });
+  });
+
+  it('has nothing to say before the hub reports the session', () => {
+    expect(pluginSessionContext(null, { workspaceId: 'ws' })).toBeUndefined();
+    expect(pluginSessionContext('pending', undefined)).toBeUndefined();
   });
 });

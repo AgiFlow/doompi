@@ -191,6 +191,18 @@ export interface WebPluginContextInventoryItem {
   active: boolean;
 }
 
+/**
+ * The browser's view of a session's baseline context: identities and relations only. Paths stay
+ * on the server, where the session API context carries the workspace and checkout roots.
+ */
+export interface WebPluginSessionContext {
+  readonly sessionId: string;
+  readonly workspaceId?: string;
+  readonly parentSessionId?: string;
+  /** The spawner's label for the session. Opaque: hosts never interpret it. */
+  readonly provenance?: string;
+}
+
 /** Slot components receive the target session, which may be an unfocused rail card. */
 export interface WebPluginSlotProps {
   sessionId: string | null;
@@ -245,6 +257,8 @@ export interface WebPluginSlotProps {
   contextInventory?: readonly WebPluginContextInventoryItem[];
   /** Names of minor modes currently active in the session catalog. */
   activeMinorModes?: readonly string[];
+  /** The target session's baseline context, once the hub has reported the session. */
+  sessionContext?: WebPluginSessionContext;
 }
 /**
  * One contribution into a slot, keyed by (pluginId, id): independent plugins

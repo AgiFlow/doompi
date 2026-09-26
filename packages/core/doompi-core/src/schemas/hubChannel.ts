@@ -23,12 +23,35 @@ export interface DoomDirectEventBus {
   close(): void;
 }
 
+/**
+ * The extension-agnostic baseline every surface gets for one session, computed once by the
+ * session host. Extensions build on it instead of re-deriving roots and relations from cwd.
+ */
+export interface DoomSessionContext {
+  readonly sessionId: string;
+  /** Persisted workspace id, shared by every session and member checkout of the workspace. */
+  readonly workspaceId: string;
+  /** The admitted workspace root. It owns configuration, composition and settings. */
+  readonly workspaceRoot: string;
+  /**
+   * The checkout the session executes in. Equals workspaceRoot unless the session runs in a
+   * member checkout, such as a worktree, which may live outside the workspace folder.
+   */
+  readonly checkoutRoot: string;
+  readonly cwd: string;
+  readonly parentSessionId?: string;
+  /** The spawner's label for the session. Opaque: hosts never interpret it. */
+  readonly provenance?: string;
+}
+
 export interface DoomHubSessionScope {
   sessionId: string;
   workspaceId?: string;
   cwd: string;
   /** Environment admitted for this session, when supplied by the host. */
   environment?: Readonly<Record<string, string | undefined>>;
+  /** The session's baseline context, when its host knows its workspace. */
+  sessionContext?: DoomSessionContext;
 }
 
 export interface DoomHubReservedWorktreeRequest {

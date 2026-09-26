@@ -602,6 +602,35 @@ describe('createHeadlessHub', () => {
     await hub.close();
   });
 
+  it('gives channels the session context its host computed', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const sessionContext = Object.freeze({
+      sessionId: 'child',
+      workspaceId: 'ws',
+      workspaceRoot: '/repo',
+      checkoutRoot: '/worktrees/feature',
+      cwd: '/worktrees/feature',
+      parentSessionId: 'parent',
+    });
+    const added: unknown[] = [];
+    hub.registerChannel({
+      frameType: 'context',
+      start: () => ({ payloadFor: () => undefined, sessionAdded: (scope) => added.push(scope), close: vi.fn() }),
+    });
+    hub.register({
+      id: 'child',
+      workspaceId: 'ws',
+      name: 'Child',
+      cwd: '/worktrees/feature',
+      createdAt: 'now',
+      parentSessionId: 'parent',
+      host: { ...host().host, sessionContext },
+    });
+
+    expect(added).toEqual([expect.objectContaining({ sessionId: 'child', sessionContext })]);
+    await hub.close();
+  });
+
   it('hands a session to the narrowest channel mount and back when it is released', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn() } as never });
     const lifecycle: string[] = [];

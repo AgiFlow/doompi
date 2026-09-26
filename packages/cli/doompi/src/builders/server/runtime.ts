@@ -627,7 +627,9 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           apis: [],
           facets: pendingSessions.get(sessionOptions.sessionId)?.bundle.facets ?? [],
           workspaceId: sessionOptions.workspaceId,
+          // The checkout, which MCP authorizes against; sessionContext carries both roots.
           workspaceRoot: sessionOptions.repoRoot,
+          ...(host.sessionContext === undefined ? {} : { sessionContext: host.sessionContext }),
           homeDirectory,
           mountChannel: (channel) => {
             const dispose = hub.registerChannel(channel, { scope: 'session', sessionId: sessionOptions.sessionId });

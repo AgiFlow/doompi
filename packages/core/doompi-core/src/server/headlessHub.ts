@@ -141,6 +141,7 @@ function scopeOf(session: HeadlessHubSession): DoomHubSessionScope {
     ...(session.workspaceId === undefined ? {} : { workspaceId: session.workspaceId }),
     cwd: session.cwd,
     ...(session.environment === undefined ? {} : { environment: session.environment }),
+    ...(session.host.sessionContext === undefined ? {} : { sessionContext: session.host.sessionContext }),
   };
 }
 
