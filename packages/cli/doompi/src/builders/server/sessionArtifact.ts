@@ -31,14 +31,19 @@ export function resolveWorktreeRestart(input: {
   return { workspaceId: workspace.id, artifact };
 }
 
+/**
+ * A member checkout (a checkout that is not its workspace root, such as a worktree) runs a
+ * compiled workspace generation: the one it recorded, its parent's, or the workspace's current.
+ */
 export async function resolveSessionArtifact(input: {
-  readonly worktree: boolean;
+  readonly member: boolean;
   readonly pinned?: SyncRegistration;
   readonly parent?: SyncRegistration;
+  readonly workspace?: () => SyncRegistration | undefined;
   readonly prepareCurrent: () => Promise<SyncRegistration>;
 }): Promise<SyncRegistration> {
-  if (!input.worktree) return input.prepareCurrent();
-  const artifact = input.pinned ?? input.parent;
-  if (artifact === undefined) throw new Error('Worktree session requires its parent compiled artifact.');
+  if (!input.member) return input.prepareCurrent();
+  const artifact = input.pinned ?? input.parent ?? input.workspace?.();
+  if (artifact === undefined) throw new Error('A member checkout requires its workspace compiled artifact.');
   return artifact;
 }

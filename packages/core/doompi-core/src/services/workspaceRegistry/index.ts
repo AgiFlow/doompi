@@ -1,7 +1,12 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { gitCommonDirectory } from '../syncLocation';
+
 const REGISTRY_FILE = 'workspaces.json';
+/** Kept in the repository's git data, which moves with the checkout and is shared by its worktrees. */
+const WORKSPACE_MARKER_FILE = 'doompi-workspace-id';
 const DIRECTORY_MODE = 0o700;
 const FILE_MODE = 0o600;
 
@@ -87,7 +92,10 @@ export function createWorkspaceRegistry(options: WorkspaceRegistryOptions): Work
     list: () => current,
     add(record) {
       if (record.id === '' || !path.isAbsolute(record.root)) throw new Error('Invalid workspace record.');
-      const next = [...current.filter((held) => held.id !== record.id), record];
+      // Replaced in place: registry order is the tie-break when checkouts are matched to workspaces.
+      const next = current.some((held) => held.id === record.id)
+        ? current.map((held) => (held.id === record.id ? record : held))
+        : [...current, record];
       persist(next);
       current = next;
     },
@@ -98,4 +106,61 @@ export function createWorkspaceRegistry(options: WorkspaceRegistryOptions): Work
       current = next;
     },
   };
+}
+
+/** The workspace id recorded in a checkout's git data, if any. */
+export function readWorkspaceMarker(checkoutRoot: string): string | undefined {
+  const commonDirectory = gitCommonDirectory(checkoutRoot);
+  if (commonDirectory === undefined) return undefined;
+  try {
+    const id = fs.readFileSync(path.join(commonDirectory, WORKSPACE_MARKER_FILE), 'utf8').trim();
+    return id === '' ? undefined : id;
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
+/**
+ * Records a workspace id in a checkout's git data so the workspace keeps its id when the
+ * repository moves. A checkout without git data has nowhere to keep it; returns false.
+ */
+export function writeWorkspaceMarker(checkoutRoot: string, id: string): boolean {
+  const commonDirectory = gitCommonDirectory(checkoutRoot);
+  if (commonDirectory === undefined) return false;
+  fs.writeFileSync(path.join(commonDirectory, WORKSPACE_MARKER_FILE), `${id}\n`, { mode: FILE_MODE });
+  return true;
+}
+
+export interface WorkspaceIdentity {
+  readonly id: string;
+  /** The workspace root. Differs from the checkout when the checkout joins an existing workspace. */
+  readonly root: string;
+  /** The recorded root no longer exists and this checkout takes its place. */
+  readonly moved: boolean;
+}
+
+/**
+ * Decides which workspace a checkout belongs to. An exact root match wins. Otherwise the id
+ * in the repository's git data names the workspace: a checkout of a workspace whose root still
+ * exists joins it, and one whose recorded root is gone is that workspace, moved. Anything else
+ * is a new workspace.
+ */
+export function identifyWorkspace(input: {
+  readonly records: readonly WorkspaceRecord[];
+  readonly checkoutRoot: string;
+  readonly marker?: string;
+  readonly exists?: (root: string) => boolean;
+  readonly newId?: () => string;
+}): WorkspaceIdentity {
+  const exact = input.records.find((record) => record.root === input.checkoutRoot);
+  if (exact !== undefined) return { id: exact.id, root: exact.root, moved: false };
+  const owner = input.marker === undefined ? undefined : input.records.find((record) => record.id === input.marker);
+  if (owner !== undefined) {
+    const exists = input.exists ?? fs.existsSync;
+    return exists(owner.root)
+      ? { id: owner.id, root: owner.root, moved: false }
+      : { id: owner.id, root: input.checkoutRoot, moved: true };
+  }
+  return { id: input.marker ?? (input.newId ?? crypto.randomUUID)(), root: input.checkoutRoot, moved: false };
 }
