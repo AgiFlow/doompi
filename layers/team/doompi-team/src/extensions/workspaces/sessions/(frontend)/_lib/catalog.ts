@@ -1,4 +1,4 @@
-import { sessionApiPath } from '@agimon-ai/doompi-core/web';
+import { pluginApiUrl, sessionApiAddress } from '@agimon-ai/doompi-core/web';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 import type {
@@ -7,6 +7,11 @@ import type {
   SubagentSteerResult,
 } from '../../../../../types/webSubagents';
 import type { LaunchRequest } from './launchCommand';
+
+/** The team API's address on a session, from the one builder every package API URL shares. */
+function teamApiUrl(sessionId: string, path: string): string {
+  return pluginApiUrl(sessionApiAddress(sessionId), 'team', path);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -35,7 +40,7 @@ function isAgent(value: unknown): value is SubagentCatalogAgent {
 
 /** Read the selected session's catalog through the host's authenticated HTTP transport. */
 export async function fetchCatalog(sessionId: string, signal: AbortSignal): Promise<SubagentCatalogPayload> {
-  const response = await sealedTransport.fetch(`${sessionApiPath(sessionId)}/plugins/team/catalog`, {
+  const response = await sealedTransport.fetch(teamApiUrl(sessionId, '/catalog'), {
     signal,
     cache: 'no-store',
   });
@@ -61,7 +66,7 @@ export async function fetchCatalog(sessionId: string, signal: AbortSignal): Prom
 
 /** Launch on the selected session host, without submitting a parent prompt. */
 export async function launchAgent(sessionId: string, request: LaunchRequest): Promise<string> {
-  const response = await sealedTransport.fetch(`${sessionApiPath(sessionId)}/plugins/team/run`, {
+  const response = await sealedTransport.fetch(teamApiUrl(sessionId, '/run'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(request),
@@ -85,7 +90,7 @@ function isSteerState(value: unknown): value is SubagentSteerResult['state'] {
 
 /** Steer one run on the selected session host, without submitting a parent prompt. */
 export async function steerRun(sessionId: string, runId: string, message: string): Promise<SubagentSteerResult> {
-  const response = await sealedTransport.fetch(`${sessionApiPath(sessionId)}/plugins/team/steer`, {
+  const response = await sealedTransport.fetch(teamApiUrl(sessionId, '/steer'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ runId, message }),
@@ -105,7 +110,7 @@ export async function steerRun(sessionId: string, runId: string, message: string
 
 /** Ask the selected session host to stop one run; the run's own status reports when it has. */
 export async function stopRun(sessionId: string, runId: string): Promise<void> {
-  const response = await sealedTransport.fetch(`${sessionApiPath(sessionId)}/plugins/team/stop`, {
+  const response = await sealedTransport.fetch(teamApiUrl(sessionId, '/stop'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ runId }),

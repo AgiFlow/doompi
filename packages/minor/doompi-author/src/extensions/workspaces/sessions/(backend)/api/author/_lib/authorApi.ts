@@ -56,10 +56,12 @@ export function createAuthorApi(options: AuthorApiOptions = {}): Hono {
 export const api: DoomApi = {
   basePath: API_BASE_PATH,
   start(context: DoomApiContext): DoomApiHandler {
-    const registry = createAuthorCanvasRegistry(context.cwd ?? process.cwd(), createBridge);
+    // One server hosts many sessions, so its own directory is never a session's project.
+    if (context.cwd === undefined) throw new Error('Author requires the session working directory.');
+    const registry = createAuthorCanvasRegistry(context.cwd, createBridge);
     const app = createAuthorApi({
       ...(context.sessionId === undefined ? {} : { sessionId: context.sessionId }),
-      ...(context.cwd === undefined ? {} : { cwd: context.cwd }),
+      cwd: context.cwd,
       registry,
     });
     return { fetch: (request) => app.fetch(request), close: () => registry.dispose() };
