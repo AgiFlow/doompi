@@ -63,3 +63,19 @@ export const Playground = {
     </div>
   ),
 };
+
+export const Manage = {
+  render: () => (
+    <div className="bg-doom-bg p-6">
+      <McpSessionAuthSection
+        {...slotPropsFixture({
+          sessionId: 's1',
+          statuses: {
+            [MCP_SESSION_AUTH_STATUS_KEY]:
+              formatMcpSessionAuthStatus([{ name: 'scaffold-mcp', state: 'connected' }]) ?? '',
+          },
+        }).props}
+      />
+    </div>
+  ),
+};

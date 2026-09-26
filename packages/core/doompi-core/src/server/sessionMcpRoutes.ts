@@ -251,6 +251,14 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
               id: record.id,
               name: `conversation ${record.id.slice(0, 8)}`,
               createdAt: record.createdAt,
+              status:
+                provision.has(record.id) || recoveries.has(record.id)
+                  ? ('provisioning' as const)
+                  : record.failureCode === undefined
+                    ? ('interrupted' as const)
+                    : ('failed' as const),
+              ...(record.setupKind === undefined ? {} : { setupKind: record.setupKind }),
+              ...(record.failureCode === undefined ? {} : { errorCode: record.failureCode }),
               ...(record.cwd === undefined ? {} : { cwd: record.cwd }),
             })),
         );
@@ -321,6 +329,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         !record.cwd ||
         !child?.workspaceId ||
         child.parentSessionId !== parentSessionId ||
+        (record.setupKind === 'managed-worktree' && child.workspaceId !== record.parentWorkspaceId) ||
         executionDirectory(child.cwd) !== record.cwd ||
         options.isSessionPersisted?.(id, child.cwd) === false
       )
@@ -344,6 +353,12 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     // A mistyped existing-directory choice must not permanently reserve a nonexistent path.
     const canonical = executionDirectory(directory);
     if (!fs.statSync(canonical).isDirectory()) throw new Error('The execution directory is not a directory.');
+    const { record: current } = readReservation(id, parentSessionId);
+    if (provision.has(id) && current.setupKind === 'managed-worktree')
+      throw new SessionMcpConversationError('SESSION_TARGET_FIXED', 'This setup belongs to a managed worktree.', id);
+    const selected = requireStore().selectSetup(id, parentSessionId, 'existing-directory');
+    if (selected.setupKind !== 'existing-directory')
+      throw new SessionMcpConversationError('SESSION_TARGET_FIXED', 'This setup belongs to a managed worktree.', id);
     const prepared = await reservations.prepare(id, parentSessionId, canonical);
     const pending = provision.get(id);
     if (pending) return pending;
@@ -368,10 +383,15 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       return reservations.complete(id, parentSessionId);
     })();
     provision.set(id, setup);
+    publishPending();
     try {
       return await setup;
+    } catch (error) {
+      requireStore().fail(id, parentSessionId, 'SESSION_UNAVAILABLE');
+      throw error;
     } finally {
       if (provision.get(id) === setup) provision.delete(id);
+      publishPending();
     }
   };
   const provisionConversationWorktree = async (
@@ -380,6 +400,8 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
   ): Promise<DoomHubSessionScope> => {
     const pending = provision.get(record.id);
     if (pending) return pending;
+    readReservation(record.id, record.parentSessionId);
+    requireStore().selectSetup(record.id, record.parentSessionId, 'managed-worktree');
     const setup = (async () => {
       try {
         const child = await options.headlessHub.sessionService.provisionReservedWorktree?.({
@@ -400,10 +422,15 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       }
     })();
     provision.set(record.id, setup);
+    publishPending();
     try {
       return await setup;
+    } catch (error) {
+      requireStore().fail(record.id, record.parentSessionId, 'SESSION_WORKTREE_PROVISION_FAILED');
+      throw error;
     } finally {
       if (provision.get(record.id) === setup) provision.delete(record.id);
+      publishPending();
     }
   };
   const publicRoutes = async (request: Request): Promise<Response | undefined> => {
@@ -457,16 +484,24 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
                     'The bound session is unavailable. Resume it in DoomPi; no other session will be used.',
                     record.id,
                   );
+                if (record.setupKind === undefined && record.cwd !== undefined)
+                  throw new SessionMcpConversationError(
+                    'SESSION_TARGET_FIXED',
+                    'This existing setup has no verified provider. Recover it without changing its ownership.',
+                    record.id,
+                  );
                 record = store.recover(record.id, sessionId);
                 const recovery =
-                  record.cwd && fs.existsSync(record.cwd)
+                  record.setupKind === 'existing-directory' && record.cwd
                     ? setupDirectory(record.id, sessionId, record.cwd)
                     : provisionConversationWorktree(record, signal);
                 recoveries.set(record.id, recovery);
+                publishPending();
                 try {
                   await recovery;
                 } finally {
                   if (recoveries.get(record.id) === recovery) recoveries.delete(record.id);
+                  publishPending();
                 }
               }
             }
@@ -481,7 +516,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
                 );
               const pending = provision.get(record.id);
               if (pending) await pending;
-              else if (record.workspaceId !== undefined && record.cwd && fs.existsSync(record.cwd))
+              else if (record.setupKind === 'existing-directory' && record.cwd)
                 await setupDirectory(record.id, sessionId, record.cwd);
               else await provisionConversationWorktree(record, signal);
               record = store.find(grant.clientId, sessionId, digest);

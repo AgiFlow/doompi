@@ -209,18 +209,43 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       const existing =
         reserved === undefined ? undefined : records.find((record) => record.sessionId === reserved.sessionId);
       if (existing) {
+        const expectedPath = worktreeDirectory({
+          worktreesRoot: worktreesRoot(deps.homeDir),
+          repositoryLabel: repositoryLabel(root),
+          repositoryId: repositoryId(root),
+          branch: request.branch,
+          shortId: shortId(reserved!.sessionId),
+        });
         if (
           existing.parentSessionId !== context.sessionId ||
+          existing.repositoryRoot !== root ||
           existing.branch !== request.branch ||
+          existing.path !== expectedPath ||
           existing.path !== reserved?.cwd ||
-          (request.baseRef !== undefined && existing.baseRef !== request.baseRef)
+          (request.baseRef !== undefined && existing.baseRef !== request.baseRef) ||
+          !fs.existsSync(existing.path) ||
+          !(await git.listWorktreePaths(root)).includes(existing.path) ||
+          (await git.repositoryRoot(existing.path)) !== existing.path ||
+          (await git.currentBranch(existing.path)) !== request.branch
         )
           throw new DoomGitExpectedError(
             'invalid_request',
-            'This setup already owns a different worktree.',
+            'The reserved checkout no longer matches this setup.',
             false,
-            'Recover its existing branch and checkout.',
+            'Inspect the existing branch and checkout; they will not be replaced.',
           );
+        if (!requireSessionService().isLive(existing.sessionId)) {
+          const session = await requireSessionService().create({
+            cwd: existing.path,
+            name: request.name ?? request.branch,
+            parentSessionId: context.sessionId,
+            sessionProvenance: 'worktree',
+            reservationId: request.reservationId,
+            ...(options?.signal === undefined ? {} : { signal: options.signal }),
+          });
+          if (session.sessionId !== existing.sessionId)
+            throw new Error('The host did not use the reserved session identity.');
+        }
         await reservations!.complete(request.reservationId!, context.sessionId);
         return existing;
       }
@@ -602,8 +627,18 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
   // the lock across startup avoids a second lease system for partially created trees.
   return {
     ...operations,
-    spawn: (context, request, options) =>
-      locked(context, () => operations.spawn(context, request, options), options?.signal),
+    spawn: (context, request, options) => {
+      if (sessionService === undefined)
+        return Promise.reject(
+          new DoomGitExpectedError(
+            'hub_unavailable',
+            'The cockpit session service is unavailable.',
+            true,
+            'Use the cockpit worktree tool after its Git server facet is available.',
+          ),
+        );
+      return locked(context, () => operations.spawn(context, request, options), options?.signal);
+    },
     close: (context, id, force) => locked(context, () => operations.close(context, id, force)),
     list: (context) => locked(context, () => operations.list(context)),
     merge: (context, id, message) => locked(context, () => operations.merge(context, id, message)),

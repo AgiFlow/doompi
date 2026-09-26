@@ -2,15 +2,20 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-core/headless';
 import type {
   DoomHeadlessCommand,
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-core/headless';
+import {
+  DOOM_MCP_PROJECTION_RESOLVER_SERVICE,
+  type DoomMcpProjectionResolverService,
+} from '@agimon-ai/doompi-core/mcpProjection';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/serverFacet';
 import { DOOM_RESOURCE_CATALOG_ENTRY_TYPE } from '@agimon-ai/doompi-core/skills';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { facet as domainHeadlessFacet } from '../../generated/server';
@@ -83,10 +88,10 @@ async function setup(withSkill = false, options: { unnamed?: boolean; brokenInac
     },
     changeSelection,
   } as unknown as DoomHeadlessHostService;
-  const dispose = await domainHeadlessFacet.apply({
-    effect() {},
-    get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? { scope: 'session' } : host),
-  } as unknown as Context);
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  const dispose = await domainHeadlessFacet.apply(context);
   const execution: DoomHeadlessExecutionContext = {
     cwd: root,
     repoRoot: root,
@@ -104,7 +109,7 @@ async function setup(withSkill = false, options: { unnamed?: boolean; brokenInac
     },
     shutdown: vi.fn(),
   };
-  return { changeSelection, command: commands[0]!, execution, resources, dispose, disposed, root, notify };
+  return { changeSelection, command: commands[0]!, execution, resources, dispose, disposed, root, notify, context };
 }
 
 describe('headless domains command', () => {
@@ -117,6 +122,33 @@ describe('headless domains command', () => {
       when: { domain: 'web', attribution: { kind: 'domain', mode: 'web' } },
     });
     expect(await skill?.read(execution)).toContain('# Web guidance');
+  });
+
+  it('stages selected plugin MCP without including an inactive plugin', async () => {
+    const { context, root } = await setup(true);
+    const plugin = path.join(root, 'plugins/web');
+    fs.writeFileSync(
+      path.join(plugin, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          'agiflow-mcp': { type: 'http', url: 'https://agiflow.agimon.win/api/v1/mcp/0.0.3' },
+          'boomlink-mcp': { type: 'http', url: 'https://boomlink.agimon.win/api/v1/mcp/0.0.1' },
+        },
+      }),
+    );
+    const resolver = context.get(DOOM_MCP_PROJECTION_RESOLVER_SERVICE) as DoomMcpProjectionResolverService;
+    const selected = await resolver.resolve(['default', 'web']);
+    expect(selected.projection.sources).toEqual([
+      expect.objectContaining({ owner: 'plugin', configPath: fs.realpathSync(path.join(plugin, '.mcp.json')) }),
+    ]);
+    expect(JSON.parse(fs.readFileSync(selected.projection.generatedConfigPath!, 'utf8')).mcpServers).toHaveProperty(
+      'agiflow-mcp',
+    );
+    await selected.cleanup();
+    expect(fs.existsSync(selected.projection.stagingDirectory)).toBe(false);
+    const deselected = await resolver.resolve(['default']);
+    expect(deselected.projection.sources).toEqual([]);
+    await deselected.cleanup();
   });
 
   it('keeps the collector directory-name fallback and model discovery metadata', async () => {

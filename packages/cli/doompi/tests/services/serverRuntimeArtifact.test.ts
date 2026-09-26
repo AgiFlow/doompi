@@ -1,7 +1,7 @@
 import type { SyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveSessionArtifact } from '../../src/builders/server/sessionArtifact';
+import { resolveSessionArtifact, resolveWorktreeRestart } from '../../src/builders/server/sessionArtifact';
 
 function registration(generation: string): SyncRegistration {
   return { generation } as SyncRegistration;
@@ -46,5 +46,56 @@ describe('resolveSessionArtifact', () => {
       'Worktree session requires its parent compiled artifact.',
     );
     expect(prepareCurrent).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveWorktreeRestart', () => {
+  const workspace = { id: 'original', root: '/repo' };
+  const artifact = { root: '/repo', generation: 'parent' } as SyncRegistration;
+  const session = { id: 'child', cwd: '/checkout', workspaceId: 'original', parentSessionId: 'closed-parent' };
+  const record = {
+    sessionId: 'child',
+    workspaceId: 'original',
+    cwd: '/checkout',
+    groupingRoot: '/repo',
+    parentSessionId: 'closed-parent',
+    name: 'child',
+    createdAt: '2025-01-01T00:00:00.000Z',
+    artifact,
+  };
+
+  it('pins the original workspace and artifact after the parent closes', () => {
+    expect(resolveWorktreeRestart({ session, record, workspaces: [workspace] })).toEqual({
+      workspaceId: 'original',
+      artifact,
+    });
+    expect(resolveWorktreeRestart({ session, artifact, workspaces: [workspace] })).toEqual({
+      workspaceId: 'original',
+      artifact,
+    });
+  });
+
+  it('rejects missing workspace or changed ownership before closing the child', () => {
+    expect(() => resolveWorktreeRestart({ session, record, workspaces: [] })).toThrow('still running');
+    expect(() =>
+      resolveWorktreeRestart({ session, record: { ...record, workspaceId: 'checkout' }, workspaces: [workspace] }),
+    ).toThrow('still running');
+    expect(() =>
+      resolveWorktreeRestart({ session, record: { ...record, groupingRoot: '/checkout' }, workspaces: [workspace] }),
+    ).toThrow('still running');
+  });
+
+  it('rejects a missing artifact or one from another workspace', () => {
+    expect(() =>
+      resolveWorktreeRestart({ session, record: { ...record, artifact: undefined }, workspaces: [workspace] }),
+    ).toThrow('still running');
+    expect(() =>
+      resolveWorktreeRestart({
+        session,
+        record,
+        artifact: { ...artifact, root: '/checkout' },
+        workspaces: [workspace],
+      }),
+    ).toThrow('still running');
   });
 });

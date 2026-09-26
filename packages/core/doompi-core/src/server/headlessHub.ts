@@ -736,7 +736,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       if (JSON.stringify(pendingSetups.get(sessionId) ?? []) === JSON.stringify(pending)) return;
       pendingSetups.set(sessionId, Object.freeze([...pending]));
       const session = sessions.get(sessionId);
-      if (session) emit({ kind: 'upsert', session });
+      if (session) emit({ kind: 'upsert', session: present(session) });
     },
     runtime: (sessionId) => sessions.get(sessionId)?.host.runtime,
     onEvent(listener) {

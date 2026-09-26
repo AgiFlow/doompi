@@ -102,6 +102,23 @@ afterEach(() => {
 });
 
 describe('spawn', () => {
+  it('does not acquire a registry lock or create Git state without the cockpit lifecycle', async () => {
+    const git = fakeGit();
+    const mirror = vi.fn();
+    const ops = createWorktreeOperations({ git, mirror, homeDir: home });
+
+    await expect(ops.spawn(CONTEXT, { branch: 'wt/one' })).rejects.toMatchObject({
+      code: 'hub_unavailable',
+      retryable: true,
+    });
+    expect(fs.readdirSync(home)).toEqual([]);
+    expect(git.repositoryRoot).not.toHaveBeenCalled();
+    expect(git.addWorktree).not.toHaveBeenCalled();
+    expect(git.removeWorktree).not.toHaveBeenCalled();
+    expect(mirror).not.toHaveBeenCalled();
+    await expect(ops.list(CONTEXT)).resolves.toEqual([]);
+  });
+
   it('creates the worktree, starts a session, and records both', async () => {
     const git = fakeGit();
     const { ops, createSession } = operations(git);
@@ -921,18 +938,27 @@ describe('concurrent and reserved worktree creation', () => {
   });
 
   it('retries binding after a lost completion without another worktree or runtime', async () => {
-    const git = fakeGit();
     let cwd: string | undefined;
+    const git = fakeGit({
+      addWorktree: vi.fn(async ({ path: checkout }) => {
+        fs.mkdirSync(checkout, { recursive: true });
+      }),
+      listWorktreePaths: vi.fn(async () => (cwd === undefined ? [] : [cwd])),
+      repositoryRoot: vi.fn(async (directory) => (directory === cwd ? directory : repository)),
+      currentBranch: vi.fn(async () => 'wt/one'),
+    });
     const create = vi.fn(async () => ({ sessionId: 'reserved-session', cwd: cwd! }));
     const complete = vi
       .fn()
       .mockRejectedValueOnce(new Error('store unavailable'))
       .mockResolvedValue({ sessionId: 'reserved-session' });
+    let live = true;
     const ops = createWorktreeOperations({
       git,
       homeDir: home,
       sessionService: {
-        ...fakeSessionService(['reserved-session'], create),
+        ...fakeSessionService([], create),
+        isLive: () => live,
         reservations: {
           read: () => ({ sessionId: 'reserved-session', cwd }),
           prepare: async (_id, _parent, directory) => {
@@ -949,7 +975,96 @@ describe('concurrent and reserved worktree creation', () => {
     expect(record.sessionId).toBe('reserved-session');
     expect(git.addWorktree).toHaveBeenCalledOnce();
     expect(create).toHaveBeenCalledOnce();
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({ reservationId: 'reserved-session' }));
-    expect(complete).toHaveBeenCalledTimes(2);
+    live = false;
+    await ops.spawn(CONTEXT, request);
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        cwd: record.path,
+        parentSessionId: CONTEXT.sessionId,
+        reservationId: request.reservationId,
+        sessionProvenance: 'worktree',
+      }),
+    );
+    expect(git.addWorktree).toHaveBeenCalledOnce();
+    expect(complete).toHaveBeenCalledTimes(3);
+  });
+
+  it('retains a recorded checkout when the host refuses to recreate a dormant child', async () => {
+    let cwd: string | undefined;
+    const git = fakeGit({
+      addWorktree: vi.fn(async ({ path: checkout }) => {
+        fs.mkdirSync(checkout, { recursive: true });
+      }),
+      listWorktreePaths: vi.fn(async () => (cwd === undefined ? [] : [cwd])),
+      repositoryRoot: vi.fn(async (directory) => (directory === cwd ? directory : repository)),
+      currentBranch: vi.fn(async () => 'wt/one'),
+    });
+    let live = true;
+    const create = vi.fn(async () => {
+      if (!live) throw new Error('Resume the recorded session instead of recreating it.');
+      return { sessionId: 'reserved-session', cwd: cwd! };
+    });
+    const complete = vi.fn().mockResolvedValue({ sessionId: 'reserved-session' });
+    const ops = createWorktreeOperations({
+      git,
+      homeDir: home,
+      sessionService: {
+        ...fakeSessionService([], create),
+        isLive: () => live,
+        reservations: {
+          read: () => ({ sessionId: 'reserved-session', cwd }),
+          prepare: async (_id, _parent, directory) => {
+            cwd = directory;
+            return { sessionId: 'reserved-session', cwd };
+          },
+          complete,
+        },
+      },
+    });
+    const request = { branch: 'wt/one', reservationId: 'reserved-session' };
+    const record = await ops.spawn(CONTEXT, request);
+    live = false;
+    await expect(ops.spawn(CONTEXT, request)).rejects.toThrow('Resume the recorded session');
+    expect(fs.existsSync(record.path)).toBe(true);
+    expect(git.addWorktree).toHaveBeenCalledOnce();
+    expect(git.removeWorktree).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(complete).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a changed reserved checkout before recreating the missing child', async () => {
+    let cwd: string | undefined;
+    let branch = 'wt/one';
+    const git = fakeGit({
+      addWorktree: vi.fn(async ({ path: checkout }) => {
+        fs.mkdirSync(checkout, { recursive: true });
+      }),
+      listWorktreePaths: vi.fn(async () => (cwd === undefined ? [] : [cwd])),
+      repositoryRoot: vi.fn(async (directory) => (directory === cwd ? directory : repository)),
+      currentBranch: vi.fn(async () => branch),
+    });
+    const create = vi.fn(async () => ({ sessionId: 'reserved-session', cwd: cwd! }));
+    const ops = createWorktreeOperations({
+      git,
+      homeDir: home,
+      sessionService: {
+        ...fakeSessionService([], create),
+        reservations: {
+          read: () => ({ sessionId: 'reserved-session', cwd }),
+          prepare: async (_id, _parent, directory) => {
+            cwd = directory;
+            return { sessionId: 'reserved-session', cwd };
+          },
+          complete: vi.fn().mockResolvedValue({ sessionId: 'reserved-session' }),
+        },
+      },
+    });
+    const request = { branch: 'wt/one', reservationId: 'reserved-session' };
+    await ops.spawn(CONTEXT, request);
+    branch = 'wt/other';
+    await expect(ops.spawn(CONTEXT, request)).rejects.toMatchObject({ code: 'invalid_request' });
+    expect(create).toHaveBeenCalledOnce();
+    expect(git.addWorktree).toHaveBeenCalledOnce();
   });
 });

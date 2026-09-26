@@ -64,6 +64,9 @@ export interface DoomPendingSessionSetup {
   readonly name: string;
   readonly createdAt: string;
   readonly cwd?: string;
+  readonly setupKind?: 'managed-worktree' | 'existing-directory';
+  readonly status?: 'provisioning' | 'failed' | 'interrupted';
+  readonly errorCode?: 'SESSION_WORKTREE_PROVISION_FAILED' | 'SESSION_UNAVAILABLE';
 }
 
 /** A host-owned setup can be fulfilled by any execution-directory provider. */

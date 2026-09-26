@@ -21,12 +21,16 @@ test('creates from the clicked session card without retargeting to the focused s
   await expect(dialog.getByTestId('git-worktree-error')).toContainText('not inside a git repository');
 });
 
-test('renders automatic worktree provisioning without parent runtime actions', async ({ page, cockpit }) => {
+test('shows worktree setup progress and recovery without parent runtime actions', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
-  cockpit.publishPendingSetups('s2', [
-    { id: 'reserved-child', name: 'conversation child', createdAt: new Date().toISOString() },
-  ]);
+  const setup = {
+    id: 'reserved-child',
+    name: 'conversation child',
+    createdAt: new Date().toISOString(),
+    setupKind: 'managed-worktree' as const,
+  };
+  cockpit.publishPendingSetups('s2', [{ ...setup, status: 'provisioning' }]);
   const pending = page.getByTestId('pending-session-reserved-child');
   await expect(pending).toBeVisible();
   await expect(pending).toContainText('automatic worktree provisioning');
@@ -36,4 +40,26 @@ test('renders automatic worktree provisioning without parent runtime actions', a
   await expect(page.getByRole('menuitem', { name: 'choose existing directory…' })).toHaveCount(0);
   await expect(page.getByTestId('session-worktree-reserved-child')).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: 'remove setup', exact: true })).toBeVisible();
+
+  cockpit.publishPendingSetups('s2', [{ ...setup, status: 'failed', errorCode: 'SESSION_WORKTREE_PROVISION_FAILED' }]);
+  await expect(pending.getByRole('alert')).toContainText('retry the authenticated conversation');
+  await expect(pending).toContainText('automatic worktree setup failed');
+
+  cockpit.publishPendingSetups('s2', [{ ...setup, status: 'interrupted' }]);
+  await expect(pending).toContainText('automatic worktree setup interrupted');
+  await expect(pending.getByRole('alert')).toHaveCount(0);
+
+  cockpit.publishPendingSetups('s2', [{ ...setup, setupKind: 'existing-directory', status: 'failed' }]);
+  await expect(pending).toContainText('conversation directory setup failed');
+  await expect(pending).toContainText('Inspect the selected directory');
+
+  cockpit.publishPendingSetups('s2', [
+    { ...setup, setupKind: undefined, cwd: '/legacy/checkout', status: 'interrupted' },
+  ]);
+  await expect(pending).toContainText('no verified provider');
+  cockpit.publishPendingSetups('s2', []);
+  await expect(pending).toHaveCount(0);
+  await expect(page.getByTestId('session-card-s2')).toBeVisible();
+  await expect(page.getByTestId('session-card-s2')).toHaveAttribute('data-active', 'false');
+  await expect(page.locator('[data-testid^="workspace-group-"]')).toHaveCount(1);
 });
