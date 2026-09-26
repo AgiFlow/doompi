@@ -10,7 +10,7 @@ import {
   type Model,
   type Api,
 } from '@earendil-works/pi-ai';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 
 import { createDirectHarnessRuntime } from '../../../../../src/server/directHarnessRuntime';
 import { createThreadJournals } from '../../../../../src/server/threadJournals';
@@ -20,6 +20,7 @@ import { registerNativeChild } from '../../../../../src/systems/child/adapters/n
 
 const directories: string[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const directory of directories.splice(0)) await fs.rm(directory, { recursive: true, force: true });
 });
 
@@ -53,6 +54,50 @@ it('persists server entries, rejects a second writer, and reopens by session id'
     await second.repository.close(BACKGROUND_CONTEXT);
     await second.historyLease.release();
   }
+});
+
+it('reopens durable SQLite history after its previous process left a valid dead-owner sidecar', async () => {
+  const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-sqlite-recovery-'));
+  directories.push(sessionsRoot);
+  const options = {
+    sessionsRoot,
+    sessionId: 'recovery',
+    historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
+  };
+  const first = await openSqliteSessionStorage(options, BACKGROUND_CONTEXT);
+  const branch = await first.session.createBranch('main', null, BACKGROUND_CONTEXT);
+  await branch.appendMessage({ role: 'user', content: 'keep this', timestamp: 100 }, BACKGROUND_CONTEXT);
+  await first.session.close(BACKGROUND_CONTEXT);
+  await first.repository.close(BACKGROUND_CONTEXT);
+  await first.historyLease.release();
+
+  const lockPath = `${first.sessionFile}.doompi-v4.lock`;
+  await fs.writeFile(
+    lockPath,
+    JSON.stringify({
+      version: 1,
+      format: 'doompi-v4-history-ownership',
+      pid: 99999999,
+      sourcePath: await fs.realpath(first.sessionFile),
+      token: '0cc2f679-c8a9-4b5f-8137-d50372c0b623',
+    }),
+  );
+  const realKill = process.kill.bind(process);
+  vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+    if (pid === 99999999) throw Object.assign(new Error('owner exited'), { code: 'ESRCH' });
+    return realKill(pid, signal);
+  });
+  const second = await openSqliteSessionStorage(options, BACKGROUND_CONTEXT);
+  try {
+    const entries = await second.session.findEntries({ order: 'asc', limit: 10 }, BACKGROUND_CONTEXT);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ type: 'message', message: { content: 'keep this' } });
+  } finally {
+    await second.session.close(BACKGROUND_CONTEXT);
+    await second.repository.close(BACKGROUND_CONTEXT);
+    await second.historyLease.release();
+  }
+  await expect(fs.access(lockPath)).rejects.toMatchObject({ code: 'ENOENT' });
 });
 
 it('streams a real harness turn and stores exactly one settlement at its original position', async () => {

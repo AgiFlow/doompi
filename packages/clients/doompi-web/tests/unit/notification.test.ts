@@ -52,10 +52,10 @@ describe('browser notification delivery', () => {
   it('delivers granted notifications with a stable encoded tag', () => {
     vi.stubGlobal('Notification', FakeNotification);
 
-    expect(deliverBrowserNotification('session/a', 'pi entry/1', data)).toBe('delivered');
+    expect(deliverBrowserNotification('session/a', 'pi entry/1', data, 'Build session')).toBe('delivered');
     expect(FakeNotification.seen).toEqual([
       {
-        title: 'Build finished',
+        title: 'Build session: Build finished',
         options: { body: 'workspace\nAll checks passed.', tag: 'doompi:session%2Fa:pi%20entry%2F1' },
       },
     ]);
@@ -66,7 +66,7 @@ describe('browser notification delivery', () => {
 
     expect(deliverBrowserNotification('s', 'e', { ...data, title: '', subtitle: '' })).toBe('delivered');
     expect(FakeNotification.seen).toEqual([
-      { title: 'DoomPi', options: { body: 'All checks passed.', tag: 'doompi:s:e' } },
+      { title: 's: DoomPi', options: { body: 'All checks passed.', tag: 'doompi:s:e' } },
     ]);
   });
 

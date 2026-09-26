@@ -192,6 +192,7 @@ export function startSessionRuntime(): () => void {
   // Focus, voice ownership, and pending captures each own a hub subscription.
   // Socket loss ends captures; a fresh snapshot restores the remaining owners.
   const subscribed = new Set<string>();
+  let subscriptionReady = false;
   const toolCompletionTabs = createToolCompletionTabs(openCompletedToolTab);
   let currentVoiceOwner: string | null = null;
   let pendingVoiceTransferTarget: string | undefined;
@@ -204,7 +205,13 @@ export function startSessionRuntime(): () => void {
     dispatchChannelFrame({ ...frame, sessionId });
     if (replay) return;
     const notification = parseDoomNotificationEntry(frame);
-    if (notification) void deliverBrowserNotification(sessionId, notification.entryId, notification.data);
+    if (notification)
+      void deliverBrowserNotification(
+        sessionId,
+        notification.entryId,
+        notification.data,
+        sessionsStore.state.byId[sessionId]?.summary.name,
+      );
     applyCaptureFrame(sessionId, frame);
     if (sessionId !== sessionsStore.state.activeId) return;
     if (frame.type === 'extension_ui_request' && frame.method === 'select')
@@ -307,6 +314,7 @@ export function startSessionRuntime(): () => void {
       if (sessionId in byId && !byId[sessionId].summary.dormant) desired.add(sessionId);
     }
     if (force) clearSubscriptions();
+    if (!subscriptionReady) return;
     for (const sessionId of subscribed) {
       if (desired.has(sessionId)) continue;
       subscribed.delete(sessionId);
@@ -358,6 +366,7 @@ export function startSessionRuntime(): () => void {
           applySessionsSnapshot(frame);
           // A snapshot means a fresh socket; any prior subscription died with
           // the old one.
+          subscriptionReady = true;
           syncSubscription(true);
           resubscribeThreads();
           notifyHubConnected();
@@ -493,6 +502,7 @@ export function startSessionRuntime(): () => void {
       // The snapshot that follows the hub's hello is the real "connected".
     },
     onClose() {
+      subscriptionReady = false;
       disconnectCaptures();
       disposeDormantTranscripts();
       markSocketClosed();

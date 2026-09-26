@@ -12,6 +12,7 @@ const socketState = vi.hoisted(() => ({
   protocolReady: true,
   handlers: undefined as SocketHandlers | undefined,
   sent: [] as Record<string, unknown>[],
+  sendError: false,
   presentation: undefined as ((sessionId: string, frame: Record<string, unknown>, replay: boolean) => void) | undefined,
 }));
 
@@ -59,7 +60,10 @@ vi.mock('../../src/web/lib/protocolHubSocket', () => ({
   createProtocolHubSocket: (_client: unknown, handlers: SocketHandlers) => {
     socketState.handlers = handlers;
     return {
-      send: (frame: Record<string, unknown>) => socketState.sent.push(frame),
+      send: (frame: Record<string, unknown>) => {
+        if (socketState.sendError) throw new Error('The hub protocol is not connected.');
+        socketState.sent.push(frame);
+      },
       close: () => undefined,
     };
   },
@@ -101,6 +105,7 @@ afterEach(() => {
   socketState.presentation = undefined;
   vi.useRealTimers();
   socketState.sent = [];
+  socketState.sendError = false;
   pluginState.dispatched = [];
   pluginState.focus = (_sessionId: string) => Promise.resolve();
   pluginState.focusedSessions = [];
@@ -388,6 +393,33 @@ describe('session runtime voice subscription lifetime', () => {
 });
 
 describe('session runtime hub connection lifecycle', () => {
+  it('defers subscription changes during rebind until the fresh snapshot', () => {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    const sessions = [
+      { id: 's1', name: 'First', createdAt: '1' },
+      { id: 's2', name: 'Second', createdAt: '2' },
+    ];
+    const stop = startSessionRuntime();
+    try {
+      socketState.handlers?.onFrame({ type: 'sessions_snapshot', sessions });
+      setActiveSession('s1');
+      // Both disconnection and connected rebind report onClose before service release.
+      socketState.handlers?.onClose();
+      socketState.sent = [];
+      socketState.sendError = true;
+
+      expect(() => setActiveSession('s2')).not.toThrow();
+      expect(sessionSubscriptionFrames()).toEqual([]);
+
+      socketState.sendError = false;
+      socketState.handlers?.onFrame({ type: 'sessions_snapshot', sessions });
+      expect(sessionSubscriptionFrames()).toEqual([{ type: 'subscribe', sessionId: 's2' }]);
+    } finally {
+      socketState.sendError = false;
+      stop();
+    }
+  });
+
   it('notifies subscribers after every fresh socket snapshot', () => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
     const hydratedStates: boolean[] = [];
@@ -632,7 +664,8 @@ describe('pending capture subscription lifetime', () => {
           expect(await result).toContain('lost its connection');
         }
         expect(pendingCaptureSessions.state.size).toBe(0);
-        expect(sessionSubscriptionFrames()).toContainEqual({ type: 'unsubscribe', sessionId: 'capture-owner' });
+        if (outcome !== 'close')
+          expect(sessionSubscriptionFrames()).toContainEqual({ type: 'unsubscribe', sessionId: 'capture-owner' });
       } finally {
         stopStatus();
         stop();
