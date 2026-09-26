@@ -399,6 +399,29 @@ describe('Pi extension tool surface in the headless host', () => {
     expect(onActiveToolsChanged).toHaveBeenCalledTimes(1);
   });
 
+  // refreshTools used to replace the runtime tools with Pi tools alone, dropping every facet tool.
+  it('rebuilds the merged surface on refreshTools instead of replacing runtime tools', async () => {
+    const onActiveToolsChanged = vi.fn();
+    const { actions } = await loadedHost(['alpha'], onActiveToolsChanged);
+
+    actions.refreshTools();
+
+    expect(onActiveToolsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  // Extensions reset their tools in session_shutdown, after the session runtime is disposed.
+  it('stops asking for tool rebuilds once shutdown begins', async () => {
+    const onActiveToolsChanged = vi.fn();
+    const { host, actions } = await loadedHost(['alpha', 'beta'], onActiveToolsChanged);
+
+    await host.shutdown();
+    actions.setActiveTools(['alpha']);
+    actions.refreshTools();
+
+    expect(actions.getActiveTools()).toEqual(['alpha']);
+    expect(onActiveToolsChanged).not.toHaveBeenCalled();
+  });
+
   it('restores a tool when the restriction releases it', async () => {
     const { host, actions } = await loadedHost(['alpha', 'beta']);
 

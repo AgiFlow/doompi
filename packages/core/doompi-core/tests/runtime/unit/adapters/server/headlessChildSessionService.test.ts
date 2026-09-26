@@ -76,6 +76,7 @@ function fakeRuntime(sessionId: string, filePath?: string): DirectHarnessRuntime
     followUp: vi.fn(async () => undefined),
     nextRun: vi.fn(async () => undefined),
     abort: vi.fn(async () => undefined),
+    interrupt: vi.fn(async () => undefined),
     compact: vi.fn(async () => undefined),
     resume: vi.fn(async () => false),
     dispose: vi.fn(async () => undefined),

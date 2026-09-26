@@ -718,9 +718,10 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       activeNames = new Set(names.filter((name) => known.has(name)));
       if (!shuttingDown) options.onActiveToolsChanged?.();
     },
+    // The session owns the merged Pi and facet surface. Replacing the runtime tools with Pi
+    // tools alone would drop every facet tool, so a refresh goes through the same rebuild.
     refreshTools: () => {
-      if (shuttingDown) return;
-      void runtime.replaceTools([...activeTools()]).catch((error: unknown) => report('refresh_tools', error));
+      if (!shuttingDown) options.onActiveToolsChanged?.();
     },
     getCommands: () => [],
     setModel: async (model) => {

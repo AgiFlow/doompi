@@ -229,6 +229,43 @@ describe('direct harness durable lifecycle', () => {
     }
   });
 
+  // A rejected settled-marker write used to poison the run_end chain, so the operation never
+  // cleared and every later prompt read as "A turn is already running".
+  it('settles the run and frees the lane when the settled marker cannot be written', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-settled-'));
+    const { models, streams } = fixtures();
+    const runtime = await createDirectHarnessRuntime({
+      cwd: root,
+      sessionsRoot: root,
+      sessionId: 'settled_marker_failure',
+      storage: 'sqlite' as const,
+      historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
+      models,
+      model,
+    });
+    const frames: string[] = [];
+    runtime.onPresentationFrame((frame) => frames.push(String(frame.type)));
+    const findEntry = vi.spyOn(runtime.lane, 'findEntry').mockRejectedValueOnce(new Error('database is locked'));
+    try {
+      const first = await runtime.submitPrompt('first');
+      await waitFor(() => streams.length === 1);
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('one') });
+      await first.settled;
+      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
+      expect(findEntry).toHaveBeenCalled();
+      expect(frames).toContain('agent_settled');
+
+      const second = await runtime.submitPrompt('second');
+      await waitFor(() => streams.length === 2);
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('two') });
+      await second.settled;
+      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
+    } finally {
+      await runtime.dispose();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('removes one pending item without replaying its neighbors and promotes by stable identity', async () => {
     const { repository, models, streams } = fixtures();
     const session = await repository.create({ id: randomUUID() }, BACKGROUND_CONTEXT);

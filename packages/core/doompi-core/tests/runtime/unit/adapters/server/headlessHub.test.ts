@@ -472,6 +472,50 @@ describe('createHeadlessHub', () => {
     await hub.close();
   });
 
+  it('lets a session id reopen after its shutdown failed', async () => {
+    const closeSession = vi.fn(async (): Promise<void> => {
+      throw new Error('cleanup unavailable');
+    });
+    const hub = createHeadlessHub({ manager: { closeSession } as never });
+    const first = host();
+    hub.register({ id: 'one', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: first.host });
+    await expect(hub.closeSession('one')).rejects.toThrow('cleanup unavailable');
+
+    const second = host();
+    hub.register({ id: 'one', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: second.host });
+    expect(hub.session('one')?.host).toBe(second.host);
+    closeSession.mockImplementation(async () => undefined);
+    await hub.close();
+  });
+
+  it('refuses a duplicate create before building a host', async () => {
+    const create = vi.fn(async () => host().host);
+    const hub = createHeadlessHub({ manager: { create, closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({ id: 'one', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: host().host });
+
+    await expect(
+      hub.create({ sessionId: 'one', workspaceId: 'one', sessionName: 'One', cwd: '/one' } as never),
+    ).rejects.toThrow("Session 'one' is already registered.");
+    expect(create).not.toHaveBeenCalled();
+    await hub.close();
+  });
+
+  it('closes the host it built when registration is refused', async () => {
+    let hub!: ReturnType<typeof createHeadlessHub>;
+    const closeSession = vi.fn(async () => undefined);
+    const create = vi.fn(async () => {
+      // The hub closes while this host is still starting.
+      await hub.close();
+      return host().host;
+    });
+    hub = createHeadlessHub({ manager: { create, closeSession } as never });
+
+    await expect(
+      hub.create({ sessionId: 'late', workspaceId: 'one', sessionName: 'Late', cwd: '/one' } as never),
+    ).rejects.toThrow('The headless hub is closed.');
+    expect(closeSession).toHaveBeenCalledWith('late');
+  });
+
   it('publishes session summaries at state changes rather than every streamed token', () => {
     const session = host();
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });

@@ -778,17 +778,24 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     if (event.type === 'tool_start') toolsThisRun += 1;
     if (event.type === 'run_end' && options.storage === 'sqlite') {
       const record = event as unknown as AnyRecord;
-      const latest = await lane.findEntry(
-        { type: 'custom', customType: 'doompi.agent-settled', order: 'newestFirst' },
-        eventContext,
-      );
-      const data = latest?.type === 'custom' && isRecord(latest.data) ? latest.data : undefined;
-      if (data?.runId !== record.runId)
-        await lane.appendCustomEntry(
-          'doompi.agent-settled',
-          { runId: String(record.runId), timestamp: Number(record.endedAt), tools: toolsThisRun },
+      // The settled marker is bookkeeping. Failing to write it must not stop the lifecycle
+      // and frames below, or the run never reads as settled and the lane stays claimed.
+      try {
+        const latest = await lane.findEntry(
+          { type: 'custom', customType: 'doompi.agent-settled', order: 'newestFirst' },
           eventContext,
         );
+        const data = latest?.type === 'custom' && isRecord(latest.data) ? latest.data : undefined;
+        if (data?.runId !== record.runId)
+          await lane.appendCustomEntry(
+            'doompi.agent-settled',
+            { runId: String(record.runId), timestamp: Number(record.endedAt), tools: toolsThisRun },
+            eventContext,
+          );
+      } catch (error) {
+        markStorageFailure(error);
+        emitFrame({ type: FRAME_ERROR, code: 'agent_settled', error: errorMessage(error) });
+      }
     }
     await emitLifecycle(event, eventContext);
     if (event.type === 'fault') markStorageFailure(event);
@@ -806,7 +813,10 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     if (event.type === 'run_end') {
       // The native drive still owns the lane while emitting run_end. Release its
       // callback before settled hooks write history, then drain before acknowledging drive.
-      settledEvents = settledEvents.then(() => deliverHarnessEvent(event, eventContext));
+      // A rejected link would poison every later run_end and the await in drive().
+      settledEvents = settledEvents
+        .then(() => deliverHarnessEvent(event, eventContext))
+        .catch((error: unknown) => emitFrame({ type: FRAME_ERROR, code: 'settled_event', error: errorMessage(error) }));
       return;
     }
     await deliverHarnessEvent(event, eventContext);
@@ -1717,129 +1727,136 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       if (!result.ok) resultError(result);
       await adoptNativeQueue();
     });
-  const abort = (targetOperationId?: string): Promise<void> =>
-    runAgentOperation(async () => {
-      const execution = await lane.inspectExecution(context);
-      const currentId = execution.current?.id;
-      if (!currentId || (targetOperationId !== undefined && targetOperationId !== currentId)) return;
-      // Serialize handoff and pause. A promoted steer can neither enter the native inbox
-      // between this snapshot and cancellation nor acknowledge without a retained mapping.
-      const paused = await serializeAdmission(async () => {
-        if ((await lane.inspectExecution(context)).current?.id !== currentId) return false;
-        // Commit pause and a complete inbox snapshot before native cancellation deletes payloads.
-        const captured = await writable(() =>
-          storage.session.mutate(async (mutator) => {
-            const stored = await mutator.getValue(lifecycleAddress, context);
-            const record = stored?.value ?? EMPTY_LIFECYCLE;
-            const native = await mutator.getValue(laneState(laneName), context);
-            if (native?.value.currentOperationId !== currentId) return false;
-            const adopted: RetainedInput[] = [];
-            for (const pending of native.value.inbox) {
-              if (pending.kind !== 'steer' && pending.kind !== 'followUp') continue;
-              if (record.queue.some((item) => item.id === pending.entryId || item.nativeEntryId === pending.entryId))
-                continue;
-              const payload = await mutator.getValue(pendingEntry(pending.entryId), context);
-              if (payload?.value.type !== 'message')
-                throw new Error(`Native queued input ${pending.entryId} has no message payload`);
-              adopted.push(retainedMessage(pending.entryId, pending.kind, payload.value.payload));
-            }
-            await mutator.commit(
-              [
-                setValue(lifecycleAddress, {
-                  ...record,
-                  revision: record.revision + 1,
-                  paused: true,
-                  abortOperationId: currentId,
-                  queue: [
-                    ...record.queue.map((entry) =>
-                      entry.disposition === 'pending' && entry.delivery === 'steer'
-                        ? { ...entry, delivery: 'followUp' as const, operationId: undefined }
-                        : entry,
-                    ),
-                    ...adopted,
-                  ],
-                }),
-              ],
-              context,
-            );
-            return true;
-          }, context),
-        );
-        if (!captured) return false;
-        abortingOperationId = currentId;
-        await publishLifecycle();
-        return true;
-      });
-      if (!paused) return;
-      const result = await writable(() => lane.requestAbort(currentId, context));
-      if (!result.ok) {
-        if (result.error._tag === 'OperationMismatch') return;
-        resultError(result);
-      }
-      const returned = [
-        ...result.value.steer.map((message) => ({ kind: 'steer' as const, message })),
-        ...result.value.followUp.map((message) => ({ kind: 'followUp' as const, message })),
-      ];
-      const latest = await readRecord();
-      const native = await storage.session.getValue(laneState(laneName), context);
-      const remaining = new Set((native?.value.inbox ?? []).map((item) => item.entryId));
-      const consumed = await Promise.all(
-        latest.queue
-          .filter((item) => item.nativeEntryId !== undefined)
-          .map(async (item) => [item.id, await storage.session.getEntry(item.nativeEntryId!, context)] as const),
-      );
-      const committed = new Set(consumed.filter(([, entry]) => entry !== undefined).map(([id]) => id));
-      const removedUnconsumed = latest.queue.filter(
-        (item) => item.nativeEntryId !== undefined && !remaining.has(item.nativeEntryId) && !committed.has(item.id),
-      );
-      // The native result omits IDs. Match it to the already-retained native inbox by
-      // cardinality and kind, never by text: two identical messages are distinct inputs.
-      const unmatched = {
-        steer: removedUnconsumed.filter((item) => item.delivery === 'steer').length,
-        followUp: removedUnconsumed.filter((item) => item.delivery === 'followUp').length,
-      };
-      const ambiguous =
-        returned.filter(({ kind }) => kind === 'steer').length !== unmatched.steer ||
-        returned.filter(({ kind }) => kind === 'followUp').length !== unmatched.followUp;
-      const extras = returned
-        .filter(({ kind }) => {
-          if (!ambiguous && unmatched[kind] > 0) {
-            unmatched[kind] -= 1;
-            return false;
+  // Cancellation itself. Session teardown calls it directly: an external tool invocation
+  // holds the agent-operation guard, and closing must not wait on or fail because of it.
+  const abortCurrent = async (targetOperationId?: string): Promise<void> => {
+    const execution = await lane.inspectExecution(context);
+    const currentId = execution.current?.id;
+    if (!currentId || (targetOperationId !== undefined && targetOperationId !== currentId)) return;
+    // Serialize handoff and pause. A promoted steer can neither enter the native inbox
+    // between this snapshot and cancellation nor acknowledge without a retained mapping.
+    const paused = await serializeAdmission(async () => {
+      if ((await lane.inspectExecution(context)).current?.id !== currentId) return false;
+      // Commit pause and a complete inbox snapshot before native cancellation deletes payloads.
+      const captured = await writable(() =>
+        storage.session.mutate(async (mutator) => {
+          const stored = await mutator.getValue(lifecycleAddress, context);
+          const record = stored?.value ?? EMPTY_LIFECYCLE;
+          const native = await mutator.getValue(laneState(laneName), context);
+          if (native?.value.currentOperationId !== currentId) return false;
+          const adopted: RetainedInput[] = [];
+          for (const pending of native.value.inbox) {
+            if (pending.kind !== 'steer' && pending.kind !== 'followUp') continue;
+            if (record.queue.some((item) => item.id === pending.entryId || item.nativeEntryId === pending.entryId))
+              continue;
+            const payload = await mutator.getValue(pendingEntry(pending.entryId), context);
+            if (payload?.value.type !== 'message')
+              throw new Error(`Native queued input ${pending.entryId} has no message payload`);
+            adopted.push(retainedMessage(pending.entryId, pending.kind, payload.value.payload));
           }
+          await mutator.commit(
+            [
+              setValue(lifecycleAddress, {
+                ...record,
+                revision: record.revision + 1,
+                paused: true,
+                abortOperationId: currentId,
+                queue: [
+                  ...record.queue.map((entry) =>
+                    entry.disposition === 'pending' && entry.delivery === 'steer'
+                      ? { ...entry, delivery: 'followUp' as const, operationId: undefined }
+                      : entry,
+                  ),
+                  ...adopted,
+                ],
+              }),
+            ],
+            context,
+          );
           return true;
-        })
-        .map(({ kind, message }) => ({
-          ...retainedMessage(randomUUID(), kind, message),
-          delivery: kind === 'steer' ? ('followUp' as const) : kind,
-          scheduling: 'held' as const,
-          disposition: 'pending' as const,
-          nativeEntryId: undefined,
-        }));
-      await changeRecord((current) => ({
-        record: {
-          ...current,
-          queue: [
-            ...current.queue.map((item) => {
-              if (item.nativeEntryId === undefined || remaining.has(item.nativeEntryId)) return item;
-              if (committed.has(item.id)) return { ...item, disposition: 'consumed' };
-              return ambiguous
-                ? { ...item, disposition: 'uncertain' }
-                : {
-                    ...item,
-                    disposition: 'pending',
-                    nativeEntryId: undefined,
-                    delivery: item.delivery === 'steer' ? 'followUp' : item.delivery,
-                    scheduling: item.delivery === 'steer' ? 'automatic' : item.scheduling,
-                  };
-            }),
-            ...extras,
-          ],
-        },
-        result: undefined,
-      }));
+        }, context),
+      );
+      if (!captured) return false;
+      abortingOperationId = currentId;
       await publishLifecycle();
+      return true;
     });
+    if (!paused) return;
+    const result = await writable(() => lane.requestAbort(currentId, context));
+    if (!result.ok) {
+      if (result.error._tag === 'OperationMismatch') return;
+      resultError(result);
+    }
+    const returned = [
+      ...result.value.steer.map((message) => ({ kind: 'steer' as const, message })),
+      ...result.value.followUp.map((message) => ({ kind: 'followUp' as const, message })),
+    ];
+    const latest = await readRecord();
+    const native = await storage.session.getValue(laneState(laneName), context);
+    const remaining = new Set((native?.value.inbox ?? []).map((item) => item.entryId));
+    const consumed = await Promise.all(
+      latest.queue
+        .filter((item) => item.nativeEntryId !== undefined)
+        .map(async (item) => [item.id, await storage.session.getEntry(item.nativeEntryId!, context)] as const),
+    );
+    const committed = new Set(consumed.filter(([, entry]) => entry !== undefined).map(([id]) => id));
+    const removedUnconsumed = latest.queue.filter(
+      (item) => item.nativeEntryId !== undefined && !remaining.has(item.nativeEntryId) && !committed.has(item.id),
+    );
+    // The native result omits IDs. Match it to the already-retained native inbox by
+    // cardinality and kind, never by text: two identical messages are distinct inputs.
+    const unmatched = {
+      steer: removedUnconsumed.filter((item) => item.delivery === 'steer').length,
+      followUp: removedUnconsumed.filter((item) => item.delivery === 'followUp').length,
+    };
+    const ambiguous =
+      returned.filter(({ kind }) => kind === 'steer').length !== unmatched.steer ||
+      returned.filter(({ kind }) => kind === 'followUp').length !== unmatched.followUp;
+    const extras = returned
+      .filter(({ kind }) => {
+        if (!ambiguous && unmatched[kind] > 0) {
+          unmatched[kind] -= 1;
+          return false;
+        }
+        return true;
+      })
+      .map(({ kind, message }) => ({
+        ...retainedMessage(randomUUID(), kind, message),
+        delivery: kind === 'steer' ? ('followUp' as const) : kind,
+        scheduling: 'held' as const,
+        disposition: 'pending' as const,
+        nativeEntryId: undefined,
+      }));
+    await changeRecord((current) => ({
+      record: {
+        ...current,
+        queue: [
+          ...current.queue.map((item) => {
+            if (item.nativeEntryId === undefined || remaining.has(item.nativeEntryId)) return item;
+            if (committed.has(item.id)) return { ...item, disposition: 'consumed' };
+            return ambiguous
+              ? { ...item, disposition: 'uncertain' }
+              : {
+                  ...item,
+                  disposition: 'pending',
+                  nativeEntryId: undefined,
+                  delivery: item.delivery === 'steer' ? 'followUp' : item.delivery,
+                  scheduling: item.delivery === 'steer' ? 'automatic' : item.scheduling,
+                };
+          }),
+          ...extras,
+        ],
+      },
+      result: undefined,
+    }));
+    await publishLifecycle();
+  };
+  const abort = (targetOperationId?: string): Promise<void> => runAgentOperation(() => abortCurrent(targetOperationId));
+  const interrupt = async (): Promise<void> => {
+    guardLive();
+    await abortCurrent();
+    await lane.waitForIdle(context);
+  };
   const compact = (customInstructions?: string): Promise<void> =>
     runAgentOperation(async () => {
       const result = await writable(() =>
@@ -2040,7 +2057,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       let failure: unknown;
       try {
         const execution = await lane.inspectExecution(context);
-        if (execution.current !== null) await abort(execution.current.id);
+        if (execution.current !== null) await abortCurrent(execution.current.id);
       } catch (error) {
         failure = error;
         markStorageFailure(error);
@@ -2128,6 +2145,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     followUp,
     nextRun,
     abort,
+    interrupt,
     compact,
     resume,
     dispose,

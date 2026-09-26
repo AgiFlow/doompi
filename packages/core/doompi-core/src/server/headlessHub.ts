@@ -579,7 +579,10 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   const register = (session: HeadlessHubSession): void => {
     if (closed) throw new Error('The headless hub is closed.');
     if (sessions.has(session.id)) throw new Error(`Session '${session.id}' is already registered.`);
-    if (sessionShutdowns.has(session.id)) throw new Error(`Session '${session.id}' is still shutting down.`);
+    if (sessionShutdowns.get(session.id)?.pending) throw new Error(`Session '${session.id}' is still shutting down.`);
+    // A failed shutdown stays visible to scoped closers until the id is reused. Reopening
+    // the session is that reuse, so it must not be blocked by the stale failure.
+    sessionShutdowns.delete(session.id);
     let current: HeadlessHubSession = {
       ...session,
       updatedAt: session.updatedAt ?? session.createdAt,
@@ -808,7 +811,12 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     pluginRegistry,
     invokePlugin: (call, direction, caller) => pluginRegistry.invoke(call, direction, caller),
     async create(sessionOptions) {
+      const id = sessionOptions.sessionId;
       if (closed) throw new Error('The headless hub is closed.');
+      // Checked before building the host: once it exists, a refusal has to close it, and a
+      // duplicate id would then close the live session that already owns the id.
+      if (sessions.has(id)) throw new Error(`Session '${id}' is already registered.`);
+      if (sessionShutdowns.get(id)?.pending) throw new Error(`Session '${id}' is still shutting down.`);
       const host = await options.manager.create(sessionOptions);
       const session: HeadlessHubSession = {
         id: sessionOptions.sessionId,
@@ -824,7 +832,15 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
         environment: sessionOptions.environment,
         host,
       };
-      register(session);
+      try {
+        register(session);
+      } catch (error) {
+        // The hub closed, or a racing create took the id, while this host was starting.
+        await Promise.resolve(options.manager.closeSession(id)).catch((closeError: unknown) =>
+          options.onNotice?.(`Session '${id}' could not be closed after a failed registration: ${String(closeError)}`),
+        );
+        throw error;
+      }
       return session;
     },
     closeSession,

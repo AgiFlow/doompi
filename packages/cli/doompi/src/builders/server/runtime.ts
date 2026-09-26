@@ -174,6 +174,13 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     sessionArtifacts.delete(sessionId);
     webCompositions?.remove({ scope: 'session', sessionId });
     const failures: unknown[] = [];
+    // The host goes first, as on the create-failure path: it stops the running turn and
+    // dispatches session_shutdown while the facets that own those hooks are still installed.
+    try {
+      await baseSessionManager.closeSession(sessionId);
+    } catch (error) {
+      failures.push(error);
+    }
     try {
       await artifacts?.apis.close();
     } catch (error) {
@@ -181,11 +188,6 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     }
     try {
       await artifacts?.cleanup();
-    } catch (error) {
-      failures.push(error);
-    }
-    try {
-      await baseSessionManager.closeSession(sessionId);
     } catch (error) {
       failures.push(error);
     }
@@ -942,17 +944,24 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           }
         }
         await hub.closeSession(session.id);
-        await openSession(
-          {
-            cwd: session.cwd,
-            name: session.name,
-            ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
-            ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
-          },
-          session.id,
-          ownership?.artifact,
-          ownership?.workspaceId,
-        );
+        try {
+          await openSession(
+            {
+              cwd: session.cwd,
+              name: session.name,
+              ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
+              ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
+            },
+            session.id,
+            ownership?.artifact,
+            ownership?.workspaceId,
+          );
+        } catch (error) {
+          // The journal lease allows one writer, so the new host cannot open before the old
+          // one closes. Keep the closed session as dormant so it can be revived after a fix.
+          if (record !== undefined) openSessions.add(record);
+          throw error;
+        }
       },
       resumeSession: async (session, targetSessionId) => {
         const workspaceId = session.workspaceId;
@@ -961,18 +970,25 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         const target = (await savedHistory(workspaceId)).find((item) => item.summary.id === targetSessionId);
         if (!target) throw new Error('Saved Pi thread not found in this workspace.');
         const artifact = validatedExecution(target.execution, workspaceId);
+        const closedRecord = openSessions.list().find((entry) => entry.sessionId === session.id);
         await hub.closeSession(session.id);
-        await openSession(
-          {
-            cwd: target.execution.cwd,
-            name: target.summary.name ?? 'untitled',
-            ...(target.execution.parentSessionId ? { parentSessionId: target.execution.parentSessionId } : {}),
-            ...(target.execution.sessionProvenance ? { sessionProvenance: target.execution.sessionProvenance } : {}),
-          },
-          target.summary.id,
-          artifact,
-          target.execution.sessionProvenance === 'worktree' ? workspaceId : undefined,
-        );
+        try {
+          await openSession(
+            {
+              cwd: target.execution.cwd,
+              name: target.summary.name ?? 'untitled',
+              ...(target.execution.parentSessionId ? { parentSessionId: target.execution.parentSessionId } : {}),
+              ...(target.execution.sessionProvenance ? { sessionProvenance: target.execution.sessionProvenance } : {}),
+            },
+            target.summary.id,
+            artifact,
+            target.execution.sessionProvenance === 'worktree' ? workspaceId : undefined,
+          );
+        } catch (error) {
+          // Same as restart: the session given up for the resume stays revivable.
+          if (closedRecord !== undefined) openSessions.add(closedRecord);
+          throw error;
+        }
         return target.summary.id;
       },
       dormantSessions: () => openSessions.list(),

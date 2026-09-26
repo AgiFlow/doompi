@@ -225,6 +225,11 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   /** Queues for the run after the current one, rather than into it. */
   nextRun(message: string | AgentMessage, images?: ImageContent[]): Promise<void>;
   abort(operationId?: string): Promise<void>;
+  /**
+   * Cancels the current operation and waits for the lane to go idle. Unlike abort, it does not
+   * wait on an external tool invocation, so session teardown can always stop a running turn.
+   */
+  interrupt(): Promise<void>;
   compact(customInstructions?: string): Promise<void>;
   /** Continues a persisted in-flight operation; false when the lane had none. */
   resume(): Promise<boolean>;
