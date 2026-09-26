@@ -14,7 +14,11 @@ import {
   type DoomHeadlessResource,
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
-import type { DoomMcpProjection } from '@agimon-ai/doompi-core/mcpProjection';
+import {
+  DOOM_MCP_PROJECTION_RESOLVER_SERVICE,
+  type DoomMcpProjection,
+  type DoomMcpProjectionResolverService,
+} from '@agimon-ai/doompi-core/mcpProjection';
 import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-core/mcpSession';
 import { DOOM_MCP_STATUS_SERVICE, type DoomMcpStatusService } from '@agimon-ai/doompi-core/mcpStatus';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/serverFacet';
@@ -98,7 +102,13 @@ afterEach(async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-async function setup(enabled = true, projection?: DoomMcpProjection, managed = false, cwd = root) {
+async function setup(
+  enabled = true,
+  projection?: DoomMcpProjection,
+  managed = false,
+  cwd = root,
+  resolver?: DoomMcpProjectionResolverService,
+) {
   const statuses: Record<string, string> = {};
   const environment = sessionConfigEnvironment({
     enabled,
@@ -179,6 +189,7 @@ async function setup(enabled = true, projection?: DoomMcpProjection, managed = f
     registerApi: registration,
   });
   context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  if (resolver) context.provide(DOOM_MCP_PROJECTION_RESOLVER_SERVICE, resolver);
   const close = await mcpHeadlessFacet.apply(context);
   cleanups.push(async () => {
     await close?.();
@@ -438,6 +449,65 @@ describe('MCP server facet contracts', () => {
       expect(mock.options[0]?.configSources).toEqual([expect.objectContaining({ path: configPath })]),
     );
   });
+  it('publishes domain plugin servers before discovery and withdraws them when deselected', async () => {
+    const pluginConfig = path.join(root, 'staging.mcp.json');
+    const contents = JSON.stringify({
+      mcpServers: {
+        'agiflow-mcp': { type: 'http', url: 'https://agiflow.agimon.win/api/v1/mcp/0.0.3' },
+        'boomlink-mcp': { type: 'http', url: 'https://boomlink.agimon.win/api/v1/mcp/0.0.1' },
+      },
+    });
+    fs.writeFileSync(pluginConfig, contents);
+    const baseline = path.join(root, '.mcp.json');
+    const source = (configPath: string, owner: 'plugin' | 'repository') => ({
+      sourceId: `${owner}:${configPath}`,
+      owner,
+      format: 'native' as const,
+      configPath,
+      contentDigest: createHash('sha256').update(fs.readFileSync(configPath)).digest('hex'),
+    });
+    const initial: DoomMcpProjection = {
+      version: 1,
+      enabled: true,
+      fingerprint: 'initial',
+      repoRoot: root,
+      stagingDirectory: path.join(root, 'projection-stage'),
+      sources: [source(baseline, 'repository')],
+    };
+    const cleanup = vi.fn(async () => {});
+    const resolve = vi.fn(async (domains: readonly string[]) => ({
+      projection: {
+        ...initial,
+        fingerprint: JSON.stringify(domains),
+        sources: [
+          source(baseline, 'repository'),
+          ...(domains.includes('staging') ? [source(pluginConfig, 'plugin')] : []),
+        ],
+      },
+      cleanup,
+    }));
+    const current = await setup(true, initial, true, root, { resolve });
+    await current.start();
+    await current.select(['initial', 'staging']);
+    expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])).toEqual([
+      { name: 'example', state: 'not-connected' },
+      { name: 'pending', state: 'not-connected' },
+      { name: 'agiflow-mcp', state: 'not-connected' },
+      { name: 'boomlink-mcp', state: 'not-connected' },
+    ]);
+    await current.command.execute('reload', current.execution);
+    expect(resolve).toHaveBeenLastCalledWith(['initial', 'staging']);
+    await current.select(['initial']);
+    expect(
+      parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])?.map((server) => server.name),
+    ).toEqual(['example', 'pending']);
+    expect(cleanup).toHaveBeenCalled();
+    await current.select(['initial', 'staging']);
+    expect(
+      parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])?.map((server) => server.name),
+    ).toContain('agiflow-mcp');
+  });
+
   it('withdraws managed tools when selection domains change and refuses stale reload', async () => {
     const configPath = path.join(root, '.mcp.json');
     const contents = fs.readFileSync(configPath);

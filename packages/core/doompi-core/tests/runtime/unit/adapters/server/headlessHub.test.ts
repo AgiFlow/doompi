@@ -92,6 +92,36 @@ describe('createHeadlessHub', () => {
     ).toThrow('closed');
   });
 
+  it('publishes pending setup changes in live upserts, including removal', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const updates: unknown[] = [];
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: host().host });
+    hub.onEvent((event) => {
+      if (event.kind === 'upsert') updates.push(event.session.pendingSetups);
+    });
+    const setup = { id: 'child', name: 'Child', createdAt: 'now', status: 'failed' as const };
+    hub.setPendingSessionSetups?.('one', [setup]);
+    hub.setPendingSessionSetups?.('one', []);
+    expect(updates).toEqual([[setup], []]);
+    await hub.close();
+  });
+
+  it('delivers reentrant setup updates to subscribers in order', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const updates: unknown[] = [];
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: host().host });
+    hub.onEvent((event) => {
+      if (event.kind === 'upsert' && event.session.pendingSetups?.length) hub.setPendingSessionSetups?.('one', []);
+    });
+    hub.onEvent((event) => {
+      if (event.kind === 'upsert') updates.push(event.session.pendingSetups);
+    });
+    const setup = { id: 'child', name: 'Child', createdAt: 'now' };
+    hub.setPendingSessionSetups?.('one', [setup]);
+    expect(updates).toEqual([[setup], []]);
+    await hub.close();
+  });
+
   it('reports failed exit cleanup and rejects invalid mount and workspace operations', async () => {
     const notices: string[] = [];
     const session = host();

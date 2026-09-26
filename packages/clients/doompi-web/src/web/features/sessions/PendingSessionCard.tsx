@@ -25,6 +25,28 @@ export function PendingSessionCard({
   const modeRef = useRef(mode);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const setupType =
+    setup.setupKind === 'existing-directory'
+      ? 'conversation directory'
+      : setup.setupKind === 'managed-worktree'
+        ? 'automatic worktree'
+        : 'conversation';
+  const setupStatus =
+    setup.status === 'failed'
+      ? `${setupType} setup failed`
+      : setup.status === 'interrupted'
+        ? `${setupType} setup interrupted`
+        : `${setupType} provisioning`;
+  const recovery =
+    setup.setupKind === undefined && setup.cwd !== undefined
+      ? 'This existing setup has no verified provider. Inspect its ownership in DoomPi before retrying.'
+      : setup.errorCode === 'SESSION_UNAVAILABLE'
+        ? 'The existing session is unavailable. Inspect or resume it in DoomPi before retrying the conversation.'
+        : setup.status === 'interrupted'
+          ? 'Retry the authenticated conversation to resume this setup. The same setup will be reused.'
+          : setup.setupKind === 'existing-directory'
+            ? 'Inspect the selected directory, then retry the authenticated conversation. The same setup will be reused.'
+            : 'Resolve the Git setup, then retry the authenticated conversation. The same setup will be reused.';
   const enter = (next: Mode): void => {
     modeRef.current = next;
     setMode(next);
@@ -70,7 +92,12 @@ export function PendingSessionCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <p className="text-xs text-doom-faint">automatic worktree provisioning</p>
+      <p className={setup.status === 'failed' ? 'text-xs text-doom-red' : 'text-xs text-doom-faint'}>{setupStatus}</p>
+      {setup.status === 'failed' || setup.status === 'interrupted' ? (
+        <p role={setup.status === 'failed' ? 'alert' : undefined} className="text-xs text-doom-faint">
+          {recovery}
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="text-xs text-doom-red">
           {error}

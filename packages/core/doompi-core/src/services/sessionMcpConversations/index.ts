@@ -10,6 +10,9 @@ const CONVERSATION_META_KEY = 'openai/session';
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/u;
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
 
+export type SessionMcpSetupKind = 'managed-worktree' | 'existing-directory';
+export type SessionMcpSetupFailureCode = 'SESSION_WORKTREE_PROVISION_FAILED' | 'SESSION_UNAVAILABLE';
+
 /** Client metadata is a routing hint within an authenticated registration, never authority. */
 export function sessionMcpConversationDigest(meta: unknown): string | undefined {
   if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return undefined;
@@ -36,6 +39,10 @@ export interface SessionMcpConversation {
   readonly conversationDigest: string;
   readonly createdAt: string;
   readonly state: 'pending' | 'bound' | 'closed';
+  /** Host-selected execution provider. Old records without this field are not assumed to be worktrees. */
+  readonly setupKind?: SessionMcpSetupKind;
+  /** Public, bounded failure code. Never persist Git stderr or exception text here. */
+  readonly failureCode?: SessionMcpSetupFailureCode;
   /** Persisted before checkout or session creation starts. */
   readonly cwd?: string;
   readonly workspaceId?: string;
@@ -57,7 +64,9 @@ export interface SessionMcpConversationStore {
   find(clientId: string, parentSessionId: string, digest: string): SessionMcpConversation | undefined;
   reserve(clientId: string, parentSessionId: string, parentWorkspaceId: string, digest: string): SessionMcpConversation;
   get(id: string, parentSessionId: string): SessionMcpConversation;
+  selectSetup(id: string, parentSessionId: string, kind: SessionMcpSetupKind): SessionMcpConversation;
   prepare(id: string, parentSessionId: string, cwd: string): SessionMcpConversation;
+  fail(id: string, parentSessionId: string, code: SessionMcpSetupFailureCode): SessionMcpConversation;
   bind(id: string, parentSessionId: string, workspaceId: string): SessionMcpConversation;
   recover(id: string, parentSessionId: string): SessionMcpConversation;
   closeSession(sessionId: string): void;
@@ -81,6 +90,13 @@ function validRecord(value: unknown): value is SessionMcpConversation {
     typeof record.createdAt === 'string' &&
     Number.isFinite(Date.parse(record.createdAt)) &&
     (record.state === 'pending' || record.state === 'bound' || record.state === 'closed') &&
+    (record.setupKind === undefined ||
+      record.setupKind === 'managed-worktree' ||
+      record.setupKind === 'existing-directory') &&
+    (record.failureCode === undefined ||
+      record.failureCode === 'SESSION_WORKTREE_PROVISION_FAILED' ||
+      record.failureCode === 'SESSION_UNAVAILABLE') &&
+    (record.failureCode === undefined || record.state === 'pending') &&
     (record.cwd === undefined ||
       (typeof record.cwd === 'string' && path.isAbsolute(record.cwd) && !record.cwd.includes('\0'))) &&
     (record.workspaceId === undefined || (typeof record.workspaceId === 'string' && record.workspaceId.length > 0)) &&
@@ -211,6 +227,24 @@ export function createSessionMcpConversationStore(stateDir: string): SessionMcpC
       persist([...list(), record]);
       return get(record.id, parentSessionId);
     },
+    selectSetup(id, parentSessionId, kind) {
+      const record = get(id, parentSessionId);
+      if (record.setupKind === kind)
+        return record.failureCode === undefined ? record : replace({ ...record, failureCode: undefined });
+      if (record.setupKind !== undefined && (record.cwd !== undefined || record.state === 'bound'))
+        throw new SessionMcpConversationError(
+          'SESSION_TARGET_FIXED',
+          'An initialized setup cannot change its provider.',
+          id,
+        );
+      if (record.setupKind === undefined && record.cwd !== undefined)
+        throw new SessionMcpConversationError(
+          'SESSION_TARGET_FIXED',
+          'This existing setup has no verified provider. Recover it without changing its ownership.',
+          id,
+        );
+      return replace({ ...record, setupKind: kind, failureCode: undefined });
+    },
     prepare(id, parentSessionId, cwd) {
       const record = get(id, parentSessionId);
       if (!path.isAbsolute(cwd) || cwd.includes('\0'))
@@ -224,6 +258,11 @@ export function createSessionMcpConversationStore(stateDir: string): SessionMcpC
       if (record.cwd === cwd) return record;
       return replace({ ...record, cwd });
     },
+    fail(id, parentSessionId, code) {
+      const record = get(id, parentSessionId);
+      if (record.state !== 'pending' || record.failureCode === code) return record;
+      return replace({ ...record, failureCode: code });
+    },
     bind(id, parentSessionId, workspaceId) {
       const record = get(id, parentSessionId);
       if (!record.cwd || !workspaceId) throw new Error('A prepared directory and admitted workspace are required.');
@@ -231,7 +270,7 @@ export function createSessionMcpConversationStore(stateDir: string): SessionMcpC
         if (record.workspaceId !== workspaceId) throw new Error('The bound workspace cannot change.');
         return record;
       }
-      return replace({ ...record, state: 'bound', workspaceId });
+      return replace({ ...record, state: 'bound', workspaceId, failureCode: undefined });
     },
     recover(id, parentSessionId) {
       const record = list().find((entry) => entry.id === id && entry.parentSessionId === parentSessionId);

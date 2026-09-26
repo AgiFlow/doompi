@@ -72,6 +72,45 @@ describe('conversation routing state', () => {
     expect(() => createSessionMcpConversationStore(root).get(first.id, 'parent')).toThrow('unavailable');
   });
 
+  it('persists trusted setup kind and bounded failures without changing legacy bindings', () => {
+    const root = directory();
+    const store = createSessionMcpConversationStore(root);
+    const worktree = store.reserve('client', 'parent', 'workspace', digest('worktree'));
+    const legacy = store.reserve('client', 'parent', 'workspace', digest('legacy'));
+    expect(legacy.setupKind).toBeUndefined();
+    store.selectSetup(worktree.id, 'parent', 'managed-worktree');
+    store.prepare(worktree.id, 'parent', path.join(root, 'worktree'));
+    expect(() => store.selectSetup(worktree.id, 'parent', 'existing-directory')).toThrow('cannot change');
+    expect(() => store.selectSetup(legacy.id, 'parent', 'managed-worktree')).not.toThrow();
+    store.fail(worktree.id, 'parent', 'SESSION_WORKTREE_PROVISION_FAILED');
+    expect(createSessionMcpConversationStore(root).get(worktree.id, 'parent')).toMatchObject({
+      setupKind: 'managed-worktree',
+      failureCode: 'SESSION_WORKTREE_PROVISION_FAILED',
+      state: 'pending',
+    });
+    expect(store.selectSetup(worktree.id, 'parent', 'managed-worktree').failureCode).toBeUndefined();
+    store.fail(worktree.id, 'parent', 'SESSION_WORKTREE_PROVISION_FAILED');
+    expect(store.bind(worktree.id, 'parent', 'workspace').failureCode).toBeUndefined();
+    expect(store.fail(worktree.id, 'parent', 'SESSION_UNAVAILABLE').state).toBe('bound');
+  });
+
+  it('rejects ambiguous prepared legacy setup and malformed optional metadata without losing evidence', () => {
+    const root = directory();
+    const store = createSessionMcpConversationStore(root);
+    const legacy = store.reserve('client', 'parent', 'workspace', digest('legacy'));
+    store.prepare(legacy.id, 'parent', path.join(root, 'checkout'));
+    expect(() => store.selectSetup(legacy.id, 'parent', 'managed-worktree')).toThrow('no verified provider');
+    expect(() => store.selectSetup(legacy.id, 'parent', 'existing-directory')).toThrow('no verified provider');
+    const file = path.join(root, 'session-mcp-conversations.json');
+    const original = fs.readFileSync(file, 'utf8');
+    fs.writeFileSync(
+      file,
+      original.replace('"state": "pending"', '"state": "pending", "failureCode": "raw git error"'),
+    );
+    expect(() => createSessionMcpConversationStore(root).list()).toThrow('could not be loaded');
+    expect(fs.readFileSync(file, 'utf8')).toContain('raw git error');
+  });
+
   it('fails closed on corruption and duplicate bindings without overwriting evidence', () => {
     const root = directory();
     const file = path.join(root, 'session-mcp-conversations.json');

@@ -10,7 +10,10 @@ import type { DoomHubSessionCreateRequest } from '../../../../../src/schemas/hub
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from '../../../../../src/server/headlessHub';
 import { createSessionMcpRoutes, type SessionMcpRoutes } from '../../../../../src/server/sessionMcpRoutes';
 import { createSessionMcpAuthorizationService } from '../../../../../src/services/sessionMcpAuthorization';
-import { createSessionMcpConversationStore } from '../../../../../src/services/sessionMcpConversations';
+import {
+  createSessionMcpConversationStore,
+  sessionMcpConversationDigest,
+} from '../../../../../src/services/sessionMcpConversations';
 import { createSessionMcpRegistrationStore } from '../../../../../src/services/sessionMcpRegistrationStore';
 import type {
   SessionToolDescriptor,
@@ -41,7 +44,7 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
   const sessions = new Map<string, HeadlessHubSession>();
   const persisted = new Map<string, string>();
   const surfaces = new Map<string, SessionToolSurface>();
-  const addSession = (id: string, cwd: string, parentSessionId?: string): void => {
+  const addSession = (id: string, cwd: string, parentSessionId?: string, inheritedWorkspace = false): void => {
     const surface: SessionToolSurface = {
       readSurface: () => ({
         revision: 1,
@@ -77,7 +80,7 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
       id,
       cwd,
       name: id,
-      workspaceId: id === 'parent' ? 'workspace' : `workspace-${id}`,
+      workspaceId: id === 'parent' || inheritedWorkspace ? 'workspace' : `workspace-${id}`,
       createdAt: new Date().toISOString(),
       parentSessionId,
       host: { mcpSurface: surface },
@@ -91,8 +94,13 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
   const create = vi.fn(async (request: DoomHubSessionCreateRequest) => {
     const reserved = routes.reservations.read(request.reservationId!, request.parentSessionId!);
     await new Promise<void>((resolve) => setImmediate(resolve));
-    addSession(reserved.sessionId, request.cwd, request.parentSessionId);
-    return { sessionId: reserved.sessionId, cwd: request.cwd, workspaceId: `workspace-${reserved.sessionId}` };
+    const inherited = request.sessionProvenance === 'worktree';
+    addSession(reserved.sessionId, request.cwd, request.parentSessionId, inherited);
+    return {
+      sessionId: reserved.sessionId,
+      cwd: request.cwd,
+      workspaceId: inherited ? 'workspace' : `workspace-${reserved.sessionId}`,
+    };
   });
   const pending = vi.fn();
   const provisionReservedWorktree = vi.fn(
@@ -228,6 +236,7 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
     authorization,
     routes,
     create,
+    provisionReservedWorktree,
     pending,
     rpc,
     call,
@@ -313,8 +322,81 @@ describe('conversation-bound Session MCP routing', () => {
     expect(f.store.list()).toHaveLength(2);
     expect(f.create).toHaveBeenCalledTimes(2);
     expect(f.store.list().every((record) => record.state === 'bound')).toBe(true);
+    expect(
+      f.store.list().every((record) => record.setupKind === 'managed-worktree' && record.workspaceId === 'workspace'),
+    ).toBe(true);
     expect(f.store.list().every((record) => record.cwd?.startsWith(path.join(f.root, 'worktrees')))).toBe(true);
     expect(f.surfaces.get('parent')!.invokeTool).not.toHaveBeenCalled();
+  });
+
+  it('publishes a failed automatic setup and retries the same reservation without creating a workspace', async () => {
+    const f = fixture('conversation', false, true);
+    f.provisionReservedWorktree.mockRejectedValueOnce(new Error('private git credentials'));
+    const failed = await f.call('a');
+    expect(failed.result?.structuredContent?.code).toBe('SESSION_WORKTREE_PROVISION_FAILED');
+    const record = f.store.list()[0]!;
+    expect(record).toMatchObject({ setupKind: 'managed-worktree', failureCode: 'SESSION_WORKTREE_PROVISION_FAILED' });
+    expect(JSON.stringify(record)).not.toContain('private git credentials');
+    expect(f.pending).toHaveBeenLastCalledWith('parent', [
+      expect.objectContaining({
+        id: record.id,
+        status: 'failed',
+        errorCode: 'SESSION_WORKTREE_PROVISION_FAILED',
+      }),
+    ]);
+    expect((await f.call('a')).result?.structuredContent?.sessionId).toBe(record.id);
+    expect(f.create).toHaveBeenCalledOnce();
+    expect(f.store.get(record.id, 'parent')).toMatchObject({ state: 'bound', workspaceId: 'workspace' });
+    expect(f.pending).toHaveBeenCalledWith('parent', []);
+  });
+
+  it('recovers a deleted managed child in its original workspace instead of admitting its checkout', async () => {
+    const f = fixture('conversation', false, true);
+    expect((await f.call('a')).result?.isError).toBe(false);
+    const record = f.store.list()[0]!;
+    f.routes.closeSessionBinding(record.id);
+    f.sessions.delete(record.id);
+    f.persisted.delete(record.id);
+    const restored = await f.call('a');
+    expect(restored.result?.structuredContent?.sessionId).toBe(record.id);
+    expect(f.provisionReservedWorktree).toHaveBeenCalledTimes(2);
+    expect(f.create).toHaveBeenCalledTimes(2);
+    expect(f.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sessionProvenance: 'worktree', reservationId: record.id }),
+    );
+    expect(f.store.get(record.id, 'parent')).toMatchObject({ workspaceId: 'workspace', setupKind: 'managed-worktree' });
+  });
+
+  it('rejects a managed child admitted into a different workspace', async () => {
+    const f = fixture('conversation', false, true);
+    f.create.mockImplementationOnce(async (request) => {
+      f.addSession(request.reservationId!, request.cwd, request.parentSessionId);
+      return { sessionId: request.reservationId!, cwd: request.cwd, workspaceId: `workspace-${request.reservationId}` };
+    });
+    expect((await f.call('a')).result?.structuredContent?.code).toBe('SESSION_SETUP_INCOMPLETE');
+    const record = f.store.list()[0]!;
+    expect(record).toMatchObject({ state: 'pending', setupKind: 'managed-worktree' });
+    expect(record.workspaceId).toBeUndefined();
+  });
+
+  it('refuses to guess managed ownership for a prepared legacy setup', async () => {
+    const f = fixture('conversation', false, true);
+    const record = f.store.reserve(
+      f.client.clientId,
+      'parent',
+      'workspace',
+      sessionMcpConversationDigest({ 'openai/session': 'legacy' })!,
+    );
+    f.store.prepare(record.id, 'parent', path.join(f.root, 'old-checkout'));
+    expect((await f.call('legacy')).result?.structuredContent?.code).toBe('SESSION_TARGET_FIXED');
+    expect(f.store.get(record.id, 'parent')).toMatchObject({
+      state: 'pending',
+      cwd: path.join(f.root, 'old-checkout'),
+    });
+    expect(f.create).not.toHaveBeenCalled();
+    f.store.bind(record.id, 'parent', 'workspace');
+    expect((await f.call('legacy')).result?.structuredContent?.code).toBe('SESSION_TARGET_FIXED');
+    expect(f.store.get(record.id, 'parent').state).toBe('bound');
   });
 
   it('routes contexts, file writes, and skills into two separate session surfaces', async () => {

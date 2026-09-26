@@ -58,6 +58,9 @@ function sessionView(session: HeadlessHubSession): Record<string, JsonValue> {
             name: setup.name,
             createdAt: setup.createdAt,
             ...(setup.cwd === undefined ? {} : { cwd: setup.cwd }),
+            ...(setup.setupKind === undefined ? {} : { setupKind: setup.setupKind }),
+            ...(setup.status === undefined ? {} : { status: setup.status }),
+            ...(setup.errorCode === undefined ? {} : { errorCode: setup.errorCode }),
           })),
         }),
   };

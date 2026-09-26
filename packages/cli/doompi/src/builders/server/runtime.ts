@@ -53,7 +53,7 @@ import { createComputerUseBinding } from './computerUseBinding';
 import { ensureGlobalLogSink } from './logSink';
 import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { resolveSessionIdentity } from './sessionArguments';
-import { resolveSessionArtifact } from './sessionArtifact';
+import { resolveSessionArtifact, resolveWorktreeRestart } from './sessionArtifact';
 import type { ServeOptions, ServerRuntimeEnvironment } from './types';
 const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -920,10 +920,15 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       },
       restartSession: async (session) => {
         const worktree = session.sessionProvenance === 'worktree';
-        const artifact =
-          sessionArtifacts.get(session.id)?.registration ??
-          openSessions.list().find((record) => record.sessionId === session.id)?.artifact;
-        if (worktree && !artifact) throw new Error('Worktree generation is unavailable; the session is still running.');
+        const record = openSessions.list().find((entry) => entry.sessionId === session.id);
+        const ownership = worktree
+          ? resolveWorktreeRestart({
+              session,
+              record,
+              artifact: sessionArtifacts.get(session.id)?.registration,
+              workspaces: hub.workspaces(),
+            })
+          : undefined;
         if (!worktree) {
           const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
           if (!workspaceRoot) throw new Error('Session workspace not found.');
@@ -945,7 +950,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
           },
           session.id,
-          worktree ? artifact : undefined,
+          ownership?.artifact,
+          ownership?.workspaceId,
         );
       },
       resumeSession: async (session, targetSessionId) => {

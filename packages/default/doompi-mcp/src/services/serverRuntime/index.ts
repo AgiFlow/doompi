@@ -8,7 +8,7 @@ import type {
   DoomHeadlessSelection,
   DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
-import { isDoomMcpProjection } from '@agimon-ai/doompi-core/mcpProjection';
+import { isDoomMcpProjection, type DoomMcpProjectionResolverService } from '@agimon-ai/doompi-core/mcpProjection';
 import type { DoomMcpSessionConfig } from '@agimon-ai/doompi-core/mcpSession';
 
 import { COMMAND_NAME, SERVER_COMMAND_DESCRIPTION } from '../../constants/mcp';
@@ -50,13 +50,18 @@ function sessionConfiguration(execution: DoomHeadlessExecutionContext, workspace
 export function createMcpServerRuntime(
   environment: Readonly<Record<string, string | undefined>> = {},
   workspaceRoot?: string,
+  getResolver?: () => DoomMcpProjectionResolverService | undefined,
 ) {
   let active: DoomHeadlessExecutionContext | undefined;
+  let currentSelection: DoomHeadlessSelection | undefined;
   let staleSelection = false;
+  let cleanup: (() => Promise<void>) | undefined;
+  let transition = Promise.resolve();
   const authorizing = new Map<string, symbol>();
   const session = new McpSession({
     environment: { ...environment },
     onAuthorizationUrl: async (url, serverName) => {
+      if (staleSelection || !session.getServers().some((server) => server.name === serverName)) return;
       await active?.client.notify({
         title: `Authorize MCP server ${serverName}`,
         body: url.toString(),
@@ -65,10 +70,96 @@ export function createMcpServerRuntime(
     },
   });
 
+  const refresh = (execution: DoomHeadlessExecutionContext, selection: DoomHeadlessSelection) => {
+    staleSelection = true;
+    authorizing.clear();
+    transition = transition
+      .catch(() => {})
+      .then(async () => {
+        if (active !== execution) return;
+        const previousCleanup = cleanup;
+        cleanup = undefined;
+        try {
+          await session.dispose();
+        } finally {
+          session.install({ enabled: false, repoRoot: execution.cwd, stagingDirectory: execution.cwd });
+          await previousCleanup?.();
+        }
+        if (active !== execution) return;
+        const resolver = getResolver?.();
+        const loaded = workspaceRoot ? loadHarnessState({ ...execution.environment }) : undefined;
+        const authorized =
+          workspaceRoot &&
+          loaded?.filePath &&
+          loaded.state.root === workspaceRoot &&
+          execution.repoRoot === workspaceRoot &&
+          loaded.state.mcp &&
+          loaded.state.majorMode === selection.majorMode &&
+          JSON.stringify(loaded.state.domains) === JSON.stringify(execution.selection.domains) &&
+          JSON.stringify(loaded.state.layers) === JSON.stringify(selection.activeLayers) &&
+          isDoomMcpProjection(loaded.state.mcpProjection) &&
+          loaded.state.mcpProjection.repoRoot === workspaceRoot &&
+          loaded.state.mcpProjection.enabled;
+        if (!resolver || !authorized) {
+          // A missing or disabled saved projection never grants implicit repository access.
+          if (active === execution && selection === currentSelection) {
+            if (
+              workspaceRoot === undefined ||
+              JSON.stringify(execution.selection.domains) === JSON.stringify(selection.domains)
+            ) {
+              await session.reconfigure(
+                sessionConfiguration(execution, workspaceRoot),
+                execution.cwd,
+                execution.repoRoot,
+              );
+            }
+            staleSelection =
+              workspaceRoot !== undefined &&
+              JSON.stringify(execution.selection.domains) !== JSON.stringify(selection.domains);
+          }
+          return;
+        }
+        const candidate = await resolver.resolve(selection.domains);
+        if (active !== execution || selection !== currentSelection) {
+          await candidate.cleanup();
+          return;
+        }
+        try {
+          if (
+            !isDoomMcpProjection(candidate.projection) ||
+            candidate.projection.repoRoot !== workspaceRoot ||
+            !candidate.projection.enabled
+          ) {
+            throw new Error('The selected domains returned an invalid MCP projection.');
+          }
+          await session.reconfigure(
+            mcpSessionConfigFromProjection(candidate.projection, execution.cwd),
+            execution.cwd,
+            execution.repoRoot,
+          );
+          cleanup = () => candidate.cleanup();
+          if (active === execution && selection === currentSelection) staleSelection = false;
+        } catch (error) {
+          await candidate.cleanup();
+          throw error;
+        }
+      })
+      .catch(async (error: unknown) => {
+        if (active !== execution || selection !== currentSelection) return;
+        await execution.client.notify({
+          title: 'DoomPi MCP unavailable',
+          body: error instanceof Error ? error.message : String(error),
+          level: 'warning',
+        });
+      });
+    return transition;
+  };
+
   const activity: DoomHeadlessActivity = {
     name: 'doompi-mcp-runtime',
     async start(execution) {
       active = execution;
+      currentSelection = execution.selection;
       staleSelection = false;
       const reported = new Set<string>();
       const publish = () => {
@@ -88,7 +179,7 @@ export function createMcpServerRuntime(
       };
       const stopPublishing = session.onChange(publish);
       try {
-        await session.reconfigure(sessionConfiguration(execution, workspaceRoot), execution.cwd, execution.repoRoot);
+        await refresh(execution, execution.selection);
         publish();
       } catch (error) {
         await execution.client.notify({
@@ -101,13 +192,18 @@ export function createMcpServerRuntime(
         stopPublishing();
         if (active !== execution) return;
         active = undefined;
-        staleSelection = false;
+        currentSelection = undefined;
+        staleSelection = true;
         authorizing.clear();
+        await transition;
+        const retiredCleanup = cleanup;
+        cleanup = undefined;
         try {
           await session.dispose();
         } finally {
           // Withdraw tools and UI state even when a connection fails to close.
           session.install({ enabled: false, repoRoot: execution.cwd, stagingDirectory: execution.cwd });
+          await retiredCleanup?.();
           execution.client.setStatus(MCP_STATUS_KEY, undefined);
           execution.client.setStatus(MCP_SESSION_AUTH_STATUS_KEY, undefined);
         }
@@ -198,15 +294,9 @@ export function createMcpServerRuntime(
           return;
         }
         if (subcommand === 'reload') {
-          authorizing.clear();
-          try {
-            await session.dispose();
-          } finally {
-            // Reset the catalog even when paths are unchanged or teardown fails.
-            session.install({ enabled: false, repoRoot: execution.cwd, stagingDirectory: execution.cwd });
-          }
-          await session.reconfigure(sessionConfiguration(execution, workspaceRoot), execution.cwd, execution.repoRoot);
-          await notify('Reconnecting MCP servers.');
+          if (!currentSelection) throw new Error('The MCP runtime has not started yet.');
+          await refresh(active, currentSelection);
+          if (!staleSelection) await notify('Reconnecting MCP servers.');
           return;
         }
         throw new Error(`Unknown /${COMMAND_NAME} subcommand "${subcommand}". Use status, auth, disconnect, reload.`);
@@ -223,16 +313,9 @@ export function createMcpServerRuntime(
     childTool,
     async onSelectionChange(selection: DoomHeadlessSelection) {
       if (!active || workspaceRoot === undefined) return;
-      const initial = active.selection;
-      if (!initial || JSON.stringify(initial.domains) === JSON.stringify(selection.domains)) return;
-      staleSelection = true;
-      authorizing.clear();
-      await session.reconfigure({
-        enabled: false,
-        repoRoot: active.cwd,
-        stagingDirectory: path.join(active.cwd, '.doom', 'mcp-disabled'),
-        sources: [],
-      });
+      if (JSON.stringify(currentSelection) === JSON.stringify(selection)) return;
+      currentSelection = selection;
+      await refresh(active, selection);
     },
   };
 }

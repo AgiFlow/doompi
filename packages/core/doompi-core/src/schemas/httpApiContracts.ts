@@ -55,7 +55,23 @@ export const SessionSummarySchema = Type.Object({
   lastSettledAt: Optional(Text),
   parentSessionId: Optional(Text),
   sessionProvenance: Optional(Text),
-  pendingSetups: Optional(Type.Array(Type.Object({ id: Text, name: Text, createdAt: Text, cwd: Optional(Text) }))),
+  pendingSetups: Optional(
+    Type.Array(
+      Type.Object({
+        id: Text,
+        name: Text,
+        createdAt: Text,
+        cwd: Optional(Text),
+        setupKind: Optional(Type.Union([Type.Literal('managed-worktree'), Type.Literal('existing-directory')])),
+        status: Optional(
+          Type.Union([Type.Literal('provisioning'), Type.Literal('failed'), Type.Literal('interrupted')]),
+        ),
+        errorCode: Optional(
+          Type.Union([Type.Literal('SESSION_WORKTREE_PROVISION_FAILED'), Type.Literal('SESSION_UNAVAILABLE')]),
+        ),
+      }),
+    ),
+  ),
   /** Present and true for a recorded session the server has not reopened yet. */
   dormant: Optional(Flag),
 });

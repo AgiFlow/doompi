@@ -129,8 +129,16 @@ export interface SessionSummary {
    * The hub does not interpret it; the rail uses it to pick an affordance.
    */
   sessionProvenance?: string;
-  /** Host reservations awaiting a directory, not initialized runtimes. */
-  pendingSetups?: Array<{ id: string; name: string; createdAt: string; cwd?: string }>;
+  /** Host reservations awaiting a durable child runtime, not live sessions. */
+  pendingSetups?: Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+    cwd?: string;
+    status?: 'provisioning' | 'failed' | 'interrupted';
+    setupKind?: 'managed-worktree' | 'existing-directory';
+    errorCode?: 'SESSION_WORKTREE_PROVISION_FAILED' | 'SESSION_UNAVAILABLE';
+  }>;
   /**
    * The hub recorded this session but has not reopened it since its last
    * restart. Its journal is on disk; nothing is running behind the card until

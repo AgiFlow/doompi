@@ -10,6 +10,8 @@ export const AGENT_PLUGIN_MCP_SCHEMA_URL = 'https://agent-plugins.org/schemas/1.
 
 /** Cordis service name for the immutable MCP projection of one Pi session. */
 export const DOOM_MCP_PROJECTION_SERVICE = 'doom/mcp-projection';
+/** Session-local provider for MCP resources selected by domain. */
+export const DOOM_MCP_PROJECTION_RESOLVER_SERVICE = 'doom/mcp-projection-resolver';
 
 export const DoomMcpProjectionAllowlistSchema = Type.Object(
   {
@@ -85,6 +87,10 @@ export interface DoomMcpProjectionService {
   readonly sessionId: string;
   readonly generation: string;
   getSnapshot(): DoomMcpProjection;
+}
+
+export interface DoomMcpProjectionResolverService {
+  resolve(domains: readonly string[]): Promise<{ projection: DoomMcpProjection; cleanup(): Promise<void> }>;
 }
 
 export interface DoomMcpProjectionServiceInput {
