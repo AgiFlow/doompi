@@ -7,6 +7,7 @@ import type { DirectHarnessFrame, DirectHarnessRuntime } from '../../../../../sr
 
 function fixture(telemetry?: ServerTelemetry) {
   const listeners = new Set<(frame: DirectHarnessFrame) => void>();
+  let operation: { id: string; kind: 'run'; status: 'open' } | null = null;
   const direct = {
     exited: new Promise<number>(() => undefined),
     onPresentationFrame(listener: (frame: DirectHarnessFrame) => void) {
@@ -15,6 +16,11 @@ function fixture(telemetry?: ServerTelemetry) {
     },
     readEntries: vi.fn(async () => ({ entries: [], leafId: null })),
     readState: vi.fn(async () => ({ sessionId: 's1', thinkingLevel: 'off' })),
+    readLifecycle: vi.fn(async () => ({ operation, paused: false, revision: 0, queue: [] })),
+    enqueueAutomatic: vi.fn(async () => ({ id: 'queue-1' })),
+    removeQueued: vi.fn(async () => 'removed'),
+    promoteQueued: vi.fn(async () => 'promoted'),
+    resumeQueue: vi.fn(async () => undefined),
     listCommands: vi.fn(() => [{ name: 'run', description: 'Run' }]),
     dispatchCommand: vi.fn(async () => false),
     availableModels: vi.fn(async () => [{ provider: 'test', id: 'm', api: 'test' }]),
@@ -66,6 +72,8 @@ function fixture(telemetry?: ServerTelemetry) {
     runtime,
     respondToExtensionUi,
     emit(frame: DirectHarnessFrame) {
+      if (frame.type === 'agent_start') operation = { id: 'op-1', kind: 'run', status: 'open' };
+      if (frame.type === 'agent_settled') operation = null;
       for (const listener of listeners) listener(frame);
     },
   };
@@ -126,6 +134,63 @@ describe('typed session runtime controls', () => {
       cost: 0.34,
       contextUsage: { tokens: 140, contextWindow: 1_000, percent: 14 },
     });
+    await runtime.dispose();
+  });
+
+  it('publishes native lifecycle independently of presentation phase and targets queue operations', async () => {
+    const { direct, runtime, emit } = fixture();
+    const active = {
+      revision: 4,
+      operation: { id: 'op-4', kind: 'run' as const, status: 'open' as const },
+      paused: false,
+      queue: [{ id: 'item-1', text: 'later', delivery: 'followUp', scheduling: 'automatic', disposition: 'pending' }],
+    } as const;
+    vi.mocked(direct.readLifecycle).mockResolvedValue(active as never);
+    await runtime.initialize();
+    expect(runtime.state.value.snapshot.lifecycle).toEqual(active);
+    // Presentation compaction/idle transitions must not hide an owned native operation.
+    emit({ type: 'compaction_end' });
+    expect(runtime.state.value.snapshot.lifecycle?.operation?.id).toBe('op-4');
+    await runtime.steer('change course', BACKGROUND_CONTEXT);
+    await runtime.abortOperation({ operationId: 'op-4' }, BACKGROUND_CONTEXT);
+    expect(direct.steer).toHaveBeenCalledWith('change course', undefined);
+    expect(direct.abort).toHaveBeenCalledWith('op-4');
+
+    await expect(runtime.enqueueAutomatic({ text: 'next' }, BACKGROUND_CONTEXT)).resolves.toEqual({ id: 'queue-1' });
+    await expect(runtime.removeQueued({ id: 'item-1' }, BACKGROUND_CONTEXT)).resolves.toBe('removed');
+    await expect(runtime.promoteQueued({ id: 'item-1', operationId: 'op-4' }, BACKGROUND_CONTEXT)).resolves.toBe(
+      'promoted',
+    );
+    await runtime.resumeQueue(BACKGROUND_CONTEXT);
+    expect(direct.enqueueAutomatic).toHaveBeenCalledWith('next', undefined);
+    expect(direct.removeQueued).toHaveBeenCalledWith('item-1');
+    expect(direct.promoteQueued).toHaveBeenCalledWith('item-1', 'op-4');
+    expect(direct.resumeQueue).toHaveBeenCalledOnce();
+
+    const aborting = { ...active, operation: { ...active.operation, status: 'aborting' as const } };
+    emit({ type: 'lifecycle_update', lifecycle: aborting });
+    expect(runtime.state.value.snapshot.lifecycle?.operation?.status).toBe('aborting');
+    emit({ type: 'agent_settled' });
+    expect(runtime.state.value.snapshot.lifecycle?.operation?.status).toBe('aborting');
+    await runtime.dispose();
+  });
+
+  it('does not let delayed hydration or an old lifecycle event hide a newer turn', async () => {
+    const { direct, runtime, emit } = fixture();
+    let resolveInitial!: (value: unknown) => void;
+    vi.mocked(direct.readLifecycle).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveInitial = resolve;
+        }) as never,
+    );
+    const initialization = runtime.initialize();
+    const current = { revision: 2, operation: { id: 'new', kind: 'run', status: 'open' }, paused: false, queue: [] };
+    emit({ type: 'lifecycle_update', lifecycle: current });
+    resolveInitial({ revision: 1, operation: null, paused: false, queue: [] });
+    await initialization;
+    emit({ type: 'lifecycle_update', lifecycle: { revision: 1, operation: null, paused: false, queue: [] } });
+    expect(runtime.state.value.snapshot.lifecycle?.operation?.id).toBe('new');
     await runtime.dispose();
   });
 
@@ -442,10 +507,11 @@ describe('typed session runtime controls', () => {
       );
       await runtime.abort(BACKGROUND_CONTEXT);
       expect(direct.steer).toHaveBeenCalledWith('steer', [{ type: 'image', data: 'data', mimeType: 'image/png' }]);
-      expect(direct.abort).toHaveBeenCalledOnce();
+      expect(direct.abort).toHaveBeenCalledWith('op-1');
       emit({ type: 'agent_settled' });
-      await expect(runtime.steer('idle', BACKGROUND_CONTEXT)).rejects.toThrow('There is no active turn to steer');
-      await expect(runtime.abort(BACKGROUND_CONTEXT)).rejects.toThrow('There is no active turn to abort');
+      await runtime.steer('idle', BACKGROUND_CONTEXT);
+      expect(direct.enqueueAutomatic).toHaveBeenCalledWith('idle', undefined);
+      await expect(runtime.abort(BACKGROUND_CONTEXT)).resolves.toBeUndefined();
 
       await expect(runtime.setModel(null as never, BACKGROUND_CONTEXT)).rejects.toThrow('Invalid model');
       await expect(runtime.setThinking('invalid' as never, BACKGROUND_CONTEXT)).rejects.toThrow(

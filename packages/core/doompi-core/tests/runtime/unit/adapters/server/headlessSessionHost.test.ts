@@ -193,9 +193,10 @@ describe('request-private auxiliary model tools', () => {
     await current.session.prompt('Start work.');
     await vi.waitFor(() => expect(complete).toHaveBeenCalledTimes(2));
     expect(streamSimple).toHaveBeenCalledTimes(2);
+    // Settlement hooks still belong to the finishing operation until their callbacks complete.
     expect(observations).toEqual([
-      { isIdle: true, hasPendingMessages: false },
-      { isIdle: true, hasPendingMessages: false },
+      { isIdle: false, hasPendingMessages: false },
+      { isIdle: false, hasPendingMessages: false },
     ]);
     expect(current.host.toolSurface.readSurface().tools.some((tool) => tool.name === 'private_decision')).toBe(false);
     await vi.waitFor(async () =>

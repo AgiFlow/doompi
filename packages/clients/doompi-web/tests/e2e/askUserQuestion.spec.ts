@@ -129,14 +129,13 @@ test('host abort stays available while the questionnaire owns the composer', asy
 
   const commandOffset = cockpit.session.received.length;
   await page.getByTestId('composer-abort').click();
-  await cockpit.session.waitForCommand('clear_queue');
   await cockpit.session.waitForCommand('abort');
   expect(
     cockpit.session.received
       .slice(commandOffset)
       .map((frame) => frame.type)
       .filter((type) => type === 'clear_queue' || type === 'abort'),
-  ).toEqual(['clear_queue', 'abort']);
+  ).toEqual(['abort']);
 
   cockpit.session.emit({ type: 'tool_execution_end', toolCallId: 'call-ask', result: { content: [] } });
   cockpit.session.emit({ type: 'agent_settled' });

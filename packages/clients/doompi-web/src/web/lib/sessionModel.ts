@@ -1,3 +1,4 @@
+import type { SessionLifecycle } from '@agimon-ai/doompi-core/sessionProtocol';
 import type { ToolResultView } from '@agimon-ai/doompi-core/web';
 
 import {
@@ -81,8 +82,9 @@ export interface QueuedEntry {
   kind: 'queued';
   id: string;
   text: string;
-  /** How Pi must receive this entry when the browser rebuilds the queue after deleting one item. */
-  delivery?: 'steer' | 'followUp';
+  delivery?: 'steer' | 'followUp' | 'nextRun';
+  scheduling?: 'automatic' | 'held';
+  disposition?: 'pending' | 'handoff' | 'uncertain';
   images?: UserImage[];
 }
 
@@ -155,6 +157,8 @@ export interface SessionState {
   widgets: string[];
   streaming: boolean;
   settled: boolean;
+  /** Latest authoritative server execution and retained-input snapshot. */
+  lifecycle: SessionLifecycle | null;
   stats: SessionStats | null;
   /**
    * Cost the assistant message now streaming has run up, on top of `stats`.
@@ -223,6 +227,7 @@ export const initialSessionState: SessionState = {
   widgets: [],
   streaming: false,
   settled: false,
+  lifecycle: null,
   stats: null,
   liveCost: 0,
   agent: null,
@@ -403,9 +408,6 @@ function updateTool(state: SessionState, toolCallId: string, patch: Partial<Tool
   return { ...state, entries };
 }
 
-/** Commands the picker issues; a refusal must show, or the chip just stays put. */
-const PICKER_COMMANDS = new Set(['set_model', 'set_thinking_level']);
-
 function modelChoice(value: unknown): ModelChoice | undefined {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.provider !== 'string') return undefined;
   return {
@@ -418,7 +420,7 @@ function modelChoice(value: unknown): ModelChoice | undefined {
 
 function applyResponse(state: SessionState, frame: Frame): SessionState {
   const command = asString(frame.command);
-  if (frame.success === false && (PICKER_COMMANDS.has(command) || command === 'navigate_tree')) {
+  if (frame.success === false && command !== 'get_state' && command !== 'get_session_stats') {
     return withEntry(state, {
       kind: 'notice',
       id: `n${state.nextId}`,
@@ -432,7 +434,13 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
   if (command === 'get_state') {
     const model = isRecord(data.model) ? asString(data.model.id ?? data.model.name, 'unknown') : 'unknown';
     const provider = isRecord(data.model) ? asString(data.model.provider) : '';
-    const streaming = data.isStreaming === undefined ? state.streaming : data.isStreaming === true;
+    // get_state is a separate RPC and can arrive after a newer replicated lifecycle snapshot.
+    const streaming =
+      state.lifecycle !== null
+        ? state.lifecycle.operation !== null
+        : data.isStreaming === undefined
+          ? state.streaming
+          : data.isStreaming === true;
     return {
       ...state,
       streaming,
@@ -853,7 +861,13 @@ function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOp
       return isRecord(frame.frame) ? reduceSession(state, frame.frame, options) : state;
 
     case 'agent_start':
-      return { ...state, activeTools: [], streaming: true, settled: false, toolsThisRun: 0 };
+      return {
+        ...state,
+        activeTools: [],
+        streaming: state.lifecycle === null ? true : state.lifecycle.operation !== null,
+        settled: false,
+        toolsThisRun: 0,
+      };
 
     case 'message_update':
       return isRecord(frame.assistantMessageEvent) ? applyAssistantDelta(state, frame.assistantMessageEvent) : state;
@@ -895,10 +909,17 @@ function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOp
             tools: closed.toolsThisRun,
             ...(timestamp === undefined ? {} : { timestamp }),
           });
-      return { ...marked, activeTools: [], dialog: null, streaming: false, settled: true };
+      return {
+        ...marked,
+        activeTools: [],
+        dialog: null,
+        streaming: state.lifecycle === null ? false : state.lifecycle.operation !== null,
+        settled: state.lifecycle === null ? true : state.lifecycle.operation === null,
+      };
     }
 
     case 'queue_update': {
+      if (state.lifecycle !== null) return state;
       const steering = Array.isArray(frame.steering) ? frame.steering : [];
       const followUp = Array.isArray(frame.followUp) ? frame.followUp : [];
       const queue = [
@@ -1051,32 +1072,11 @@ export function appendQueued(state: SessionState, text: string, images: UserImag
   return withPendingUser(withEntry(state, entry), id, text, images);
 }
 
-/** Replaces visible queued rows while preserving optimistic ids and attachments. */
+/** Uses server IDs as-is: equal text or a snapshot revision is not an item identity. */
 export function replaceQueuedEntries(state: SessionState, queue: readonly QueuedEntry[]): SessionState {
-  const remaining = state.entries.filter((entry): entry is QueuedEntry => entry.kind === 'queued');
-  const normalized = queue.map((entry) => {
-    const existingIndex = remaining.findIndex((candidate) => candidate.text === entry.text);
-    if (existingIndex === -1) return entry;
-    const [existing] = remaining.splice(existingIndex, 1);
-    return existing === undefined
-      ? entry
-      : {
-          ...entry,
-          id: existing.id,
-          ...(entry.delivery === undefined && existing.delivery !== undefined ? { delivery: existing.delivery } : {}),
-          ...(existing.images ? { images: existing.images } : {}),
-        };
-  });
-  const pendingUserEntries = [...state.pendingUserEntries];
-  for (const entry of normalized) {
-    if (!pendingUserEntries.some((pending) => pending.id === entry.id)) {
-      pendingUserEntries.push({ id: entry.id, text: entry.text, ...(entry.images ? { images: entry.images } : {}) });
-    }
-  }
   return {
     ...state,
-    entries: [...state.entries.filter((entry) => entry.kind !== 'queued'), ...normalized],
-    pendingUserEntries,
+    entries: [...state.entries.filter((entry) => entry.kind !== 'queued'), ...queue],
   };
 }
 

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -14,6 +15,9 @@ import {
   JSONL_STORAGE_VERSION,
   JsonlSessionRepo,
   laneState,
+  pendingEntry,
+  setValue,
+  value,
   type JsonlSessionMetadata,
   type Session,
 } from '@earendil-works/pi-agent-core/harness/session';
@@ -40,6 +44,8 @@ import type {
   DirectHarnessEventListener,
   DirectHarnessFrame,
   DirectHarnessModel,
+  DirectHarnessLifecycle,
+  DirectHarnessQueuedInput,
   DirectHarnessRuntime,
   DirectHarnessRuntimeOptions,
 } from '../types/server/directHarnessRuntime';
@@ -82,6 +88,44 @@ const STORAGE_ERROR_CODES = new Set(['EACCES', 'EBUSY', 'EIO', 'EMFILE', 'ENFILE
 type AnyRecord = Record<string, unknown>;
 type AnySession = Session;
 type AnyModels = Models | MutableModels;
+
+type RetainedInput = Omit<DirectHarnessQueuedInput, 'disposition'> & {
+  disposition: DirectHarnessQueuedInput['disposition'] | 'consumed' | 'removed';
+  message?: AgentMessage;
+  operationId?: string;
+  nativeEntryId?: string;
+  /** A handoff is reserved before the native mutation, and reconciled on reopen. */
+  attemptId?: string;
+};
+
+type LifecycleRecord = {
+  version: 1;
+  revision: number;
+  paused: boolean;
+  abortOperationId?: string;
+  queue: RetainedInput[];
+};
+
+const EMPTY_LIFECYCLE: LifecycleRecord = { version: 1, revision: 0, paused: false, queue: [] };
+const RETAINED_RECEIPTS = 128;
+
+function compactLifecycle(record: LifecycleRecord): LifecycleRecord {
+  let receipts = 0;
+  const queue = record.queue
+    .toReversed()
+    .filter((item) => {
+      if (item.disposition !== 'consumed' && item.disposition !== 'removed') return true;
+      receipts += 1;
+      return receipts <= RETAINED_RECEIPTS;
+    })
+    .toReversed()
+    .map((item): RetainedInput =>
+      item.disposition === 'consumed' || item.disposition === 'removed'
+        ? { id: item.id, text: '', delivery: item.delivery, scheduling: item.scheduling, disposition: item.disposition }
+        : item,
+    );
+  return { ...record, queue };
+}
 
 type StorageHandle = {
   session: AnySession;
@@ -583,6 +627,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   const context = options.context ?? BACKGROUND_CONTEXT;
   const laneName = options.lane ?? DEFAULT_LANE;
   let disposed = false;
+  let disposePromise: Promise<void> | undefined;
   let storageQuarantined = false;
   let requestPreparationFailure: { error: unknown } | undefined;
   let turnPreparationFailure: { error: unknown } | undefined;
@@ -748,6 +793,14 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     await emitLifecycle(event, eventContext);
     if (event.type === 'fault') markStorageFailure(event);
     for (const frame of mapHarnessEvent(event)) emitFrame(frame);
+    if (
+      ['run_start', 'run_end', 'operation_abort', 'queue_update', 'compaction_start', 'compaction_end'].includes(
+        event.type,
+      )
+    )
+      void (event.type === 'queue_update' ? reconcileNativeQueue() : publishLifecycle()).catch((error: unknown) =>
+        emitFrame({ type: FRAME_ERROR, code: 'lifecycle_projection', error: errorMessage(error) }),
+      );
   };
   const handleHarnessEvent = async (event: HarnessEvent, eventContext: Context): Promise<void> => {
     if (event.type === 'run_end') {
@@ -783,6 +836,173 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     }
   };
 
+  // DoomPi owns the product queue and cancellation policy. Pi's inbox is an execution
+  // handoff, not a second editable copy of the product queue.
+  const lifecycleAddress = value<LifecycleRecord>('doompi.server.lifecycle', laneName);
+  const readRecord = async (): Promise<LifecycleRecord> => {
+    const stored = await storage.session.getValue(lifecycleAddress, context);
+    if (stored !== undefined && stored.value.version !== 1) throw new Error('Unknown server lifecycle format');
+    return stored?.value ?? EMPTY_LIFECYCLE;
+  };
+  const changeRecord = async <T>(
+    change: (record: LifecycleRecord) => { record: LifecycleRecord; result: T } | { result: T },
+  ): Promise<T> =>
+    writable(() =>
+      storage.session.mutate(async (mutator) => {
+        const stored = await mutator.getValue(lifecycleAddress, context);
+        const current = stored?.value ?? EMPTY_LIFECYCLE;
+        if (current.version !== 1) throw new Error('Unknown server lifecycle format');
+        const decision = change(current);
+        if ('record' in decision) {
+          await mutator.commit(
+            [setValue(lifecycleAddress, compactLifecycle({ ...decision.record, revision: current.revision + 1 }))],
+            context,
+          );
+        }
+        return decision.result;
+      }, context),
+    );
+  let settlingOperationId: string | undefined;
+  let abortingOperationId: string | undefined;
+  const readLifecycle = async (): Promise<DirectHarnessLifecycle> => {
+    const [record, execution] = await Promise.all([readRecord(), lane.inspectExecution(context)]);
+    const current = execution.current;
+    return {
+      revision: Math.max(record.revision, publicationRevision),
+      operation:
+        current === null
+          ? settlingOperationId === undefined
+            ? null
+            : {
+                id: settlingOperationId,
+                kind: 'run',
+                status: abortingOperationId === settlingOperationId ? 'aborting' : 'open',
+              }
+          : {
+              id: current.id,
+              kind: current.kind,
+              status: current.status === 'aborting' || abortingOperationId === current.id ? 'aborting' : 'open',
+            },
+      paused: record.paused,
+      queue: record.queue
+        .filter((item) => item.disposition !== 'consumed' && item.disposition !== 'removed')
+        .map(({ id, text, images, delivery, scheduling, disposition }) => ({
+          id,
+          text,
+          ...(images === undefined ? {} : { images }),
+          delivery,
+          scheduling,
+          disposition: disposition as DirectHarnessQueuedInput['disposition'],
+        })),
+    };
+  };
+  let publishingLifecycle = Promise.resolve();
+  let publicationRevision = 0;
+  const publishLifecycle = (): Promise<void> => {
+    const next = publishingLifecycle.then(async () => {
+      if (disposed) return;
+      const lifecycle = await readLifecycle();
+      publicationRevision = Math.max(publicationRevision + 1, lifecycle.revision);
+      emitFrame({ type: 'lifecycle_update', lifecycle: { ...lifecycle, revision: publicationRevision } });
+    });
+    publishingLifecycle = next.catch((error: unknown) => {
+      emitFrame({ type: FRAME_ERROR, code: 'lifecycle_projection', error: errorMessage(error) });
+    }); // a failed projection must not stall later updates
+    return next;
+  };
+  const retainedMessage = (
+    id: string,
+    kind: 'steer' | 'followUp' | 'nextRun',
+    message: AgentMessage,
+  ): RetainedInput => {
+    const content = message.role === 'user' ? message.content : [];
+    const parts = typeof content === 'string' ? [{ type: 'text', text: content }] : content;
+    const text =
+      message.role === 'user'
+        ? parts
+            .map((part) => (part.type === 'text' ? part.text : ''))
+            .filter(Boolean)
+            .join('\n')
+        : '';
+    const images = message.role === 'user' ? parts.filter((part): part is ImageContent => part.type === 'image') : [];
+    return {
+      id,
+      text,
+      ...(images.length === 0 ? {} : { images }),
+      message,
+      delivery: kind,
+      scheduling: 'held',
+      disposition: 'handoff',
+      nativeEntryId: id,
+    };
+  };
+  // Native entries from older sessions and extension/voice callers are adopted by identity,
+  // never copied or enqueued a second time. Pi continues to own their actual handoff.
+  const adoptNativeQueue = async (): Promise<void> => {
+    const changed = await writable(() =>
+      storage.session.mutate(async (mutator) => {
+        const native = await mutator.getValue(laneState(laneName), context);
+        const original = await mutator.getValue(lifecycleAddress, context);
+        const current = original?.value ?? EMPTY_LIFECYCLE;
+        const adopted: RetainedInput[] = [];
+        for (const item of native?.value.inbox ?? []) {
+          if (item.kind !== 'steer' && item.kind !== 'followUp' && item.kind !== 'nextRun') continue;
+          if (current.queue.some((entry) => entry.nativeEntryId === item.entryId || entry.id === item.entryId))
+            continue;
+          const pending = await mutator.getValue(pendingEntry(item.entryId), context);
+          if (pending?.value.type !== 'message')
+            throw new Error(`Native queued input ${item.entryId} has no message payload`);
+          adopted.push(retainedMessage(item.entryId, item.kind, pending.value.payload));
+        }
+        if (adopted.length === 0) return false;
+        await mutator.commit(
+          [
+            setValue(lifecycleAddress, {
+              ...current,
+              revision: current.revision + 1,
+              queue: [...current.queue, ...adopted],
+            }),
+          ],
+          context,
+        );
+        return true;
+      }, context),
+    );
+    if (changed) await publishLifecycle();
+  };
+  const reconcileNativeQueue = async (): Promise<void> => {
+    if (disposed) return;
+    const native = await storage.session.getValue(laneState(laneName), context);
+    const remaining = new Set((native?.value.inbox ?? []).map((entry) => entry.entryId));
+    const record = await readRecord();
+    for (const item of record.queue.filter(
+      (entry) => entry.nativeEntryId !== undefined && !remaining.has(entry.nativeEntryId),
+    )) {
+      if (record.abortOperationId !== undefined) continue;
+      const committed = await storage.session.getEntry(item.nativeEntryId!, context);
+      await changeRecord((current) => ({
+        record: {
+          ...current,
+          queue: current.queue.map((entry) =>
+            entry.id === item.id && entry.nativeEntryId === item.nativeEntryId
+              ? committed !== undefined
+                ? { ...entry, disposition: 'consumed' }
+                : current.paused
+                  ? {
+                      ...entry,
+                      disposition: 'pending',
+                      nativeEntryId: undefined,
+                      delivery: entry.delivery === 'steer' ? 'followUp' : entry.delivery,
+                    }
+                  : { ...entry, disposition: 'uncertain' }
+              : entry,
+          ),
+        },
+        result: undefined,
+      }));
+    }
+    await publishLifecycle();
+  };
   const unsubscribeHooks: Array<() => void> = [];
   if (options.transformContext !== undefined) {
     unsubscribeHooks.push(
@@ -911,12 +1131,149 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     }
   };
 
+  // Serialize only admission/cancellation decisions, never the turn's provider/tool work.
+  // The Session mutation line alone cannot cover the native accept and DoomPi pause commits.
+  let admissionLine = Promise.resolve();
+  const serializeAdmission = async <T>(operation: () => Promise<T>): Promise<T> => {
+    const previous = admissionLine;
+    let release!: () => void;
+    admissionLine = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  };
+  let drainingAutomatic = false;
+  let drainRequested = false;
   const drive = async (operationId: string): Promise<void> => {
-    const result = await writable(() => lane.drive({ operationId, waitForRetry: true }, context));
-    await settledEvents;
-    if (!result.ok) resultError(result);
-    if (result.value.kind === 'waiting' && result.value.reason === 'retry') {
-      throw new Error(`Direct harness returned an unexpected retry wait for ${operationId}`);
+    settlingOperationId = operationId;
+    try {
+      const result = await writable(() => lane.drive({ operationId, waitForRetry: true }, context));
+      if (!result.ok) resultError(result);
+      if (result.value.kind === 'waiting' && result.value.reason === 'retry') {
+        throw new Error(`Direct harness returned an unexpected retry wait for ${operationId}`);
+      }
+    } finally {
+      await settledEvents;
+      if (settlingOperationId === operationId) settlingOperationId = undefined;
+      if (abortingOperationId === operationId) abortingOperationId = undefined;
+      if (!disposed) {
+        await publishLifecycle();
+        void drainAutomatic().catch((error: unknown) =>
+          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
+        );
+      }
+    }
+  };
+  // Only this function starts automatic follow-up turns. It never holds the Session mutation
+  // line during provider/tool work; a claim is persisted before native admission.
+  const drainAutomatic = async (): Promise<void> => {
+    if (disposed) return;
+    if (drainingAutomatic) {
+      drainRequested = true;
+      return;
+    }
+    drainingAutomatic = true;
+    try {
+      while (!disposed) {
+        const execution = await lane.inspectExecution(context);
+        if (execution.current !== null) return;
+        const operationId = randomUUID();
+        const claimed = await changeRecord((record) => {
+          if (record.paused || record.abortOperationId !== undefined) return { result: undefined };
+          const item = record.queue.find(
+            (candidate) =>
+              candidate.disposition === 'pending' &&
+              candidate.scheduling === 'automatic' &&
+              candidate.delivery !== 'steer',
+          );
+          if (!item) return { result: undefined };
+          return {
+            record: {
+              ...record,
+              queue: record.queue.map((entry) =>
+                entry.id === item.id
+                  ? { ...entry, disposition: 'handoff', operationId, attemptId: randomUUID() }
+                  : entry,
+              ),
+            },
+            result: item,
+          };
+        });
+        if (!claimed) return;
+        await publishLifecycle();
+        try {
+          const message: AgentMessage = claimed.message ?? {
+            role: 'user',
+            content: [
+              ...(claimed.text ? [{ type: 'text' as const, text: claimed.text }] : []),
+              ...(claimed.images ?? []),
+            ],
+            timestamp: Date.now(),
+          };
+          const admitted = await serializeAdmission(async () => {
+            if ((await readRecord()).paused) return undefined;
+            return writable(() => lane.accept({ kind: 'prompt', operationId, prompt: message }, context));
+          });
+          if (!admitted || !admitted.ok) {
+            if (admitted && admitted.error._tag !== 'LaneBusy') resultError(admitted);
+            await changeRecord((record) => ({
+              record: {
+                ...record,
+                queue: record.queue.map((entry) =>
+                  entry.id === claimed.id && entry.operationId === operationId
+                    ? { ...entry, disposition: 'pending', operationId: undefined, attemptId: undefined }
+                    : entry,
+                ),
+              },
+              result: undefined,
+            }));
+            await publishLifecycle();
+            return;
+          }
+          await changeRecord((record) => ({
+            record: {
+              ...record,
+              queue: record.queue.map((entry) =>
+                entry.id === claimed.id && entry.operationId === operationId
+                  ? { ...entry, disposition: 'consumed' }
+                  : entry,
+              ),
+            },
+            result: undefined,
+          }));
+          await publishLifecycle();
+          await drive(operationId);
+        } catch (error) {
+          // An uncertain handoff is not retried: native admission may have committed before
+          // an I/O or acknowledgement failure. Recovery reconciles it by operation identity.
+          await changeRecord((record) => ({
+            record: {
+              ...record,
+              queue: record.queue.map((entry) =>
+                entry.id === claimed.id && entry.operationId === operationId && entry.disposition === 'handoff'
+                  ? { ...entry, disposition: 'uncertain' }
+                  : entry,
+              ),
+            },
+            result: undefined,
+          }));
+          emitFrame({ type: FRAME_ERROR, code: 'queue_handoff', error: errorMessage(error) });
+          await publishLifecycle();
+        }
+      }
+    } finally {
+      drainingAutomatic = false;
+      if (drainRequested && !disposed) {
+        drainRequested = false;
+        void drainAutomatic().catch((error: unknown) =>
+          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
+        );
+      }
     }
   };
 
@@ -932,6 +1289,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           ? await writable(() => lane.steer(text, images, context))
           : await writable(() => lane.followUp(text, images, context));
       if (!queued.ok) resultError(queued);
+      await adoptNativeQueue();
       return { settled: Promise.resolve() };
     }
     // `images` belongs to the text form of the request only: a composed message already
@@ -940,14 +1298,61 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       typeof text === 'string'
         ? ({ kind: 'prompt', prompt: text, ...(images === undefined ? {} : { images }) } as const)
         : ({ kind: 'prompt', prompt: text } as const);
-    const admission = await writable(() => lane.accept(request, context));
+    const admission = await serializeAdmission(async () => {
+      if ((await readRecord()).paused) throw new Error('The agent queue is paused; resume before starting a turn');
+      // Held native follow-ups never wake an idle session. Reattach them only when a
+      // person starts a new turn, preserving their enqueue-only scheduling policy.
+      for (const item of (await readRecord()).queue.filter(
+        (entry) => entry.disposition === 'pending' && entry.scheduling === 'held',
+      )) {
+        await changeRecord((record) => ({
+          record: {
+            ...record,
+            queue: record.queue.map((entry) =>
+              entry.id === item.id ? { ...entry, disposition: 'handoff', attemptId: randomUUID() } : entry,
+            ),
+          },
+          result: undefined,
+        }));
+        try {
+          const queued = await writable(() =>
+            lane.followUp(item.message ?? item.text, item.message ? undefined : item.images, context),
+          );
+          if (!queued.ok) resultError(queued);
+          await changeRecord((record) => ({
+            record: {
+              ...record,
+              queue: record.queue.map((entry) =>
+                entry.id === item.id ? { ...entry, nativeEntryId: queued.value.entryId } : entry,
+              ),
+            },
+            result: undefined,
+          }));
+        } catch (error) {
+          await changeRecord((record) => ({
+            record: {
+              ...record,
+              queue: record.queue.map((entry) =>
+                entry.id === item.id ? { ...entry, disposition: 'uncertain' } : entry,
+              ),
+            },
+            result: undefined,
+          }));
+          await publishLifecycle();
+          throw error;
+        }
+      }
+      return writable(() => lane.accept(request, context));
+    });
     if (!admission.ok) {
-      // A turn can begin between the inspectExecution read above and this accept. The lane then
-      // reports LaneBusy, and a caller that named a streaming behaviour wants delivery into the
-      // live turn rather than a failure, so it is steered in.
+      // A turn can begin between inspection and admission. Preserve the requested delivery
+      // kind when the lane reports that another operation won the race.
       if (streamingBehavior !== undefined && admission.error._tag === 'LaneBusy') {
-        const queued = await writable(() => lane.steer(text, images, context));
+        const queued = await writable(() =>
+          streamingBehavior === 'steer' ? lane.steer(text, images, context) : lane.followUp(text, images, context),
+        );
         if (!queued.ok) resultError(queued);
+        await adoptNativeQueue();
         return { settled: Promise.resolve() };
       }
       resultError(admission);
@@ -1029,25 +1434,395 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       throw error;
     }
   };
-  const steer = (message: string | AgentMessage, images?: ImageContent[]): Promise<void> =>
+  const enqueueAutomatic = async (text: string, images?: ImageContent[]): Promise<{ id: string }> => {
+    if (!text && !images?.length) throw new Error('Queued input must contain text or an image');
+    const id = randomUUID();
+    await changeRecord((record) => ({
+      record: {
+        ...record,
+        queue: [
+          ...record.queue,
+          {
+            id,
+            text,
+            ...(images === undefined ? {} : { images }),
+            delivery: 'followUp',
+            scheduling: 'automatic',
+            disposition: 'pending',
+          },
+        ],
+      },
+      result: undefined,
+    }));
+    await publishLifecycle();
+    void drainAutomatic().catch((error: unknown) =>
+      emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
+    );
+    return { id };
+  };
+  const removeQueued = async (id: string): Promise<'removed' | 'in_flight' | 'already_consumed' | 'not_found'> => {
+    const native = (await readRecord()).queue.find((entry) => entry.id === id);
+    if (native?.disposition === 'handoff' && native.nativeEntryId !== undefined) {
+      const cancelled = await writable(() => lane.cancelQueued(native.nativeEntryId!, context));
+      if (!cancelled.ok) resultError(cancelled);
+      if (cancelled.value.kind === 'cancelled') {
+        await changeRecord((record) => ({
+          record: {
+            ...record,
+            queue: record.queue.map((entry) => (entry.id === id ? { ...entry, disposition: 'removed' } : entry)),
+          },
+          result: undefined,
+        }));
+        await publishLifecycle();
+        return 'removed';
+      }
+      await reconcileNativeQueue();
+      return cancelled.value.kind === 'already_consumed' ? 'already_consumed' : 'not_found';
+    }
+    const result = await changeRecord((record) => {
+      const item = record.queue.find((entry) => entry.id === id);
+      if (!item) return { result: 'not_found' as const };
+      if (item.disposition === 'consumed') return { result: 'already_consumed' as const };
+      if (item.disposition === 'removed') return { result: 'removed' as const };
+      if (item.disposition !== 'pending') return { result: 'in_flight' as const };
+      return {
+        record: {
+          ...record,
+          queue: record.queue.map((entry) => (entry.id === id ? { ...entry, disposition: 'removed' } : entry)),
+        },
+        result: 'removed' as const,
+      };
+    });
+    if (result === 'removed') await publishLifecycle();
+    return result;
+  };
+  const deliverPromoted = (id: string, operationId: string): Promise<void> =>
+    serializeAdmission(async () => {
+      const execution = await lane.inspectExecution(context);
+      if (execution.current?.id !== operationId || execution.current.status === 'aborting') {
+        await changeRecord((record) => ({
+          record: {
+            ...record,
+            queue: record.queue.map((entry) =>
+              entry.id === id && entry.operationId === operationId
+                ? { ...entry, delivery: 'followUp', disposition: 'pending', operationId: undefined }
+                : entry,
+            ),
+          },
+          result: undefined,
+        }));
+        await publishLifecycle();
+        void drainAutomatic().catch((error: unknown) =>
+          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
+        );
+        return;
+      }
+      const item = (await readRecord()).queue.find((entry) => entry.id === id && entry.operationId === operationId);
+      if (!item || item.disposition !== 'pending') return;
+      const message: AgentMessage = item.message ?? {
+        role: 'user',
+        content: [...(item.text ? [{ type: 'text' as const, text: item.text }] : []), ...(item.images ?? [])],
+        timestamp: Date.now(),
+      };
+      // Reserve the item before crossing the native handoff boundary. Promotion/removal
+      // can no longer claim it once the native mutation may have started.
+      const reserved = await changeRecord((record) => {
+        const current = record.queue.find((entry) => entry.id === id && entry.operationId === operationId);
+        if (!current || current.disposition !== 'pending' || record.paused) return { result: false };
+        return {
+          record: {
+            ...record,
+            queue: record.queue.map((entry) =>
+              entry.id === id ? { ...entry, disposition: 'handoff', attemptId: randomUUID() } : entry,
+            ),
+          },
+          result: true,
+        };
+      });
+      if (!reserved) return;
+      await publishLifecycle();
+      try {
+        const queued = await writable(() => lane.steer(message, undefined, context));
+        if (!queued.ok) resultError(queued);
+        const after = await lane.inspectExecution(context);
+        if (after.current?.id !== operationId || after.current.status === 'aborting') {
+          const cancelled = await writable(() => lane.cancelQueued(queued.value.entryId, context));
+          if (!cancelled.ok) resultError(cancelled);
+          await changeRecord((record) => ({
+            record: {
+              ...record,
+              queue: record.queue.map((entry) =>
+                entry.id === id
+                  ? cancelled.value.kind === 'cancelled'
+                    ? {
+                        ...entry,
+                        delivery: 'followUp',
+                        disposition: 'pending',
+                        operationId: undefined,
+                        attemptId: undefined,
+                      }
+                    : {
+                        ...entry,
+                        disposition: cancelled.value.kind === 'already_consumed' ? 'consumed' : 'uncertain',
+                        nativeEntryId: queued.value.entryId,
+                      }
+                  : entry,
+              ),
+            },
+            result: undefined,
+          }));
+          await publishLifecycle();
+          if (cancelled.value.kind === 'cancelled')
+            void drainAutomatic().catch((error: unknown) =>
+              emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
+            );
+          return;
+        }
+        await changeRecord((record) => ({
+          record: {
+            ...record,
+            queue: record.queue.map((entry) =>
+              entry.id === id ? { ...entry, nativeEntryId: queued.value.entryId } : entry,
+            ),
+          },
+          result: undefined,
+        }));
+        await reconcileNativeQueue();
+      } catch (error) {
+        await changeRecord((record) => ({
+          record: {
+            ...record,
+            queue: record.queue.map((entry) =>
+              entry.id === id && entry.disposition === 'handoff' ? { ...entry, disposition: 'uncertain' } : entry,
+            ),
+          },
+          result: undefined,
+        }));
+        await publishLifecycle();
+        emitFrame({ type: FRAME_ERROR, code: 'steer_handoff', error: errorMessage(error) });
+      }
+    });
+  const promoteQueued = async (
+    id: string,
+    operationId: string,
+  ): Promise<'promoted' | 'in_flight' | 'target_changed' | 'not_found'> => {
+    const execution = await lane.inspectExecution(context);
+    const result = await changeRecord((record) => {
+      const item = record.queue.find((entry) => entry.id === id);
+      if (!item || item.disposition === 'removed' || item.disposition === 'consumed')
+        return { result: 'not_found' as const };
+      if (item.disposition !== 'pending') return { result: 'in_flight' as const };
+      if (record.paused || execution.current?.id !== operationId || execution.current.status === 'aborting')
+        return { result: 'target_changed' as const };
+      return {
+        record: {
+          ...record,
+          queue: record.queue.map((entry) => (entry.id === id ? { ...entry, delivery: 'steer', operationId } : entry)),
+        },
+        result: 'promoted' as const,
+      };
+    });
+    if (result === 'promoted') {
+      await publishLifecycle();
+      void deliverPromoted(id, operationId).catch((error: unknown) =>
+        emitFrame({ type: FRAME_ERROR, code: 'steer_handoff', error: errorMessage(error) }),
+      );
+    }
+    return result;
+  };
+  const resumeQueue = async (): Promise<void> => {
+    const execution = await lane.inspectExecution(context);
+    if (execution.current !== null) throw new Error('Wait for the active turn to settle before resuming the queue');
+    await changeRecord((record) => ({
+      record: {
+        ...record,
+        paused: false,
+        abortOperationId: undefined,
+        queue: record.queue.map((entry) =>
+          entry.disposition === 'pending' && entry.delivery === 'steer'
+            ? { ...entry, delivery: 'followUp', operationId: undefined, scheduling: 'automatic' }
+            : entry,
+        ),
+      },
+      result: undefined,
+    }));
+    await publishLifecycle();
+    void drainAutomatic().catch((error: unknown) =>
+      emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
+    );
+  };
+  const steer = (message: string | AgentMessage, images?: ImageContent[], targetOperationId?: string): Promise<void> =>
     runAgentOperation(async () => {
-      const result = await writable(() => lane.steer(message, images, context));
-      if (!result.ok) resultError(result);
+      const execution = await lane.inspectExecution(context);
+      const id = randomUUID();
+      const retained =
+        typeof message === 'string'
+          ? { id, text: message, ...(images === undefined ? {} : { images }) }
+          : { ...retainedMessage(id, 'steer', message), id };
+      const target = targetOperationId ?? execution.current?.id;
+      const active =
+        target !== undefined && execution.current?.id === target && execution.current.status !== 'aborting';
+      await changeRecord((record) => ({
+        record: {
+          ...record,
+          queue: [
+            ...record.queue,
+            {
+              ...retained,
+              delivery: active ? 'steer' : 'followUp',
+              scheduling: 'automatic',
+              disposition: 'pending',
+              nativeEntryId: undefined,
+              ...(active ? { operationId: target } : {}),
+            },
+          ],
+        },
+        result: undefined,
+      }));
+      await publishLifecycle();
+      if (active)
+        void deliverPromoted(id, target).catch((error: unknown) =>
+          emitFrame({ type: FRAME_ERROR, code: 'steer_handoff', error: errorMessage(error) }),
+        );
+      else
+        void drainAutomatic().catch((error: unknown) =>
+          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
+        );
     });
   const followUp = (message: string | AgentMessage, images?: ImageContent[]): Promise<void> =>
     runAgentOperation(async () => {
       const result = await writable(() => lane.followUp(message, images, context));
       if (!result.ok) resultError(result);
+      await adoptNativeQueue();
     });
   const nextRun = (message: string | AgentMessage, images?: ImageContent[]): Promise<void> =>
     runAgentOperation(async () => {
       const result = await writable(() => lane.nextRun(message, images, context));
       if (!result.ok) resultError(result);
+      await adoptNativeQueue();
     });
-  const abort = (): Promise<void> =>
+  const abort = (targetOperationId?: string): Promise<void> =>
     runAgentOperation(async () => {
-      const result = await writable(() => lane.abort(context));
-      if (!result.ok) resultError(result);
+      const execution = await lane.inspectExecution(context);
+      const currentId = execution.current?.id;
+      if (!currentId || (targetOperationId !== undefined && targetOperationId !== currentId)) return;
+      // Serialize handoff and pause. A promoted steer can neither enter the native inbox
+      // between this snapshot and cancellation nor acknowledge without a retained mapping.
+      const paused = await serializeAdmission(async () => {
+        if ((await lane.inspectExecution(context)).current?.id !== currentId) return false;
+        // Commit pause and a complete inbox snapshot before native cancellation deletes payloads.
+        const captured = await writable(() =>
+          storage.session.mutate(async (mutator) => {
+            const stored = await mutator.getValue(lifecycleAddress, context);
+            const record = stored?.value ?? EMPTY_LIFECYCLE;
+            const native = await mutator.getValue(laneState(laneName), context);
+            if (native?.value.currentOperationId !== currentId) return false;
+            const adopted: RetainedInput[] = [];
+            for (const pending of native.value.inbox) {
+              if (pending.kind !== 'steer' && pending.kind !== 'followUp') continue;
+              if (record.queue.some((item) => item.id === pending.entryId || item.nativeEntryId === pending.entryId))
+                continue;
+              const payload = await mutator.getValue(pendingEntry(pending.entryId), context);
+              if (payload?.value.type !== 'message')
+                throw new Error(`Native queued input ${pending.entryId} has no message payload`);
+              adopted.push(retainedMessage(pending.entryId, pending.kind, payload.value.payload));
+            }
+            await mutator.commit(
+              [
+                setValue(lifecycleAddress, {
+                  ...record,
+                  revision: record.revision + 1,
+                  paused: true,
+                  abortOperationId: currentId,
+                  queue: [
+                    ...record.queue.map((entry) =>
+                      entry.disposition === 'pending' && entry.delivery === 'steer'
+                        ? { ...entry, delivery: 'followUp' as const, operationId: undefined }
+                        : entry,
+                    ),
+                    ...adopted,
+                  ],
+                }),
+              ],
+              context,
+            );
+            return true;
+          }, context),
+        );
+        if (!captured) return false;
+        abortingOperationId = currentId;
+        await publishLifecycle();
+        return true;
+      });
+      if (!paused) return;
+      const result = await writable(() => lane.requestAbort(currentId, context));
+      if (!result.ok) {
+        if (result.error._tag === 'OperationMismatch') return;
+        resultError(result);
+      }
+      const returned = [
+        ...result.value.steer.map((message) => ({ kind: 'steer' as const, message })),
+        ...result.value.followUp.map((message) => ({ kind: 'followUp' as const, message })),
+      ];
+      const latest = await readRecord();
+      const native = await storage.session.getValue(laneState(laneName), context);
+      const remaining = new Set((native?.value.inbox ?? []).map((item) => item.entryId));
+      const consumed = await Promise.all(
+        latest.queue
+          .filter((item) => item.nativeEntryId !== undefined)
+          .map(async (item) => [item.id, await storage.session.getEntry(item.nativeEntryId!, context)] as const),
+      );
+      const committed = new Set(consumed.filter(([, entry]) => entry !== undefined).map(([id]) => id));
+      const removedUnconsumed = latest.queue.filter(
+        (item) => item.nativeEntryId !== undefined && !remaining.has(item.nativeEntryId) && !committed.has(item.id),
+      );
+      // The native result omits IDs. Match it to the already-retained native inbox by
+      // cardinality and kind, never by text: two identical messages are distinct inputs.
+      const unmatched = {
+        steer: removedUnconsumed.filter((item) => item.delivery === 'steer').length,
+        followUp: removedUnconsumed.filter((item) => item.delivery === 'followUp').length,
+      };
+      const ambiguous =
+        returned.filter(({ kind }) => kind === 'steer').length !== unmatched.steer ||
+        returned.filter(({ kind }) => kind === 'followUp').length !== unmatched.followUp;
+      const extras = returned
+        .filter(({ kind }) => {
+          if (!ambiguous && unmatched[kind] > 0) {
+            unmatched[kind] -= 1;
+            return false;
+          }
+          return true;
+        })
+        .map(({ kind, message }) => ({
+          ...retainedMessage(randomUUID(), kind, message),
+          delivery: kind === 'steer' ? ('followUp' as const) : kind,
+          scheduling: 'held' as const,
+          disposition: 'pending' as const,
+          nativeEntryId: undefined,
+        }));
+      await changeRecord((current) => ({
+        record: {
+          ...current,
+          queue: [
+            ...current.queue.map((item) => {
+              if (item.nativeEntryId === undefined || remaining.has(item.nativeEntryId)) return item;
+              if (committed.has(item.id)) return { ...item, disposition: 'consumed' };
+              return ambiguous
+                ? { ...item, disposition: 'uncertain' }
+                : {
+                    ...item,
+                    disposition: 'pending',
+                    nativeEntryId: undefined,
+                    delivery: item.delivery === 'steer' ? 'followUp' : item.delivery,
+                    scheduling: item.delivery === 'steer' ? 'automatic' : item.scheduling,
+                  };
+            }),
+            ...extras,
+          ],
+        },
+        result: undefined,
+      }));
+      await publishLifecycle();
     });
   const compact = (customInstructions?: string): Promise<void> =>
     runAgentOperation(async () => {
@@ -1056,19 +1831,91 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       );
       if (!result.ok) resultError(result);
     });
+  const recover = async (): Promise<void> => {
+    await adoptNativeQueue();
+    const record = await readRecord();
+    if (record.abortOperationId !== undefined) {
+      const execution = await lane.inspectExecution(context);
+      if (execution.current?.id === record.abortOperationId) {
+        await abort(record.abortOperationId);
+        const afterAbort = await lane.inspectExecution(context);
+        if (afterAbort.current?.id === record.abortOperationId && afterAbort.current.status !== 'aborting')
+          throw new Error('Cannot resume a turn before its persisted abort intent reaches native cancellation');
+        // An interrupted native drive has no process-local owner. Resume only its
+        // already-cancelled control path to reach terminal cleanup; never regenerate.
+        if (afterAbort.current?.id === record.abortOperationId) {
+          const resumed = await writable(() => lane.resume(context));
+          if (!resumed.ok && resumed.error._tag !== 'NothingToResume') resultError(resumed);
+        }
+      }
+      await changeRecord((current) => ({
+        record: { ...current, abortOperationId: undefined, paused: true },
+        result: undefined,
+      }));
+    }
+    for (const item of (await readRecord()).queue.filter(
+      (entry) =>
+        entry.disposition === 'handoff' &&
+        entry.attemptId !== undefined &&
+        entry.operationId === undefined &&
+        entry.nativeEntryId === undefined,
+    )) {
+      await changeRecord((record) => ({
+        record: {
+          ...record,
+          queue: record.queue.map((entry) => (entry.id === item.id ? { ...entry, disposition: 'uncertain' } : entry)),
+        },
+        result: undefined,
+      }));
+    }
+    const current = await readRecord();
+    for (const item of current.queue.filter(
+      (entry) => entry.disposition === 'handoff' && entry.operationId !== undefined,
+    )) {
+      const execution = await lane.inspectExecution(context);
+      const result = await lane.getResult(item.operationId!, context);
+      if (item.delivery !== 'steer' && (execution.current?.id === item.operationId || result !== undefined)) {
+        await changeRecord((record) => ({
+          record: {
+            ...record,
+            queue: record.queue.map((entry) => (entry.id === item.id ? { ...entry, disposition: 'consumed' } : entry)),
+          },
+          result: undefined,
+        }));
+      } else {
+        await changeRecord((record) => ({
+          record: {
+            ...record,
+            queue: record.queue.map((entry) => (entry.id === item.id ? { ...entry, disposition: 'uncertain' } : entry)),
+          },
+          result: undefined,
+        }));
+      }
+    }
+    await reconcileNativeQueue();
+    await publishLifecycle();
+  };
   const resume = (): Promise<boolean> =>
     runAgentOperation(async () => {
+      await recover();
+      if ((await readRecord()).paused) return false;
       const result = await writable(() => lane.resume(context));
       // A lane with no persisted operation has nothing to continue. That is the
       // ordinary state of a session reopened while idle, not a failure, so it is
       // reported rather than thrown: only the caller knows whether it expected one.
-      if (!result.ok && result.error._tag === 'NothingToResume') return false;
+      if (!result.ok && result.error._tag === 'NothingToResume') {
+        void drainAutomatic().catch((error: unknown) =>
+          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
+        );
+        return false;
+      }
       if (!result.ok) resultError(result);
       return true;
     });
   const readState = async (): Promise<Record<string, unknown>> => {
-    const [execution, persisted, stats, thinking] = await Promise.all([
-      lane.inspectExecution(context),
+    const [lifecycle, retained, persisted, stats, thinking] = await Promise.all([
+      readLifecycle(),
+      readRecord(),
       storage.session.getValue(laneState(laneName), context),
       storage.session.getStats(context),
       lane.getThinkingLevel(context),
@@ -1078,8 +1925,12 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     return {
       model: configuredModel === undefined ? undefined : { provider: configuredModel.provider, id: configuredModel.id },
       thinkingLevel: thinking,
-      isStreaming: execution.current?.kind === 'run',
-      isCompacting: execution.current?.kind === 'compaction',
+      isStreaming: lifecycle.operation?.kind === 'run',
+      isCompacting: lifecycle.operation?.kind === 'compaction',
+      operationId: lifecycle.operation?.id,
+      executionStatus: lifecycle.operation?.status ?? 'idle',
+      queuePaused: lifecycle.paused,
+      queueRevision: lifecycle.revision,
       steeringMode: await harness.getSteeringMode(context),
       followUpMode: await harness.getFollowUpMode(context),
       sessionFile: storage.sessionFile,
@@ -1087,7 +1938,13 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       ...(name === undefined ? {} : { sessionName: name }),
       autoCompactionEnabled: (await harness.getCompactionSettings(context)).enabled,
       messageCount: stats.messageCount,
-      pendingMessageCount: persisted?.value.inbox.length ?? 0,
+      pendingMessageCount:
+        lifecycle.queue.length +
+        (persisted?.value.inbox.filter(
+          (entry) =>
+            entry.kind !== 'write' &&
+            !retained.queue.some((item) => item.id === entry.entryId || item.nativeEntryId === entry.entryId),
+        ).length ?? 0),
     };
   };
   const readEntries = async () => ({
@@ -1122,35 +1979,74 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       };
     });
   const clearQueue = async () => {
+    await changeRecord((record) => ({
+      record: {
+        ...record,
+        queue: record.queue.map((entry) =>
+          entry.disposition === 'pending' ? { ...entry, disposition: 'removed' } : entry,
+        ),
+      },
+      result: undefined,
+    }));
     const queued = (await storage.session.getValue(laneState(laneName), context))?.value.inbox ?? [];
     for (const item of queued) {
+      if (item.kind === 'write') continue;
       const result = await writable(() => lane.cancelQueued(item.entryId, context));
       if (!result.ok) resultError(result);
+      if (result.value.kind === 'cancelled')
+        await changeRecord((record) => ({
+          record: {
+            ...record,
+            queue: record.queue.map((entry) =>
+              entry.nativeEntryId === item.entryId ? { ...entry, disposition: 'removed' } : entry,
+            ),
+          },
+          result: undefined,
+        }));
     }
+    await publishLifecycle();
     return { steering: [] as never[], followUp: [] as never[] };
   };
   const setName = (name: string) => writable(() => harness.setName(name, context));
   const getSessionStats = () => storage.session.getStats(context);
-  const dispose = async (): Promise<void> => {
-    if (disposed) return;
-    disposed = true;
-    for (const unsubscribeEvent of unsubscribe) unsubscribeEvent();
-    for (const unsubscribeHook of unsubscribeHooks) unsubscribeHook();
-    let failure: unknown;
-    try {
-      await harness.close(context);
-    } catch (error) {
-      failure = error;
-      markStorageFailure(error);
-    }
-    try {
-      await closeStorage(storage, context);
-    } catch (error) {
-      failure ??= error;
-      markStorageFailure(error);
-    }
-    settleExit(failure === undefined ? 0 : 1);
-    if (failure !== undefined) throw failure;
+  const dispose = (): Promise<void> => {
+    // Preserve the facade's idempotent second-dispose contract even if the first
+    // close reported a failure, while still waiting for a concurrent close to finish.
+    if (disposed)
+      return (
+        disposePromise?.then(
+          () => undefined,
+          () => undefined,
+        ) ?? Promise.resolve()
+      );
+    disposePromise ??= (async () => {
+      let failure: unknown;
+      try {
+        const execution = await lane.inspectExecution(context);
+        if (execution.current !== null) await abort(execution.current.id);
+      } catch (error) {
+        failure = error;
+        markStorageFailure(error);
+      }
+      disposed = true;
+      for (const unsubscribeEvent of unsubscribe) unsubscribeEvent();
+      for (const unsubscribeHook of unsubscribeHooks) unsubscribeHook();
+      try {
+        await harness.close(context);
+      } catch (error) {
+        failure ??= error;
+        markStorageFailure(error);
+      }
+      try {
+        await closeStorage(storage, context);
+      } catch (error) {
+        failure ??= error;
+        markStorageFailure(error);
+      }
+      settleExit(failure === undefined ? 0 : 1);
+      if (failure !== undefined) throw failure;
+    })();
+    return disposePromise;
   };
 
   // The owning host explicitly resumes only after its facets and selection gates are ready.
@@ -1181,6 +2077,12 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         .finally(() => dispose().catch(() => undefined));
     },
     readState,
+    readLifecycle,
+    enqueueAutomatic,
+    removeQueued,
+    promoteQueued,
+    resumeQueue,
+    recover,
     readEntries,
     listCommands,
     dispatchCommand,

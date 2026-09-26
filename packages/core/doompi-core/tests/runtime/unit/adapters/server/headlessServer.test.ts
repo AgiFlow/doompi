@@ -41,6 +41,7 @@ function host() {
       thinkingLevel: 'off',
       isStreaming: false,
     })),
+    readLifecycle: vi.fn(async () => ({ revision: 0, operation: null, paused: false, queue: [] })),
     submitPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
     prompt: vi.fn(async () => undefined),
     onPresentationFrame(listener: (frame: Record<string, unknown>) => void) {

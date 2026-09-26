@@ -1,3 +1,4 @@
+import type { SessionLifecycle } from '@agimon-ai/doompi-core/sessionProtocol';
 import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
 
@@ -9,7 +10,10 @@ import {
   dialogCancelled,
   dialogConfirmed,
   dialogValue,
-  followUpCommand,
+  enqueueAutomaticCommand,
+  promoteQueuedCommand,
+  removeQueuedCommand,
+  resumeQueueCommand,
   getAvailableModelsCommand,
   getAvailableThinkingLevelsCommand,
   getCommandsCommand,
@@ -24,21 +28,18 @@ import {
   steerCommand,
 } from '../lib/commands';
 import {
-  appendQueued,
   appendUserPrompt,
   clearDialog,
-  clearQueuedEntries,
   isSupportedImageMimeType,
   initialSessionState,
   prependHistory,
   reduceSession,
   replaceQueuedEntries,
-  removeQueuedEntry,
   type QueuedEntry,
   type SessionState,
   type TimelineEntry,
 } from '../lib/sessionModel';
-import { sendFrame, sendHubFrame } from '../lib/transport';
+import { sendFrame, sendFrameWithAck, sendHubFrame } from '../lib/transport';
 import { activeSessionId, sessionsStore } from './sessionsStore';
 
 /**
@@ -305,8 +306,8 @@ export function applyProtocolTranscript(sessionId: string, entries: TimelineEntr
     return {
       ...state,
       entries: mergeProtocolEntries(state.entries, normalizedEntries, pendingUserIds, reconciledUserIds),
-      streaming,
-      settled: !streaming,
+      streaming: state.lifecycle === null ? streaming : state.lifecycle.operation !== null,
+      settled: state.lifecycle === null ? !streaming : state.lifecycle.operation === null,
       pendingUserEntries,
       reconciledUserEntries,
       protocolUserEntryIds,
@@ -320,7 +321,15 @@ function protocolQueueMatches(state: SessionState, queue: readonly QueuedEntry[]
     current.length === queue.length &&
     current.every((entry, index) => {
       const next = queue[index];
-      if (next === undefined || entry.text !== next.text) return false;
+      if (
+        next === undefined ||
+        entry.id !== next.id ||
+        entry.text !== next.text ||
+        entry.delivery !== next.delivery ||
+        entry.scheduling !== next.scheduling ||
+        entry.disposition !== next.disposition
+      )
+        return false;
       const images = entry.images ?? [];
       const nextImages = next.images ?? [];
       return (
@@ -332,6 +341,32 @@ function protocolQueueMatches(state: SessionState, queue: readonly QueuedEntry[]
       );
     })
   );
+}
+
+/** Applies execution and retained-input state from the server, never from replayed history. */
+export function applySessionLifecycle(sessionId: string, lifecycle: SessionLifecycle, newBinding = false): void {
+  sessionStoreFor(sessionId).setState((state) => {
+    const current = state.lifecycle;
+    if (!newBinding && current !== null && lifecycle.revision < current.revision) return state;
+    const queue: QueuedEntry[] = lifecycle.queue.map(({ id, text, images, delivery, scheduling, disposition }) => ({
+      kind: 'queued',
+      id,
+      text,
+      delivery,
+      scheduling,
+      disposition,
+      ...(images === undefined ? {} : { images: images.map(({ data, mimeType }) => ({ data, mimeType })) }),
+    }));
+    const streaming = lifecycle.operation !== null;
+    const updated = protocolQueueMatches(state, queue) ? state : replaceQueuedEntries(state, queue);
+    return {
+      ...updated,
+      lifecycle,
+      streaming,
+      settled: !streaming,
+      ...(state.agent === null ? {} : { agent: { ...state.agent, isStreaming: streaming } }),
+    };
+  });
 }
 
 /** Replaces composer queue rows with the protocol server's authoritative queue. */
@@ -357,6 +392,7 @@ export function resetSessionStore(sessionId: string): void {
     const reset = {
       ...initialSessionState,
       agent: state.agent,
+      lifecycle: state.lifecycle,
       stats: state.stats,
       commands: state.commands,
       models: state.models,
@@ -484,6 +520,26 @@ export function submitMessage(
   sendFrame(sessionId, streaming ? steerCommand(trimmed, images) : promptCommand(trimmed, images));
 }
 
+/** The composer retains its draft until the server acknowledges admission. */
+export async function submitMessageWithAck(
+  text: string,
+  images: RpcImage[] = [],
+  sessionId: string | null = activeSessionId(),
+): Promise<boolean> {
+  const trimmed = text.trim();
+  if (!trimmed || sessionId === null) return false;
+  const store = sessionStoreFor(sessionId);
+  const builtin = builtinCommandFrame(trimmed);
+  const active = store.state.lifecycle === null ? store.state.streaming : store.state.lifecycle.operation !== null;
+  const response = await sendFrameWithAck(
+    sessionId,
+    builtin ?? (active ? steerCommand(trimmed, images) : promptCommand(trimmed, images)),
+  );
+  if (!response.success && response.error?.includes('uncertain'))
+    store.setState((state) => reduceSession(state, { type: 'error', message: response.error }));
+  return response.success;
+}
+
 export function rewindToMessage(itemId: string, sessionId: string | null = activeSessionId()): void {
   if (sessionId === null || itemId === '') return;
   sendFrame(sessionId, rewindCommand(itemId));
@@ -496,45 +552,45 @@ export function queueFollowUp(
 ): void {
   const trimmed = text.trim();
   if (!trimmed || sessionId === null) return;
-  const userImages = images
-    .filter((image) => isSupportedImageMimeType(image.mimeType))
-    .map(({ data, mimeType }) => ({ data, mimeType }));
-  sessionStoreFor(sessionId).setState((state) => appendQueued(state, trimmed, userImages));
-  sendFrame(sessionId, followUpCommand(trimmed, images));
+  sendFrame(sessionId, enqueueAutomaticCommand(trimmed, images));
+}
+
+/** A queued submission is acknowledged by the server; consumption is a later lifecycle event. */
+export async function queueFollowUpWithAck(
+  text: string,
+  images: RpcImage[] = [],
+  sessionId: string | null = activeSessionId(),
+): Promise<boolean> {
+  const trimmed = text.trim();
+  if (!trimmed || sessionId === null) return false;
+  const response = await sendFrameWithAck(sessionId, enqueueAutomaticCommand(trimmed, images));
+  if (!response.success && response.error?.includes('uncertain'))
+    sessionStoreFor(sessionId).setState((state) => reduceSession(state, { type: 'error', message: response.error }));
+  return response.success;
 }
 
 export function clearQueuedMessages(sessionId: string | null = activeSessionId()): void {
   if (sessionId === null) return;
-  sessionStoreFor(sessionId).setState(clearQueuedEntries);
   sendFrame(sessionId, clearQueueCommand());
 }
 
-/**
- * Deletes one queued message through Pi's clear-only RPC queue contract.
- *
- * Clearing and replaying is safe only with a complete browser snapshot. The UI
- * passes the authoritative count and disables this action while any rows are
- * unlisted, so an unseen message is never lost during reconstruction.
- */
+/** Requests server-owned removal; the authoritative snapshot removes the row on success. */
 export function deleteQueuedMessage(
   id: string,
-  knownQueueCount: number,
+  _knownQueueCount: number,
   sessionId: string | null = activeSessionId(),
 ): void {
+  if (sessionId !== null) sendFrame(sessionId, removeQueuedCommand(id));
+}
+
+export function promoteQueuedMessage(id: string, sessionId: string | null = activeSessionId()): void {
   if (sessionId === null) return;
-  const store = sessionStoreFor(sessionId);
-  const queued = store.state.entries.filter((entry): entry is QueuedEntry => entry.kind === 'queued');
-  if (queued.length !== knownQueueCount || !queued.some((entry) => entry.id === id)) return;
-  const remaining = queued.filter((entry) => entry.id !== id);
-  store.setState((state) => removeQueuedEntry(state, id));
-  sendFrame(sessionId, clearQueueCommand());
-  for (const entry of remaining) {
-    const images: RpcImage[] = (entry.images ?? []).map((image) => ({ type: 'image', ...image }));
-    sendFrame(
-      sessionId,
-      entry.delivery === 'steer' ? steerCommand(entry.text, images) : followUpCommand(entry.text, images),
-    );
-  }
+  const operationId = sessionStoreFor(sessionId).state.lifecycle?.operation?.id;
+  if (operationId !== undefined) sendFrame(sessionId, promoteQueuedCommand(id, operationId));
+}
+
+export function resumeQueuedMessages(sessionId: string | null = activeSessionId()): void {
+  if (sessionId !== null) sendFrame(sessionId, resumeQueueCommand());
 }
 
 /**
@@ -551,8 +607,7 @@ export function renameSession(name: string, sessionId: string | null = activeSes
 
 export function abortRun(sessionId: string | null = activeSessionId()): void {
   if (sessionId === null) return;
-  sessionStoreFor(sessionId).setState(clearQueuedEntries);
-  sendFrame(sessionId, abortCommand());
+  sendFrame(sessionId, abortCommand(sessionStoreFor(sessionId).state.lifecycle?.operation?.id));
 }
 
 export function runCommand(name: string, sessionId: string | null = activeSessionId()): void {

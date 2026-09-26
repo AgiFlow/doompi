@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   bindSessionProtocol,
   hasSessionProtocol,
+  requestSessionProtocolFrame,
   sendSessionProtocolFrame,
 } from '../../src/web/lib/sessionProtocolCommands';
 
@@ -93,26 +94,20 @@ describe('session protocol command lifecycle', () => {
     expect(receive).not.toHaveBeenCalled();
   });
 
-  it('starts queue clearing before abort without waiting for another short RPC', async () => {
-    const order: string[] = [];
+  it('aborts without clearing pending input or waiting for another short RPC', async () => {
+    const clearQueue = vi.fn();
+    const abort = vi.fn(async () => undefined);
     const release = bindSessionProtocol(
       's1',
-      service({
-        getState: () => new Promise(() => undefined),
-        clearQueue: async () => {
-          order.push('clear_queue');
-        },
-        abort: async () => {
-          order.push('abort');
-        },
-      }),
+      service({ getState: () => new Promise(() => undefined), clearQueue, abort }),
       vi.fn(),
     );
     releases.push(release);
 
     sendSessionProtocolFrame('s1', { type: 'get_state' });
     sendSessionProtocolFrame('s1', { type: 'abort' });
-    await vi.waitFor(() => expect(order).toEqual(['clear_queue', 'abort']));
+    await vi.waitFor(() => expect(abort).toHaveBeenCalledOnce());
+    expect(clearQueue).not.toHaveBeenCalled();
   });
 
   it('omits absent optional fields from serialized command arguments', async () => {
@@ -130,5 +125,46 @@ describe('session protocol command lifecycle', () => {
     expect(steer).toHaveBeenCalledWith({ text: 'guide' }, expect.anything());
     expect(followUp).toHaveBeenCalledWith({ text: 'next' }, expect.anything());
     expect(compact).toHaveBeenCalledWith({}, expect.anything());
+  });
+
+  it('correlates failed steer acknowledgement and keeps a replaced binding outcome uncertain', async () => {
+    const receive = vi.fn();
+    const steer = vi.fn(async () => {
+      throw new Error('turn ended before steering');
+    });
+    const release = bindSessionProtocol('s1', service({ steer }), receive);
+    releases.push(release);
+    const failed = await requestSessionProtocolFrame('s1', { type: 'steer', message: 'keep this' });
+    expect(failed).toMatchObject({ success: false, error: 'turn ended before steering' });
+    expect(receive).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'response',
+        command: 'steer',
+        success: false,
+        error: 'turn ended before steering',
+      }),
+    );
+
+    const releaseWait = bindSessionProtocol('s1', service({ steer: () => new Promise(() => undefined) }), receive);
+    releases.push(releaseWait);
+    const unacknowledged = requestSessionProtocolFrame('s1', { type: 'steer', message: 'do not resend' });
+    releaseWait();
+    await expect(unacknowledged).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('uncertain'),
+    });
+  });
+
+  it('sends stable item and target identities in a single promote command', async () => {
+    const promoteQueued = vi.fn(async () => 'promoted');
+    const release = bindSessionProtocol('s1', service({ promoteQueued }), vi.fn());
+    releases.push(release);
+    const response = await requestSessionProtocolFrame('s1', {
+      type: 'promote_queued',
+      id: 'item-17',
+      operationId: 'operation-8',
+    });
+    expect(response).toEqual({ success: true, data: 'promoted' });
+    expect(promoteQueued).toHaveBeenCalledWith({ id: 'item-17', operationId: 'operation-8' }, expect.anything());
   });
 });

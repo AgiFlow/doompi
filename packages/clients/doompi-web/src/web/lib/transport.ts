@@ -1,4 +1,4 @@
-import { sendSessionProtocolFrame } from './sessionProtocolCommands';
+import { requestSessionProtocolFrame, sendSessionProtocolFrame } from './sessionProtocolCommands';
 
 type Frame = Record<string, unknown>;
 
@@ -36,6 +36,11 @@ export function releaseTransport(): void {
 /** Sends one command frame to a session's agent, enveloped for the hub. */
 export function sendFrame(sessionId: string, frame: Frame): void {
   sendSessionProtocolFrame(sessionId, frame);
+}
+
+/** Resolves when a session command is accepted or explicitly refused, never when a turn finishes. */
+export function sendFrameWithAck(sessionId: string, frame: Frame): ReturnType<typeof requestSessionProtocolFrame> {
+  return requestSessionProtocolFrame(sessionId, frame);
 }
 
 /** Sends one hub-level frame (subscribe, unsubscribe) as-is. */

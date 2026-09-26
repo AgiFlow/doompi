@@ -122,7 +122,7 @@ test('queues a follow-up', async ({ page, cockpit }) => {
   await page.getByTestId('composer-input').fill('then run the packed-install gate');
   await page.getByTestId('composer-queue').click();
 
-  const sent = await cockpit.session.waitForCommand('follow_up');
+  const sent = await cockpit.session.waitForCommand('enqueue_automatic');
   expect(sent.message).toBe('then run the packed-install gate');
 });
 

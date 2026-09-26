@@ -148,4 +148,4 @@ Server facets are imported one at a time and installed one at a time, in bundle 
 | Web mount and teardown                  | [`pluginRuntime.ts`](../packages/clients/doompi-web/src/web/lib/pluginRuntime.ts)                |
 | Compiled CLI extension set              | [`compiler/index.ts`](../packages/cli/doompi/src/compiler/index.ts)                              |
 
-See [Extension layout](extension-layout.md) for the folder convention that declares these contributions, [Architecture](architecture.md) for Cordis root ownership, selection transitions and child isolation, and [Composition and runtime bundling](bundling.md) for how a selection becomes the artifacts these hosts load.
+See [Extension layout](extension-layout.md) for the folder convention that declares these contributions, [Architecture](architecture.md) for Cordis root ownership, selection transitions and child isolation, and [Composition and runtime bundling](bundling.md) for how a selection becomes the artifacts these hosts load. The server agent's separate execution, input queue, cancellation, and recovery contract is mapped in [Server Pi lifecycle audit](pi-server-lifecycle.md).
