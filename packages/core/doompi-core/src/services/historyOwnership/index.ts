@@ -121,10 +121,104 @@ function readToken(lockPath: string): string | undefined {
   }
 }
 
+/** A dead owner is recoverable only when the entire lock record is recognizable. */
+function readRecoverableLock(lockPath: string, sourcePath: string): HistoryLockRecord | undefined {
+  try {
+    const stat = fs.lstatSync(lockPath);
+    if (!stat.isFile() || stat.nlink !== 1) return undefined;
+    const value: unknown = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+    if (
+      !isHistoryObject(value) ||
+      value.version !== LOCK_VERSION ||
+      value.format !== LOCK_FORMAT ||
+      value.sourcePath !== sourcePath ||
+      !Number.isSafeInteger(value.pid) ||
+      (value.pid as number) <= 0 ||
+      typeof value.token !== 'string' ||
+      !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(value.token)
+    )
+      return undefined;
+    return value as unknown as HistoryLockRecord;
+  } catch {
+    return undefined;
+  }
+}
+
+function ownerMayBeAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !(isFileSystemError(error) && error.code === 'ESRCH');
+  }
+}
+/** A guard left by a dead acquirer can be retired without touching its source lock. */
+function retireDeadGuard(guard: string): boolean {
+  try {
+    const stat = fs.lstatSync(guard);
+    if (!stat.isDirectory()) return false;
+    const entries = fs.readdirSync(guard);
+    // An empty guard might still belong to a process killed between mkdir and
+    // publishing its marker. Fail closed rather than race a new acquirer.
+    if (entries.length !== 1 || !/^owner-[\da-f-]{36}\.json$/iu.test(entries[0]!)) return false;
+    const marker = path.join(guard, entries[0]!);
+    const markerStat = fs.lstatSync(marker);
+    if (!markerStat.isFile() || markerStat.nlink !== 1) return false;
+    const owner: unknown = JSON.parse(fs.readFileSync(marker, 'utf8'));
+    if (!isHistoryObject(owner) || !Number.isSafeInteger(owner.pid) || (owner.pid as number) <= 0) return false;
+    if (ownerMayBeAlive(owner.pid as number)) return false;
+    // Only the process that unlinks this unique marker may retire the directory.
+    // Other cleaners see a newly empty guard and refuse to remove it.
+    fs.unlinkSync(marker);
+    fs.rmdirSync(guard);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** All new acquirers hold this guard until their ownership record is durable. */
+function withAcquisitionGuard<T>(lockPath: string, acquire: () => T): T {
+  const guard = `${lockPath}.recovery`;
+  try {
+    fs.mkdirSync(guard, { mode: 0o700 });
+  } catch (error) {
+    if (!isFileSystemError(error) || error.code !== 'EEXIST' || !retireDeadGuard(guard)) throw error;
+    fs.mkdirSync(guard, { mode: 0o700 });
+  }
+  const marker = path.join(guard, `owner-${randomUUID()}.json`);
+  try {
+    fs.writeFileSync(marker, JSON.stringify({ pid: process.pid }), { flag: 'wx', mode: 0o600 });
+    return acquire();
+  } finally {
+    fs.rmSync(marker, { force: true });
+    fs.rmdirSync(guard);
+  }
+}
+
+/** Called only under the acquisition guard, before publishing a new owner. */
+function recoverDeadOwner(lockPath: string, sourcePath: string): boolean {
+  try {
+    const record = readRecoverableLock(lockPath, sourcePath);
+    if (!record || ownerMayBeAlive(record.pid)) return false;
+    const before = fs.lstatSync(lockPath);
+    if (readRecoverableLock(lockPath, sourcePath)?.token !== record.token || ownerMayBeAlive(record.pid)) return false;
+    const current = fs.lstatSync(lockPath);
+    if (before.dev !== current.dev || before.ino !== current.ino) return false;
+    // The owner is gone, and other recoverers cannot remove this lock while
+    // the guard is held. Legacy writers still contend on the exclusive wx open.
+    fs.unlinkSync(lockPath);
+    return true;
+  } catch (error) {
+    if (isFileSystemError(error) && error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
 function releaseLock(lockPath: string, token: string, handle: number): void {
   fs.closeSync(handle);
-  // An unrecognisable or replaced lock is ambiguous. Never remove it merely
-  // because its recorded pid is gone or its contents look stale.
+  // Recovery only retires a lock after its recorded owner has exited, so that
+  // owner cannot be here releasing it concurrently. A replaced lock is ambiguous.
   if (readToken(lockPath) === token) fs.rmSync(lockPath, { force: true });
 }
 
@@ -165,8 +259,8 @@ function createLease(
 /**
  * Creates the canonical history owner used by runtime writers, export CLI, and
  * the explicit offline importer. The default source boundary remains v4.
- * Locks are deliberately never reclaimed from dead pids: a stale or malformed
- * sidecar needs explicit operator cleanup because it cannot prove quiescence.
+ * Complete locks left by a dead process are recovered under an exclusive guard.
+ * A live owner or an ambiguous sidecar still blocks acquisition.
  */
 export function createHistoryOwnership(options: HistoryOwnershipOptions = {}): HistoryOwnership {
   const assertQuiescent = options.assertQuiescent ?? (() => undefined);
@@ -196,11 +290,20 @@ export function createHistoryOwnership(options: HistoryOwnershipOptions = {}): H
             token,
           };
           fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
-          const handle = fs.openSync(lockPath, 'wx', 0o600);
-          const lock = { lockPath, token, handle };
-          locks.push(lock);
-          fs.writeFileSync(handle, `${JSON.stringify(record)}\n`, 'utf8');
-          fs.fsyncSync(handle);
+          withAcquisitionGuard(lockPath, () => {
+            let handle: number;
+            try {
+              handle = fs.openSync(lockPath, 'wx', 0o600);
+            } catch (error) {
+              if (!isFileSystemError(error) || error.code !== 'EEXIST' || !recoverDeadOwner(lockPath, lockedPath))
+                throw error;
+              handle = fs.openSync(lockPath, 'wx', 0o600);
+            }
+            const lock = { lockPath, token, handle };
+            locks.push(lock);
+            fs.writeFileSync(handle, `${JSON.stringify(record)}\n`, 'utf8');
+            fs.fsyncSync(handle);
+          });
         }
         assertSource(absoluteSourcePath);
       } catch (error) {

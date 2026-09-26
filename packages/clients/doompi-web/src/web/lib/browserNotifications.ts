@@ -29,6 +29,7 @@ export function deliverBrowserNotification(
   sessionId: string,
   entryId: string,
   data: DoomNotificationEntryData,
+  sessionName?: string,
 ): BrowserNotificationDeliveryStatus {
   if (typeof Notification === 'undefined') return 'unsupported';
   const permission = Notification.permission;
@@ -36,7 +37,8 @@ export function deliverBrowserNotification(
 
   try {
     const body = data.subtitle === '' ? data.body : `${data.subtitle}\n${data.body}`;
-    new Notification(data.title || 'DoomPi', {
+    const owner = sessionName?.trim() || sessionId;
+    new Notification(`${owner}: ${data.title || 'DoomPi'}`, {
       body,
       tag: `doompi:${encodeURIComponent(sessionId)}:${encodeURIComponent(entryId)}`,
     });

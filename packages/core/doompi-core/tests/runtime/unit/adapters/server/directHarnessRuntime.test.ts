@@ -18,8 +18,10 @@ import {
   type Models,
 } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
+import { Check } from 'typebox/value';
 import { describe, expect, it, vi, type MockInstance } from 'vitest';
 
+import { SessionMethodSchemas } from '../../../../../src/schemas/sessionApiContracts';
 import {
   createDirectHarnessRuntime,
   promptForAssistantText,
@@ -374,10 +376,14 @@ describe('direct AgentHarness runtime', () => {
         promptTemplates: [{ name: 'greet', content: 'Hello' }],
       });
 
-      await expect(runtime.readState()).resolves.toMatchObject({
+      const state = await runtime.readState();
+      expect(state).toMatchObject({
         sessionId: 'direct-runtime-test',
         model: { provider: 'test-provider', id: 'test-model' },
       });
+      expect(state).not.toHaveProperty('operationId');
+      expect(state).not.toHaveProperty('executionStatus');
+      expect(Check(SessionMethodSchemas.getState.output, state)).toBe(true);
     } finally {
       await runtime.dispose();
       await repository.close(BACKGROUND_CONTEXT);

@@ -39,6 +39,7 @@ export function createProtocolHubSocket(client: Client, handlers: SessionSocketH
     if (previous) void previous.dispose(BACKGROUND_CONTEXT).catch(() => undefined);
   };
   const open = async () => {
+    if (service) handlers.onClose();
     release();
     const mine = generation;
     const next = createRemoteServiceBinding({

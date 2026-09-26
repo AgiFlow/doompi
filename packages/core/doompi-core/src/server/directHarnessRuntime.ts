@@ -1927,8 +1927,9 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       thinkingLevel: thinking,
       isStreaming: lifecycle.operation?.kind === 'run',
       isCompacting: lifecycle.operation?.kind === 'compaction',
-      operationId: lifecycle.operation?.id,
-      executionStatus: lifecycle.operation?.status ?? 'idle',
+      ...(lifecycle.operation === null
+        ? {}
+        : { operationId: lifecycle.operation.id, executionStatus: lifecycle.operation.status }),
       queuePaused: lifecycle.paused,
       queueRevision: lifecycle.revision,
       steeringMode: await harness.getSteeringMode(context),

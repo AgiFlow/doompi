@@ -56,6 +56,25 @@ function binding(ready: () => Promise<void> = async () => {}): {
 }
 
 describe('protocol hub socket lifecycle', () => {
+  it('reports a connected rebind before the old service becomes unavailable', async () => {
+    let finishSecond!: () => void;
+    const first = binding();
+    const second = binding(() => new Promise<void>((resolve) => (finishSecond = resolve)));
+    fake.binding.mockReturnValueOnce(first.value).mockReturnValueOnce(second.value);
+    const handlers = { onFrame: vi.fn(), onOpen: vi.fn(), onClose: vi.fn() };
+    const socket = createProtocolHubSocket(client(), handlers);
+    await Promise.resolve();
+    expect(handlers.onOpen).toHaveBeenCalledOnce();
+
+    fake.connectionChanged({ state: 'connected' });
+    expect(handlers.onClose).toHaveBeenCalledOnce();
+    expect(() => socket.send({ type: 'subscribe', sessionId: 's2' })).toThrow('not connected');
+    finishSecond();
+    await Promise.resolve();
+    expect(handlers.onOpen).toHaveBeenCalledTimes(2);
+    socket.close();
+  });
+
   it('only invokes plugin methods on the ready current binding', async () => {
     const first = binding();
     const second = binding();
