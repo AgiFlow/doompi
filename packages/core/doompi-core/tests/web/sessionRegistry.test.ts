@@ -4,11 +4,8 @@ import {
   HUB_ADVERTISEMENT_VERSION,
   hubAdvertisementPath,
   parseHubAdvertisement,
-  parseSessionLineage,
   REGISTRY_DIR_ENV,
   resolveRegistryDir,
-  SESSION_LINEAGE_RECORD_VERSION,
-  sessionLineagePath,
 } from '../../src/web/services/sessionRegistry';
 
 describe('resolveRegistryDir', () => {
@@ -26,50 +23,6 @@ describe('resolveRegistryDir', () => {
 
   it('names the env var the hub and its session servers share', () => {
     expect(REGISTRY_DIR_ENV).toBe('DOOMPI_RUNTIME_DIR');
-  });
-});
-
-describe('sessionLineagePath', () => {
-  it('sits beside the session record, under the registry sessions directory', () => {
-    expect(sessionLineagePath('/run', 'abc')).toBe('/run/sessions/abc.lineage.json');
-  });
-});
-
-describe('parseSessionLineage', () => {
-  it('reads a well formed sidecar', () => {
-    const raw = JSON.stringify({
-      version: SESSION_LINEAGE_RECORD_VERSION,
-      parentSessionId: 'parent-1',
-      provenance: 'worktree',
-    });
-    expect(parseSessionLineage(raw)).toEqual({
-      version: SESSION_LINEAGE_RECORD_VERSION,
-      parentSessionId: 'parent-1',
-      provenance: 'worktree',
-    });
-  });
-
-  it('defaults a missing or non-string provenance to empty rather than failing', () => {
-    const raw = JSON.stringify({ version: SESSION_LINEAGE_RECORD_VERSION, parentSessionId: 'p' });
-    expect(parseSessionLineage(raw)?.provenance).toBe('');
-    const numeric = JSON.stringify({ version: SESSION_LINEAGE_RECORD_VERSION, parentSessionId: 'p', provenance: 7 });
-    expect(parseSessionLineage(numeric)?.provenance).toBe('');
-  });
-
-  // Every one of these means the same thing to a caller: no known parent. The
-  // sidecar is written by a separate process that may be mid-write or newer.
-  it.each([
-    ['not json at all', 'not json'],
-    ['a torn write', '{"version":1,"parentSess'],
-    ['a json literal rather than an object', '42'],
-    ['null', 'null'],
-    ['an unknown version', '{"version":2,"parentSessionId":"p","provenance":"worktree"}'],
-    ['a missing version', '{"parentSessionId":"p","provenance":"worktree"}'],
-    ['a missing parent', '{"version":1,"provenance":"worktree"}'],
-    ['a blank parent', '{"version":1,"parentSessionId":"","provenance":"worktree"}'],
-    ['a non-string parent', '{"version":1,"parentSessionId":5,"provenance":"worktree"}'],
-  ])('returns undefined for %s', (_label, raw) => {
-    expect(parseSessionLineage(raw)).toBeUndefined();
   });
 });
 

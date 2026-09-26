@@ -60,15 +60,6 @@ export interface SessionGitStatus {
   dirty: boolean;
 }
 
-/**
- * A session's parent, as read from its lineage sidecar. Fixed at spawn, so the
- * hub reads it once rather than refreshing it like git status.
- */
-export interface SessionLineage {
-  parentSessionId: string;
-  /** The spawning package's own label, such as "worktree". Never interpreted. */
-  provenance: string;
-}
 /** One immutable, signed client composition resolved for a session. */
 export interface SessionWebComposition {
   /** Stable identity of the synchronized root and generation. */
@@ -120,7 +111,7 @@ export interface SessionSummary {
   /** Signed plugin composition independently resolved for this session. */
   webComposition?: SessionWebComposition;
   /**
-   * The session this one was spawned from, when a lineage sidecar named one.
+   * The session this one was spawned from, recorded by the hub when it opened the session.
    * The rail nests a session under its parent; absent means a top-level row.
    */
   parentSessionId?: string;

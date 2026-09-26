@@ -115,6 +115,10 @@ describe('containerWorkspacePath', () => {
 
   it('falls back to the workspace for a path outside the repository', () => {
     expect(containerWorkspacePath('/Users/me/repo', '/somewhere/else', '/workspaces/repo')).toBe('/workspaces/repo');
+    // A sibling that only shares the name prefix is outside the repository.
+    expect(containerWorkspacePath('/Users/me/repo', '/Users/me/repo-other/app', '/workspaces/repo')).toBe(
+      '/workspaces/repo',
+    );
   });
 });
 

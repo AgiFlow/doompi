@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 /**
  * Relative locations the Dev Containers spec looks for a configuration.
  *
@@ -78,7 +80,9 @@ export function parseDevcontainerUp(stdout: string): DevcontainerUpResult {
  * inside and would fail the exec before the agent ever starts.
  */
 export function containerWorkspacePath(repoRoot: string, cwd: string, remoteWorkspaceFolder: string): string {
-  const relative = cwd.startsWith(repoRoot) ? cwd.slice(repoRoot.length).replace(/^[\\/]+/, '') : '';
+  // A plain prefix test would also map a sibling such as <repo>-other into the container.
+  const inside = path.relative(repoRoot, cwd);
+  const relative = inside === '' || inside.startsWith('..') || path.isAbsolute(inside) ? '' : inside;
   return relative ? `${remoteWorkspaceFolder}/${relative.split('\\').join('/')}` : remoteWorkspaceFolder;
 }
 

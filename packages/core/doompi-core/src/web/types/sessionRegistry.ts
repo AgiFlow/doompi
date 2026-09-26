@@ -21,23 +21,6 @@ export interface RegistryDirInput {
 }
 
 /**
- * Where a session came from, written next to its registry record by whoever
- * spawned it. Absent for a session a person started themselves.
- */
-export interface SessionLineageRecord {
-  /** Bumped when this shape changes; a reader ignores any other value. */
-  version: 1;
-  /** The session this one was spawned from. */
-  parentSessionId: string;
-  /**
-   * Short label in the spawning package's own vocabulary, such as "worktree".
-   * Free text: the host never interprets it, it only carries it to the rail so
-   * the rail can pick an affordance for it.
-   */
-  provenance: string;
-}
-
-/**
  * Where the cockpit hub is listening, published by the hub into the registry
  * directory so a local process can find it without guessing ports.
  *
