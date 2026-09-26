@@ -25,6 +25,7 @@ import { registerPromptInput } from '../../lib/promptFocus';
 import type { QueuedEntry } from '../../lib/sessionModel';
 import {
   clearComposerState,
+  composerStore,
   type ComposerAttachment,
   type ComposerImageAttachment,
   MAX_COMPOSER_ATTACHMENTS,
@@ -39,10 +40,13 @@ import { openPalette } from '../../stores/paletteStore';
 import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore';
 import {
   abortRun,
+  applySessionFrame,
   clearQueuedMessages,
   deleteQueuedMessage,
-  queueFollowUp,
-  submitMessage,
+  promoteQueuedMessage,
+  queueFollowUpWithAck,
+  resumeQueuedMessages,
+  submitMessageWithAck,
   useActiveSession,
 } from '../../stores/sessionStore';
 import { useToolPrompt } from '../../stores/useToolPrompt';
@@ -173,6 +177,9 @@ export function Composer() {
   const sessionId = useStore(sessionsStore, (state) => state.activeId);
   const meta = useActiveSessionMeta();
   const streaming = useActiveSession((state) => state.streaming);
+  const lifecycle = useActiveSession((state) => state.lifecycle);
+  const active = lifecycle === null ? streaming : lifecycle.operation !== null;
+  const aborting = lifecycle?.operation?.status === 'aborting';
   const queuedEntries = useActiveSession((state) =>
     state.entries.filter((entry): entry is QueuedEntry => entry.kind === 'queued'),
   );
@@ -183,13 +190,17 @@ export function Composer() {
   const [completion, setCompletion] = useState<CompletionState | null>(null);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pendingSubmission, setPendingSubmission] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const dormant = meta?.summary.dormant === true;
   const attached = !dormant && meta?.attach === 'attached';
-  const queued = Math.max(meta?.summary.pendingMessageCount ?? 0, queuedEntries.length);
+  const queued =
+    lifecycle === null
+      ? Math.max(meta?.summary.pendingMessageCount ?? 0, queuedEntries.length)
+      : lifecycle.queue.length;
 
   // Completion and drag state are transient. The draft and attachments below
   // come from the newly focused session immediately after this reset, so the
@@ -201,6 +212,7 @@ export function Composer() {
     setCompletion(null);
     setDraggingFiles(false);
     setMenuOpen(false);
+    setPendingSubmission(false);
   }
 
   // The completion popup and the '+' menu are two popovers over one composer,
@@ -434,56 +446,56 @@ export function Composer() {
         : [],
     );
 
-  const clearAfterSend = (): void => {
-    clearComposerState(sessionId);
-    closeCompletion();
+  const submitAccepted = async (delivery: 'submit' | 'queue'): Promise<void> => {
+    if ((!draft.trim() && attachments.length === 0) || !attached || sessionId === null || pendingSubmission) return;
+    const message = attachmentPrompt(draft, attachments);
+    const images = attachments
+      .filter((attachment): attachment is ComposerImageAttachment => attachment.kind === 'image')
+      .map(({ data, mimeType }) => ({ type: 'image' as const, data, mimeType }));
+    const submittedDraft = draft;
+    const submittedAttachments = attachments;
+    const contextItems = submittedContextItems();
+    setPendingSubmission(true);
+    try {
+      const accepted =
+        delivery === 'submit'
+          ? await submitMessageWithAck(message, images, sessionId)
+          : await queueFollowUpWithAck(message, images, sessionId);
+      if (!accepted) return; // Rejected or uncertain: the original draft remains retryable.
+      publishComposerSubmission({ sessionId, message, delivery, submittedAt: Date.now(), contextItems });
+      const current = composerStore.state[sessionId];
+      if (current?.draft === submittedDraft && current.attachments === submittedAttachments) {
+        clearComposerState(sessionId);
+        closeCompletion();
+      }
+    } catch (error) {
+      applySessionFrame(sessionId, { type: 'error', message: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setPendingSubmission(false);
+    }
   };
-
   const submit = (): void => {
-    if ((!draft.trim() && attachments.length === 0) || !attached) return;
-    const message = attachmentPrompt(draft, attachments);
-    const images = attachments
-      .filter((attachment): attachment is ComposerImageAttachment => attachment.kind === 'image')
-      .map(({ data, mimeType }) => ({ type: 'image' as const, data, mimeType }));
-    submitMessage(message, images, sessionId);
-    if (sessionId !== null)
-      publishComposerSubmission({
-        sessionId,
-        message,
-        delivery: 'submit',
-        submittedAt: Date.now(),
-        contextItems: submittedContextItems(),
-      });
-    clearAfterSend();
+    void submitAccepted('submit');
   };
-
   const queue = (): void => {
-    if ((!draft.trim() && attachments.length === 0) || !attached) return;
-    const message = attachmentPrompt(draft, attachments);
-    const images = attachments
-      .filter((attachment): attachment is ComposerImageAttachment => attachment.kind === 'image')
-      .map(({ data, mimeType }) => ({ type: 'image' as const, data, mimeType }));
-    queueFollowUp(message, images, sessionId);
-    if (sessionId !== null)
-      publishComposerSubmission({
-        sessionId,
-        message,
-        delivery: 'queue',
-        submittedAt: Date.now(),
-        contextItems: submittedContextItems(),
-      });
-    clearAfterSend();
+    void submitAccepted('queue');
   };
 
   const placeholder = !attached
     ? 'waiting for the session…'
-    : streaming
+    : active
       ? 'steer the run without stopping it…'
       : 'ask anything · / for commands · $ for skills · @ for files…';
   const abortAction = (
-    <Button variant="danger-outline" size="md" data-testid="composer-abort" onClick={() => abortRun(sessionId)}>
+    <Button
+      variant="danger-outline"
+      size="md"
+      data-testid="composer-abort"
+      disabled={aborting}
+      onClick={() => abortRun(sessionId)}
+    >
       <StopIcon className="h-2 w-2 fill-current" />
-      abort
+      {aborting ? 'aborting…' : 'abort'}
     </Button>
   );
 
@@ -506,11 +518,15 @@ export function Composer() {
           entries={queuedEntries}
           onClear={() => clearQueuedMessages(sessionId)}
           onDelete={(id) => deleteQueuedMessage(id, queued, sessionId)}
+          onPromote={(id) => promoteQueuedMessage(id, sessionId)}
+          onResume={() => resumeQueuedMessages(sessionId)}
+          operationId={lifecycle?.operation?.id}
+          paused={lifecycle?.paused}
         />
         <div className="rounded-lg border border-doom-edge-magenta bg-doom-deep">
           <ComposerPrompt claim={prompt} sessionId={sessionId} />
         </div>
-        <div className="mt-2 flex justify-end">{abortAction}</div>
+        {active ? <div className="mt-2 flex justify-end">{abortAction}</div> : null}
       </div>
     );
   }
@@ -522,6 +538,10 @@ export function Composer() {
         entries={queuedEntries}
         onClear={() => clearQueuedMessages(sessionId)}
         onDelete={(id) => deleteQueuedMessage(id, queued, sessionId)}
+        onPromote={(id) => promoteQueuedMessage(id, sessionId)}
+        onResume={() => resumeQueuedMessages(sessionId)}
+        operationId={lifecycle?.operation?.id}
+        paused={lifecycle?.paused}
       />
       <Popover
         open={completion !== null}
@@ -550,7 +570,7 @@ export function Composer() {
             className={`relative rounded-lg border bg-doom-deep transition-colors focus-within:border-doom-blue/60 ${
               draggingFiles
                 ? 'border-doom-blue bg-doom-blue/5'
-                : streaming
+                : active
                   ? 'border-doom-edge-yellow'
                   : 'border-doom-border'
             }`}
@@ -668,7 +688,7 @@ export function Composer() {
                     event.preventDefault();
                     submit();
                   }
-                  if (event.key === 'Escape' && streaming) {
+                  if (event.key === 'Escape' && active && !aborting) {
                     event.preventDefault();
                     abortRun(sessionId);
                   }
@@ -718,8 +738,10 @@ export function Composer() {
             ) : null}
             <div className="flex flex-wrap items-center gap-2 px-2.5 pt-2 pb-2.5 sm:flex-nowrap sm:px-3.5">
               <span data-testid="composer-hint" className="text-xs text-doom-faint max-sm:hidden">
-                {streaming
-                  ? 'enter steers the run · esc aborts'
+                {active
+                  ? aborting
+                    ? 'abort requested · waiting for the turn to stop'
+                    : 'enter steers the run · esc aborts'
                   : 'enter sends · shift+enter for a new line · space opens leader'}
               </span>
               <Popover
@@ -793,7 +815,7 @@ export function Composer() {
                 ) : null}
               </Popover>
               <span className="min-w-0 flex-1" />
-              {streaming ? abortAction : null}
+              {active ? abortAction : null}
               <span className="contents" data-testid="composer-actions">
                 <PluginSurface slot={HOST_SLOTS.composerActions} sessionId={sessionId} />
               </span>
@@ -802,7 +824,7 @@ export function Composer() {
                 size="md"
                 data-testid="composer-queue"
                 onClick={queue}
-                disabled={!attached || (!draft.trim() && attachments.length === 0)}
+                disabled={!attached || pendingSubmission || (!draft.trim() && attachments.length === 0)}
                 title="deliver after the current run settles"
               >
                 queue
@@ -812,10 +834,10 @@ export function Composer() {
                 size="md"
                 data-testid="composer-send"
                 onClick={submit}
-                disabled={!attached || (!draft.trim() && attachments.length === 0)}
+                disabled={!attached || pendingSubmission || (!draft.trim() && attachments.length === 0)}
                 className="px-2.5 sm:px-3.5"
               >
-                {streaming ? 'steer' : 'send'}
+                {active ? 'steer' : 'send'}
               </Button>
             </div>
           </div>

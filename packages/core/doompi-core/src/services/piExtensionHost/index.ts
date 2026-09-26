@@ -617,6 +617,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   // before load must not read as "everything is hidden".
   let activeNames = new Set<string>();
   let unsubscribeEvents: (() => void) | undefined;
+  let unsubscribeLifecycle: (() => void) | undefined;
   let cordisConnection: DoomCordisHostConnection | undefined;
 
   // Pi's ExtensionContext getters are synchronous while every harness read is not, so the
@@ -624,7 +625,8 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   // Hot lifecycle events update only bounded, incremental state. No event rereads history.
   let contextTokens: number | null = null;
   let currentOperation: 'run' | 'compaction' | 'navigation' | null = null;
-  let queuedMessages = 0;
+  let nativeQueuedMessages = 0;
+  let retainedQueuedMessages = 0;
   let turnIndex = 0;
   let runMessages: AgentMessage[] = [];
   const toolArguments = new Map<string, unknown>();
@@ -737,7 +739,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     // Queued writes are excluded. An extension's own deferred append is not a message the
     // model is waiting on, and counting it would stall every extension that waits for a
     // quiet queue before acting.
-    hasPendingMessages: () => queuedMessages > 0,
+    hasPendingMessages: () => nativeQueuedMessages > 0 || retainedQueuedMessages > 0,
     shutdown: () => {
       runtime.stop();
     },
@@ -832,7 +834,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         sessionSync?.append(event.entry);
         return;
       case 'queue_update':
-        queuedMessages = event.queues.filter((item) => item.kind !== 'write').length;
+        nativeQueuedMessages = event.queues.filter((item) => item.kind !== 'write').length;
         return;
       case 'turn_end': {
         const branch = sessionManager?.getBranch() ?? [];
@@ -1062,6 +1064,16 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       // Subscribe before extension lifecycle handlers run: those handlers may write history,
       // and missing their entry_added acknowledgement would permanently stale this mirror.
       unsubscribeEvents = runtime.onEvent(onHarnessEvent);
+      const initialLifecycle = await runtime.readLifecycle();
+      currentOperation = initialLifecycle.operation?.kind ?? null;
+      nativeQueuedMessages = Number((await runtime.readState()).pendingMessageCount) || 0;
+      retainedQueuedMessages = initialLifecycle.queue.length;
+      unsubscribeLifecycle = runtime.onPresentationFrame((frame) => {
+        if (frame.type !== 'lifecycle_update' || !frame.lifecycle || typeof frame.lifecycle !== 'object') return;
+        const lifecycle = frame.lifecycle as Awaited<ReturnType<typeof runtime.readLifecycle>>;
+        retainedQueuedMessages = lifecycle.queue.length;
+        currentOperation = lifecycle.operation?.kind ?? null;
+      });
       // Pi opens session-scoped extension services before resource discovery. Doom tool
       // restrictions depend on the same ordering.
       await runner.emit({ type: 'session_start', reason: 'startup' });
@@ -1073,6 +1085,8 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     async shutdown(): Promise<void> {
       unsubscribeEvents?.();
       unsubscribeEvents = undefined;
+      unsubscribeLifecycle?.();
+      unsubscribeLifecycle = undefined;
       sessionSync = undefined;
       sessionManager = undefined;
       runMessages = [];

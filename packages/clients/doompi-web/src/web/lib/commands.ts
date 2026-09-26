@@ -18,13 +18,29 @@ export function followUpCommand(message: string, images: RpcImage[] = []): Frame
   return { type: 'follow_up', message, ...(images.length > 0 ? { images } : {}) };
 }
 
+export function enqueueAutomaticCommand(message: string, images: RpcImage[] = []): Frame {
+  return { type: 'enqueue_automatic', message, ...(images.length > 0 ? { images } : {}) };
+}
+
+export function removeQueuedCommand(id: string): Frame {
+  return { type: 'remove_queued', id };
+}
+
+export function promoteQueuedCommand(id: string, operationId: string): Frame {
+  return { type: 'promote_queued', id, operationId };
+}
+
+export function resumeQueueCommand(): Frame {
+  return { type: 'resume_queue' };
+}
+
 /** Requests in-place Pi session-tree navigation after the hub resolves the visible transcript id. */
 export function rewindCommand(itemId: string): Frame {
   return { type: 'rewind', itemId };
 }
 
-export function abortCommand(): Frame {
-  return { type: 'abort' };
+export function abortCommand(operationId?: string): Frame {
+  return operationId === undefined ? { type: 'abort' } : { type: 'abort', operationId };
 }
 
 export function clearQueueCommand(): Frame {

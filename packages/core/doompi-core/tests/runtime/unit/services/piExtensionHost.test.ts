@@ -57,6 +57,9 @@ function stubRuntime(entries: Entry[], options?: { parentSessionId?: string; fai
       },
     },
     readEntries,
+    readState: async () => ({ pendingMessageCount: 0 }),
+    readLifecycle: async () => ({ revision: 0, operation: null, paused: false, queue: [] }),
+    onPresentationFrame: () => () => undefined,
     appendCustomEntry: async (customType: string, data: unknown) => {
       if (options?.failWrites === true) throw new Error('storage is quarantined');
       appended.push({ customType, data });

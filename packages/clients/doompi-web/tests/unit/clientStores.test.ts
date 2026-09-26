@@ -64,6 +64,7 @@ import {
   applyProtocolQueue,
   applyProtocolTranscript,
   applySessionFrame,
+  applySessionLifecycle,
   cancelDialog,
   clearQueuedMessages,
   deleteQueuedMessage,
@@ -770,21 +771,23 @@ describe('session actions', () => {
     expect(sent.map((item) => item.frame)).toEqual([
       { type: 'prompt', message: 'first', images },
       { type: 'steer', message: 'second', images },
-      { type: 'follow_up', message: 'later', images },
+      { type: 'enqueue_automatic', message: 'later', images },
     ]);
     expect(sessionStoreFor('s1').state.entries).toMatchObject([
       { kind: 'user', text: 'first', images: userImages },
       { kind: 'user', text: 'second', images: userImages },
-      { kind: 'queued', text: 'later', images: userImages },
     ]);
   });
-  it('clears local queued work before aborting an explicit session', () => {
+  it('keeps queued work visible while an explicit session is aborting', () => {
     setActiveSession('s1');
     applySessionFrame('s2', { type: 'queue_update', steering: ['interrupt'], followUp: ['later'] });
 
     abortRun('s2');
 
-    expect(sessionStoreFor('s2').state.entries.filter((entry) => entry.kind === 'queued')).toEqual([]);
+    expect(sessionStoreFor('s2').state.entries.filter((entry) => entry.kind === 'queued')).toMatchObject([
+      { text: 'interrupt' },
+      { text: 'later' },
+    ]);
     expect(sent).toEqual([{ type: 'session_command', sessionId: 's2', frame: { type: 'abort' } }]);
   });
 
@@ -807,40 +810,73 @@ describe('session actions', () => {
 
     const settled = sessionStoreFor('s1').state;
     applyProtocolQueue('s1', [{ kind: 'queued', id: 'server-q2', text: 'after that' }]);
-    expect(sessionStoreFor('s1').state).toBe(settled);
+    expect(sessionStoreFor('s1').state).not.toBe(settled);
+    expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued')).toMatchObject([
+      { id: 'server-q2', text: 'after that' },
+    ]);
+    const stable = sessionStoreFor('s1').state;
+    applyProtocolQueue('s1', [{ kind: 'queued', id: 'server-q2', text: 'after that' }]);
+    expect(sessionStoreFor('s1').state).toBe(stable);
   });
 
-  it('clears queued rows and asks Pi to delete its queue', () => {
+  it('keeps server queue rows until the server confirms clear', () => {
     setActiveSession('s1');
-    queueFollowUp('later');
+    applySessionLifecycle('s1', {
+      revision: 1,
+      operation: null,
+      paused: false,
+      queue: [
+        { id: 'server-q1', text: 'later', delivery: 'followUp', scheduling: 'automatic', disposition: 'pending' },
+      ],
+    });
     clearQueuedMessages();
-
+    expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued')).toHaveLength(1);
+    expect(sent.at(-1)?.frame).toEqual({ type: 'clear_queue' });
+    applySessionLifecycle('s1', { revision: 2, operation: null, paused: false, queue: [] });
     expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued')).toEqual([]);
-    expect(sent.map((item) => item.frame)).toEqual([{ type: 'follow_up', message: 'later' }, { type: 'clear_queue' }]);
   });
 
-  it('deletes one known queue row and restores the others through Pi clear_queue', () => {
+  it('removes only the requested server item and preserves duplicate-text identities', () => {
     setActiveSession('s1');
     const images = [{ type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' }];
-    queueFollowUp('first');
-    queueFollowUp('second', images);
-    const queued = sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued');
-    const first = queued[0];
-    if (first === undefined) throw new Error('Expected the first queued entry.');
-
-    deleteQueuedMessage(first.id, 3);
-    expect(sent).toHaveLength(2);
-    deleteQueuedMessage(first.id, 2);
-
+    applySessionLifecycle('s1', {
+      revision: 1,
+      operation: null,
+      paused: false,
+      queue: [
+        { id: 'server-q1', text: 'same', delivery: 'followUp', scheduling: 'automatic', disposition: 'pending' },
+        {
+          id: 'server-q2',
+          text: 'same',
+          images,
+          delivery: 'followUp',
+          scheduling: 'automatic',
+          disposition: 'pending',
+        },
+      ],
+    });
+    deleteQueuedMessage('server-q1', 2);
+    expect(sent.map((item) => item.frame)).toEqual([{ type: 'remove_queued', id: 'server-q1' }]);
+    expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued')).toHaveLength(2);
+    applySessionLifecycle('s1', {
+      revision: 2,
+      operation: null,
+      paused: false,
+      queue: [
+        {
+          id: 'server-q2',
+          text: 'same',
+          images,
+          delivery: 'followUp',
+          scheduling: 'automatic',
+          disposition: 'pending',
+        },
+      ],
+    });
     expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued')).toMatchObject([
-      { text: 'second', delivery: 'followUp', images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }] },
+      { id: 'server-q2', text: 'same', images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }] },
     ]);
-    expect(sent.map((item) => item.frame)).toEqual([
-      { type: 'follow_up', message: 'first' },
-      { type: 'follow_up', message: 'second', images },
-      { type: 'clear_queue' },
-      { type: 'follow_up', message: 'second', images },
-    ]);
+    expect(sessionStoreFor('s1').state.pendingUserEntries).toEqual([]);
   });
 
   it('ask for every fact the rail shows', () => {

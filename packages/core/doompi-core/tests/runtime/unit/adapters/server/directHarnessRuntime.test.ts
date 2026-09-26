@@ -140,7 +140,7 @@ describe('direct AgentHarness runtime', () => {
         },
       ])
         await events.emit(event, BACKGROUND_CONTEXT);
-      expect(frames.map((frame) => frame.type)).toEqual([
+      expect(frames.filter((frame) => frame.type !== 'lifecycle_update').map((frame) => frame.type)).toEqual([
         'agent_start',
         'run_suspend',
         'operation_abort',
@@ -978,7 +978,146 @@ describe('direct AgentHarness runtime', () => {
 
   // A streaming behaviour describes how to deliver into a turn that is already running. It must
   // still wake an idle lane, otherwise a headless caller can only talk to an agent that is busy.
-  it('wakes an idle lane, steers a busy one, and steers through an admission race for a streamed prompt', async () => {
+  it('preserves automatic and held input through abort until explicit resume', async () => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'paused-abort-queue' }, BACKGROUND_CONTEXT);
+    let releaseFirst!: () => void;
+    let firstStarted!: () => void;
+    const firstDone = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
+    let calls = 0;
+    const streamSimple = vi.fn<Models['streamSimple']>(() => {
+      const stream = createAssistantMessageEventStream();
+      const message: AssistantMessage = {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'done' }],
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        timestamp: Date.now(),
+        stopReason: 'stop',
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      };
+      stream.push({ type: 'start', partial: message });
+      if (++calls === 1) {
+        firstStarted();
+        void firstDone.then(() => stream.push({ type: 'done', reason: 'stop', message }));
+      } else stream.push({ type: 'done', reason: 'stop', message });
+      return stream;
+    });
+    const runtime = await createDirectHarnessRuntime({
+      cwd: '/tmp',
+      session,
+      model,
+      models: { ...models, streamSimple } as unknown as Models,
+    });
+    try {
+      const first = await runtime.submitPrompt('first');
+      await started;
+      await runtime.followUp('held voice');
+      const { id } = await runtime.enqueueAutomatic('automatic after abort');
+      const { id: removedId } = await runtime.enqueueAutomatic('remove before resume');
+      expect(await runtime.removeQueued(removedId)).toBe('removed');
+      const active = await runtime.readLifecycle();
+      expect(active.operation?.status).toBe('open');
+      expect(active.queue.map((item) => item.text)).toEqual(['held voice', 'automatic after abort']);
+      await runtime.abort(active.operation!.id);
+      await runtime.abort(active.operation!.id);
+      await runtime.abort('old-operation');
+      expect((await runtime.readLifecycle()).paused).toBe(true);
+      releaseFirst();
+      await first.settled.catch(() => undefined);
+      expect((await runtime.readLifecycle()).queue.find((item) => item.id === id)?.disposition).toBe('pending');
+      expect(streamSimple).toHaveBeenCalledTimes(1);
+      await runtime.resumeQueue();
+      await vi.waitFor(() => expect(streamSimple).toHaveBeenCalledTimes(2));
+      await vi.waitFor(async () => expect((await runtime.readLifecycle()).operation).toBeNull());
+      expect((await runtime.readLifecycle()).queue.some((item) => item.id === id || item.id === removedId)).toBe(false);
+      expect(streamSimple).toHaveBeenCalledTimes(2);
+    } finally {
+      releaseFirst();
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  it('promotes one queued item into native steering without executing it as a separate turn', async () => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'promote-native-steer' }, BACKGROUND_CONTEXT);
+    let releaseFirst!: () => void;
+    let firstStarted!: () => void;
+    const firstDone = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
+    let calls = 0;
+    const streamSimple = vi.fn<Models['streamSimple']>(() => {
+      const stream = createAssistantMessageEventStream();
+      const message: AssistantMessage = {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'done' }],
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        timestamp: Date.now(),
+        stopReason: 'stop',
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      };
+      stream.push({ type: 'start', partial: message });
+      if (++calls === 1) {
+        firstStarted();
+        void firstDone.then(() => stream.push({ type: 'done', reason: 'stop', message }));
+      } else stream.push({ type: 'done', reason: 'stop', message });
+      return stream;
+    });
+    const runtime = await createDirectHarnessRuntime({
+      cwd: '/tmp',
+      session,
+      model,
+      models: { ...models, streamSimple } as unknown as Models,
+    });
+    try {
+      const first = await runtime.submitPrompt('first');
+      await started;
+      const { id } = await runtime.enqueueAutomatic('change direction');
+      const operationId = (await runtime.readLifecycle()).operation!.id;
+      expect(await runtime.promoteQueued(id, operationId)).toBe('promoted');
+      await vi.waitFor(async () =>
+        expect((await runtime.readLifecycle()).queue.find((item) => item.id === id)?.disposition).toBe('handoff'),
+      );
+      releaseFirst();
+      await first.settled;
+      expect(streamSimple).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(streamSimple.mock.calls[1]?.[1].messages)).toContain('change direction');
+      expect((await runtime.readLifecycle()).queue.some((item) => item.id === id)).toBe(false);
+    } finally {
+      releaseFirst();
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  it('wakes an idle lane and preserves delivery kind through a busy admission race', async () => {
     const repository = new MemorySessionRepo();
     const session = await repository.create({ id: 'admit-streaming-behaviour' }, BACKGROUND_CONTEXT);
     const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
@@ -986,10 +1125,12 @@ describe('direct AgentHarness runtime', () => {
     const accept = vi.spyOn(runtime.lane, 'accept');
     const drive = vi.spyOn(runtime.lane, 'drive');
     const steer = vi.spyOn(runtime.lane, 'steer');
+    const followUp = vi.spyOn(runtime.lane, 'followUp');
     const busy = () =>
       new LaneBusy({ lane: 'main', operationId: 'op-live', operationKind: 'run', message: 'lane is busy' });
     try {
       steer.mockResolvedValue({ ok: true, value: { entryId: 'queued' } } as never);
+      followUp.mockResolvedValue({ ok: true, value: { entryId: 'follow-up' } } as never);
       drive.mockResolvedValue({ ok: true, value: { kind: 'completed' } } as never);
 
       inspectExecution.mockResolvedValueOnce({ current: null } as never);
@@ -1007,14 +1148,19 @@ describe('direct AgentHarness runtime', () => {
       expect(accept).toHaveBeenCalledOnce();
       expect(drive).toHaveBeenCalledOnce();
 
-      // A turn can start between the execution read and the admission, so a LaneBusy admission is
-      // steered into that turn instead of failing the caller.
+      // Another turn can start between inspection and admission; preserve the requested delivery kind.
       inspectExecution.mockResolvedValueOnce({ current: null } as never);
       accept.mockResolvedValueOnce({ ok: false, error: busy() } as never);
       const raced = await runtime.submitPrompt('raced', undefined, 'steer');
       await expect(raced.settled).resolves.toBeUndefined();
       expect(steer).toHaveBeenNthCalledWith(2, 'raced', undefined, expect.anything());
       expect(drive).toHaveBeenCalledOnce();
+
+      inspectExecution.mockResolvedValueOnce({ current: null } as never);
+      accept.mockResolvedValueOnce({ ok: false, error: busy() } as never);
+      const followUpRace = await runtime.submitPrompt('later', undefined, 'followUp');
+      await expect(followUpRace.settled).resolves.toBeUndefined();
+      expect(followUp).toHaveBeenCalledExactlyOnceWith('later', undefined, expect.anything());
 
       // Without a streaming behaviour there is nowhere to put the text, so the busy lane still fails.
       inspectExecution.mockResolvedValueOnce({ current: null } as never);
@@ -1026,6 +1172,7 @@ describe('direct AgentHarness runtime', () => {
       accept.mockRestore();
       drive.mockRestore();
       steer.mockRestore();
+      followUp.mockRestore();
       await runtime.dispose();
       await repository.close(BACKGROUND_CONTEXT);
     }

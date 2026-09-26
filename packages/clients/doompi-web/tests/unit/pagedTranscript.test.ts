@@ -409,3 +409,83 @@ it('defers navigation reload while the initial page is loading and drops repeate
     transcript.dispose();
   }
 });
+
+it('restores authoritative running and queue state after history reload despite an old settled frame', async () => {
+  const { transcript, read } = fixture();
+  try {
+    await transcript.initialize();
+    const lifecycle = {
+      revision: 12,
+      operation: { id: 'current-turn', kind: 'run', status: 'aborting' },
+      paused: true,
+      queue: [
+        {
+          id: 'pending-1',
+          text: 'keep me',
+          delivery: 'followUp',
+          scheduling: 'automatic',
+          disposition: 'pending',
+        },
+      ],
+    };
+    transcript.publish({
+      snapshot: { phase: 'idle', lifecycle },
+      progress: null,
+      presentation: {
+        revision: 1,
+        events: [{ sequence: 1, frame: { type: 'agent_settled', runId: 'old-turn' } }],
+        projections: [],
+        dropped: 0,
+      },
+    } as unknown as SessionServiceState);
+    expect(sessionStoreFor(id).state.streaming).toBe(true);
+    expect(sessionStoreFor(id).state.lifecycle?.operation?.id).toBe('current-turn');
+    expect(sessionStoreFor(id).state.entries.filter((entry) => entry.kind === 'queued')).toMatchObject([
+      { id: 'pending-1', text: 'keep me' },
+    ]);
+    expect(requestOlderHistory(id)).toBe(true);
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    expect(sessionStoreFor(id).state.streaming).toBe(true);
+    expect(sessionStoreFor(id).state.entries.filter((entry) => entry.kind === 'queued')).toMatchObject([
+      { id: 'pending-1' },
+    ]);
+    applySessionFrame(id, {
+      type: 'response',
+      command: 'get_state',
+      success: true,
+      data: { model: { provider: 'openai', id: 'old' }, isStreaming: false },
+    });
+    expect(sessionStoreFor(id).state.streaming).toBe(true);
+  } finally {
+    transcript.dispose();
+  }
+});
+
+it('accepts a fresh server binding even when its lifecycle revision restarts', async () => {
+  const previous = fixture();
+  try {
+    await previous.transcript.initialize();
+    previous.transcript.publish({
+      snapshot: {
+        phase: 'turn',
+        lifecycle: { revision: 50, operation: { id: 'old', kind: 'run', status: 'open' }, paused: false, queue: [] },
+      },
+      progress: null,
+    } as unknown as SessionServiceState);
+    expect(sessionStoreFor(id).state.lifecycle?.operation?.id).toBe('old');
+  } finally {
+    previous.transcript.dispose();
+  }
+  const replacement = fixture();
+  try {
+    await replacement.transcript.initialize();
+    replacement.transcript.publish({
+      snapshot: { phase: 'idle', lifecycle: { revision: 1, operation: null, paused: true, queue: [] } },
+      progress: null,
+    } as unknown as SessionServiceState);
+    expect(sessionStoreFor(id).state.lifecycle?.operation).toBeNull();
+    expect(sessionStoreFor(id).state.lifecycle?.paused).toBe(true);
+  } finally {
+    replacement.transcript.dispose();
+  }
+});

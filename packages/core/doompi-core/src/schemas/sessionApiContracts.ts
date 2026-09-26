@@ -92,6 +92,28 @@ const Usage = Type.Object({
   total: NumberValue,
 });
 const Message = Type.Object({ text: Text, images: Optional(Type.Array(Image)) });
+const Lifecycle = Type.Object({
+  revision: NumberValue,
+  operation: Type.Union([
+    Type.Null(),
+    Type.Object({
+      id: Text,
+      kind: Type.Union([Type.Literal('run'), Type.Literal('compaction'), Type.Literal('navigation')]),
+      status: Type.Union([Type.Literal('open'), Type.Literal('aborting')]),
+    }),
+  ]),
+  paused: Flag,
+  queue: Type.Array(
+    Type.Object({
+      id: Text,
+      text: Text,
+      images: Optional(Type.Array(Image)),
+      delivery: Type.Union([Type.Literal('steer'), Type.Literal('followUp'), Type.Literal('nextRun')]),
+      scheduling: Type.Union([Type.Literal('automatic'), Type.Literal('held')]),
+      disposition: Type.Union([Type.Literal('pending'), Type.Literal('handoff'), Type.Literal('uncertain')]),
+    }),
+  ),
+});
 const Frame = Type.Intersect([Type.Object({ type: Text }), Type.Record(Text, Json)], {
   description: 'Discriminated extension presentation frame; selected channel schemas describe package payloads.',
 });
@@ -192,6 +214,7 @@ export const SessionServiceStateSchema = Type.Object({
     revision: NumberValue,
     queuedSteer: Type.Array(User),
     queuedSteerCount: NumberValue,
+    lifecycle: Optional(Lifecycle),
   }),
   progress: Type.Union([
     Type.Null(),
@@ -248,9 +271,30 @@ export const SessionMethodSchemas = {
   },
   steer: { input: Type.Tuple([Type.Union([Text, Message])]) },
   abort: { input: Type.Tuple([]) },
+  abortOperation: { input: Type.Tuple([Type.Object({ operationId: Text })]) },
   setModel: { input: Type.Tuple([Model]) },
   setThinking: { input: Type.Tuple([Thinking]) },
   followUp: { input: Type.Tuple([Message]) },
+  enqueueAutomatic: { input: Type.Tuple([Message]), output: Type.Object({ id: Text }) },
+  removeQueued: {
+    input: Type.Tuple([Type.Object({ id: Text })]),
+    output: Type.Union([
+      Type.Literal('removed'),
+      Type.Literal('in_flight'),
+      Type.Literal('already_consumed'),
+      Type.Literal('not_found'),
+    ]),
+  },
+  promoteQueued: {
+    input: Type.Tuple([Type.Object({ id: Text, operationId: Text })]),
+    output: Type.Union([
+      Type.Literal('promoted'),
+      Type.Literal('in_flight'),
+      Type.Literal('target_changed'),
+      Type.Literal('not_found'),
+    ]),
+  },
+  resumeQueue: { input: Type.Tuple([]) },
   clearQueue: { input: Type.Tuple([]), output: Type.Object({ steering: Strings, followUp: Strings }) },
   rewind: {
     input: Type.Tuple([
@@ -304,6 +348,10 @@ export const SessionMethodSchemas = {
       autoCompactionEnabled: Flag,
       messageCount: NumberValue,
       pendingMessageCount: NumberValue,
+      operationId: Optional(Text),
+      executionStatus: Optional(Type.Union([Type.Literal('open'), Type.Literal('aborting')])),
+      queuePaused: Optional(Flag),
+      queueRevision: Optional(NumberValue),
     }),
   },
   getSessionStats: {

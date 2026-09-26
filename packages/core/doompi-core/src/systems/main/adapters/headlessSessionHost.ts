@@ -1306,6 +1306,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     headlessReady = headlessHost.status.ready;
     if (headlessReady) {
       await prepareMcpSurface();
+      // Honor persisted abort/pause intent before recovering an interrupted native drive.
+      await runtime.recover();
       await headlessHost.dispatchHook('session_start', {});
       await publishComposition();
       // A journal reopened while its lane still holds an in-flight operation is a
@@ -1329,7 +1331,25 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       mcpLifecycle.abort();
       const failures: unknown[] = [];
       try {
+        const operation = (await runtime.readLifecycle()).operation;
+        if (operation !== null) {
+          await runtime.abort(operation.id);
+          await runtime.lane.waitForIdle(BACKGROUND_CONTEXT);
+        }
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
         if (headlessHost?.status.ready) await headlessHost.dispatchHook('session_shutdown', {});
+      } catch (error) {
+        failures.push(error);
+      }
+      // Native close seals late model/tool effects while their extension hosts still exist.
+      client?.dispose();
+      unsubscribePresentation();
+      unsubscribeEvents();
+      try {
+        await runtime.dispose();
       } catch (error) {
         failures.push(error);
       }
@@ -1345,14 +1365,6 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       }
       try {
         await childSessionProvider.close();
-      } catch (error) {
-        failures.push(error);
-      }
-      client?.dispose();
-      unsubscribePresentation();
-      unsubscribeEvents();
-      try {
-        await runtime.dispose();
       } catch (error) {
         failures.push(error);
       }

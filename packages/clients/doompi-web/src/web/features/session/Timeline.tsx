@@ -39,7 +39,7 @@ import {
   requestLatestHistory,
   rewindToMessage,
   sessionStoreFor,
-  submitMessage,
+  submitMessageWithAck,
   useActiveSession,
 } from '../../stores/sessionStore';
 import { openTransientTab } from '../../stores/transientTabsStore';
@@ -819,7 +819,9 @@ export function Timeline() {
                   variant="outline"
                   size="lg"
                   data-testid={`suggestion-${index}`}
-                  onClick={() => submitMessage(suggestion)}
+                  onClick={() => {
+                    void submitMessageWithAck(suggestion);
+                  }}
                   className="h-auto justify-between bg-doom-panel px-3 py-2 text-left font-normal text-doom-text"
                 >
                   <span className="flex-1 truncate">{suggestion}</span>

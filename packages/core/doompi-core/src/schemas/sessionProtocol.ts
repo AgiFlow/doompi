@@ -10,6 +10,21 @@ export type JsonValue = null | boolean | number | string | JsonValue[] | { [key:
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type SessionPhase = 'idle' | 'turn' | 'compaction' | 'retry';
 
+/** Native execution ownership plus DoomPi's durable pending-input policy. */
+export interface SessionLifecycle {
+  revision: number;
+  operation: { id: string; kind: 'run' | 'compaction' | 'navigation'; status: 'open' | 'aborting' } | null;
+  paused: boolean;
+  queue: Array<{
+    id: string;
+    text: string;
+    images?: ImageContentPart[];
+    delivery: 'steer' | 'followUp' | 'nextRun';
+    scheduling: 'automatic' | 'held';
+    disposition: 'pending' | 'handoff' | 'uncertain';
+  }>;
+}
+
 export interface ModelRef {
   provider: string;
   id: string;
@@ -92,6 +107,8 @@ export interface SessionSnapshot {
   transcript: TranscriptItem[];
   queuedSteer: UserTranscriptItem[];
   queuedSteerCount: number;
+  /** Authoritative execution and queue state, independent of transcript replay. */
+  lifecycle?: SessionLifecycle;
 }
 
 export interface ProtocolEvent {
@@ -157,6 +174,12 @@ export interface PromptArgs extends SessionMessageArgs {
 }
 export type SteerArgs = SessionMessageArgs;
 export type FollowUpArgs = SessionMessageArgs;
+export interface QueuedItemArgs {
+  id: string;
+}
+export interface PromoteQueuedArgs extends QueuedItemArgs {
+  operationId: string;
+}
 
 export interface ClearQueueResult {
   steering: string[];
@@ -215,6 +238,10 @@ export interface SessionStateInfo {
   autoCompactionEnabled: boolean;
   messageCount: number;
   pendingMessageCount: number;
+  operationId?: string;
+  executionStatus?: 'open' | 'aborting';
+  queuePaused?: boolean;
+  queueRevision?: number;
 }
 
 export interface SessionStats {
@@ -253,9 +280,20 @@ export interface SessionService {
   steer(text: string, context: Context): Promise<void>;
   steer(args: SteerArgs, context: Context): Promise<void>;
   abort(context: Context): Promise<void>;
+  abortOperation(args: { operationId: string }, context: Context): Promise<void>;
   setModel(model: ModelRef, context: Context): Promise<void>;
   setThinking(thinkingLevel: ThinkingLevel, context: Context): Promise<void>;
   followUp(args: FollowUpArgs, context: Context): Promise<void>;
+  enqueueAutomatic(args: FollowUpArgs, context: Context): Promise<{ id: string }>;
+  removeQueued(
+    args: QueuedItemArgs,
+    context: Context,
+  ): Promise<'removed' | 'in_flight' | 'already_consumed' | 'not_found'>;
+  promoteQueued(
+    args: PromoteQueuedArgs,
+    context: Context,
+  ): Promise<'promoted' | 'in_flight' | 'target_changed' | 'not_found'>;
+  resumeQueue(context: Context): Promise<void>;
   clearQueue(context: Context): Promise<ClearQueueResult>;
   rewind(args: RewindArgs, context: Context): Promise<RewindResult>;
   extensionUiResponse(response: ExtensionUiResponse, context: Context): Promise<void>;

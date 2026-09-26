@@ -29,10 +29,12 @@ test('views queued follow-ups and can delete the queue', async ({ page, cockpit 
 
   await page.getByTestId('composer-input').fill('then run the packed-install gate');
   await page.getByTestId('composer-queue').click();
-  await cockpit.session.waitForCommand('follow_up');
+  await cockpit.session.waitForCommand('enqueue_automatic');
   await page.getByTestId('composer-input').fill('then report the bundle size');
   await page.getByTestId('composer-queue').click();
-  await expect.poll(() => cockpit.session.received.filter((frame) => frame.type === 'follow_up').length).toBe(2);
+  await expect
+    .poll(() => cockpit.session.received.filter((frame) => frame.type === 'enqueue_automatic').length)
+    .toBe(2);
 
   await expect(page.getByTestId('entry-queued')).toHaveCount(0);
   await expect(page.getByTestId('composer-queued')).toContainText('2 queued messages');
@@ -44,19 +46,39 @@ test('views queued follow-ups and can delete the queue', async ({ page, cockpit 
   await expect(page.getByTestId('queue-sheet')).toContainText('then report the bundle size');
 
   await page.getByTestId('queue-delete-0').click();
-  await cockpit.session.waitForCommand('clear_queue');
+  await cockpit.session.waitForCommand('remove_queued');
   await expect
-    .poll(() => cockpit.session.received.filter((frame) => frame.type === 'follow_up').at(-1)?.message)
+    .poll(() => cockpit.session.received.filter((frame) => frame.type === 'enqueue_automatic').at(-1)?.message)
     .toBe('then report the bundle size');
   await expect(page.getByTestId('queue-sheet-item')).toHaveCount(1);
   await expect(page.getByTestId('queue-sheet')).not.toContainText('then run the packed-install gate');
   await expect(page.getByTestId('queue-sheet')).toContainText('then report the bundle size');
   await page.getByTestId('queue-clear').click();
-  await expect.poll(() => cockpit.session.received.filter((frame) => frame.type === 'clear_queue').length).toBe(2);
+  await expect.poll(() => cockpit.session.received.filter((frame) => frame.type === 'clear_queue').length).toBe(1);
   await expect(page.getByTestId('queue-sheet')).toBeHidden();
   await expect(page.getByTestId('composer-queued')).toBeHidden();
 });
 
+test('keeps queued input visible through abort and resumes only when requested', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  cockpit.session.emit({ type: 'agent_start' });
+  await expect(page.getByTestId('composer-abort')).toBeVisible();
+  await page.getByTestId('composer-input').fill('keep this input');
+  await page.getByTestId('composer-queue').click();
+  await cockpit.session.waitForCommand('enqueue_automatic');
+  await expect(page.getByTestId('composer-queued')).toContainText('1 queued message');
+  await page.getByTestId('composer-abort').click();
+  await cockpit.session.waitForCommand('abort');
+  await expect(page.getByTestId('composer-abort')).toContainText('aborting');
+  cockpit.session.emit({ type: 'agent_settled' });
+  await expect(page.getByTestId('composer-abort')).toBeHidden();
+  await page.getByTestId('composer-queued').click();
+  await expect(page.getByTestId('queue-sheet-item')).toContainText('keep this input');
+  await page.getByTestId('queue-resume').click();
+  await cockpit.session.waitForCommand('resume_queue');
+  await expect(page.getByTestId('queue-resume')).toBeHidden();
+});
 test('places one-shot voice transcription into the browser composer', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

@@ -18,17 +18,25 @@ export function QueueSheet({
   entries,
   onClear,
   onDelete,
+  onPromote,
+  onResume,
+  operationId,
+  paused = false,
 }: {
   count: number;
   entries: readonly QueuedEntry[];
   onClear: () => void;
   onDelete: (id: string) => void;
+  onPromote?: (id: string) => void;
+  onResume?: () => void;
+  operationId?: string;
+  paused?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const unlisted = Math.max(0, count - entries.length);
   const label = `${String(count)} queued message${count === 1 ? '' : 's'}`;
 
-  if (count === 0) return null;
+  if (count === 0 && !paused) return null;
 
   return (
     <>
@@ -44,7 +52,9 @@ export function QueueSheet({
         <span className="flex min-w-0 items-center gap-2">
           <RefreshIcon className="h-3 w-3 shrink-0 text-doom-cyan" />
           <span className="font-bold text-doom-hi">{label}</span>
-          <span className="truncate text-doom-faint">waiting for the current run</span>
+          <span className="truncate text-doom-faint">
+            {paused ? 'paused until resumed' : 'waiting for the current run'}
+          </span>
         </span>
         <span className="flex shrink-0 items-center gap-1 text-doom-faint">
           view queue
@@ -62,7 +72,7 @@ export function QueueSheet({
           <span aria-hidden className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-doom-border" />
           <DialogHeader dismissible closeLabel="close queued messages" className="py-2.5">
             <DialogTitle>queued messages</DialogTitle>
-            <span className="text-xs text-doom-faint">{label} waiting</span>
+            <span className="text-xs text-doom-faint">{paused ? 'paused' : `${label} waiting`}</span>
           </DialogHeader>
           <DialogBody className="overflow-y-auto p-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <ol className="flex flex-col gap-1.5">
@@ -80,16 +90,37 @@ export function QueueSheet({
                         {entry.images.length} image{entry.images.length === 1 ? '' : 's'} attached
                       </p>
                     ) : null}
+                    {entry.disposition === 'uncertain' ? (
+                      <p className="mt-1 text-2xs text-doom-red">delivery uncertain; not resending automatically</p>
+                    ) : null}
                   </div>
+                  {operationId && !paused && entry.disposition === 'pending' && onPromote ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      data-testid={`queue-steer-${String(index)}`}
+                      aria-label={`steer queued message ${String(index + 1)}`}
+                      onClick={() => onPromote(entry.id)}
+                      className="h-7 shrink-0 text-doom-cyan"
+                    >
+                      steer
+                    </Button>
+                  ) : null}
                   <Button
                     variant="ghost"
                     size="icon"
                     data-testid={`queue-delete-${String(index)}`}
                     aria-label={`delete queued message ${String(index + 1)}`}
                     title={
-                      unlisted > 0 ? 'Wait for the complete queue before deleting one message' : 'Delete this message'
+                      entry.disposition === 'uncertain'
+                        ? 'Delivery is uncertain; refresh the session first'
+                        : entry.disposition === 'handoff'
+                          ? 'This message is already being delivered'
+                          : unlisted > 0
+                            ? 'Wait for the complete queue before deleting one message'
+                            : 'Delete this message'
                     }
-                    disabled={unlisted > 0}
+                    disabled={unlisted > 0 || entry.disposition === 'handoff' || entry.disposition === 'uncertain'}
                     onClick={() => onDelete(entry.id)}
                     className="h-7 w-7 shrink-0 text-doom-faint hover:text-doom-red"
                   >
@@ -107,18 +138,25 @@ export function QueueSheet({
                 </li>
               ) : null}
             </ol>
-            <Button
-              variant="danger"
-              size="sm"
-              data-testid="queue-clear"
-              className="mt-2 w-full"
-              onClick={() => {
-                onClear();
-                setOpen(false);
-              }}
-            >
-              delete all queued messages
-            </Button>
+            {paused && onResume ? (
+              <Button variant="subtle" size="sm" data-testid="queue-resume" className="mt-2 w-full" onClick={onResume}>
+                resume queued messages
+              </Button>
+            ) : null}
+            {count > 0 ? (
+              <Button
+                variant="danger"
+                size="sm"
+                data-testid="queue-clear"
+                className="mt-2 w-full"
+                onClick={() => {
+                  onClear();
+                  setOpen(false);
+                }}
+              >
+                delete all queued messages
+              </Button>
+            ) : null}
           </DialogBody>
         </DialogContent>
       </Dialog>

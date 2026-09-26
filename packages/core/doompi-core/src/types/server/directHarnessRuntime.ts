@@ -134,6 +134,22 @@ export interface DirectHarnessEventListener {
   (event: HarnessEvent, context: Context): void | Promise<void>;
 }
 
+export interface DirectHarnessQueuedInput {
+  id: string;
+  text: string;
+  images?: ImageContent[];
+  delivery: 'steer' | 'followUp' | 'nextRun';
+  scheduling: 'automatic' | 'held';
+  disposition: 'pending' | 'handoff' | 'uncertain';
+}
+
+export interface DirectHarnessLifecycle {
+  revision: number;
+  operation: { id: string; kind: 'run' | 'compaction' | 'navigation'; status: 'open' | 'aborting' } | null;
+  paused: boolean;
+  queue: DirectHarnessQueuedInput[];
+}
+
 /** Direct, same-process AgentHarness runtime owned by one session host. */
 export interface DirectHarnessRuntime<TContext extends object | undefined = object | undefined> {
   readonly sessionId: string;
@@ -150,6 +166,13 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   stop(): void;
 
   readState(): Promise<Record<string, unknown>>;
+  readLifecycle(): Promise<DirectHarnessLifecycle>;
+  enqueueAutomatic(text: string, images?: ImageContent[]): Promise<{ id: string }>;
+  removeQueued(id: string): Promise<'removed' | 'in_flight' | 'already_consumed' | 'not_found'>;
+  promoteQueued(id: string, operationId: string): Promise<'promoted' | 'in_flight' | 'target_changed' | 'not_found'>;
+  resumeQueue(): Promise<void>;
+  /** Reconciles persisted cancellation intent before the host resumes an interrupted native drive. */
+  recover(): Promise<void>;
   readEntries(): Promise<{ entries: Entry[]; leafId: string | null }>;
   listCommands(): readonly { name: string; description: string }[];
   /** Dispatches a registered command without admitting a model turn. */
@@ -197,11 +220,11 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   prompt(text: string, images?: ImageContent[]): Promise<void>;
   /** Starts a run from an already-composed message, without awaiting the run. */
   admitMessage(message: AgentMessage): Promise<{ settled: Promise<void> }>;
-  steer(message: string | AgentMessage, images?: ImageContent[]): Promise<void>;
+  steer(message: string | AgentMessage, images?: ImageContent[], targetOperationId?: string): Promise<void>;
   followUp(message: string | AgentMessage, images?: ImageContent[]): Promise<void>;
   /** Queues for the run after the current one, rather than into it. */
   nextRun(message: string | AgentMessage, images?: ImageContent[]): Promise<void>;
-  abort(): Promise<void>;
+  abort(operationId?: string): Promise<void>;
   compact(customInstructions?: string): Promise<void>;
   /** Continues a persisted in-flight operation; false when the lane had none. */
   resume(): Promise<boolean>;

@@ -8,6 +8,7 @@ import { type Context } from '@earendil-works/chord';
 
 import { recordBrowserPerformance } from '../lib/browserTelemetry';
 import {
+  applySessionLifecycle,
   bindHistoryReader,
   resetSessionStore,
   beginSessionReplay,
@@ -81,7 +82,8 @@ export function createPagedTranscript(
             );
           }
         }
-      if (latestState?.snapshot.phase === 'turn') emit({ type: 'agent_start' }, true);
+      if (latestState?.snapshot.lifecycle) applySessionLifecycle(sessionId, latestState.snapshot.lifecycle);
+      else if (latestState?.snapshot.phase === 'turn') emit({ type: 'agent_start' }, true);
       setHasNewerHistory(sessionId, !atLatest());
     } finally {
       endSessionReplay(sessionId);
@@ -225,6 +227,7 @@ export function createPagedTranscript(
     publish(state: SessionServiceState) {
       const previous = latestState?.presentation?.revision;
       latestState = state;
+      if (state.snapshot.lifecycle) applySessionLifecycle(sessionId, state.snapshot.lifecycle, previous === undefined);
       if (previous !== undefined && state.presentation && state.presentation.revision < previous) {
         revision = 0;
         request('latest');

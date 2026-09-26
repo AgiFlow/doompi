@@ -16,6 +16,7 @@ import {
   DOOM_COCKPIT_SERVER_ID,
   DoomSessionManagementService,
   DoomSessionService,
+  type SessionLifecycle,
 } from '@agimon-ai/doompi-core/sessionProtocol';
 import { createRemoteServiceBinding } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
@@ -143,6 +144,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     isStreaming: false,
     messageCount: 0,
   };
+  let lifecycle: SessionLifecycle = { revision: 0, operation: null, paused: false, queue: [] };
   let closed = false;
   let reconnecting = false;
   let restarting: Promise<void> | undefined;
@@ -253,6 +255,57 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       closed = true;
       exitResolve(0);
     },
+    readLifecycle: async () => lifecycle,
+    enqueueAutomatic: async (message: string, images?: unknown[]) => {
+      record({ type: 'enqueue_automatic', message, ...(images === undefined ? {} : { images }) });
+      await answer('enqueue_automatic', undefined);
+      const id = `queue-${randomUUID()}`;
+      lifecycle = {
+        ...lifecycle,
+        revision: lifecycle.revision + 1,
+        queue: [
+          ...lifecycle.queue,
+          {
+            id,
+            text: message,
+            delivery: 'followUp',
+            scheduling: 'automatic',
+            disposition: 'pending',
+            ...(images === undefined ? {} : { images: images as never }),
+          },
+        ],
+      };
+      for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
+      return { id };
+    },
+    removeQueued: async (itemId: string) => {
+      record({ type: 'remove_queued', id: itemId });
+      await answer('remove_queued', undefined);
+      lifecycle = {
+        ...lifecycle,
+        revision: lifecycle.revision + 1,
+        queue: lifecycle.queue.filter(({ id }) => id !== itemId),
+      };
+      for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
+      return 'removed';
+    },
+    promoteQueued: async (itemId: string, operationId: string) => {
+      record({ type: 'promote_queued', id: itemId, operationId });
+      await answer('promote_queued', undefined);
+      lifecycle = {
+        ...lifecycle,
+        revision: lifecycle.revision + 1,
+        queue: lifecycle.queue.map((entry) => (entry.id === itemId ? { ...entry, delivery: 'steer' as const } : entry)),
+      };
+      for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
+      return 'promoted';
+    },
+    resumeQueue: async () => {
+      record({ type: 'resume_queue' });
+      await answer('resume_queue', undefined);
+      lifecycle = { ...lifecycle, revision: lifecycle.revision + 1, paused: false };
+      for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
+    },
     readState: async () => {
       record({ type: 'get_state' });
       const result = (await answer('get_state', state)) as Frame;
@@ -297,6 +350,8 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     clearQueue: async () => {
       record({ type: 'clear_queue' });
       await answer('clear_queue', { steering: [], followUp: [] });
+      lifecycle = { ...lifecycle, revision: lifecycle.revision + 1, queue: [] };
+      for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
       return { steering: [], followUp: [] };
     },
     setName: async (next: string) => {
@@ -334,9 +389,16 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       record({ type: 'follow_up', message, ...(images === undefined ? {} : { images }) });
       await answer('follow_up', undefined);
     },
-    abort: async () => {
-      record({ type: 'abort' });
+    abort: async (operationId?: string) => {
+      record({ type: 'abort', ...(operationId === undefined ? {} : { operationId }) });
       await answer('abort', undefined);
+      lifecycle = {
+        ...lifecycle,
+        revision: lifecycle.revision + 1,
+        paused: true,
+        operation: lifecycle.operation === null ? null : { ...lifecycle.operation, status: 'aborting' },
+      };
+      for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
     },
     compact: async () => {
       record({ type: 'compact' });
@@ -541,6 +603,18 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
             message,
           });
         return;
+      }
+      if (frame.type === 'agent_start') {
+        lifecycle = {
+          ...lifecycle,
+          revision: lifecycle.revision + 1,
+          operation: { id: `turn-${randomUUID()}`, kind: 'run', status: 'open' },
+        };
+        for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
+      }
+      if (frame.type === 'agent_settled') {
+        lifecycle = { ...lifecycle, revision: lifecycle.revision + 1, operation: null };
+        for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
       }
       if (frame.type === 'agent_settled' && assistantDraft !== undefined) {
         const draft = assistantDraft;

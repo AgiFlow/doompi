@@ -18,6 +18,7 @@ import {
   type PromptArgs,
   type SessionServiceState,
   type SessionSnapshot,
+  type SessionLifecycle,
   type TranscriptItem,
   type TranscriptPage,
   type TranscriptPageRequest,
@@ -226,6 +227,11 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     else if (frame.type === 'message_end' && message?.role === 'assistant') reportPromptLatency('response_completed');
     const reductionStartedAt = performance.now();
     const reduction = transcript.apply(frame);
+    if (frame.type === 'lifecycle_update' && frame.lifecycle !== undefined)
+      state.change(BACKGROUND_CONTEXT, (draft) => {
+        const lifecycle = frame.lifecycle as SessionLifecycle;
+        if ((draft.snapshot.lifecycle?.revision ?? -1) <= lifecycle.revision) draft.snapshot.lifecycle = lifecycle;
+      });
     const updates = acpUpdates.apply(frame, reduction);
     const reductionDurationMs = performance.now() - reductionStartedAt;
     if (reduction.aggregate && options.telemetry) {
@@ -238,7 +244,11 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     }
     if (reduction.snapshot || updates.length > 0) {
       state.change(BACKGROUND_CONTEXT, (draft) => {
-        if (reduction.snapshot) draft.snapshot = summary(reduction.snapshot);
+        if (reduction.snapshot)
+          draft.snapshot = {
+            ...summary(reduction.snapshot),
+            ...(draft.snapshot.lifecycle === undefined ? {} : { lifecycle: draft.snapshot.lifecycle }),
+          };
         if (updates.length > 0) {
           const events = draft.updates ?? [];
           for (const update of updates) events.push({ sequence: ++updateSequence, update });
@@ -330,7 +340,10 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     return { message: args.text, ...(args.images === undefined ? {} : { images: args.images }) };
   };
   const hydrate = async (): Promise<void> => {
+    const lifecycle = await options.runtime.readLifecycle();
+    if (disposed) return;
     state.change(BACKGROUND_CONTEXT, (draft) => {
+      if ((draft.snapshot.lifecycle?.revision ?? -1) <= lifecycle.revision) draft.snapshot.lifecycle = lifecycle;
       draft.presentation = presentation.resetCustomEntries();
     });
   };
@@ -373,7 +386,7 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       const args = messageArgs(text);
       const waitFor = typeof text === 'string' ? 'settled' : (text.waitFor ?? 'settled');
       if (waitFor !== 'accepted' && waitFor !== 'settled') throw new Error('Invalid prompt acknowledgement mode');
-      if (transcript.phase() !== 'idle' || settlers.size > 0) {
+      if ((await options.runtime.readLifecycle()).operation !== null || settlers.size > 0) {
         if (isSelectionCommand(args.message) && (await options.runtime.dispatchCommand(args.message))) return;
         throw new Error('A turn is already running');
       }
@@ -476,14 +489,25 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     },
     async steer(text: string | SessionMessageArgs) {
       requireLive();
-      if (transcript.phase() === 'idle') throw new Error('There is no active turn to steer');
       const args = messageArgs(text);
+      const { operation } = await options.runtime.readLifecycle();
+      if (operation === null || operation.status === 'aborting') {
+        // The turn may have completed between the client's send and this request. Retain the
+        // acknowledged input for the next eligible turn instead of dropping it at the boundary.
+        await options.runtime.enqueueAutomatic(args.message, args.images);
+        return;
+      }
       await options.runtime.steer(args.message, args.images);
     },
     async abort() {
       requireLive();
-      if (transcript.phase() === 'idle') throw new Error('There is no active turn to abort');
-      await options.runtime.abort();
+      await options.runtime.abort((await options.runtime.readLifecycle()).operation?.id);
+    },
+    async abortOperation(args) {
+      requireLive();
+      if (!args || typeof args.operationId !== 'string' || !args.operationId)
+        throw new Error('Invalid operation identity');
+      await options.runtime.abort(args.operationId);
     },
     async setModel(model, context) {
       guardContext(context);
@@ -501,6 +525,26 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       guardContext(context);
       const message = messageArgs(args);
       await options.runtime.followUp(message.message, message.images);
+    },
+    async enqueueAutomatic(args, context) {
+      guardContext(context);
+      const message = messageArgs(args);
+      return options.runtime.enqueueAutomatic(message.message, message.images);
+    },
+    async removeQueued(args, context) {
+      guardContext(context);
+      if (!args || typeof args.id !== 'string' || !args.id) throw new Error('Invalid queue identity');
+      return options.runtime.removeQueued(args.id);
+    },
+    async promoteQueued(args, context) {
+      guardContext(context);
+      if (!args || typeof args.id !== 'string' || !args.id || typeof args.operationId !== 'string' || !args.operationId)
+        throw new Error('Invalid queue promotion');
+      return options.runtime.promoteQueued(args.id, args.operationId);
+    },
+    async resumeQueue(context) {
+      guardContext(context);
+      await options.runtime.resumeQueue();
     },
     async clearQueue(context) {
       guardContext(context);
