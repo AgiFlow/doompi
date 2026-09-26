@@ -412,6 +412,9 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         hub.channelTypes(),
       );
       const admissions = new Map<string, Promise<{ id: string; root: string; available: boolean }>>();
+      // A member checkout is any checkout other than its workspace root, such as a worktree.
+      const isMemberCheckout = (from: string, workspace: { root: string }): boolean =>
+        fs.realpathSync(findRepositoryRoot(from)) !== workspace.root;
       admitWorkspace = async (from) => {
         const checkoutRoot = fs.realpathSync(findRepositoryRoot(from));
         // Ids are persisted, never re-derived from the path: a checkout of an admitted repository
@@ -543,7 +546,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           workspaceId: workspace.id,
           groupingRoot: workspace.root,
           // A member checkout runs its workspace's compiled composition, not one of its own.
-          ...(policyOptions.repoRoot === workspace.root ? {} : { inheritedArtifact: registration }),
+          ...(isMemberCheckout(policyOptions.repoRoot, workspace) ? { inheritedArtifact: registration } : {}),
           sessionName: identity.sessionName,
           webComposition: webCompositions?.publish(
             { scope: 'session', sessionId: identity.sessionId },
@@ -570,13 +573,17 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               args: ['--cwd', policyOptions.cwd],
               cwd: policyOptions.cwd,
               environment,
+              ...(policyOptions.configRoot === undefined ? {} : { configRoot: policyOptions.configRoot }),
             });
             return { majorMode: defaults.majorMode, domains: defaults.domains, profile: defaults.profile };
           },
           candidates: bundle.descriptor.entries,
           mcpPlugins: mcpBundle.plugins,
           resolveSelection: (requested) => {
-            const config = loadMajorModesConfig(policyOptions.repoRoot, policyOptions.homeDirectory);
+            const config = loadMajorModesConfig(
+              policyOptions.configRoot ?? policyOptions.repoRoot,
+              policyOptions.homeDirectory,
+            );
             return {
               ...requested,
               activeLayers: filterHookDisabledLayers(
@@ -755,23 +762,25 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           const childIdentity = resolveSessionIdentity([], identity);
           const childEnvironment = { ...baseEnvironment };
           for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete childEnvironment[key];
+          // The workspace is settled first: a member checkout reads its workspace's configuration.
+          const workspace =
+            inheritedWorkspaceId === undefined
+              ? await admitWorkspace(request.cwd)
+              : hub
+                  .workspaces()
+                  .find((candidate) => candidate.id === inheritedWorkspaceId && candidate.available !== false);
+          if (workspace === undefined) throw new Error('The session workspace is unavailable.');
+          const member = isMemberCheckout(request.cwd, workspace);
           const childContext = await buildHarnessContext(
             resolveHarnessOptions({
               args: ['--cwd', request.cwd, ...childIdentity.agentArgs],
               cwd: request.cwd,
               environment: childEnvironment,
+              ...(member ? { configRoot: workspace.root } : {}),
             }),
             harnessTelemetry,
           );
           try {
-            const workspace =
-              inheritedWorkspaceId === undefined
-                ? await admitWorkspace(childContext.options.repoRoot)
-                : hub
-                    .workspaces()
-                    .find((candidate) => candidate.id === inheritedWorkspaceId && candidate.available !== false);
-            if (workspace === undefined) throw new Error('The session workspace is unavailable.');
-            const member = childContext.options.repoRoot !== workspace.root;
             const registration = await resolveSessionArtifact({
               member,
               pinned: pinnedArtifact,

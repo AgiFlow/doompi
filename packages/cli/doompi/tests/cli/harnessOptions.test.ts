@@ -64,6 +64,25 @@ describe('resolveHarnessOptions', () => {
     expect(configMocks.loadDomains).toHaveBeenCalledWith(root, expect.any(String));
   });
 
+  it('reads a worktree checkout configuration from its workspace root', () => {
+    const workspaceRoot = temporaryDirectory();
+    const checkout = temporaryDirectory();
+    fs.mkdirSync(path.join(checkout, '.git'));
+
+    const options = resolveHarnessOptions({
+      args: ['--cwd', checkout],
+      environment: {},
+      cwd: checkout,
+      configRoot: workspaceRoot,
+    });
+
+    expect(options.repoRoot).toBe(checkout);
+    expect(options.configRoot).toBe(workspaceRoot);
+    expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(workspaceRoot, expect.any(String));
+    expect(configMocks.loadDomains).toHaveBeenCalledWith(workspaceRoot, expect.any(String));
+    expect(configMocks.loadMajorModesConfig).not.toHaveBeenCalledWith(checkout, expect.any(String));
+  });
+
   it('starts on the repository default profile, and lets a run override it', () => {
     const cwd = temporaryDirectory();
     configMocks.loadProfileCatalog.mockReturnValue({ profiles: [], defaultProfile: 'ponytail' });

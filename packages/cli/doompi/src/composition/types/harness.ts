@@ -2,7 +2,13 @@ export type HarnessPreset = 'default' | 'kimi' | 'ollama';
 export type HarnessOutputFormat = 'native' | 'vibe-lint';
 
 export interface HarnessOptions {
+  /** The checkout the run executes in. */
   repoRoot: string;
+  /**
+   * Where modes, domains, profiles, plugins and MCP config are read from. Set when the checkout
+   * belongs to a workspace rooted elsewhere, such as a worktree; defaults to repoRoot.
+   */
+  configRoot?: string;
   /** Injected home root for home-scoped generated artifacts. */
   homeDirectory?: string;
   cwd: string;

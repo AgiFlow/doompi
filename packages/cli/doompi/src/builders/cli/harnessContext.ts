@@ -95,7 +95,7 @@ export function configurePreset(
 
 /** Resolves the optional persona and environment profile selected for this run. */
 export function resolveHarnessProfile(options: HarnessOptions): AgentProfile | undefined {
-  return options.profile ? resolveProfile(options.repoRoot, options.profile) : undefined;
+  return options.profile ? resolveProfile(options.configRoot ?? options.repoRoot, options.profile) : undefined;
 }
 
 /**
@@ -109,12 +109,14 @@ export async function buildHarnessContext(
   options: HarnessOptions,
   telemetry: HarnessTelemetry = createHarnessTelemetry(),
 ): Promise<HarnessContext> {
+  // A worktree reads its workspace's configuration; resources still come from the checkout.
+  const configRoot = options.configRoot ?? options.repoRoot;
   // Everything up to collectResources reads configuration off disk, so a single
   // malformed modes.yaml or profiles.yaml surfaces here as a failed launch
   // with no other record.
   const configured = await telemetry
     .runInSpan(`doom_pi.${RESOLVE_CONFIG_PHASE}`, { 'harness.phase': RESOLVE_CONFIG_PHASE }, async () => {
-      const majorModesConfig = loadMajorModesConfig(options.repoRoot, options.homeDirectory);
+      const majorModesConfig = loadMajorModesConfig(configRoot, options.homeDirectory);
       const selectedLayers = filterHookDisabledLayers(
         majorModesConfig,
         resolveLayers(majorModesConfig, options.majorMode),
@@ -130,10 +132,10 @@ export async function buildHarnessContext(
         hookGroups: layerHookGroups(majorModesConfig, selectedLayers),
         profile,
         plugins: await materializePluginEntries(
-          resolvePluginEntries(options.repoRoot, options.domains, options.pluginDirectories),
+          resolvePluginEntries(configRoot, options.domains, options.pluginDirectories),
         ),
-        mcpAllowlist: resolveMcpAllowlist(options.repoRoot, options.domains),
-        sharedSkills: resolveSharedSkills(options.repoRoot, options.domains),
+        mcpAllowlist: resolveMcpAllowlist(configRoot, options.domains),
+        sharedSkills: resolveSharedSkills(configRoot, options.domains),
       };
     })
     .catch(async (error: unknown) => {
@@ -148,7 +150,7 @@ export async function buildHarnessContext(
   const { majorModesConfig, selectedLayers, hookGroups, profile, plugins, mcpAllowlist } = configured;
   const personaDirectory = profile?.persona;
   // A global profile's persona lives beside the global config, not in the repo.
-  const personaRoot = profile?.personaRoot ?? options.repoRoot;
+  const personaRoot = profile?.personaRoot ?? configRoot;
   const resources = await telemetry
     .runInSpan(
       `doom_pi.${COLLECT_RESOURCES_PHASE}`,
