@@ -726,7 +726,10 @@ describe('serveHeadlessServer', () => {
   // old host closing and the new one registering.
   it('holds a session request that arrives while the session restarts', async () => {
     const closeSession = vi.fn(async () => undefined);
-    const hub = createHeadlessHub({ manager: { closeSession } as never });
+    const hub = createHeadlessHub({
+      manager: { closeSession } as never,
+      requestSessionApi: vi.fn(async () => Response.json({ plugin: true })),
+    });
     const register = () =>
       hub.register({
         workspaceId: 'test-workspace',
@@ -757,11 +760,16 @@ describe('serveHeadlessServer', () => {
     const restart = fetch(`${server.url}/api/workspaces/test-workspace/sessions/current/restart`, { method: 'POST' });
     await vi.waitFor(() => expect(hub.session('current')).toBeUndefined());
     const during = fetch(`${server.url}/api/workspaces/test-workspace/sessions/current`);
+    const plugin = fetch(`${server.url}/api/workspaces/test-workspace/sessions/current/plugins/poll/heartbeat`, {
+      method: 'POST',
+    });
     // Long enough for the request to reach the server while the session is still gone.
     setTimeout(reopen, 200);
 
     expect((await restart).status).toBe(200);
     expect((await during).status).toBe(200);
+    // Reaches the reopened session's API instead of the 404 for a missing session.
+    expect(await (await plugin).json()).toEqual({ plugin: true });
     await hub.close();
   });
 

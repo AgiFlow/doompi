@@ -442,6 +442,11 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       json(response, 401, { error: 'Unauthorized.' });
       return;
     }
+    // A restart closes the session before reopening it under the same id. Any session-scoped
+    // request that lands in that gap, such as a plugin's poll, waits for the reopened session.
+    const reopening = scopedSession === undefined ? undefined : restarting.get(decodeURIComponent(scopedSession));
+    if (reopening !== undefined && options.headlessHub.session(decodeURIComponent(scopedSession!)) === undefined)
+      await reopening;
     if (isSessionMcpHostRoute(url.pathname)) {
       const hostSessionMcp = await sessionMcp.handleHost(webRequest(request, url));
       if (hostSessionMcp !== undefined) {
@@ -781,14 +786,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     }
     const sessionId = decodeURIComponent(sessionMatch[2]);
     const workspaceId = decodeURIComponent(sessionMatch[1]);
-    let session = options.headlessHub.session(sessionId);
-    // A restart closes the session before reopening it under the same id. Requests that land in
-    // that gap, such as a plugin's poll, wait for the reopened session instead of failing.
-    const reopening = session === undefined ? restarting.get(sessionId) : undefined;
-    if (reopening !== undefined) {
-      await reopening;
-      session = options.headlessHub.session(sessionId);
-    }
+    const session = options.headlessHub.session(sessionId);
     const suffix = sessionMatch[3] === undefined ? '' : `/${sessionMatch[3]}`;
     if (suffix === '/transcript' && request.method === 'GET' && options.readDormantTranscript) {
       const record = dormant().find(
