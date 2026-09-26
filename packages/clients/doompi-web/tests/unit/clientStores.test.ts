@@ -931,6 +931,27 @@ describe('session actions', () => {
 describe('transient tabs', () => {
   beforeEach(() => resetTransientTabs());
 
+  it('starts only inserted tabs and disposes each on close, session drop, or reset', () => {
+    const Panel = (): null => null;
+    const onOpen = vi.fn();
+    const onClose = vi.fn();
+    const a = { id: 'owner-a', label: 'a', panel: Panel, onOpen, onClose };
+    const b = { id: 'owner-b', label: 'b', panel: Panel, onOpen, onClose };
+    openTransientTab('s1', a);
+    openTransientTab('s1', { ...a, onOpen: vi.fn(), onClose: vi.fn() });
+    openTransientTab('s2', b);
+    expect(onOpen.mock.calls).toEqual([['s1'], ['s2']]);
+    closeTransientTab('s1', a.id);
+    closeTransientTab('s1', a.id);
+    expect(onClose.mock.calls).toEqual([['s1']]);
+    dropTransientTabs('s2');
+    expect(onClose.mock.calls).toEqual([['s1'], ['s2']]);
+    openTransientTab('s1', a);
+    openTransientTab('s2', b);
+    resetTransientTabs();
+    expect(onClose.mock.calls).toEqual([['s1'], ['s2'], ['s1'], ['s2']]);
+  });
+
   it('opens once per id, closes, and leaves with its session', () => {
     const Panel = (): null => null;
     const tab = { id: 'owner-x-1', label: 'x', panel: Panel, retainComposer: true };

@@ -6,6 +6,7 @@ import {
   authorBridgeView,
   dropAuthorViewportSession,
   focusAuthorViewport,
+  openAuthorCanvas,
   startAuthorBrowserBridge,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorBrowserBridge';
 import type { AuthorBrowserMessage, AuthorHubMessage } from '../../src/types/webAuthor';
@@ -17,7 +18,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function fixture() {
+function fixture(sessionId = 'session') {
   const tools = new Map<string, ModelContextTool>();
   const sent: AuthorBrowserMessage[] = [];
   let connected: (() => void) | undefined;
@@ -40,7 +41,7 @@ function fixture() {
     removeEventListener() {},
   };
   const runtime: WebPluginRuntime = {
-    mount: { scope: 'session', workspaceId: 'work-1', sessionId: 'session-1' },
+    mount: { scope: 'session', workspaceId: 'work-1', sessionId },
     sendSessionFrame() {},
     sendHubFrame() {},
     async invokeServerMethod(call) {
@@ -58,9 +59,10 @@ function fixture() {
   return { connected: () => connected?.(), runtime, sent, tools };
 }
 
-const accepted = (catalogToken?: string): AuthorHubMessage => ({
+const accepted = (generation: number, catalogToken?: string, alias = 'default'): AuthorHubMessage => ({
   kind: 'accepted',
-  generation: 1,
+  alias,
+  generation,
   ownerToken: 'owner',
   leaseMs: 2_000,
   ...(catalogToken === undefined ? {} : { catalogToken }),
@@ -81,15 +83,17 @@ describe('Author browser bridge', () => {
       ]),
     );
 
-    expect(h.sent).toEqual([{ kind: 'register', generation: 1 }]);
-    applyAuthorHubMessage('session', accepted());
-    expect(h.sent.at(-1)).toMatchObject({ kind: 'catalog', generation: 1, ownerToken: 'owner' });
-    applyAuthorHubMessage('session', accepted('catalog'));
+    expect(h.sent.at(-1)).toMatchObject({ kind: 'register', alias: 'default' });
+    const generation = h.sent.at(-1)!.generation;
+    applyAuthorHubMessage('session', accepted(generation));
+    expect(h.sent.at(-1)).toMatchObject({ kind: 'catalog', generation, ownerToken: 'owner' });
+    applyAuthorHubMessage('session', accepted(generation, 'catalog'));
     expect(authorBridgeView('session')).toEqual({ activation: 'active', capabilityCount: 1 });
 
     applyAuthorHubMessage('session', {
       kind: 'request',
-      generation: 1,
+      alias: 'default',
+      generation,
       ownerToken: 'wrong-owner',
       catalogToken: 'catalog',
       requestId: 'fenced',
@@ -100,7 +104,8 @@ describe('Author browser bridge', () => {
 
     applyAuthorHubMessage('session', {
       kind: 'request',
-      generation: 1,
+      alias: 'default',
+      generation,
       ownerToken: 'owner',
       catalogToken: 'catalog',
       requestId: 'request',
@@ -111,9 +116,9 @@ describe('Author browser bridge', () => {
     expect(execute).toHaveBeenCalledWith({ value: 1 }, expect.any(AbortSignal));
 
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(h.sent.at(-1)).toEqual({ kind: 'register', generation: 1 });
+    expect(h.sent.at(-1)).toEqual({ kind: 'register', alias: 'default', generation });
     h.connected();
-    expect(h.sent.at(-1)).toEqual({ kind: 'register', generation: 1 });
+    expect(h.sent.at(-1)).toEqual({ kind: 'register', alias: 'default', generation });
   });
 
   it('returns structured tool failures instead of reporting cancellation', async () => {
@@ -134,11 +139,13 @@ describe('Author browser bridge', () => {
         ],
       },
     ]);
-    applyAuthorHubMessage('session', accepted());
-    applyAuthorHubMessage('session', accepted('catalog'));
+    const generation = h.sent.at(-1)!.generation;
+    applyAuthorHubMessage('session', accepted(generation));
+    applyAuthorHubMessage('session', accepted(generation, 'catalog'));
     applyAuthorHubMessage('session', {
       kind: 'request',
-      generation: 1,
+      alias: 'default',
+      generation,
       ownerToken: 'owner',
       catalogToken: 'catalog',
       requestId: 'failed',
@@ -154,6 +161,92 @@ describe('Author browser bridge', () => {
       }),
     );
   });
+  it('keeps two named catalogs registered while their viewport is hidden and isolates close', async () => {
+    const h = fixture();
+    releases.push(startAuthorBrowserBridge(h.runtime));
+    const executeA = vi.fn(async () => 'a');
+    const executeB = vi.fn(async () => 'b');
+    const profile = (execute: typeof executeA) => [
+      {
+        id: 'profile',
+        tools: [
+          { name: 'author_test', description: 'test', inputSchema: {}, execute },
+          { name: 'author_describe_grid', description: 'grid', inputSchema: {}, execute },
+        ],
+      },
+    ];
+    await openAuthorCanvas('session', 'a', profile(executeA));
+    await openAuthorCanvas('session', 'b', profile(executeB));
+    expect(h.tools.size).toBe(2);
+    expect([...h.tools.keys()].every((name) => name !== 'author_test')).toBe(true);
+    const registrations = h.sent.filter((message) => message.kind === 'register');
+    expect(registrations.map((message) => message.alias)).toEqual(['a', 'b']);
+    for (const registration of registrations) {
+      const alias = registration.alias;
+      applyAuthorHubMessage('session', accepted(registration.generation, undefined, alias));
+      applyAuthorHubMessage('session', accepted(registration.generation, `token-${alias}`, alias));
+    }
+    const first = registrations[0]!;
+    applyAuthorHubMessage('session', {
+      kind: 'request',
+      alias: 'a',
+      generation: first.generation,
+      ownerToken: 'owner',
+      catalogToken: 'token-b',
+      requestId: 'cross',
+      name: 'author_test',
+      arguments: {},
+    });
+    expect(executeA).not.toHaveBeenCalled();
+    applyAuthorHubMessage('session', {
+      kind: 'request',
+      alias: 'a',
+      generation: first.generation,
+      ownerToken: 'owner',
+      catalogToken: 'token-a',
+      requestId: 'a-request',
+      name: 'author_test',
+      arguments: {},
+    });
+    await vi.waitFor(() => expect(executeA).toHaveBeenCalledOnce());
+    dropAuthorViewportSession('session', 'a');
+    expect(h.tools.size).toBe(1);
+    const second = registrations[1]!;
+    applyAuthorHubMessage('session', {
+      kind: 'request',
+      alias: 'b',
+      generation: second.generation,
+      ownerToken: 'owner',
+      catalogToken: 'token-b',
+      requestId: 'b-request',
+      name: 'author_test',
+      arguments: {},
+    });
+    await vi.waitFor(() => expect(executeB).toHaveBeenCalledOnce());
+  });
+  it('starting another session mount does not discard a conversation catalog', async () => {
+    const first = fixture('session');
+    releases.push(startAuthorBrowserBridge(first.runtime));
+    await openAuthorCanvas('session', 'alpha', [
+      {
+        id: 'profile',
+        tools: [{ name: 'author_test', description: 'test', inputSchema: {}, execute: async () => 'a' }],
+      },
+    ]);
+    const second = fixture('other');
+    releases.push(startAuthorBrowserBridge(second.runtime));
+    await openAuthorCanvas('other', 'beta', [
+      {
+        id: 'profile',
+        tools: [{ name: 'author_test', description: 'test', inputSchema: {}, execute: async () => 'b' }],
+      },
+    ]);
+    expect(first.tools.size).toBe(1);
+    expect(second.tools.size).toBe(1);
+    dropAuthorViewportSession('other');
+    expect(first.tools.size).toBe(1);
+    expect(second.tools.size).toBe(0);
+  });
   it('cancels pending work and drops the active session cleanly', async () => {
     const h = fixture();
     releases.push(startAuthorBrowserBridge(h.runtime));
@@ -166,11 +259,13 @@ describe('Author browser bridge', () => {
     await focusAuthorViewport('session', [
       { id: 'profile', tools: [{ name: 'author_wait', description: 'wait', inputSchema: {}, execute }] },
     ]);
-    applyAuthorHubMessage('session', accepted());
-    applyAuthorHubMessage('session', accepted('catalog'));
+    const generation = h.sent.at(-1)!.generation;
+    applyAuthorHubMessage('session', accepted(generation));
+    applyAuthorHubMessage('session', accepted(generation, 'catalog'));
     applyAuthorHubMessage('session', {
       kind: 'request',
-      generation: 1,
+      alias: 'default',
+      generation,
       ownerToken: 'owner',
       catalogToken: 'catalog',
       requestId: 'request',
@@ -179,7 +274,8 @@ describe('Author browser bridge', () => {
     });
     applyAuthorHubMessage('session', {
       kind: 'cancel',
-      generation: 1,
+      alias: 'default',
+      generation,
       ownerToken: 'owner',
       catalogToken: 'catalog',
       requestId: 'request',
@@ -187,7 +283,7 @@ describe('Author browser bridge', () => {
     await vi.waitFor(() => expect(h.sent.at(-1)).toMatchObject({ kind: 'cancelled', requestId: 'request' }));
 
     dropAuthorViewportSession('session');
-    expect(h.sent.at(-1)).toEqual({ kind: 'release', generation: 1 });
+    expect(h.sent.at(-1)).toEqual({ kind: 'release', alias: 'default', generation });
     expect(authorBridgeView('session')).toEqual({ activation: 'inactive', capabilityCount: 0 });
     expect(h.tools.size).toBe(0);
   });

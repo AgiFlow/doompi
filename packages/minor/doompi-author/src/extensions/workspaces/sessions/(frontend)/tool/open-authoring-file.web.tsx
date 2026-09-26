@@ -8,6 +8,9 @@ export default defineToolRenderer({
   message: OpenAuthoringFileToolCard,
   completionTab: ({ result }) => {
     const path = resultPath(result);
-    return path === undefined ? undefined : authorFileTab(path);
+    const details = result?.details as { alias?: unknown } | undefined;
+    return path === undefined
+      ? undefined
+      : authorFileTab(path, typeof details?.alias === 'string' ? details.alias : undefined);
   },
 });

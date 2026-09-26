@@ -29,10 +29,17 @@ describe('the author API', () => {
         body: JSON.stringify(value),
       });
     try {
-      const registered = (await (await post('register', { bindingId: 'browser', generation: 1 })).json()) as {
+      expect(await session.catalog.open('README.md', undefined, 'review')).toMatchObject({
+        alias: 'review',
+        status: 'opening',
+      });
+      const registered = (await (
+        await post('register', { alias: 'review', bindingId: 'browser', generation: 1 })
+      ).json()) as {
         ownerToken: string;
       };
       await post('catalog', {
+        alias: 'review',
         bindingId: 'browser',
         generation: 1,
         ownerToken: registered.ownerToken,
@@ -40,11 +47,13 @@ describe('the author API', () => {
           { name: 'inspect', label: 'Inspect', description: 'Read the document', inputSchema: { type: 'object' } },
         ],
       });
-      const catalog = await session.catalog.describe();
+      const catalog = await session.catalog.describe(undefined, 'review');
       expect(catalog.tools.map((tool) => tool.name)).toEqual(['inspect']);
       expect(catalog.catalogToken).toEqual(expect.any(String));
-      expect(await session.catalog.open('README.md')).toMatchObject({
+      expect(await session.catalog.open('README.md', undefined, 'alternate')).toMatchObject({
         path: 'README.md',
+        alias: 'review',
+        reused: true,
         byteLength: expect.any(Number),
       });
       await expect(session.catalog.open('../package.json')).rejects.toThrow('outside');

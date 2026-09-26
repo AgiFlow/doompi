@@ -11,6 +11,8 @@ export interface AuthorPreviewActionSource {
 
 export interface AuthorPreviewAnnotationLocation {
   mode: 'region' | 'point';
+  /** Feedback-only normalized location mark, never an editable source region. */
+  stroke?: readonly { x: number; y: number }[];
   point: { x: number; y: number };
   rect?: { x: number; y: number; width: number; height: number };
 }
@@ -27,7 +29,7 @@ export interface AuthorPreviewAnnotationCandidate extends AuthorPreviewAnnotatio
 
 export interface AuthorPreviewPanelProps extends WebPluginSlotProps {
   source: AuthorPreviewActionSource;
-  activeTool?: 'select' | 'mark' | 'comment';
+  activeTool?: 'select' | 'mark' | 'comment' | 'draw' | 'pan';
   displayedAnnotations?: readonly AuthorPreviewDisplayedAnnotation[];
   pendingCandidate?: boolean;
   onAnnotationCandidate?: (candidate: AuthorPreviewAnnotationCandidate) => void;

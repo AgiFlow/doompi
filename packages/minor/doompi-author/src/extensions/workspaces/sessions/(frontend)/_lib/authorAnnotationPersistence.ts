@@ -1,3 +1,4 @@
+import { validAuthorStroke } from './authorRegions';
 import type { AuthorAnnotationCandidate, AuthorAnnotationDraft, AuthorNativeAnchor } from './authorViewportTypes';
 import {
   AUTHOR_REGION_LIMIT,
@@ -40,7 +41,16 @@ function point(value: unknown): boolean {
 
 function rect(value: unknown): boolean {
   return (
-    point(value) && object(value) && finite(value.width) && finite(value.height) && value.width > 0 && value.height > 0
+    point(value) &&
+    object(value) &&
+    finite(value.width) &&
+    finite(value.height) &&
+    value.width > 0 &&
+    value.height > 0 &&
+    finite(value.x) &&
+    finite(value.y) &&
+    value.x + value.width <= 1 &&
+    value.y + value.height <= 1
   );
 }
 
@@ -90,6 +100,8 @@ function validCandidate(value: unknown): value is AuthorAnnotationCandidate {
     (value.sourceSha256 === undefined || typeof value.sourceSha256 === 'string') &&
     (value.mode === undefined || value.mode === 'region' || value.mode === 'point') &&
     validAnchor(value.anchor) &&
+    (value.stroke === undefined ||
+      (validAuthorStroke(value.stroke) && 'rect' in value.anchor && value.mode === 'region')) &&
     object(value.viewport) &&
     finite(value.viewport.width) &&
     finite(value.viewport.height) &&
@@ -139,7 +151,10 @@ export function validateAuthorAnnotationRecord(input: unknown): AuthorAnnotation
 
 function durableCandidate<T extends AuthorAnnotationCandidate>(candidate: T): T {
   const { thumbnailUrl: _thumbnailUrl, ...durable } = candidate;
-  return durable as T;
+  return {
+    ...durable,
+    ...(candidate.stroke === undefined ? {} : { stroke: candidate.stroke.map((point) => ({ ...point })) }),
+  } as T;
 }
 
 function persistenceRecords(): readonly AuthorAnnotationPersistenceRecord[] {

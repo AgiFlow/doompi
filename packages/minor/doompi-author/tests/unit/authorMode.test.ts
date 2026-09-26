@@ -118,7 +118,11 @@ describe('Author minor mode', () => {
     const tools = [...regularTools, 'open_authoring_file', 'describe_author_tools'];
 
     expect(authorToolRestriction(false, false)(tools, tools)).toEqual(regularTools);
-    expect(authorToolRestriction(true, false)(tools, tools)).toEqual([...regularTools, 'open_authoring_file']);
+    expect(authorToolRestriction(true, false)(tools, tools)).toEqual([
+      ...regularTools,
+      'open_authoring_file',
+      'describe_author_tools',
+    ]);
     expect(authorToolRestriction(true, true)(tools, tools)).toEqual([
       ...regularTools,
       'open_authoring_file',
@@ -126,7 +130,7 @@ describe('Author minor mode', () => {
     ]);
   });
 
-  it('exposes no Author tools while off and only the open tool before a viewport is focused', async () => {
+  it('exposes discovery before a viewport catalog is ready', async () => {
     vi.useFakeTimers();
     const value = fixture();
     const definition = value.definition();
@@ -151,14 +155,14 @@ describe('Author minor mode', () => {
       },
     );
     await vi.advanceTimersByTimeAsync(0);
-    expect(value.activeTools()).toEqual(['read', 'open_authoring_file']);
+    expect(value.activeTools()).toEqual(['read', 'open_authoring_file', 'describe_author_tools', 'use_author_tools']);
     expect(value.handle.publish).toHaveBeenLastCalledWith(expect.objectContaining({ activation: 'active' }));
 
     value.cleanup();
     expect(value.activeTools()).toEqual(['read']);
   });
 
-  it('adds facades for an accepted focused catalog, then removes them on blur and deactivation', async () => {
+  it('retains discovery after blur and removes tools on deactivation', async () => {
     vi.useFakeTimers();
     const value = fixture();
     value.startSession();
@@ -172,7 +176,7 @@ describe('Author minor mode', () => {
 
     value.focus(false);
     await tickMonitor();
-    expect(value.activeTools()).toEqual(['read', 'open_authoring_file']);
+    expect(value.activeTools()).toEqual(['read', 'open_authoring_file', 'describe_author_tools', 'use_author_tools']);
 
     value.controller.deactivate();
     expect(value.activeTools()).toEqual(['read']);

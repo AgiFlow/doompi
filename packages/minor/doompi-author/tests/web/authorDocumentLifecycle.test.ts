@@ -43,6 +43,16 @@ vi.mock('../../src/extensions/workspaces/sessions/(frontend)/_lib/authorFiles', 
 }));
 vi.mock('../../src/extensions/workspaces/sessions/(frontend)/_lib/authorBrowserBridge', () => ({
   focusAuthorViewport: vi.fn(async () => vi.fn()),
+  openAuthorCanvas: vi.fn(async () => undefined),
+  dropAuthorViewportSession: vi.fn(),
+}));
+vi.mock('../../generated/client', () => ({
+  api: {
+    session: () => ({
+      documentsOpen: vi.fn(async () => ({ ok: true, data: { path: 'doc', alias: 'doc' } })),
+      bridgeClose: vi.fn(async () => ({ ok: true })),
+    }),
+  },
 }));
 type Props = {
   children?: ReactNode;
@@ -56,10 +66,10 @@ function nodes(node: ReactNode): ReactElement<Props>[] {
   if (!isValidElement<Props>(node)) return [];
   return [node, ...nodes(node.props.children)];
 }
-function render(sessionId: string | null = 's', statuses: Record<string, string> = {}) {
+function render(sessionId: string | null = 's', statuses: Record<string, string> = {}, path = 'doc') {
   const element = AuthorDocumentPanel({
     sessionId,
-    path: 'doc',
+    path,
     statuses,
     activeMinorModes: ['author'],
   } as unknown as WebPluginSlotProps & { path: string });
@@ -77,6 +87,7 @@ async function settle() {
   await Promise.resolve();
 }
 afterEach(() => {
+  authorFileTab('doc').onClose?.('s');
   hooks.cleanups.splice(0).forEach((cleanup) => cleanup());
   hooks.effects = [];
   hooks.values = [];
@@ -95,17 +106,27 @@ describe('Author document lifecycle', () => {
       sourceSha256: 'sha',
     });
     expect(render().some((node) => node.props.children === 'Loading document...')).toBe(true);
-    effects();
+    authorFileTab('doc').onOpen?.('s');
     await settle();
     expect(workspace.authorDocument('s', 'doc')?.content).toBe('loaded');
-    expect(hooks.setters[1]).toHaveBeenCalledWith('loading');
     render();
     effects();
     await settle();
     expect(workspace.authorSessionWorkspace('s').focusedDocument).toMatchObject({ path: 'doc', sourceSha256: 'sha' });
-    expect(focusAuthorViewport).toHaveBeenCalledWith('s', expect.any(Array));
+    expect(focusAuthorViewport).toHaveBeenCalledWith('s', expect.any(Array), 'doc');
     hooks.cleanups.splice(0).forEach((cleanup) => cleanup());
     expect(workspace.authorSessionWorkspace('s').focusedDocument).toBeUndefined();
+  });
+  it('uses the server-canonical path for a provisional link without creating a second draft', async () => {
+    vi.mocked(loadAuthorDocument).mockResolvedValueOnce({ path: 'doc', kind: 'text', content: 'loaded' });
+    const tab = authorFileTab('link');
+    tab.onOpen?.('s');
+    await settle();
+    expect(loadAuthorDocument).toHaveBeenCalledWith('s', 'doc', expect.any(AbortSignal));
+    expect(workspace.authorDocument('s', 'link')).toBeUndefined();
+    expect(workspace.authorDocument('s', 'doc')?.content).toBe('loaded');
+    expect(render('s', {}, 'link').some((node) => node.props['data-testid'] === 'author-document')).toBe(true);
+    tab.onClose?.('s');
   });
   it('does not load documents without a session', () => {
     render(null);
@@ -114,31 +135,25 @@ describe('Author document lifecycle', () => {
   });
   it('surfaces load failures without populating the workspace', async () => {
     vi.mocked(loadAuthorDocument).mockRejectedValueOnce(new Error('Read denied'));
-    render();
-    effects();
+    authorFileTab('doc').onOpen?.('s');
     await settle();
-    expect(hooks.setters[1]).toHaveBeenCalledWith('Read denied');
     expect(workspace.authorDocument('s', 'doc')).toBeUndefined();
-    hooks.values = [true, 'Read denied'];
+    expect(loadAuthorDocument).toHaveBeenCalledOnce();
     expect(render().some((node) => node.props.children === 'Read denied')).toBe(true);
   });
   it('ignores late loading results after teardown', async () => {
     vi.mocked(loadAuthorDocument).mockResolvedValueOnce({ path: 'doc', kind: 'text', content: 'late' });
-    render();
-    effects();
-    hooks.cleanups.splice(0).forEach((cleanup) => cleanup());
+    const tab = authorFileTab('doc');
+    tab.onOpen?.('s');
+    tab.onClose?.('s');
     await settle();
     expect(workspace.authorDocument('s', 'doc')).toBeUndefined();
-    vi.mocked(loadAuthorDocument).mockRejectedValueOnce(new Error('aborted'));
-    render();
-    effects();
-    hooks.cleanups.splice(0).forEach((cleanup) => cleanup());
-    await settle();
-    expect(hooks.setters.at(-1)).not.toHaveBeenCalledWith('aborted');
   });
   it('releases a viewport whose registration resolves after teardown', async () => {
     workspace.putAuthorDocument('s', { path: 'doc', kind: 'text' });
     const release = vi.fn();
+    authorFileTab('doc').onOpen?.('s');
+    await settle();
     vi.mocked(focusAuthorViewport).mockResolvedValueOnce(release);
     render();
     effects();

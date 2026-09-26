@@ -8,13 +8,19 @@ const AuthorCapabilityNameSchema = Type.String({
   pattern: '^[a-z][a-z0-9_]*$',
 });
 
-/** Lists the capabilities exposed by the current Author viewport. */
-export const AuthorDescribeToolsInputSchema = Type.Object({}, { additionalProperties: false });
+export const AuthorAliasSchema = Type.String({ minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_-]{0,63}$' });
+
+/** Lists canvases or the capabilities of one named canvas. */
+export const AuthorDescribeToolsInputSchema = Type.Object(
+  { alias: Type.Optional(AuthorAliasSchema) },
+  { additionalProperties: false },
+);
 export type AuthorDescribeToolsInput = Static<typeof AuthorDescribeToolsInputSchema>;
 
 /** Invokes one capability exposed by the current Author viewport. */
 export const AuthorUseToolsInputSchema = Type.Object(
   {
+    alias: Type.Optional(AuthorAliasSchema),
     catalogToken: Type.String({ minLength: 1, maxLength: 256 }),
     name: AuthorCapabilityNameSchema,
     arguments: Type.Record(Type.String(), Type.Unknown()),
@@ -24,6 +30,7 @@ export const AuthorUseToolsInputSchema = Type.Object(
 export type AuthorUseToolsInput = Static<typeof AuthorUseToolsInputSchema>;
 
 const AuthorBridgeBase = {
+  alias: AuthorAliasSchema,
   generation: Type.Number({ minimum: 0 }),
 };
 

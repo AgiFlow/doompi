@@ -615,37 +615,40 @@ function updateDocument(
     const next = update(document);
     const session = state.sessions[sessionId];
     const focused = session?.focusedDocument;
-    const identityChanged =
-      focused?.path === document.path &&
-      (focused.revision !== next.version || focused.sourceSha256 !== next.sourceSha256);
-    if (identityChanged) {
+    const identityChanged = document.version !== next.version || document.sourceSha256 !== next.sourceSha256;
+    const focusedChanged = identityChanged && focused?.path === document.path;
+    const collection = identityChanged ? session?.annotationsByDocument[document.path] : undefined;
+    if (collection !== undefined) {
+      if (collection.candidate?.thumbnailUrl !== undefined) staleThumbnails.push(collection.candidate.thumbnailUrl);
       staleThumbnails.push(
-        ...(session.candidate?.thumbnailUrl === undefined ? [] : [session.candidate.thumbnailUrl]),
-        ...session.annotations.flatMap((annotation) =>
+        ...collection.annotations.flatMap((annotation) =>
           annotation.thumbnailUrl === undefined ? [] : [annotation.thumbnailUrl],
         ),
       );
     }
-    const staleCollection = identityChanged
-      ? staleAuthorCollection(session.annotationsByDocument[document.path], Date.now())
-      : undefined;
-    const sessions = identityChanged
-      ? {
-          ...state.sessions,
-          [sessionId]: {
-            ...session,
-            focusedDocument: { ...focused, revision: next.version, sourceSha256: next.sourceSha256 },
-            annotationsByDocument: {
-              ...session.annotationsByDocument,
-              ...(staleCollection && { [document.path]: staleCollection }),
+    const staleCollection = identityChanged ? staleAuthorCollection(collection, Date.now()) : undefined;
+    const sessions =
+      identityChanged && session !== undefined
+        ? {
+            ...state.sessions,
+            [sessionId]: {
+              ...session,
+              annotationsByDocument: {
+                ...session.annotationsByDocument,
+                ...(staleCollection && { [document.path]: staleCollection }),
+              },
+              ...(focusedChanged
+                ? {
+                    focusedDocument: { ...focused, revision: next.version, sourceSha256: next.sourceSha256 },
+                    candidate: undefined,
+                    candidateText: '',
+                    annotations: [],
+                    regions: [],
+                  }
+                : {}),
             },
-            candidate: undefined,
-            candidateText: '',
-            annotations: [],
-            regions: [],
-          },
-        }
-      : state.sessions;
+          }
+        : state.sessions;
     return { documents: { ...state.documents, [key]: next }, sessions };
   });
   staleThumbnails.forEach(revokeThumbnail);
@@ -670,6 +673,7 @@ function copyCandidate<T extends AuthorAnnotationCandidate>(candidate: T): T {
     ...candidate,
     anchor,
     viewport: { ...candidate.viewport },
+    stroke: candidate.stroke?.map((point) => ({ ...point })),
     voiceGrid: candidate.voiceGrid && { ...candidate.voiceGrid },
   };
 }

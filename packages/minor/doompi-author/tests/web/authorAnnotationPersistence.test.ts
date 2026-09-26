@@ -112,6 +112,48 @@ describe('Author annotation persistence', () => {
     ).toBeUndefined();
   });
 
+  it('retains valid drawn marks but rejects malformed feedback strokes instead of converting them to crop regions', () => {
+    const drawn = {
+      ...annotation,
+      mode: 'region',
+      anchor: {
+        kind: 'image-rect',
+        rect: { x: 0.25, y: 0.75, width: 0.4, height: 0.001 },
+        naturalWidth: 100,
+        naturalHeight: 50,
+      },
+      stroke: [
+        { x: 0.25, y: 0.75 },
+        { x: 0.65, y: 0.75 },
+      ],
+    };
+    const stored = { ...record(), collection: { ...record().collection, annotations: [drawn] } };
+    expect(validateAuthorAnnotationRecord(stored)).toBeDefined();
+    expect(
+      validateAuthorAnnotationRecord({
+        ...stored,
+        collection: {
+          ...stored.collection,
+          annotations: [
+            {
+              ...drawn,
+              stroke: [
+                { x: 0, y: 0 },
+                { x: NaN, y: 1 },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      validateAuthorAnnotationRecord({
+        ...stored,
+        collection: { ...stored.collection, annotations: [{ ...drawn, mode: 'point' }] },
+      }),
+    ).toBeUndefined();
+  });
+
   it('hydrates before its first write and does not overwrite newer in-memory annotations', async () => {
     let resolveLoad!: (records: readonly unknown[]) => void;
     const load = new Promise<readonly unknown[]>((resolve) => {

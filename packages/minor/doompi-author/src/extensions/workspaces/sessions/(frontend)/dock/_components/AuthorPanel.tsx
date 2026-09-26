@@ -1,13 +1,10 @@
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
-import { Button } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { useState } from 'react';
 
 import { autonomousVoiceGridVisible } from '../../_components/AuthorGridOverlay';
-import { authorCaptureContext, createAuthorCapturePacket, multiRegionCaptureProvider } from '../../_lib/authorCapture';
 import { authorGrid } from '../../_lib/authorGrid';
 import { authorWorkspace } from '../../_lib/authorWorkspaceStore';
-import { AuthorRegionDrafts } from './AuthorRegionDrafts';
+import { AuthorFeedbackControls } from './AuthorFeedbackControls';
 import { AuthorRequestLog } from './AuthorRequestLog';
 import { AuthorToolPalette } from './AuthorToolPalette';
 
@@ -19,8 +16,6 @@ export function AuthorPanel({
   renderSlot,
   renderSessionActivity,
 }: WebPluginSlotProps) {
-  const [captureStatus, setCaptureStatus] = useState<string>();
-  const [capturing, setCapturing] = useState(false);
   const documents = useStore(authorWorkspace.store, (state) => {
     if (sessionId === null) return [];
     const prefix = `${sessionId}\n`;
@@ -62,50 +57,15 @@ export function AuthorPanel({
                   <p className="mt-1 truncate">token {grid.geometryToken}</p>
                 </div>
               ) : null}
-              <AuthorRegionDrafts key={focused.path} sessionId={sessionId} workspace={workspace} />
-              {workspace.annotations.length > 0 ? (
-                <div className="space-y-1.5 border-b border-doom-border-soft pb-3">
-                  <Button
-                    className="min-h-11 min-w-11 w-full text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
-                    variant="outline"
-                    data-testid="author-attach-capture"
-                    disabled={capturing || workspace.candidate !== undefined || submitCapture === undefined}
-                    onClick={async () => {
-                      if (capturing || workspace.candidate || submitCapture === undefined) return;
-                      setCapturing(true);
-                      setCaptureStatus('Submitting annotations…');
-                      try {
-                        const packet = createAuthorCapturePacket(
-                          crypto.randomUUID(),
-                          Date.now(),
-                          focused,
-                          workspace.annotations,
-                        );
-                        const image = await multiRegionCaptureProvider(workspace.annotations).capture();
-                        await submitCapture({ ...image, context: authorCaptureContext(packet) });
-                        setCaptureStatus('Request submitted. You can keep annotating here.');
-                      } catch (reason) {
-                        setCaptureStatus(reason instanceof Error ? reason.message : String(reason));
-                      } finally {
-                        setCapturing(false);
-                      }
-                    }}
-                  >
-                    {capturing
-                      ? 'Submitting…'
-                      : `Submit ${workspace.annotations.length} annotation${workspace.annotations.length === 1 ? '' : 's'}`}
-                  </Button>
-                  {workspace.candidate ? (
-                    <p className="text-base text-doom-dim sm:text-sm">
-                      Add or discard the current annotation before submitting.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-              {submitCapture === undefined ? (
-                <output className="text-sm text-doom-red">Submission unavailable. Reload to update the app.</output>
-              ) : null}
-              {captureStatus ? <output className="block text-sm text-doom-dim">{captureStatus}</output> : null}
+              <div className="hidden sm:block">
+                <AuthorFeedbackControls
+                  key={focused.path}
+                  sessionId={sessionId}
+                  document={focused}
+                  workspace={workspace}
+                  submitCapture={submitCapture}
+                />
+              </div>
             </>
           ) : null}
           <AuthorRequestLog requests={workspace?.requests ?? []} />

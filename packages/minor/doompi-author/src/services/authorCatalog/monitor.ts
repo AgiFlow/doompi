@@ -1,6 +1,6 @@
 import type { DoomToolRestriction } from '@agimon-ai/doompi-core/toolSurface';
 
-import { AUTHOR_FACADE_TOOL_NAMES } from '../../constants/author';
+import { AUTHOR_DESCRIBE_TOOL_NAME, AUTHOR_USE_TOOL_NAME } from '../../constants/author';
 import { OPEN_AUTHORING_FILE_TOOL_NAME, type AuthorViewportCatalogSnapshot } from '../../types/author';
 import type { AuthorCatalog } from './type';
 
@@ -19,10 +19,10 @@ export interface AuthorCatalogMonitor {
 }
 
 /** Hide Author tools until the mode and viewport catalog can serve them. */
-export function authorToolRestriction(active: boolean, catalogReady: boolean): DoomToolRestriction {
+export function authorToolRestriction(active: boolean, _catalogReady: boolean): DoomToolRestriction {
   const hidden = new Set<string>([
     ...(active ? [] : [OPEN_AUTHORING_FILE_TOOL_NAME]),
-    ...(active && catalogReady ? [] : AUTHOR_FACADE_TOOL_NAMES),
+    ...(active ? [] : [AUTHOR_DESCRIBE_TOOL_NAME, AUTHOR_USE_TOOL_NAME]),
   ]);
   return (incoming) => (hidden.size === 0 ? incoming : incoming.filter((name) => !hidden.has(name)));
 }
@@ -56,7 +56,7 @@ export function createAuthorCatalogMonitor(
     void catalog
       .describe(controller.signal)
       .then((snapshot) => {
-        if (active && owner === generation && snapshot.catalogToken !== '') setCatalog(snapshot);
+        if (active && owner === generation) setCatalog(snapshot);
       })
       .catch(() => {
         if (active && owner === generation) setCatalog(undefined);

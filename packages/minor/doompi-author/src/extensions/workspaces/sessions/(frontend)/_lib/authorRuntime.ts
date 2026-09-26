@@ -4,6 +4,7 @@ import type {
   ModelContextToolDescriptor,
   WebPluginRuntime,
 } from '@agimon-ai/doompi-core/web';
+import { Store } from '@tanstack/store';
 
 import type { AuthorTrustedProfile, AuthorTrustedTool } from './authorViewportTypes';
 
@@ -16,6 +17,13 @@ interface ActiveCatalog {
   generation: number;
   controller: AbortController;
   profiles: ReadonlyMap<string, AuthorTrustedProfile>;
+  registrations: ReadonlyMap<string, string>;
+}
+
+const runtimeIds = new Store(0);
+function runtimePrefix(): string {
+  runtimeIds.setState((id) => id + 1);
+  return `a${runtimeIds.state.toString(36)}_`;
 }
 
 function assertProfile(profile: AuthorTrustedProfile): void {
@@ -66,6 +74,7 @@ function invocationSignal(
 /** Owns page-lifetime WebMCP registrations. Profiles are replaced as one abortable catalog. */
 export class AuthorRuntime {
   readonly #runtime: WebPluginRuntime;
+  readonly #registrationPrefix = runtimePrefix();
   #context: ModelContext | undefined;
   #active: ActiveCatalog | undefined;
   #pending: ActiveCatalog | undefined;
@@ -88,9 +97,12 @@ export class AuthorRuntime {
     const context = this.#context ?? (await this.#runtime.acquireModelContext?.())?.modelContext;
     if (context === undefined) throw new Error('Model Context is unavailable');
     this.#context = context;
+    const registrations = new Map(
+      tools.map((tool, index) => [tool.name, `${this.#registrationPrefix}${index.toString(36)}`]),
+    );
     const generation = ++this.#generation;
     const controller = new AbortController();
-    const candidate: ActiveCatalog = { generation, controller, profiles: profileMap };
+    const candidate: ActiveCatalog = { generation, controller, profiles: profileMap, registrations };
     const inactive = staleError();
     this.#pending?.controller.abort(inactive);
     this.#active?.controller.abort(inactive);
@@ -105,7 +117,7 @@ export class AuthorRuntime {
         tools.map(async (tool) =>
           context.registerTool(
             {
-              name: tool.name,
+              name: registrations.get(tool.name)!,
               description: tool.description,
               inputSchema: tool.inputSchema,
               execute: async (input, options) => {
@@ -127,7 +139,13 @@ export class AuthorRuntime {
         ),
       );
       const registered = await context.getTools();
-      if (!tools.every((tool) => registered.some((descriptor) => descriptorMatches(descriptor, tool)))) {
+      if (
+        !tools.every((tool) =>
+          registered.some((descriptor) =>
+            descriptorMatches(descriptor, { ...tool, name: registrations.get(tool.name)! }),
+          ),
+        )
+      ) {
         throw new Error('Model Context did not confirm the Author catalog');
       }
       if (this.#disposed || generation !== this.#generation || this.#pending !== candidate) throw staleError();
@@ -150,7 +168,9 @@ export class AuthorRuntime {
   async execute(name: string, input: unknown, signal: AbortSignal): Promise<unknown> {
     const context = this.#context;
     if (context === undefined || this.#active === undefined) throw new Error('Author catalog is not registered');
-    return context.executeTool(name, JSON.stringify(input), { signal });
+    const registration = this.#active.registrations.get(name);
+    if (registration === undefined) throw new Error(`Unknown Author capability: ${name}`);
+    return context.executeTool(registration, JSON.stringify(input), { signal });
   }
 
   dispose(): void {

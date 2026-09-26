@@ -15,8 +15,9 @@ export function openAuthoringFileTab(
   path: string,
   openTransientTab: ToolMessageRenderProps['openTransientTab'],
   openTab: ToolMessageRenderProps['openTab'],
+  alias?: string,
 ): void {
-  const tab = authorFileTab(path);
+  const tab = authorFileTab(path, alias);
   openTransientTab(tab);
   openTab(tab.id);
 }
@@ -46,13 +47,20 @@ export function OpenAuthoringFileToolCard({
         .map((text) => ({ text, tone: 'error' as const }))
     : [];
   const requestedPath = typeof args.path === 'string' ? args.path : 'document';
+  const alias =
+    typeof result?.details === 'object' &&
+    result.details !== null &&
+    'alias' in result.details &&
+    typeof result.details.alias === 'string'
+      ? result.details.alias
+      : undefined;
   return (
     <MessageItem tone={toolTone({ running, isError: isError || unavailable })}>
       {() => (
         <>
           <MessageItemHeader title="open_authoring_file">
             <span data-testid="tool-call-open_authoring_file" className="min-w-0 flex-1 truncate text-doom-text">
-              {requestedPath}
+              {alias === undefined ? requestedPath : `${alias} · ${requestedPath}`}
             </span>
           </MessageItemHeader>
           <MessageItemBody data-testid="tool-result-open_authoring_file" className="flex flex-col gap-1">
@@ -73,7 +81,7 @@ export function OpenAuthoringFileToolCard({
                 size="xs"
                 variant="outline"
                 data-testid="author-open-file"
-                onClick={() => openAuthoringFileTab(path, openTransientTab, openTab)}
+                onClick={() => openAuthoringFileTab(path, openTransientTab, openTab, alias)}
               >
                 open in Author
               </Button>

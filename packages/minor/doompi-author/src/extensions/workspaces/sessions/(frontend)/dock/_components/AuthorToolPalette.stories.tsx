@@ -27,8 +27,8 @@ export const Playground = {
       </div>
 
       <div className="flex w-80 flex-col gap-2">
-        <span className="text-2xs text-doom-dim uppercase tracking-widest">image · no formatting tools</span>
-        <AuthorToolPalette sessionId="s1" kind="image" activeTool="select" />
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">image · draw feedback and pan</span>
+        <AuthorToolPalette sessionId="s1" kind="image" activeTool="draw" />
       </div>
     </div>
   ),

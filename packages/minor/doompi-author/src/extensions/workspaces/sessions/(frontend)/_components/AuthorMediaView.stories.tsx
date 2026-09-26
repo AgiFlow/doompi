@@ -33,6 +33,12 @@ const marked: readonly AuthorDisplayedRegion[] = [
     region: {
       id: 'r1',
       documentPath: picture.path,
+      mode: 'region',
+      stroke: [
+        { x: 0.1, y: 0.24 },
+        { x: 0.5, y: 0.27 },
+        { x: 0.78, y: 0.35 },
+      ],
       revision: 1,
       comment: 'Re-align this block.',
       anchor: {
@@ -64,8 +70,10 @@ export const Playground = {
       </div>
 
       <div className="flex flex-col gap-2">
-        <span className="text-2xs text-doom-dim uppercase tracking-widest">image · mark mode with one region</span>
-        <AuthorMediaView sessionId="s1" document={picture} activeTool="mark" displayedRegions={marked} />
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">
+          image · draw mode with location feedback and zoom controls
+        </span>
+        <AuthorMediaView sessionId="s1" document={picture} activeTool="draw" displayedRegions={marked} />
       </div>
 
       <div className="flex flex-col gap-2">

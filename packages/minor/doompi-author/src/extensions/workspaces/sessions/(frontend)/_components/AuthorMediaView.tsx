@@ -1,4 +1,5 @@
 import {
+  Button,
   MediaPreview,
   type MediaPlaybackState,
   type MediaPreviewController,
@@ -8,7 +9,7 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react';
 
 import { registerAuthorGridResolver } from '../_lib/authorGrid';
 import { loadAuthorMedia } from '../_lib/authorMedia';
-import { normalizedAuthorRectangle } from '../_lib/authorRegions';
+import { appendAuthorStrokePoint, authorStrokeBounds, normalizedAuthorRectangle } from '../_lib/authorRegions';
 import type { AuthorDisplayedRegion, AuthorNativeAnchor, AuthorToolMode } from '../_lib/authorViewportTypes';
 import {
   authorSessionWorkspace,
@@ -43,11 +44,19 @@ export function AuthorMediaView({
     | {
         x: number;
         y: number;
-        mode: 'mark' | 'comment';
+        pointerId: number;
+        mode: 'mark' | 'comment' | 'draw';
+        points: readonly { x: number; y: number }[];
         element: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
       }
     | undefined
   >(undefined);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pan = useRef<{ x: number; y: number; left: number; top: number } | undefined>(undefined);
+  const pinch = useRef<{ distance: number; zoom: number } | undefined>(undefined);
+  const [zoom, setZoom] = useState(1);
+  const [stroke, setStroke] = useState<readonly { x: number; y: number }[]>();
+  const [pdfPlane, setPdfPlane] = useState<{ left: number; top: number; width: number; height: number }>();
   const [playback, setPlayback] = useState<MediaPlaybackState>({ playing: false, currentTime: 0, duration: 0 });
   const [frameReady, setFrameReady] = useState(false);
   const [selection, setSelection] = useState<{
@@ -57,7 +66,63 @@ export function AuthorMediaView({
   }>();
   const [error, setError] = useState<string>();
   const [media, setMedia] = useState<{ source: string; url: string }>();
+  useEffect(() => {
+    start.current = undefined;
+    pointers.current.clear();
+    pinch.current = undefined;
+    pan.current = undefined;
+    setStroke(undefined);
+    setSelection(undefined);
+    setZoom(1);
+  }, [source.path, source.version, source.sourceSha256, source.mediaUrl]);
+  useEffect(() => {
+    start.current = undefined;
+    setStroke(undefined);
+    pointers.current.clear();
+    pinch.current = undefined;
+    pan.current = undefined;
+  }, [activeTool]);
   const mediaUrl = media?.source === source.mediaUrl ? media?.url : undefined;
+  useEffect(() => {
+    if (source.kind !== 'pdf' || mediaUrl === undefined) return;
+    const container = host.current;
+    if (container === null) return;
+    const update = () => {
+      const canvas = container.querySelector('canvas');
+      const wrapper = container.querySelector('[data-testid="author-media"]');
+      if (!canvas || !wrapper) return;
+      const bounds = canvas.getBoundingClientRect();
+      const outer = wrapper.getBoundingClientRect();
+      const next = {
+        left: (bounds.left - outer.left) / zoom,
+        top: (bounds.top - outer.top) / zoom,
+        width: bounds.width / zoom,
+        height: bounds.height / zoom,
+      };
+      setPdfPlane((current) =>
+        current &&
+        Object.keys(next).every(
+          (key) => Math.abs(current[key as keyof typeof next] - next[key as keyof typeof next]) < 0.01,
+        )
+          ? current
+          : next,
+      );
+    };
+    const resize = new ResizeObserver(update);
+    const mutation = new MutationObserver(() => {
+      const canvas = container.querySelector('canvas');
+      if (canvas) resize.observe(canvas);
+      update();
+    });
+    mutation.observe(container, { childList: true, subtree: true });
+    const canvas = container.querySelector('canvas');
+    if (canvas) resize.observe(canvas);
+    update();
+    return () => {
+      resize.disconnect();
+      mutation.disconnect();
+    };
+  }, [source.kind, mediaUrl, zoom]);
   useEffect(() => {
     if (source.mediaUrl === undefined) return;
     const input = source.mediaUrl;
@@ -140,25 +205,35 @@ export function AuthorMediaView({
   );
   const mark = async (event: PointerEvent<HTMLDivElement>) => {
     const drag = start.current;
+    if (!drag || drag.pointerId !== event.pointerId || pinch.current !== undefined) return;
     start.current = undefined;
-    if (!drag) return;
     const bounds = drag.element.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) return;
     const point = {
       x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
       y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
     };
+    const points = drag.mode === 'draw' ? appendAuthorStrokePoint(drag.points, point) : undefined;
     const rect =
-      drag.mode === 'mark'
-        ? normalizedAuthorRectangle(bounds, {
-            left: drag.x,
-            top: drag.y,
-            right: event.clientX,
-            bottom: event.clientY,
-          })
-        : undefined;
-    if (drag.mode === 'mark' && !rect) return;
-    setSelection(drag.mode === 'mark' ? { path: source.path, rect: rect! } : { path: source.path, point });
+      drag.mode === 'draw'
+        ? authorStrokeBounds(points ?? [])
+        : drag.mode === 'mark'
+          ? normalizedAuthorRectangle(bounds, {
+              left: drag.x,
+              top: drag.y,
+              right: event.clientX,
+              bottom: event.clientY,
+            })
+          : undefined;
+    if (drag.mode !== 'comment' && !rect) return;
+    setStroke(undefined);
+    setSelection(
+      drag.mode === 'draw'
+        ? undefined
+        : drag.mode === 'mark'
+          ? { path: source.path, rect: rect! }
+          : { path: source.path, point },
+    );
     const focused = authorSessionWorkspace(sessionId).focusedDocument;
     if (!focused || focused.path !== source.path) return;
     let anchor: AuthorNativeAnchor;
@@ -169,7 +244,7 @@ export function AuthorMediaView({
         const image = drag.element;
         if (!image.naturalWidth || !image.naturalHeight) throw new Error('Image is not ready.');
         anchor =
-          drag.mode === 'mark'
+          drag.mode !== 'comment'
             ? { kind: 'image-rect', rect: rect!, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight }
             : { kind: 'image-point', point, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight };
         const canvas = document.createElement('canvas');
@@ -184,15 +259,16 @@ export function AuthorMediaView({
         const page = pdf.current?.getState();
         if (!page?.sourceWidth) throw new Error('PDF page is not ready.');
         anchor =
-          drag.mode === 'mark'
+          drag.mode !== 'comment'
             ? { kind: 'pdf-page-rect', page: page.page, rect: rect! }
             : { kind: 'pdf-page-point', page: page.page, point };
         blob = await pdf.current!.capturePage();
+        if (pdf.current?.getState().page !== page.page) return;
       } else {
         const frame = await video.current?.captureFrame();
         if (!frame) throw new Error('Video frame is not ready.');
         anchor =
-          drag.mode === 'mark'
+          drag.mode !== 'comment'
             ? {
                 kind: 'video-time-rect',
                 rect: rect!,
@@ -208,6 +284,11 @@ export function AuthorMediaView({
                 intrinsicHeight: frame.height,
               };
         blob = frame.blob;
+        if (
+          Math.abs((video.current?.getState().currentTime ?? -1) - frame.timeSeconds) > 0.1 ||
+          video.current?.isFrameReady() === false
+        )
+          return;
       }
       if (!blob) throw new Error('Unable to capture selected media.');
       if (authorSessionWorkspace(sessionId).focusedDocument?.generation !== focused.generation) return;
@@ -216,8 +297,9 @@ export function AuthorMediaView({
         documentPath: source.path,
         revision: source.version,
         sourceSha256: source.sourceSha256,
-        mode: drag.mode === 'mark' ? 'region' : 'point',
+        mode: drag.mode === 'comment' ? 'point' : 'region',
         anchor,
+        ...(points === undefined ? {} : { stroke: points }),
         viewport: { width: bounds.width, height: bounds.height },
         thumbnailUrl,
         evidence: blob,
@@ -229,6 +311,27 @@ export function AuthorMediaView({
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   };
+  const strokeOverlay = (points: readonly { x: number; y: number }[] | undefined, ordinal?: number) =>
+    points === undefined ? null : (
+      <svg
+        data-testid={ordinal === undefined ? 'author-media-stroke-selection' : 'author-media-stroke'}
+        data-author-stroke={ordinal}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+        viewBox="0 0 1000 1000"
+        preserveAspectRatio="none"
+      >
+        <polyline
+          points={points.map((point) => `${String(point.x * 1000)},${String(point.y * 1000)}`).join(' ')}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={ordinal === undefined ? 'text-doom-red' : 'text-doom-yellow'}
+        />
+      </svg>
+    );
   const selected = selection?.path === source.path ? selection.rect : undefined;
   const selectedPoint = selection?.path === source.path ? selection.point : undefined;
   const selectionOverlay =
@@ -260,13 +363,38 @@ export function AuthorMediaView({
     <div
       ref={host}
       className="min-h-0 flex-1 overflow-auto p-4"
-      style={{
-        touchAction: activeTool === 'select' ? 'auto' : 'none',
-        cursor: activeTool === 'select' ? undefined : 'crosshair',
-      }}
+      style={{ cursor: activeTool === 'draw' || activeTool === 'mark' ? 'crosshair' : undefined }}
       onPointerMove={(event) => {
+        if (pointers.current.has(event.pointerId))
+          pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (pinch.current !== undefined && pointers.current.size >= 2) {
+          const [a, b] = [...pointers.current.values()];
+          const distance = Math.hypot(a!.x - b!.x, a!.y - b!.y);
+          if (pinch.current.distance > 0)
+            setZoom(Math.min(8, Math.max(1, (pinch.current.zoom * distance) / pinch.current.distance)));
+          return;
+        }
+        if (pan.current !== undefined && activeTool === 'pan') {
+          const element = host.current;
+          if (element) {
+            element.scrollLeft = pan.current.left + pan.current.x - event.clientX;
+            element.scrollTop = pan.current.top + pan.current.y - event.clientY;
+          }
+          return;
+        }
         const drag = start.current;
-        if (drag === undefined || drag.mode !== 'mark') return;
+        if (drag?.pointerId !== event.pointerId) return;
+        if (drag.mode === 'draw') {
+          const bounds = drag.element.getBoundingClientRect();
+          if (bounds.width <= 0 || bounds.height <= 0) return;
+          drag.points = appendAuthorStrokePoint(drag.points, {
+            x: (event.clientX - bounds.left) / bounds.width,
+            y: (event.clientY - bounds.top) / bounds.height,
+          });
+          setStroke(drag.points);
+          return;
+        }
+        if (drag.mode !== 'mark') return;
         const rect = normalizedAuthorRectangle(drag.element.getBoundingClientRect(), {
           left: drag.x,
           top: drag.y,
@@ -276,7 +404,7 @@ export function AuthorMediaView({
         setSelection(rect === null ? undefined : { path: source.path, rect });
       }}
       onPointerDownCapture={(event) => {
-        if ((activeTool !== 'mark' && activeTool !== 'comment') || event.button !== 0 || pendingCandidate) return;
+        if (event.button !== 0) return;
         const element = event.target;
         if (
           !(
@@ -286,6 +414,25 @@ export function AuthorMediaView({
           )
         )
           return;
+        pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (pointers.current.size === 2) {
+          start.current = undefined;
+          setStroke(undefined);
+          setSelection(undefined);
+          pan.current = undefined;
+          const [a, b] = [...pointers.current.values()];
+          pinch.current = { distance: Math.hypot(a!.x - b!.x, a!.y - b!.y), zoom };
+          event.currentTarget.setPointerCapture(event.pointerId);
+          return;
+        }
+        if (activeTool === 'pan') {
+          const container = host.current;
+          if (container)
+            pan.current = { x: event.clientX, y: event.clientY, left: container.scrollLeft, top: container.scrollTop };
+          event.currentTarget.setPointerCapture(event.pointerId);
+          return;
+        }
+        if ((activeTool !== 'mark' && activeTool !== 'comment' && activeTool !== 'draw') || pendingCandidate) return;
         event.preventDefault();
         setSelection(undefined);
         if (element instanceof HTMLVideoElement) {
@@ -295,23 +442,99 @@ export function AuthorMediaView({
           }
           video.current?.pause();
         }
-        start.current = { x: event.clientX, y: event.clientY, mode: activeTool, element };
+        const bounds = element.getBoundingClientRect();
+        start.current = {
+          x: event.clientX,
+          y: event.clientY,
+          pointerId: event.pointerId,
+          mode: activeTool,
+          element,
+          points:
+            activeTool === 'draw'
+              ? [{ x: (event.clientX - bounds.left) / bounds.width, y: (event.clientY - bounds.top) / bounds.height }]
+              : [],
+        };
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
-      onPointerUp={(event) => void mark(event)}
-      onPointerCancel={() => {
+      onPointerUp={(event) => {
+        if (pinch.current === undefined && pan.current === undefined) void mark(event);
+        pointers.current.delete(event.pointerId);
+        pan.current = undefined;
+        if (pointers.current.size < 2) pinch.current = undefined;
+      }}
+      onPointerCancel={(event) => {
+        pointers.current.delete(event.pointerId);
+        pinch.current = undefined;
+        pan.current = undefined;
         start.current = undefined;
+        setStroke(undefined);
         setSelection(undefined);
       }}
+      onLostPointerCapture={() => {
+        start.current = undefined;
+        pan.current = undefined;
+        setStroke(undefined);
+      }}
     >
+      <div
+        className="sticky top-0 z-20 mb-2 flex items-center gap-2 bg-doom-bg py-1"
+        role="group"
+        aria-label="Canvas zoom"
+      >
+        <Button
+          size="md"
+          variant="outline"
+          aria-label="Zoom out"
+          className="min-h-11 min-w-11"
+          onClick={() => setZoom((current) => Math.max(1, current / 1.5))}
+        >
+          −
+        </Button>
+        <output className="text-sm text-doom-dim">{Math.round(zoom * 100)}%</output>
+        <Button
+          size="md"
+          variant="outline"
+          aria-label="Zoom in"
+          className="min-h-11 min-w-11"
+          onClick={() => setZoom((current) => Math.min(8, current * 1.5))}
+        >
+          +
+        </Button>
+        <Button
+          size="md"
+          variant="outline"
+          aria-label="Fit canvas"
+          className="min-h-11"
+          onClick={() => {
+            setZoom(1);
+            if (host.current) {
+              host.current.scrollLeft = 0;
+              host.current.scrollTop = 0;
+            }
+          }}
+        >
+          Fit
+        </Button>
+      </div>
       {mediaUrl === undefined ? (
         <p className="text-doom-dim">{error === undefined ? 'Loading media...' : 'Media unavailable.'}</p>
       ) : source.kind === 'image' ? (
-        <div className="relative inline-block max-w-full">
+        <div
+          className="relative inline-block max-w-full"
+          style={{ zoom, touchAction: activeTool === 'select' ? 'auto' : 'none' }}
+        >
           <img ref={image} src={mediaUrl} alt={source.path} draggable={false} className="block max-w-full" />
           {selectionOverlay}
           {pointSelectionOverlay}
+          {strokeOverlay(stroke)}
           {displayedRegions.flatMap(({ ordinal, region }) => {
+            if (region.stroke !== undefined)
+              return [
+                <div key={region.id} className="pointer-events-none absolute inset-0">
+                  {strokeOverlay(region.stroke, ordinal)}
+                  {pointPin(ordinal, region.stroke[0]!, `label:${region.id}`)}
+                </div>,
+              ];
             if (region.anchor.kind === 'image-point') return [pointPin(ordinal, region.anchor.point, region.id)];
             if (region.anchor.kind !== 'image-rect') return [];
             const { rect } = region.anchor;
@@ -335,7 +558,10 @@ export function AuthorMediaView({
           })}
         </div>
       ) : (
-        <div className="relative w-fit max-w-full">
+        <div
+          className="relative w-fit max-w-full"
+          style={{ zoom, touchAction: activeTool === 'select' ? 'auto' : 'none' }}
+        >
           <MediaPreview
             src={mediaUrl}
             path={source.path}
@@ -350,13 +576,74 @@ export function AuthorMediaView({
               if (state.playing) setSelection(undefined);
             }}
           />
-          {selectionOverlay}
-          {pointSelectionOverlay}
-          {displayedRegions.map(({ ordinal, region }) => {
-            if (source.kind === 'pdf') {
-              if (region.anchor.kind !== 'pdf-page-point' && region.anchor.kind !== 'pdf-page-rect') return null;
-              if (region.anchor.page !== pdf.current?.getState().page) return null;
-              if (region.anchor.kind === 'pdf-page-point') return pointPin(ordinal, region.anchor.point, region.id);
+          <div
+            className="pointer-events-none absolute"
+            style={
+              source.kind === 'pdf'
+                ? pdfPlane === undefined
+                  ? { display: 'none' }
+                  : { left: pdfPlane.left, top: pdfPlane.top, width: pdfPlane.width, height: pdfPlane.height }
+                : { inset: 0 }
+            }
+          >
+            {selectionOverlay}
+            {pointSelectionOverlay}
+            {strokeOverlay(stroke)}
+            {displayedRegions.map(({ ordinal, region }) => {
+              if (region.stroke !== undefined) {
+                const anchor = region.anchor;
+                if (
+                  source.kind === 'pdf' &&
+                  (anchor.kind !== 'pdf-page-rect' || anchor.page !== pdf.current?.getState().page)
+                )
+                  return null;
+                if (
+                  source.kind === 'video' &&
+                  (anchor.kind !== 'video-time-rect' ||
+                    playback.playing ||
+                    Math.abs(anchor.timeSeconds - playback.currentTime) > 0.1)
+                )
+                  return null;
+                return (
+                  <div key={region.id} className="pointer-events-none absolute inset-0">
+                    {strokeOverlay(region.stroke, ordinal)}
+                    {pointPin(ordinal, region.stroke[0]!, `label:${region.id}`)}
+                  </div>
+                );
+              }
+              if (source.kind === 'pdf') {
+                if (region.anchor.kind !== 'pdf-page-point' && region.anchor.kind !== 'pdf-page-rect') return null;
+                if (region.anchor.page !== pdf.current?.getState().page) return null;
+                if (region.anchor.kind === 'pdf-page-point') return pointPin(ordinal, region.anchor.point, region.id);
+                const { rect } = region.anchor;
+                return (
+                  <div
+                    key={region.id}
+                    data-author-region={ordinal}
+                    className="pointer-events-none absolute border border-doom-yellow bg-doom-yellow/10"
+                    style={{
+                      left: `${String(rect.x * 100)}%`,
+                      top: `${String(rect.y * 100)}%`,
+                      width: `${String(rect.width * 100)}%`,
+                      height: `${String(rect.height * 100)}%`,
+                    }}
+                  >
+                    <span className="bg-doom-yellow text-doom-deep">{ordinal}</span>
+                  </div>
+                );
+              }
+              if (source.kind !== 'video' || playback.playing) return null;
+              if (
+                region.anchor.kind === 'video-time-point' &&
+                Math.abs(region.anchor.timeSeconds - playback.currentTime) <= 0.1
+              ) {
+                return pointPin(ordinal, region.anchor.point, region.id);
+              }
+              if (
+                region.anchor.kind !== 'video-time-rect' ||
+                Math.abs(region.anchor.timeSeconds - playback.currentTime) > 0.1
+              )
+                return null;
               const { rect } = region.anchor;
               return (
                 <div
@@ -364,45 +651,17 @@ export function AuthorMediaView({
                   data-author-region={ordinal}
                   className="pointer-events-none absolute border border-doom-yellow bg-doom-yellow/10"
                   style={{
-                    left: `${String(rect.x * 100)}%`,
-                    top: `${String(rect.y * 100)}%`,
-                    width: `${String(rect.width * 100)}%`,
-                    height: `${String(rect.height * 100)}%`,
+                    left: `${rect.x * 100}%`,
+                    top: `${rect.y * 100}%`,
+                    width: `${rect.width * 100}%`,
+                    height: `${rect.height * 100}%`,
                   }}
                 >
                   <span className="bg-doom-yellow text-doom-deep">{ordinal}</span>
                 </div>
               );
-            }
-            if (source.kind !== 'video' || playback.playing) return null;
-            if (
-              region.anchor.kind === 'video-time-point' &&
-              Math.abs(region.anchor.timeSeconds - playback.currentTime) <= 0.1
-            ) {
-              return pointPin(ordinal, region.anchor.point, region.id);
-            }
-            if (
-              region.anchor.kind !== 'video-time-rect' ||
-              Math.abs(region.anchor.timeSeconds - playback.currentTime) > 0.1
-            )
-              return null;
-            const { rect } = region.anchor;
-            return (
-              <div
-                key={region.id}
-                data-author-region={ordinal}
-                className="pointer-events-none absolute border border-doom-yellow bg-doom-yellow/10"
-                style={{
-                  left: `${rect.x * 100}%`,
-                  top: `${rect.y * 100}%`,
-                  width: `${rect.width * 100}%`,
-                  height: `${rect.height * 100}%`,
-                }}
-              >
-                <span className="bg-doom-yellow text-doom-deep">{ordinal}</span>
-              </div>
-            );
-          })}
+            })}
+          </div>
         </div>
       )}
       {source.kind === 'video' ? (

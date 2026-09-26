@@ -79,6 +79,8 @@ export async function loadAuthorDocument(
   const format = structuredFormat(path);
   if (format !== undefined) {
     const parsed = await documentRequest(api.session(sessionId).documentsOpen, sessionId, { path, format }, signal);
+    if (!('fragments' in parsed) || !Array.isArray(parsed.fragments))
+      throw new Error('Author returned an invalid structured document.');
     const parsedDigest = parsed.manifest?.sourceDigest;
     if (sourceSha256 !== undefined && parsedDigest !== undefined && sourceSha256 !== parsedDigest) {
       throw new Error('Document source changed while opening. Reopen the document.');

@@ -1,5 +1,6 @@
 import { apiResponse, defineApiRoutes } from '@agimon-ai/doompi-core/web';
 
+import type { AuthorOpenFileResult } from './author';
 import type { AuthorSessionView } from './authorApi';
 import type { DocumentPreflightReport, ParsedStructuredDocument } from './structuredDocuments';
 
@@ -52,9 +53,14 @@ export default defineApiRoutes({
     method: 'POST',
     path: '/bridge/disconnect',
   },
+  bridgeClose: {
+    method: 'POST',
+    path: '/bridge/close',
+  },
   bridgeDescribe: {
     method: 'GET',
     path: '/bridge/describe',
+    query: ['alias'],
   },
   bridgeInvoke: {
     method: 'POST',
@@ -70,7 +76,7 @@ export default defineApiRoutes({
     method: 'POST',
     path: '/documents/open',
     query: ['session'],
-    response: apiResponse<ParsedStructuredDocument>(),
+    response: apiResponse<ParsedStructuredDocument | AuthorOpenFileResult>(),
   },
   documentsPreflight: {
     method: 'POST',

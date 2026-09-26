@@ -11,10 +11,12 @@ import {
 } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
 import type { AuthorRequestRecord } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
 import { AuthorRequestLog } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorRequestLog';
+import { DescribeAuthorToolsToolCard } from '../../src/extensions/workspaces/sessions/(frontend)/tool/_components/DescribeAuthorToolsToolCard';
 import {
   OpenAuthoringFileToolCard,
   openAuthoringFileTab,
 } from '../../src/extensions/workspaces/sessions/(frontend)/tool/_components/OpenAuthoringFileToolCard';
+import { UseAuthorToolsToolCard } from '../../src/extensions/workspaces/sessions/(frontend)/tool/_components/UseAuthorToolsToolCard';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,
@@ -86,6 +88,27 @@ describe('the Author web plugin', () => {
       label: 'report.md',
       retainComposer: true,
     });
+  });
+  it.each([
+    ['describe_author_tools', DescribeAuthorToolsToolCard],
+    ['use_author_tools', UseAuthorToolsToolCard],
+  ] as const)('renders %s results and execution states in the conversation', (toolName, Card) => {
+    const props = {
+      toolName,
+      args: { name: 'author_list_regions' },
+      result: { content: [{ type: 'text', text: Array.from({ length: 12 }, (_, i) => `line ${i}`).join('\n') }] },
+      running: false,
+      isError: false,
+    } as unknown as ToolMessageRenderProps;
+    const result = renderToStaticMarkup(createElement(Card, props));
+    expect(result).toContain(`tool-result-${toolName}`);
+    expect(result).toContain('line 0');
+    expect(result).toContain('more line(s)');
+    expect(renderToStaticMarkup(createElement(Card, { ...props, result: null }))).not.toContain(
+      `tool-result-${toolName}`,
+    );
+    expect(renderToStaticMarkup(createElement(Card, { ...props, result: null, running: true }))).toContain('running');
+    expect(renderToStaticMarkup(createElement(Card, { ...props, result: null, isError: true }))).toContain('failed');
   });
 
   it('offers successful results as an explicit open action when rendering conversation history', () => {
