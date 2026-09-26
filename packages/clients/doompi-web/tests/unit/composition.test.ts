@@ -430,11 +430,14 @@ describe('activityGroups', () => {
     ]);
     try {
       expect(activityGroups({ 'doom-voice': '' }, [], 'other-session')).toEqual([]);
+      expect(activityGroups({}, [], 'other-session')).toEqual([]);
       globalVoiceActive = true;
       expect(activityGroups({ 'doom-voice': '' }, [], 'other-session')).toEqual([
         { name: 'voice', keys: 'v e', summary: '', active: true },
       ]);
       expect(activityGroups({}, [], null)).toEqual([{ name: 'voice', keys: 'v e', summary: '', active: true }]);
+      globalVoiceActive = false;
+      expect(activityGroups({}, [], 'other-session')).toEqual([]);
     } finally {
       resetWebPlugins();
     }
