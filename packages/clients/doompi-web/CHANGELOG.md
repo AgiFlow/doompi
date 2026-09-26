@@ -1,3 +1,26 @@
+## 0.0.1-alpha.57 (2026-09-26)
+
+### 🚀 Features
+
+- **doompi-core:** own server agent lifecycle and queue ([#207](https://github.com/AgiFlow/doompi/pull/207))
+- **doompi-author:** support named canvases and mobile feedback ([#206](https://github.com/AgiFlow/doompi/pull/206))
+
+### 🩹 Fixes
+
+- **doompi-web:** hide inactive voice from activity rail ([#205](https://github.com/AgiFlow/doompi/pull/205))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.94
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.90
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.91
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.11
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.49
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.56 (2026-09-26)
 
 ### 🧱 Updated Dependencies

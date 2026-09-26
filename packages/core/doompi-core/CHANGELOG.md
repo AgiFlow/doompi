@@ -1,3 +1,14 @@
+## 0.0.1-alpha.91 (2026-09-26)
+
+### 🚀 Features
+
+- **doompi-core:** own server agent lifecycle and queue ([#207](https://github.com/AgiFlow/doompi/pull/207))
+- **doompi-author:** support named canvases and mobile feedback ([#206](https://github.com/AgiFlow/doompi/pull/206))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.90 (2026-09-26)
 
 ### 🩹 Fixes

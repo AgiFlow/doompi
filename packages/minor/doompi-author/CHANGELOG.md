@@ -1,3 +1,19 @@
+## 0.0.1-alpha.29 (2026-09-26)
+
+### 🚀 Features
+
+- **doompi-author:** support named canvases and mobile feedback ([#206](https://github.com/AgiFlow/doompi/pull/206))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.91
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.91
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.28 (2026-09-26)
 
 ### 🧱 Updated Dependencies
