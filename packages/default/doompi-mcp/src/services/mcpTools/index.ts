@@ -2,7 +2,7 @@ import type { DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
 import { definePiTool, type PiToolDeclaration } from '@agimon-ai/doompi-core/piExtension';
 import type { McpClientManagerService } from '@agimon-ai/mcp-proxy';
 import type { AgentToolResult, ToolDefinition } from '@earendil-works/pi-coding-agent';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import type { TSchema } from 'typebox';
 
 import type { CatalogTool } from '../../services/mcpCatalog';
@@ -57,10 +57,20 @@ function resultBlocks(result: CallToolResult): McpResultBlock[] {
       });
     }
   }
-  if (typeof result.structuredContent === 'object' && result.structuredContent !== null) {
-    blocks.push({ type: 'structured', value: result.structuredContent });
-  }
+  const structured = structuredRecord(result);
+  if (structured !== undefined) blocks.push({ type: 'structured', value: structured });
   return blocks;
+}
+
+/**
+ * MCP v2 allows any JSON value as structured content; DoomPi's contract carries an object, which
+ * is all v1 permitted. Any other value still reaches the model through the text fallback.
+ */
+function structuredRecord(result: CallToolResult): Record<string, unknown> | undefined {
+  const value = result.structuredContent;
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 /**
@@ -86,9 +96,10 @@ export function toHeadlessToolResult(
     resultText(result) ||
     (result.structuredContent === undefined ? 'No output.' : JSON.stringify(result.structuredContent));
   const blocks = resultBlocks(result);
+  const structured = structuredRecord(result);
   return {
     content: [{ type: 'text', text }, ...resultImages(result)],
-    ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
+    ...(structured === undefined ? {} : { structuredContent: structured }),
     ...(result.isError === undefined ? {} : { isError: result.isError }),
     details: { server: tool.serverName, tool: tool.toolName, ...(blocks.length > 0 ? { blocks } : {}) },
   };

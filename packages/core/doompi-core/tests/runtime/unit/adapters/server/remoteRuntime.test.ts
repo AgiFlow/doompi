@@ -11,6 +11,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { createHeadlessHub, type HeadlessHub } from '../../../../../src/server/headlessHub';
 import { serveHeadlessServer, type HeadlessServer } from '../../../../../src/server/headlessServer';
 import { createRemoteRuntime, type RemoteRuntime } from '../../../../../src/server/remoteRuntime';
+import { MODERN_ENVELOPE, MODERN_PROTOCOL_VERSION } from './modernMcpRequest';
 
 const PUBLIC_ORIGIN = 'https://remote.example.com';
 const trust = { publicKey: Buffer.alloc(32, 7).toString('base64url'), revision: 1 };
@@ -292,12 +293,14 @@ describe('global remote control', () => {
       control.remote.tunnelPort()!,
       root,
       'POST',
-      { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      { jsonrpc: '2.0', id: 1, method: 'tools/list', params: { _meta: MODERN_ENVELOPE } },
       undefined,
       false,
       {
         authorization: `Bearer ${tokens.access_token}`,
         accept: 'application/json, text/event-stream',
+        'mcp-protocol-version': MODERN_PROTOCOL_VERSION,
+        'mcp-method': 'tools/list',
       },
     );
     expect(mcp.status, await mcp.clone().text()).toBe(200);

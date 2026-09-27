@@ -1,5 +1,5 @@
 import { AppBridge, PostMessageTransport } from '@modelcontextprotocol/ext-apps/app-bridge';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 
 export interface WidgetHost {
   calls: { name: string; arguments?: Record<string, unknown> }[];

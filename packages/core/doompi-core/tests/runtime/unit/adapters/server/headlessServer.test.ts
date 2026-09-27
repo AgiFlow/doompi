@@ -25,6 +25,7 @@ import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 import { serveHeadlessServer, type HeadlessServer } from '../../../../../src/server/headlessServer';
 import type { HeadlessSessionHost } from '../../../../../src/systems/main/types/headlessSessionHost';
 import type { SessionToolInvocation } from '../../../../../src/types/server/sessionToolSurface';
+import { modernMcpRequest } from './modernMcpRequest';
 
 function host() {
   const listeners = new Set<(frame: Record<string, unknown>) => void>();
@@ -391,15 +392,19 @@ describe('serveHeadlessServer', () => {
     });
     expect(token.status).toBe(200);
     const tokens = (await token.json()) as { access_token: string };
-    const mcp = await fetch(`${server.url}${root}`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${tokens.access_token}`,
-        accept: 'application/json, text/event-stream',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-    });
+    const mcp = await fetch(
+      await modernMcpRequest(
+        new Request(`${server.url}${root}`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${tokens.access_token}`,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        }),
+      ),
+    );
     const mcpCatalog = (await mcp.json()) as { result: { tools: { name: string }[] } };
     expect(mcpCatalog.result.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'read' })]));
     expect(mcpCatalog.result.tools.map(({ name }) => name)).toEqual(
@@ -415,20 +420,24 @@ describe('serveHeadlessServer', () => {
       ).status,
     ).toBe(401);
 
-    const routed = await fetch(`${server.url}${root}`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${tokens.access_token}`,
-        accept: 'application/json, text/event-stream',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 42,
-        method: 'tools/call',
-        params: { name: 'read', _meta: { 'openai/session': conversation } },
-      }),
-    });
+    const routed = await fetch(
+      await modernMcpRequest(
+        new Request(`${server.url}${root}`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${tokens.access_token}`,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 42,
+            method: 'tools/call',
+            params: { name: 'read', _meta: { 'openai/session': conversation } },
+          }),
+        }),
+      ),
+    );
     await expect(routed.json()).resolves.toMatchObject({ result: { content: [{ text: 'done' }] } });
     expect(conversationHost.host.mcpSurface.invokeTool).toHaveBeenCalledOnce();
     expect(first.host.mcpSurface.invokeTool).not.toHaveBeenCalled();
@@ -444,11 +453,15 @@ describe('serveHeadlessServer', () => {
     });
     expect(
       (
-        await fetch(`${server.url}${root}`, {
-          method: 'POST',
-          headers: { authorization: `Bearer ${tokens.access_token}`, 'content-type': 'application/json' },
-          body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
-        })
+        await fetch(
+          await modernMcpRequest(
+            new Request(`${server.url}${root}`, {
+              method: 'POST',
+              headers: { authorization: `Bearer ${tokens.access_token}`, 'content-type': 'application/json' },
+              body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
+            }),
+          ),
+        )
       ).status,
     ).toBe(401);
 
@@ -510,16 +523,20 @@ describe('serveHeadlessServer', () => {
     const created = await create();
     expect(created.status).toBe(201);
     const { client } = (await created.json()) as { client: { clientId: string; clientSecret: string } };
-    const rpc = (url: string, key: string) =>
-      fetch(`${url}${root}`, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${key}`,
-          'content-type': 'application/json',
-          accept: 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-      });
+    const rpc = async (url: string, key: string) =>
+      fetch(
+        await modernMcpRequest(
+          new Request(`${url}${root}`, {
+            method: 'POST',
+            headers: {
+              authorization: `Bearer ${key}`,
+              'content-type': 'application/json',
+              accept: 'application/json, text/event-stream',
+            },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+          }),
+        ),
+      );
     const listed = await rpc(first.url, client.clientSecret);
     expect(listed.status).toBe(200);
     const catalog = (await listed.json()) as { result: { tools: { name: string }[] } };
@@ -584,15 +601,19 @@ describe('serveHeadlessServer', () => {
     expect(body.client.connectionUrl.startsWith(`${origin}${root}/`)).toBe(true);
 
     const signedPath = new URL(body.client.connectionUrl).pathname;
-    const rpc = (url: string, path: string) =>
-      fetch(`${url}${path}`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          accept: 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-      });
+    const rpc = async (url: string, path: string) =>
+      fetch(
+        await modernMcpRequest(
+          new Request(`${url}${path}`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              accept: 'application/json, text/event-stream',
+            },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+          }),
+        ),
+      );
     const listed = await rpc(first.url, signedPath);
     expect(listed.status).toBe(200);
     const catalog = (await listed.json()) as { result: { tools: { name: string }[] } };
@@ -1931,15 +1952,19 @@ describe('canonical scoped routes', () => {
       return ((await token.json()) as { access_token: string }).access_token;
     };
     const firstToken = await authorize(firstServer);
-    const firstMcp = await fetch(`${firstServer.url}${root}`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${firstToken}`,
-        accept: 'application/json, text/event-stream',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-    });
+    const firstMcp = await fetch(
+      await modernMcpRequest(
+        new Request(`${firstServer.url}${root}`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${firstToken}`,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        }),
+      ),
+    );
     expect(firstMcp.status).toBe(200);
     await firstServer.close();
 
@@ -1974,15 +1999,19 @@ describe('canonical scoped routes', () => {
     });
     expect(oldToken.status).toBe(401);
     const secondToken = await authorize(secondServer);
-    const secondMcp = await fetch(`${secondServer.url}${root}`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${secondToken}`,
-        accept: 'application/json, text/event-stream',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-    });
+    const secondMcp = await fetch(
+      await modernMcpRequest(
+        new Request(`${secondServer.url}${root}`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${secondToken}`,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        }),
+      ),
+    );
     expect(secondMcp.status).toBe(200);
   });
 });

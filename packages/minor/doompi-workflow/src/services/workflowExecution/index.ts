@@ -2,7 +2,7 @@ import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
 import type { DoomToolRestriction } from '@agimon-ai/doompi-core/toolSurface';
 import { type EmbeddedWorkflowFeature, type WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
 import type { AgentToolResult, AgentToolUpdateCallback, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
 import { type WorkflowRunInput } from '../../schemas/workflowPi';

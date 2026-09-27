@@ -71,11 +71,11 @@ importers:
         specifier: workspace:*
         version: link:packages/clients/doompi-web
       '@agimon-ai/style-system':
-        specifier: 0.1.8
-        version: 0.1.8(@types/node@26.6.1)(@types/react@19.3.0)(esbuild@0.28.2)(jiti@2.7.0)(supports-color@7.2.0)(yaml@2.9.1)(zod@4.6.5)
+        specifier: 0.1.9
+        version: 0.1.9(@types/node@26.6.1)(@types/react@19.3.0)(esbuild@0.28.2)(hono@4.13.8)(jiti@2.7.0)(yaml@2.9.1)(zod@4.6.5)
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.40
-        version: 0.0.1-alpha.40(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)
+        specifier: 0.0.1-alpha.41
+        version: 0.0.1-alpha.41(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))
       '@agimon-ai/vibe-lint-plugin-doom-cli':
         specifier: workspace:*
         version: link:packages/tooling/vibe-lint-plugin-doom-cli
@@ -89,8 +89,8 @@ importers:
         specifier: workspace:*
         version: link:packages/tooling/vibe-lint-plugin-doom-web
       '@agimon-ai/workflow-mcp':
-        specifier: 0.23.29
-        version: 0.23.29(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)
+        specifier: 0.23.32
+        version: 0.23.32(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)
       '@commitlint/cli':
         specifier: 21.2.2
         version: 21.2.2(@types/node@26.6.1)(conventional-commits-parser@7.1.2)(typescript@7.0.2)
@@ -213,8 +213,8 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-security
       '@agimon-ai/style-system':
-        specifier: 0.1.8
-        version: 0.1.8(@types/node@26.6.1)(@types/react@19.3.0)(esbuild@0.28.2)(jiti@2.7.0)(supports-color@7.2.0)(yaml@2.9.1)(zod@4.6.5)
+        specifier: 0.1.9
+        version: 0.1.9(@types/node@26.6.1)(@types/react@19.3.0)(esbuild@0.28.2)(hono@4.13.8)(jiti@2.7.0)(yaml@2.9.1)(zod@4.6.5)
       hono:
         specifier: 4.13.8
         version: 4.13.8
@@ -659,8 +659,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/log-sink-mcp':
-        specifier: 0.29.30
-        version: 0.29.30(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)
+        specifier: 0.29.31
+        version: 0.29.31(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -744,11 +744,11 @@ importers:
         specifier: 0.87.1
         version: 0.87.1
       '@modelcontextprotocol/ext-apps':
-        specifier: 1.5.0
-        version: 1.5.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
-      '@modelcontextprotocol/sdk':
-        specifier: 1.30.0
-        version: 1.30.0(supports-color@7.2.0)(zod@4.6.5)
+        specifier: 2.0.0
+        version: 2.0.0(@modelcontextprotocol/client@2.1.0)(@modelcontextprotocol/core@2.1.0)(@modelcontextprotocol/server@2.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
+      '@modelcontextprotocol/server':
+        specifier: 2.1.0
+        version: 2.1.0
       '@playwright/test':
         specifier: 1.63.0
         version: 1.63.0
@@ -976,9 +976,9 @@ importers:
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.8)
-      '@modelcontextprotocol/sdk':
-        specifier: 1.30.0
-        version: 1.30.0(supports-color@7.2.0)(zod@4.6.5)
+      '@modelcontextprotocol/server':
+        specifier: 2.1.0
+        version: 2.1.0
       '@simplewebauthn/server':
         specifier: ^14.0.2
         version: 14.0.2
@@ -1028,6 +1028,9 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
+      '@modelcontextprotocol/core':
+        specifier: 2.1.0
+        version: 2.1.0
       '@types/cross-spawn':
         specifier: 6.0.6
         version: 6.0.6
@@ -1107,8 +1110,8 @@ importers:
         specifier: 1.2.3
         version: 1.2.3
       '@modelcontextprotocol/ext-apps':
-        specifier: 1.5.0
-        version: 1.5.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
+        specifier: 2.0.0
+        version: 2.0.0(@modelcontextprotocol/client@2.1.0)(@modelcontextprotocol/core@2.1.0)(@modelcontextprotocol/server@2.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
       '@xterm/xterm':
         specifier: 6.0.0
         version: 6.0.0
@@ -1494,8 +1497,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/log-sink-mcp':
-        specifier: 0.29.30
-        version: 0.29.30(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)
+        specifier: 0.29.31
+        version: 0.29.31(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1518,6 +1521,9 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
+      '@modelcontextprotocol/client':
+        specifier: 2.1.0
+        version: 2.1.0
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -1567,14 +1573,14 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/mcp-proxy':
-        specifier: 0.31.30
-        version: 0.31.30(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)
+        specifier: 0.31.31
+        version: 0.31.31(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
-      '@modelcontextprotocol/sdk':
-        specifier: 1.30.0
-        version: 1.30.0(supports-color@7.2.0)(zod@4.6.5)
+      '@modelcontextprotocol/server':
+        specifier: 2.1.0
+        version: 2.1.0
       '@napi-rs/keyring':
         specifier: 2.1.0
         version: 2.1.0
@@ -1774,8 +1780,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/foundation-process-registry':
-        specifier: 0.29.27
-        version: 0.29.27(zod@4.6.5)
+        specifier: 0.29.31
+        version: 0.29.31(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1962,11 +1968,11 @@ importers:
         specifier: 0.87.1
         version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@modelcontextprotocol/ext-apps':
-        specifier: 1.5.0
-        version: 1.5.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
-      '@modelcontextprotocol/sdk':
-        specifier: 1.30.0
-        version: 1.30.0(supports-color@7.2.0)(zod@4.6.5)
+        specifier: 2.0.0
+        version: 2.0.0(@modelcontextprotocol/client@2.1.0)(@modelcontextprotocol/core@2.1.0)(@modelcontextprotocol/server@2.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
+      '@modelcontextprotocol/server':
+        specifier: 2.1.0
+        version: 2.1.0
       '@playwright/test':
         specifier: 1.63.0
         version: 1.63.0
@@ -2341,8 +2347,8 @@ importers:
   packages/foundations/doompi-telemetry:
     dependencies:
       '@agimon-ai/log-sink-mcp':
-        specifier: 0.29.30
-        version: 0.29.30(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)
+        specifier: 0.29.31
+        version: 0.29.31(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
       '@opentelemetry/api':
         specifier: 1.9.1
         version: 1.9.1
@@ -2920,14 +2926,14 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/workflow-mcp':
-        specifier: 0.23.29
-        version: 0.23.29(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)
+        specifier: 0.23.32
+        version: 0.23.32(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
-      '@modelcontextprotocol/sdk':
-        specifier: 1.30.0
-        version: 1.30.0(supports-color@7.2.0)(zod@4.6.5)
+      '@modelcontextprotocol/server':
+        specifier: 2.1.0
+        version: 2.1.0
       hono:
         specifier: 4.13.8
         version: 4.13.8
@@ -2988,8 +2994,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.40
-        version: 0.0.1-alpha.40(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)
+        specifier: 0.0.1-alpha.41
+        version: 0.0.1-alpha.41(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))
       '@types/node':
         specifier: 26.6.1
         version: 26.6.1
@@ -3010,8 +3016,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.40
-        version: 0.0.1-alpha.40(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)
+        specifier: 0.0.1-alpha.41
+        version: 0.0.1-alpha.41(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))
       '@types/node':
         specifier: 26.6.1
         version: 26.6.1
@@ -3035,8 +3041,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.40
-        version: 0.0.1-alpha.40(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)
+        specifier: 0.0.1-alpha.41
+        version: 0.0.1-alpha.41(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))
       '@types/node':
         specifier: 26.6.1
         version: 26.6.1
@@ -3060,8 +3066,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.40
-        version: 0.0.1-alpha.40(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)
+        specifier: 0.0.1-alpha.41
+        version: 0.0.1-alpha.41(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))
       '@types/node':
         specifier: 26.6.1
         version: 26.6.1
@@ -3131,57 +3137,29 @@ packages:
     resolution: {integrity: sha512-qed0biDNj7N89SD7293daRKf5fROjpEeFPQr/DnWDXVlvaarqv+6r54mnGcUb2J+yx6QJx+anzVzcVYvkTs2RA==}
     hasBin: true
 
-  '@agimon-ai/foundation-exec@0.26.30':
-    resolution: {integrity: sha512-5HVVtuRPT5Fdc1iMzqe4WRyzubT3ca3r30x/r11gGFBTir+pdG7fsceCzUfZdCMTT0bkDqaUL8IWjlBxayv6RQ==}
+  '@agimon-ai/foundation-exec@0.26.31':
+    resolution: {integrity: sha512-mhC+nRPqrBklPRJyvBzeIxvKadNeBTUgnOCuAnr2tSW71E/xyDhbV65jG8NRzpzvEWN8yzrtbE7r4jb0Vas+TQ==}
 
-  '@agimon-ai/foundation-port-registry@0.29.27':
-    resolution: {integrity: sha512-W8GI0MnpDn4GoNugtn4LkhDhbXlzgXUQdnlwDeQOa8CEnAU+wn1oAlHqDdtrnh0BvZB/jQA9bZPjOUUClLtKrQ==}
+  '@agimon-ai/foundation-port-registry@0.29.31':
+    resolution: {integrity: sha512-hvWLScXD4uDt1GQCRafdyfdVtwhHMQ6E+Eiza9QBtGUcWgQl61/taPEGNjg9btttWCBjRnkR1uFiVsuzx/7U4g==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/foundation-port-registry@0.29.28':
-    resolution: {integrity: sha512-li6wJ2sexHx8X/orw6sJ/vSL9P9Kc/JzvX9zjbYq4cWPhk3DYDxtIX4ZP0DqNsM9eOTDqd3/qr5wgJifbUxjBQ==}
+  '@agimon-ai/foundation-process-registry@0.29.31':
+    resolution: {integrity: sha512-NO56UY5A4pAJTEv+fhajlt+IVhTxZskuNCxgwXSsAL9VtajYZXeOGNZGLLf5C+fXn8rSfQm1Wr8jYBf9Xv7YHQ==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/foundation-port-registry@0.29.30':
-    resolution: {integrity: sha512-G/QpkWBGgeuZsq/lK9CN5F0Rld/y0wMdpdbbOGYUJlaGCYUV66sz2JM7tx8tO23NR6tfHy/fZWVb6dQVJVHLRA==}
-    hasBin: true
+  '@agimon-ai/foundation-validator@0.26.31':
+    resolution: {integrity: sha512-f++4xyJeT9Z5LJw5zKQteIIOe554ZqvzqVrRNhKJ/k4jMWAlPRqv4ingEPBe+WZZDHZla/3Zww2TpRsDmkSBtQ==}
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/foundation-process-registry@0.29.27':
-    resolution: {integrity: sha512-daz9E2lYzYOM/Y8nUzU8RBmscfVTjVGVtvYF3SRPaSAbScAC8YWxckefPzFpNj5BxH8FgoGwb6tAdn2ETdpWhA==}
-    hasBin: true
-    peerDependencies:
-      zod: ^4.4.3
-
-  '@agimon-ai/foundation-process-registry@0.29.28':
-    resolution: {integrity: sha512-YbTfnWA+N4PDXvr/PpuUWfxUXOphltaVq1Va4APpDi1i8aN16JK2NFIOMSR/DS/9BJNHIrtEBNGMOTdcZBawJQ==}
-    hasBin: true
-    peerDependencies:
-      zod: ^4.4.3
-
-  '@agimon-ai/foundation-process-registry@0.29.30':
-    resolution: {integrity: sha512-JSDMOMwBRzq90+/zN/VsTExdnbLGwxZvnG1/hvtEli6fHz5clwq1rBipfNb0RsBZZfqJ4Ml5Ib+LgrkfOAehAw==}
-    hasBin: true
-    peerDependencies:
-      zod: ^4.4.3
-
-  '@agimon-ai/foundation-validator@0.26.28':
-    resolution: {integrity: sha512-yYZZ0cEA0QyWvpJ+pEqS5urwSfyu121suYwf52lY3nr/zh2SSuXqNbCKDvzN6IVpl49J23NOJqf2riXaOUdMMw==}
-    peerDependencies:
-      zod: ^4.4.3
-
-  '@agimon-ai/foundation-validator@0.26.30':
-    resolution: {integrity: sha512-RdLd2nZSFR/6KTXAkBzgjxu5wKfH2bnV2p7QEgYFKGo9iDShFQAxQnJgN7IkQaFLeqWC+YRkYJl4fQIk5myVgA==}
-    peerDependencies:
-      zod: ^4.4.3
-
-  '@agimon-ai/log-sink-mcp@0.29.28':
-    resolution: {integrity: sha512-L6qSXaeWJIbJhmt1MEeRdym2SUeR2qqxj7Htp2d21qkZIoTAU0BRvhPv4EXbN+44DpIza2+M246eTfgjKLCfdw==}
+  '@agimon-ai/log-sink-mcp@0.29.31':
+    resolution: {integrity: sha512-R9qASiveNXpXNtz+0qJaCcK0cDWNoYRke2eyHjfuzRHcc5J7QwK70u61EAlJfLPa36pfN4UWw6fzV6rr78AVtw==}
+    engines: {node: '>=22.13.0'}
     hasBin: true
     peerDependencies:
       '@earendil-works/pi-coding-agent': '*'
@@ -3190,56 +3168,48 @@ packages:
       '@earendil-works/pi-coding-agent':
         optional: true
 
-  '@agimon-ai/log-sink-mcp@0.29.30':
-    resolution: {integrity: sha512-TpdqEhkn+bczadrjDBQBuqI5Oq+3qGLfpI9yKmC+GfvTbsTg6FkFk2f79Xeg80+1VJTS+UBTBEnj6s1V+Kn4Fw==}
-    hasBin: true
-    peerDependencies:
-      '@earendil-works/pi-coding-agent': '*'
-      zod: ^4.4.3
-    peerDependenciesMeta:
-      '@earendil-works/pi-coding-agent':
-        optional: true
-
-  '@agimon-ai/mcp-proxy@0.31.30':
-    resolution: {integrity: sha512-WF4PSPmQzmRluAM/mYjPYaQGxBY4xnqe4xZvSvdQq4pkUfDqviBkB+vZONeGC+PyBfWDxeQ3JYYLIP/yHCbvow==}
+  '@agimon-ai/mcp-proxy@0.31.31':
+    resolution: {integrity: sha512-ok2QDNNQSHRExf/9HgGdr5MJexBKNE2l9N/CAKmg8b0PKGH35irq5ILkOnUgrjFqqikB/RtUj4Re4NCczuqEUg==}
+    engines: {node: '>=20'}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/rmux-darwin-arm64@0.9.5':
-    resolution: {integrity: sha512-MOQsHiBjY0c9JXqLBdzj5Qv8nlN4rzX4N5PfTBX5KYK6jjpMzU6VajpyWOAcmfTxZ/a0KumadE+2MZJY2b58Xw==}
+  '@agimon-ai/rmux-darwin-arm64@0.9.8':
+    resolution: {integrity: sha512-cGNY18vtYIgs8cDNs9jGuuZ9+o6de6/3DRERqyJmhVzVXyJTBkkB+bxpZmAwU/Grr4j1i7sXFyyESiW0bSFBuQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@agimon-ai/rmux-darwin-x64@0.9.5':
-    resolution: {integrity: sha512-JGT5Oj2DYDhhC/qhrEPOdlo7vNAcmgTU9OATCojIL9s681+Ab8NNW3fmdUkTq30PLifDpNDpaLv2LUEafxmBMQ==}
+  '@agimon-ai/rmux-darwin-x64@0.9.8':
+    resolution: {integrity: sha512-QyASODWUe8hBJBad3ABdi3h0UB+vhMDrnorugSF8/995bGwaTld1Y585oXrAZM853uqZngVQGvQ9wmzJwAYA3A==}
     cpu: [x64]
     os: [darwin]
 
-  '@agimon-ai/rmux-linux-arm64@0.9.5':
-    resolution: {integrity: sha512-F2p9+UuKdHU3S/U/WLkjbRy3Zzu/9gNG787bdKG8p04qyUgk6joPf5aRYs7wD/PCM7Xw8dGkCFWzHiduX1hVtQ==}
+  '@agimon-ai/rmux-linux-arm64@0.9.8':
+    resolution: {integrity: sha512-YwULqWEosn3lC7TG2jromTW713DPyWgiwodrLyN0sebUet/wbe1iW6/slPu2tpxOSjEgyc/XoKkRPYmekwn9Ow==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@agimon-ai/rmux-linux-x64@0.9.5':
-    resolution: {integrity: sha512-WUeSJM+LePpR8TAuh0HQZ8oW/NoQSQ9XFdS8BSUfdLIq8axXOcuMvGCI5thYU+FLvTVmQviFfXOMnvvK6Fttdg==}
+  '@agimon-ai/rmux-linux-x64@0.9.8':
+    resolution: {integrity: sha512-zMIu2Z+wJUm2O9FqxgpfovW6dWL9gwWX160xTg+zmuTwKKYBmyjsmwZQApHo/2kEUe37oKcZqpBGwMCcgwx3Aw==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@agimon-ai/style-system@0.1.8':
-    resolution: {integrity: sha512-RTCBr39b6/9SIJMKXH21K3SwgJZTyrw1lKl3lsFqdx/mABHzosRLE40A22yutkifJhkX1npBY6dTnckLFLMgxw==}
+  '@agimon-ai/style-system@0.1.9':
+    resolution: {integrity: sha512-0lrBa1XuOTfe+B2SF4SZVKrETb9zcku7fzDFntbid5mLadlK0B4XJsTBFgEbs16ttl7ijBbviPPHM0Wdplbsjg==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/vibe-lint@0.0.1-alpha.40':
-    resolution: {integrity: sha512-0+jccj3JX6o3C108cGO0R0DN83y26oqa4p8aT8gY3USaNMvXRBVKi1ZAKAUPbMyCkfvMtxwa+uurn8uSqtkcsA==}
+  '@agimon-ai/vibe-lint@0.0.1-alpha.41':
+    resolution: {integrity: sha512-FaDrXwPq//B6yUwO7locZ6KQYPixzE00LJpV8NPgjqfuQ+IW7ELhl/njr1E3EhbzYiqey8CCWAg9mFBBT7r93w==}
+    engines: {node: '>=20'}
     hasBin: true
 
-  '@agimon-ai/workflow-mcp@0.23.29':
-    resolution: {integrity: sha512-PqKjFdCF44qfSYNvo50JqJUSUzNdivs94olkqPWLMGE7xaNAUqLO428YlNHfJi3GnextvG3+mRii+OBV3OOqEg==}
+  '@agimon-ai/workflow-mcp@0.23.32':
+    resolution: {integrity: sha512-ZottAByvSyvAFF7FGkc5el4zIRDaJ/XKQhab+M1/u8qsO2gVcBgJU/O8aFlnzVVpFffkicNZB0pVMLz0Pa9cbg==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
@@ -4792,18 +4762,40 @@ packages:
   '@mermaid-js/parser@1.2.1':
     resolution: {integrity: sha512-n12NohV3mrUyUL2o93IgG/ifeW9FTyeJn3zDxkhwa8MJ9Fxg3HQMlA3RiGmD/3UnJvheztkjjQAjA2T4LmUcpw==}
 
-  '@modelcontextprotocol/ext-apps@1.5.0':
-    resolution: {integrity: sha512-q4fut89TOoP2LEPHSGfZErIf1K1xOTTzV+41h/bB2BqKw2gKb0uLKbHusOy1UtbY0puS16zBho/vFp3f5XMVbQ==}
+  '@modelcontextprotocol/client@2.1.0':
+    resolution: {integrity: sha512-mDVhoy5WjDb0U+4dQPzLcciC2erSex/GRVQqnoZdiuMoE3YiTZdiS7ezNcFwX4XEOWOaj7jZr0kLYnILnL8orA==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/core@2.1.0':
+    resolution: {integrity: sha512-YdFj5gMRHr0gYNAhTbQDgjLHiEJdIAUYxomhKseUNye7ZGlISQmUoLh2sveFFCiQ7j2YMffT1kgSND0FSfIFjQ==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/ext-apps@2.0.0':
+    resolution: {integrity: sha512-a6tXzFcIbIIdnqumQ7W8Oxd8W/KAPkAKYpoxpD9nDgxZ24ywgxG5pK/8G9W5pOFUygS7gWHQhPv8cwRB44/8yg==}
     engines: {node: '>=20'}
     peerDependencies:
-      '@modelcontextprotocol/sdk': ^1.29.0
+      '@modelcontextprotocol/client': ^2.0.0
+      '@modelcontextprotocol/core': ^2.0.0
+      '@modelcontextprotocol/server': ^2.0.0
       react: ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^17.0.0 || ^18.0.0 || ^19.0.0
-      zod: ^3.25.0 || ^4.0.0
+      zod: ^4.2.0
     peerDependenciesMeta:
+      '@modelcontextprotocol/server':
+        optional: true
       react:
         optional: true
       react-dom:
+        optional: true
+
+  '@modelcontextprotocol/node@2.1.0':
+    resolution: {integrity: sha512-6xg3iWVcOfiL8Y7rI6xUqXD0lI2AY5q3djsa/cOi1IJUSwx06t0gvhSwU/6mIIohrFlt40/ANUG56DQ0HLhILQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@modelcontextprotocol/server': ^2.1.0
+      hono: 4.13.8
+    peerDependenciesMeta:
+      hono:
         optional: true
 
   '@modelcontextprotocol/sdk@1.29.0':
@@ -4825,6 +4817,10 @@ packages:
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
+
+  '@modelcontextprotocol/server@2.1.0':
+    resolution: {integrity: sha512-FdvwZU5N03O77Suh35JqjAqq5R1ZTEPFtwu6N4BgBq28qrQtrCnpbLL5U2pwYCuE194jAw0xnlOVmIqhfoYuUQ==}
+    engines: {node: '>=20'}
 
   '@napi-rs/canvas-android-arm64@1.0.8':
     resolution: {integrity: sha512-5+nkh8i3gt6lqS/d2jTZ1xAn6tdgtB4Lf1mW6T0Qm5/rXNwBuV1sAEyLEWan5o9gJPU/GuvHR3rvSeZ+FaGrbw==}
@@ -11354,78 +11350,56 @@ snapshots:
       - '@types/node'
       - supports-color
 
-  '@agimon-ai/foundation-exec@0.26.30(zod@4.4.3)':
+  '@agimon-ai/foundation-exec@0.26.31(zod@4.4.3)':
     dependencies:
-      '@agimon-ai/foundation-process-registry': 0.29.30(zod@4.4.3)
+      '@agimon-ai/foundation-process-registry': 0.29.31(zod@4.4.3)
     transitivePeerDependencies:
       - zod
 
-  '@agimon-ai/foundation-exec@0.26.30(zod@4.6.5)':
+  '@agimon-ai/foundation-exec@0.26.31(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-process-registry': 0.29.30(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.29.31(zod@4.6.5)
     transitivePeerDependencies:
       - zod
 
-  '@agimon-ai/foundation-port-registry@0.29.27(zod@4.6.5)':
-    dependencies:
-      '@tursodatabase/database': 0.7.2
-      zod: 4.6.5
-
-  '@agimon-ai/foundation-port-registry@0.29.28(zod@4.6.5)':
-    dependencies:
-      '@tursodatabase/database': 0.7.2
-      zod: 4.6.5
-
-  '@agimon-ai/foundation-port-registry@0.29.30(zod@4.4.3)':
+  '@agimon-ai/foundation-port-registry@0.29.31(zod@4.4.3)':
     dependencies:
       '@tursodatabase/database': 0.7.2
       zod: 4.4.3
 
-  '@agimon-ai/foundation-port-registry@0.29.30(zod@4.6.5)':
+  '@agimon-ai/foundation-port-registry@0.29.31(zod@4.6.5)':
     dependencies:
       '@tursodatabase/database': 0.7.2
       zod: 4.6.5
 
-  '@agimon-ai/foundation-process-registry@0.29.27(zod@4.6.5)':
+  '@agimon-ai/foundation-process-registry@0.29.31(zod@4.4.3)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.27(zod@4.6.5)
-      '@tursodatabase/database': 0.7.2
-      zod: 4.6.5
-
-  '@agimon-ai/foundation-process-registry@0.29.28(zod@4.6.5)':
-    dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.28(zod@4.6.5)
-      '@tursodatabase/database': 0.7.2
-      zod: 4.6.5
-
-  '@agimon-ai/foundation-process-registry@0.29.30(zod@4.4.3)':
-    dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.30(zod@4.4.3)
+      '@agimon-ai/foundation-port-registry': 0.29.31(zod@4.4.3)
       '@tursodatabase/database': 0.7.2
       zod: 4.4.3
 
-  '@agimon-ai/foundation-process-registry@0.29.30(zod@4.6.5)':
+  '@agimon-ai/foundation-process-registry@0.29.31(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.30(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.29.31(zod@4.6.5)
       '@tursodatabase/database': 0.7.2
       zod: 4.6.5
 
-  '@agimon-ai/foundation-validator@0.26.28(zod@4.6.5)':
+  '@agimon-ai/foundation-validator@0.26.31(zod@4.4.3)':
+    dependencies:
+      zod: 4.4.3
+
+  '@agimon-ai/foundation-validator@0.26.31(zod@4.6.5)':
     dependencies:
       zod: 4.6.5
 
-  '@agimon-ai/foundation-validator@0.26.30(zod@4.6.5)':
+  '@agimon-ai/log-sink-mcp@0.29.31(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.4.3)':
     dependencies:
-      zod: 4.6.5
-
-  '@agimon-ai/log-sink-mcp@0.29.28(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)':
-    dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.28(zod@4.6.5)
-      '@agimon-ai/foundation-process-registry': 0.29.28(zod@4.6.5)
-      '@agimon-ai/foundation-validator': 0.26.28(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.29.31(zod@4.4.3)
+      '@agimon-ai/foundation-process-registry': 0.29.31(zod@4.4.3)
+      '@agimon-ai/foundation-validator': 0.26.31(zod@4.4.3)
       '@hono/node-server': 2.0.10(hono@4.13.8)
-      '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.6.5)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.5)
+      '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.4.3)
+      '@modelcontextprotocol/server': 2.1.0
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/api-logs': 0.219.0
       '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
@@ -11445,12 +11419,11 @@ snapshots:
       sqlite-vec: 0.1.9
       ulidx: 2.4.1
       yaml: 2.8.3
-      zod: 4.6.5
+      zod: 4.4.3
     optionalDependencies:
       '@earendil-works/pi-coding-agent': 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
-      - '@cfworker/json-schema'
       - '@cloudflare/workers-types'
       - '@electric-sql/pglite'
       - '@libsql/client'
@@ -11478,17 +11451,16 @@ snapshots:
       - prisma
       - sql.js
       - sqlite3
-      - supports-color
       - unstorage
 
-  '@agimon-ai/log-sink-mcp@0.29.30(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)':
+  '@agimon-ai/log-sink-mcp@0.29.31(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.30(zod@4.6.5)
-      '@agimon-ai/foundation-process-registry': 0.29.30(zod@4.6.5)
-      '@agimon-ai/foundation-validator': 0.26.30(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.29.31(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.29.31(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.26.31(zod@4.6.5)
       '@hono/node-server': 2.0.10(hono@4.13.8)
       '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.6.5)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.5)
+      '@modelcontextprotocol/server': 2.1.0
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/api-logs': 0.219.0
       '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
@@ -11513,7 +11485,6 @@ snapshots:
       '@earendil-works/pi-coding-agent': 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
-      - '@cfworker/json-schema'
       - '@cloudflare/workers-types'
       - '@electric-sql/pglite'
       - '@libsql/client'
@@ -11541,17 +11512,19 @@ snapshots:
       - prisma
       - sql.js
       - sqlite3
-      - supports-color
       - unstorage
 
-  '@agimon-ai/mcp-proxy@0.31.30(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)':
+  '@agimon-ai/mcp-proxy@0.31.31(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.30(zod@4.6.5)
-      '@agimon-ai/foundation-process-registry': 0.29.30(zod@4.6.5)
-      '@agimon-ai/foundation-validator': 0.26.30(zod@4.6.5)
-      '@agimon-ai/log-sink-mcp': 0.29.30(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.29.31(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.29.31(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.26.31(zod@4.6.5)
+      '@agimon-ai/log-sink-mcp': 0.29.31(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
       '@hono/node-server': 2.0.10(hono@4.13.8)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.5)
+      '@modelcontextprotocol/client': 2.1.0
+      '@modelcontextprotocol/core': 2.1.0
+      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.8)
+      '@modelcontextprotocol/server': 2.1.0
       chalk: 5.6.2
       commander: 14.0.3
       gray-matter: 4.0.3
@@ -11561,7 +11534,6 @@ snapshots:
       zod: 4.6.5
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
-      - '@cfworker/json-schema'
       - '@cloudflare/workers-types'
       - '@earendil-works/pi-coding-agent'
       - '@electric-sql/pglite'
@@ -11590,25 +11562,26 @@ snapshots:
       - prisma
       - sql.js
       - sqlite3
-      - supports-color
       - unstorage
 
-  '@agimon-ai/rmux-darwin-arm64@0.9.5':
+  '@agimon-ai/rmux-darwin-arm64@0.9.8':
     optional: true
 
-  '@agimon-ai/rmux-darwin-x64@0.9.5':
+  '@agimon-ai/rmux-darwin-x64@0.9.8':
     optional: true
 
-  '@agimon-ai/rmux-linux-arm64@0.9.5':
+  '@agimon-ai/rmux-linux-arm64@0.9.8':
     optional: true
 
-  '@agimon-ai/rmux-linux-x64@0.9.5':
+  '@agimon-ai/rmux-linux-x64@0.9.8':
     optional: true
 
-  '@agimon-ai/style-system@0.1.8(@types/node@26.6.1)(@types/react@19.3.0)(esbuild@0.28.2)(jiti@2.7.0)(supports-color@7.2.0)(yaml@2.9.1)(zod@4.6.5)':
+  '@agimon-ai/style-system@0.1.9(@types/node@26.6.1)(@types/react@19.3.0)(esbuild@0.28.2)(hono@4.13.8)(jiti@2.7.0)(yaml@2.9.1)(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-exec': 0.26.30(zod@4.6.5)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.5)
+      '@agimon-ai/foundation-exec': 0.26.31(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.26.31(zod@4.6.5)
+      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.8)
+      '@modelcontextprotocol/server': 2.1.0
       '@tailwindcss/vite': 4.3.3(vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
       '@vitejs/plugin-react': 6.0.3(vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
       chalk: 5.6.2
@@ -11630,7 +11603,6 @@ snapshots:
       vite-plugin-singlefile: 2.3.3(vite@8.2.2(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
       zod: 4.6.5
     transitivePeerDependencies:
-      - '@cfworker/json-schema'
       - '@rolldown/plugin-babel'
       - '@types/node'
       - '@types/react'
@@ -11639,6 +11611,7 @@ snapshots:
       - bufferutil
       - encoding
       - esbuild
+      - hono
       - jiti
       - less
       - prettier
@@ -11647,19 +11620,19 @@ snapshots:
       - sass-embedded
       - stylus
       - sugarss
-      - supports-color
       - terser
       - tsx
       - utf-8-validate
       - vite-plus
       - yaml
 
-  '@agimon-ai/vibe-lint@0.0.1-alpha.40(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)':
+  '@agimon-ai/vibe-lint@0.0.1-alpha.41(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))':
     dependencies:
-      '@agimon-ai/foundation-exec': 0.26.30(zod@4.4.3)
-      '@agimon-ai/foundation-validator': 0.26.30(zod@4.6.5)
-      '@agimon-ai/log-sink-mcp': 0.29.30(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.4.3)
+      '@agimon-ai/foundation-exec': 0.26.31(zod@4.4.3)
+      '@agimon-ai/foundation-validator': 0.26.31(zod@4.4.3)
+      '@agimon-ai/log-sink-mcp': 0.29.31(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.4.3)
+      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.8)
+      '@modelcontextprotocol/server': 2.1.0
       chalk: 5.6.2
       commander: 14.0.3
       hono: 4.13.8
@@ -11670,11 +11643,10 @@ snapshots:
       typescript: 6.0.3
       zod: 4.4.3
     optionalDependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.30(zod@4.4.3)
-      '@agimon-ai/foundation-process-registry': 0.29.30(zod@4.4.3)
+      '@agimon-ai/foundation-port-registry': 0.29.31(zod@4.4.3)
+      '@agimon-ai/foundation-process-registry': 0.29.31(zod@4.4.3)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
-      - '@cfworker/json-schema'
       - '@cloudflare/workers-types'
       - '@earendil-works/pi-coding-agent'
       - '@electric-sql/pglite'
@@ -11703,16 +11675,16 @@ snapshots:
       - prisma
       - sql.js
       - sqlite3
-      - supports-color
       - unstorage
 
-  '@agimon-ai/workflow-mcp@0.23.29(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)':
+  '@agimon-ai/workflow-mcp@0.23.32(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.28(zod@4.6.5)
-      '@agimon-ai/foundation-process-registry': 0.29.28(zod@4.6.5)
-      '@agimon-ai/foundation-validator': 0.26.28(zod@4.6.5)
-      '@agimon-ai/log-sink-mcp': 0.29.28(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(zod@4.6.5)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.29.31(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.29.31(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.26.31(zod@4.6.5)
+      '@agimon-ai/log-sink-mcp': 0.29.31(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
+      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.8)
+      '@modelcontextprotocol/server': 2.1.0
       '@rmux/sdk': 0.6.5
       chalk: 5.6.2
       commander: 14.0.3
@@ -11720,13 +11692,12 @@ snapshots:
       proper-lockfile: 4.1.2
       zod: 4.6.5
     optionalDependencies:
-      '@agimon-ai/rmux-darwin-arm64': 0.9.5
-      '@agimon-ai/rmux-darwin-x64': 0.9.5
-      '@agimon-ai/rmux-linux-arm64': 0.9.5
-      '@agimon-ai/rmux-linux-x64': 0.9.5
+      '@agimon-ai/rmux-darwin-arm64': 0.9.8
+      '@agimon-ai/rmux-darwin-x64': 0.9.8
+      '@agimon-ai/rmux-linux-arm64': 0.9.8
+      '@agimon-ai/rmux-linux-x64': 0.9.8
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
-      - '@cfworker/json-schema'
       - '@cloudflare/workers-types'
       - '@earendil-works/pi-coding-agent'
       - '@electric-sql/pglite'
@@ -11747,6 +11718,7 @@ snapshots:
       - bun-types
       - expo-sqlite
       - gel
+      - hono
       - knex
       - kysely
       - mysql2
@@ -11755,7 +11727,6 @@ snapshots:
       - prisma
       - sql.js
       - sqlite3
-      - supports-color
       - unstorage
 
   '@antfu/install-pkg@2.0.1':
@@ -13289,6 +13260,11 @@ snapshots:
     dependencies:
       hono: 4.13.8
 
+  '@hono/zod-validator@0.7.6(hono@4.13.8)(zod@4.4.3)':
+    dependencies:
+      hono: 4.13.8
+      zod: 4.4.3
+
   '@hono/zod-validator@0.7.6(hono@4.13.8)(zod@4.6.5)':
     dependencies:
       hono: 4.13.8
@@ -13681,13 +13657,37 @@ snapshots:
     dependencies:
       '@chevrotain/types': 11.1.2
 
-  '@modelcontextprotocol/ext-apps@1.5.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)':
+  '@modelcontextprotocol/client@2.1.0':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.30.0(supports-color@7.2.0)(zod@4.6.5)
+      '@modelcontextprotocol/core': 2.1.0
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.1.1
+      jose: 6.2.9
+      pkce-challenge: 5.0.1
+      zod: 4.6.5
+
+  '@modelcontextprotocol/core@2.1.0':
+    dependencies:
+      zod: 4.6.5
+
+  '@modelcontextprotocol/ext-apps@2.0.0(@modelcontextprotocol/client@2.1.0)(@modelcontextprotocol/core@2.1.0)(@modelcontextprotocol/server@2.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)':
+    dependencies:
+      '@modelcontextprotocol/client': 2.1.0
+      '@modelcontextprotocol/core': 2.1.0
+      '@standard-schema/spec': 1.1.0
       zod: 4.6.5
     optionalDependencies:
+      '@modelcontextprotocol/server': 2.1.0
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
+
+  '@modelcontextprotocol/node@2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.8)':
+    dependencies:
+      '@hono/node-server': 1.19.17(hono@4.13.8)
+      '@modelcontextprotocol/server': 2.1.0
+    optionalDependencies:
+      hono: 4.13.8
 
   '@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.3.6)':
     dependencies:
@@ -13708,50 +13708,6 @@ snapshots:
       raw-body: 3.0.2
       zod: 4.3.6
       zod-to-json-schema: 3.25.2(zod@4.3.6)
-    transitivePeerDependencies:
-      - supports-color
-
-  '@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.4.3)':
-    dependencies:
-      '@hono/node-server': 1.19.17(hono@4.13.8)
-      ajv: 8.20.0
-      ajv-formats: 3.0.1(ajv@8.20.0)
-      content-type: 1.0.5
-      cors: 2.8.6
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.1.1
-      express: 5.2.1(supports-color@7.2.0)
-      express-rate-limit: 8.6.2(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)
-      hono: 4.13.8
-      jose: 6.2.9
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.1
-      raw-body: 3.0.2
-      zod: 4.4.3
-      zod-to-json-schema: 3.25.2(zod@4.4.3)
-    transitivePeerDependencies:
-      - supports-color
-
-  '@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.6.5)':
-    dependencies:
-      '@hono/node-server': 1.19.17(hono@4.13.8)
-      ajv: 8.20.0
-      ajv-formats: 3.0.1(ajv@8.20.0)
-      content-type: 1.0.5
-      cors: 2.8.6
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.1.1
-      express: 5.2.1(supports-color@7.2.0)
-      express-rate-limit: 8.6.2(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)
-      hono: 4.13.8
-      jose: 6.2.9
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.1
-      raw-body: 3.0.2
-      zod: 4.6.5
-      zod-to-json-schema: 3.25.2(zod@4.6.5)
     transitivePeerDependencies:
       - supports-color
 
@@ -13776,6 +13732,12 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@4.6.5)
     transitivePeerDependencies:
       - supports-color
+    optional: true
+
+  '@modelcontextprotocol/server@2.1.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.1.0
+      zod: 4.6.5
 
   '@napi-rs/canvas-android-arm64@1.0.8':
     optional: true
@@ -20388,13 +20350,10 @@ snapshots:
     dependencies:
       zod: 4.3.6
 
-  zod-to-json-schema@3.25.2(zod@4.4.3):
-    dependencies:
-      zod: 4.4.3
-
   zod-to-json-schema@3.25.2(zod@4.6.5):
     dependencies:
       zod: 4.6.5
+    optional: true
 
   zod@4.3.6: {}
 

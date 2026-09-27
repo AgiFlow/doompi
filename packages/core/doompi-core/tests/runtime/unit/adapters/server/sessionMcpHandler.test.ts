@@ -1,10 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import {
-  InitializeResultSchema,
-  JSONRPCResponseSchema,
-  ListToolsResultSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { JSONRPCResponseSchema, ListToolsResultSchema } from '@modelcontextprotocol/core';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -25,6 +21,14 @@ function rpcResult(body: unknown) {
   if ('error' in response) throw new Error(response.error.message);
   return response.result;
 }
+
+/** The per-request envelope every 2026-07-28 request carries; the endpoint serves no other revision. */
+const MODERN_PROTOCOL_VERSION = '2026-07-28';
+const MODERN_ENVELOPE = {
+  'io.modelcontextprotocol/protocolVersion': MODERN_PROTOCOL_VERSION,
+  'io.modelcontextprotocol/clientInfo': { name: 'session-mcp-test', version: '1.0.0' },
+  'io.modelcontextprotocol/clientCapabilities': {},
+};
 
 function fixture(scope: 'restricted' | 'session' = 'restricted', toolGrants: readonly string[] = ['allowed_tool']) {
   const authorization = createSessionMcpAuthorizationService();
@@ -143,19 +147,25 @@ function fixture(scope: 'restricted' | 'session' = 'restricted', toolGrants: rea
           accept: 'application/json, text/event-stream',
           authorization: `Bearer ${token}`,
           'content-type': 'application/json',
+          'mcp-protocol-version': MODERN_PROTOCOL_VERSION,
+          'mcp-method': method,
+          ...(typeof params?.name === 'string'
+            ? { 'mcp-name': params.name }
+            : typeof params?.uri === 'string'
+              ? { 'mcp-name': params.uri }
+              : {}),
         },
         body: JSON.stringify({
           jsonrpc: '2.0',
           id,
           method,
-          ...(params === undefined
-            ? {}
-            : {
-                params:
-                  method === 'tools/call' || method === 'resources/read'
-                    ? { ...params, _meta: { 'openai/session': 'test' } }
-                    : params,
-              }),
+          params: {
+            ...params,
+            _meta: {
+              ...MODERN_ENVELOPE,
+              ...(method === 'tools/call' || method === 'resources/read' ? { 'openai/session': 'test' } : {}),
+            },
+          },
         }),
       }),
     );
@@ -170,11 +180,13 @@ function fixture(scope: 'restricted' | 'session' = 'restricted', toolGrants: rea
             authorization: `Bearer ${token}`,
             accept: 'application/json, text/event-stream',
             'content-type': 'application/json',
+            'mcp-protocol-version': MODERN_PROTOCOL_VERSION,
+            'mcp-method': 'notifications/cancelled',
           },
           body: JSON.stringify({
             jsonrpc: '2.0',
             method: 'notifications/cancelled',
-            params: { requestId, _meta: { 'openai/session': 'test' } },
+            params: { requestId, _meta: { ...MODERN_ENVELOPE, 'openai/session': 'test' } },
           }),
         }),
       ),
@@ -200,14 +212,35 @@ function fixture(scope: 'restricted' | 'session' = 'restricted', toolGrants: rea
 }
 
 describe('session MCP Streamable HTTP handler', () => {
+  // The endpoint serves only the 2026-07-28 revision; a 2025-era client learns the supported
+  // versions from the refusal instead of being half-served.
+  it('refuses a 2025-era request with the versions it supports', async () => {
+    const { handler, mint } = fixture();
+    const response = await handler(
+      new Request(AUDIENCE, {
+        method: 'POST',
+        headers: {
+          accept: 'application/json, text/event-stream',
+          authorization: `Bearer ${mint().accessToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'legacy', version: '1' } },
+        }),
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain(MODERN_PROTOCOL_VERSION);
+  });
+
   it('advertises a self-contained bootstrap without needing plugin resources', async () => {
     const { request } = fixture();
-    const response = await request('initialize', {
-      protocolVersion: '2025-03-26',
-      capabilities: {},
-      clientInfo: { name: 'test-client', version: '1' },
-    });
-    const result = InitializeResultSchema.parse(rpcResult(await response.json()));
+    // Discovery replaced the initialize handshake in the 2026-07-28 revision.
+    const response = await request('server/discover');
+    const result = rpcResult(await response.json()) as { instructions?: string };
     expect(result.instructions?.length).toBeLessThanOrEqual(512);
     expect(result.instructions).toContain('load_context');
     expect(result.instructions).toContain('load_skill');
@@ -232,7 +265,8 @@ describe('session MCP Streamable HTTP handler', () => {
         isError,
       });
       const response = rpcResult(await (await request('tools/call', { name: 'allowed_tool' })).json());
-      expect(response).toEqual({
+      // The protocol adds its own fields (server info, result type, cache hints); these are the tool's.
+      expect(response).toMatchObject({
         content: [{ type: 'text', text: 'A readable result' }],
         structuredContent: { status: isError ? 'failed' : 'completed' },
         _meta: { widgetType: 'session', displayLabel: 'Component only' },
@@ -307,8 +341,13 @@ describe('session MCP Streamable HTTP handler', () => {
     const response = await handler(
       new Request(resource, {
         method: 'POST',
-        headers: { accept: 'application/json, text/event-stream', 'content-type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        headers: {
+          accept: 'application/json, text/event-stream',
+          'content-type': 'application/json',
+          'mcp-protocol-version': MODERN_PROTOCOL_VERSION,
+          'mcp-method': 'tools/list',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: { _meta: MODERN_ENVELOPE } }),
       }),
     );
 
@@ -787,7 +826,7 @@ describe('session MCP Streamable HTTP handler', () => {
     expect(JSON.stringify(resources)).toContain(UI_RESOURCE.uri);
     expect(JSON.stringify(resources)).not.toContain('ui://doompi/hidden');
     const result = rpcResult(await (await f.request('resources/read', { uri: UI_RESOURCE.uri })).json());
-    expect(result).toEqual({ contents: [{ ...UI_RESOURCE, text: '<!doctype html><title>Session</title>' }] });
+    expect(result).toMatchObject({ contents: [{ ...UI_RESOURCE, text: '<!doctype html><title>Session</title>' }] });
     expect(f.readUiResource).toHaveBeenCalledWith(12, UI_RESOURCE.uri);
     expect(f.readSkill).not.toHaveBeenCalled();
     expect(f.invokeTool).not.toHaveBeenCalled();
@@ -838,7 +877,7 @@ describe('composed widget result identity', () => {
       };
       f.invokeTool.mockResolvedValue(native);
       const result = rpcResult(await (await f.request('tools/call', { name: 'allowed_tool' })).json());
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         ...native,
         _meta: { custom: 'preserved', 'doompi/widget': '@test/tools/allowed_tool', 'doompi/toolName': 'allowed_tool' },
       });

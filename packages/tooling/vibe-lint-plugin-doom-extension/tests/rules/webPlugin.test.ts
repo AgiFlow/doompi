@@ -140,7 +140,7 @@ describe('Doom web plugin rules', () => {
       for (const specifier of [
         '@modelcontextprotocol/ext-apps/server',
         '@modelcontextprotocol/ext-apps/app-bridge',
-        '@modelcontextprotocol/sdk/server/index.js',
+        '@modelcontextprotocol/server',
       ]) {
         const file = write(`${FRONTEND}/_lib/invalid.ts`, `import { Server } from '${specifier}';`);
         expect(webPluginImportAllowlist.check?.(file, root)).toContain(specifier);

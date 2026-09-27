@@ -1,6 +1,6 @@
 import { type EmbeddedWorkflowFeature, type Workflow } from '@agimon-ai/workflow-mcp';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createWorkflowLaunchExecutor, type WorkflowLaunchInput } from '../../src/services/workflowExecution';

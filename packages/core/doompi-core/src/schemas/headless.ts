@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
-import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult, Tool } from '@modelcontextprotocol/server';
 import type { Static, TSchema } from 'typebox';
 
 import type { DoomSessionContext } from './hubChannel';

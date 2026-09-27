@@ -1,5 +1,5 @@
 import type { McpServerSnapshot, McpStatusSnapshot } from '@agimon-ai/doompi-core/mcpStatus';
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { Tool } from '@modelcontextprotocol/server';
 
 export interface McpCatalogToolInput {
   name: string;

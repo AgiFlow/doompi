@@ -17,7 +17,7 @@
 
 import type { WorkflowProgressJob, WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
 import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 
 /**
  * Environment variable stamped onto every run launched from a Pi session.
