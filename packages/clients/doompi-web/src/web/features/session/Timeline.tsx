@@ -30,6 +30,7 @@ import {
   type TimelineEntry,
   type ToolEntry,
 } from '../../lib/sessionModel';
+import { personaInitials } from '../../lib/sessionSummary';
 import { groupSummary, groupTone, timelineUnits } from '../../lib/timelineGroups';
 import { appendComposerQuote } from '../../stores/composerStore';
 import { sessionsStore } from '../../stores/sessionsStore';
@@ -104,12 +105,6 @@ function Gutter({ label, tone, trailing = false }: { label: string; tone: string
 }
 
 /** Two letters from a persona name, so a profile without an icon is still distinct. */
-function personaInitials(name: string): string {
-  const words = name.trim().split(/\s+/u).filter(Boolean);
-  const letters = words.length > 1 ? `${words[0]?.[0] ?? ''}${words[1]?.[0] ?? ''}` : (words[0]?.slice(0, 2) ?? '');
-  return letters.toUpperCase() || 'DP';
-}
-
 function SpeakerAvatar({ speaker, identity }: { speaker: 'assistant' | 'user'; identity?: ProfileIdentity | null }) {
   if (speaker === 'assistant') {
     // The icon arrives as a bounded data URL on the journalled identity entry,

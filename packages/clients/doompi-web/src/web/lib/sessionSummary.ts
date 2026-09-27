@@ -55,6 +55,13 @@ export function runningCount(phases: Iterable<SessionPhase>): number {
   return count;
 }
 
+/** Two letters standing in for a persona avatar: the first letters of two words, or one word's first two. */
+export function personaInitials(name: string): string {
+  const words = name.trim().split(/\s+/u).filter(Boolean);
+  const letters = words.length > 1 ? `${words[0]?.[0] ?? ''}${words[1]?.[0] ?? ''}` : (words[0]?.slice(0, 2) ?? '');
+  return letters.toUpperCase() || 'DP';
+}
+
 /** Shortens a home-rooted cwd the way a shell prompt would. */
 export function abbreviateCwd(cwd: string): string {
   const match = /^\/(?:Users|home)\/[^/]+/u.exec(cwd);

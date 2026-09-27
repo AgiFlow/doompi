@@ -49,6 +49,16 @@ function sessionView(session: HeadlessHubSession): Record<string, JsonValue> {
     everPrompted: session.everPrompted ?? false,
     awaitingInput: session.awaitingInput ?? false,
     ...(session.lastSettledAt === undefined ? {} : { lastSettledAt: session.lastSettledAt }),
+    ...(session.git === undefined ? {} : { git: { branch: session.git.branch, dirty: session.git.dirty } }),
+    ...(session.profile === undefined
+      ? {}
+      : {
+          profile: {
+            name: session.profile.name,
+            ...(session.profile.displayName === undefined ? {} : { displayName: session.profile.displayName }),
+            ...(session.profile.iconVersion === undefined ? {} : { iconVersion: session.profile.iconVersion }),
+          },
+        }),
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
     ...(session.pendingSetups === undefined
@@ -126,6 +136,7 @@ function frameOf(event: HeadlessHubEvent): HubFrame {
         workspace: {
           id: event.workspace.id,
           root: event.workspace.root,
+          ...(event.workspace.name === undefined ? {} : { name: event.workspace.name }),
           available: event.workspace.available !== false,
         },
       };
@@ -206,6 +217,7 @@ function managementHost(
           .map((workspace) => ({
             id: workspace.id,
             root: workspace.root,
+            ...(workspace.name === undefined ? {} : { name: workspace.name }),
             available: workspace.available !== false,
           })),
       });

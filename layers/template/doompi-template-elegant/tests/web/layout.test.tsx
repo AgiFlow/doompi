@@ -1,4 +1,5 @@
 import type { WebTemplateProps } from '@agimon-ai/doompi-core/web';
+import { templateRailStub } from '@agimon-ai/doompi-core/webTesting';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 
@@ -13,8 +14,8 @@ const props: WebTemplateProps = {
   onNavigationOpenChange: () => {},
   onDesktopActivityOpenChange: () => {},
   onMobileActivityOpenChange: () => {},
+  rail: templateRailStub().rail,
   slots: {
-    navigation: <nav>Sessions</nav>,
     header: (options) => {
       expect(options).toEqual({ navigationToggle: 'always', activityToggle: 'always' });
       return <header>Header</header>;
@@ -34,7 +35,7 @@ it('centers the conversation without mounting closed drawer content', () => {
   expect(html.match(/<textarea/g)).toHaveLength(1);
   expect(html).toContain('template-controls-toggle');
   expect(html).not.toContain('<aside>Activity');
-  expect(html).not.toContain('<nav>Sessions');
+  expect(html).not.toContain('data-testid="workspace-group-');
   expect(elegantTemplate.layout).toBe(ElegantLayout);
 });
 

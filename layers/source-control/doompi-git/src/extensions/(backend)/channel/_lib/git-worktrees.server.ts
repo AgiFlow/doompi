@@ -57,8 +57,11 @@ function viewsFor(scope: DoomHubSessionScope, deps: ViewDeps): WorktreeView[] {
     return createWorktreeRegistry(registryFile(scope.cwd, deps.homeDir))
       .list()
       .flatMap((record) => {
-        const owned = record.parentSessionId === scope.sessionId;
-        const unowned = !owned && !deps.sessionService.isLive(record.parentSessionId);
+        // A worktree opened on its own from the new-session dialog belongs to the session
+        // inside it; sibling sessions in the repository never see it.
+        if (record.parentSessionId === undefined && record.sessionId !== scope.sessionId) return [];
+        const owned = record.parentSessionId === undefined || record.parentSessionId === scope.sessionId;
+        const unowned = !owned && !deps.sessionService.isLive(record.parentSessionId!);
         if (!owned && !unowned) return [];
         return [
           {

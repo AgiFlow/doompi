@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 
 import type {
@@ -31,12 +33,31 @@ import {
   type InstalledServerFacets,
   type LoadedServerFacet,
 } from '../exports/serverFacet';
+import { PROFILE_ICON_MIME_TYPES } from '../schemas/profileIdentity';
+import { readSessionGitStatus } from '../services/sessionGitStatus';
+import type { SessionGitStatus } from '../services/sessionGitStatus/type';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../systems/main/types/headlessSessionHost';
 import type { HeadlessSessionManager } from '../systems/main/types/headlessSessionManager';
 import { AGENT_SETTLED_ENTRY_TYPE } from './directHarnessRuntime';
 
 const AUTHORIZATION_HEADER = 'authorization';
 const CHANNEL_PRIORITY = { global: 0, workspace: 1, session: 2 } as const;
+const ICON_VERSION_LENGTH = 12;
+const ICON_DATA_URL = /^data:([a-z/+.-]+);base64,([A-Za-z0-9+/=]+)$/u;
+
+/** The profile a session runs under, as shown on its rail card. The icon itself is served separately. */
+export interface HeadlessSessionProfile {
+  readonly name: string;
+  readonly displayName?: string;
+  /** Changes whenever the icon does, so a client can cache the avatar by it. */
+  readonly iconVersion?: string;
+}
+
+/** A profile's persona presentation: display name and icon as a data: URL. */
+export interface HeadlessProfileIdentity {
+  readonly displayName?: string;
+  readonly icon?: string;
+}
 
 export interface HeadlessHubSession {
   readonly id: string;
@@ -54,6 +75,10 @@ export interface HeadlessHubSession {
   readonly everPrompted?: boolean;
   readonly awaitingInput?: boolean;
   readonly lastSettledAt?: string;
+  /** Branch and dirty flag of the session cwd; absent outside a git work tree. */
+  readonly git?: SessionGitStatus;
+  /** Selected profile; absent when the session runs without one. */
+  readonly profile?: HeadlessSessionProfile;
   readonly pendingSetups?: readonly DoomPendingSessionSetup[];
   /** Environment admitted for this session, when supplied by the host. */
   readonly environment?: Readonly<Record<string, string | undefined>>;
@@ -63,7 +88,14 @@ export interface HeadlessHubSession {
 export interface HeadlessWorkspace {
   readonly id: string;
   readonly root: string;
+  readonly name?: string;
   readonly available?: boolean;
+}
+
+/** A workspace to admit: an existing folder, or a name alone for a new default folder. */
+export interface HeadlessWorkspaceAdmission {
+  readonly root?: string;
+  readonly name?: string;
 }
 
 export type HeadlessHubEvent =
@@ -78,13 +110,24 @@ export interface HeadlessHubOptions {
   /** Resolves the hub credential, because the server reads its token file after the hub exists. */
   hubToken?: () => string | undefined;
   /** Creates a session through the canonical cockpit lifecycle for hub channels. */
-  createSession?: (request: DoomHubSessionCreateRequest) => Promise<DoomHubSessionScope>;
+  createSession?: (
+    request: DoomHubSessionCreateRequest,
+    /**
+     * Set when a workspace-mounted package creates a session with no parent. The host must
+     * refuse a cwd outside that workspace before admitting anything.
+     */
+    placement?: { workspaceId: string },
+  ) => Promise<DoomHubSessionScope>;
   onNotice?: (message: string) => void;
   sessionReservations?: DoomHubSessionReservations;
   requestSessionApi?: (scope: DoomHubSessionScope, request: DoomHubSessionApiRequest) => Promise<Response>;
   computerUse?: DoomComputerUseHostBinding;
-  admitWorkspace?: (root: string) => Promise<HeadlessWorkspace>;
+  admitWorkspace?: (request: HeadlessWorkspaceAdmission) => Promise<HeadlessWorkspace>;
   onWorkspaceRemoved?: (workspaceId: string) => void;
+  /** Reads a session cwd's git status; defaults to the git CLI. */
+  readGitStatus?: (cwd: string) => Promise<SessionGitStatus | undefined>;
+  /** Resolves a profile's persona presentation for a workspace root; sessions show no avatar without it. */
+  resolveProfileIdentity?: (root: string, profile: string) => HeadlessProfileIdentity | undefined;
 }
 
 export interface HeadlessHub {
@@ -96,6 +139,8 @@ export interface HeadlessHub {
   snapshot(): readonly HeadlessHubSession[];
   session(sessionId: string): HeadlessHubSession | undefined;
   runtime(sessionId: string): HeadlessSessionHost['runtime'] | undefined;
+  /** The session's profile avatar image, when its profile has an icon. */
+  sessionAvatar(sessionId: string): { mimeType: string; bytes: Uint8Array } | undefined;
   onEvent(listener: (event: HeadlessHubEvent) => void): () => void;
   register(session: HeadlessHubSession): void;
   create(options: HeadlessSessionHostOptions): Promise<HeadlessHubSession>;
@@ -110,7 +155,7 @@ export interface HeadlessHub {
   mountFacets(facets: readonly (DoomServerFacet | LoadedServerFacet)[], context?: DoomApiContext): Promise<void>;
   workspaces(): readonly HeadlessWorkspace[];
   registerWorkspace(workspace: HeadlessWorkspace): void;
-  admitWorkspace(root: string): Promise<HeadlessWorkspace>;
+  admitWorkspace(request: HeadlessWorkspaceAdmission): Promise<HeadlessWorkspace>;
   removeWorkspace(workspaceId: string): Promise<void>;
   requestApi(mount: DoomApiMount, basePath: string, request: Request): Promise<Response>;
   /** The dispatch table hub facets mount into, shared with session hosts this hub serves. */
@@ -180,6 +225,8 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   const subscriptions = new Set<() => void>();
   const sessionCleanups = new Map<string, () => void>();
   const presentationCleanups = new Map<string, () => void>();
+  /** Profile icons by session, kept out of summaries because each can be hundreds of kilobytes. */
+  const avatarIcons = new Map<string, string>();
   const sessionShutdowns = new Map<string, { session: HeadlessHubSession; promise: Promise<void>; pending: boolean }>();
   const directEventListeners = new Map<string, Set<(payload: unknown) => void>>();
   const directEventLatest = new Map<string, unknown>();
@@ -437,6 +484,13 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     sessionService: {
       reservations: reservationsFor(mount),
       create: async (request) => {
+        // A workspace package may start a top-level session, placed in its own workspace.
+        if (mount.scope === 'workspace' && request.parentSessionId === undefined) {
+          if (request.reservationId !== undefined) throw new Error('A reserved session requires its owning parent.');
+          if (options.createSession === undefined)
+            throw new Error('The cockpit session service cannot create sessions in this host.');
+          return options.createSession(request, { workspaceId: mount.workspaceId });
+        }
         if (mount.scope !== 'global') {
           const parent = request.parentSessionId === undefined ? undefined : sessions.get(request.parentSessionId);
           if (!parent || !belongs(mount, parent)) throw new Error('Parent session is outside this mount.');
@@ -577,6 +631,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     sessionCleanups.delete(sessionId);
     presentationCleanups.get(sessionId)?.();
     presentationCleanups.delete(sessionId);
+    avatarIcons.delete(sessionId);
     directEvents.clearSession?.(sessionId);
     emit({ kind: 'removed', sessionId });
   };
@@ -618,6 +673,23 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     };
     sessions.set(session.id, current);
     announceCommunicationReady(session.id);
+    // Branch changes happen inside runs, so the status is read at start and after each settle.
+    const refreshGit = (): void => {
+      void (options.readGitStatus ?? readSessionGitStatus)(session.cwd).then(
+        (git) => {
+          if (closed || sessions.get(session.id)?.host !== session.host) return;
+          if (git?.branch === current.git?.branch && git?.dirty === current.git?.dirty) return;
+          const { git: _previous, ...rest } = current;
+          current = git === undefined ? rest : { ...rest, git };
+          sessions.set(session.id, current);
+          emit({ kind: 'upsert', session: current });
+        },
+        (error: unknown) =>
+          options.onNotice?.(
+            `session ${session.id} git status failed (${error instanceof Error ? error.message : String(error)})`,
+          ),
+      );
+    };
     const stopPresentation = session.host.onPresentationFrame((frame) => {
       if (sessions.get(session.id)?.host !== session.host) return;
       const type = typeof frame.type === 'string' ? frame.type : '';
@@ -654,8 +726,51 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       };
       sessions.set(session.id, current);
       emit({ kind: 'upsert', session: current });
+      if (type === 'agent_settled') refreshGit();
     });
-    presentationCleanups.set(session.id, stopPresentation);
+    let registered = false;
+    const applyProfile = (profileName: string | undefined): void => {
+      if (closed || sessions.get(session.id)?.host !== session.host) return;
+      let identity: HeadlessProfileIdentity | undefined;
+      if (profileName) {
+        const root = (session.workspaceId && workspaces.get(session.workspaceId)?.root) || session.cwd;
+        try {
+          identity = options.resolveProfileIdentity?.(root, profileName);
+        } catch (error) {
+          options.onNotice?.(
+            `session ${session.id} profile "${profileName}" could not be resolved (${error instanceof Error ? error.message : String(error)})`,
+          );
+        }
+      }
+      const icon = identity?.icon;
+      if (icon) avatarIcons.set(session.id, icon);
+      else avatarIcons.delete(session.id);
+      const profile: HeadlessSessionProfile | undefined = profileName
+        ? {
+            name: profileName,
+            ...(identity?.displayName ? { displayName: identity.displayName } : {}),
+            ...(icon
+              ? { iconVersion: crypto.createHash('sha256').update(icon).digest('hex').slice(0, ICON_VERSION_LENGTH) }
+              : {}),
+          }
+        : undefined;
+      const previous = current.profile;
+      if (
+        previous?.name === profile?.name &&
+        previous?.displayName === profile?.displayName &&
+        previous?.iconVersion === profile?.iconVersion
+      )
+        return;
+      const { profile: _previous, ...rest } = current;
+      current = profile === undefined ? rest : { ...rest, profile };
+      sessions.set(session.id, current);
+      if (registered) emit({ kind: 'upsert', session: current });
+    };
+    const stopSelection = session.host.onSelection?.((selection) => applyProfile(selection.profile));
+    presentationCleanups.set(session.id, () => {
+      stopPresentation();
+      stopSelection?.();
+    });
     for (const { source } of selectedChannels(current)) source.sessionAdded?.(scopeOf(session));
     const active = (): boolean => sessions.get(session.id)?.host === session.host && !closed;
     const cleanup = (): void => {
@@ -671,7 +786,9 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     sessionCleanups.set(session.id, cleanup);
     void session.host.runtime.exited.then(cleanup, cleanup);
     subscriptions.add(cleanup);
+    registered = true;
     emit({ kind: 'upsert', session: current });
+    refreshGit();
   };
 
   const closeSession = async (sessionId: string): Promise<void> => {
@@ -776,6 +893,12 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       if (session) emit({ kind: 'upsert', session: present(session) });
     },
     runtime: (sessionId) => sessions.get(sessionId)?.host.runtime,
+    sessionAvatar(sessionId) {
+      const match = ICON_DATA_URL.exec(avatarIcons.get(sessionId) ?? '');
+      const mimeType = match?.[1];
+      if (match === null || !(PROFILE_ICON_MIME_TYPES as readonly string[]).includes(mimeType ?? '')) return undefined;
+      return { mimeType: mimeType!, bytes: Buffer.from(match[2]!, 'base64') };
+    },
     onEvent(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -790,9 +913,9 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       workspaces.set(workspace.id, workspace);
       emit({ kind: 'workspace_upsert', workspace });
     },
-    admitWorkspace: async (root) => {
+    admitWorkspace: async (request) => {
       if (!options.admitWorkspace) throw new Error('Workspace admission is unavailable.');
-      return options.admitWorkspace(root);
+      return options.admitWorkspace(request);
     },
     async removeWorkspace(id) {
       if ([...sessions.values()].some((session) => session.workspaceId === id))

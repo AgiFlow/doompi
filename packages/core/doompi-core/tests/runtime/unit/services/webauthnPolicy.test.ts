@@ -12,6 +12,12 @@ describe('stepUpActionFor', () => {
     expect(stepUpActionFor('POST', '/api/workspaces/w/sessions/one/resume')).toBe('session.create');
   });
 
+  it('gates a git worktree session from the new-session dialog, but not its branch listing', () => {
+    expect(stepUpActionFor('POST', '/api/workspaces/w/plugins/git/sessions')).toBe('session.create');
+    expect(stepUpActionFor('GET', '/api/workspaces/w/plugins/git/branches')).toBeUndefined();
+    expect(stepUpActionFor('POST', '/api/workspaces/w/plugins/git/sessions/extra')).toBeUndefined();
+  });
+
   it('leaves reading and stopping a session ungated', () => {
     expect(stepUpActionFor('GET', '/api/workspaces/w/sessions')).toBeUndefined();
     expect(stepUpActionFor('DELETE', '/api/workspaces/w/sessions/one')).toBeUndefined();

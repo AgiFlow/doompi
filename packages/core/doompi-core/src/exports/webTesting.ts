@@ -16,3 +16,11 @@ export {
   type ToolMessagePropsFixture,
   type ToolMessagePropsOptions,
 } from '../web/services/testing/slotProps';
+export {
+  defaultRailWorkspaces,
+  railSession,
+  type RecordedRailAction,
+  templateRailStub,
+  type TemplateRailFixture,
+  type TemplateRailOptions,
+} from '../web/services/testing/templateRail';

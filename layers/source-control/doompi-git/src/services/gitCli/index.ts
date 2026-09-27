@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 
+import type { GitBranches, GitLocalBranch, GitRemoteBranch } from '../../types/gitSessions';
 import type { WorktreeGit } from '../../types/worktreeRegistry';
 
 /**
@@ -18,6 +19,11 @@ const ADD_TIMEOUT_MS = 300_000;
 const REMOVE_TIMEOUT_MS = 300_000;
 const PRUNE_TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_BYTES = 1_000_000;
+/** Enough for any branch picker; a repository with more refs lists its most recent ones. */
+const MAX_LISTED_REFS = 2_000;
+const LOCAL_PREFIX = 'refs/heads/';
+const REMOTE_PREFIX = 'refs/remotes/';
+const HEAD_SUFFIX = '/HEAD';
 
 interface GitResult {
   code: number;
@@ -73,6 +79,60 @@ export function createWorktreeGit(): WorktreeGit {
     async addWorktree({ repositoryRoot, path, branch, baseRef }) {
       const result = await git(repositoryRoot, ['worktree', 'add', '-b', branch, path, baseRef], ADD_TIMEOUT_MS);
       if (result.code !== 0) throw failure('worktree add', result);
+    },
+
+    async addExistingWorktree({ repositoryRoot, path, branch, remote }) {
+      const args =
+        remote === undefined
+          ? ['worktree', 'add', path, branch]
+          : ['worktree', 'add', '--track', '-b', branch, path, `${remote}/${branch}`];
+      const result = await git(repositoryRoot, args, ADD_TIMEOUT_MS);
+      if (result.code !== 0) throw failure('worktree add', result);
+    },
+
+    async listBranches(repositoryRoot): Promise<GitBranches> {
+      const refs = await git(
+        repositoryRoot,
+        [
+          'for-each-ref',
+          '--sort=-committerdate',
+          `--count=${String(MAX_LISTED_REFS)}`,
+          '--format=%(refname)%09%(worktreepath)%09%(symref)',
+          'refs/heads',
+          'refs/remotes',
+        ],
+        READ_TIMEOUT_MS,
+      );
+      if (refs.code !== 0) throw failure('for-each-ref', refs);
+      const local: GitLocalBranch[] = [];
+      const remotes: GitRemoteBranch[] = [];
+      for (const line of refs.stdout.split('\n')) {
+        const [ref = '', worktreePath = '', symref = ''] = line.split('\t');
+        if (ref === '' || symref !== '') continue;
+        if (ref.startsWith(LOCAL_PREFIX)) {
+          const name = ref.slice(LOCAL_PREFIX.length);
+          local.push(worktreePath === '' ? { name } : { name, checkedOutAt: worktreePath });
+        } else if (ref.startsWith(REMOTE_PREFIX) && !ref.endsWith(HEAD_SUFFIX)) {
+          const rest = ref.slice(REMOTE_PREFIX.length);
+          const separator = rest.indexOf('/');
+          if (separator > 0) remotes.push({ remote: rest.slice(0, separator), name: rest.slice(separator + 1) });
+        }
+      }
+      const localNames = new Set(local.map((branch) => branch.name));
+      const head = await git(repositoryRoot, ['symbolic-ref', '--quiet', '--short', 'HEAD'], READ_TIMEOUT_MS);
+      const current = head.code === 0 && head.stdout.trim() !== '' ? head.stdout.trim() : undefined;
+      const origin = await git(
+        repositoryRoot,
+        ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
+        READ_TIMEOUT_MS,
+      );
+      const defaultBase = origin.code === 0 && origin.stdout.trim() !== '' ? origin.stdout.trim() : current;
+      return {
+        ...(current === undefined ? {} : { current }),
+        ...(defaultBase === undefined ? {} : { defaultBase }),
+        local,
+        remote: remotes.filter((branch) => !localNames.has(branch.name)),
+      };
     },
 
     async removeWorktree({ repositoryRoot, path, force }) {

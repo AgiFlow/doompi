@@ -10,6 +10,13 @@ import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 import type { HeadlessSessionHost } from '../../../../../src/systems/main/types/headlessSessionHost';
 import type { DirectHarnessFrame } from '../../../../../src/types/server/directHarnessRuntime';
 
+type SelectionListener = Parameters<NonNullable<HeadlessSessionHost['onSelection']>>[0];
+
+/** Hub profile tracking reads only the profile axis of a selection. */
+function selected(profile?: string): Parameters<SelectionListener>[0] {
+  return (profile === undefined ? {} : { profile }) as Parameters<SelectionListener>[0];
+}
+
 function host() {
   let resolveExit: ((code: number) => void) | undefined;
   let presentationListener: ((frame: DirectHarnessFrame) => void) | undefined;
@@ -133,7 +140,7 @@ describe('createHeadlessHub', () => {
       } as never,
       onNotice: (notice) => notices.push(notice),
     });
-    await expect(hub.admitWorkspace('/repo')).rejects.toThrow('unavailable');
+    await expect(hub.admitWorkspace({ root: '/repo' })).rejects.toThrow('unavailable');
     await expect(hub.mountFacets([], { scope: 'session', sessionId: 'one', onNotice: vi.fn() })).rejects.toThrow(
       'Session facets belong',
     );
@@ -176,7 +183,15 @@ describe('createHeadlessHub', () => {
     expect(scopedSessions).toBeDefined();
     expect(scopedSessions?.isLive('one')).toBe(true);
     expect(scopedSessions?.isLive('two')).toBe(true);
-    await expect(scopedSessions?.create({ cwd: '/one', name: 'child' })).rejects.toThrow('Parent session');
+    // A workspace package may start a top-level session, placed in its own workspace.
+    await expect(scopedSessions?.create({ cwd: '/one/wt', name: 'top' })).resolves.toEqual({
+      sessionId: 'created',
+      cwd: '/one',
+    });
+    expect(createSession).toHaveBeenLastCalledWith({ cwd: '/one/wt', name: 'top' }, { workspaceId: 'one' });
+    await expect(scopedSessions?.create({ cwd: '/one', name: 'reserved', reservationId: 'r1' })).rejects.toThrow(
+      'requires its owning parent',
+    );
     await expect(scopedSessions?.create({ cwd: '/one', name: 'child', parentSessionId: 'two' })).rejects.toThrow(
       'Parent session',
     );
@@ -184,7 +199,8 @@ describe('createHeadlessHub', () => {
       sessionId: 'created',
       cwd: '/one',
     });
-    expect(createSession).toHaveBeenCalledOnce();
+    expect(createSession).toHaveBeenLastCalledWith({ cwd: '/one', name: 'child', parentSessionId: 'one' });
+    expect(createSession).toHaveBeenCalledTimes(2);
     await expect(scopedSessions?.close('two')).rejects.toThrow('outside this mount');
     await expect(scopedSessions?.close('missing')).resolves.toBeUndefined();
     expect(closeSession).not.toHaveBeenCalled();
@@ -547,6 +563,108 @@ describe('createHeadlessHub', () => {
 
     expect(events).toEqual(['upsert', 'upsert', 'upsert', 'upsert']);
     expect(hub.snapshot()[0]?.phase).toBe('idle');
+  });
+
+  it('publishes the session git status at registration and again after a run settles', async () => {
+    const session = host();
+    const readGitStatus = vi
+      .fn()
+      .mockResolvedValueOnce({ branch: 'main', dirty: false })
+      .mockResolvedValueOnce({ branch: 'feature/rail', dirty: true })
+      .mockResolvedValue(undefined);
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never, readGitStatus });
+    const upserts: unknown[] = [];
+    hub.onEvent((event) => {
+      if (event.kind === 'upsert') upserts.push(event.session.git);
+    });
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: session.host });
+
+    await vi.waitFor(() => expect(hub.session('one')?.git).toEqual({ branch: 'main', dirty: false }));
+    expect(readGitStatus).toHaveBeenCalledWith('/repo');
+
+    session.emitFrame({ type: 'agent_start' });
+    await Promise.resolve();
+    expect(readGitStatus).toHaveBeenCalledTimes(1);
+
+    session.emitFrame({ type: 'agent_settled' });
+    await vi.waitFor(() => expect(hub.session('one')?.git).toEqual({ branch: 'feature/rail', dirty: true }));
+
+    session.emitFrame({ type: 'agent_settled' });
+    await vi.waitFor(() => expect(hub.session('one')?.git).toBeUndefined());
+    expect(upserts.at(-1)).toBeUndefined();
+    expect(upserts).toContainEqual({ branch: 'main', dirty: false });
+  });
+
+  it('tracks the selected profile and serves its icon outside the summary', async () => {
+    const session = host();
+    let selectionListener: SelectionListener | undefined;
+    const png = `data:image/png;base64,${Buffer.from('png-bytes').toString('base64')}`;
+    const resolveProfileIdentity = vi.fn((_root: string, profile: string) => {
+      if (profile === 'ponytail') return { displayName: 'Ponytail', icon: png };
+      if (profile === 'vector') return { icon: 'data:image/svg+xml;base64,PHN2Zy8+' };
+      if (profile === 'plain') return {};
+      throw new Error(`Unknown profile: ${profile}`);
+    });
+    const onNotice = vi.fn();
+    const hub = createHeadlessHub({
+      manager: { closeSession: vi.fn(async () => undefined) } as never,
+      readGitStatus: async () => undefined,
+      resolveProfileIdentity,
+      onNotice,
+    });
+    hub.registerWorkspace({ id: 'ws', root: '/workspace-root' });
+    const upserts: unknown[] = [];
+    hub.onEvent((event) => {
+      if (event.kind === 'upsert') upserts.push(event.session.profile);
+    });
+    hub.register({
+      id: 'one',
+      workspaceId: 'ws',
+      name: 'One',
+      cwd: '/workspace-root/packages/app',
+      createdAt: 'now',
+      host: {
+        ...session.host,
+        onSelection: (listener) => {
+          selectionListener = listener;
+          listener(selected('ponytail'));
+          return () => {
+            selectionListener = undefined;
+          };
+        },
+      },
+    });
+
+    expect(resolveProfileIdentity).toHaveBeenCalledWith('/workspace-root', 'ponytail');
+    expect(hub.session('one')?.profile).toEqual({
+      name: 'ponytail',
+      displayName: 'Ponytail',
+      iconVersion: expect.stringMatching(/^[0-9a-f]{12}$/u),
+    });
+    expect(upserts.at(-1)).not.toHaveProperty('icon');
+    expect(hub.sessionAvatar('one')).toEqual({ mimeType: 'image/png', bytes: Buffer.from('png-bytes') });
+
+    const published = upserts.length;
+    selectionListener?.(selected('ponytail'));
+    expect(upserts).toHaveLength(published);
+
+    selectionListener?.(selected('vector'));
+    expect(hub.sessionAvatar('one')).toBeUndefined();
+    selectionListener?.(selected('plain'));
+    expect(hub.session('one')?.profile).toEqual({ name: 'plain' });
+    expect(hub.sessionAvatar('one')).toBeUndefined();
+
+    selectionListener?.(selected('gone'));
+    expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('profile "gone" could not be resolved'));
+    expect(hub.session('one')?.profile).toEqual({ name: 'gone' });
+
+    selectionListener?.(selected());
+    expect(hub.session('one')?.profile).toBeUndefined();
+
+    selectionListener?.(selected('ponytail'));
+    await hub.closeSession('one');
+    expect(selectionListener).toBeUndefined();
+    expect(hub.sessionAvatar('one')).toBeUndefined();
   });
 
   it('keeps workspace APIs alive without sessions and isolates equal package paths', async () => {

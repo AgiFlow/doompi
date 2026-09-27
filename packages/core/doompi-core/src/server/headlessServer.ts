@@ -28,7 +28,7 @@ import { createSessionMcpRegistrationStore } from '../services/sessionMcpRegistr
 import type { SavedSession } from '../services/sqliteSessionHistory';
 import { createContextApi } from './contextApi';
 import { harnessErrorMessage } from './harnessErrorMessage';
-import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
+import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession, HeadlessWorkspaceAdmission } from './headlessHub';
 import { createHeadlessProtocol } from './headlessProtocol';
 import { createSessionMcpRoutes, isPublicSessionMcpRoute, isSessionMcpHostRoute } from './sessionMcpRoutes';
 
@@ -52,6 +52,11 @@ const HEALTH_ROLE = 'hub';
 const PROTOCOL_VERSION = 1;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const MAX_SESSION_FILE_BYTES = 25 * 1024 * 1024;
+const DIRECTORY_SUGGESTION_LIMIT = 12;
+const DIRECTORY_CHILDREN_LIMIT = 500;
+const HOME_PREFIX = '~';
+const WORKSPACE_NAME_MAX_LENGTH = 80;
+const WORKSPACE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ._-]*$/u;
 const SESSION_FILE_CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.avif': 'image/avif',
   '.bmp': 'image/bmp',
@@ -126,6 +131,8 @@ function sessionView(session: HeadlessHubSession): Record<string, unknown> {
     everPrompted: session.everPrompted ?? false,
     awaitingInput: session.awaitingInput ?? false,
     ...(session.lastSettledAt === undefined ? {} : { lastSettledAt: session.lastSettledAt }),
+    ...(session.git === undefined ? {} : { git: { ...session.git } }),
+    ...(session.profile === undefined ? {} : { profile: { ...session.profile } }),
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
     ...(session.pendingSetups === undefined ? {} : { pendingSetups: session.pendingSetups }),
@@ -239,8 +246,39 @@ async function sessionFile(session: HeadlessHubSession, relativePath: string | n
   }
 }
 
+/** Expands a leading `~` the way a shell would, so typed paths match what the user sees in a terminal. */
+function expandHome(value: string): string {
+  if (value === HOME_PREFIX) return os.homedir();
+  return value.startsWith(`${HOME_PREFIX}${path.sep}`) ? path.join(os.homedir(), value.slice(2)) : value;
+}
+
+/**
+ * Validates an add-workspace request. A name alone asks for a new default folder,
+ * so it must be safe to use as one folder name.
+ */
+function parseWorkspaceAdmission(body: unknown): HeadlessWorkspaceAdmission | { error: string } {
+  if (typeof body !== 'object' || body === null) return { error: 'A workspace root or name is required.' };
+  const record = body as Record<string, unknown>;
+  if (record.root !== undefined && typeof record.root !== 'string')
+    return { error: 'The workspace root must be text.' };
+  if (record.name !== undefined && typeof record.name !== 'string')
+    return { error: 'The workspace name must be text.' };
+  const root =
+    typeof record.root === 'string' && record.root.trim() !== '' ? expandHome(record.root.trim()) : undefined;
+  const name = typeof record.name === 'string' && record.name.trim() !== '' ? record.name.trim() : undefined;
+  if (root === undefined && name === undefined) return { error: 'A workspace root or name is required.' };
+  if (
+    name !== undefined &&
+    (name.length > WORKSPACE_NAME_MAX_LENGTH || !WORKSPACE_NAME_PATTERN.test(name) || name.includes('..'))
+  )
+    return {
+      error: `Workspace names use letters, numbers, spaces, dots, dashes, or underscores (up to ${String(WORKSPACE_NAME_MAX_LENGTH)} characters).`,
+    };
+  return { ...(root === undefined ? {} : { root }), ...(name === undefined ? {} : { name }) };
+}
+
 async function directorySuggestions(query: string, sessions: readonly HeadlessHubSession[]): Promise<string[]> {
-  const typed = query.trim();
+  const typed = expandHome(query.trim());
   if (typed === '') return [];
   const matches = (value: string): boolean => value.toLowerCase().includes(typed.toLowerCase());
   const known = [...new Set([process.cwd(), ...sessions.map((session) => session.cwd)])].filter(matches);
@@ -265,7 +303,35 @@ async function directorySuggestions(query: string, sessions: readonly HeadlessHu
       // A missing or unreadable parent simply has no completions.
     }
   }
-  return [...new Set([...known, ...completed.sort((left, right) => left.localeCompare(right))])].slice(0, 12);
+  return [...new Set([...known, ...completed.sort((left, right) => left.localeCompare(right))])].slice(
+    0,
+    DIRECTORY_SUGGESTION_LIMIT,
+  );
+}
+
+/**
+ * Lists the visible child directories of one folder for the workspace folder browser.
+ * Resolves undefined for a relative, missing, or unreadable path.
+ */
+async function directoryChildren(
+  requested: string | null,
+): Promise<{ path: string; parent?: string; directories: string[] } | undefined> {
+  const directory = requested === null || requested.trim() === '' ? os.homedir() : expandHome(requested.trim());
+  if (!path.isAbsolute(directory)) return undefined;
+  const resolved = path.resolve(directory);
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(resolved, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+  const directories = entries
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+    .map((entry) => path.join(resolved, entry.name))
+    .sort((left, right) => left.localeCompare(right))
+    .slice(0, DIRECTORY_CHILDREN_LIMIT);
+  const parent = path.dirname(resolved);
+  return { path: resolved, ...(parent === resolved ? {} : { parent }), directories };
 }
 
 async function readBody(request: IncomingMessage): Promise<Uint8Array> {
@@ -523,6 +589,12 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         return;
       }
     }
+    if (url.pathname === '/api/directories/children' && request.method === 'GET') {
+      const listing = await directoryChildren(url.searchParams.get('path'));
+      if (listing === undefined) json(response, 404, { error: 'That folder cannot be read.' });
+      else json(response, 200, listing);
+      return;
+    }
     if (url.pathname === '/api/directories' && request.method === 'GET') {
       json(response, 200, {
         directories: await directorySuggestions(url.searchParams.get('q') ?? '', options.headlessHub.snapshot()),
@@ -623,12 +695,18 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         return;
       }
       if (request.method === 'POST') {
-        const body = parseJson(await readBody(request));
-        if (typeof body !== 'object' || body === null || !('root' in body) || typeof body.root !== 'string') {
-          json(response, 400, { error: 'A workspace root is required.' });
+        const admission = parseWorkspaceAdmission(parseJson(await readBody(request)));
+        if ('error' in admission) {
+          json(response, 400, admission);
           return;
         }
-        const workspace = await options.headlessHub.admitWorkspace(body.root);
+        let workspace: Awaited<ReturnType<HeadlessHub['admitWorkspace']>>;
+        try {
+          workspace = await options.headlessHub.admitWorkspace(admission);
+        } catch (error) {
+          json(response, 422, { error: error instanceof Error ? error.message : String(error) });
+          return;
+        }
         json(response, 201, { workspace });
         return;
       }
@@ -875,6 +953,22 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     }
     if (suffix === '/history' && request.method === 'GET' && options.sessionHistory) {
       json(response, 200, { sessions: await options.sessionHistory(session) });
+      return;
+    }
+    if (suffix === '/avatar' && request.method === 'GET') {
+      const avatar = options.headlessHub.sessionAvatar(sessionId);
+      if (avatar === undefined) {
+        json(response, 404, { error: 'This session has no avatar.' });
+        return;
+      }
+      const current = url.searchParams.get('v') === session.profile?.iconVersion;
+      response.writeHead(200, {
+        'content-type': avatar.mimeType,
+        'content-length': String(avatar.bytes.byteLength),
+        'cache-control': current ? 'private, max-age=31536000, immutable' : 'no-store',
+        'x-content-type-options': 'nosniff',
+      });
+      response.end(avatar.bytes);
       return;
     }
     if (suffix === '/file' && request.method === 'GET') {

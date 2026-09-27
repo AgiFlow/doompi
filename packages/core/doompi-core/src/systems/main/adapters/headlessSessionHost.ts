@@ -804,6 +804,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         });
   const entries = opened.entries;
   const listeners = new Set<(frame: SessionFrame) => void>();
+  const selectionListeners = new Set<(selection: DoomHeadlessSelection) => void>();
+  let latestSelection: DoomHeadlessSelection = options.selection;
   const initialSelection = restoreHeadlessSelection(entries, options.selection);
   let headlessHost: HeadlessHost | undefined;
   let mcpServiceRoot: CordisContext | undefined;
@@ -1325,6 +1327,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       },
       onApplied: async (selection) => {
         options.publishSelectionStatus?.((source, text) => client!.client.setStatus(source, text), selection);
+        latestSelection = selection;
+        for (const listener of selectionListeners) listener(selection);
       },
       onError: (error) => options.onNotice?.(`Headless selection failed: ${harnessErrorMessage(error)}`),
     });
@@ -1658,6 +1662,13 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     onPresentationFrame(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+    onSelection(listener) {
+      selectionListeners.add(listener);
+      listener(latestSelection);
+      return () => {
+        selectionListeners.delete(listener);
+      };
     },
     respondToExtensionUi(frame) {
       return client?.receive(frame as SessionFrame) ?? false;

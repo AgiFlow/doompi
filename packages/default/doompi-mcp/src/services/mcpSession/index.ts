@@ -345,8 +345,8 @@ export class McpSession {
   /**
    * Records the URL a flow is waiting on, then passes it to the host.
    *
-   * Kept here as well as announced, because the announcement lands in the
-   * transcript and the panel a user starts the flow from covers it. Host work is
+   * Kept here because the status panel a user starts the flow from is where the
+   * link is shown; hosts do not repeat it in the transcript. Host work is
    * detached so a failed desktop browser launch never cancels a still-usable OAuth
    * callback; the overlay retains a clickable fallback and a retry action.
    */

@@ -747,7 +747,7 @@ describe('doom mcp extension', () => {
       await extension.runCommand('auth pencil', false);
 
       expect(openExternalUrl).not.toHaveBeenCalled();
-      expect(notify).toHaveBeenCalledWith(expect.stringContaining(authorizationUrl.toString()), 'info');
+      expect(notify).not.toHaveBeenCalledWith(expect.stringContaining(authorizationUrl.toString()), expect.anything());
     });
 
     it('reconnects on reload', async () => {

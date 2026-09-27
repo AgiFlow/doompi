@@ -692,6 +692,67 @@ describe('serveHeadlessServer', () => {
     await hub.close();
   });
 
+  it('serves a session profile avatar with cache headers keyed by its icon version', async () => {
+    const icon = `data:image/webp;base64,${Buffer.from('webp-bytes').toString('base64')}`;
+    const hub = createHeadlessHub({
+      manager: { closeSession: vi.fn(async () => undefined) } as never,
+      readGitStatus: async () => undefined,
+      resolveProfileIdentity: (_root, profile) => (profile === 'ponytail' ? { displayName: 'Ponytail', icon } : {}),
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const withProfile = (profile: string) => ({
+      ...host().host,
+      onSelection: (listener: Parameters<NonNullable<HeadlessSessionHost['onSelection']>>[0]) => {
+        listener({ profile } as Parameters<typeof listener>[0]);
+        return () => undefined;
+      },
+    });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: withProfile('ponytail'),
+    });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'two',
+      name: 'Two',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: withProfile('plain'),
+    });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
+    servers.push(server);
+    const headers = { 'x-doompi-token': 'secret' };
+    const sessionUrl = (id: string) => `${server.url}/api/workspaces/test-workspace/sessions/${id}`;
+
+    const view = (await (await fetch(sessionUrl('one'), { headers })).json()) as {
+      profile?: { name: string; displayName?: string; iconVersion?: string };
+    };
+    expect(view.profile).toMatchObject({ name: 'ponytail', displayName: 'Ponytail' });
+    const version = view.profile?.iconVersion ?? '';
+
+    const cached = await fetch(`${sessionUrl('one')}/avatar?v=${version}`, { headers });
+    expect(cached.status).toBe(200);
+    expect(cached.headers.get('content-type')).toBe('image/webp');
+    expect(cached.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
+    expect(cached.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(Buffer.from(await cached.arrayBuffer()).toString()).toBe('webp-bytes');
+
+    const stale = await fetch(`${sessionUrl('one')}/avatar?v=old`, { headers });
+    expect(stale.headers.get('cache-control')).toBe('no-store');
+    expect((await fetch(`${sessionUrl('two')}/avatar`, { headers })).status).toBe(404);
+    expect((await fetch(`${sessionUrl('one')}/avatar`)).status).toBe(401);
+    await hub.close();
+  });
+
   it('routes restart, history, and resume through the live session lifecycle', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
     hub.register({
@@ -1062,11 +1123,52 @@ describe('serveHeadlessServer', () => {
         })
       ).json(),
     ).toEqual({ directories: [] });
+    fs.mkdirSync(path.join(directory, '.hidden'));
+    expect(
+      await (
+        await fetch(`${server.url}/api/directories/children?path=${encodeURIComponent(directory)}`, { headers })
+      ).json(),
+    ).toEqual({
+      path: directory,
+      parent: path.dirname(directory),
+      directories: [path.join(directory, 'Alpha'), path.join(directory, 'alpine')],
+    });
+    const home = vi.spyOn(os, 'homedir').mockReturnValue(directory);
+    try {
+      const listedHome = await (await fetch(`${server.url}/api/directories/children`, { headers })).json();
+      expect(listedHome).toMatchObject({ path: directory });
+      const tilde = await (
+        await fetch(`${server.url}/api/directories/children?path=${encodeURIComponent('~/Alpha')}`, { headers })
+      ).json();
+      expect(tilde).toEqual({ path: path.join(directory, 'Alpha'), parent: directory, directories: [] });
+      const suggested = (await (
+        await fetch(`${server.url}/api/directories?q=${encodeURIComponent('~/al')}`, { headers })
+      ).json()) as { directories: string[] };
+      expect(suggested.directories).toContain(path.join(directory, 'alpine'));
+    } finally {
+      home.mockRestore();
+    }
+    expect((await fetch(`${server.url}/api/directories/children?path=relative`, { headers })).status).toBe(404);
+    expect(
+      (
+        await fetch(
+          `${server.url}/api/directories/children?path=${encodeURIComponent(path.join(directory, 'absent'))}`,
+          { headers },
+        )
+      ).status,
+    ).toBe(404);
     await hub.close();
   });
 
   it('validates workspace requests and reports deletion conflicts', async () => {
-    const admitWorkspace = vi.fn(async (root: string) => ({ id: 'one', root }));
+    const admitWorkspace = vi.fn(async (request: { root?: string; name?: string }) => {
+      if (request.name === 'Broken') throw new Error('The folder is not a repository.');
+      return {
+        id: 'one',
+        root: request.root ?? `/default/${request.name ?? ''}`,
+        ...(request.name === undefined ? {} : { name: request.name }),
+      };
+    });
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never, admitWorkspace });
     await hub.mountFacets([], { scope: 'workspace', workspaceId: 'one', workspaceRoot: '/one', onNotice: vi.fn() });
     await hub.mountFacets([], {
@@ -1084,14 +1186,36 @@ describe('serveHeadlessServer', () => {
         { id: 'test-workspace', root: '/repo', available: true },
       ],
     });
-    for (const body of ['', 'null', '[]', '{}', '{"root":1}']) {
+    for (const body of [
+      '',
+      'null',
+      '{}',
+      '{"root":1}',
+      '{"name":2}',
+      '{"root":"  ","name":""}',
+      '{"name":"../escape"}',
+      '{"name":"a/b"}',
+      '{"name":".hidden"}',
+      `{"name":"${'x'.repeat(81)}"}`,
+    ]) {
       const result = await post(body);
-      expect(result.status).toBe(400);
+      expect(result.status, body).toBe(400);
     }
     expect(admitWorkspace).not.toHaveBeenCalled();
     const created = await post('{"root":"/new"}');
     expect(created.status).toBe(201);
     expect(await created.json()).toEqual({ workspace: { id: 'one', root: '/new' } });
+    const named = await post('{"name":"  My project  "}');
+    expect(named.status).toBe(201);
+    expect(await named.json()).toEqual({
+      workspace: { id: 'one', root: '/default/My project', name: 'My project' },
+    });
+    expect(admitWorkspace).toHaveBeenLastCalledWith({ name: 'My project' });
+    await post('{"root":"~/code/app","name":"App"}');
+    expect(admitWorkspace).toHaveBeenLastCalledWith({ root: path.join(os.homedir(), 'code', 'app'), name: 'App' });
+    const failed = await post('{"name":"Broken"}');
+    expect(failed.status).toBe(422);
+    expect(await failed.json()).toEqual({ error: 'The folder is not a repository.' });
     expect((await fetch(`${server.url}/api/workspaces/missing`, { method: 'DELETE' })).status).toBe(404);
     hub.register({ id: 'session', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: host().host });
     expect((await fetch(`${server.url}/api/workspaces/one`, { method: 'DELETE' })).status).toBe(409);

@@ -7,6 +7,8 @@
  * is how orphans are found, so the two views are kept separate on purpose.
  */
 
+import type { GitBranches } from './gitSessions';
+
 /**
  * A worktree's lifecycle as this package sees it.
  *
@@ -32,8 +34,11 @@ export interface WorktreeRecord {
   repositoryRoot: string;
   /** The session spawned into the worktree. */
   sessionId: string;
-  /** The session that asked for the worktree; the rail nests one under the other. */
-  parentSessionId: string;
+  /**
+   * The session that asked for the worktree; the rail nests one under the other.
+   * Absent for a worktree opened from the new-session dialog, which has no parent.
+   */
+  parentSessionId?: string;
   status: WorktreeStatus;
   /** ISO 8601. */
   createdAt: string;
@@ -56,6 +61,13 @@ export interface WorktreeRegistryStore {
 /** The git operations this package needs, named in its own vocabulary. */
 export interface WorktreeGit {
   addWorktree(input: { repositoryRoot: string; path: string; branch: string; baseRef: string }): Promise<void>;
+  /**
+   * A worktree on a branch that already exists. With `remote`, the branch exists only
+   * there and a local tracking branch of the same name is created first.
+   */
+  addExistingWorktree(input: { repositoryRoot: string; path: string; branch: string; remote?: string }): Promise<void>;
+  /** The repository's branches, most recently committed first. */
+  listBranches(repositoryRoot: string): Promise<GitBranches>;
   removeWorktree(input: { repositoryRoot: string; path: string; force: boolean }): Promise<void>;
   /**
    * Safe branch delete, reporting refusal rather than throwing.

@@ -37,6 +37,27 @@ describe('createWorkspaceRegistry', () => {
     expect(createWorkspaceRegistry({ directory }).list()).toEqual([{ id: 'two', root: '/repo/two' }]);
   });
 
+  it('keeps a chosen display name and drops a blank or non-string one', () => {
+    const directory = temporary();
+    const registry = createWorkspaceRegistry({ directory });
+    registry.add({ id: 'named', root: '/repo/named', name: 'My project' });
+    expect(createWorkspaceRegistry({ directory }).list()).toEqual([
+      { id: 'named', root: '/repo/named', name: 'My project' },
+    ]);
+
+    fs.writeFileSync(
+      path.join(directory, 'workspaces.json'),
+      JSON.stringify([
+        { id: 'blank', root: '/repo/blank', name: '  ' },
+        { id: 'number', root: '/repo/number', name: 7 },
+      ]),
+    );
+    expect(createWorkspaceRegistry({ directory }).list()).toEqual([
+      { id: 'blank', root: '/repo/blank' },
+      { id: 'number', root: '/repo/number' },
+    ]);
+  });
+
   it('replaces duplicate identities and ignores invalid persisted entries', () => {
     const directory = temporary();
     fs.writeFileSync(

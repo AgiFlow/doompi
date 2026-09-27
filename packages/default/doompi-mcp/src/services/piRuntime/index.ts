@@ -23,7 +23,6 @@ import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../t
 import { registerLeaderContribution } from '../leader';
 import { createMcpChildTool, createMcpSessionToolsService, MCP_SESSION_TOOLS_SERVICE } from '../mcpSessionTools';
 
-const INFO = 'info';
 const WARNING = 'warning';
 
 function failClosedSessionConfig(cwd: string): McpSessionConfig {
@@ -40,23 +39,20 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
   let activeContext: ExtensionContext | undefined;
   let disposed = false;
   const session = new McpSession({
+    // Browser hosts read the URL from the MCP status panel, so only the TUI acts on it here.
     onAuthorizationUrl: async (url, serverName, { openBrowser }) => {
       const context = activeContext;
-      if (context?.mode === 'tui') {
-        if (!openBrowser) return;
-        try {
-          const { default: open } = await import('open');
-          await open(url.toString());
-        } catch (error) {
-          context.ui.notify(
-            `Could not open the authorization page for ${serverName}: ${error instanceof Error ? error.message : String(error)}. Press a in the MCP overlay to retry.`,
-            WARNING,
-          );
-          throw error;
-        }
-        return;
+      if (context?.mode !== 'tui' || !openBrowser) return;
+      try {
+        const { default: open } = await import('open');
+        await open(url.toString());
+      } catch (error) {
+        context.ui.notify(
+          `Could not open the authorization page for ${serverName}: ${error instanceof Error ? error.message : String(error)}. Press a in the MCP overlay to retry.`,
+          WARNING,
+        );
+        throw error;
       }
-      context?.ui?.notify(`Authorize ${serverName} by opening:\n${url.toString()}`, INFO);
     },
   });
 

@@ -13,6 +13,8 @@ const FILE_MODE = 0o600;
 export interface WorkspaceRecord {
   id: string;
   root: string;
+  /** Display name chosen when the workspace was added; the folder basename stands in when absent. */
+  name?: string;
 }
 
 export interface WorkspaceRegistry {
@@ -31,7 +33,8 @@ function parseRecord(value: unknown): WorkspaceRecord | undefined {
   const record = value as Record<string, unknown>;
   if (typeof record.id !== 'string' || record.id === '') return undefined;
   if (typeof record.root !== 'string' || !path.isAbsolute(record.root)) return undefined;
-  return { id: record.id, root: record.root };
+  const name = typeof record.name === 'string' && record.name.trim() !== '' ? record.name : undefined;
+  return { id: record.id, root: record.root, ...(name === undefined ? {} : { name }) };
 }
 
 /** Durable workspace membership, independent of whether a workspace can currently mount. */

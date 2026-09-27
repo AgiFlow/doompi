@@ -13,7 +13,7 @@ const RecordSchema = Type.Object({
   path: S,
   repositoryRoot: S,
   sessionId: S,
-  parentSessionId: S,
+  parentSessionId: Type.Optional(S),
   status: literals(['spawning', 'running', 'closing', 'orphaned']),
   createdAt: S,
 });
@@ -84,6 +84,47 @@ export const apiContracts = defineApiContract({
       parameters: [...query, { name: 'force', in: 'query', required: false, schema: B }],
       responses: jsonApiResponses(Type.Object({ worktree: RecordSchema })),
     },
+    // The new-session dialog's routes exist only on a workspace mount.
+    ...(scope === 'workspace'
+      ? [
+          {
+            id: 'git.branches',
+            scope,
+            basePath: 'git',
+            path: '/branches',
+            method: 'GET' as const,
+            authentication: 'owner' as const,
+            description: 'List the workspace branches for the new-session dialog.',
+            responses: jsonApiResponses(
+              Type.Object({
+                repository: B,
+                current: O(S),
+                defaultBase: O(S),
+                local: Type.Array(Type.Object({ name: S, checkedOutAt: O(S) })),
+                remote: Type.Array(Type.Object({ remote: S, name: S })),
+              }),
+            ),
+          },
+          {
+            id: 'git.sessions.create',
+            scope,
+            basePath: 'git',
+            path: '/sessions',
+            method: 'POST' as const,
+            authentication: 'owner' as const,
+            description: 'Start a top-level worktree session on an existing or new branch.',
+            body: {
+              required: true,
+              contentType: 'application/json',
+              schema: Type.Union([
+                Type.Object({ mode: Type.Literal('existing-branch'), branch: S, remote: O(S), name: O(S) }),
+                Type.Object({ mode: Type.Literal('new-branch'), branch: S, baseRef: O(S), name: O(S) }),
+              ]),
+            },
+            responses: jsonApiResponses(Type.Object({ sessionId: S, worktreeId: S }), 201),
+          },
+        ]
+      : []),
   ]),
   sockets: (['global', 'workspace'] as const).flatMap((scope) => [
     {

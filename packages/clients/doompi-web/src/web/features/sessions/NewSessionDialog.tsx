@@ -8,11 +8,9 @@ import {
   DialogTitle,
   Input,
 } from '@agimon-ai/doompi-web-components';
-import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
-import { createWorkspaceSession } from '../../lib/hubApi';
-import { applySessionUpsert, waitForSession } from '../../stores/sessionsStore';
+import { useNewSessionActions } from './useNewSessionActions';
 
 /** Creates a session directly in an already admitted workspace. */
 export function NewSessionDialog({
@@ -24,7 +22,7 @@ export function NewSessionDialog({
   workspaceRoot: string;
   onClose: () => void;
 }) {
-  const navigate = useNavigate();
+  const { createPlain } = useNewSessionActions(workspaceId, onClose);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,20 +31,9 @@ export function NewSessionDialog({
     if (busy) return;
     setBusy(true);
     setError('');
-    const outcome = await createWorkspaceSession(workspaceId, { name: name.trim() || undefined });
-    if ('sessionId' in outcome) {
-      if (outcome.session !== undefined) applySessionUpsert({ session: outcome.session });
-      const appeared = await waitForSession(outcome.sessionId);
-      if (appeared) {
-        onClose();
-        await navigate({ to: '/session/$sessionId', params: { sessionId: outcome.sessionId } });
-        return;
-      }
-      setError('The session was created but has not appeared yet; it will show up in the rail.');
-      setBusy(false);
-      return;
-    }
-    setError(outcome.error);
+    const failure = await createPlain(name);
+    if (failure === undefined) return;
+    setError(failure);
     setBusy(false);
   };
 

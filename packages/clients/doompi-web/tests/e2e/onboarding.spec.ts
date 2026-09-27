@@ -56,3 +56,26 @@ test('starting a session hands the column back to the conversation', async ({ pa
   await expect(page.getByTestId('welcome')).toBeHidden();
   await expect(page.getByTestId('composer-input')).toBeVisible();
 });
+
+test('adds a workspace by name alone, after browsing the server folders', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await page.getByTestId('add-workspace-open').click();
+  const dialog = page.getByTestId('add-workspace-dialog');
+  await expect(dialog).toBeVisible();
+
+  // The folder browser walks the server's folders and fills the path with the choice.
+  await page.getByTestId('add-workspace-browse').click();
+  await expect(page.getByTestId('folder-browser')).toBeVisible();
+  await page.getByTestId('folder-browser-select').click();
+  await expect(page.getByTestId('folder-browser')).toBeHidden();
+  await expect(page.getByTestId('add-workspace-root')).not.toHaveValue('');
+
+  // With no path, the name alone asks for the default folder.
+  await page.getByTestId('add-workspace-root').fill('');
+  await page.getByTestId('add-workspace-name').fill('Notes');
+  await expect(page.getByTestId('add-workspace-default-hint')).toContainText('~/.pi/.doom/workspace/Notes');
+  await page.getByTestId('add-workspace-confirm').click();
+
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('[data-testid^="workspace-group-"]').first()).toContainText('Notes');
+});

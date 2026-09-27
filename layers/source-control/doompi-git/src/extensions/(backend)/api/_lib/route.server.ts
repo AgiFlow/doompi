@@ -1,9 +1,12 @@
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 
+import { GIT_API_BASE_PATH, GIT_BRANCHES_PATH, GIT_SESSIONS_PATH } from '../../../../constants/git';
 import { DoomGitExpectedError } from '../../../../services/errors';
 import { createWorktreeGit } from '../../../../services/gitCli';
+import { newSessionRequest } from '../../../../services/newSessionRequest';
 import { GIT_WORKTREE_LIFECYCLE_EVENT } from '../../../../services/worktreeEvents';
 import { createWorktreeOperations } from '../../../../services/worktreeOperations';
+import type { GitBranchesResponse, GitSessionCreated } from '../../../../types/gitSessions';
 
 /**
  * The worktree surface the cockpit panel calls.
@@ -29,17 +32,56 @@ function failed(error: unknown): Response {
 }
 
 export const api: DoomApi = {
-  basePath: 'git',
+  basePath: GIT_API_BASE_PATH,
   start(context: DoomApiContext): DoomApiHandler {
     if (context.directEvents === undefined) throw new Error('Git hub API requires the direct event bus.');
     const directEvents = context.directEvents;
     const publishLifecycle = (sessionId: string, repositoryRoot: string): void => {
       directEvents.publish(GIT_WORKTREE_LIFECYCLE_EVENT, sessionId, { version: 1 as const, repositoryRoot });
     };
+    const git = createWorktreeGit();
     const operations = createWorktreeOperations({
-      git: createWorktreeGit(),
+      git,
       sessionService: context.sessionService,
+      ...(context.homeDirectory === undefined ? {} : { homeDir: context.homeDirectory }),
     });
+
+    /**
+     * The new-session dialog's routes: the workspace's branches, and a top-level
+     * worktree session on one. Workspace-mounted only, and always rooted at the
+     * mount's own workspace, so a request can never name another directory.
+     */
+    const newSession = async (request: Request, url: URL): Promise<Response | undefined> => {
+      const isBranches = request.method === 'GET' && url.pathname === GIT_BRANCHES_PATH;
+      const isCreate = request.method === 'POST' && url.pathname === GIT_SESSIONS_PATH;
+      if (!isBranches && !isCreate) return undefined;
+      const workspaceRoot = context.scope === 'workspace' ? context.workspaceRoot : undefined;
+      if (workspaceRoot === undefined)
+        return Response.json({ error: 'This route belongs to a workspace.' }, { status: 404 });
+      if (isBranches) {
+        const repositoryRoot = await git.repositoryRoot(workspaceRoot);
+        const branches: GitBranchesResponse =
+          repositoryRoot === undefined
+            ? { repository: false, local: [], remote: [] }
+            : { repository: true, ...(await git.listBranches(repositoryRoot)) };
+        return Response.json(branches);
+      }
+      const parsed = newSessionRequest(await request.json().catch(() => undefined));
+      if ('error' in parsed) return badRequest(parsed.error);
+      const record = await operations.spawn(
+        { cwd: workspaceRoot },
+        {
+          branch: parsed.branch,
+          checkout: parsed.mode === 'existing-branch' ? 'existing' : 'new',
+          ...(parsed.mode === 'existing-branch' && parsed.remote !== undefined ? { remote: parsed.remote } : {}),
+          ...(parsed.mode === 'new-branch' && parsed.baseRef !== undefined ? { baseRef: parsed.baseRef } : {}),
+          ...(parsed.name === undefined ? {} : { name: parsed.name }),
+        },
+      );
+      publishLifecycle(record.sessionId, record.repositoryRoot);
+      const created: GitSessionCreated = { sessionId: record.sessionId, worktreeId: record.id };
+      return Response.json(created, { status: 201 });
+    };
 
     /** The admitted root for a request, or a response explaining why not. */
     const rootOf = (url: URL): string | Response => {
@@ -53,6 +95,13 @@ export const api: DoomApi = {
     return {
       async fetch(request) {
         const url = new URL(request.url);
+        try {
+          const answered = await newSession(request, url);
+          if (answered !== undefined) return answered;
+        } catch (error) {
+          context.onNotice(`new-session request failed: ${(error as Error).name}`);
+          return failed(error);
+        }
         const root = rootOf(url);
         if (root instanceof Response) return root;
         // The operations layer works from a cwd, and an admitted repository

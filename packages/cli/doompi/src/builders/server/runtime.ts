@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
 import { filterHookDisabledLayers, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
+import { resolveProfile } from '@agimon-ai/doompi-config/profiles';
 import { createHeadlessHub, type HeadlessHub } from '@agimon-ai/doompi-core/headlessHub';
 import { serveHeadlessServer } from '@agimon-ai/doompi-core/headlessServer';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '@agimon-ai/doompi-core/headlessSessionHost';
@@ -53,11 +54,13 @@ import { readSyncState } from '../../composition/syncState';
 import { readRegisteredBootstrapStatus } from '../cli/bootstrapLocator';
 import { buildHarnessContext } from '../cli/harnessContext';
 import { createComputerUseBinding } from './computerUseBinding';
+import { createDefaultWorkspaceFolder } from './defaultWorkspace';
 import { ensureGlobalLogSink } from './logSink';
 import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { resolveSessionIdentity } from './sessionArguments';
 import { resolveSessionArtifact, resolveWorktreeRestart } from './sessionArtifact';
 import type { ServeOptions, ServerRuntimeEnvironment } from './types';
+import { checkoutWorkspaceId } from './workspaceCheckout';
 const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 2_000;
 
 async function bounded(operation: Promise<unknown>, label: string, notice: (message: string) => void): Promise<void> {
@@ -248,19 +251,37 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   ) => Promise<DoomHubSessionScope> = async () => {
     throw new Error('The cockpit session service is not ready.');
   };
-  let admitWorkspace: (root: string) => Promise<{ id: string; root: string; available: boolean }> = async () => {
+  let admitWorkspace: (
+    root: string,
+    name?: string,
+  ) => Promise<{ id: string; root: string; name?: string; available: boolean }> = async () => {
     throw new Error('Workspace admission is not ready.');
   };
   const computerUse = await createComputerUseBinding();
   let hub!: HeadlessHub;
   hub = createHeadlessHub({
     manager: sessionManager,
-    admitWorkspace: (root) => admitWorkspace(root),
+    // Throws for an unknown profile; the hub reports that and shows the session without an avatar.
+    resolveProfileIdentity: (root, profile) => {
+      const identity = resolveProfile(root, profile, homeDirectory).identity;
+      return identity === undefined ? undefined : { displayName: identity.name, icon: identity.icon };
+    },
+    admitWorkspace: async ({ root, name }) =>
+      admitWorkspace(
+        root === undefined || root.trim() === '' ? await createDefaultWorkspaceFolder(name ?? '', homeDirectory) : root,
+        name,
+      ),
     onWorkspaceRemoved: (workspaceId) => {
       workspaces.remove(workspaceId);
       webCompositions?.remove({ scope: 'workspace', workspaceId });
     },
-    createSession: (request) => openSession(request),
+    createSession: async (request, placement) => {
+      if (placement === undefined) return openSession(request);
+      // A workspace package's top-level session must run in a checkout of that same workspace.
+      if (checkoutWorkspaceId(workspaces.list(), request.cwd) !== placement.workspaceId)
+        throw new Error('The session directory is outside this workspace.');
+      return openSession(request, undefined, undefined, placement.workspaceId);
+    },
     sessionReservations: {
       read(id, parentSessionId) {
         if (!cockpit) throw new Error('Session setup is not ready.');
@@ -412,11 +433,11 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         readSyncRegistration(globalRoot, homeDirectory)!,
         hub.channelTypes(),
       );
-      const admissions = new Map<string, Promise<{ id: string; root: string; available: boolean }>>();
+      const admissions = new Map<string, Promise<{ id: string; root: string; name?: string; available: boolean }>>();
       // A member checkout is any checkout other than its workspace root, such as a worktree.
       const isMemberCheckout = (from: string, workspace: { root: string }): boolean =>
         fs.realpathSync(findRepositoryRoot(from)) !== workspace.root;
-      admitWorkspace = async (from) => {
+      admitWorkspace = async (from, requestedName) => {
         const checkoutRoot = fs.realpathSync(findRepositoryRoot(from));
         // Ids are persisted, never re-derived from the path: a checkout of an admitted repository
         // joins its workspace, and a repository that moved keeps its id and sessions.
@@ -425,15 +446,25 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           checkoutRoot,
           marker: readWorkspaceMarker(checkoutRoot),
         });
+        const record = workspaces.list().find((workspace) => workspace.id === id);
+        // A name given now replaces the stored one; readmitting without a name keeps it.
+        const name = requestedName?.trim() || record?.name;
+        const named = name === undefined ? {} : { name };
+        const renamed = record !== undefined && name !== record.name;
         const existing = hub.workspaces().find((workspace) => workspace.id === id);
-        if (existing !== undefined && existing.available !== false && existing.root === root)
-          return { ...existing, available: true };
+        if (existing !== undefined && existing.available !== false && existing.root === root) {
+          if (renamed) {
+            workspaces.add({ id, root, ...named });
+            hub.registerWorkspace({ ...existing, ...named, available: true });
+          }
+          return { ...existing, ...named, available: true };
+        }
         const pending = admissions.get(id);
         if (pending) return pending;
-        const wasRemembered = workspaces.list().some((workspace) => workspace.id === id);
-        if (!wasRemembered || moved) workspaces.add({ id, root });
+        const wasRemembered = record !== undefined;
+        if (!wasRemembered || moved || renamed) workspaces.add({ id, root, ...named });
         if (moved) notice(`Workspace '${id}' moved to '${root}'.`);
-        hub.registerWorkspace({ id, root, available: false });
+        hub.registerWorkspace({ id, root, ...named, available: false });
         const admission = (async () => {
           const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: root };
           for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete syncEnvironment[key];
@@ -459,7 +490,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               `Workspace '${root}' id could not be recorded in its git data: ${error instanceof Error ? error.message : String(error)}`,
             );
           }
-          return { id, root, available: true };
+          return { id, root, ...named, available: true };
         })();
         admissions.set(id, admission);
         try {

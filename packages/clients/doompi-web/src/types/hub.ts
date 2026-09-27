@@ -23,6 +23,8 @@ export const SESSIONS_API_ROUTE = '/api/workspaces/:workspaceId/sessions';
 export interface WorkspaceSummary {
   id: string;
   root: string;
+  /** Display name chosen when the workspace was added; the folder basename stands in when absent. */
+  name?: string;
   /** A remembered workspace whose root could not be mounted on this server start. */
   available?: boolean;
   error?: string;
@@ -45,6 +47,16 @@ export interface PiSessionHistoryItem {
  */
 export const DIRECTORIES_API_ROUTE = '/api/directories';
 
+/** Lists the visible child folders of ?path= (home when absent) for the workspace folder browser. */
+export const DIRECTORY_CHILDREN_API_ROUTE = '/api/directories/children';
+
+/** One folder's visible child directories, as absolute paths. */
+export interface DirectoryListing {
+  path: string;
+  parent?: string;
+  directories: string[];
+}
+
 /**
  * Query parameter that routes a package API request to one session's server.
  * Without it the request is answered by a hub-scoped API in this process.
@@ -53,6 +65,13 @@ export const API_SESSION_QUERY_PARAM = 'session';
 
 /** What the agent is doing right now, derived from its frame stream. */
 export type SessionPhase = 'idle' | 'turn' | 'compaction' | 'retry';
+
+export interface SessionProfile {
+  name: string;
+  displayName?: string;
+  /** Changes whenever the icon does; absent when the profile has no icon. */
+  iconVersion?: string;
+}
 
 export interface SessionGitStatus {
   branch: string;
@@ -108,6 +127,8 @@ export interface SessionSummary {
   lastSettledAt?: string;
   /** Omitted when the cwd is not a git repository or git is unavailable. */
   git?: SessionGitStatus;
+  /** Selected profile; the icon itself is served by the session avatar route. */
+  profile?: SessionProfile;
   /** Signed plugin composition independently resolved for this session. */
   webComposition?: SessionWebComposition;
   /**
