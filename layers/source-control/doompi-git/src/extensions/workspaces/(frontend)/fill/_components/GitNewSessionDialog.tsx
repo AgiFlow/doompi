@@ -133,10 +133,11 @@ export function GitNewSessionDialog({ newSession }: WebPluginSlotProps) {
                   key={entry.mode}
                   role="radio"
                   aria-checked={mode === entry.mode}
-                  variant={mode === entry.mode ? 'subtle' : 'ghost'}
+                  variant={mode === entry.mode ? 'outline' : 'ghost'}
                   size="sm"
                   data-testid={`git-new-session-mode-${entry.mode}`}
                   disabled={busy}
+                  className={mode === entry.mode ? 'border-doom-blue/60 text-doom-hi' : undefined}
                   onClick={() => update({ mode: entry.mode })}
                 >
                   {entry.label}
@@ -180,19 +181,21 @@ export function GitNewSessionDialog({ newSession }: WebPluginSlotProps) {
                     data-branch={option.name}
                     data-remote={option.remote}
                     onClick={() => update({ selected: option })}
-                    className="w-full px-2.5 py-1 text-sm"
+                    className={`w-full px-2.5 py-1 text-sm ${option.busyAt !== undefined ? 'opacity-50' : ''}`}
                   >
                     <span className="min-w-0 flex-1 truncate">
                       {option.remote === undefined ? option.name : `${option.remote}/${option.name}`}
                     </span>
                     <span className="shrink-0 text-2xs text-doom-faint">
-                      {option.current
-                        ? 'current'
-                        : option.busyAt !== undefined
-                          ? 'checked out'
-                          : option.remote !== undefined
-                            ? 'remote'
-                            : ''}
+                      {option.current && option.busyAt !== undefined
+                        ? 'current · checked out'
+                        : option.current
+                          ? 'current'
+                          : option.busyAt !== undefined
+                            ? 'checked out'
+                            : option.remote !== undefined
+                              ? 'remote'
+                              : ''}
                     </span>
                   </OptionRow>
                 ))}
