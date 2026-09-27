@@ -73,6 +73,9 @@ export interface SessionMcpConversationStore {
   closeClient(clientId: string): void;
 }
 
+/** How many id characters name a conversation's managed worktree branch and directory. */
+const MANAGED_WORKTREE_ID_LENGTH = 12;
+
 function validRecord(value: unknown): value is SessionMcpConversation {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Partial<SessionMcpConversation>;
@@ -104,6 +107,18 @@ function validRecord(value: unknown): value is SessionMcpConversation {
   );
 }
 
+/**
+ * Records written before setups carried a provider have none, and recovery refuses a setup it
+ * cannot attribute, which left every such conversation stuck. A managed conversation worktree is
+ * the only setup named `doompi-conversation-<first 12 id characters>--`, so a record reserving
+ * that directory can be attributed to it. Anything else stays unattributed and refused.
+ */
+function withLegacySetupKind(record: SessionMcpConversation): SessionMcpConversation {
+  if (record.setupKind !== undefined || record.cwd === undefined) return record;
+  const managedName = `doompi-conversation-${record.id.slice(0, MANAGED_WORKTREE_ID_LENGTH)}--`;
+  return path.basename(record.cwd).startsWith(managedName) ? { ...record, setupKind: 'managed-worktree' } : record;
+}
+
 function routingKey(
   record: Pick<SessionMcpConversation, 'clientId' | 'parentSessionId' | 'conversationDigest'>,
 ): string {
@@ -130,7 +145,7 @@ export function createSessionMcpConversationStore(stateDir: string): SessionMcpC
         new Set(records.map(routingKey)).size !== records.length
       )
         throw new Error('Duplicate or excessive bindings');
-      return Object.freeze(records.map((record) => Object.freeze(record)));
+      return Object.freeze(records.map((record) => Object.freeze(withLegacySetupKind(record))));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
       failure = new SessionMcpConversationError(

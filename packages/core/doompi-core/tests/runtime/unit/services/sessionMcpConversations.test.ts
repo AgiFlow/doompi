@@ -42,6 +42,39 @@ describe('conversation routing state', () => {
     expect(fs.readFileSync(path.join(root, 'session-mcp-conversations.json'), 'utf8')).not.toContain('private-chat-id');
   });
 
+  // Records written before setups carried a provider were refused on recovery forever.
+  it('attributes a legacy record reserving its managed conversation worktree, and nothing else', () => {
+    const root = directory();
+    const managed = '0bbda5df-eaae-4e93-a074-691492a6a8fb';
+    const chosen = '1ccda5df-eaae-4e93-a074-691492a6a8fb';
+    const legacy = (id: string, cwd: string, chat: string) => ({
+      id,
+      clientId: 'client',
+      parentSessionId: 'parent',
+      parentWorkspaceId: 'workspace',
+      conversationDigest: digest(chat),
+      createdAt: '2026-09-25T08:01:19.525Z',
+      state: 'pending',
+      cwd,
+    });
+    fs.writeFileSync(
+      path.join(root, 'session-mcp-conversations.json'),
+      JSON.stringify({
+        version: 1,
+        bindings: [
+          legacy(managed, '/home/.pi/.doom/git/worktrees/repo--1/doompi-conversation-0bbda5df-eaa--3ecb6da9', 'a'),
+          legacy(chosen, '/home/projects/chosen-directory', 'b'),
+        ],
+      }),
+    );
+    const store = createSessionMcpConversationStore(root);
+
+    expect(store.get(managed, 'parent').setupKind).toBe('managed-worktree');
+    expect(store.selectSetup(managed, 'parent', 'managed-worktree').setupKind).toBe('managed-worktree');
+    expect(store.get(chosen, 'parent').setupKind).toBeUndefined();
+    expect(() => store.selectSetup(chosen, 'parent', 'managed-worktree')).toThrow('no verified provider');
+  });
+
   it('reserves once, separates registrations, and reloads the same association', () => {
     const root = directory();
     const store = createSessionMcpConversationStore(root);
