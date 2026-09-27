@@ -69,9 +69,13 @@ describe('skill headless facet', () => {
     const prompt = vi.fn();
     const execution = { cwd, client: { notify }, session: { prompt } } as unknown as DoomHeadlessExecutionContext;
 
-    const catalog = resources.find(({ name }) => name === 'doompi/skills');
-    if (!catalog) throw new Error('Skill catalog resource was not registered');
-    expect(await catalog.read(execution)).toContain('Example skill');
+    // A repository skill is its own prompt entry, with the path the agent reads it from.
+    expect(resources.some(({ name }) => name === 'doompi/skills')).toBe(false);
+    const listed = resources.find(({ name }) => name === 'example');
+    if (!listed) throw new Error('Repository skill resource was not registered');
+    expect(listed).toMatchObject({ kind: 'skill', path: expect.stringContaining('SKILL.md') });
+    expect(listed.when).toBeUndefined();
+    expect(await listed.read(execution)).toContain('Example skill');
 
     await command.execute('', execution);
     expect(notify).toHaveBeenCalledWith(

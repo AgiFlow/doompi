@@ -291,7 +291,8 @@ function mapResources(resources: readonly ResolvedHeadlessResource[]): {
       // Advertised only with a path the agent can open. Without one the prompt would
       // point at a doom-headless:// URI no tool resolves, so such a skill stays
       // explicitly invocable and silent, exactly as it was before.
-      if (resource.path !== undefined) advertised.push(skill);
+      // One entry per name: two domains can each carry the same shared skill.
+      if (resource.path !== undefined && !advertised.some((entry) => entry.name === skill.name)) advertised.push(skill);
     } else if (resource.kind === 'prompt') {
       promptTemplates.push({ name: resource.name, content: resource.text });
     } else {
