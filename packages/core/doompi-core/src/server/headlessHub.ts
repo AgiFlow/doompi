@@ -110,7 +110,14 @@ export interface HeadlessHubOptions {
   /** Resolves the hub credential, because the server reads its token file after the hub exists. */
   hubToken?: () => string | undefined;
   /** Creates a session through the canonical cockpit lifecycle for hub channels. */
-  createSession?: (request: DoomHubSessionCreateRequest) => Promise<DoomHubSessionScope>;
+  createSession?: (
+    request: DoomHubSessionCreateRequest,
+    /**
+     * Set when a workspace-mounted package creates a session with no parent. The host must
+     * refuse a cwd outside that workspace before admitting anything.
+     */
+    placement?: { workspaceId: string },
+  ) => Promise<DoomHubSessionScope>;
   onNotice?: (message: string) => void;
   sessionReservations?: DoomHubSessionReservations;
   requestSessionApi?: (scope: DoomHubSessionScope, request: DoomHubSessionApiRequest) => Promise<Response>;
@@ -477,6 +484,13 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     sessionService: {
       reservations: reservationsFor(mount),
       create: async (request) => {
+        // A workspace package may start a top-level session, placed in its own workspace.
+        if (mount.scope === 'workspace' && request.parentSessionId === undefined) {
+          if (request.reservationId !== undefined) throw new Error('A reserved session requires its owning parent.');
+          if (options.createSession === undefined)
+            throw new Error('The cockpit session service cannot create sessions in this host.');
+          return options.createSession(request, { workspaceId: mount.workspaceId });
+        }
         if (mount.scope !== 'global') {
           const parent = request.parentSessionId === undefined ? undefined : sessions.get(request.parentSessionId);
           if (!parent || !belongs(mount, parent)) throw new Error('Parent session is outside this mount.');

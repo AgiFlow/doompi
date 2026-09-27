@@ -183,7 +183,15 @@ describe('createHeadlessHub', () => {
     expect(scopedSessions).toBeDefined();
     expect(scopedSessions?.isLive('one')).toBe(true);
     expect(scopedSessions?.isLive('two')).toBe(true);
-    await expect(scopedSessions?.create({ cwd: '/one', name: 'child' })).rejects.toThrow('Parent session');
+    // A workspace package may start a top-level session, placed in its own workspace.
+    await expect(scopedSessions?.create({ cwd: '/one/wt', name: 'top' })).resolves.toEqual({
+      sessionId: 'created',
+      cwd: '/one',
+    });
+    expect(createSession).toHaveBeenLastCalledWith({ cwd: '/one/wt', name: 'top' }, { workspaceId: 'one' });
+    await expect(scopedSessions?.create({ cwd: '/one', name: 'reserved', reservationId: 'r1' })).rejects.toThrow(
+      'requires its owning parent',
+    );
     await expect(scopedSessions?.create({ cwd: '/one', name: 'child', parentSessionId: 'two' })).rejects.toThrow(
       'Parent session',
     );
@@ -191,7 +199,8 @@ describe('createHeadlessHub', () => {
       sessionId: 'created',
       cwd: '/one',
     });
-    expect(createSession).toHaveBeenCalledOnce();
+    expect(createSession).toHaveBeenLastCalledWith({ cwd: '/one', name: 'child', parentSessionId: 'one' });
+    expect(createSession).toHaveBeenCalledTimes(2);
     await expect(scopedSessions?.close('two')).rejects.toThrow('outside this mount');
     await expect(scopedSessions?.close('missing')).resolves.toBeUndefined();
     expect(closeSession).not.toHaveBeenCalled();

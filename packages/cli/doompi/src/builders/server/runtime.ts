@@ -60,6 +60,7 @@ import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { resolveSessionIdentity } from './sessionArguments';
 import { resolveSessionArtifact, resolveWorktreeRestart } from './sessionArtifact';
 import type { ServeOptions, ServerRuntimeEnvironment } from './types';
+import { checkoutWorkspaceId } from './workspaceCheckout';
 const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 2_000;
 
 async function bounded(operation: Promise<unknown>, label: string, notice: (message: string) => void): Promise<void> {
@@ -274,7 +275,13 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       workspaces.remove(workspaceId);
       webCompositions?.remove({ scope: 'workspace', workspaceId });
     },
-    createSession: (request) => openSession(request),
+    createSession: async (request, placement) => {
+      if (placement === undefined) return openSession(request);
+      // A workspace package's top-level session must run in a checkout of that same workspace.
+      if (checkoutWorkspaceId(workspaces.list(), request.cwd) !== placement.workspaceId)
+        throw new Error('The session directory is outside this workspace.');
+      return openSession(request, undefined, undefined, placement.workspaceId);
+    },
     sessionReservations: {
       read(id, parentSessionId) {
         if (!cockpit) throw new Error('Session setup is not ready.');
