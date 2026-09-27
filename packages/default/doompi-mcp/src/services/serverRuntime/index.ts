@@ -60,17 +60,8 @@ export function createMcpServerRuntime(
   let cleanup: (() => Promise<void>) | undefined;
   let transition = Promise.resolve();
   const authorizing = new Map<string, symbol>();
-  const session = new McpSession({
-    environment: { ...environment },
-    onAuthorizationUrl: async (url, serverName) => {
-      if (staleSelection || !session.getServers().some((server) => server.name === serverName)) return;
-      await active?.client.notify({
-        title: `Authorize MCP server ${serverName}`,
-        body: url.toString(),
-        level: 'warning',
-      });
-    },
-  });
+  // Authorization URLs reach clients through the MCP status snapshot, not the transcript.
+  const session = new McpSession({ environment: { ...environment } });
 
   const refresh = (execution: DoomHeadlessExecutionContext, selection: DoomHeadlessSelection) => {
     staleSelection = true;
@@ -306,7 +297,7 @@ export function createMcpServerRuntime(
             return;
           }
           if (server.authorizationUrl) {
-            await session.openAuthorizationPage(serverName);
+            await notify(`${serverName} is waiting for sign-in. Open it from the MCP servers panel.`);
             return;
           }
           if (authorizing.has(serverName)) return;
