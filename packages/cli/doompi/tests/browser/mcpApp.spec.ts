@@ -64,7 +64,16 @@ test.beforeAll(async () => {
     write: false,
     clean: false,
     logLevel: 'silent',
-    deps: { alwaysBundle: [/./], onlyBundle: ['@modelcontextprotocol/ext-apps', '@modelcontextprotocol/sdk', 'zod'] },
+    deps: {
+      alwaysBundle: [/./],
+      onlyBundle: [
+        '@modelcontextprotocol/ext-apps',
+        '@modelcontextprotocol/core',
+        '@modelcontextprotocol/client',
+        '@modelcontextprotocol/server',
+        'zod',
+      ],
+    },
   });
   const chunk = host.bundles[0]?.chunks[0];
   if (chunk?.type !== 'chunk') throw new Error('Missing MCP host harness');

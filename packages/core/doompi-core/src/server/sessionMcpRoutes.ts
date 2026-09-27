@@ -30,6 +30,23 @@ const SESSION_MCP_CONFIG_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]
 const SESSION_MCP_CLIENTS_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/clients(?:\/([^/]+))?$/u;
 const SESSION_MCP_CONVERSATIONS_PATTERN =
   /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/conversations(?:\/([^/]+))?$/u;
+
+/**
+ * An OAuth resource as it can be logged: the URL with any URL-token segment and every query value
+ * redacted, so a mismatch in origin, path, trailing slash or query is visible without a secret.
+ */
+function describeResource(resource: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(resource);
+  } catch {
+    return 'a resource that is not a URL';
+  }
+  const token = SESSION_MCP_URL_TOKEN_PATTERN.exec(parsed.pathname);
+  const pathname = token === null ? parsed.pathname : parsed.pathname.slice(0, -token[3]!.length) + '<token>';
+  const query = [...parsed.searchParams.keys()].map((key) => `${key}=<redacted>`).join('&');
+  return `${parsed.origin}${pathname}${query === '' ? '' : `?${query}`}${parsed.hash === '' ? '' : '#<redacted>'}`;
+}
 const PROTECTED_RESOURCE_PATTERN =
   /^\/\.well-known\/oauth-protected-resource(\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/mcp)$/u;
 
@@ -620,8 +637,17 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         }
         if (url.searchParams.get('response_type') !== 'code')
           throw new SessionMcpOAuthError('invalid_request', 'Only the code response type is supported.');
-        if (url.searchParams.get('resource') !== null && url.searchParams.get('resource') !== binding.audience)
-          throw new SessionMcpOAuthError('invalid_request', 'The requested resource is not preauthorized.');
+        const resource = url.searchParams.get('resource');
+        if (resource !== null && resource !== binding.audience) {
+          // The requested URL can carry a URL token, which is redacted.
+          options.onNotice?.(
+            `session MCP authorize refused: client ${clientId} is bound to session ${binding.sessionId}, expecting ${binding.audience} but the connector asked for ${describeResource(resource)}`,
+          );
+          throw new SessionMcpOAuthError(
+            'invalid_request',
+            "The requested resource is not preauthorized. The connector's MCP URL must be the session URL this client was created for.",
+          );
+        }
         const code = authorization.issueAuthorizationCode({
           clientId,
           redirectUri,

@@ -225,11 +225,42 @@ describe('MCP session authorization Context section', () => {
       }).props,
     );
     expect(rendered.error).toBeUndefined();
-    expect(rendered.html).toContain('aria-label="pencil tools"');
+    expect(rendered.html).toContain('aria-label="pencil tools and skills"');
     expect(rendered.includes('pencil_execute')).toBe(true);
     expect(rendered.includes('~320')).toBe(true);
     expect(rendered.includes('read')).toBe(false);
-    expect(rendered.includes('no tools reported')).toBe(true);
+    expect(rendered.includes('no tools or skills reported')).toBe(true);
+  });
+
+  it('lists the tools a server offers through mcp_use when none sit in the context', () => {
+    const status = formatMcpSessionAuthStatus([
+      {
+        name: 'boomlink-mcp',
+        state: 'connected',
+        tools: [
+          { toolName: 'send_link', active: true, tokens: 212 },
+          { toolName: 'withheld', active: false },
+        ],
+      },
+    ]);
+    expect(parseMcpSessionAuthStatus(status)).toEqual([
+      { name: 'boomlink-mcp', state: 'connected', tools: [{ name: 'send_link', tokens: 212 }] },
+    ]);
+    const rendered = renderPlugin(
+      McpSessionAuthSection,
+      slotPropsFixture({ statuses: { [MCP_SESSION_AUTH_STATUS_KEY]: status! } }).props,
+    );
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.html).toContain('data-testid="context-mcp-reachable-boomlink-mcp-send_link"');
+    expect(rendered.includes('1 tool via mcp_use, not in context')).toBe(true);
+    expect(rendered.includes('(~212)')).toBe(true);
+    expect(rendered.includes('withheld')).toBe(false);
+    expect(rendered.includes('no tools or skills reported')).toBe(false);
+  });
+
+  it('rejects a status whose tool list is not a list of names', () => {
+    const raw = JSON.stringify([{ name: 'boomlink-mcp', state: 'connected', tools: ['send_link'] }]);
+    expect(parseMcpSessionAuthStatus(raw)).toBeUndefined();
   });
 
   it('keeps a connected zero-tool server visible and offers management', () => {

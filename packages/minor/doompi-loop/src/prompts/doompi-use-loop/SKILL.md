@@ -33,7 +33,7 @@ Pass either configuration to `loop_start`. Stop one instance with `loop_stop` an
 
 ## Manual controls
 
-Activity's Loops group is available whenever the Loop package is loaded, even with the minor mode off. It offers interval and cron setup, a chooser for extension types, and per-instance stop controls. `/loop [launcherId]` starts manual setup. `/loops` lists instances, and `/loops stop <instanceId>` stops one. The TUI also provides `SPC l s` and `SPC l l`.
+Activity's Loops group lists this session's loops whenever the Loop package is loaded, even with the minor mode off, and each row has a stop control. Loops are set by asking the agent while the minor mode is active. `/loops` lists instances, and `/loops stop <instanceId>` stops one.
 
 ## Cost and lifecycle
 

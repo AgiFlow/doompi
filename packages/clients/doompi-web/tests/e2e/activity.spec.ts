@@ -109,7 +109,7 @@ test('lists the groups whose packages report in, each rendered by its own plugin
   await expect(page.getByTestId('background-work-notice')).toBeHidden();
 });
 
-test('shows Loop lifecycle rows and routes the single manage action through /loops', async ({ page, cockpit }) => {
+test('shows Loop lifecycle rows and stops one through /loops stop', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
@@ -120,21 +120,18 @@ test('shows Loop lifecycle rows and routes the single manage action through /loo
 
   cockpit.session.emit(status('doom-loop-instances', loop('starting')));
   await expect(page.getByTestId('activity-loops')).toBeVisible();
-  await expect(page.getByTestId('activity-loop-default-launch')).toBeVisible();
 
   const row = page.getByTestId('activity-loop-loop-release');
-  await expect(page.getByTestId('activity-loops')).toBeVisible();
   await expect(row).toContainText('Release watcher');
   await expect(row).toContainText('every 60s · Check release status');
   await expect(row).toHaveAttribute('data-loop-state', 'starting');
-  await expect(page.getByTestId('activity-loops-manage')).toHaveCount(1);
 
   cockpit.session.emit(status('doom-loop-instances', loop('running')));
   await expect(row).toHaveAttribute('data-loop-state', 'running');
 
-  await page.getByTestId('activity-loops-manage').click();
+  await row.getByRole('button', { name: 'stop Release watcher' }).click();
   const sent = await cockpit.session.waitForCommand('prompt');
-  expect(sent.message).toBe('/loops');
+  expect(sent.message).toBe('/loops stop loop-release');
 
   cockpit.session.emit(status('doom-loop-instances', loop('stopping')));
   await expect(row).toHaveAttribute('data-loop-state', 'stopping');
@@ -142,51 +139,57 @@ test('shows Loop lifecycle rows and routes the single manage action through /loo
   cockpit.session.emit(status('doom-loop-instances'));
   await expect(row).toHaveCount(0);
   await expect(page.getByTestId('activity-loops')).toBeVisible();
-  await expect(page.getByTestId('activity-loops-manage')).toHaveCount(1);
 });
 
-test('toggles Loop agent tools while leaving manual Activity launchers available', async ({ page, cockpit }) => {
+test('tells the user to activate Loop mode, then to ask the agent for a loop', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
-  cockpit.session.emit({
-    type: 'entry_appended',
+  const modes = (activation: 'active' | 'inactive', revision: number) => ({
+    type: 'entry_appended' as const,
     entry: {
       type: 'custom',
       customType: 'doom-minor-modes',
       data: {
         version: 1,
-        revision: 1,
+        revision,
         modes: [
           {
-            id: 'loop.active',
+            id: 'loop',
             label: 'Loop',
             description: '',
             order: 30,
-            activation: 'inactive',
+            activation,
             condition: 'ready',
-            actions: [{ id: 'activate', label: 'Activate', description: '', needsInput: false, enabled: true }],
+            actions: [
+              {
+                id: 'activate',
+                label: 'Activate',
+                description: '',
+                needsInput: false,
+                enabled: activation !== 'active',
+              },
+            ],
           },
         ],
       },
     },
   });
 
+  cockpit.session.emit(modes('inactive', 1));
   cockpit.session.emit(status('doom-loop-instances'));
   await expect(page.getByTestId('activity-loops')).toBeVisible();
-  await expect(page.getByTestId('activity-loop-default-launch')).toBeVisible();
+  await expect(page.getByTestId('activity-loops-hint')).toHaveText('Activate loop minor mode to set loop or cron job.');
+
   await page.getByTestId('axis-minor').click();
   await page.getByTestId('minor-loop').click();
-
-  await expect(page.getByTestId('dock-tab-activity')).toHaveAttribute('data-active', 'true');
-  await expect(page.getByTestId('activity-loops')).toBeVisible();
   const sent = await cockpit.session.waitForCommand('prompt');
-  expect(sent.message).toBe('/minor loop.active');
-  await expect(page.getByTestId('activity-loop-cron-launch')).toBeVisible();
-  await page.getByTestId('activity-loop-cron-launch').click();
-  await expect
-    .poll(() => cockpit.session.received.filter((frame) => frame.type === 'prompt').map((frame) => frame.message))
-    .toContain('/loop doompi.cron');
+  expect(sent.message).toBe('/minor loop');
+
+  cockpit.session.emit(modes('active', 2));
+  await expect(page.getByTestId('activity-loops-hint')).toHaveText(
+    'No loops yet. Ask the agent to set a loop or cron job.',
+  );
 });
 test('keeps bottom-pinned groups visible while ordinary groups scroll', async ({ page, cockpit }) => {
   await page.setViewportSize({ width: 1280, height: 280 });

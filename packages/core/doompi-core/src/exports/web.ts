@@ -83,16 +83,13 @@ export {
   HUB_ADVERTISEMENT_VERSION,
   hubAdvertisementPath,
   parseHubAdvertisement,
-  parseSessionLineage,
   REGISTRY_DIR_ENV,
   resolveRegistryDir,
-  SESSION_LINEAGE_RECORD_VERSION,
-  sessionLineagePath,
 } from '../web/services/sessionRegistry';
 export { toolResultText, toolResultTextLines } from '../web/services/toolResult';
 export { defineMcpWidget } from '../web/services/mcpWidget';
 export type { DoomMcpWidgetProps } from '../web/types/mcpWidget';
-export type { HubAdvertisement, RegistryDirInput, SessionLineageRecord } from '../web/types/sessionRegistry';
+export type { HubAdvertisement, RegistryDirInput } from '../web/types/sessionRegistry';
 export type {
   ModelContext,
   ModelContextAbortSignal,
@@ -157,6 +154,7 @@ export type {
   WebPluginContextItem,
   WebPluginDefinition,
   WebPluginRuntime,
+  WebPluginSessionContext,
   WebPluginSlotProps,
   WorkspaceRecords,
   WorkspaceStore,

@@ -23,8 +23,10 @@ import {
 } from '../../../../../src/exports/sessionProtocol';
 import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 import { serveHeadlessServer, type HeadlessServer } from '../../../../../src/server/headlessServer';
+import { writeContextDetail } from '../../../../../src/services/contextDetailStore';
 import type { HeadlessSessionHost } from '../../../../../src/systems/main/types/headlessSessionHost';
 import type { SessionToolInvocation } from '../../../../../src/types/server/sessionToolSurface';
+import { modernMcpRequest } from './modernMcpRequest';
 
 function host() {
   const listeners = new Set<(frame: Record<string, unknown>) => void>();
@@ -391,15 +393,19 @@ describe('serveHeadlessServer', () => {
     });
     expect(token.status).toBe(200);
     const tokens = (await token.json()) as { access_token: string };
-    const mcp = await fetch(`${server.url}${root}`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${tokens.access_token}`,
-        accept: 'application/json, text/event-stream',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-    });
+    const mcp = await fetch(
+      await modernMcpRequest(
+        new Request(`${server.url}${root}`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${tokens.access_token}`,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        }),
+      ),
+    );
     const mcpCatalog = (await mcp.json()) as { result: { tools: { name: string }[] } };
     expect(mcpCatalog.result.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'read' })]));
     expect(mcpCatalog.result.tools.map(({ name }) => name)).toEqual(
@@ -415,20 +421,24 @@ describe('serveHeadlessServer', () => {
       ).status,
     ).toBe(401);
 
-    const routed = await fetch(`${server.url}${root}`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${tokens.access_token}`,
-        accept: 'application/json, text/event-stream',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 42,
-        method: 'tools/call',
-        params: { name: 'read', _meta: { 'openai/session': conversation } },
-      }),
-    });
+    const routed = await fetch(
+      await modernMcpRequest(
+        new Request(`${server.url}${root}`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${tokens.access_token}`,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 42,
+            method: 'tools/call',
+            params: { name: 'read', _meta: { 'openai/session': conversation } },
+          }),
+        }),
+      ),
+    );
     await expect(routed.json()).resolves.toMatchObject({ result: { content: [{ text: 'done' }] } });
     expect(conversationHost.host.mcpSurface.invokeTool).toHaveBeenCalledOnce();
     expect(first.host.mcpSurface.invokeTool).not.toHaveBeenCalled();
@@ -444,11 +454,15 @@ describe('serveHeadlessServer', () => {
     });
     expect(
       (
-        await fetch(`${server.url}${root}`, {
-          method: 'POST',
-          headers: { authorization: `Bearer ${tokens.access_token}`, 'content-type': 'application/json' },
-          body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
-        })
+        await fetch(
+          await modernMcpRequest(
+            new Request(`${server.url}${root}`, {
+              method: 'POST',
+              headers: { authorization: `Bearer ${tokens.access_token}`, 'content-type': 'application/json' },
+              body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
+            }),
+          ),
+        )
       ).status,
     ).toBe(401);
 
@@ -510,16 +524,20 @@ describe('serveHeadlessServer', () => {
     const created = await create();
     expect(created.status).toBe(201);
     const { client } = (await created.json()) as { client: { clientId: string; clientSecret: string } };
-    const rpc = (url: string, key: string) =>
-      fetch(`${url}${root}`, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${key}`,
-          'content-type': 'application/json',
-          accept: 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-      });
+    const rpc = async (url: string, key: string) =>
+      fetch(
+        await modernMcpRequest(
+          new Request(`${url}${root}`, {
+            method: 'POST',
+            headers: {
+              authorization: `Bearer ${key}`,
+              'content-type': 'application/json',
+              accept: 'application/json, text/event-stream',
+            },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+          }),
+        ),
+      );
     const listed = await rpc(first.url, client.clientSecret);
     expect(listed.status).toBe(200);
     const catalog = (await listed.json()) as { result: { tools: { name: string }[] } };
@@ -584,15 +602,19 @@ describe('serveHeadlessServer', () => {
     expect(body.client.connectionUrl.startsWith(`${origin}${root}/`)).toBe(true);
 
     const signedPath = new URL(body.client.connectionUrl).pathname;
-    const rpc = (url: string, path: string) =>
-      fetch(`${url}${path}`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          accept: 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-      });
+    const rpc = async (url: string, path: string) =>
+      fetch(
+        await modernMcpRequest(
+          new Request(`${url}${path}`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              accept: 'application/json, text/event-stream',
+            },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+          }),
+        ),
+      );
     const listed = await rpc(first.url, signedPath);
     expect(listed.status).toBe(200);
     const catalog = (await listed.json()) as { result: { tools: { name: string }[] } };
@@ -720,6 +742,109 @@ describe('serveHeadlessServer', () => {
     expect(await resumed.json()).toEqual({ sessionId: 'saved' });
     expect(resumeSession).toHaveBeenCalledWith(expect.objectContaining({ id: 'current' }), 'saved');
     await hub.close();
+  });
+
+  // A plugin polling a session during its restart used to get a 404 in the gap between the
+  // old host closing and the new one registering.
+  it('holds a session request that arrives while the session restarts', async () => {
+    const closeSession = vi.fn(async () => undefined);
+    const hub = createHeadlessHub({
+      manager: { closeSession } as never,
+      requestSessionApi: vi.fn(async () => Response.json({ plugin: true })),
+    });
+    const register = () =>
+      hub.register({
+        workspaceId: 'test-workspace',
+        id: 'current',
+        name: 'Current',
+        cwd: '/repo',
+        createdAt: '2025-01-01',
+        host: host().host,
+      });
+    register();
+    let reopen!: () => void;
+    const restartSession = vi.fn(async () => {
+      await hub.closeSession('current');
+      await new Promise<void>((resolve) => {
+        reopen = resolve;
+      });
+      register();
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, restartSession });
+    servers.push(server);
+
+    const restart = fetch(`${server.url}/api/workspaces/test-workspace/sessions/current/restart`, { method: 'POST' });
+    await vi.waitFor(() => expect(hub.session('current')).toBeUndefined());
+    const during = fetch(`${server.url}/api/workspaces/test-workspace/sessions/current`);
+    const plugin = fetch(`${server.url}/api/workspaces/test-workspace/sessions/current/plugins/poll/heartbeat`, {
+      method: 'POST',
+    });
+    // Long enough for the request to reach the server while the session is still gone.
+    setTimeout(reopen, 200);
+
+    expect((await restart).status).toBe(200);
+    expect((await during).status).toBe(200);
+    // Reaches the reopened session's API instead of the 404 for a missing session.
+    expect(await (await plugin).json()).toEqual({ plugin: true });
+    await hub.close();
+  });
+
+  it('serves a stopped session its saved context detail and nothing else', async () => {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-context-detail-'));
+    vi.stubEnv('PI_CODING_AGENT_DIR', agentDir);
+    try {
+      writeContextDetail(
+        'asleep',
+        3,
+        [
+          {
+            itemKind: 'skill',
+            name: 'doompi-use-prompt',
+            owner: '@agimon-ai/doompi-prompt',
+            source: 'extension',
+            description: 'Use prompts.',
+            body: '# Prompt',
+          },
+        ] as never,
+        { PI_CODING_AGENT_DIR: agentDir },
+      );
+      const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+      await hub.mountFacets([], {
+        scope: 'workspace',
+        workspaceId: 'test-workspace',
+        workspaceRoot: '/repo',
+        onNotice: vi.fn(),
+      });
+      const server = await serveHeadlessServer({
+        headlessHub: hub,
+        port: 0,
+        dormantSessions: () => [
+          { sessionId: 'asleep', workspaceId: 'test-workspace', cwd: '/repo', name: 'Asleep', createdAt: '2025-01-02' },
+        ],
+      });
+      servers.push(server);
+      const base = `${server.url}/api/workspaces/test-workspace/sessions/asleep/plugins`;
+
+      const detail = await fetch(`${base}/context/item?kind=skill&name=doompi-use-prompt`);
+      expect(detail.status).toBe(200);
+      expect(await detail.json()).toMatchObject({ revision: 3, item: { name: 'doompi-use-prompt' } });
+      expect((await fetch(`${base}/context/item?kind=skill&name=missing`)).status).toBe(404);
+      fs.rmSync(path.join(agentDir, 'doom-context'), { recursive: true, force: true });
+      expect(await (await fetch(`${base}/context/item?kind=skill&name=doompi-use-prompt`)).json()).toEqual({
+        error: 'This session is stopped. Wake it to read this item.',
+      });
+      // Every other package API still needs the session awake.
+      expect(await (await fetch(`${base}/runner/runners`)).json()).toEqual({ error: 'Session not found.' });
+    } finally {
+      vi.unstubAllEnvs();
+      fs.rmSync(agentDir, { recursive: true, force: true });
+    }
   });
 
   it('lists dormant records beside live sessions and revives one on request', async () => {
@@ -1880,15 +2005,19 @@ describe('canonical scoped routes', () => {
       return ((await token.json()) as { access_token: string }).access_token;
     };
     const firstToken = await authorize(firstServer);
-    const firstMcp = await fetch(`${firstServer.url}${root}`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${firstToken}`,
-        accept: 'application/json, text/event-stream',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-    });
+    const firstMcp = await fetch(
+      await modernMcpRequest(
+        new Request(`${firstServer.url}${root}`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${firstToken}`,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        }),
+      ),
+    );
     expect(firstMcp.status).toBe(200);
     await firstServer.close();
 
@@ -1923,15 +2052,19 @@ describe('canonical scoped routes', () => {
     });
     expect(oldToken.status).toBe(401);
     const secondToken = await authorize(secondServer);
-    const secondMcp = await fetch(`${secondServer.url}${root}`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${secondToken}`,
-        accept: 'application/json, text/event-stream',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-    });
+    const secondMcp = await fetch(
+      await modernMcpRequest(
+        new Request(`${secondServer.url}${root}`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${secondToken}`,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        }),
+      ),
+    );
     expect(secondMcp.status).toBe(200);
   });
 });

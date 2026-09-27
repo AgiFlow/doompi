@@ -18,8 +18,11 @@
  * needs the prefix, so the prefix has to live here.
  */
 
-/** Control plane for listing and registering targets; registration is local-only. */
-export const DEV_PROXY_API_ROUTE = '/api/dev-proxy';
+/**
+ * Control plane for listing and registering targets; registration is local-only. It lives under
+ * the Remote Control API, which is how both the host and a paired device reach the hub's proxy.
+ */
+export const DEV_PROXY_API_ROUTE = '/api/remote/dev-proxy';
 export const DEV_PROXY_TARGETS_ROUTE = `${DEV_PROXY_API_ROUTE}/targets`;
 
 /**

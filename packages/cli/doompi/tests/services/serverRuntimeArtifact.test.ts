@@ -12,7 +12,7 @@ describe('resolveSessionArtifact', () => {
     const parent = registration('parent');
     const prepareCurrent = vi.fn().mockResolvedValue(registration('child'));
 
-    await expect(resolveSessionArtifact({ worktree: true, parent, prepareCurrent })).resolves.toBe(parent);
+    await expect(resolveSessionArtifact({ member: true, parent, prepareCurrent })).resolves.toBe(parent);
     expect(prepareCurrent).not.toHaveBeenCalled();
   });
 
@@ -22,7 +22,7 @@ describe('resolveSessionArtifact', () => {
 
     await expect(
       resolveSessionArtifact({
-        worktree: true,
+        member: true,
         pinned,
         parent: registration('new-parent'),
         prepareCurrent,
@@ -35,15 +35,25 @@ describe('resolveSessionArtifact', () => {
     const current = registration('current');
     const prepareCurrent = vi.fn().mockResolvedValue(current);
 
-    await expect(resolveSessionArtifact({ worktree: false, prepareCurrent })).resolves.toBe(current);
+    await expect(resolveSessionArtifact({ member: false, prepareCurrent })).resolves.toBe(current);
     expect(prepareCurrent).toHaveBeenCalledOnce();
   });
 
-  it('fails closed when a worktree has no inherited generation', async () => {
+  it('runs the workspace generation for a checkout that joined without a parent', async () => {
+    const current = registration('workspace');
+    const prepareCurrent = vi.fn().mockResolvedValue(registration('checkout'));
+
+    await expect(resolveSessionArtifact({ member: true, workspace: () => current, prepareCurrent })).resolves.toBe(
+      current,
+    );
+    expect(prepareCurrent).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when a member checkout has no workspace generation', async () => {
     const prepareCurrent = vi.fn().mockResolvedValue(registration('child'));
 
-    await expect(resolveSessionArtifact({ worktree: true, prepareCurrent })).rejects.toThrow(
-      'Worktree session requires its parent compiled artifact.',
+    await expect(resolveSessionArtifact({ member: true, workspace: () => undefined, prepareCurrent })).rejects.toThrow(
+      'A member checkout requires its workspace compiled artifact.',
     );
     expect(prepareCurrent).not.toHaveBeenCalled();
   });

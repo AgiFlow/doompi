@@ -46,17 +46,10 @@ describe('config server resources', () => {
       },
     } as unknown as DoomHeadlessExecutionContext;
 
-    const projected = resources.find(({ name }) => name === 'doompi/config');
+    // The selection is not restated to the model as raw JSON.
+    expect(resources.some(({ name }) => name === 'doompi/config')).toBe(false);
     const authoring = resources.find(({ name }) => name === 'doompi-author-config');
-    if (!projected || !authoring) throw new Error('Config resources were not registered');
-    expect(await projected.read(execution)).toBe(
-      JSON.stringify({
-        profile: 'focused',
-        domains: ['typescript'],
-        majorMode: 'development',
-        activeLayers: ['tools'],
-      }),
-    );
+    if (!authoring) throw new Error('Config resources were not registered');
     expect(await authoring.read(execution)).toContain('doompi');
     await close?.();
     await context.fiber.dispose();

@@ -5,6 +5,7 @@ import yauzl from 'yauzl';
 import yazl from 'yazl';
 
 import {
+  documentTooLarge,
   MAX_ARCHIVE_ENTRIES,
   MAX_COMPRESSED_BYTES,
   MAX_COMPRESSION_RATIO,
@@ -59,7 +60,7 @@ function readEntry(zipFile: yauzl.ZipFile, entry: yauzl.Entry): Promise<Buffer> 
 }
 
 function validateXml(name: string, data: Buffer): void {
-  if (data.byteLength > MAX_XML_ENTRY_BYTES) throw new Error(`XML entry exceeds its size limit: ${name}`);
+  if (data.byteLength > MAX_XML_ENTRY_BYTES) throw documentTooLarge(`XML entry exceeds its size limit: ${name}`);
   const xml = new TextDecoder('utf-8', { fatal: true }).decode(data);
   const withoutDeclaration = xml.replace(/^\uFEFF?\s*<\?xml\s[^?]*\?>/i, '');
   if (/<!DOCTYPE|<!ENTITY|<\?/i.test(withoutDeclaration)) throw new Error(`Unsafe XML construct rejected: ${name}`);
@@ -77,7 +78,8 @@ function validateXml(name: string, data: Buffer): void {
 }
 
 export async function readOoxmlArchive(source: Uint8Array): Promise<OoxmlArchive> {
-  if (source.byteLength > MAX_COMPRESSED_BYTES) throw new Error('OOXML archive exceeds the compressed size limit.');
+  if (source.byteLength > MAX_COMPRESSED_BYTES)
+    throw documentTooLarge('OOXML archive exceeds the compressed size limit.');
   const zipFile = await openArchive(Buffer.from(source));
   return await new Promise<OoxmlArchive>((resolve, reject) => {
     const entries: OoxmlArchiveEntry[] = [];
@@ -90,7 +92,7 @@ export async function readOoxmlArchive(source: Uint8Array): Promise<OoxmlArchive
     zipFile.once('error', fail);
     zipFile.on('entry', (entry: yauzl.Entry) => {
       void (async () => {
-        if (entries.length >= MAX_ARCHIVE_ENTRIES) throw new Error('OOXML archive has too many entries.');
+        if (entries.length >= MAX_ARCHIVE_ENTRIES) throw documentTooLarge('OOXML archive has too many entries.');
         if ((entry.generalPurposeBitFlag & 1) !== 0) throw new Error('Encrypted OOXML archive rejected.');
         if (((entry.externalFileAttributes >>> 16) & 0xf000) === 0xa000) throw new Error('Archive symlink rejected.');
         if (entry.compressionMethod !== 0 && entry.compressionMethod !== 8)
@@ -99,9 +101,9 @@ export async function readOoxmlArchive(source: Uint8Array): Promise<OoxmlArchive
         if (!name || names.has(name)) throw new Error('Duplicate normalized archive entry rejected.');
         names.add(name);
         expanded += entry.uncompressedSize;
-        if (expanded > MAX_EXPANDED_BYTES) throw new Error('OOXML archive exceeds the expanded size limit.');
+        if (expanded > MAX_EXPANDED_BYTES) throw documentTooLarge('OOXML archive exceeds the expanded size limit.');
         if (entry.uncompressedSize > Math.max(1, entry.compressedSize) * MAX_COMPRESSION_RATIO) {
-          throw new Error('OOXML archive compression ratio exceeds the limit.');
+          throw documentTooLarge('OOXML archive compression ratio exceeds the limit.');
         }
         const lower = name.toLowerCase();
         if (

@@ -13,9 +13,12 @@ import {
   createOpenSessionRegistry,
   createRequestReceipts,
   createWorkspaceRegistry,
+  identifyWorkspace,
   listSavedSessionRecords,
   listSavedSessions,
   readSqliteTranscript,
+  readWorkspaceMarker,
+  writeWorkspaceMarker,
 } from '@agimon-ai/doompi-core/history';
 import type { OpenSessionRecord, SavedSessionExecution } from '@agimon-ai/doompi-core/history';
 import type {
@@ -174,6 +177,13 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     sessionArtifacts.delete(sessionId);
     webCompositions?.remove({ scope: 'session', sessionId });
     const failures: unknown[] = [];
+    // The host goes first, as on the create-failure path: it stops the running turn and
+    // dispatches session_shutdown while the facets that own those hooks are still installed.
+    try {
+      await baseSessionManager.closeSession(sessionId);
+    } catch (error) {
+      failures.push(error);
+    }
     try {
       await artifacts?.apis.close();
     } catch (error) {
@@ -181,11 +191,6 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     }
     try {
       await artifacts?.cleanup();
-    } catch (error) {
-      failures.push(error);
-    }
-    try {
-      await baseSessionManager.closeSession(sessionId);
     } catch (error) {
       failures.push(error);
     }
@@ -375,6 +380,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       remoteRuntime = createRemoteRuntime({
         homeDirectory,
         registrationToken: token,
+        reservedPorts: () => [options.webPort],
         bundleTrust: () => webCompositions?.shellTrust(),
         onNotice: notice,
         forward: async (request) => {
@@ -407,15 +413,26 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         hub.channelTypes(),
       );
       const admissions = new Map<string, Promise<{ id: string; root: string; available: boolean }>>();
+      // A member checkout is any checkout other than its workspace root, such as a worktree.
+      const isMemberCheckout = (from: string, workspace: { root: string }): boolean =>
+        fs.realpathSync(findRepositoryRoot(from)) !== workspace.root;
       admitWorkspace = async (from) => {
-        const root = fs.realpathSync(findRepositoryRoot(from));
-        const id = resolveSyncLocation(root, homeDirectory).identity.worktreeId;
+        const checkoutRoot = fs.realpathSync(findRepositoryRoot(from));
+        // Ids are persisted, never re-derived from the path: a checkout of an admitted repository
+        // joins its workspace, and a repository that moved keeps its id and sessions.
+        const { id, root, moved } = identifyWorkspace({
+          records: workspaces.list(),
+          checkoutRoot,
+          marker: readWorkspaceMarker(checkoutRoot),
+        });
         const existing = hub.workspaces().find((workspace) => workspace.id === id);
-        if (existing !== undefined && existing.available !== false) return { ...existing, available: true };
+        if (existing !== undefined && existing.available !== false && existing.root === root)
+          return { ...existing, available: true };
         const pending = admissions.get(id);
         if (pending) return pending;
         const wasRemembered = workspaces.list().some((workspace) => workspace.id === id);
-        if (!wasRemembered) workspaces.add({ id, root });
+        if (!wasRemembered || moved) workspaces.add({ id, root });
+        if (moved) notice(`Workspace '${id}' moved to '${root}'.`);
         hub.registerWorkspace({ id, root, available: false });
         const admission = (async () => {
           const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: root };
@@ -435,6 +452,13 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             readSyncRegistration(root, homeDirectory)!,
             hub.channelTypes(),
           );
+          try {
+            if (readWorkspaceMarker(root) === undefined) writeWorkspaceMarker(root, id);
+          } catch (error) {
+            notice(
+              `Workspace '${root}' id could not be recorded in its git data: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
           return { id, root, available: true };
         })();
         admissions.set(id, admission);
@@ -453,13 +477,15 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       for (const record of openSessions.list()) {
         if (workspaces.list().some((workspace) => workspace.id === record.workspaceId)) continue;
         try {
-          const candidate =
-            record.groupingRoot ?? (record.sessionProvenance === 'worktree' ? record.artifact?.root : record.cwd);
-          if (!candidate) throw new Error('Parent workspace location is unavailable.');
+          const candidate = record.groupingRoot ?? record.artifact?.root ?? record.cwd;
           const root = fs.realpathSync(findRepositoryRoot(candidate));
-          const id = resolveSyncLocation(root, homeDirectory).identity.worktreeId;
-          if ((record.groupingRoot === undefined || root === candidate) && id === record.workspaceId)
-            workspaces.add({ id, root });
+          // The recorded id is kept as is. It may be a legacy path hash, and journals, open-session
+          // records and MCP audiences all refer to it.
+          if (
+            (record.groupingRoot === undefined || root === candidate) &&
+            !workspaces.list().some((workspace) => workspace.root === root)
+          )
+            workspaces.add({ id: record.workspaceId, root });
           else
             notice(
               `Session '${record.sessionId}' no longer resolves to its recorded workspace; skipping registration.`,
@@ -474,8 +500,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         hub.registerWorkspace({ ...workspace, available: false });
         try {
           const root = fs.realpathSync(findRepositoryRoot(workspace.root));
-          const id = resolveSyncLocation(root, homeDirectory).identity.worktreeId;
-          if (root !== workspace.root || id !== workspace.id) {
+          if (root !== workspace.root) {
             notice(
               `Workspace '${workspace.root}' no longer resolves to its recorded identity; leaving it unavailable.`,
             );
@@ -500,7 +525,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           parentSessionId?: string;
           sessionProvenance?: string;
         },
-        workspaceId?: string,
+        workspace: { id: string; root: string },
       ): HeadlessSessionHostOptions => {
         const policyOptions = context.options;
         const sessionSelection = {
@@ -519,12 +544,10 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           cwd: policyOptions.cwd,
           repoRoot: policyOptions.repoRoot,
           sessionId: identity.sessionId,
-          workspaceId: workspaceId ?? resolveSyncLocation(policyOptions.repoRoot, homeDirectory).identity.worktreeId,
-          groupingRoot:
-            workspaceId === undefined
-              ? policyOptions.repoRoot
-              : hub.workspaces().find((workspace) => workspace.id === workspaceId)?.root,
-          ...(identity.sessionProvenance === 'worktree' ? { inheritedArtifact: registration } : {}),
+          workspaceId: workspace.id,
+          groupingRoot: workspace.root,
+          // A member checkout runs its workspace's compiled composition, not one of its own.
+          ...(isMemberCheckout(policyOptions.repoRoot, workspace) ? { inheritedArtifact: registration } : {}),
           sessionName: identity.sessionName,
           webComposition: webCompositions?.publish(
             { scope: 'session', sessionId: identity.sessionId },
@@ -551,13 +574,17 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               args: ['--cwd', policyOptions.cwd],
               cwd: policyOptions.cwd,
               environment,
+              ...(policyOptions.configRoot === undefined ? {} : { configRoot: policyOptions.configRoot }),
             });
             return { majorMode: defaults.majorMode, domains: defaults.domains, profile: defaults.profile };
           },
           candidates: bundle.descriptor.entries,
           mcpPlugins: mcpBundle.plugins,
           resolveSelection: (requested) => {
-            const config = loadMajorModesConfig(policyOptions.repoRoot, policyOptions.homeDirectory);
+            const config = loadMajorModesConfig(
+              policyOptions.configRoot ?? policyOptions.repoRoot,
+              policyOptions.homeDirectory,
+            );
             return {
               ...requested,
               activeLayers: filterHookDisabledLayers(
@@ -601,7 +628,9 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           apis: [],
           facets: pendingSessions.get(sessionOptions.sessionId)?.bundle.facets ?? [],
           workspaceId: sessionOptions.workspaceId,
+          // The checkout, which MCP authorizes against; sessionContext carries both roots.
           workspaceRoot: sessionOptions.repoRoot,
+          ...(host.sessionContext === undefined ? {} : { sessionContext: host.sessionContext }),
           homeDirectory,
           mountChannel: (channel) => {
             const dispose = hub.registerChannel(channel, { scope: 'session', sessionId: sessionOptions.sessionId });
@@ -641,10 +670,10 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         );
         const activeHarnessContext = harnessContext;
         try {
-          await admitWorkspace(harnessContext.options.repoRoot);
-          const initialRegistration = readSyncRegistration(harnessContext.options.repoRoot, homeDirectory);
+          const initialWorkspace = await admitWorkspace(harnessContext.options.repoRoot);
+          const initialRegistration = readSyncRegistration(initialWorkspace.root, homeDirectory);
           if (initialRegistration === undefined)
-            throw new Error(`Run the scoped DoomPi sync for '${harnessContext.options.repoRoot}' before opening it.`);
+            throw new Error(`Run the scoped DoomPi sync for '${initialWorkspace.root}' before opening it.`);
           const initialBundle = await loadComposition(
             harnessContext.options.repoRoot,
             'session',
@@ -670,7 +699,14 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             registration: initialRegistration,
           });
           await hub.create(
-            sessionHostOptions(harnessContext, initialBundle, initialMcpBundle, initialRegistration, resolved.identity),
+            sessionHostOptions(
+              harnessContext,
+              initialBundle,
+              initialMcpBundle,
+              initialRegistration,
+              resolved.identity,
+              initialWorkspace,
+            ),
           );
         } catch (error) {
           pendingSessions.delete(resolved.identity.sessionId);
@@ -711,15 +747,14 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           parentSessionId: request.parentSessionId,
           sessionProvenance: request.sessionProvenance,
         };
-        const isWorktree = request.sessionProvenance === 'worktree';
+        // Membership follows the parent link, whatever the session is called or wherever its
+        // checkout lives. Without a known parent, the checkout's own identity decides.
         const inheritedWorkspaceId =
-          isWorktree && request.parentSessionId
-            ? (groupingWorkspaceId ??
-              hub.session(request.parentSessionId)?.workspaceId ??
+          groupingWorkspaceId ??
+          (request.parentSessionId
+            ? (hub.session(request.parentSessionId)?.workspaceId ??
               openSessions.list().find((record) => record.sessionId === request.parentSessionId)?.workspaceId)
-            : undefined;
-        if (isWorktree && inheritedWorkspaceId === undefined)
-          throw new Error('Worktree session requires its parent workspace.');
+            : undefined);
         const parentArtifact =
           request.parentSessionId === undefined
             ? undefined
@@ -730,32 +765,34 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           const childIdentity = resolveSessionIdentity([], identity);
           const childEnvironment = { ...baseEnvironment };
           for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete childEnvironment[key];
+          // The workspace is settled first: a member checkout reads its workspace's configuration.
+          const workspace =
+            inheritedWorkspaceId === undefined
+              ? await admitWorkspace(request.cwd)
+              : hub
+                  .workspaces()
+                  .find((candidate) => candidate.id === inheritedWorkspaceId && candidate.available !== false);
+          if (workspace === undefined) throw new Error('The session workspace is unavailable.');
+          const member = isMemberCheckout(request.cwd, workspace);
           const childContext = await buildHarnessContext(
             resolveHarnessOptions({
               args: ['--cwd', request.cwd, ...childIdentity.agentArgs],
               cwd: request.cwd,
               environment: childEnvironment,
+              ...(member ? { configRoot: workspace.root } : {}),
             }),
             harnessTelemetry,
           );
           try {
-            if (inheritedWorkspaceId !== undefined) {
-              const inheritedWorkspace = hub
-                .workspaces()
-                .find((workspace) => workspace.id === inheritedWorkspaceId && workspace.available !== false);
-              if (inheritedWorkspace === undefined) throw new Error('Worktree parent workspace is unavailable.');
-            }
             const registration = await resolveSessionArtifact({
-              worktree: isWorktree,
+              member,
               pinned: pinnedArtifact,
               parent: parentArtifact,
+              workspace: () => readSyncRegistration(workspace.root, homeDirectory),
               prepareCurrent: async () => {
-                await admitWorkspace(childContext.options.repoRoot);
-                const current = readSyncRegistration(childContext.options.repoRoot, homeDirectory);
+                const current = readSyncRegistration(workspace.root, homeDirectory);
                 if (current === undefined)
-                  throw new Error(
-                    `Run the scoped DoomPi sync for '${childContext.options.repoRoot}' before opening it.`,
-                  );
+                  throw new Error(`Run the scoped DoomPi sync for '${workspace.root}' before opening it.`);
                 return current;
               },
             });
@@ -785,7 +822,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               registration,
             });
             const created = await hub.create(
-              sessionHostOptions(childContext, bundle, mcpBundle, registration, identity, inheritedWorkspaceId),
+              sessionHostOptions(childContext, bundle, mcpBundle, registration, identity, workspace),
             );
             request.signal?.throwIfAborted();
             if (created.workspaceId !== undefined) {
@@ -794,12 +831,12 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
                 workspaceId: created.workspaceId,
                 cwd: created.cwd,
                 repoRoot: childContext.options.repoRoot,
-                groupingRoot: hub.workspaces().find((workspace) => workspace.id === created.workspaceId)?.root,
+                groupingRoot: workspace.root,
                 name: created.name,
                 createdAt: created.createdAt,
                 ...(created.parentSessionId === undefined ? {} : { parentSessionId: created.parentSessionId }),
                 ...(created.sessionProvenance === undefined ? {} : { sessionProvenance: created.sessionProvenance }),
-                ...(isWorktree ? { artifact: registration } : {}),
+                ...(member ? { artifact: registration } : {}),
               });
               if (saved === false) throw new Error('The new session could not be durably recorded.');
             }
@@ -843,12 +880,12 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         throw new Error('Saved session does not belong to this workspace.');
       if (fs.realpathSync(findRepositoryRoot(target.cwd)) !== target.repoRoot)
         throw new Error('Saved session checkout is unavailable.');
-      if (target.sessionProvenance !== 'worktree') return undefined;
-      if (!target.parentSessionId || target.inheritedArtifact === undefined)
-        throw new Error('Saved worktree generation is unavailable.');
-      const artifact = parseSyncRegistration(target.inheritedArtifact, 'saved worktree generation');
+      // Only a member checkout records the workspace generation it ran.
+      if (target.repoRoot === root) return undefined;
+      if (target.inheritedArtifact === undefined) throw new Error('Saved member checkout generation is unavailable.');
+      const artifact = parseSyncRegistration(target.inheritedArtifact, 'saved member checkout generation');
       validateSyncRegistration(artifact, resolveSyncLocation(artifact.root, homeDirectory));
-      if (artifact.root !== root) throw new Error('Saved worktree generation belongs to another workspace.');
+      if (artifact.root !== root) throw new Error('Saved member checkout generation belongs to another workspace.');
       return artifact;
     };
     cockpit = await serveHeadlessServer({
@@ -878,7 +915,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             },
             target.summary.id,
             artifact,
-            target.execution.sessionProvenance === 'worktree' ? workspaceId : undefined,
+            workspaceId,
           );
           return target.summary.id;
         })();
@@ -919,9 +956,10 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         );
       },
       restartSession: async (session) => {
-        const worktree = session.sessionProvenance === 'worktree';
         const record = openSessions.list().find((entry) => entry.sessionId === session.id);
-        const ownership = worktree
+        // Only a member checkout records an artifact; it restarts on its workspace's generation.
+        const member = record?.artifact !== undefined;
+        const ownership = member
           ? resolveWorktreeRestart({
               session,
               record,
@@ -929,7 +967,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               workspaces: hub.workspaces(),
             })
           : undefined;
-        if (!worktree) {
+        if (!member) {
           const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
           if (!workspaceRoot) throw new Error('Session workspace not found.');
           const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: workspaceRoot };
@@ -942,17 +980,24 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           }
         }
         await hub.closeSession(session.id);
-        await openSession(
-          {
-            cwd: session.cwd,
-            name: session.name,
-            ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
-            ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
-          },
-          session.id,
-          ownership?.artifact,
-          ownership?.workspaceId,
-        );
+        try {
+          await openSession(
+            {
+              cwd: session.cwd,
+              name: session.name,
+              ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
+              ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
+            },
+            session.id,
+            ownership?.artifact,
+            ownership?.workspaceId ?? session.workspaceId,
+          );
+        } catch (error) {
+          // The journal lease allows one writer, so the new host cannot open before the old
+          // one closes. Keep the closed session as dormant so it can be revived after a fix.
+          if (record !== undefined) openSessions.add(record);
+          throw error;
+        }
       },
       resumeSession: async (session, targetSessionId) => {
         const workspaceId = session.workspaceId;
@@ -961,18 +1006,25 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         const target = (await savedHistory(workspaceId)).find((item) => item.summary.id === targetSessionId);
         if (!target) throw new Error('Saved Pi thread not found in this workspace.');
         const artifact = validatedExecution(target.execution, workspaceId);
+        const closedRecord = openSessions.list().find((entry) => entry.sessionId === session.id);
         await hub.closeSession(session.id);
-        await openSession(
-          {
-            cwd: target.execution.cwd,
-            name: target.summary.name ?? 'untitled',
-            ...(target.execution.parentSessionId ? { parentSessionId: target.execution.parentSessionId } : {}),
-            ...(target.execution.sessionProvenance ? { sessionProvenance: target.execution.sessionProvenance } : {}),
-          },
-          target.summary.id,
-          artifact,
-          target.execution.sessionProvenance === 'worktree' ? workspaceId : undefined,
-        );
+        try {
+          await openSession(
+            {
+              cwd: target.execution.cwd,
+              name: target.summary.name ?? 'untitled',
+              ...(target.execution.parentSessionId ? { parentSessionId: target.execution.parentSessionId } : {}),
+              ...(target.execution.sessionProvenance ? { sessionProvenance: target.execution.sessionProvenance } : {}),
+            },
+            target.summary.id,
+            artifact,
+            workspaceId,
+          );
+        } catch (error) {
+          // Same as restart: the session given up for the resume stays revivable.
+          if (closedRecord !== undefined) openSessions.add(closedRecord);
+          throw error;
+        }
         return target.summary.id;
       },
       dormantSessions: () => openSessions.list(),
@@ -988,8 +1040,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           throw new Error('The session workspace is unavailable.');
         if (record.repoRoot !== undefined && fs.realpathSync(findRepositoryRoot(record.cwd)) !== record.repoRoot)
           throw new Error('The session checkout has changed.');
-        if (record.sessionProvenance === 'worktree' && record.artifact?.root !== groupingRoot)
-          throw new Error('The inherited worktree generation is unavailable.');
+        if (record.artifact !== undefined && record.artifact.root !== groupingRoot)
+          throw new Error('The inherited workspace generation is unavailable.');
         await openSession(
           {
             cwd: record.cwd,
@@ -998,8 +1050,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             ...(record.sessionProvenance === undefined ? {} : { sessionProvenance: record.sessionProvenance }),
           },
           record.sessionId,
-          record.sessionProvenance === 'worktree' ? record.artifact : undefined,
-          record.sessionProvenance === 'worktree' ? record.workspaceId : undefined,
+          record.artifact,
+          record.workspaceId,
         );
       },
       requestAsset: (request) => webCompositions?.request(request) ?? Promise.resolve(undefined),

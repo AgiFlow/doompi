@@ -17,7 +17,9 @@ import { McpHeadlessToolParameters } from '../../schemas/mcpHeadlessTool';
 import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../types/webMcp';
 import { formatStatus } from '../mcpCommand';
 import { McpSession } from '../mcpSession';
+import { createMcpSessionApi } from '../mcpSessionApi';
 import { createMcpChildTool } from '../mcpSessionTools';
+import { type CountTokens, mcpToolTokens } from '../mcpToolCost';
 import { mcpSessionConfigFromProjection } from '../projection';
 import { readSessionConfig } from '../sessionConfig';
 
@@ -152,6 +154,27 @@ export function createMcpServerRuntime(
     return transition;
   };
 
+  // The tokenizer loads on first use rather than at startup; the status republishes once it has.
+  let countTokens: CountTokens | undefined;
+  let tokenizer: Promise<CountTokens> | undefined;
+  const loadTokenizer = (): Promise<CountTokens> => {
+    tokenizer ??= import('gpt-tokenizer').then((module) => {
+      countTokens = module.countTokens;
+      return module.countTokens;
+    });
+    return tokenizer;
+  };
+  const toolTokens = new Map<string, number>();
+  /** Each reachable tool's schema cost, keyed by its registered name, once the tokenizer is loaded. */
+  const reachableTokens = (): ReadonlyMap<string, number> => {
+    if (countTokens === undefined) return toolTokens;
+    for (const tool of session.activeToolDefinitions()) {
+      if (!toolTokens.has(tool.piName)) toolTokens.set(tool.piName, mcpToolTokens(tool, countTokens));
+    }
+    return toolTokens;
+  };
+  const api = createMcpSessionApi(session, loadTokenizer);
+
   const activity: DoomHeadlessActivity = {
     name: 'doompi-mcp-runtime',
     async start(execution) {
@@ -167,14 +190,32 @@ export function createMcpServerRuntime(
             .map((server) => server.name)
             .join(','),
         );
-        execution.client.setStatus(MCP_SESSION_AUTH_STATUS_KEY, formatMcpSessionAuthStatus(session.getServers()));
+        const tokens = reachableTokens();
+        execution.client.setStatus(
+          MCP_SESSION_AUTH_STATUS_KEY,
+          formatMcpSessionAuthStatus(
+            session.getServers().map((server) => ({
+              ...server,
+              tools: server.tools.map((tool) => {
+                const cost = tokens.get(tool.piName);
+                return cost === undefined ? tool : { ...tool, tokens: cost };
+              }),
+            })),
+          ),
+        );
         for (const diagnostic of session.getDiagnostics()) {
           if (reported.has(diagnostic)) continue;
           reported.add(diagnostic);
           void execution.client.notify({ title: 'DoomPi MCP', body: diagnostic, level: 'warning' });
         }
       };
-      const stopPublishing = session.onChange(publish);
+      const stopPublishing = session.onChange(() => {
+        toolTokens.clear();
+        publish();
+      });
+      void loadTokenizer().then(() => {
+        if (active === execution) publish();
+      });
       try {
         await refresh(execution, execution.selection);
         publish();
@@ -304,6 +345,7 @@ export function createMcpServerRuntime(
   };
   return {
     session,
+    api: [api],
     activities: [activity],
     commands: [command],
     tools: [tool],

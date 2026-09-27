@@ -123,6 +123,7 @@ describe('doompiServerFacet headless minor command', () => {
     let command: DoomHeadlessCommand | undefined;
     const headless: DoomHeadlessHostService = {
       context: {} as DoomHeadlessHostService['context'],
+      readSkill: vi.fn(() => undefined),
       changeSelection: vi.fn(async () => undefined),
       assertActive: vi.fn(),
       subscribeSelection: vi.fn(() => vi.fn()),

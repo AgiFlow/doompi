@@ -355,26 +355,34 @@ export function ArtifactsPane({
   const [error, setError] = useState<string>();
 
   useEffect(() => {
+    // Cleared on every change, settled runs included, so a slow answer for the previous run or
+    // session never overwrites this one. One read at a time keeps a slow hub from piling up polls.
     let live = true;
+    let reading = false;
     const read = (): void => {
-      void fetchArtifacts(run.workspace, run.runKey, sessionId).then((result) => {
-        if (!live) return;
-        if ('error' in result) {
-          setError(result.error);
-          return;
-        }
-        setError(undefined);
-        setListing(result.artifacts);
-      });
+      if (reading) return;
+      reading = true;
+      void fetchArtifacts(run.workspace, run.runKey, sessionId)
+        .then((result) => {
+          if (!live) return;
+          if ('error' in result) {
+            setError(result.error);
+            return;
+          }
+          setError(undefined);
+          setListing(result.artifacts);
+        })
+        .finally(() => {
+          reading = false;
+        });
     };
     read();
     // A running workflow writes while the pane is open; a settled one cannot,
     // so it is read once and left alone.
-    if (run.stage !== 'running') return;
-    const timer = setInterval(read, 5_000);
+    const timer = run.stage === 'running' ? setInterval(read, 5_000) : undefined;
     return () => {
       live = false;
-      clearInterval(timer);
+      if (timer !== undefined) clearInterval(timer);
     };
   }, [run.workspace, run.runKey, run.stage, sessionId]);
 

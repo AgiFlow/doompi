@@ -19,6 +19,7 @@ export function createSandboxSkillResource(root: SandboxServerScope): DoomHeadle
   if (!root.service) return undefined;
   return {
     name: 'doompi-use-sandbox',
+    when: { state: { 'minor-mode': 'help' }, attribution: { kind: 'minor', mode: 'help' } },
     kind: 'skill',
     read: () => readPackageResource(import.meta.url, 'src/prompts/doompi-use-sandbox/SKILL.md'),
   };

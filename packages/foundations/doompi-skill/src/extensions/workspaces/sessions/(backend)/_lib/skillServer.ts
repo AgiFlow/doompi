@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
 import {
   type DoomServerSessionPlugin,
@@ -6,6 +8,7 @@ import {
 } from '@agimon-ai/doompi-core/serverFacet';
 
 import { mountMcpSkills } from '../../../../../services/mcpSkills';
+import { createSessionLoadSkillTool } from '../../../../../services/mcpSkillTools';
 import { discoverServerSkills } from '../../../../../services/serverInventory';
 import { createSkillCommands } from './skillCommands';
 
@@ -13,12 +16,25 @@ export async function createSkillServer(
   agent: DoomHeadlessHostService,
   signal: AbortSignal,
 ): Promise<DoomServerSessionPlugin> {
-  const { inventory, catalog, groups, mcpGroups } = await discoverServerSkills(agent.context, signal);
+  const { inventory, catalog, groups, mcpGroups, listed } = await discoverServerSkills(agent.context, signal);
   return {
     commands: createSkillCommands(inventory, catalog, groups),
+    tools: [createSessionLoadSkillTool(agent)],
     services: [mountMcpSkills(mcpGroups, signal)],
     resources: [
-      { name: 'doompi/skills', kind: 'skill', read: () => catalog },
+      // Each skill joins the prompt's one <available_skills> list, gated like the rest.
+      ...listed.flatMap((group) =>
+        group.skills.map((skill) => ({
+          name: skill.name,
+          description: skill.description,
+          path: skill.filePath,
+          kind: 'skill' as const,
+          ...(group.domain === undefined
+            ? {}
+            : { when: { domain: group.domain, attribution: { kind: 'domain' as const, mode: group.domain } } }),
+          read: () => readFile(skill.filePath, 'utf8'),
+        })),
+      ),
       ...[
         {
           name: 'doompi-author-skill',

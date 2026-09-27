@@ -13,6 +13,7 @@ import type {
   DoomDirectEventBus,
   DoomHubSessionService,
   DoomSessionCommunicationEndpoint,
+  DoomSessionContext,
 } from './hubChannel';
 import type { DoomMcpProjection } from './mcpProjection';
 /** The host-owned sync view a repository-scoped package API may inspect. */
@@ -186,10 +187,15 @@ export interface DoomPeerAgentRegistry {
 /** What the host tells an API about itself when it starts. */
 export interface DoomApiContext {
   scope: DoomApiScope;
-  /** Stable, opaque identity shared by sessions in one canonical worktree. */
+  /** Stable, opaque workspace id, shared by every session and member checkout of the workspace. */
   workspaceId?: string;
-  /** Canonical admitted workspace root, absent from global mounts. */
+  /**
+   * The admitted workspace root for a workspace mount. For a session mount it is the checkout
+   * the session runs in; read sessionContext for both roots. Absent from global mounts.
+   */
   workspaceRoot?: string;
+  /** The session's baseline context; present on session mounts whose host knows its workspace. */
+  sessionContext?: DoomSessionContext;
   /** Explicit host home, never selected by a remote request. */
   homeDirectory?: string;
   /** The session this host serves; absent for a hub-scoped API. */

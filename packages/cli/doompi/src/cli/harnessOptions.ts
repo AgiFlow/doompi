@@ -18,6 +18,8 @@ export interface ResolveHarnessOptionsInput {
   args: readonly string[];
   environment?: NodeJS.ProcessEnv;
   cwd?: string;
+  /** Reads configuration from this root instead of the checkout's own. */
+  configRoot?: string;
   /** Reports a malformed inherited harness state without failing the run. */
   report?: HarnessFailureReporter;
 }
@@ -50,7 +52,8 @@ export function resolveHarnessOptions(input: ResolveHarnessOptionsInput): Harnes
   const inheritedRoot = readHarnessState(environment, input.report).root;
   const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : resolveConfigurationRoot(initial.options.cwd);
   const homeDirectory = initial.options.homeDirectory ?? environment.HOME ?? os.homedir();
-  const defaults = loadDoomConfig(repoRoot, homeDirectory).selection;
+  const configRoot = input.configRoot ?? repoRoot;
+  const defaults = loadDoomConfig(configRoot, homeDirectory).selection;
   const selectedEnvironment = { ...environment };
   for (const axis of ['majorMode', 'domains', 'profile'] as const) {
     const value = defaults?.[axis];
@@ -61,9 +64,9 @@ export function resolveHarnessOptions(input: ResolveHarnessOptionsInput): Harnes
     args,
     selectedEnvironment,
     cwd,
-    loadMajorModesConfig(repoRoot, homeDirectory).defaultMajorMode,
-    loadDomains(repoRoot, homeDirectory).defaultDomains,
-    loadProfileCatalog(repoRoot, homeDirectory).defaultProfile,
+    loadMajorModesConfig(configRoot, homeDirectory).defaultMajorMode,
+    loadDomains(configRoot, homeDirectory).defaultDomains,
+    loadProfileCatalog(configRoot, homeDirectory).defaultProfile,
   );
-  return { repoRoot, ...parsed.options, homeDirectory };
+  return { repoRoot, ...(input.configRoot === undefined ? {} : { configRoot }), ...parsed.options, homeDirectory };
 }

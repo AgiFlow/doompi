@@ -1,19 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import {
-  CallToolRequestSchema,
-  CancelledNotificationSchema,
-  ErrorCode,
-  ListResourcesRequestSchema,
-  ListToolsRequestSchema,
-  McpError,
-  ReadResourceRequestSchema,
+  createMcpHandler,
+  ProtocolError,
+  ProtocolErrorCode,
+  Server,
   type CallToolResult,
   type Tool,
-} from '@modelcontextprotocol/sdk/types.js';
+} from '@modelcontextprotocol/server';
 
 import type { SessionMcpAccessGrant, SessionMcpAuthorizationService } from '../services/sessionMcpAuthorization';
 import { sessionMcpConversationDigest, SessionMcpConversationError } from '../services/sessionMcpConversations';
@@ -82,7 +77,7 @@ function extraTools(baseline: SessionMcpBaseline, tools: readonly SessionToolDes
 
 function toolArguments(name: string, value: unknown): { name?: string; arguments?: Record<string, unknown> } {
   if (typeof value !== 'object' || value === null || Array.isArray(value))
-    throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for '${name}'.`);
+    throw new ProtocolError(ProtocolErrorCode.InvalidParams, `Invalid arguments for '${name}'.`);
   const args = value as Record<string, unknown>;
   if (
     Object.keys(args).some((key) => key !== 'name' && key !== 'arguments') ||
@@ -93,7 +88,7 @@ function toolArguments(name: string, value: unknown): { name?: string; arguments
         (args.arguments !== undefined &&
           (typeof args.arguments !== 'object' || args.arguments === null || Array.isArray(args.arguments)))))
   )
-    throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for '${name}'.`);
+    throw new ProtocolError(ProtocolErrorCode.InvalidParams, `Invalid arguments for '${name}'.`);
   return args as { name?: string; arguments?: Record<string, unknown> };
 }
 export interface SessionMcpTarget {
@@ -162,7 +157,10 @@ function currentUrl(request: Request): string | undefined {
 function grantedSurface(grant: SessionMcpAccessGrant, surface: SessionToolSurface) {
   const snapshot = surface.readSurface();
   if (snapshot.tools.some((tool) => SESSION_MCP_EXTRA_TOOLS.some((wrapper) => wrapper.name === tool.name)))
-    throw new McpError(ErrorCode.InvalidRequest, 'A session tool conflicts with a reserved remote tool name.');
+    throw new ProtocolError(
+      ProtocolErrorCode.InvalidRequest,
+      'A session tool conflicts with a reserved remote tool name.',
+    );
   const toolNames = new Set(grant.tools);
   const skillNames = new Set(grant.skills);
   const tools = grant.scope === 'session' ? snapshot.tools : snapshot.tools.filter((tool) => toolNames.has(tool.name));
@@ -228,7 +226,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
     }> => {
       const activeGrant = authenticate(token, exactAudience);
       if (activeGrant === undefined || activeGrant.id !== grant.id) {
-        throw new McpError(ErrorCode.InvalidRequest, 'The session grant is no longer active.');
+        throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session grant is no longer active.');
       }
       const target = await options.resolveSession(activeGrant.sessionId);
       const recheckedGrant = authenticate(token, exactAudience);
@@ -238,7 +236,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         target === undefined ||
         target.generation !== recheckedGrant.sessionGeneration
       ) {
-        throw new McpError(ErrorCode.InvalidRequest, 'The session grant is no longer active.');
+        throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session grant is no longer active.');
       }
       return { grant: recheckedGrant, target };
     };
@@ -261,7 +259,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           'Read saved command logs instead of relaunching work. Saving a plan does not authorize implementation.',
       },
     );
-    server.setNotificationHandler(CancelledNotificationSchema, async (notification) => {
+    server.setNotificationHandler('notifications/cancelled', async (notification) => {
       const active = await authorizeOperation();
       if (notification.params.requestId === undefined) return;
       const owner = operationOwner(active.grant, notification.params.requestId);
@@ -274,7 +272,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       );
       if (candidates.length === 1) candidates[0]!.controller.abort();
     });
-    server.setRequestHandler(ListToolsRequestSchema, async () => {
+    server.setRequestHandler('tools/list', async () => {
       const active = await authorizeOperation();
       await options.onVerified?.(active.grant);
       const { tools, skills } = grantedSurface(active.grant, active.target.toolSurface);
@@ -288,15 +286,20 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       baselines.set(active.grant.clientId, baseline);
       return { tools: [...parentTools, ...wrappers] };
     });
-    server.setRequestHandler(CallToolRequestSchema, async (message, extra): Promise<CallToolResult> => {
-      const conversation = sessionMcpConversationDigest((message.params as { _meta?: unknown })._meta);
-      const owner = operationOwner(grant, extra.requestId);
+    server.setRequestHandler('tools/call', async (message, ctx): Promise<CallToolResult> => {
+      const conversation = sessionMcpConversationDigest(
+        ctx.mcpReq._meta ?? (message.params as { _meta?: unknown })._meta,
+      );
+      const owner = operationOwner(grant, ctx.mcpReq.id);
       const key = JSON.stringify([owner, conversation]);
       if (operations.has(key))
-        throw new McpError(ErrorCode.InvalidRequest, 'A tool call with this request identity is already active.');
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidRequest,
+          'A tool call with this request identity is already active.',
+        );
       const controller = new AbortController();
       operations.set(key, { controller, owner, conversation });
-      const signal = AbortSignal.any([request.signal, extra.signal, controller.signal]);
+      const signal = AbortSignal.any([request.signal, ctx.mcpReq.signal, controller.signal]);
       const invocationId = randomUUID();
       let skillAccessOpen = true;
       let widgetTool: SessionToolDescriptor | undefined;
@@ -309,7 +312,10 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
               (tool) => tool.name === message.params.name,
             );
         if (!wrapper && !advertised)
-          throw new McpError(ErrorCode.InvalidParams, `Tool '${message.params.name}' is not granted or active.`);
+          throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            `Tool '${message.params.name}' is not granted or active.`,
+          );
         widgetTool = advertised;
         const wrapperArgs = wrapper ? toolArguments(message.params.name, message.params.arguments ?? {}) : undefined;
         // A binding must not outlive an unpersisted registration when tools/call precedes tools/list.
@@ -367,7 +373,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             current.target.sessionId !== active.target.sessionId ||
             current.target.toolSurface.readSurface().revision !== snapshot.revision
           )
-            throw new McpError(ErrorCode.InvalidRequest, 'The session tool surface has changed.');
+            throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session tool surface has changed.');
           options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
           return {
             content: [{ type: 'text', text: JSON.stringify(discovery) }],
@@ -378,7 +384,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         const name = wrapper ? wrapperArgs!.name! : message.params.name;
         const selected = tools.find((tool) => tool.name === name);
         if (wrapper && (!extras.some((tool) => tool.name === name) || !selected))
-          throw new McpError(ErrorCode.InvalidParams, `Extra tool '${name}' is not granted or active.`);
+          throw new ProtocolError(ProtocolErrorCode.InvalidParams, `Extra tool '${name}' is not granted or active.`);
         if (
           !wrapper &&
           (!selected ||
@@ -399,22 +405,22 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             current.target.generation !== active.target.generation ||
             current.target.sessionId !== active.target.sessionId
           )
-            throw new McpError(ErrorCode.InvalidRequest, 'The session tool surface has changed.');
+            throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session tool surface has changed.');
           if (wrapper) {
             if (!grantedExtraTools(current.grant).some((tool) => tool.name === message.params.name))
-              throw new McpError(ErrorCode.InvalidRequest, 'The connection tool surface has changed.');
+              throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The connection tool surface has changed.');
           } else {
             const currentAdvertised = grantedSurface(current.grant, parent.target.toolSurface).tools.find(
               (tool) => tool.name === message.params.name,
             );
             if (!currentAdvertised || !isDeepStrictEqual(currentAdvertised, advertised))
-              throw new McpError(ErrorCode.InvalidRequest, 'The connection tool surface has changed.');
+              throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The connection tool surface has changed.');
           }
           return current;
         };
         const authorizedSkills = async () => {
           if (!skillAccessOpen)
-            throw new McpError(ErrorCode.InvalidRequest, 'Remote skill access is no longer active.');
+            throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'Remote skill access is no longer active.');
           signal.throwIfAborted();
           const current = await recheck();
           signal.throwIfAborted();
@@ -428,12 +434,12 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           async read(name: string) {
             const current = await authorizedSkills();
             const skill = current.skills.find((candidate) => candidate.name === name);
-            if (!skill) throw new McpError(ErrorCode.InvalidParams, 'Skill is not granted or active.');
+            if (!skill) throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Skill is not granted or active.');
             const text = await active.target.toolSurface.readSkill(current.snapshot.revision, skill.uri);
             signal.throwIfAborted();
             const after = await authorizedSkills();
             if (after.snapshot.revision !== current.snapshot.revision)
-              throw new McpError(ErrorCode.InvalidRequest, 'The session skill surface has changed.');
+              throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session skill surface has changed.');
             return text;
           },
         };
@@ -450,7 +456,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
                 (tool) => tool.name === name,
               );
               if (!currentTool || !isDeepStrictEqual(currentTool, selected))
-                throw new McpError(ErrorCode.InvalidRequest, 'The extra tool surface has changed.');
+                throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The extra tool surface has changed.');
             }
           },
         });
@@ -463,7 +469,20 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           isError: result.isError ?? false,
         });
       } catch (error) {
-        options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=failed`);
+        // The cause is logged because the client may drop the answer, for example on a timeout
+        // during a first call that provisions a worktree, and then nothing else records why. Only a
+        // class or code: a message can carry tool arguments, which notices never do.
+        const cause =
+          error instanceof SessionMcpConversationError
+            ? error.code
+            : signal.aborted
+              ? 'aborted'
+              : error instanceof ProtocolError
+                ? `mcp_${String(error.code)}`
+                : error instanceof Error
+                  ? error.name
+                  : 'unknown';
+        options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=failed cause=${cause}`);
         if (!(error instanceof SessionMcpConversationError)) throw error;
         return widgetResult(widgetTool, {
           content: [{ type: 'text', text: error.message }],
@@ -479,26 +498,31 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         operations.delete(key);
       }
     });
-    server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    server.setRequestHandler('resources/list', async () => {
       const active = await authorizeOperation();
       const { uiResources } = grantedSurface(active.grant, active.target.toolSurface);
       return {
         resources: [...uiResources],
       };
     });
-    server.setRequestHandler(ReadResourceRequestSchema, async (message) => {
-      const conversation = sessionMcpConversationDigest((message.params as { _meta?: unknown })._meta);
+    server.setRequestHandler('resources/read', async (message, ctx) => {
+      const conversation = sessionMcpConversationDigest(
+        ctx.mcpReq._meta ?? (message.params as { _meta?: unknown })._meta,
+      );
       const active = await authorizeOperation();
       const { snapshot, skills, uiResources } = grantedSurface(active.grant, active.target.toolSurface);
       const skill = skills.find((candidate) => candidate.uri === message.params.uri);
       if (skill !== undefined) {
         if (!conversation)
-          throw new McpError(
-            ErrorCode.InvalidParams,
+          throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
             'Use load_skill with conversation metadata to read target-session guidance.',
           );
         if (!options.resolveConversation)
-          throw new McpError(ErrorCode.InvalidRequest, 'Conversation routing is unavailable in this host.');
+          throw new ProtocolError(
+            ProtocolErrorCode.InvalidRequest,
+            'Conversation routing is unavailable in this host.',
+          );
         const target = await options.resolveConversation(active.grant, conversation, false, request.signal);
         const text = await target.toolSurface.readSkill(snapshot.revision, skill.uri);
         await authorizeOperation();
@@ -520,24 +544,22 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             resource,
           )
         )
-          throw new McpError(ErrorCode.InvalidRequest, 'The session UI resource surface has changed.');
+          throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session UI resource surface has changed.');
         return { contents: [{ ...resource, text }] };
       }
       if (message.params.uri.startsWith('ui:'))
-        throw new McpError(ErrorCode.InvalidParams, 'UI resource is not granted or active.');
-      throw new McpError(
-        ErrorCode.InvalidParams,
+        throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'UI resource is not granted or active.');
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Use load_skill with conversation metadata to read target-session guidance.',
       );
     });
 
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true,
-    });
+    // One server per request, as before. Only the 2026-07-28 revision is served; a 2025-era request
+    // is refused with the versions this endpoint supports.
+    const handler = createMcpHandler(() => server, { legacy: 'reject' });
     try {
-      await server.connect(transport);
-      return await transport.handleRequest(request, {
+      return await handler.fetch(request, {
         authInfo: {
           token,
           clientId: grant.clientId,

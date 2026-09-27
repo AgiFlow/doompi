@@ -3,31 +3,8 @@ import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 
 import { LOOP_VIEW_STATUS_KEY, parseLoopStatusView, type LoopStatusState } from '../../../../../../types/loopView';
 
-const MANAGE_COMMAND = '/loops';
-const DEFAULT_LOOP_COMMAND = '/loop doompi.default';
-
-/** Starts the built-in prompt loop without opening a generic launcher chooser. */
-export function DefaultLoopLauncher({
-  sessionId,
-  sendSessionFrame,
-}: Pick<WebPluginSlotProps, 'sessionId' | 'sendSessionFrame'>) {
-  return (
-    <Button
-      variant="subtle"
-      size="xs"
-      data-testid="activity-loop-default-launch"
-      aria-label="launch default loop"
-      disabled={sessionId === null}
-      onClick={() => {
-        if (sessionId === null) return;
-        sendSessionFrame(sessionId, { type: 'prompt', message: DEFAULT_LOOP_COMMAND });
-      }}
-      className="text-2xs font-bold"
-    >
-      default loop
-    </Button>
-  );
-}
+/** The minor mode name the cockpit reports while the agent's loop tools are active. */
+const LOOP_MODE = 'loop';
 
 function toneOf(state: LoopStatusState): DotTone {
   if (state === 'running') return 'green';
@@ -82,54 +59,25 @@ export function LoopActivityItems({
   );
 }
 
-/** Idle-safe Loop activity shell with extension registration and instance slots. */
-export function LoopsActivitySection({ sessionId, renderSlot, sendSessionFrame }: WebPluginSlotProps) {
+/**
+ * The Loop activity section. The agent sets loops through its tools while the Loop minor mode is
+ * active; this section lists the session's loops whatever the mode, so any of them can be stopped.
+ */
+export function LoopsActivitySection({ statuses, activeMinorModes, renderSlot }: WebPluginSlotProps) {
+  const modeActive = activeMinorModes?.includes(LOOP_MODE) === true;
+  const hasLoops = parseLoopStatusView(statuses[LOOP_VIEW_STATUS_KEY]) !== undefined;
+  let hint: string | undefined;
+  if (!modeActive) hint = 'Activate loop minor mode to set loop or cron job.';
+  else if (!hasLoops) hint = 'No loops yet. Ask the agent to set a loop or cron job.';
   return (
     <div data-testid="activity-loop-instances" className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-1">
-        <DefaultLoopLauncher sessionId={sessionId} sendSessionFrame={sendSessionFrame} />
-        <Button
-          variant="subtle"
-          size="xs"
-          data-testid="activity-loop-cron-launch"
-          aria-label="launch cron loop"
-          disabled={sessionId === null}
-          onClick={() => {
-            if (sessionId !== null) sendSessionFrame(sessionId, { type: 'prompt', message: '/loop doompi.cron' });
-          }}
-          className="text-2xs font-bold"
-        >
-          cron loop
-        </Button>
-        <Button
-          variant="subtle"
-          size="xs"
-          aria-label="choose loop type"
-          disabled={sessionId === null}
-          onClick={() => {
-            if (sessionId !== null) sendSessionFrame(sessionId, { type: 'prompt', message: '/loop' });
-          }}
-          className="text-2xs font-bold"
-        >
-          choose type
-        </Button>
-        {renderSlot('loop.registration')}
-      </div>
+      {renderSlot('loop.registration')}
       {renderSlot('loop.items')}
-      <Button
-        variant="subtle"
-        size="xs"
-        data-testid="activity-loops-manage"
-        aria-label="manage loops"
-        disabled={sessionId === null}
-        onClick={() => {
-          if (sessionId === null) return;
-          sendSessionFrame(sessionId, { type: 'prompt', message: MANAGE_COMMAND });
-        }}
-        className="self-end text-2xs font-bold"
-      >
-        manage
-      </Button>
+      {hint === undefined ? null : (
+        <p data-testid="activity-loops-hint" className="px-1 text-xs text-doom-faint">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

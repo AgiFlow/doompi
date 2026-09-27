@@ -7,7 +7,14 @@ import type {
   ParsedStructuredDocument,
   SerializedStructuredDocument,
 } from '../../types/structuredDocuments';
-import { decodeUtf8, MAX_COMPRESSED_BYTES, parsedDocument, preflight, requireAccepted } from './common';
+import {
+  decodeUtf8,
+  documentTooLarge,
+  MAX_COMPRESSED_BYTES,
+  parsedDocument,
+  preflight,
+  requireAccepted,
+} from './common';
 
 const FORMULA_TRIGGER = /^\s*[=+\-@]/;
 const MAX_CELLS = 1_000_000;
@@ -41,7 +48,7 @@ export function parseCsv(
   requestedDialect?: Partial<CsvDialect>,
 ): ParsedStructuredDocument {
   const bytes = typeof source === 'string' ? new TextEncoder().encode(source) : source;
-  if (bytes.byteLength > MAX_COMPRESSED_BYTES) throw new Error('CSV input exceeds the size limit.');
+  if (bytes.byteLength > MAX_COMPRESSED_BYTES) throw documentTooLarge('CSV input exceeds the size limit.');
   const text = decodeUtf8(bytes);
   const dialect = normalizeDialect(text, requestedDialect);
   const records = parse(text, {
@@ -53,7 +60,7 @@ export function parseCsv(
     skip_empty_lines: false,
   }) as string[][];
   const cellCount = records.reduce((total, row) => total + row.length, 0);
-  if (cellCount > MAX_CELLS) throw new Error('CSV input has too many cells.');
+  if (cellCount > MAX_CELLS) throw documentTooLarge('CSV input has too many cells.');
   const fragments = records.flatMap((row, rowIndex) =>
     row.map((text, columnIndex) => {
       if (FORMULA_TRIGGER.test(text)) throw new Error(`CSV formula trigger rejected at row ${rowIndex + 1}.`);

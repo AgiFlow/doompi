@@ -14,6 +14,8 @@ import {
   DOOM_API_CALLER_STEP_UP_HEADER,
   parseDoomSocketPath,
 } from '../schemas/packageApi';
+import { isDevProxyPath, parseProxyPath } from '../services/devProxyPolicy';
+import { createDevProxyStore } from '../services/devProxyStore';
 import { createRemoteAccess, type RemoteAccess } from '../services/remoteAccess';
 import { createRemoteAccessStore } from '../services/remoteAccessStore';
 import {
@@ -25,6 +27,8 @@ import {
 import { createTunnelLauncher, reapStaleTunnel } from '../services/tunnelProcess';
 import { stepUpActionFor } from '../services/webauthnPolicy';
 import { type TunnelLauncher } from '../types/remote';
+import { registerDevProxyRoutes } from './devProxyRoutes';
+import { relayDevProxySocket } from './devProxySocket';
 import { registerRemoteRoutes } from './remoteRoutes';
 import { isPublicSessionMcpRoute, isSessionMcpHostRoute } from './sessionMcpRoutes';
 
@@ -107,6 +111,8 @@ export interface RemoteRuntimeOptions {
   forward(request: Request): Promise<Response>;
   connectProtocol(pathname: string): WebSocket;
   launchTunnel?: TunnelLauncher;
+  /** Ports the host itself listens on, which a dev proxy target may never name. */
+  reservedPorts?: () => readonly (number | undefined)[];
 }
 
 export interface RemoteRuntime {
@@ -143,6 +149,7 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
     onNotice: (message) => options.onNotice(message),
   });
   reapStaleTunnel(store.directory, (message) => options.onNotice(message));
+  const devProxy = createDevProxyStore({ stateDir: store.directory, onNotice: (message) => options.onNotice(message) });
   const app = new Hono<{ Bindings: ListenerBindings }>();
   let remote: RemoteAccess;
   let frontendOrigin: string | undefined;
@@ -169,6 +176,10 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
     const device = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
     if (device === undefined) return context.json({ error: 'This device is not paired.' }, 401);
     if (context.env.sealedDeviceId === device) return next();
+    // A proxied dev site issues its own subresource requests and form posts, none of which can go
+    // through a gateway that seals whole JSON responses. The same predicate the proxy route uses
+    // refuses dot segments, so a path granted here cannot resolve into /api/.
+    if (isDevProxyPath(path)) return next();
     if (context.req.method === 'POST' && (path === REMOTE_CHANNEL_ROUTE || path === REMOTE_HTTP_ROUTE)) return next();
     if ((context.req.method === 'GET' || context.req.method === 'HEAD') && !path.startsWith('/api/')) return next();
     return context.json({ error: 'Remote HTTP requests must use the sealed gateway.' }, 401);
@@ -237,6 +248,27 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
           }),
         );
         const device = remote.authorize(cookies.get(`__Host-${DEVICE_COOKIE}`));
+        // Hot module reload: a paired device's dev-site socket goes to the registered target.
+        if (isDevProxyPath(url.pathname) && verdict === 'allow' && device !== undefined) {
+          const parsed = parseProxyPath(url.pathname);
+          const target = parsed.kind === 'match' ? devProxy.find(parsed.name) : undefined;
+          if (parsed.kind !== 'match' || target === undefined) {
+            socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+            socket.destroy();
+            return;
+          }
+          webSockets.handleUpgrade(incoming, socket, head, (client) => {
+            const untrack = remote.trackSocket(device, (code, reason) => client.close(code, reason));
+            client.once('close', untrack);
+            relayDevProxySocket(client, {
+              port: target.port,
+              upstreamPath: `${parsed.upstreamPath}${url.search}`,
+              protocols: incoming.headers['sec-websocket-protocol'],
+              onNotice: (message) => options.onNotice(message),
+            });
+          });
+          return;
+        }
         const channel = device === undefined ? undefined : remote.channelFor(device, 'protocol');
         if (!parseDoomSocketPath(url.pathname) || verdict !== 'allow' || !device || !channel) {
           socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
@@ -336,6 +368,18 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
   registerRemoteRoutes(app as unknown as Hono, {
     remote,
     listenerOf: (context) => (context.env as ListenerBindings).listener,
+  });
+  registerDevProxyRoutes(app as unknown as Hono, {
+    store: devProxy,
+    listenerOf: (context) => (context.env as ListenerBindings).listener,
+    // Read per call: the tunnel port exists only while remote access is on, and a target checked
+    // against a stale list could end up aimed at the cockpit itself.
+    reservedPorts: () => [
+      remote.tunnelPort(),
+      frontendOrigin === undefined ? undefined : Number(new URL(frontendOrigin).port),
+      ...(options.reservedPorts?.() ?? []),
+    ],
+    onNotice: (message) => options.onNotice(message),
   });
   app.post('/api/remote/frontend', async (context) => {
     if (context.env.listener !== 'local')

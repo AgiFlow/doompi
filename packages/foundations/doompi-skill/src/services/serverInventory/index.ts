@@ -27,6 +27,11 @@ export interface ServerSkillInventory {
   readonly inventory: DeferredSkillSnapshot;
   readonly groups: readonly ServerSkillGroup[];
   readonly mcpGroups: readonly ServerSkillGroup[];
+  /**
+   * The shared and repository skills this package advertises itself. Domain plugin skills are
+   * left out: doompi-domain already contributes each one, and listing them twice was noise.
+   */
+  readonly listed: readonly ServerSkillGroup[];
   readonly catalog: string;
 }
 
@@ -34,6 +39,8 @@ interface SkillSource {
   readonly domain?: string;
   readonly paths: readonly string[];
   readonly mcpPaths: readonly string[];
+  /** Advertised by this package rather than by doompi-domain. */
+  readonly listed?: boolean;
 }
 
 const LOCAL_ONLY_MCP_PACKAGES = new Set([
@@ -154,13 +161,13 @@ export async function discoverServerSkills(
     const sharedPaths = shared.map((skill) => skill.path);
     for (const domain of domains) {
       if (resolveSharedSkills(execution.repoRoot, [domain], home)) {
-        sources.push({ domain, paths: sharedPaths, mcpPaths: sharedPaths });
+        sources.push({ domain, paths: sharedPaths, mcpPaths: sharedPaths, listed: true });
       }
     }
   }
 
   // Repository-local skills belong to the repository, not to a selection.
-  sources.push({ paths: [repoSkills], mcpPaths: [repoSkills] });
+  sources.push({ paths: [repoSkills], mcpPaths: [repoSkills], listed: true });
 
   signal.throwIfAborted();
   // One walk for every group. Pi drops a path it has already loaded, so the
@@ -170,6 +177,13 @@ export async function discoverServerSkills(
   signal.throwIfAborted();
 
   const groups = sources
+    .map((source) => ({
+      ...(source.domain === undefined ? {} : { domain: source.domain }),
+      skills: inventory.skills.filter((skill) => within(skill.filePath, source.paths)),
+    }))
+    .filter((group) => group.skills.length > 0);
+  const listed = sources
+    .filter((source) => source.listed === true)
     .map((source) => ({
       ...(source.domain === undefined ? {} : { domain: source.domain }),
       skills: inventory.skills.filter((skill) => within(skill.filePath, source.paths)),
@@ -191,6 +205,7 @@ export async function discoverServerSkills(
     inventory: { skills: inventory.skills, diagnostics: [...inventory.diagnostics, ...diagnostics] },
     groups,
     mcpGroups,
+    listed,
     catalog: formatSkillsForPrompt(activeSkills) || '(no discovered skills)',
   };
 }

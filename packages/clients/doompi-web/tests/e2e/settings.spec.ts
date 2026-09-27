@@ -95,6 +95,29 @@ test('creates and revokes signed URL and OAuth session MCP clients', async ({ pa
     skills: [{ name: 'review', description: 'Review the current changes.', uri: 'doompi://skills/review' }],
   };
   let clients: Record<string, unknown>[] = [];
+  // Session MCP URLs hang off Remote Control's public origin; the page asks for the config only
+  // once Remote Control reports one.
+  await page.route('**/api/remote', (route) =>
+    route.fulfill({
+      json: {
+        state: {
+          status: 'on',
+          publicUrl: 'https://doom.example.com',
+          devices: [],
+          pending: [],
+          settings: {
+            autoCloseEnabled: false,
+            autoCloseMinutes: 60,
+            sessionExpiryEnabled: false,
+            idleMinutes: 30,
+            absoluteHours: 12,
+            tunnel: { kind: 'quick' },
+            sandbox: { enabled: false, workspaces: [] },
+          },
+        },
+      },
+    }),
+  );
   await page.route('**/api/workspaces/*/sessions/*/mcp/config', (route) => route.fulfill({ json: config }));
   await page.route('**/api/workspaces/*/sessions/*/mcp/clients', async (route) => {
     if (route.request().method() === 'POST') {

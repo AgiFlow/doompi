@@ -5,6 +5,7 @@ import {
   preflightStructuredDocument,
   serializeStructuredDocument,
 } from '../../../../../../../services/structuredDocuments';
+import { DocumentRequestError } from '../../../../../../../services/structuredDocuments/common';
 import { readDocument } from '../../../../../../../services/structuredDocuments/document';
 import routes from '../../../../../../../types/apiRoutes';
 import type { AuthorOpenFileResult } from '../../../../../../../types/author';
@@ -37,8 +38,8 @@ function errorResponse(
   error: unknown,
 ): Response {
   const message = error instanceof Error ? error.message : 'Document operation failed.';
-  const status = /limit|too many|exceeds/i.test(message) ? 413 : /outside/i.test(message) ? 403 : 422;
-  return context.json({ error: message }, status);
+  // A refusal names its own status; anything else is a request the document cannot satisfy.
+  return context.json({ error: message }, error instanceof DocumentRequestError ? error.status : 422);
 }
 
 function requestFormat(value: unknown): StructuredDocumentFormat {

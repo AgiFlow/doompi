@@ -32,6 +32,8 @@ import type {
   DoomHeadlessTool,
   DoomHeadlessToolCompletionRequest,
 } from '../../../exports/headless';
+import { DOOM_LOAD_SKILL_TOOL } from '../../../exports/headless';
+import type { DoomSessionContext } from '../../../exports/hubChannel';
 import type { DoomMcpContextSnapshot, DoomMcpSkill, DoomMcpUiResource } from '../../../exports/mcpFacet';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
 import { createDirectHarnessRuntime } from '../../../server/directHarnessRuntime';
@@ -60,7 +62,7 @@ import type {
 import { createHeadlessChildSessionServiceProvider } from '../../child/adapters/headlessChildSessionService';
 import type { ResolvedHeadlessResource } from '../types/headlessHost';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/headlessSessionHost';
-import { HeadlessHost, headlessHarnessSkill } from './headlessHost';
+import { describeLoadSkillTool, HeadlessHost, headlessHarnessSkill } from './headlessHost';
 
 type AnyRecord = Record<string, unknown>;
 type HeadlessTool = DoomHeadlessTool;
@@ -290,7 +292,8 @@ function mapResources(resources: readonly ResolvedHeadlessResource[]): {
       // Advertised only with a path the agent can open. Without one the prompt would
       // point at a doom-headless:// URI no tool resolves, so such a skill stays
       // explicitly invocable and silent, exactly as it was before.
-      if (resource.path !== undefined) advertised.push(skill);
+      // One entry per name: two domains can each carry the same shared skill.
+      if (resource.path !== undefined && !advertised.some((entry) => entry.name === skill.name)) advertised.push(skill);
     } else if (resource.kind === 'prompt') {
       promptTemplates.push({ name: resource.name, content: resource.text });
     } else {
@@ -524,7 +527,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     // bill these skills to the context panel. Until now nothing emitted it, so the
     // panel charged for an <available_skills> block the model never received. It
     // returns '' for an empty list and leads with a blank line of its own.
-    const skills = formatSkillsForSystemPrompt(mapped.advertised).trim();
+    // With the load tool, its description carries the skill list; without it, the prompt lists
+    // the skills the agent can open with read.
+    const skills = toolGuidance.some((entry) => entry.name === DOOM_LOAD_SKILL_TOOL)
+      ? ''
+      : formatSkillsForSystemPrompt(mapped.advertised).trim();
     // Pi's order for the same sections: operator prompt, project context, tools,
     // skills, package context, then the working directory last.
     return [
@@ -747,29 +754,54 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         throw new Error('Headless capability preparation is not ready.');
     },
   });
-  await runtime.session.setValue(value('doompi.session', 'workspaceRoot'), options.repoRoot, BACKGROUND_CONTEXT);
-  await runtime.session.setValue(
-    value('doompi.session', 'execution'),
-    JSON.stringify({
-      cwd: options.cwd,
-      repoRoot: options.repoRoot,
-      workspaceId: options.workspaceId,
-      groupingRoot: options.groupingRoot ?? options.repoRoot,
-      parentSessionId: options.parentSessionId,
-      sessionProvenance: options.sessionProvenance,
-      inheritedArtifact: options.inheritedArtifact,
-    }),
-    BACKGROUND_CONTEXT,
-  );
+  // The runtime already holds the history lease. A storage failure while opening must
+  // release it, or every retry of this session id fails on the stale lease.
+  const opened = await (async () => {
+    await runtime.session.setValue(value('doompi.session', 'workspaceRoot'), options.repoRoot, BACKGROUND_CONTEXT);
+    await runtime.session.setValue(
+      value('doompi.session', 'execution'),
+      JSON.stringify({
+        cwd: options.cwd,
+        repoRoot: options.repoRoot,
+        workspaceId: options.workspaceId,
+        groupingRoot: options.groupingRoot ?? options.repoRoot,
+        parentSessionId: options.parentSessionId,
+        sessionProvenance: options.sessionProvenance,
+        inheritedArtifact: options.inheritedArtifact,
+      }),
+      BACKGROUND_CONTEXT,
+    );
 
-  let currentModel = await runtime.lane.getModel(BACKGROUND_CONTEXT);
-  const entries = (
-    await Promise.all(
-      [DOOM_CONTEXT_ENTRY_TYPE].map((customType) =>
-        runtime.lane.findEntries({ type: 'custom', customType, order: 'newestFirst', limit: 1 }, BACKGROUND_CONTEXT),
-      ),
-    )
-  ).flat() as unknown as AnyRecord[];
+    const model = await runtime.lane.getModel(BACKGROUND_CONTEXT);
+    const entries = (
+      await Promise.all(
+        [DOOM_CONTEXT_ENTRY_TYPE].map((customType) =>
+          runtime.lane.findEntries({ type: 'custom', customType, order: 'newestFirst', limit: 1 }, BACKGROUND_CONTEXT),
+        ),
+      )
+    ).flat() as unknown as AnyRecord[];
+    return { model, entries };
+  })().catch(async (error: unknown) => {
+    await runtime
+      .dispose()
+      .catch((disposeError: unknown) => options.onNotice?.(`Session runtime failed to close: ${String(disposeError)}`));
+    throw error;
+  });
+  let currentModel = opened.model;
+  // One frozen baseline, shared by every surface this session exposes.
+  const sessionContext: DoomSessionContext | undefined =
+    options.workspaceId === undefined
+      ? undefined
+      : Object.freeze({
+          sessionId: runtime.sessionId,
+          workspaceId: options.workspaceId,
+          workspaceRoot: options.groupingRoot ?? options.repoRoot,
+          checkoutRoot: options.repoRoot,
+          cwd: options.cwd,
+          ...(options.parentSessionId === undefined ? {} : { parentSessionId: options.parentSessionId }),
+          ...(options.sessionProvenance === undefined ? {} : { provenance: options.sessionProvenance }),
+        });
+  const entries = opened.entries;
   const listeners = new Set<(frame: SessionFrame) => void>();
   const initialSelection = restoreHeadlessSelection(entries, options.selection);
   let headlessHost: HeadlessHost | undefined;
@@ -882,6 +914,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     cwd: options.cwd,
     repoRoot: options.repoRoot,
     sessionId: runtime.sessionId,
+    ...(sessionContext === undefined ? {} : { sessionContext }),
     environment: options.environment,
     client: client!.client,
     model: currentModel === undefined ? undefined : modelIdentity(currentModel),
@@ -1129,7 +1162,15 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
 
   const applyToolSurface = async (tools: readonly HeadlessTool[]): Promise<void> => {
     toolSurfaceReady = false;
-    const facetTools = tools.map((tool) => toolAdapter(tool, () => headlessHost!.context, reportedToolErrors));
+    const facetTools = tools.map((tool) =>
+      toolAdapter(
+        tool.name === DOOM_LOAD_SKILL_TOOL
+          ? { ...tool, description: describeLoadSkillTool(tool.description, headlessHost?.appliedResources ?? []) }
+          : tool,
+        () => headlessHost!.context,
+        reportedToolErrors,
+      ),
+    );
     // Facet tools win a name collision, including when the collision is with a
     // name the facet surface declared and then gated out. The reconciled set
     // owns the name either way, so a Pi extension tool never fills a slot a
@@ -1194,13 +1235,23 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
    * `register`, and coalesced because several extensions register their restrictions in the same
    * tick. The facet set is unchanged, so this never re-enters the kernel.
    */
+  // Facet reconciliation and Pi restriction changes both rebuild the surface. Each run reads
+  // the latest facet tools when it starts, so the surface converges on the last change
+  // instead of whichever overlapping replaceTools happened to finish last.
+  let toolLine: Promise<void> = Promise.resolve();
+  const applyLatestTools = (): Promise<void> => {
+    // A failed run was already reported to the caller that queued it; the line moves on.
+    toolLine = toolLine.catch(() => undefined).then(() => applyToolSurface(appliedFacetTools));
+    return toolLine;
+  };
+
   const scheduleToolReapply = (): void => {
     if (toolReapplyQueued) return;
     toolReapplyQueued = true;
     queueMicrotask(() => {
       toolReapplyQueued = false;
       if (disposed) return;
-      void applyToolSurface(appliedFacetTools).catch((error: unknown) =>
+      void applyLatestTools().catch((error: unknown) =>
         options.onNotice?.(
           `Pi extension tool refresh failed: ${error instanceof Error ? error.message : String(error)}`,
         ),
@@ -1244,7 +1295,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       resolveSelection: options.resolveSelection,
       applyTools: async (tools) => {
         appliedFacetTools = tools;
-        await applyToolSurface(tools);
+        await applyLatestTools();
       },
       applyResources: async (next) => {
         const mapped = mapResources(next);
@@ -1268,6 +1319,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           }),
         );
         surfaceRevision += 1;
+        // The load tool lists the skills in its description, so it follows them.
+        if (appliedFacetTools.some((tool) => tool.name === DOOM_LOAD_SKILL_TOOL)) await applyLatestTools();
       },
       onApplied: async (selection) => {
         options.publishSelectionStatus?.((source, text) => client!.client.setStatus(source, text), selection);
@@ -1287,14 +1340,29 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       // the remote surface here, after selection is coherent, rather than making a
       // transient not-ready state fail the host selection.
       if (!headlessReady || !headlessHost?.status.ready) return;
-      await prepareMcpSurface();
+      // A throw here marks the whole host not ready. That is right for a composition that
+      // failed to publish, but not for the remote MCP surface: a failure there, or a newer
+      // refresh aborting this one, must not block the session's own dispatch.
+      try {
+        await prepareMcpSurface();
+      } catch (error) {
+        // A superseded refresh ends with its lifecycle signal's AbortError.
+        if (!(error instanceof Error && error.name === 'AbortError'))
+          options.onNotice?.(`MCP tool refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
       await publishComposition(selection);
     });
   };
 
   const activateFacets = async (installed: InstalledServerFacets): Promise<void> => {
     if (headlessHost === undefined) throw new Error('Direct headless host was not prepared.');
-    headlessHost.setAvailableSources(installed.installedPackages);
+    const host = headlessHost;
+    // Dispose can run while activation awaits. Continuing would mark a closed session ready
+    // and run its startup hooks against a disposed runtime.
+    const assertLive = (): void => {
+      if (disposed) throw new Error('The session was closed while it was starting.');
+    };
+    host.setAvailableSources(installed.installedPackages);
     // Pi extensions load before the first selection so their session lifetime tools and skills
     // are present in the very first composition. A failure here is reported, never fatal.
     if (piHost !== undefined) {
@@ -1304,45 +1372,51 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         options.onNotice?.(`Pi extensions failed to load: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
-    await headlessHost.select(initialSelection);
-    headlessReady = headlessHost.status.ready;
-    if (headlessReady) {
-      await prepareMcpSurface();
-      // Honor persisted abort/pause intent before recovering an interrupted native drive.
-      await runtime.recover();
-      await headlessHost.dispatchHook('session_start', {});
-      await publishComposition();
-      // A journal reopened while its lane still holds an in-flight operation is a
-      // turn that was cut off, not a finished one. Driving it here is what the
-      // runtime's resume exists for, and it runs detached because that turn can
-      // outlive session startup by minutes.
-      void runtime
-        .resume()
-        .catch((error: unknown) =>
-          options.onNotice?.(`Session resume failed: ${error instanceof Error ? error.message : String(error)}`),
-        );
-    }
+    assertLive();
+    await host.select(initialSelection);
+    assertLive();
+    // Nothing recomputes readiness after this point, so a session whose first selection
+    // failed would stay registered but unable to run. Fail creation instead.
+    if (!host.status.ready)
+      throw new Error(`Session capabilities failed to start: ${host.status.error ?? 'selection is not ready'}`);
+    headlessReady = true;
+    await prepareMcpSurface();
+    assertLive();
+    // Honor persisted abort/pause intent before recovering an interrupted native drive.
+    await runtime.recover();
+    assertLive();
+    await host.dispatchHook('session_start', {});
+    await publishComposition();
+    // A journal reopened while its lane still holds an in-flight operation is a
+    // turn that was cut off, not a finished one. Driving it here is what the
+    // runtime's resume exists for, and it runs detached because that turn can
+    // outlive session startup by minutes.
+    void runtime
+      .resume()
+      .catch((error: unknown) =>
+        options.onNotice?.(`Session resume failed: ${error instanceof Error ? error.message : String(error)}`),
+      );
   };
 
   const dispose = (): Promise<void> => {
     disposePromise ??= (async () => {
       if (disposed) return;
+      // Only a session that finished activation ran session_start, so only it gets the
+      // matching shutdown hook. The owner disposes this host before removing facets, so a
+      // ready host is still ready when the hook is dispatched.
+      const wasReady = headlessReady;
       disposed = true;
       headlessReady = false;
       mcpSurfaceReady = false;
       mcpLifecycle.abort();
       const failures: unknown[] = [];
       try {
-        const operation = (await runtime.readLifecycle()).operation;
-        if (operation !== null) {
-          await runtime.abort(operation.id);
-          await runtime.lane.waitForIdle(BACKGROUND_CONTEXT);
-        }
+        await runtime.interrupt();
       } catch (error) {
         failures.push(error);
       }
       try {
-        if (headlessHost?.status.ready) await headlessHost.dispatchHook('session_shutdown', {});
+        if (wasReady && headlessHost?.status.ready) await headlessHost.dispatchHook('session_shutdown', {});
       } catch (error) {
         failures.push(error);
       }
@@ -1576,6 +1650,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
 
   return {
     runtime,
+    ...(sessionContext === undefined ? {} : { sessionContext }),
     get host() {
       return headlessHost;
     },

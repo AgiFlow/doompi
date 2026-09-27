@@ -128,6 +128,12 @@ function ContextItemBody({ detail }: { detail: ContextItemDetail }) {
         </Section>
       ) : null}
 
+      {detail.itemKind === 'skill' && detail.body !== undefined ? (
+        <Section title="body">
+          <Pre testId="context-item-body">{detail.body}</Pre>
+        </Section>
+      ) : null}
+
       {detail.itemKind === 'tool' && detail.promptSnippet !== undefined ? (
         <Section title="prompt snippet">
           <Pre testId="context-item-snippet">{detail.promptSnippet}</Pre>

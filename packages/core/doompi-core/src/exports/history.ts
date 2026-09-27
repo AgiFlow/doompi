@@ -29,7 +29,17 @@ export type {
   OpenSessionRegistry,
   OpenSessionRegistryOptions,
 } from '../services/openSessionRegistry';
-export { createWorkspaceRegistry } from '../services/workspaceRegistry';
-export type { WorkspaceRecord, WorkspaceRegistry, WorkspaceRegistryOptions } from '../services/workspaceRegistry';
+export {
+  createWorkspaceRegistry,
+  identifyWorkspace,
+  readWorkspaceMarker,
+  writeWorkspaceMarker,
+} from '../services/workspaceRegistry';
+export type {
+  WorkspaceIdentity,
+  WorkspaceRecord,
+  WorkspaceRegistry,
+  WorkspaceRegistryOptions,
+} from '../services/workspaceRegistry';
 export { createRequestReceipts } from '../services/requestReceipts';
 export type { V3ExportLoss, V3ExportLossReport, V3ExportOptions, V3ExportResult } from '../services/v3Export';

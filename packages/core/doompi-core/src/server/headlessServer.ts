@@ -10,6 +10,7 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
 
+import { API_BASE_PATH as CONTEXT_API_BASE_PATH } from '../constants/contextApi';
 import {
   DOOM_API_CALLER_HEADERS,
   DOOM_API_CALLER_LOCALITY_HEADER,
@@ -19,11 +20,13 @@ import {
 } from '../exports/packageApi';
 import type { TranscriptPage, TranscriptPageRequest } from '../exports/sessionProtocol';
 import type { DoomHubSessionReservations } from '../schemas/hubChannel';
+import { readContextDetail } from '../services/contextDetailStore';
 import type { OpenSessionRecord } from '../services/openSessionRegistry';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
 import { createSessionMcpConversationStore } from '../services/sessionMcpConversations';
 import { createSessionMcpRegistrationStore } from '../services/sessionMcpRegistrationStore';
 import type { SavedSession } from '../services/sqliteSessionHistory';
+import { createContextApi } from './contextApi';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createHeadlessProtocol } from './headlessProtocol';
 import { createSessionMcpRoutes, isPublicSessionMcpRoute, isSessionMcpHostRoute } from './sessionMcpRoutes';
@@ -374,6 +377,8 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     conversationStore: createSessionMcpConversationStore(sessionMcpStateDir),
     registrationStore: createSessionMcpRegistrationStore({ stateDir: sessionMcpStateDir, onNotice: options.onNotice }),
   });
+  /** Sessions being restarted, keyed by id, settled once the reopen succeeds or fails. */
+  const restarting = new Map<string, Promise<void>>();
   const server = createServer((request, response) => {
     void handleRequest(request, response).catch((error: unknown) => {
       if (response.headersSent) {
@@ -440,6 +445,11 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       json(response, 401, { error: 'Unauthorized.' });
       return;
     }
+    // A restart closes the session before reopening it under the same id. Any session-scoped
+    // request that lands in that gap, such as a plugin's poll, waits for the reopened session.
+    const reopening = scopedSession === undefined ? undefined : restarting.get(decodeURIComponent(scopedSession));
+    if (reopening !== undefined && options.headlessHub.session(decodeURIComponent(scopedSession!)) === undefined)
+      await reopening;
     if (isSessionMcpHostRoute(url.pathname)) {
       const hostSessionMcp = await sessionMcp.handleHost(webRequest(request, url));
       if (hostSessionMcp !== undefined) {
@@ -693,6 +703,22 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         return;
       }
       if (sessionId !== undefined && options.headlessHub.session(sessionId)?.workspaceId !== workspaceId) {
+        // A stopped session still shows the composition it last published, so its context detail
+        // is served from the file it wrote. Nothing else answers until it is woken.
+        const stopped = dormant().some(
+          (record) => record.sessionId === sessionId && record.workspaceId === workspaceId,
+        );
+        if (stopped && pluginMatch[3] === CONTEXT_API_BASE_PATH && request.method === 'GET') {
+          const detail = await createContextApi({ sessionId, environment: process.env }).fetch(
+            new Request(`http://doompi.local/${pluginMatch[4] ?? ''}${url.search}`),
+          );
+          const body = (await detail.json()) as { error?: string };
+          // The detail file is only kept while the session runs, so a stopped session usually has none.
+          if (readContextDetail(sessionId, process.env) === undefined)
+            json(response, 404, { error: 'This session is stopped. Wake it to read this item.' });
+          else json(response, detail.status, body);
+          return;
+        }
         json(response, 404, { error: 'Session not found.' });
         return;
       }
@@ -855,7 +881,18 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       return;
     }
     if (suffix === '/restart' && request.method === 'POST' && options.restartSession) {
-      await options.restartSession(session);
+      const restart = options.restartSession(session);
+      // Settled either way: a failed restart leaves the session dormant, and waiters then see that.
+      const settled = restart.then(
+        () => undefined,
+        () => undefined,
+      );
+      restarting.set(sessionId, settled);
+      try {
+        await restart;
+      } finally {
+        if (restarting.get(sessionId) === settled) restarting.delete(sessionId);
+      }
       json(response, 200, { ok: true });
       return;
     }

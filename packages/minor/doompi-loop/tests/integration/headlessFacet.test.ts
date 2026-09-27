@@ -139,7 +139,7 @@ describe('loop headless facet', () => {
     const test = await fixture();
     try {
       expect(test.tools.map(({ name }) => name).sort()).toEqual(['loop_list', 'loop_start', 'loop_stop']);
-      expect(test.tools.every(({ when }) => when?.state?.['minor-mode'] === 'loop.active')).toBe(true);
+      expect(test.tools.every(({ when }) => when?.state?.['minor-mode'] === 'loop')).toBe(true);
       await expect(test.run('loop_list', {})).resolves.toMatchObject({
         isError: true,
         content: [expect.objectContaining({ text: expect.stringContaining('Enable Loop') })],
@@ -223,23 +223,20 @@ describe('loop headless facet', () => {
     }
   });
 
-  it.each([[''], ['Prompt', undefined], ['Prompt', '* * * * *', undefined]])(
-    'cancels dismissed manual setup without creating timers: %j',
-    async (...answers) => {
-      const test = await fixture();
-      try {
-        const request = vi.mocked(test.execution.client.request);
-        for (const answer of answers) request.mockResolvedValueOnce(answer);
-        await test.commands
-          .find(({ name }) => name === 'loop')!
-          .execute(answers.length === 3 ? 'doompi.cron' : 'doompi.default', test.execution);
-        expect(lastLoopView(test.execution.client)).toBe('');
-        expect(test.execution.session.prompt).not.toHaveBeenCalled();
-      } finally {
-        await test.close();
-      }
-    },
-  );
+  it('offers no manual /loop command and refuses a launch without configuration', async () => {
+    const test = await fixture();
+    try {
+      expect(test.commands.map(({ name }) => name)).toEqual(['loops']);
+      await test.setMode('activate');
+      await expect(test.run('loop_start', { launcherId: 'doompi.default' })).resolves.toMatchObject({
+        isError: true,
+      });
+      expect(test.execution.client.request).not.toHaveBeenCalled();
+      expect(test.execution.session.prompt).not.toHaveBeenCalled();
+    } finally {
+      await test.close();
+    }
+  });
 
   it('validates schedules and reports invalid manual commands', async () => {
     const test = await fixture();
@@ -267,43 +264,26 @@ describe('loop headless facet', () => {
     }
   });
 
-  it('launches the default loop while inactive without prompting for a launcher', async () => {
+  it('starts the default loop through the agent tool and lists the active instance', async () => {
     const test = await fixture();
-    try {
-      await test.commands.find((command) => command.name === 'loop')!.execute('doompi.default', test.execution);
-      expect(test.selection().state?.['minor-mode'] ?? []).not.toContain('loop.active');
-      expect(test.execution.session.prompt).toHaveBeenCalledWith('Check status');
-      expect(test.execution.client.request).not.toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Choose a loop launcher' }),
-      );
-    } finally {
-      await test.close();
-    }
-  });
-  it('starts the default loop through its activity and lists the active instance', async () => {
-    const test = await fixture();
-    const start = test.commands.find(({ name }) => name === 'loop');
     const list = test.commands.find(({ name }) => name === 'loops');
     const shutdown = test.hooks.find(({ event }) => event === 'session_shutdown') as
       | DoomHeadlessHook<'session_shutdown'>
       | undefined;
     const resource = test.resources[0];
-    if (!start || !list || !shutdown || !resource) throw new Error('Loop registrations were not created');
+    if (!list || !shutdown || !resource) throw new Error('Loop registrations were not created');
 
-    expect(start.when).toBeUndefined();
     expect(list.when).toBeUndefined();
     expect(await resource.read(test.execution)).toContain('loop');
     const stopActivity = await test.activity.start(test.execution);
-    await start.execute('', test.execution);
-
-    expect(test.execution.client.request).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'select', title: 'Choose a loop launcher' }),
-    );
-    expect(test.execution.session.prompt).toHaveBeenCalledWith('Check status');
-    expect(test.execution.client.notify).toHaveBeenCalledWith({
-      body: expect.stringMatching(/^Loop '.+' started\.$/),
-      level: 'info',
+    await test.setMode('activate');
+    await test.run('loop_start', {
+      launcherId: 'doompi.default',
+      input: { prompt: 'Check status', intervalSeconds: 30 },
     });
+
+    expect(test.execution.client.request).not.toHaveBeenCalled();
+    expect(test.execution.session.prompt).toHaveBeenCalledWith('Check status');
 
     await list.execute('', test.execution);
     expect(test.execution.client.notify).toHaveBeenLastCalledWith({
@@ -327,11 +307,10 @@ describe('loop headless facet', () => {
     // A cockpit drives this facet and never the Pi runtime, so this is the only
     // thing that can fill the dock's loops group.
     const test = await fixture();
-    const start = test.commands.find(({ name }) => name === 'loop');
     const startHook = test.hooks.find(({ event }) => event === 'session_start') as
       | DoomHeadlessHook<'session_start'>
       | undefined;
-    if (!start || !startHook) throw new Error('Loop command or session_start hook was not registered');
+    if (!startHook) throw new Error('Loop session_start hook was not registered');
 
     // Ungated: the group is a way in, so it exists before loop mode is selected.
     expect(startHook.when).toBeUndefined();
@@ -339,7 +318,11 @@ describe('loop headless facet', () => {
     expect(lastLoopView(test.execution.client)).toBe('');
 
     const stopActivity = await test.activity.start(test.execution);
-    await start.execute('', test.execution);
+    await test.setMode('activate');
+    await test.run('loop_start', {
+      launcherId: 'doompi.default',
+      input: { prompt: 'Check status', intervalSeconds: 30 },
+    });
     expect(parseLoopStatusView(lastLoopView(test.execution.client))).toHaveLength(1);
 
     await stopActivity();

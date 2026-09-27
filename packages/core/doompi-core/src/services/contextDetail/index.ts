@@ -68,6 +68,7 @@ export function buildContextDetail(input: ContextDetailInput): ContextItemDetail
       tokens: skill.promptTokens ?? 0,
       description: skill.description,
       ...(skill.filePath === undefined ? {} : { filePath: skill.filePath }),
+      ...(skill.body === undefined ? {} : { body: skill.body }),
       modelInvocable: skill.modelInvocable,
     });
   }

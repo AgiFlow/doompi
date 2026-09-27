@@ -114,7 +114,11 @@ export default defineRoot<{ voiceApi?: DoomApi; mediaApi?: DoomApi }, DoomServer
           };
         },
       });
-      if (!channelRegistration.mounted) throw new Error('Global Voice could not claim its hub channel.');
+      if (!channelRegistration.mounted) {
+        channelRegistration.dispose();
+        channelRegistration = undefined;
+        throw new Error('Global Voice could not claim its hub channel.');
+      }
       ownershipRegistration = host.registerChannel(
         createVoiceOwnershipChannel(
           (owner) => {
@@ -136,13 +140,23 @@ export default defineRoot<{ voiceApi?: DoomApi; mediaApi?: DoomApi }, DoomServer
           },
         ),
       );
-      if (!ownershipRegistration.mounted) throw new Error('Global Voice could not claim its ownership channel.');
+      if (!ownershipRegistration.mounted) {
+        // Released here rather than left for onStop, so a failed start holds no channel.
+        ownershipRegistration.dispose();
+        ownershipRegistration = undefined;
+        channelRegistration.dispose();
+        channelRegistration = undefined;
+        throw new Error('Global Voice could not claim its ownership channel.');
+      }
     },
     async onStop() {
-      await companion.close();
-      ownershipRegistration?.dispose();
-      coordinator = undefined;
-      channelRegistration?.dispose();
+      try {
+        await companion.close();
+      } finally {
+        ownershipRegistration?.dispose();
+        coordinator = undefined;
+        channelRegistration?.dispose();
+      }
     },
   };
 });

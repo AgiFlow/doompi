@@ -24,6 +24,7 @@ export interface PackageApiServerOptions {
   sessionId: string;
   workspaceId?: string;
   workspaceRoot?: string;
+  sessionContext?: DoomApiContext['sessionContext'];
   homeDirectory?: string;
   mountChannel?: CreateDoomServerHostOptions['mountChannel'];
   cwd: string;
@@ -127,6 +128,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     sessionId: options.sessionId,
     workspaceId: options.workspaceId,
     workspaceRoot: options.workspaceRoot,
+    ...(options.sessionContext === undefined ? {} : { sessionContext: options.sessionContext }),
     homeDirectory: options.homeDirectory,
     cwd: options.cwd,
     environment: options.environment,

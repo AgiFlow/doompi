@@ -20,6 +20,7 @@ import type {
   SessionToolInvocation,
   SessionToolSurface,
 } from '../../../../../src/types/server/sessionToolSurface';
+import { modernMcpRequest } from './modernMcpRequest';
 
 const roots: string[] = [];
 const routePath = '/api/workspaces/workspace/sessions/parent/mcp';
@@ -166,15 +167,17 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
   let token = mint().accessToken;
   const rpc = async (method: string, params?: Record<string, unknown>, requestId: string | number = 1) => {
     const response = await routes.handlePublic(
-      new Request(audience, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-          accept: 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({ jsonrpc: '2.0', id: requestId, method, ...(params === undefined ? {} : { params }) }),
-      }),
+      await modernMcpRequest(
+        new Request(audience, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${token}`,
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: requestId, method, ...(params === undefined ? {} : { params }) }),
+        }),
+      ),
     );
     return (await response!.json()) as {
       result?: {
@@ -187,24 +190,26 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
       error?: unknown;
     };
   };
-  const cancel = (chat?: string) =>
+  const cancel = async (chat?: string) =>
     routes.handlePublic(
-      new Request(audience, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-          accept: 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'notifications/cancelled',
-          params: {
-            requestId: 1,
-            ...(chat === undefined ? {} : { _meta: { 'openai/session': chat } }),
+      await modernMcpRequest(
+        new Request(audience, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${token}`,
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
           },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'notifications/cancelled',
+            params: {
+              requestId: 1,
+              ...(chat === undefined ? {} : { _meta: { 'openai/session': chat } }),
+            },
+          }),
         }),
-      }),
+      ),
     );
   const call = (chat?: string, name = 'load_context', args: Record<string, unknown> = {}, id: string | number = 1) =>
     rpc(
@@ -539,11 +544,13 @@ describe('conversation-bound Session MCP routing', () => {
     const { client } = (await created!.json()) as { client: { connectionUrl: string } };
     const signed = async (method: string, params?: Record<string, unknown>) => {
       const response = await f.routes.handlePublic(
-        new Request(client.connectionUrl, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
-          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, ...(params === undefined ? {} : { params }) }),
-        }),
+        await modernMcpRequest(
+          new Request(client.connectionUrl, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, ...(params === undefined ? {} : { params }) }),
+          }),
+        ),
       );
       return (await response!.json()) as {
         result?: { isError?: boolean; structuredContent?: Record<string, unknown> };
@@ -680,15 +687,17 @@ describe('conversation-bound Session MCP routing', () => {
     expect(f.authorization.authenticateAccessToken(created.client.clientSecret, `${audience}/other`)).toBeUndefined();
     const saveSpy = vi.spyOn(fs, 'renameSync');
     const response = await f.routes.handlePublic(
-      new Request(audience, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${created.client.clientSecret}`,
-          'content-type': 'application/json',
-          accept: 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-      }),
+      await modernMcpRequest(
+        new Request(audience, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${created.client.clientSecret}`,
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        }),
+      ),
     );
     expect(response!.status).toBe(200);
     expect(saveSpy).not.toHaveBeenCalled();

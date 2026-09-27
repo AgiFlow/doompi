@@ -4,10 +4,9 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { doomGitRoot, hubRegistryDir, registryFile, worktreesRoot } from '../../../../src/services/paths';
+import { doomGitRoot, registryFile, worktreesRoot } from '../../../../src/services/paths';
 import { repositoryId } from '../../../../src/services/repositoryIdentity';
 
-const ENV_NAME = 'DOOMPI_RUNTIME_DIR';
 const HOME = '/home/tester';
 const temporaryDirectories: string[] = [];
 
@@ -60,6 +59,17 @@ describe('registryFile', () => {
     expect(registryFile(parent, root)).toBe(registryFile(child, root));
   });
 
+  it('resolves the repository registry from a session running in a subdirectory', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-git-registry-'));
+    temporaryDirectories.push(root);
+    const repository = path.join(root, 'repo');
+    const nested = path.join(repository, 'packages', 'app');
+    fs.mkdirSync(path.join(repository, '.git'), { recursive: true });
+    fs.mkdirSync(nested, { recursive: true });
+
+    expect(registryFile(nested, root)).toBe(registryFile(repository, root));
+  });
+
   it('merges every legacy label-prefixed registry into the canonical file', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-git-legacy-'));
     temporaryDirectories.push(home);
@@ -99,33 +109,5 @@ describe('registryFile', () => {
     }
 
     expect(() => registryFile(repository, home)).toThrow("Conflicting legacy worktree registry entries for 'same'.");
-  });
-});
-
-describe('hubRegistryDir', () => {
-  it('prefers the flag over the env var and the home default', () => {
-    // The hub passes --registry-dir to its children and also exports the env
-    // var, so the flag has to win or a child watches the wrong directory.
-    const resolved = hubRegistryDir(
-      ['node', 'server.mjs', '--registry-dir', '/run/from-flag'],
-      { [ENV_NAME]: '/run/from-env' },
-      HOME,
-    );
-    expect(resolved).toBe('/run/from-flag');
-  });
-
-  it('prefers the env var over the home default when there is no flag', () => {
-    expect(hubRegistryDir(['node', 'server.mjs'], { [ENV_NAME]: '/run/from-env' }, HOME)).toBe('/run/from-env');
-  });
-
-  it('falls back to the home default when neither is given', () => {
-    expect(hubRegistryDir(['node', 'server.mjs'], {}, HOME)).toBe(`${HOME}/.doompi/run`);
-  });
-
-  it('ignores a trailing flag with no value', () => {
-    expect(hubRegistryDir(['node', 'server.mjs', '--registry-dir'], { [ENV_NAME]: '/run/from-env' }, HOME)).toBe(
-      '/run/from-env',
-    );
-    expect(hubRegistryDir(['node', 'server.mjs', '--registry-dir'], {}, HOME)).toBe(`${HOME}/.doompi/run`);
   });
 });

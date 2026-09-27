@@ -15,9 +15,18 @@ import type { BrowserRealtimeOptions, RealtimeBrowserState } from '../../../../.
 import { BrowserRealtimeSession } from './browserRealtimeSession';
 
 const RECONNECT_DELAY_MS = 2_000;
+/**
+ * The server holds a media lease for 15 seconds, so waiting longer than that only delays taking
+ * over from an owner that went away. Backing off keeps a second tab from polling every 2 seconds.
+ */
+const MAX_RECONNECT_DELAY_MS = 16_000;
 const MAX_CONNECTION_ID_LENGTH = 200;
 const MAX_PENDING_REALTIME_POSTS = 128;
-const MEDIA_CLIENT_CONFLICT = 'Another client owns voice media for this session.';
+const CONFLICT_STATUS = 409;
+
+function isConflict(error: unknown): boolean {
+  return error instanceof Error && 'status' in error && error.status === CONFLICT_STATUS;
+}
 
 interface RealtimeBrowserSession {
   start(): Promise<void>;
@@ -131,6 +140,7 @@ export class VoiceMediaClient {
 
   private async run(): Promise<void> {
     const signal = this.abortController.signal;
+    let reconnectDelay = RECONNECT_DELAY_MS;
     while (!signal.aborted) {
       const connectionId = this.nextConnectionId();
       const attemptController = new AbortController();
@@ -150,6 +160,7 @@ export class VoiceMediaClient {
         }
         this.activeConnectionId = connectionId;
         this.advertisedCapabilities = advertisedCapabilities;
+        reconnectDelay = RECONNECT_DELAY_MS;
         this.onConnectionState('connected');
         this.prepareCapabilities(connectionId, advertisedCapabilities, attemptController.signal);
         let cursor = connected.cursor;
@@ -164,7 +175,7 @@ export class VoiceMediaClient {
         }
       } catch (error) {
         if (signal.aborted) return;
-        if (error instanceof Error && error.message === MEDIA_CLIENT_CONFLICT) this.onConnectionState('conflict');
+        if (isConflict(error)) this.onConnectionState('conflict');
         attemptController.abort();
         this.closeRealtime();
         await this.releaseMedia();
@@ -173,7 +184,8 @@ export class VoiceMediaClient {
           this.activeConnectionId = undefined;
           this.advertisedCapabilities = undefined;
         }
-        await delay(RECONNECT_DELAY_MS, signal);
+        await delay(reconnectDelay, signal);
+        reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
       } finally {
         signal.removeEventListener('abort', abortAttempt);
         if (this.failAttempt === rejectAttempt) this.failAttempt = undefined;

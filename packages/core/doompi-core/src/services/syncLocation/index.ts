@@ -69,7 +69,8 @@ function readGitDirectory(repositoryRoot: string): string | undefined {
   }
 }
 
-function gitCommonDirectory(repositoryRoot: string): string | undefined {
+/** The git data directory shared by every worktree of a repository, if the root is a git checkout. */
+export function gitCommonDirectory(repositoryRoot: string): string | undefined {
   const gitDirectory = readGitDirectory(repositoryRoot);
   if (!gitDirectory) return undefined;
   try {

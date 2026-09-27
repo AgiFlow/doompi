@@ -1,6 +1,6 @@
 import type { McpClientManagerService, McpToolInfo } from '@agimon-ai/mcp-proxy';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { McpCatalog } from '../src/services/mcpCatalog';

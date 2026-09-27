@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { api } from '../../generated/client';
+import { mcp as api } from '../../generated/client';
 
 /**
  * Pins every URL this package sends, as a literal string.

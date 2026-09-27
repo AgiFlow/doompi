@@ -23,6 +23,8 @@ export const MCP_SESSION_AUTH_STATUS_KEY = 'doom-mcp-session-auth';
 const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, 'gu');
 const MAX_SESSION_AUTH_SERVERS = 128;
 const MAX_AUTHORIZATION_URL_LENGTH = 8192;
+const MAX_SERVER_TOOLS = 512;
+const MAX_TOOL_NAME_LENGTH = 256;
 const SESSION_AUTH_STATES = [
   'not-connected',
   'connecting',
@@ -43,12 +45,38 @@ export interface McpSessionAuthStatusItem {
   readonly name: string;
   readonly state: McpSessionAuthState;
   readonly authorizationUrl?: string;
+  /**
+   * The server's tools the agent can call through `mcp_use`. They are reached through that one
+   * tool rather than added to the model's context, so they cost nothing until called; `tokens`
+   * is what the tool's schema would cost if it were added directly.
+   */
+  readonly tools?: readonly McpSessionReachableTool[];
 }
+
+export interface McpSessionReachableTool {
+  readonly name: string;
+  readonly tokens?: number;
+}
+
+/** A session's view of one reachable tool: what the dialog shows when a row is opened. */
+export interface McpSessionToolDetail {
+  readonly server: string;
+  readonly tool: string;
+  readonly description?: string;
+  readonly inputSchema: Record<string, unknown>;
+  readonly tokens: number;
+}
+
+/** Session route for one reachable tool's description and schema. */
+export const MCP_SESSION_TOOL_API_PATH = '/tool';
+export const MCP_SESSION_TOOL_SERVER_QUERY = 'server';
+export const MCP_SESSION_TOOL_NAME_QUERY = 'tool';
 
 interface McpSessionServerStatusSource {
   readonly name: string;
   readonly state: string;
   readonly authorizationUrl?: unknown;
+  readonly tools?: readonly { readonly toolName: string; readonly active: boolean; readonly tokens?: number }[];
 }
 
 /** Keeps servers visible before discovery and after failures, without diagnostics or credentials. */
@@ -57,10 +85,18 @@ export function formatMcpSessionAuthStatus<T extends McpSessionServerStatusSourc
 ): string | undefined {
   const items: McpSessionAuthStatusItem[] = servers.flatMap((server) => {
     if (!isSessionAuthState(server.state)) return [];
+    const tools = (server.tools ?? [])
+      .filter((tool) => tool.active && isToolName(tool.toolName))
+      .map((tool): McpSessionReachableTool => ({
+        name: tool.toolName,
+        ...(isTokenCount(tool.tokens) ? { tokens: tool.tokens } : {}),
+      }))
+      .slice(0, MAX_SERVER_TOOLS);
     const item: McpSessionAuthStatusItem = {
       name: server.name,
       state: server.state,
       ...(isAuthorizationUrl(server.authorizationUrl) ? { authorizationUrl: server.authorizationUrl } : {}),
+      ...(tools.length === 0 ? {} : { tools }),
     };
     return [item];
   });
@@ -105,12 +141,41 @@ function isAuthorizationUrl(value: unknown): value is string {
   }
 }
 
+function isToolName(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim() !== '' &&
+    value.length <= MAX_TOOL_NAME_LENGTH &&
+    !hasControlCharacter(value)
+  );
+}
+
+function isTokenCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+function isReachableTool(value: unknown): value is McpSessionReachableTool {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    Object.keys(record).every((key) => key === 'name' || key === 'tokens') &&
+    isToolName(record.name) &&
+    (!('tokens' in record) || isTokenCount(record.tokens))
+  );
+}
+
 function isSessionAuthStatusItem(value: unknown): value is McpSessionAuthStatusItem {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   return (
-    Object.keys(record).every((key) => key === 'name' || key === 'state' || key === 'authorizationUrl') &&
+    Object.keys(record).every(
+      (key) => key === 'name' || key === 'state' || key === 'authorizationUrl' || key === 'tools',
+    ) &&
     (!('authorizationUrl' in record) || isAuthorizationUrl(record.authorizationUrl)) &&
+    (!('tools' in record) ||
+      (Array.isArray(record.tools) &&
+        record.tools.length <= MAX_SERVER_TOOLS &&
+        record.tools.every(isReachableTool))) &&
     typeof record.name === 'string' &&
     record.name.trim() !== '' &&
     !hasControlCharacter(record.name) &&

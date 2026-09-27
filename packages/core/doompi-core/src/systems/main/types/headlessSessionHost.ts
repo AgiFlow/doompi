@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 
 import type { DoomHeadlessSelection } from '../../../exports/headless';
+import type { DoomSessionContext } from '../../../exports/hubChannel';
 import type { LoadedMcpPlugin } from '../../../exports/mcpFacet';
 import type { DoomWebComposition } from '../../../exports/packageApi';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
@@ -51,6 +52,8 @@ export interface HeadlessSessionHostOptions {
 
 export interface HeadlessSessionHost {
   readonly runtime: DirectHarnessRuntime;
+  /** Built once from the host options; absent only for a host that was given no workspace. */
+  readonly sessionContext?: DoomSessionContext;
   readonly host: HeadlessHost | undefined;
   readonly toolSurface: SessionToolSurface;
   readonly mcpSurface: SessionToolSurface;

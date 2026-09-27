@@ -20,6 +20,7 @@ import {
   readSessionMcpConfig,
   revokeSessionMcpClient,
 } from '../../lib/sessionMcpApi';
+import { remoteAccessStore } from '../../stores/remoteAccessStore';
 import { sessionsStore } from '../../stores/sessionsStore';
 
 function exactHttpsUrl(value: string): boolean {
@@ -99,6 +100,9 @@ export function SessionMcpSettings() {
     selectionKeyRef.current = selectionKey;
   }, [selectionKey]);
   const remoteCaller = rememberedHostChannelKey() !== undefined;
+  // Session MCP URLs hang off Remote Control's public origin. Without one the config cannot exist,
+  // so it is not requested; the page says to enable Remote Control instead of reporting a failure.
+  const publicUrl = useStore(remoteAccessStore, (state) => state.view?.publicUrl);
   const [config, setConfig] = useState<SessionMcpConfig>();
   const [clients, setClients] = useState<SessionMcpClient[]>([]);
   const [redirectUri, setRedirectUri] = useState('');
@@ -135,11 +139,12 @@ export function SessionMcpSettings() {
     }
     setLoading(true);
     void Promise.all([
-      readSessionMcpConfig(workspaceId, sessionId),
+      publicUrl === undefined ? undefined : readSessionMcpConfig(workspaceId, sessionId),
       listSessionMcpClients(workspaceId, sessionId),
     ]).then(([configResult, clientsResult]) => {
       if (!current) return;
-      if ('error' in configResult) setError(configResult.error);
+      if (configResult === undefined) setConfig(undefined);
+      else if ('error' in configResult) setError(configResult.error);
       else setConfig(configResult.config);
       if ('error' in clientsResult) setError((previous) => previous ?? clientsResult.error);
       else setClients(clientsResult.clients);
@@ -148,7 +153,7 @@ export function SessionMcpSettings() {
     return () => {
       current = false;
     };
-  }, [available, sessionId, workspaceId]);
+  }, [available, publicUrl, sessionId, workspaceId]);
 
   const invalidCallback = authMethod === 'oauth' && redirectUri !== '' && !exactHttpsUrl(redirectUri);
   const canCreate =

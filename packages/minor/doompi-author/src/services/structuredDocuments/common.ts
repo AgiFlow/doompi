@@ -11,6 +11,20 @@ import type {
   StructuredDocumentFormat,
 } from '../../types/structuredDocuments';
 
+/** A document request the host refuses for a stated reason, carrying the HTTP status it means. */
+export class DocumentRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: 403 | 413,
+  ) {
+    super(message);
+    this.name = 'DocumentRequestError';
+  }
+}
+
+/** The input is larger than a document operation accepts. */
+export const documentTooLarge = (message: string): DocumentRequestError => new DocumentRequestError(message, 413);
+
 export const MAX_COMPRESSED_BYTES = 25 * 1024 * 1024;
 export const MAX_EXPANDED_BYTES = 100 * 1024 * 1024;
 export const MAX_XML_ENTRY_BYTES = 10 * 1024 * 1024;

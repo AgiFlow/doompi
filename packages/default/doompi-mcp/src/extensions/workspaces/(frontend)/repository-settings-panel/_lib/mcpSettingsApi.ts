@@ -1,4 +1,4 @@
-import { api } from '../../../../../../generated/client';
+import { mcp as api } from '../../../../../../generated/client';
 import {
   MCP_FLOW_ID_PARAM,
   MCP_REPOSITORY_ID_QUERY,

@@ -7,6 +7,7 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessResource,
+  DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -48,8 +49,14 @@ describe('skill headless facet', () => {
       disposers.push(dispose);
       return { dispose };
     };
+    const tools: DoomHeadlessTool[] = [];
     const host = {
       context: { cwd, repoRoot: cwd, environment: {} },
+      readSkill: (name: string) => (name === 'example' ? '# Example skill' : undefined),
+      registerTool: (tool: DoomHeadlessTool) => {
+        tools.push(tool);
+        return registration();
+      },
       registerResource: (resource: DoomHeadlessResource) => {
         resources.push(resource);
         return registration();
@@ -69,9 +76,23 @@ describe('skill headless facet', () => {
     const prompt = vi.fn();
     const execution = { cwd, client: { notify }, session: { prompt } } as unknown as DoomHeadlessExecutionContext;
 
-    const catalog = resources.find(({ name }) => name === 'doompi/skills');
-    if (!catalog) throw new Error('Skill catalog resource was not registered');
-    expect(await catalog.read(execution)).toContain('Example skill');
+    // A repository skill is its own prompt entry, with the path the agent reads it from.
+    expect(resources.some(({ name }) => name === 'doompi/skills')).toBe(false);
+    const listed = resources.find(({ name }) => name === 'example');
+    if (!listed) throw new Error('Repository skill resource was not registered');
+    expect(listed).toMatchObject({ kind: 'skill', path: expect.stringContaining('SKILL.md') });
+    expect(listed.when).toBeUndefined();
+    expect(await listed.read(execution)).toContain('Example skill');
+
+    // The session agent loads a listed skill by name through its own tool.
+    const load = tools.find(({ name }) => name === 'load_skill');
+    if (!load) throw new Error('load_skill was not registered');
+    await expect(load.execute('call-1', { name: 'example' }, undefined, undefined, execution)).resolves.toMatchObject({
+      content: [{ type: 'text', text: '# Example skill' }],
+    });
+    await expect(load.execute('call-2', { name: 'missing' }, undefined, undefined, execution)).resolves.toMatchObject({
+      isError: true,
+    });
 
     await command.execute('', execution);
     expect(notify).toHaveBeenCalledWith(
@@ -114,6 +135,7 @@ describe('skill headless facet', () => {
     const host = {
       context: { cwd, repoRoot: cwd, environment: { HOME: cwd } },
       registerResource: () => ({ dispose: vi.fn() }),
+      registerTool: () => ({ dispose: vi.fn() }),
       registerCommand: (registered: DoomHeadlessCommand) => {
         commands.set(registered.name, registered);
         return { dispose: vi.fn() };

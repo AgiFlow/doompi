@@ -13,14 +13,22 @@ const MAX_LABEL_LENGTH = 32;
  * at the shared directory. Following that chain is what makes every worktree of
  * one repository agree on the repository's identity, which matters here because
  * the registry is per repository and must be found from inside a worktree too.
+ * A session may run in a subdirectory, so the nearest enclosing checkout is used.
  */
-export function gitCommonDirectory(root: string): string | undefined {
-  const marker = path.join(root, '.git');
-  let stat: fs.Stats;
-  try {
-    stat = fs.statSync(marker);
-  } catch {
-    return undefined;
+export function gitCommonDirectory(directory: string): string | undefined {
+  let root = path.resolve(directory);
+  let marker = path.join(root, '.git');
+  let stat: fs.Stats | undefined;
+  for (;;) {
+    try {
+      stat = fs.statSync(marker);
+      break;
+    } catch {
+      const parent = path.dirname(root);
+      if (parent === root) return undefined;
+      root = parent;
+      marker = path.join(root, '.git');
+    }
   }
   if (stat.isDirectory()) return marker;
   let pointer: string;

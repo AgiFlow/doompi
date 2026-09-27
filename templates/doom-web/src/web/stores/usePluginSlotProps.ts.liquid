@@ -2,13 +2,18 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { useCallback, useMemo } from 'react';
 import { minorModes } from '../lib/composition.ts';
-import { pluginSlotProps } from '../lib/pluginSlotProps.ts';
+import { pluginSessionContext, pluginSlotProps } from '../lib/pluginSlotProps.ts';
 import { submitCapture } from './captureStore.ts';
 import { appendComposerDraft, attachComposerCapture, attachComposerContext } from './composerStore.ts';
 import { sessionStoreFor } from './sessionStore.ts';
+import { sessionsStore } from './sessionsStore.ts';
 import { closeTransientTab, openTransientTab } from './transientTabsStore.ts';
 import { useOpenTab } from './useOpenTab.ts';
 import { useWebPluginRegistry } from './useWebPluginRegistry.ts';
+function useSummaryField(sessionId: string | null, key: 'parentSessionId' | 'sessionProvenance'): string | undefined {
+  return useStore(sessionsStore, (state) => (sessionId === null ? undefined : state.byId[sessionId]?.summary[key]));
+}
+
 /** The props a plugin component receives for a session, with the host's navigation and facts bound in. */
 export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void): WebPluginSlotProps {
   const store = sessionStoreFor(sessionId);
@@ -17,6 +22,14 @@ export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void
   const widgets = useStore(store, (state) => state.widgets);
   const context = useStore(store, (state) => state.context);
   const contextInventory = useMemo(() => context?.groups.flatMap((group) => group.items) ?? [], [context]);
+  // Selected field by field so a summary upsert that changes none of them keeps the same object.
+  const known = useStore(sessionsStore, (state) => sessionId !== null && state.byId[sessionId] !== undefined);
+  const parentSessionId = useSummaryField(sessionId, 'parentSessionId');
+  const sessionProvenance = useSummaryField(sessionId, 'sessionProvenance');
+  const sessionContext = useMemo(
+    () => pluginSessionContext(sessionId, known ? { parentSessionId, sessionProvenance } : undefined),
+    [known, parentSessionId, sessionId, sessionProvenance],
+  );
   const openTab = useOpenTab();
   const registryRevision = useWebPluginRegistry();
   const openPluginTab = useCallback(
@@ -76,6 +89,7 @@ export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void
       capture,
     );
     props.activeMinorModes = activeMinorModes;
+    if (sessionContext !== undefined) props.sessionContext = sessionContext;
     return props;
   }, [
     activeMinorModes,
@@ -88,6 +102,7 @@ export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void
     openPluginTab,
     openPluginTransientTab,
     registryRevision,
+    sessionContext,
     sessionId,
     statuses,
   ]);

@@ -75,9 +75,11 @@ export function createVoiceSessionApi(options: VoiceSessionApiOptions): DoomApiH
 export const api: DoomApi = {
   basePath: VOICE_MEDIA_API_BASE_PATH,
   start(context: DoomApiContext): DoomApiHandler {
+    // One server hosts many sessions, so its own directory is never a session's project.
+    if (context.cwd === undefined) throw new Error('Voice transcription requires the session working directory.');
     return new VoiceSessionApi(
       voiceMediaApi.start(context),
-      createDefaultManualTranscriptionService(context.cwd ?? process.cwd(), context.homeDirectory),
+      createDefaultManualTranscriptionService(context.cwd, context.homeDirectory),
     );
   },
 };

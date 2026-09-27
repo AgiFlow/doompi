@@ -46,10 +46,9 @@ function asSummary(value: unknown): SessionSummary | undefined {
  * The parent this session nests under, or undefined when it renders at the top
  * level.
  *
- * A sidecar naming a parent that has since closed, naming this session itself,
- * or forming a cycle all resolve to undefined. Lineage is written by a separate
- * process and read best effort, so the only safe failure is to render the row
- * where it can still be seen rather than to hide or duplicate it.
+ * A parent that has since closed, this session itself, a parent in another
+ * workspace, or a cycle all resolve to undefined. The only safe failure is to
+ * render the row where it can still be seen rather than to hide or duplicate it.
  */
 export function resolveParentId(byId: Record<string, SessionMeta>, id: string): string | undefined {
   const parent = byId[id]?.summary.parentSessionId;

@@ -25,8 +25,10 @@ pi install npm:@agimon-ai/doompi-loop
 
 ## Start and manage loops
 
-Use `/loop` to start a loop and `/loops` to inspect or stop active loops. In DoomPi, `SPC l s` opens
-the start flow and `SPC l l` opens the list.
+Activate the Loop minor mode, then ask the agent to set an interval loop or a cron job; it uses the
+`loop_start` tool. The Activity Loops section lists the session's loops whether or not the mode is
+active, and each row has a stop control. `/loops` lists loops and `/loops stop <instanceId>` stops
+one.
 
 The default interval is 300 seconds. Accepted intervals range from 30 to 3600 seconds. A loop runs
 its prompt once immediately, then schedules later passes.

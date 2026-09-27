@@ -4,6 +4,7 @@ import type { TSchema } from 'typebox';
 
 import {
   DOOM_HEADLESS_HOST_SERVICE,
+  DOOM_LOAD_SKILL_TOOL,
   readDoomHeadlessOwner,
   type DoomHeadlessActivity,
   type DoomHeadlessCommand,
@@ -72,6 +73,33 @@ export function headlessHarnessSkill(resource: ResolvedHeadlessResource) {
     content: resource.text,
     filePath: resource.path ?? `doom-headless://${resource.source}/${resource.name}`,
   };
+}
+
+function escapeXml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * The load tool's description with the session's skills appended, so the agent sees what it can
+ * load where it decides to call the tool. Rebuilt whenever the applied skills change.
+ */
+export function describeLoadSkillTool(base: string, skills: readonly ResolvedHeadlessResource[]): string {
+  const listed = skills.filter(
+    (skill, index, all) => skill.kind === 'skill' && all.findIndex((entry) => entry.name === skill.name) === index,
+  );
+  if (listed.length === 0) return base;
+  return [
+    base,
+    '',
+    '<available_skills>',
+    ...listed.flatMap((skill) => [
+      '  <skill>',
+      `    <name>${escapeXml(skill.name)}</name>`,
+      `    <description>${escapeXml(headlessHarnessSkill(skill).description)}</description>`,
+      '  </skill>',
+    ]),
+    '</available_skills>',
+  ].join('\n');
 }
 
 /** Retains facets and their state; only kernel-computed active contributions change. */
@@ -201,6 +229,11 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     return this.resolvedResources;
   }
 
+  readSkill(name: string): string | undefined {
+    // The last declaration of a name is the one the session uses.
+    return this.resolvedResources.findLast((entry) => entry.kind === 'skill' && entry.name === name)?.text;
+  }
+
   inspectCapabilities(): ReturnType<DoomHeadlessHostService['inspectCapabilities']> {
     const ready = this.ready && !this.disposed;
     const capabilities: ReturnType<DoomHeadlessHostService['inspectCapabilities']>['capabilities'][number][] = [];
@@ -295,7 +328,11 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       const contextAttribution = conditionAttribution(tool.when);
       const entry: ContextToolInventory = {
         name: tool.name,
-        description: tool.description,
+        // Priced as sent: the load tool carries the skill list in its description.
+        description:
+          tool.name === DOOM_LOAD_SKILL_TOOL
+            ? describeLoadSkillTool(tool.description, this.resolvedResources)
+            : tool.description,
         parameters: tool.parameters,
         ...(tool.promptSnippet === undefined ? {} : { promptSnippet: tool.promptSnippet }),
         ...(tool.promptGuidelines === undefined ? {} : { promptGuidelines: tool.promptGuidelines }),
@@ -326,6 +363,7 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
           group: 'extensions' as const,
           owner: resource.source,
           modelInvocable: true,
+          body: skill.content,
           ...(countTokens === undefined
             ? {}
             : { promptTokens: Math.max(0, countTokens(formatSkillsForSystemPrompt([skill])) - framingTokens) }),

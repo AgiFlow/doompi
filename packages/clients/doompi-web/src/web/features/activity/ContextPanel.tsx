@@ -139,11 +139,19 @@ export function ContextPanel() {
   );
 }
 
+/** Active carries the bright ink, inactive the faint one, so what the model sees reads at a glance. */
+function ink(active: boolean): string {
+  return active ? 'text-doom-hi' : 'text-doom-faint';
+}
+
 function ContextGroupView({ group, onSelect }: { group: ContextGroup; onSelect: (target: ItemTarget) => void }) {
+  // A group that reported rows is active when any of them is; one still pending keeps the normal head.
+  const groupActive = group.items.length === 0 || group.items.some((item) => item.active);
   return (
     <div
       data-testid={`context-group-${group.id}`}
       data-kind={group.kind}
+      data-active={groupActive}
       className="flex flex-col gap-1 border-b border-doom-border-soft px-3 py-3"
     >
       {/* The same head the activity dock uses, for the same reason: the glyph
@@ -153,7 +161,7 @@ function ContextGroupView({ group, onSelect }: { group: ContextGroup; onSelect: 
         <span aria-hidden className="text-sm font-bold text-doom-faint">
           #
         </span>
-        <span className="flex-1 text-sm font-bold text-doom-text">{group.label}</span>
+        <span className={`flex-1 text-sm font-bold ${ink(groupActive)}`}>{group.label}</span>
         <span className="text-2xs font-bold tracking-widest text-doom-violet uppercase">{group.kind}</span>
         <span data-testid={`context-subtotal-${group.id}`} className="w-14 text-right text-xs text-doom-dim">
           {tokens(group.tokens)}
@@ -165,51 +173,55 @@ function ContextGroupView({ group, onSelect }: { group: ContextGroup; onSelect: 
           {group.detail || 'no tools or skills reported'}
         </p>
       ) : (
-        ownersOf(group).map((owner) => (
-          <div key={owner.owner} className="flex flex-col">
-            {/* The package heads its own rows, so the source tag sits here
+        ownersOf(group).map((owner) => {
+          const ownerActive = owner.items.some((item) => item.active);
+          return (
+            <div key={owner.owner} className="flex flex-col">
+              {/* The package heads its own rows, so the source tag sits here
                 rather than repeating on every tool that shares it. */}
-            <div
-              data-testid={`context-owner-${owner.owner}`}
-              title={owner.owner}
-              className="flex items-center gap-2 px-1 pt-1"
-            >
-              <span className="flex-1 truncate text-xs text-doom-dim">{ownerLabel(owner.owner)}</span>
-              <span className="text-2xs text-doom-faint">{SOURCE_LABEL[owner.source]}</span>
-              <span className="w-14 text-right text-xs text-doom-dim">{tokens(owner.tokens)}</span>
-            </div>
-            {owner.items.map((item) => (
-              // A row is a question as much as a figure: what am I paying for.
-              // The answer is too large to have travelled with the panel, so
-              // the row asks for it rather than carrying it.
-              <Button
-                variant="ghost"
-                size="card"
-                key={`${item.itemKind}:${item.name}`}
-                data-testid={`context-row-${item.name}`}
-                data-active={item.active}
-                onClick={() => onSelect({ itemKind: item.itemKind, name: item.name, owner: item.owner })}
-                className="flex-row items-center gap-2 rounded-none py-px pr-1 pl-4"
+              <div
+                data-testid={`context-owner-${owner.owner}`}
+                data-active={ownerActive}
+                title={owner.owner}
+                className="flex items-center gap-2 px-1 pt-1"
               >
-                <abbr
-                  title={item.itemKind}
-                  className="w-4 shrink-0 text-center text-2xs font-bold text-doom-violet no-underline"
-                >
-                  {item.itemKind === 'skill' ? 'S' : 'T'}
-                </abbr>
-                <span className={`flex-1 truncate text-xs ${item.active ? 'text-doom-text' : 'text-doom-faint'}`}>
-                  {item.name}
+                <span className={`flex-1 truncate text-xs ${ownerActive ? 'text-doom-text' : 'text-doom-faint'}`}>
+                  {ownerLabel(owner.owner)}
                 </span>
-                <span
-                  title={item.active ? undefined : 'not sent to the model; costs nothing until switched on'}
-                  className={`w-14 text-right text-xs ${item.active ? 'text-doom-dim' : 'text-doom-faint'}`}
+                <span className="text-2xs text-doom-faint">{SOURCE_LABEL[owner.source]}</span>
+                <span className="w-14 text-right text-xs text-doom-dim">{tokens(owner.tokens)}</span>
+              </div>
+              {owner.items.map((item) => (
+                // A row is a question as much as a figure: what am I paying for.
+                // The answer is too large to have travelled with the panel, so
+                // the row asks for it rather than carrying it.
+                <Button
+                  variant="ghost"
+                  size="card"
+                  key={`${item.itemKind}:${item.name}`}
+                  data-testid={`context-row-${item.name}`}
+                  data-active={item.active}
+                  onClick={() => onSelect({ itemKind: item.itemKind, name: item.name, owner: item.owner })}
+                  className="flex-row items-center gap-2 rounded-none py-px pr-1 pl-4"
                 >
-                  {item.active ? tokens(item.tokens) : `(${tokens(item.tokens)})`}
-                </span>
-              </Button>
-            ))}
-          </div>
-        ))
+                  <abbr
+                    title={item.itemKind}
+                    className={`w-4 shrink-0 text-center text-2xs font-bold no-underline ${item.active ? 'text-doom-violet' : 'text-doom-faint'}`}
+                  >
+                    {item.itemKind === 'skill' ? 'S' : 'T'}
+                  </abbr>
+                  <span className={`flex-1 truncate text-xs ${ink(item.active)}`}>{item.name}</span>
+                  <span
+                    title={item.active ? undefined : 'not sent to the model; costs nothing until switched on'}
+                    className={`w-14 text-right text-xs ${item.active ? 'text-doom-text' : 'text-doom-faint'}`}
+                  >
+                    {item.active ? tokens(item.tokens) : `(${tokens(item.tokens)})`}
+                  </span>
+                </Button>
+              ))}
+            </div>
+          );
+        })
       )}
     </div>
   );

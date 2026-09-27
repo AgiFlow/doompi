@@ -472,6 +472,67 @@ describe('createHeadlessHub', () => {
     await hub.close();
   });
 
+  it('lets a session id reopen after its shutdown failed', async () => {
+    const closeSession = vi.fn(async (): Promise<void> => {
+      throw new Error('cleanup unavailable');
+    });
+    const hub = createHeadlessHub({ manager: { closeSession } as never });
+    const first = host();
+    hub.register({ id: 'one', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: first.host });
+    await expect(hub.closeSession('one')).rejects.toThrow('cleanup unavailable');
+
+    const second = host();
+    hub.register({ id: 'one', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: second.host });
+    expect(hub.session('one')?.host).toBe(second.host);
+    closeSession.mockImplementation(async () => undefined);
+    await hub.close();
+  });
+
+  // A reopened session with a whole history used to read as "fresh session, nothing sent yet".
+  it('shows a reopened session as prompted, from its journal settled marker', async () => {
+    const reopened = host().host;
+    const findEntry = vi.fn(async () => ({
+      type: 'custom',
+      customType: 'doompi.agent-settled',
+      data: { runId: 'run', timestamp: Date.parse('2026-09-26T10:00:00.000Z'), tools: 0 },
+    }));
+    const create = vi.fn(async () => ({ ...reopened, runtime: { ...reopened.runtime, lane: { findEntry } } }));
+    const hub = createHeadlessHub({ manager: { create, closeSession: vi.fn(async () => undefined) } as never });
+
+    await hub.create({ sessionId: 'old', workspaceId: 'ws', sessionName: 'Old', cwd: '/repo' } as never);
+
+    expect(hub.session('old')).toMatchObject({ everPrompted: true, lastSettledAt: '2026-09-26T10:00:00.000Z' });
+    await hub.close();
+  });
+
+  it('refuses a duplicate create before building a host', async () => {
+    const create = vi.fn(async () => host().host);
+    const hub = createHeadlessHub({ manager: { create, closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({ id: 'one', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: host().host });
+
+    await expect(
+      hub.create({ sessionId: 'one', workspaceId: 'one', sessionName: 'One', cwd: '/one' } as never),
+    ).rejects.toThrow("Session 'one' is already registered.");
+    expect(create).not.toHaveBeenCalled();
+    await hub.close();
+  });
+
+  it('closes the host it built when registration is refused', async () => {
+    let hub!: ReturnType<typeof createHeadlessHub>;
+    const closeSession = vi.fn(async () => undefined);
+    const create = vi.fn(async () => {
+      // The hub closes while this host is still starting.
+      await hub.close();
+      return host().host;
+    });
+    hub = createHeadlessHub({ manager: { create, closeSession } as never });
+
+    await expect(
+      hub.create({ sessionId: 'late', workspaceId: 'one', sessionName: 'Late', cwd: '/one' } as never),
+    ).rejects.toThrow('The headless hub is closed.');
+    expect(closeSession).toHaveBeenCalledWith('late');
+  });
+
   it('publishes session summaries at state changes rather than every streamed token', () => {
     const session = host();
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
@@ -555,6 +616,35 @@ describe('createHeadlessHub', () => {
     expect(received).toEqual(['workspace-two:two']);
     hub.registerChannel(channel('session-one'), { scope: 'session', sessionId: 'one' });
     expect(hub.channelFrames('one')[0]?.payload).toEqual({ owner: 'session-one', sessions: ['one'] });
+    await hub.close();
+  });
+
+  it('gives channels the session context its host computed', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const sessionContext = Object.freeze({
+      sessionId: 'child',
+      workspaceId: 'ws',
+      workspaceRoot: '/repo',
+      checkoutRoot: '/worktrees/feature',
+      cwd: '/worktrees/feature',
+      parentSessionId: 'parent',
+    });
+    const added: unknown[] = [];
+    hub.registerChannel({
+      frameType: 'context',
+      start: () => ({ payloadFor: () => undefined, sessionAdded: (scope) => added.push(scope), close: vi.fn() }),
+    });
+    hub.register({
+      id: 'child',
+      workspaceId: 'ws',
+      name: 'Child',
+      cwd: '/worktrees/feature',
+      createdAt: 'now',
+      parentSessionId: 'parent',
+      host: { ...host().host, sessionContext },
+    });
+
+    expect(added).toEqual([expect.objectContaining({ sessionId: 'child', sessionContext })]);
     await hub.close();
   });
 

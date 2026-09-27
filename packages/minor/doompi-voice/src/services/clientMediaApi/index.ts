@@ -634,6 +634,8 @@ export class VoiceMediaBroker implements DoomApiHandler {
 
   private async disconnect(request: Request): Promise<Response> {
     const body = await jsonRecord(request);
+    // Nothing is connected, for example after the session restarted: already disconnected.
+    if (this.client === undefined) return new Response(null, { status: 204 });
     if (!this.matchesClient(body?.clientId, body?.connectionId))
       return errorResponse('Voice media client does not own this session.', 409);
     this.client = undefined;
@@ -644,6 +646,10 @@ export class VoiceMediaBroker implements DoomApiHandler {
 
   private async heartbeat(request: Request): Promise<Response> {
     const body = await jsonRecord(request);
+    // A broker with no client is a new one, for example after the session restarted. Its wake
+    // carries a different epoch, which tells the caller to reconnect; a 409 would say the same
+    // thing as a failure. A client that another caller owns is still refused.
+    if (this.client === undefined) return Response.json(this.currentWake());
     if (!this.matchesClient(body?.clientId, body?.connectionId))
       return errorResponse('Voice media client does not own this session.', 409);
     this.touchClient();

@@ -46,6 +46,8 @@ export interface ContextSkillDetail {
   readonly tokens: number;
   readonly description: string;
   readonly filePath?: string;
+  /** The skill's instructions, which the model loads when it uses the skill. */
+  readonly body?: string;
   /** Whether the model may invoke it, as opposed to a human running it. */
   readonly modelInvocable: boolean;
 }
