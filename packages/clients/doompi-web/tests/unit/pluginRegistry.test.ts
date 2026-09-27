@@ -31,6 +31,7 @@ import {
   webPluginDiagnostics,
   webPluginRegistryRevision,
   webTabs,
+  workspaceSlotFills,
 } from '../../src/web/lib/pluginRegistry';
 import { settingsSections } from '../../src/web/lib/settingsSections';
 interface ItemsPayload {
@@ -237,6 +238,25 @@ describe('the web plugin registry', () => {
       { pluginId: 'first', label: 'first', detail: 'first panel', order: 10, component: Panel },
       { pluginId: 'later', label: 'later', detail: 'later panel', order: 20, component: Other },
     ]);
+  });
+
+  it('finds a workspace new-session fill for its own workspace whatever is focused', () => {
+    const Dialog = () => null;
+    installWorkspaceWebPlugins('repo', [
+      { id: 'git', workspace: { fills: [{ slot: HOST_SLOTS.newSession, id: 'git-new-session', component: Dialog }] } },
+    ]);
+    installWorkspaceWebPlugins('other', [{ id: 'plain', workspace: {} }]);
+    installSessionWebPlugins('in-other', [
+      { id: 'session-only', session: { fills: [{ slot: HOST_SLOTS.newSession, id: 'late', component: Dialog }] } },
+    ]);
+    activateWebPluginWorkspace('other');
+    activateWebPluginSession('in-other');
+
+    expect(workspaceSlotFills('repo', HOST_SLOTS.newSession)).toEqual([
+      expect.objectContaining({ pluginId: 'git', id: 'git-new-session', component: Dialog }),
+    ]);
+    expect(workspaceSlotFills('other', HOST_SLOTS.newSession)).toEqual([]);
+    expect(workspaceSlotFills('unknown', HOST_SLOTS.newSession)).toEqual([]);
   });
 
   it('separates general sections from repository defaults and package panels', () => {

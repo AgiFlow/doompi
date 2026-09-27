@@ -98,6 +98,8 @@ export const HOST_SLOTS = {
   composerActions: 'composer-actions',
   composerMenu: 'composer-menu',
   sessionMenu: 'session-menu',
+  /** A workspace plugin fill here replaces the host's new-session dialog for that workspace. */
+  newSession: 'new-session',
 } as const;
 
 const SLOT_SEPARATOR = '.';
@@ -745,6 +747,11 @@ export function pluginSettingsPanels(): readonly InstalledSettingsPanel[] {
 /** The fills placed into one slot, in slot order; empty for a slot nobody declared. */
 export function slotFills(slot: string): readonly ResolvedFill[] {
   return activeState().fills.get(slot) ?? [];
+}
+
+/** One workspace's own fills for a slot, whichever session or workspace is focused. */
+export function workspaceSlotFills(workspaceId: string, slot: string): readonly ResolvedFill[] {
+  return workspaceStates.get(workspaceId)?.fills.get(slot) ?? [];
 }
 
 export function paletteCommands(): readonly PaletteCommandContribution[] {

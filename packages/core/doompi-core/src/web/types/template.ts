@@ -82,7 +82,7 @@ export interface WebTemplateRailActions {
   removeSession: (sessionId: string) => WebTemplateRailResult;
   /** Opens the host's history dialog for one session. */
   resumeSession: (sessionId: string) => void;
-  /** Opens the host's new-session dialog for a workspace. */
+  /** Opens the new-session dialog for a workspace: the host's, or a workspace plugin's `new-session` fill. */
   createSession: (workspaceId: string) => void;
   resumeInWorkspace: (workspaceId: string) => void;
   openWorkspaceSettings: (workspaceId: string) => void;

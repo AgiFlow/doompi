@@ -173,7 +173,7 @@ The most specific match wins. A host quietly skips surfaces it does not read, so
 
 ### One `fill/` folder, one rule
 
-Every fill names a slot, and there is no host-region special case. The cockpit declares its own regions as real slots (`overlay`, `rail`, `context`, `selection-bar`, `activity`, `composer-actions`, `composer-menu`), and an activity group opens `activity.<group>`. So filling a host region and filling another plugin's slot are the same operation, spelled the same way.
+Every fill names a slot, and there is no host-region special case. The cockpit declares its own regions as real slots (`overlay`, `rail`, `context`, `selection-bar`, `activity`, `composer-actions`, `composer-menu`, `session-menu`, `new-session`), and an activity group opens `activity.<group>`. So filling a host region and filling another plugin's slot are the same operation, spelled the same way. A workspace-scope `new-session` fill replaces the host's new-session dialog for that workspace; it receives a `newSession` prop with the workspace, the host's plain-session create, and a step-up request helper.
 
 ```text
 fill/PlanRail.rail.web.tsx                 -> { slot: 'rail', id: 'plan-rail' }

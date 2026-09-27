@@ -203,6 +203,24 @@ export interface WebPluginSessionContext {
   readonly provenance?: string;
 }
 
+/**
+ * What a `new-session` fill needs to replace the host's new-session dialog for
+ * one workspace. The host keeps creating plain sessions itself, so remote
+ * callers still pass its passkey gate.
+ */
+export interface WebPluginNewSessionContext {
+  readonly workspaceId: string;
+  readonly workspaceRoot: string;
+  /** Dismisses the dialog without creating anything. */
+  close: () => void;
+  /** Creates a session in the workspace root; resolves an error message, or undefined once it is open. */
+  createPlain: (name?: string) => Promise<string | undefined>;
+  /** Waits for a session created elsewhere, then opens it; resolves an error message, or undefined. */
+  openCreated: (sessionId: string) => Promise<string | undefined>;
+  /** Same-origin request through the host's transport, retrying once after a fresh passkey gesture. */
+  requestWithStepUp: (input: string, init?: RequestInit) => Promise<Response>;
+}
+
 /** Slot components receive the target session, which may be an unfocused rail card. */
 export interface WebPluginSlotProps {
   sessionId: string | null;
@@ -259,6 +277,8 @@ export interface WebPluginSlotProps {
   activeMinorModes?: readonly string[];
   /** The target session's baseline context, once the hub has reported the session. */
   sessionContext?: WebPluginSessionContext;
+  /** Present only for a `new-session` fill, which then owns the whole new-session dialog. */
+  newSession?: WebPluginNewSessionContext;
 }
 /**
  * One contribution into a slot, keyed by (pluginId, id): independent plugins
