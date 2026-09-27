@@ -1,3 +1,13 @@
+## 0.0.1-alpha.86 (2026-09-27)
+
+### 🩹 Fixes
+
+- stop --auto-stop sessions reliably after the agent settles ([#221](https://github.com/AgiFlow/doompi/pull/221))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.85 (2026-09-27)
 
 ### 🩹 Fixes

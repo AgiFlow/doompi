@@ -1,3 +1,23 @@
+## 0.0.1-alpha.61 (2026-09-27)
+
+### 🩹 Fixes
+
+- **root:** improve remote lifecycle diagnostics ([#218](https://github.com/AgiFlow/doompi/pull/218))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.98
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.94
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.95
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.53
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.49
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.83
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.60 (2026-09-27)
 
 ### 🧱 Updated Dependencies

@@ -1,3 +1,19 @@
+## 0.0.1-alpha.19 (2026-09-27)
+
+### 🩹 Fixes
+
+- **doompi-git:** confirm worktree message admission reliably ([#217](https://github.com/AgiFlow/doompi/pull/217))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.95
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.84
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.18 (2026-09-27)
 
 ### 🧱 Updated Dependencies

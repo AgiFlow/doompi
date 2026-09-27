@@ -1,3 +1,31 @@
+## 0.0.1-alpha.95 (2026-09-27)
+
+### 🩹 Fixes
+
+- stop --auto-stop sessions reliably after the agent settles ([#221](https://github.com/AgiFlow/doompi/pull/221))
+- **root:** improve remote lifecycle diagnostics ([#218](https://github.com/AgiFlow/doompi/pull/218))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.95
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.84
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.84
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.84
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.84
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.84
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.84
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.84
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.84
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.86
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.95
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.53
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.49
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.94 (2026-09-27)
 
 ### 🧱 Updated Dependencies

@@ -1,3 +1,13 @@
+## 0.0.1-alpha.21 (2026-09-27)
+
+### 🩹 Fixes
+
+- stop --auto-stop sessions reliably after the agent settles ([#221](https://github.com/AgiFlow/doompi/pull/221))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.20 (2026-09-27)
 
 This was a version bump only for @agimon-ai/vibe-lint-plugin-doom-cli to align it with other projects, there were no code changes.
