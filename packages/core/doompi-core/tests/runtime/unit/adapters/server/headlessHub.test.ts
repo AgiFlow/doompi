@@ -549,6 +549,36 @@ describe('createHeadlessHub', () => {
     expect(hub.snapshot()[0]?.phase).toBe('idle');
   });
 
+  it('publishes the session git status at registration and again after a run settles', async () => {
+    const session = host();
+    const readGitStatus = vi
+      .fn()
+      .mockResolvedValueOnce({ branch: 'main', dirty: false })
+      .mockResolvedValueOnce({ branch: 'feature/rail', dirty: true })
+      .mockResolvedValue(undefined);
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never, readGitStatus });
+    const upserts: unknown[] = [];
+    hub.onEvent((event) => {
+      if (event.kind === 'upsert') upserts.push(event.session.git);
+    });
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: session.host });
+
+    await vi.waitFor(() => expect(hub.session('one')?.git).toEqual({ branch: 'main', dirty: false }));
+    expect(readGitStatus).toHaveBeenCalledWith('/repo');
+
+    session.emitFrame({ type: 'agent_start' });
+    await Promise.resolve();
+    expect(readGitStatus).toHaveBeenCalledTimes(1);
+
+    session.emitFrame({ type: 'agent_settled' });
+    await vi.waitFor(() => expect(hub.session('one')?.git).toEqual({ branch: 'feature/rail', dirty: true }));
+
+    session.emitFrame({ type: 'agent_settled' });
+    await vi.waitFor(() => expect(hub.session('one')?.git).toBeUndefined());
+    expect(upserts.at(-1)).toBeUndefined();
+    expect(upserts).toContainEqual({ branch: 'main', dirty: false });
+  });
+
   it('keeps workspace APIs alive without sessions and isolates equal package paths', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn() } as never });
     const closed: string[] = [];

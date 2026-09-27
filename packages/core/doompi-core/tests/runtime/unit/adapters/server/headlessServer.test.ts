@@ -1062,6 +1062,40 @@ describe('serveHeadlessServer', () => {
         })
       ).json(),
     ).toEqual({ directories: [] });
+    fs.mkdirSync(path.join(directory, '.hidden'));
+    expect(
+      await (
+        await fetch(`${server.url}/api/directories/children?path=${encodeURIComponent(directory)}`, { headers })
+      ).json(),
+    ).toEqual({
+      path: directory,
+      parent: path.dirname(directory),
+      directories: [path.join(directory, 'Alpha'), path.join(directory, 'alpine')],
+    });
+    const home = vi.spyOn(os, 'homedir').mockReturnValue(directory);
+    try {
+      const listedHome = await (await fetch(`${server.url}/api/directories/children`, { headers })).json();
+      expect(listedHome).toMatchObject({ path: directory });
+      const tilde = await (
+        await fetch(`${server.url}/api/directories/children?path=${encodeURIComponent('~/Alpha')}`, { headers })
+      ).json();
+      expect(tilde).toEqual({ path: path.join(directory, 'Alpha'), parent: directory, directories: [] });
+      const suggested = (await (
+        await fetch(`${server.url}/api/directories?q=${encodeURIComponent('~/al')}`, { headers })
+      ).json()) as { directories: string[] };
+      expect(suggested.directories).toContain(path.join(directory, 'alpine'));
+    } finally {
+      home.mockRestore();
+    }
+    expect((await fetch(`${server.url}/api/directories/children?path=relative`, { headers })).status).toBe(404);
+    expect(
+      (
+        await fetch(
+          `${server.url}/api/directories/children?path=${encodeURIComponent(path.join(directory, 'absent'))}`,
+          { headers },
+        )
+      ).status,
+    ).toBe(404);
     await hub.close();
   });
 

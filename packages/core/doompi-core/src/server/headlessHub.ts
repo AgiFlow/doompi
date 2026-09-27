@@ -31,6 +31,8 @@ import {
   type InstalledServerFacets,
   type LoadedServerFacet,
 } from '../exports/serverFacet';
+import { readSessionGitStatus } from '../services/sessionGitStatus';
+import type { SessionGitStatus } from '../services/sessionGitStatus/type';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../systems/main/types/headlessSessionHost';
 import type { HeadlessSessionManager } from '../systems/main/types/headlessSessionManager';
 import { AGENT_SETTLED_ENTRY_TYPE } from './directHarnessRuntime';
@@ -54,6 +56,8 @@ export interface HeadlessHubSession {
   readonly everPrompted?: boolean;
   readonly awaitingInput?: boolean;
   readonly lastSettledAt?: string;
+  /** Branch and dirty flag of the session cwd; absent outside a git work tree. */
+  readonly git?: SessionGitStatus;
   readonly pendingSetups?: readonly DoomPendingSessionSetup[];
   /** Environment admitted for this session, when supplied by the host. */
   readonly environment?: Readonly<Record<string, string | undefined>>;
@@ -63,6 +67,7 @@ export interface HeadlessHubSession {
 export interface HeadlessWorkspace {
   readonly id: string;
   readonly root: string;
+  readonly name?: string;
   readonly available?: boolean;
 }
 
@@ -85,6 +90,8 @@ export interface HeadlessHubOptions {
   computerUse?: DoomComputerUseHostBinding;
   admitWorkspace?: (root: string) => Promise<HeadlessWorkspace>;
   onWorkspaceRemoved?: (workspaceId: string) => void;
+  /** Reads a session cwd's git status; defaults to the git CLI. */
+  readGitStatus?: (cwd: string) => Promise<SessionGitStatus | undefined>;
 }
 
 export interface HeadlessHub {
@@ -618,6 +625,23 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     };
     sessions.set(session.id, current);
     announceCommunicationReady(session.id);
+    // Branch changes happen inside runs, so the status is read at start and after each settle.
+    const refreshGit = (): void => {
+      void (options.readGitStatus ?? readSessionGitStatus)(session.cwd).then(
+        (git) => {
+          if (closed || sessions.get(session.id)?.host !== session.host) return;
+          if (git?.branch === current.git?.branch && git?.dirty === current.git?.dirty) return;
+          const { git: _previous, ...rest } = current;
+          current = git === undefined ? rest : { ...rest, git };
+          sessions.set(session.id, current);
+          emit({ kind: 'upsert', session: current });
+        },
+        (error: unknown) =>
+          options.onNotice?.(
+            `session ${session.id} git status failed (${error instanceof Error ? error.message : String(error)})`,
+          ),
+      );
+    };
     const stopPresentation = session.host.onPresentationFrame((frame) => {
       if (sessions.get(session.id)?.host !== session.host) return;
       const type = typeof frame.type === 'string' ? frame.type : '';
@@ -654,6 +678,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       };
       sessions.set(session.id, current);
       emit({ kind: 'upsert', session: current });
+      if (type === 'agent_settled') refreshGit();
     });
     presentationCleanups.set(session.id, stopPresentation);
     for (const { source } of selectedChannels(current)) source.sessionAdded?.(scopeOf(session));
@@ -672,6 +697,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     void session.host.runtime.exited.then(cleanup, cleanup);
     subscriptions.add(cleanup);
     emit({ kind: 'upsert', session: current });
+    refreshGit();
   };
 
   const closeSession = async (sessionId: string): Promise<void> => {

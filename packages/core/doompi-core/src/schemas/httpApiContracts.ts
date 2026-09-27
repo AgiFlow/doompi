@@ -53,6 +53,7 @@ export const SessionSummarySchema = Type.Object({
   everPrompted: Flag,
   awaitingInput: Flag,
   lastSettledAt: Optional(Text),
+  git: Optional(Type.Object({ branch: Text, dirty: Flag })),
   parentSessionId: Optional(Text),
   sessionProvenance: Optional(Text),
   pendingSetups: Optional(
@@ -84,7 +85,7 @@ export const HubUpsertFrameSchema = Type.Object({
   session: SessionSummarySchema,
 });
 export const HubRemovedFrameSchema = Type.Object({ type: Type.Literal('session_removed'), sessionId: Text });
-const Workspace = Type.Object({ id: Text, root: Text, available: Optional(Flag) });
+const Workspace = Type.Object({ id: Text, root: Text, name: Optional(Text), available: Optional(Flag) });
 export const WorkspaceSnapshotFrameSchema = Type.Object({
   type: Type.Literal('workspaces_snapshot'),
   workspaces: Type.Array(Workspace),
@@ -172,6 +173,13 @@ export const headlessHttpContracts: DoomHttpContract[] = [
     }),
   ),
   host('directories', '/api/directories', 'GET', Type.Object({ directories: Strings }), { parameters: [query('q')] }),
+  host(
+    'directories.children',
+    '/api/directories/children',
+    'GET',
+    Type.Object({ path: Text, parent: Optional(Text), directories: Strings }),
+    { parameters: [query('path')] },
+  ),
   host(
     'sessions.list',
     '/api/workspaces/{workspaceId}/sessions',

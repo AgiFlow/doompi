@@ -52,6 +52,9 @@ const HEALTH_ROLE = 'hub';
 const PROTOCOL_VERSION = 1;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const MAX_SESSION_FILE_BYTES = 25 * 1024 * 1024;
+const DIRECTORY_SUGGESTION_LIMIT = 12;
+const DIRECTORY_CHILDREN_LIMIT = 500;
+const HOME_PREFIX = '~';
 const SESSION_FILE_CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.avif': 'image/avif',
   '.bmp': 'image/bmp',
@@ -126,6 +129,7 @@ function sessionView(session: HeadlessHubSession): Record<string, unknown> {
     everPrompted: session.everPrompted ?? false,
     awaitingInput: session.awaitingInput ?? false,
     ...(session.lastSettledAt === undefined ? {} : { lastSettledAt: session.lastSettledAt }),
+    ...(session.git === undefined ? {} : { git: { ...session.git } }),
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
     ...(session.pendingSetups === undefined ? {} : { pendingSetups: session.pendingSetups }),
@@ -239,8 +243,14 @@ async function sessionFile(session: HeadlessHubSession, relativePath: string | n
   }
 }
 
+/** Expands a leading `~` the way a shell would, so typed paths match what the user sees in a terminal. */
+function expandHome(value: string): string {
+  if (value === HOME_PREFIX) return os.homedir();
+  return value.startsWith(`${HOME_PREFIX}${path.sep}`) ? path.join(os.homedir(), value.slice(2)) : value;
+}
+
 async function directorySuggestions(query: string, sessions: readonly HeadlessHubSession[]): Promise<string[]> {
-  const typed = query.trim();
+  const typed = expandHome(query.trim());
   if (typed === '') return [];
   const matches = (value: string): boolean => value.toLowerCase().includes(typed.toLowerCase());
   const known = [...new Set([process.cwd(), ...sessions.map((session) => session.cwd)])].filter(matches);
@@ -265,7 +275,35 @@ async function directorySuggestions(query: string, sessions: readonly HeadlessHu
       // A missing or unreadable parent simply has no completions.
     }
   }
-  return [...new Set([...known, ...completed.sort((left, right) => left.localeCompare(right))])].slice(0, 12);
+  return [...new Set([...known, ...completed.sort((left, right) => left.localeCompare(right))])].slice(
+    0,
+    DIRECTORY_SUGGESTION_LIMIT,
+  );
+}
+
+/**
+ * Lists the visible child directories of one folder for the workspace folder browser.
+ * Resolves undefined for a relative, missing, or unreadable path.
+ */
+async function directoryChildren(
+  requested: string | null,
+): Promise<{ path: string; parent?: string; directories: string[] } | undefined> {
+  const directory = requested === null || requested.trim() === '' ? os.homedir() : expandHome(requested.trim());
+  if (!path.isAbsolute(directory)) return undefined;
+  const resolved = path.resolve(directory);
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(resolved, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+  const directories = entries
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+    .map((entry) => path.join(resolved, entry.name))
+    .sort((left, right) => left.localeCompare(right))
+    .slice(0, DIRECTORY_CHILDREN_LIMIT);
+  const parent = path.dirname(resolved);
+  return { path: resolved, ...(parent === resolved ? {} : { parent }), directories };
 }
 
 async function readBody(request: IncomingMessage): Promise<Uint8Array> {
@@ -522,6 +560,12 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         await writeResponse(response, result);
         return;
       }
+    }
+    if (url.pathname === '/api/directories/children' && request.method === 'GET') {
+      const listing = await directoryChildren(url.searchParams.get('path'));
+      if (listing === undefined) json(response, 404, { error: 'That folder cannot be read.' });
+      else json(response, 200, listing);
+      return;
     }
     if (url.pathname === '/api/directories' && request.method === 'GET') {
       json(response, 200, {
