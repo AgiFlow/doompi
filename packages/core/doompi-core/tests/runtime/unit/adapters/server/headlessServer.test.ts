@@ -1100,7 +1100,14 @@ describe('serveHeadlessServer', () => {
   });
 
   it('validates workspace requests and reports deletion conflicts', async () => {
-    const admitWorkspace = vi.fn(async (root: string) => ({ id: 'one', root }));
+    const admitWorkspace = vi.fn(async (request: { root?: string; name?: string }) => {
+      if (request.name === 'Broken') throw new Error('The folder is not a repository.');
+      return {
+        id: 'one',
+        root: request.root ?? `/default/${request.name ?? ''}`,
+        ...(request.name === undefined ? {} : { name: request.name }),
+      };
+    });
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never, admitWorkspace });
     await hub.mountFacets([], { scope: 'workspace', workspaceId: 'one', workspaceRoot: '/one', onNotice: vi.fn() });
     await hub.mountFacets([], {
@@ -1118,14 +1125,36 @@ describe('serveHeadlessServer', () => {
         { id: 'test-workspace', root: '/repo', available: true },
       ],
     });
-    for (const body of ['', 'null', '[]', '{}', '{"root":1}']) {
+    for (const body of [
+      '',
+      'null',
+      '{}',
+      '{"root":1}',
+      '{"name":2}',
+      '{"root":"  ","name":""}',
+      '{"name":"../escape"}',
+      '{"name":"a/b"}',
+      '{"name":".hidden"}',
+      `{"name":"${'x'.repeat(81)}"}`,
+    ]) {
       const result = await post(body);
-      expect(result.status).toBe(400);
+      expect(result.status, body).toBe(400);
     }
     expect(admitWorkspace).not.toHaveBeenCalled();
     const created = await post('{"root":"/new"}');
     expect(created.status).toBe(201);
     expect(await created.json()).toEqual({ workspace: { id: 'one', root: '/new' } });
+    const named = await post('{"name":"  My project  "}');
+    expect(named.status).toBe(201);
+    expect(await named.json()).toEqual({
+      workspace: { id: 'one', root: '/default/My project', name: 'My project' },
+    });
+    expect(admitWorkspace).toHaveBeenLastCalledWith({ name: 'My project' });
+    await post('{"root":"~/code/app","name":"App"}');
+    expect(admitWorkspace).toHaveBeenLastCalledWith({ root: path.join(os.homedir(), 'code', 'app'), name: 'App' });
+    const failed = await post('{"name":"Broken"}');
+    expect(failed.status).toBe(422);
+    expect(await failed.json()).toEqual({ error: 'The folder is not a repository.' });
     expect((await fetch(`${server.url}/api/workspaces/missing`, { method: 'DELETE' })).status).toBe(404);
     hub.register({ id: 'session', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: host().host });
     expect((await fetch(`${server.url}/api/workspaces/one`, { method: 'DELETE' })).status).toBe(409);

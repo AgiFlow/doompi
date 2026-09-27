@@ -23,6 +23,8 @@ export const SESSIONS_API_ROUTE = '/api/workspaces/:workspaceId/sessions';
 export interface WorkspaceSummary {
   id: string;
   root: string;
+  /** Display name chosen when the workspace was added; the folder basename stands in when absent. */
+  name?: string;
   /** A remembered workspace whose root could not be mounted on this server start. */
   available?: boolean;
   error?: string;
@@ -44,6 +46,16 @@ export interface PiSessionHistoryItem {
  * directory whose names match the trailing segment as a regular expression.
  */
 export const DIRECTORIES_API_ROUTE = '/api/directories';
+
+/** Lists the visible child folders of ?path= (home when absent) for the workspace folder browser. */
+export const DIRECTORY_CHILDREN_API_ROUTE = '/api/directories/children';
+
+/** One folder's visible child directories, as absolute paths. */
+export interface DirectoryListing {
+  path: string;
+  parent?: string;
+  directories: string[];
+}
 
 /**
  * Query parameter that routes a package API request to one session's server.

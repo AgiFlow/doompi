@@ -22,6 +22,7 @@ function asWorkspace(value: unknown): WorkspaceSummary | undefined {
   return {
     id: value.id,
     root: value.root,
+    ...(typeof value.name === 'string' && value.name !== '' ? { name: value.name } : {}),
     ...(typeof value.available === 'boolean' ? { available: value.available } : {}),
     ...(typeof value.error === 'string' ? { error: value.error } : {}),
   };

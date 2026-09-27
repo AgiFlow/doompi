@@ -63,7 +63,7 @@ export function AddWorkspaceDialog({
     if (busy || root.trim() === '') return;
     setBusy(true);
     setError('');
-    const outcome = await admitWorkspace(directory);
+    const outcome = await admitWorkspace({ root: directory });
     if ('error' in outcome) {
       setError(outcome.error);
       setBusy(false);

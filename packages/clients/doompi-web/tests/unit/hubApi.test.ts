@@ -7,6 +7,7 @@ import {
   admitWorkspace,
   createSession,
   createWorkspaceSession,
+  listDirectory,
   listSessionHistory,
   listWorkspaceHistory,
   listWorkspaces,
@@ -38,7 +39,7 @@ describe('workspace sessions', () => {
     await expect(listWorkspaces()).resolves.toEqual({
       workspaces: [{ id: 'one', root: '/one', available: true }],
     });
-    await expect(admitWorkspace('/two')).resolves.toEqual({
+    await expect(admitWorkspace({ root: '/two' })).resolves.toEqual({
       workspace: { id: 'two', root: '/two', available: true },
     });
     expect(fetchMock).toHaveBeenLastCalledWith('/api/workspaces', {
@@ -46,6 +47,23 @@ describe('workspace sessions', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: '/two' }),
     });
+  });
+
+  it('admits a workspace by name alone and keeps the returned name', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        respond(201, { workspace: { id: 'new', root: '/home/.pi/.doom/workspace/Notes', name: 'Notes' } }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(admitWorkspace({ name: 'Notes' })).resolves.toEqual({
+      workspace: { id: 'new', root: '/home/.pi/.doom/workspace/Notes', name: 'Notes' },
+    });
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/workspaces',
+      expect.objectContaining({ body: '{"name":"Notes"}' }),
+    );
   });
 
   it('unregisters a workspace through its workspace route', async () => {
@@ -307,5 +325,30 @@ describe('searchDirectories', () => {
     await expect(searchDirectories('/x')).resolves.toEqual([]);
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
     await expect(searchDirectories('/x')).resolves.toEqual([]);
+  });
+});
+describe('listDirectory', () => {
+  it('lists home when no folder is given and a named folder otherwise', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(respond(200, { path: '/home/me', parent: '/home', directories: ['/home/me/code', 3] }))
+      .mockResolvedValueOnce(respond(200, { path: '/', directories: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(listDirectory()).resolves.toEqual({
+      path: '/home/me',
+      parent: '/home',
+      directories: ['/home/me/code'],
+    });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/directories/children', undefined);
+    await expect(listDirectory('/')).resolves.toEqual({ path: '/', directories: [] });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/directories/children?path=%2F', undefined);
+  });
+
+  it('relays an unreadable folder and an unreachable hub as errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respond(404, { error: 'That folder cannot be read.' })));
+    await expect(listDirectory('/nope')).resolves.toEqual({ error: 'That folder cannot be read.' });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
+    await expect(listDirectory('/nope')).resolves.toEqual({ error: 'The cockpit hub is unreachable.' });
   });
 });

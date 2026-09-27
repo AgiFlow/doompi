@@ -241,7 +241,7 @@ export const headlessHttpContracts: DoomHttpContract[] = [
   ),
   host('workspaces.list', '/api/workspaces', 'GET', Type.Object({ workspaces: Type.Array(Workspace) })),
   host('workspaces.admit', '/api/workspaces', 'POST', Type.Object({ workspace: Workspace }), {
-    body: body(Type.Object({ root: Text })),
+    body: body(Type.Object({ root: Optional(Text), name: Optional(Text) })),
     responses: jsonApiResponses(Type.Object({ workspace: Workspace }), 201),
   }),
   host('workspaces.get', '/api/workspaces/{workspaceId}', 'GET', Type.Object({ workspace: Workspace })),

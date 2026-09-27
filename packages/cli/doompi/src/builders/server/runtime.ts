@@ -53,6 +53,7 @@ import { readSyncState } from '../../composition/syncState';
 import { readRegisteredBootstrapStatus } from '../cli/bootstrapLocator';
 import { buildHarnessContext } from '../cli/harnessContext';
 import { createComputerUseBinding } from './computerUseBinding';
+import { createDefaultWorkspaceFolder } from './defaultWorkspace';
 import { ensureGlobalLogSink } from './logSink';
 import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { resolveSessionIdentity } from './sessionArguments';
@@ -248,14 +249,21 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   ) => Promise<DoomHubSessionScope> = async () => {
     throw new Error('The cockpit session service is not ready.');
   };
-  let admitWorkspace: (root: string) => Promise<{ id: string; root: string; available: boolean }> = async () => {
+  let admitWorkspace: (
+    root: string,
+    name?: string,
+  ) => Promise<{ id: string; root: string; name?: string; available: boolean }> = async () => {
     throw new Error('Workspace admission is not ready.');
   };
   const computerUse = await createComputerUseBinding();
   let hub!: HeadlessHub;
   hub = createHeadlessHub({
     manager: sessionManager,
-    admitWorkspace: (root) => admitWorkspace(root),
+    admitWorkspace: async ({ root, name }) =>
+      admitWorkspace(
+        root === undefined || root.trim() === '' ? await createDefaultWorkspaceFolder(name ?? '', homeDirectory) : root,
+        name,
+      ),
     onWorkspaceRemoved: (workspaceId) => {
       workspaces.remove(workspaceId);
       webCompositions?.remove({ scope: 'workspace', workspaceId });
@@ -412,11 +420,11 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         readSyncRegistration(globalRoot, homeDirectory)!,
         hub.channelTypes(),
       );
-      const admissions = new Map<string, Promise<{ id: string; root: string; available: boolean }>>();
+      const admissions = new Map<string, Promise<{ id: string; root: string; name?: string; available: boolean }>>();
       // A member checkout is any checkout other than its workspace root, such as a worktree.
       const isMemberCheckout = (from: string, workspace: { root: string }): boolean =>
         fs.realpathSync(findRepositoryRoot(from)) !== workspace.root;
-      admitWorkspace = async (from) => {
+      admitWorkspace = async (from, requestedName) => {
         const checkoutRoot = fs.realpathSync(findRepositoryRoot(from));
         // Ids are persisted, never re-derived from the path: a checkout of an admitted repository
         // joins its workspace, and a repository that moved keeps its id and sessions.
@@ -425,15 +433,25 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           checkoutRoot,
           marker: readWorkspaceMarker(checkoutRoot),
         });
+        const record = workspaces.list().find((workspace) => workspace.id === id);
+        // A name given now replaces the stored one; readmitting without a name keeps it.
+        const name = requestedName?.trim() || record?.name;
+        const named = name === undefined ? {} : { name };
+        const renamed = record !== undefined && name !== record.name;
         const existing = hub.workspaces().find((workspace) => workspace.id === id);
-        if (existing !== undefined && existing.available !== false && existing.root === root)
-          return { ...existing, available: true };
+        if (existing !== undefined && existing.available !== false && existing.root === root) {
+          if (renamed) {
+            workspaces.add({ id, root, ...named });
+            hub.registerWorkspace({ ...existing, ...named, available: true });
+          }
+          return { ...existing, ...named, available: true };
+        }
         const pending = admissions.get(id);
         if (pending) return pending;
-        const wasRemembered = workspaces.list().some((workspace) => workspace.id === id);
-        if (!wasRemembered || moved) workspaces.add({ id, root });
+        const wasRemembered = record !== undefined;
+        if (!wasRemembered || moved || renamed) workspaces.add({ id, root, ...named });
         if (moved) notice(`Workspace '${id}' moved to '${root}'.`);
-        hub.registerWorkspace({ id, root, available: false });
+        hub.registerWorkspace({ id, root, ...named, available: false });
         const admission = (async () => {
           const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: root };
           for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete syncEnvironment[key];
@@ -459,7 +477,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               `Workspace '${root}' id could not be recorded in its git data: ${error instanceof Error ? error.message : String(error)}`,
             );
           }
-          return { id, root, available: true };
+          return { id, root, ...named, available: true };
         })();
         admissions.set(id, admission);
         try {

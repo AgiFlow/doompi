@@ -3,7 +3,9 @@ import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 
 import {
   DIRECTORIES_API_ROUTE,
+  DIRECTORY_CHILDREN_API_ROUTE,
   WORKSPACES_API_ROUTE,
+  type DirectoryListing,
   type PiSessionHistoryItem,
   type SessionSummary,
   type WorkspaceSummary,
@@ -19,11 +21,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Lists one server folder's visible child directories for the workspace folder browser. */
+export async function listDirectory(folder?: string): Promise<DirectoryListing | { error: string }> {
+  try {
+    const query = folder === undefined ? '' : `?path=${encodeURIComponent(folder)}`;
+    const response = await sealedHttpSession.fetch(`${DIRECTORY_CHILDREN_API_ROUTE}${query}`);
+    const body: unknown = await response.json().catch(() => undefined);
+    if (response.ok && isRecord(body) && typeof body.path === 'string' && Array.isArray(body.directories)) {
+      return {
+        path: body.path,
+        ...(typeof body.parent === 'string' ? { parent: body.parent } : {}),
+        directories: body.directories.filter((entry): entry is string => typeof entry === 'string'),
+      };
+    }
+    return {
+      error: isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`,
+    };
+  } catch {
+    return { error: 'The cockpit hub is unreachable.' };
+  }
+}
+
 function asWorkspace(value: unknown): WorkspaceSummary | undefined {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.root !== 'string') return undefined;
   return {
     id: value.id,
     root: value.root,
+    ...(typeof value.name === 'string' && value.name !== '' ? { name: value.name } : {}),
     ...(typeof value.available === 'boolean' ? { available: value.available } : {}),
     ...(typeof value.error === 'string' ? { error: value.error } : {}),
   };
@@ -46,13 +70,16 @@ export async function listWorkspaces(): Promise<WorkspacesResult> {
   }
 }
 
-/** Admits a server-side repository root without starting a session. */
-export async function admitWorkspace(root: string): Promise<WorkspaceResult> {
+/**
+ * Admits a server-side repository root without starting a session. A name alone
+ * asks the server to create the workspace in its default folder.
+ */
+export async function admitWorkspace(input: { root?: string; name?: string }): Promise<WorkspaceResult> {
   try {
     const response = await fetchWithStepUp(WORKSPACES_API_ROUTE, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ root }),
+      body: JSON.stringify(input),
     });
     const body: unknown = await response.json().catch(() => undefined);
     const workspace = isRecord(body) ? asWorkspace(body.workspace) : undefined;
@@ -121,7 +148,7 @@ export async function createWorkspaceSession(
 
 /** Compatibility flow for callers that have not admitted a workspace yet. */
 export async function createSession(input: { cwd: string; name?: string }): Promise<CreateSessionResult> {
-  const admission = await admitWorkspace(input.cwd);
+  const admission = await admitWorkspace({ root: input.cwd });
   if ('error' in admission) return admission;
   return createWorkspaceSession(admission.workspace.id, { name: input.name });
 }

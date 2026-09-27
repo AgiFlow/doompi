@@ -71,6 +71,12 @@ export interface HeadlessWorkspace {
   readonly available?: boolean;
 }
 
+/** A workspace to admit: an existing folder, or a name alone for a new default folder. */
+export interface HeadlessWorkspaceAdmission {
+  readonly root?: string;
+  readonly name?: string;
+}
+
 export type HeadlessHubEvent =
   | { kind: 'upsert'; session: HeadlessHubSession }
   | { kind: 'removed'; sessionId: string }
@@ -88,7 +94,7 @@ export interface HeadlessHubOptions {
   sessionReservations?: DoomHubSessionReservations;
   requestSessionApi?: (scope: DoomHubSessionScope, request: DoomHubSessionApiRequest) => Promise<Response>;
   computerUse?: DoomComputerUseHostBinding;
-  admitWorkspace?: (root: string) => Promise<HeadlessWorkspace>;
+  admitWorkspace?: (request: HeadlessWorkspaceAdmission) => Promise<HeadlessWorkspace>;
   onWorkspaceRemoved?: (workspaceId: string) => void;
   /** Reads a session cwd's git status; defaults to the git CLI. */
   readGitStatus?: (cwd: string) => Promise<SessionGitStatus | undefined>;
@@ -117,7 +123,7 @@ export interface HeadlessHub {
   mountFacets(facets: readonly (DoomServerFacet | LoadedServerFacet)[], context?: DoomApiContext): Promise<void>;
   workspaces(): readonly HeadlessWorkspace[];
   registerWorkspace(workspace: HeadlessWorkspace): void;
-  admitWorkspace(root: string): Promise<HeadlessWorkspace>;
+  admitWorkspace(request: HeadlessWorkspaceAdmission): Promise<HeadlessWorkspace>;
   removeWorkspace(workspaceId: string): Promise<void>;
   requestApi(mount: DoomApiMount, basePath: string, request: Request): Promise<Response>;
   /** The dispatch table hub facets mount into, shared with session hosts this hub serves. */
@@ -816,9 +822,9 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       workspaces.set(workspace.id, workspace);
       emit({ kind: 'workspace_upsert', workspace });
     },
-    admitWorkspace: async (root) => {
+    admitWorkspace: async (request) => {
       if (!options.admitWorkspace) throw new Error('Workspace admission is unavailable.');
-      return options.admitWorkspace(root);
+      return options.admitWorkspace(request);
     },
     async removeWorkspace(id) {
       if ([...sessions.values()].some((session) => session.workspaceId === id))

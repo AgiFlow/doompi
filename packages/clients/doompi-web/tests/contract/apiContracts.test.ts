@@ -54,7 +54,7 @@ async function server() {
       closeSession: async () => undefined,
       close: async () => undefined,
     },
-    admitWorkspace: async (root) => ({ id: 'test-workspace', root }),
+    admitWorkspace: async ({ root }) => ({ id: 'test-workspace', root: root ?? '' }),
     createSession: async (request) => ({ sessionId: 'created-session', cwd: request.cwd }),
   });
   await hub.mountFacets([], {

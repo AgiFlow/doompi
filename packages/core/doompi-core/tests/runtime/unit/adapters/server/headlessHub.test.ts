@@ -133,7 +133,7 @@ describe('createHeadlessHub', () => {
       } as never,
       onNotice: (notice) => notices.push(notice),
     });
-    await expect(hub.admitWorkspace('/repo')).rejects.toThrow('unavailable');
+    await expect(hub.admitWorkspace({ root: '/repo' })).rejects.toThrow('unavailable');
     await expect(hub.mountFacets([], { scope: 'session', sessionId: 'one', onNotice: vi.fn() })).rejects.toThrow(
       'Session facets belong',
     );
