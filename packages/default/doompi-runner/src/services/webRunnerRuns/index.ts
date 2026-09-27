@@ -34,6 +34,9 @@ export function toRunnerRunView(record: RunnerRecord): RunnerRunView {
             reason: record.exit.reason,
             code: record.exit.code,
             signal: record.exit.signal,
+            ...(record.exit.terminationReason === undefined
+              ? {}
+              : { terminationReason: record.exit.terminationReason }),
             ...(record.exit.stopReason === undefined ? {} : { stopReason: record.exit.stopReason }),
             finishedAt: record.exit.finishedAt,
           },

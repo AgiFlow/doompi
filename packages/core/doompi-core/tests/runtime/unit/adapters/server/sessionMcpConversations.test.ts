@@ -431,7 +431,13 @@ describe('conversation-bound Session MCP routing', () => {
     const f = fixture();
     const listed = (await f.rpc('tools/list')).result!.tools as { name: string }[];
     expect(listed.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining(['load_extra_tools', 'use_extra_tools', 'load_context', 'load_skill']),
+      expect.arrayContaining([
+        'load_extra_tools',
+        'use_extra_tools',
+        'session_capabilities',
+        'load_context',
+        'load_skill',
+      ]),
     );
     expect(listed.some((tool) => tool.name === 'child_action')).toBe(false);
     expect(f.store.list()).toHaveLength(0);
@@ -456,6 +462,15 @@ describe('conversation-bound Session MCP routing', () => {
       ...original,
       tools: [...original.tools, childTool],
       skills: [...original.skills, { name: 'child-guide', description: 'Child guidance', uri: 'doompi://child-guide' }],
+    });
+    const capabilities = await f.call('a', 'session_capabilities', {});
+    expect(capabilities.result?.structuredContent).toMatchObject({
+      sessionId: record.id,
+      baseline: 'available',
+      inventory: 'active_surface',
+      discovery: 'unknown',
+      tools: expect.arrayContaining([expect.objectContaining({ name: 'child_action' })]),
+      skills: expect.arrayContaining([{ name: 'child-guide', description: 'Child guidance' }]),
     });
     const discovered = await f.call('a', 'load_extra_tools', {});
     expect(discovered.result?.isError).toBe(false);
@@ -537,6 +552,78 @@ describe('conversation-bound Session MCP routing', () => {
     bSurface.readSurface = () => originalB;
     expect(f.surfaces.get('parent')!.invokeTool).not.toHaveBeenCalled();
   });
+  it('cancels signed-URL calls across HTTP requests without crossing clients, conversations, or request IDs', async () => {
+    const f = fixture('conversation', false, true);
+    const createUrl = async () => {
+      const response = await f.host('POST', '/clients', { authMethod: 'url_token', scope: 'session' });
+      expect(response!.status).toBe(201);
+      return ((await response!.json()) as { client: { connectionUrl: string } }).client.connectionUrl;
+    };
+    const firstUrl = await createUrl();
+    const secondUrl = await createUrl();
+    const signals: AbortSignal[] = [];
+    const releases: (() => void)[] = [];
+    const invoke = vi.fn(async (invocation: SessionToolInvocation) => {
+      signals.push(invocation.signal!);
+      await new Promise<void>((resolve) => releases.push(resolve));
+      return { content: [{ type: 'text' as const, text: 'done' }] };
+    });
+    const send = async (url: string, method: string, id: string | number, chat?: string) =>
+      f.routes.handlePublic(
+        await modernMcpRequest(
+          new Request(url, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              ...(method === 'tools/call' ? { id } : {}),
+              method,
+              params: {
+                ...(method === 'tools/call' ? { name: 'load_context', arguments: {} } : { requestId: id }),
+                ...(chat === undefined ? {} : { _meta: { 'openai/session': chat } }),
+              },
+            }),
+          }),
+        ),
+      );
+    for (const [url, chat] of [
+      [firstUrl, 'a'],
+      [firstUrl, 'b'],
+      [secondUrl, 'a'],
+    ] as const) {
+      const response = await send(url, 'tools/call', 1, chat);
+      expect(response!.status).toBe(200);
+      await response!.json();
+    }
+    for (const record of f.store.list()) f.surfaces.get(record.id)!.invokeTool = invoke;
+    const calls = [
+      send(firstUrl, 'tools/call', 1, 'a'),
+      send(firstUrl, 'tools/call', 1, 'b'),
+      send(secondUrl, 'tools/call', 1, 'a'),
+    ];
+    try {
+      await vi.waitFor(() => expect(signals).toHaveLength(3));
+      expect(await (await send(firstUrl, 'tools/call', 1, 'a'))!.json()).toMatchObject({ error: { code: -32600 } });
+      expect(signals).toHaveLength(3);
+      expect((await send(firstUrl, 'notifications/cancelled', '1', 'a'))!.status).toBe(202);
+      expect((await send(firstUrl, 'notifications/cancelled', 1))!.status).toBe(202);
+      expect(signals.every((signal) => !signal.aborted)).toBe(true);
+      expect((await send(firstUrl, 'notifications/cancelled', 1, 'a'))!.status).toBe(202);
+      expect(signals.map((signal) => signal.aborted)).toEqual([true, false, false]);
+      expect((await send(firstUrl, 'notifications/cancelled', 1, 'b'))!.status).toBe(202);
+      expect(signals.map((signal) => signal.aborted)).toEqual([true, true, false]);
+      expect((await send(secondUrl, 'notifications/cancelled', 1, 'a'))!.status).toBe(202);
+      expect(signals[2]!.aborted).toBe(true);
+    } finally {
+      releases.forEach((release) => release());
+      await Promise.all(calls);
+    }
+    invoke.mockResolvedValue({ content: [{ type: 'text', text: 'reused' }] });
+    expect(await (await send(firstUrl, 'tools/call', 1, 'a'))!.json()).toMatchObject({
+      result: { content: [{ text: 'reused' }] },
+    });
+  });
+
   it('retains a signed URL baseline across independent HTTP handlers', async () => {
     const f = fixture();
     const created = await f.host('POST', '/clients', { authMethod: 'url_token', scope: 'session' });

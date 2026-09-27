@@ -25,7 +25,6 @@ import {
   HISTORY_SWEEP_INTERVAL_MS,
   LEADER_GROUP_ORDER,
   LEADER_SOURCE,
-  RMUX_BACKEND,
   RUNNER_FINISHED_MESSAGE,
   RUNNER_FOOTER_ORDER,
   RUNNER_STATUS_KEY,
@@ -376,7 +375,14 @@ export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
     await Promise.all(
       owned.map(async (record) => {
         try {
-          const stopped = await stopRunnerProcess(record, launcher, rmuxBackend);
+          const stopped = await stopRunnerProcess(record, launcher, rmuxBackend, {
+            registry,
+            intent: {
+              reason: 'stopped',
+              terminationReason: 'parent_session_cleanup',
+              stopReason: 'session ended',
+            },
+          });
           if (!stopped && processControl.isAlive(record.pid)) {
             process.emitWarning(`Could not stop runner ${record.id} during session shutdown`);
             return;
@@ -434,9 +440,15 @@ export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
     if (!isCurrent(generation, activeSessionId)) return false;
     const record = runners.find((candidate) => candidate.id === id);
     if (!record) return false;
-    if (record.backend === RMUX_BACKEND && record.backendTarget) {
-      await rmuxBackend.stop(record.backendTarget, record.pid);
-    } else await launcher.stop(record.pid);
+    const stopped = await stopRunnerProcess(record, launcher, rmuxBackend, {
+      registry,
+      intent: {
+        reason: STOPPED_REASON,
+        terminationReason: 'user_stop',
+        ...(reason ? { stopReason: reason } : {}),
+      },
+    });
+    if (!stopped && processControl.isAlive(record.pid)) return false;
     if (!isCurrent(generation, activeSessionId)) return true;
     await registry.complete(
       record.id,

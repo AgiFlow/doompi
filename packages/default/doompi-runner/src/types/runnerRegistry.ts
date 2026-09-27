@@ -9,10 +9,24 @@ export type RunnerExitReason =
   | 'launcher_error'
   | 'backend_lost';
 
+export type RunnerTerminationReason =
+  | 'timeout'
+  | 'user_stop'
+  | 'request_cancelled'
+  | 'parent_session_cleanup'
+  | 'owner_lost'
+  | 'external_signal';
+export type RunnerTerminationIntent = {
+  reason: 'stopped' | 'timed_out';
+  terminationReason: Exclude<RunnerTerminationReason, 'external_signal'>;
+  stopReason?: string;
+};
+
 export interface RunnerExit {
   reason: RunnerExitReason;
   code: number | null;
   signal: NodeJS.Signals | null;
+  terminationReason?: RunnerTerminationReason;
   stopReason?: string;
   finishedAt: string;
 }
@@ -36,6 +50,8 @@ export interface RunnerRecord {
   backend: RunnerBackend;
   backendTarget?: string;
   exit?: RunnerExit;
+  /** Persisted before sending a stop signal so other observers retain the caller's intent. */
+  terminationIntent?: RunnerTerminationIntent;
   /** pid of the pi process that launched it, for orphan detection. */
   hostPid: number;
 }
@@ -57,6 +73,7 @@ export interface CompleteRunnerInput {
   reason: RunnerExitReason;
   code: number | null;
   signal: NodeJS.Signals | null;
+  terminationReason?: RunnerTerminationReason;
   stopReason?: string;
 }
 
@@ -74,6 +91,11 @@ export interface IRunnerRegistry {
   listAll(sessionId?: string): Promise<RunnerRecord[]>;
   get(id: string, sessionId?: string): Promise<RunnerRecord | undefined>;
   markPromoted(id: string): Promise<RunnerRecord | undefined>;
+  requestTermination(
+    id: string,
+    intent: RunnerTerminationIntent | undefined,
+    sessionId?: string,
+  ): Promise<RunnerRecord | undefined>;
   complete(id: string, outcome: CompleteRunnerInput, sessionId?: string): Promise<RunnerRecord | undefined>;
   /** Removes the active process entry while retaining run metadata. */
   release(id: string, sessionId?: string): Promise<void>;

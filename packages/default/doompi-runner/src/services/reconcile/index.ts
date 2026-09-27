@@ -4,7 +4,7 @@ import { COMPLETED_STATE } from '../../constants/reconcile';
 import type { ILauncher } from '../../types/launcher';
 import type { IProcessControl } from '../../types/processControl';
 import type { IRmuxBackend } from '../../types/rmuxBackend';
-import type { IRunnerRegistry, RunnerRecord } from '../../types/runnerRegistry';
+import type { IRunnerRegistry, RunnerRecord, RunnerTerminationIntent } from '../../types/runnerRegistry';
 import type { IRunnerPaths } from '../runnerPaths/type';
 
 const MULTIPLEXER_BACKENDS = new Set(['rmux', 'tmux']);
@@ -28,12 +28,15 @@ export async function stopRunnerProcess(
   record: RunnerRecord,
   launcher: ILauncher,
   rmuxBackend: IRmuxBackend,
+  termination?: { registry: IRunnerRegistry; intent: RunnerTerminationIntent },
 ): Promise<boolean> {
-  if (MULTIPLEXER_BACKENDS.has(record.backend) && record.backendTarget) {
-    const stopped = await rmuxBackend.stop(record.backendTarget, record.pid);
-    if (stopped) return true;
-  }
-  return launcher.stop(record.pid);
+  if (termination) await termination.registry.requestTermination(record.id, termination.intent, record.sessionId);
+  const stopped =
+    (MULTIPLEXER_BACKENDS.has(record.backend) && record.backendTarget
+      ? await rmuxBackend.stop(record.backendTarget, record.pid)
+      : false) || (await launcher.stop(record.pid));
+  if (!stopped && termination) await termination.registry.requestTermination(record.id, undefined, record.sessionId);
+  return stopped;
 }
 
 /** Repairs active registry entries that lost their original completion observer. */
@@ -56,9 +59,13 @@ export async function reconcileActiveRunners(dependencies: ReconcileDependencies
         await dependencies.registry.complete(
           record.id,
           {
-            reason: rmuxOutcome.signal ? 'signaled' : rmuxOutcome.code === 0 ? COMPLETED_STATE : 'failed',
+            reason:
+              rmuxOutcome.reason ??
+              (rmuxOutcome.signal ? 'signaled' : rmuxOutcome.code === 0 ? COMPLETED_STATE : 'failed'),
             code: rmuxOutcome.code,
             signal: rmuxOutcome.signal,
+            ...(rmuxOutcome.terminationReason ? { terminationReason: rmuxOutcome.terminationReason } : {}),
+            ...(rmuxOutcome.stopReason ? { stopReason: rmuxOutcome.stopReason } : {}),
           },
           record.sessionId,
         );
@@ -80,7 +87,14 @@ export async function reconcileActiveRunners(dependencies: ReconcileDependencies
       const ownerLost = !dependencies.processControl.isAlive(record.hostPid);
       if (!previousRuntime && !ownerLost) continue;
 
-      const stopped = await stopRunnerProcess(record, dependencies.launcher, dependencies.rmuxBackend);
+      const stopped = await stopRunnerProcess(record, dependencies.launcher, dependencies.rmuxBackend, {
+        registry: dependencies.registry,
+        intent: {
+          reason: 'stopped',
+          terminationReason: ownerLost ? 'owner_lost' : 'parent_session_cleanup',
+          stopReason: 'owner session ended',
+        },
+      });
       if (!stopped && dependencies.processControl.isAlive(record.pid)) {
         result.errors.push(`Could not stop orphaned runner ${record.id}`);
         continue;

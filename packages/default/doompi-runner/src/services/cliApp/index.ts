@@ -108,8 +108,11 @@ async function stop(args: readonly string[], dependencies: CliDependencies): Pro
     dependencies.stderr(`Runner ${record.id} is already ${record.state}`);
     return 1;
   }
-  await stopRecord(record, dependencies);
   const reason = option(args, '--reason');
+  if (!(await stopRecord(record, dependencies, reason))) {
+    dependencies.stderr(`Could not stop runner ${record.id}`);
+    return 1;
+  }
   await dependencies.registry.complete(
     record.id,
     {
@@ -128,8 +131,9 @@ async function stopAll(args: readonly string[], dependencies: CliDependencies): 
   const sessionId = requiredSessionId(dependencies.env);
   const records = await dependencies.registry.listBySession(sessionId);
   const reason = option(args, '--reason');
+  const stopped: RunnerRecord[] = [];
   for (const record of records) {
-    await stopRecord(record, dependencies);
+    if (!(await stopRecord(record, dependencies, reason))) continue;
     await dependencies.registry.complete(
       record.id,
       {
@@ -140,12 +144,17 @@ async function stopAll(args: readonly string[], dependencies: CliDependencies): 
       },
       record.sessionId,
     );
+    stopped.push(record);
   }
   dependencies.stdout(
-    records.length > 0
-      ? `Stopped ${records.length} runner(s) for session ${sessionId}: ${records.map((record) => record.id).join(', ')}`
-      : `No active runners for session ${sessionId}`,
+    records.length === 0
+      ? `No active runners for session ${sessionId}`
+      : `Stopped ${stopped.length} runner(s) for session ${sessionId}: ${stopped.map((record) => record.id).join(', ')}`,
   );
+  if (stopped.length !== records.length) {
+    dependencies.stderr(`Could not stop ${records.length - stopped.length} runner(s) for session ${sessionId}`);
+    return 1;
+  }
   return 0;
 }
 
@@ -201,8 +210,9 @@ function formatExit(record: RunnerRecord): string {
   const exit = record.exit;
   if (!exit) return 'unknown';
   const detail = exit.code !== null ? ` code ${exit.code}` : exit.signal ? ` ${exit.signal}` : '';
+  const attribution = exit.terminationReason ? ` [${exit.terminationReason}]` : '';
   const note = exit.stopReason ? ` (${exit.stopReason})` : '';
-  return `${exit.reason}${detail}${note}`;
+  return `${exit.reason}${detail}${attribution}${note}`;
 }
 
 function option(args: readonly string[], name: string): string | undefined {
@@ -261,11 +271,22 @@ async function follow(record: RunnerRecord, initialSize: number, dependencies: C
   });
 }
 
-async function stopRecord(record: RunnerRecord, dependencies: CliDependencies): Promise<boolean> {
-  if (MULTIPLEXER_BACKENDS.has(record.backend) && record.backendTarget) {
-    return dependencies.rmuxBackend.stop(record.backendTarget, record.pid);
-  }
-  return dependencies.launcher.stop(record.pid);
+async function stopRecord(record: RunnerRecord, dependencies: CliDependencies, reason?: string): Promise<boolean> {
+  await dependencies.registry.requestTermination(
+    record.id,
+    {
+      reason: STOPPED_REASON,
+      terminationReason: 'user_stop',
+      ...(reason ? { stopReason: reason } : {}),
+    },
+    record.sessionId,
+  );
+  const stopped =
+    MULTIPLEXER_BACKENDS.has(record.backend) && record.backendTarget
+      ? await dependencies.rmuxBackend.stop(record.backendTarget, record.pid)
+      : await dependencies.launcher.stop(record.pid);
+  if (!stopped) await dependencies.registry.requestTermination(record.id, undefined, record.sessionId);
+  return stopped;
 }
 
 function help(): string {

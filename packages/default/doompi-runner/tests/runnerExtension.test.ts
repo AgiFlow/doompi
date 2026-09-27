@@ -140,6 +140,7 @@ async function createHarness(options: { activate?: boolean } = {}) {
     listByRootSession: vi.fn(async () => activeRecords),
     listAll: vi.fn(async () => [runningRecord]),
     get: vi.fn(async () => persistedRecord),
+    requestTermination: vi.fn(async () => persistedRecord),
     release: vi.fn(async (id: string) => {
       activeRecords = activeRecords.filter((record) => record.id !== id);
     }),
@@ -572,6 +573,11 @@ describe('runnerExtension refresh', () => {
     );
     expect(harness.notify).toHaveBeenCalledWith('Stopped runner runner-a.', 'info');
     expect(extensionMocks.openRunnerSpace).not.toHaveBeenCalled();
+
+    harness.registry.complete.mockClear();
+    harness.launcher.stop.mockResolvedValueOnce(false);
+    await harness.command()('stop runner-a retry', harness.context);
+    expect(harness.registry.complete).not.toHaveBeenCalled();
 
     await harness.handlers.get('session_shutdown')?.({}, harness.context);
   });

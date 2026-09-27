@@ -104,7 +104,14 @@ export function createHeadlessRunnersCommand(dependencies: RunnerDependencies): 
         await context.client.notify({ body: `No active runner ${request.id} in this session.`, level: 'warning' });
         return;
       }
-      const stopped = await stopRunnerProcess(record, dependencies.launcher, dependencies.rmuxBackend);
+      const stopped = await stopRunnerProcess(record, dependencies.launcher, dependencies.rmuxBackend, {
+        registry: dependencies.runnerRegistry,
+        intent: {
+          reason: 'stopped',
+          terminationReason: 'user_stop',
+          ...(request.reason ? { stopReason: request.reason } : {}),
+        },
+      });
       if (stopped) {
         await dependencies.runnerRegistry.complete(
           request.id,

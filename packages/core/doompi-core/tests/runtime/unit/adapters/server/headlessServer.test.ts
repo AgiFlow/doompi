@@ -316,7 +316,12 @@ describe('serveHeadlessServer', () => {
     await expect(config.json()).resolves.toMatchObject({
       audience: `${publicOrigin}${root}`,
       authorizationEndpoint: `${publicOrigin}/oauth/authorize`,
-      tools: [{ name: 'read' }, { name: 'load_extra_tools' }, { name: 'use_extra_tools' }],
+      tools: [
+        { name: 'read' },
+        { name: 'load_extra_tools' },
+        { name: 'use_extra_tools' },
+        { name: 'session_capabilities' },
+      ],
       skills: [{ name: 'review' }],
     });
     expect(

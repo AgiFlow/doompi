@@ -18,6 +18,7 @@ function registryWith(names: string[], otherSessionNames: string[] = []): IRunne
     listAll: async () => records,
     get: async () => undefined,
     markPromoted: async () => undefined,
+    requestTermination: async () => undefined,
     complete: async () => undefined,
     release: async () => undefined,
     pruneDead: async () => [],

@@ -114,6 +114,7 @@ export class BashRunService implements IBashRunService {
         return this.promote(handle, 'threshold', request.signal);
       }
       if (outcome === ABORTED) {
+        await this.registry.requestTermination(id, { reason: 'stopped', terminationReason: 'request_cancelled' });
         await handle.stop();
         outputUpdates?.flush();
         await this.registry.complete(id, { reason: 'stopped', code: null, signal: 'SIGTERM' });
@@ -132,6 +133,7 @@ export class BashRunService implements IBashRunService {
       if (outcome === DEADLINE) {
         // An explicit timeout means the caller wants the command dead, not
         // supervised, so it is stopped rather than promoted.
+        await this.registry.requestTermination(id, { reason: 'timed_out', terminationReason: 'timeout' });
         await handle.stop();
         outputUpdates?.flush();
         await this.registry.complete(id, { reason: 'timed_out', code: null, signal: 'SIGTERM' });
@@ -153,9 +155,11 @@ export class BashRunService implements IBashRunService {
       }
 
       await this.registry.complete(id, {
-        reason: outcome.signal ? SIGNALED : outcome.code === 0 ? COMPLETED : FAILED,
+        reason: outcome.reason ?? (outcome.signal ? SIGNALED : outcome.code === 0 ? COMPLETED : FAILED),
         code: outcome.code,
         signal: outcome.signal,
+        ...(outcome.terminationReason ? { terminationReason: outcome.terminationReason } : {}),
+        ...(outcome.stopReason ? { stopReason: outcome.stopReason } : {}),
       });
 
       return {
@@ -283,8 +287,9 @@ export class BashRunService implements IBashRunService {
     handle.detach();
     let abortStop: Promise<boolean> | undefined;
     const abort = (): void => {
-      abortStop = handle
-        .stop()
+      abortStop = this.registry
+        .requestTermination(handle.id, { reason: 'stopped', terminationReason: 'request_cancelled' })
+        .then(() => handle.stop())
         .then(async () => {
           await this.registry.complete(handle.id, { reason: 'stopped', code: null, signal: 'SIGTERM' });
           return true;
@@ -305,9 +310,11 @@ export class BashRunService implements IBashRunService {
         async (outcome) => {
           if (await abortStop) return;
           await this.registry.complete(handle.id, {
-            reason: outcome.signal ? SIGNALED : outcome.code === 0 ? COMPLETED : FAILED,
+            reason: outcome.reason ?? (outcome.signal ? SIGNALED : outcome.code === 0 ? COMPLETED : FAILED),
             code: outcome.code,
             signal: outcome.signal,
+            ...(outcome.terminationReason ? { terminationReason: outcome.terminationReason } : {}),
+            ...(outcome.stopReason ? { stopReason: outcome.stopReason } : {}),
           });
         },
         async () => {

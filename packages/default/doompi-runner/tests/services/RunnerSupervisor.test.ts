@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { watchForFile } from '../../src/services/runnerSupervisor';
+import { readExitMetadata, watchForFile } from '../../src/services/runnerSupervisor';
 
 let cleanups: Array<() => void> = [];
 
@@ -19,6 +19,31 @@ function freshDirectory(): string {
   return directory;
 }
 
+describe('readExitMetadata', () => {
+  it('retains explicit owner-loss evidence without inventing a reason from a signal or exit code', () => {
+    const directory = freshDirectory();
+    const target = path.join(directory, 'run.exit.json');
+    fs.writeFileSync(
+      target,
+      JSON.stringify({
+        code: 143,
+        signal: 'SIGTERM',
+        reason: 'stopped',
+        terminationReason: 'owner_lost',
+        stopReason: 'owner session ended',
+      }),
+    );
+    expect(readExitMetadata(target)).toEqual({
+      code: 143,
+      signal: 'SIGTERM',
+      reason: 'stopped',
+      terminationReason: 'owner_lost',
+      stopReason: 'owner session ended',
+    });
+    fs.writeFileSync(target, JSON.stringify({ code: 137, signal: null }));
+    expect(readExitMetadata(target)).toEqual({ code: 137, signal: null });
+  });
+});
 describe('watchForFile', () => {
   it('reports a file that already exists without waiting for an event', async () => {
     const directory = freshDirectory();

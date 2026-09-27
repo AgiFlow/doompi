@@ -23,6 +23,16 @@ const Run = Type.Object({
       reason: literals(['completed', 'failed', 'signaled', 'stopped', 'timed_out', 'launcher_error', 'backend_lost']),
       code: Type.Union([N, Type.Null()]),
       signal: Type.Union([S, Type.Null()]),
+      terminationReason: O(
+        literals([
+          'timeout',
+          'user_stop',
+          'request_cancelled',
+          'parent_session_cleanup',
+          'owner_lost',
+          'external_signal',
+        ]),
+      ),
       stopReason: O(S),
       finishedAt: S,
     }),
