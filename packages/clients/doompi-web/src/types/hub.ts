@@ -66,6 +66,13 @@ export const API_SESSION_QUERY_PARAM = 'session';
 /** What the agent is doing right now, derived from its frame stream. */
 export type SessionPhase = 'idle' | 'turn' | 'compaction' | 'retry';
 
+export interface SessionProfile {
+  name: string;
+  displayName?: string;
+  /** Changes whenever the icon does; absent when the profile has no icon. */
+  iconVersion?: string;
+}
+
 export interface SessionGitStatus {
   branch: string;
   /** True when the working tree has uncommitted changes; rendered as a star. */
@@ -120,6 +127,8 @@ export interface SessionSummary {
   lastSettledAt?: string;
   /** Omitted when the cwd is not a git repository or git is unavailable. */
   git?: SessionGitStatus;
+  /** Selected profile; the icon itself is served by the session avatar route. */
+  profile?: SessionProfile;
   /** Signed plugin composition independently resolved for this session. */
   webComposition?: SessionWebComposition;
   /**

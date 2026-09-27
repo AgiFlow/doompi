@@ -1,3 +1,6 @@
+import { templateRailStub } from '@agimon-ai/doompi-core/webTesting';
+import { TooltipProvider } from '@agimon-ai/doompi-web-components';
+
 import { AdvancedLayout } from './AdvancedLayout';
 
 const slots = {
@@ -49,17 +52,41 @@ export default meta;
 
 export const Playground = {
   render: () => (
-    <div className="h-[720px] w-full max-w-[1180px] bg-doom-bg">
-      <AdvancedLayout
-        view="conversation"
-        slots={slots}
-        navigationOpen={false}
-        desktopActivityOpen
-        mobileActivityOpen={false}
-        onNavigationOpenChange={() => undefined}
-        onDesktopActivityOpenChange={() => undefined}
-        onMobileActivityOpenChange={() => undefined}
-      />
-    </div>
+    <TooltipProvider>
+      <div className="h-[720px] w-full max-w-[1180px] bg-doom-bg">
+        <AdvancedLayout
+          view="conversation"
+          rail={templateRailStub().rail}
+          slots={slots}
+          navigationOpen={false}
+          desktopActivityOpen
+          mobileActivityOpen={false}
+          onNavigationOpenChange={() => undefined}
+          onDesktopActivityOpenChange={() => undefined}
+          onMobileActivityOpenChange={() => undefined}
+        />
+      </div>
+    </TooltipProvider>
+  ),
+};
+
+/** The add-workspace dialog open over the layout, with a suggested folder. */
+export const AddWorkspace = {
+  render: () => (
+    <TooltipProvider>
+      <div className="h-[720px] w-full max-w-[1180px] bg-doom-bg">
+        <AdvancedLayout
+          view="conversation"
+          rail={templateRailStub({ addWorkspace: { suggestedPaths: ['/Users/dev/workspace/doompi'] } }).rail}
+          slots={slots}
+          navigationOpen={false}
+          desktopActivityOpen={false}
+          mobileActivityOpen={false}
+          onNavigationOpenChange={() => undefined}
+          onDesktopActivityOpenChange={() => undefined}
+          onMobileActivityOpenChange={() => undefined}
+        />
+      </div>
+    </TooltipProvider>
   ),
 };

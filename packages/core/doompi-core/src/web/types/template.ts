@@ -77,30 +77,30 @@ export interface WebTemplateRailDirectoryListing {
 
 /** Everything the rail can ask the host to do. Actions that navigate also close a drawer rail. */
 export interface WebTemplateRailActions {
-  openSession(sessionId: string): void;
-  renameSession(sessionId: string, name: string): void;
-  restartSession(sessionId: string): void;
-  removeSession(sessionId: string): WebTemplateRailResult;
+  openSession: (sessionId: string) => void;
+  renameSession: (sessionId: string, name: string) => void;
+  restartSession: (sessionId: string) => void;
+  removeSession: (sessionId: string) => WebTemplateRailResult;
   /** Opens the host's history dialog for one session. */
-  resumeSession(sessionId: string): void;
+  resumeSession: (sessionId: string) => void;
   /** Opens the host's new-session dialog for a workspace. */
-  createSession(workspaceId: string): void;
-  resumeInWorkspace(workspaceId: string): void;
-  openWorkspaceSettings(workspaceId: string): void;
-  deleteWorkspace(workspaceId: string): WebTemplateRailResult;
-  openAddWorkspace(): void;
-  closeAddWorkspace(): void;
+  createSession: (workspaceId: string) => void;
+  resumeInWorkspace: (workspaceId: string) => void;
+  openWorkspaceSettings: (workspaceId: string) => void;
+  deleteWorkspace: (workspaceId: string) => WebTemplateRailResult;
+  openAddWorkspace: () => void;
+  closeAddWorkspace: () => void;
   /** Admits a folder, or with no path creates `~/.pi/.doom/workspace/<name>`. The host closes the dialog on success. */
-  addWorkspace(input: { name: string; path?: string }): WebTemplateRailResult;
-  searchDirectories(query: string): Promise<readonly string[]>;
+  addWorkspace: (input: { name: string; path?: string }) => WebTemplateRailResult;
+  searchDirectories: (query: string) => Promise<readonly string[]>;
   /** Lists a folder's visible child directories; home when no path is given. */
-  listDirectory(path?: string): Promise<WebTemplateRailDirectoryListing | { error: string }>;
-  removePendingSetup(sessionId: string, setupId: string): WebTemplateRailResult;
-  openSettings(): void;
-  openRemoteAccess(): void;
-  turnRemoteAccessOff(): void;
+  listDirectory: (path?: string) => Promise<WebTemplateRailDirectoryListing | { error: string }>;
+  removePendingSetup: (sessionId: string, setupId: string) => WebTemplateRailResult;
+  openSettings: () => void;
+  openRemoteAccess: () => void;
+  turnRemoteAccessOff: () => void;
   /** Plugin menu items for a session; render first inside the session menu's content. */
-  renderSessionMenuItems(sessionId: string): ReactNode;
+  renderSessionMenuItems: (sessionId: string) => ReactNode;
 }
 
 /**

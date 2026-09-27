@@ -4,7 +4,8 @@ import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 
 import { TemplateHost } from '../components/TemplateHost';
-import { SessionRail } from '../features/sessions/SessionRail';
+import { SessionRailDialogs } from '../features/sessions/SessionRailDialogs';
+import { useSessionRail } from '../features/sessions/useSessionRail';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings';
 import { ContributedSettings } from '../features/settings/ContributedSettings';
 import { ImageSettings } from '../features/settings/ImageSettings';
@@ -36,6 +37,7 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const [railOpen, setRailOpen] = useState(false);
+  const rail = useSessionRail({ onDismiss: () => setRailOpen(false) });
   const [loadError, setLoadError] = useState<string>();
   const [repositoryReady, setRepositoryReady] = useState(false);
   const [templateTarget, setTemplateTarget] = useState('global');
@@ -75,8 +77,9 @@ export function SettingsPage() {
         onNavigationOpenChange={setRailOpen}
         onDesktopActivityOpenChange={() => {}}
         onMobileActivityOpenChange={() => {}}
+        rail={rail}
         slots={{
-          navigation: <SessionRail onDismiss={() => setRailOpen(false)} />,
+          navigation: null,
           notices: null,
           composer: null,
           controls: null,
@@ -191,6 +194,7 @@ export function SettingsPage() {
             ),
         }}
       />
+      <SessionRailDialogs />
     </div>
   );
 }

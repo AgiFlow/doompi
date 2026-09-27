@@ -1,3 +1,5 @@
+import { templateRailStub } from '@agimon-ai/doompi-core/webTesting';
+
 import { ElegantLayout } from './ElegantLayout';
 
 const slots = {
@@ -43,8 +45,28 @@ export const Playground = {
     <div className="h-[720px] w-full max-w-[1180px] bg-doom-bg">
       <ElegantLayout
         view="conversation"
+        rail={templateRailStub().rail}
         slots={slots}
         navigationOpen={false}
+        desktopActivityOpen={false}
+        mobileActivityOpen={false}
+        onNavigationOpenChange={() => undefined}
+        onDesktopActivityOpenChange={() => undefined}
+        onMobileActivityOpenChange={() => undefined}
+      />
+    </div>
+  ),
+};
+
+/** The session drawer open, showing the template's own rail. */
+export const SessionsOpen = {
+  render: () => (
+    <div className="h-[720px] w-full max-w-[1180px] bg-doom-bg">
+      <ElegantLayout
+        view="conversation"
+        rail={templateRailStub().rail}
+        slots={slots}
+        navigationOpen
         desktopActivityOpen={false}
         mobileActivityOpen={false}
         onNavigationOpenChange={() => undefined}

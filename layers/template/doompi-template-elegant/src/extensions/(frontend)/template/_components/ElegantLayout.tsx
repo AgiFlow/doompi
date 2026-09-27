@@ -1,10 +1,14 @@
 import type { WebTemplateProps } from '@agimon-ai/doompi-core/web';
 import { Drawer } from '@agimon-ai/doompi-web-components';
 
+import { ElegantAddWorkspaceDialog } from './ElegantAddWorkspaceDialog';
+import { ElegantRail } from './ElegantRail';
+
 /** A conversation-first frame, with the same host capabilities available on demand. */
 export function ElegantLayout({
   view,
   slots,
+  rail,
   navigationOpen,
   mobileActivityOpen,
   onNavigationOpenChange,
@@ -21,7 +25,7 @@ export function ElegantLayout({
         data-testid="session-rail-panel"
         backdropTestId="mobile-drawer-backdrop"
       >
-        {slots.navigation}
+        {rail ? <ElegantRail rail={rail} /> : slots.navigation}
       </Drawer>
       {slots.notices}
       {slots.header({ navigationToggle: 'always', activityToggle: 'always' })}
@@ -66,6 +70,9 @@ export function ElegantLayout({
           {slots.activity}
         </Drawer>
       )}
+      {rail?.addWorkspace ? (
+        <ElegantAddWorkspaceDialog suggestedPaths={rail.addWorkspace.suggestedPaths} actions={rail.actions} />
+      ) : null}
     </div>
   );
 }

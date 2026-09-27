@@ -7,7 +7,8 @@ import { ActivityDock } from '../features/activity/ActivityDock';
 import { SelectionBar } from '../features/selection/SelectionBar';
 import { Composer } from '../features/session/Composer';
 import { Timeline } from '../features/session/Timeline';
-import { SessionRail } from '../features/sessions/SessionRail';
+import { SessionRailDialogs } from '../features/sessions/SessionRailDialogs';
+import { useSessionRail } from '../features/sessions/useSessionRail';
 import { WelcomePanel } from '../features/sessions/WelcomePanel';
 import { TopBar } from '../features/status/TopBar';
 import { pluginActivityGroups, webTabs } from '../lib/pluginRegistry';
@@ -104,6 +105,8 @@ export function CockpitPage() {
     }
   }, [hydrated, sessionId, tabId, tab, order, navigate]);
 
+  const rail = useSessionRail({ onDismiss: () => setRailOpen(false) });
+
   const closeActivity = (): void => {
     if (mobileActivityOpen) setMobileActivityOpen(false);
     else setDockOpen(false);
@@ -126,8 +129,9 @@ export function CockpitPage() {
         onNavigationOpenChange={setRailOpen}
         onDesktopActivityOpenChange={setDockOpen}
         onMobileActivityOpenChange={setMobileActivityOpen}
+        rail={rail}
         slots={{
-          navigation: <SessionRail onDismiss={() => setRailOpen(false)} />,
+          navigation: null,
           header: (options) => (
             <TopBar
               {...options}
@@ -158,6 +162,7 @@ export function CockpitPage() {
           activity: <ActivityDock onClose={closeActivity} onOpenContent={() => setMobileActivityOpen(false)} />,
         }}
       />
+      <SessionRailDialogs />
     </div>
   );
 }
