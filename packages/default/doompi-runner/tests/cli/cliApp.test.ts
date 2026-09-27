@@ -57,6 +57,7 @@ function harness(
     get: async (id, sessionId) =>
       records.find((entry) => entry.id === id && (!sessionId || entry.sessionId === sessionId)),
     markPromoted: async () => undefined,
+    requestTermination: async (id) => records.find((entry) => entry.id === id),
     complete: async (id) => {
       completed.push(id);
       return records.find((entry) => entry.id === id);
@@ -161,6 +162,7 @@ describe('doom-runner CLI', () => {
           reason: 'stopped',
           code: null,
           signal: 'SIGTERM',
+          terminationReason: 'parent_session_cleanup',
           stopReason: 'session ended',
           finishedAt: '2026-08-03T00:01:00.000Z',
         },
@@ -170,7 +172,7 @@ describe('doom-runner CLI', () => {
     await expect(runCli(['status', record().id], run.dependencies)).resolves.toBe(0);
 
     expect(run.output[0]).toContain('Backend target: doom-runner-id');
-    expect(run.output[0]).toContain('stopped SIGTERM (session ended)');
+    expect(run.output[0]).toContain('stopped SIGTERM [parent_session_cleanup] (session ended)');
   });
 
   it('shows a numeric exit code without an optional note', async () => {
@@ -310,6 +312,17 @@ describe('doom-runner CLI', () => {
 
     expect(run.rmuxStopped).toEqual(['doom-runner-id']);
     expect(run.completed).toEqual([rmux.id]);
+  });
+
+  it('keeps a runner active when its stop backend fails', async () => {
+    const active = record();
+    const run = harness([active]);
+    run.dependencies.launcher.stop = async () => false;
+
+    await expect(runCli(['stop', active.id], run.dependencies)).resolves.toBe(1);
+
+    expect(run.completed).toEqual([]);
+    expect(run.errors).toContain(`Could not stop runner ${active.id}`);
   });
 
   it('does not stop an already completed runner', async () => {

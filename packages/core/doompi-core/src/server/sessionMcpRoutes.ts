@@ -18,6 +18,7 @@ import {
   SESSION_MCP_EXTRA_TOOLS,
   type SessionMcpBaseline,
   type SessionMcpHttpHandler,
+  type SessionMcpOperationRegistry,
 } from './sessionMcpHandler';
 
 const AUTHORIZATION_SERVER_DISCOVERY = '/.well-known/oauth-authorization-server';
@@ -167,6 +168,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       host: HeadlessHubSession['host'];
       generation: number;
       handlers: Map<string, SessionMcpHttpHandler>;
+      operations: SessionMcpOperationRegistry;
       baselines: Map<string, SessionMcpBaseline>;
     }
   >();
@@ -176,15 +178,23 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
   const revokeIncarnation = (sessionId: string, generation: number): void => {
     authorization.revokeSessionGeneration(sessionId, generation);
   };
+  const abortOperations = (operations: SessionMcpOperationRegistry): void => {
+    for (const operation of operations.values()) operation.controller.abort();
+    operations.clear();
+  };
   const register = (session: HeadlessHubSession): boolean => {
     const current = incarnations.get(session.id);
     if (current?.host === session.host) return false;
-    if (current !== undefined) revokeIncarnation(session.id, current.generation);
+    if (current !== undefined) {
+      revokeIncarnation(session.id, current.generation);
+      abortOperations(current.operations);
+    }
     incarnations.set(session.id, {
       host: session.host,
       generation: nextGeneration++,
       handlers: new Map(),
       baselines: new Map(),
+      operations: new Map(),
     });
     return true;
   };
@@ -193,7 +203,10 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     if (event.kind === 'upsert' && register(event.session)) publishPending();
     if (event.kind === 'removed') {
       const current = incarnations.get(event.sessionId);
-      if (current !== undefined) revokeIncarnation(event.sessionId, current.generation);
+      if (current !== undefined) {
+        revokeIncarnation(event.sessionId, current.generation);
+        abortOperations(current.operations);
+      }
       incarnations.delete(event.sessionId);
     }
   });
@@ -215,6 +228,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       for (const incarnation of incarnations.values()) {
         incarnation.handlers.clear();
         incarnation.baselines.clear();
+        abortOperations(incarnation.operations);
       }
     }
     observedOrigin = current;
@@ -473,7 +487,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
           baselines: incarnation?.baselines ?? new Map(),
           authorization,
           onNotice: options.onNotice,
-          ...(pathToken === undefined ? {} : { pathToken }),
+          ...(pathToken === undefined ? {} : { pathToken, operations: incarnation?.operations }),
           resolveConversation: async (grant, digest, reserve, signal) => {
             const store = requireStore();
             let record = reserve
@@ -924,7 +938,10 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     },
     close() {
       unsubscribe();
-      for (const [sessionId, incarnation] of incarnations) revokeIncarnation(sessionId, incarnation.generation);
+      for (const [sessionId, incarnation] of incarnations) {
+        revokeIncarnation(sessionId, incarnation.generation);
+        abortOperations(incarnation.operations);
+      }
       incarnations.clear();
     },
   };

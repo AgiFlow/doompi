@@ -110,6 +110,44 @@ describe('RunnerRegistry', () => {
     });
   });
 
+  it('preserves trusted termination evidence when completion observes only process state', async () => {
+    const owner = registryFor('/repo/main');
+    const observer = registryFor('/repo/main');
+    await owner.register(inputFor('timeout', 1));
+    await owner.requestTermination('timeout', { reason: 'timed_out', terminationReason: 'timeout' });
+    await observer.requestTermination('timeout', {
+      reason: 'stopped',
+      terminationReason: 'parent_session_cleanup',
+    });
+    await observer.complete('timeout', { reason: 'signaled', code: null, signal: 'SIGTERM' });
+    expect((await owner.get('timeout'))?.exit).toMatchObject({
+      reason: 'timed_out',
+      signal: 'SIGTERM',
+      terminationReason: 'timeout',
+    });
+
+    await owner.register(inputFor('stopped', 2));
+    await owner.requestTermination('stopped', {
+      reason: 'stopped',
+      terminationReason: 'user_stop',
+      stopReason: 'user requested',
+    });
+    await observer.complete('stopped', { reason: 'backend_lost', code: null, signal: null });
+    expect((await owner.get('stopped'))?.exit).toMatchObject({
+      reason: 'stopped',
+      terminationReason: 'user_stop',
+      stopReason: 'user requested',
+    });
+
+    await owner.register(inputFor('owner-lost', 3));
+    await observer.complete('owner-lost', {
+      reason: 'stopped',
+      code: null,
+      signal: 'SIGTERM',
+      terminationReason: 'owner_lost',
+    });
+    expect((await owner.get('owner-lost'))?.exit).toMatchObject({ terminationReason: 'owner_lost' });
+  });
   it('reads only the requested primary metadata record with retained history', async () => {
     const registry = registryFor('/repo/main');
     await registry.register(inputFor('api', 1));

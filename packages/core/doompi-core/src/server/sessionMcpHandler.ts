@@ -36,6 +36,15 @@ export const SESSION_MCP_EXTRA_TOOLS: readonly Tool[] = [
     },
     _meta: { ui: { visibility: ['model'] } },
   },
+  {
+    name: 'session_capabilities',
+    title: 'Session capabilities',
+    description:
+      'Inspect the tools and skills currently available in this conversation, independently of the parent catalog diff.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    _meta: { ui: { visibility: ['model'] } },
+  },
 ];
 
 export interface SessionMcpBaseline {
@@ -81,7 +90,7 @@ function toolArguments(name: string, value: unknown): { name?: string; arguments
   const args = value as Record<string, unknown>;
   if (
     Object.keys(args).some((key) => key !== 'name' && key !== 'arguments') ||
-    (name === 'load_extra_tools' && Object.keys(args).length !== 0) ||
+    ((name === 'load_extra_tools' || name === 'session_capabilities') && Object.keys(args).length !== 0) ||
     (name === 'use_extra_tools' &&
       (typeof args.name !== 'string' ||
         args.name.trim() === '' ||
@@ -106,6 +115,8 @@ export interface SessionMcpHttpHandlerOptions {
   /** Signed JWT carried as the final URL path segment instead of an Authorization header. */
   readonly pathToken?: string;
   readonly baselines?: Map<string, SessionMcpBaseline>;
+  /** Shared only by signed-URL requests in one live session incarnation. */
+  readonly operations?: SessionMcpOperationRegistry;
   readonly resolveSession: (sessionId: string) => SessionMcpTarget | undefined | Promise<SessionMcpTarget | undefined>;
   readonly resolveConversation?: (
     grant: SessionMcpAccessGrant,
@@ -118,6 +129,11 @@ export interface SessionMcpHttpHandlerOptions {
   readonly serverName?: string;
   readonly serverVersion?: string;
 }
+
+export type SessionMcpOperationRegistry = Map<
+  string,
+  { controller: AbortController; owner: string; conversation?: string }
+>;
 
 export type SessionMcpHttpHandler = (request: Request) => Promise<Response>;
 
@@ -205,7 +221,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
     options.pathToken === undefined
       ? options.authorization.authenticateAccessToken
       : options.authorization.authenticateUrlToken;
-  const operations = new Map<string, { controller: AbortController; owner: string; conversation?: string }>();
+  const operations: SessionMcpOperationRegistry = options.operations ?? new Map();
   const baselines = options.baselines ?? new Map<string, SessionMcpBaseline>();
   const operationOwner = (grant: SessionMcpAccessGrant, requestId: string | number): string =>
     JSON.stringify([grant.clientId, grant.sessionId, grant.sessionGeneration, grant.id, requestId]);
@@ -253,10 +269,11 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       {
         capabilities: { tools: {}, resources: {} },
         instructions:
-          'Use only this bound DoomPi session. Call load_context before repository work and after selection changes. ' +
-          'Call load_extra_tools for conversation-only tools and skills; invoke extra tools with use_extra_tools, and read guidance with load_skill. ' +
-          'Inspect before editing and follow repository checks. Do not assume local UI access, downloadable host files, or background completion notifications. ' +
-          'Read saved command logs instead of relaunching work. Saving a plan does not authorize implementation.',
+          'Use only this bound DoomPi session. Call load_context before work and after selection changes. ' +
+          'Call session_capabilities for the current inventory; load_extra_tools returns only conversation differences. ' +
+          'Invoke extras with use_extra_tools and guidance with load_skill. Inspect before editing and follow repository checks. ' +
+          'Do not assume UI, downloadable files, or background notifications. Read saved logs instead of relaunching work. ' +
+          'Saving a plan does not authorize implementation.',
       },
     );
     server.setNotificationHandler('notifications/cancelled', async (notification) => {
@@ -297,6 +314,8 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           ProtocolErrorCode.InvalidRequest,
           'A tool call with this request identity is already active.',
         );
+      if (options.operations !== undefined && operations.size >= 1024)
+        throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'Too many active MCP tool calls. Retry later.');
       const controller = new AbortController();
       operations.set(key, { controller, owner, conversation });
       const signal = AbortSignal.any([request.signal, ctx.mcpReq.signal, controller.signal]);
@@ -344,7 +363,10 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             'CONVERSATION_ID_REQUIRED',
             'This connection requires conversation metadata. Use a compatible ChatGPT conversation and retry.',
           );
-        if (wrapper && !baselines.has(parent.grant.clientId))
+        if (
+          (message.params.name === 'load_extra_tools' || message.params.name === 'use_extra_tools') &&
+          !baselines.has(parent.grant.clientId)
+        )
           throw new SessionMcpConversationError(
             'SESSION_MCP_BASELINE_REQUIRED',
             'Refresh this MCP connection tool catalog before loading or using extra tools.',
@@ -353,6 +375,32 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         const { snapshot, tools, skills } = grantedSurface(active.grant, active.target.toolSurface);
         const baseline = baselines.get(parent.grant.clientId);
         const extras = wrapper && baseline ? extraTools(baseline, tools) : [];
+        if (message.params.name === 'session_capabilities' && wrapper) {
+          const capabilities = {
+            sessionId: active.target.sessionId ?? parent.grant.sessionId,
+            generation: active.target.generation,
+            revision: snapshot.revision,
+            baseline: baseline === undefined ? 'missing' : 'available',
+            inventory: 'active_surface',
+            discovery: 'unknown',
+            tools: [...tools.map(publicTool), ...grantedExtraTools(active.grant)],
+            skills: skills.map(({ name, description }) => ({ name, description })),
+          };
+          const current = await resolveTarget(false);
+          if (
+            current.target.toolSurface !== active.target.toolSurface ||
+            current.target.generation !== active.target.generation ||
+            current.target.sessionId !== active.target.sessionId ||
+            current.target.toolSurface.readSurface().revision !== snapshot.revision
+          )
+            throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session tool surface has changed.');
+          options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
+          return {
+            content: [{ type: 'text', text: JSON.stringify(capabilities) }],
+            structuredContent: capabilities,
+            isError: false,
+          };
+        }
         if (message.params.name === 'load_extra_tools' && wrapper) {
           const discovery = {
             tools: extras,

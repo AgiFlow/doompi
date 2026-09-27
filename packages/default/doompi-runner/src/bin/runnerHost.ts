@@ -41,6 +41,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
   let child: ChildProcess | undefined;
   let forwardedSignal: NodeJS.Signals | null = null;
   let escalationTimer: NodeJS.Timeout | undefined;
+  let ownerLost = false;
   const signalChild = (signal: NodeJS.Signals): void => {
     if (!child?.pid) return;
     try {
@@ -72,14 +73,20 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
   // The lifeline comes from the spec rather than this process's environment: an
   // rmux server outlives the session that started it, so its own environment can
   // still name a previous session's socket.
-  const detachLifeline = watchOwner(() => forward('SIGTERM'), spec.env[LIFELINE_ENV]);
+  const detachLifeline = watchOwner(() => {
+    ownerLost = true;
+    forward('SIGTERM');
+  }, spec.env[LIFELINE_ENV]);
 
   try {
     const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
       child?.once('error', reject);
       child?.once('exit', (code, signal) => resolve({ code, signal: signal ?? forwardedSignal }));
     });
-    writeAtomic(exitPath, result);
+    writeAtomic(exitPath, {
+      ...result,
+      ...(ownerLost ? { reason: 'stopped', terminationReason: 'owner_lost', stopReason: 'owner session ended' } : {}),
+    });
     const exitCode = result.code !== null ? result.code : result.signal ? 128 + os.constants.signals[result.signal] : 1;
     await telemetry.recordEvent('doom_runner.host_finished', {
       outcome: result.signal || forwardedSignal ? 'signaled' : exitCode === 0 ? 'completed' : 'failed',

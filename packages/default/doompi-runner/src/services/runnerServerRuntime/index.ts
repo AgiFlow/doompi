@@ -67,7 +67,18 @@ export function createRunnerServerRuntime(
       await Promise.all(
         records.map(async (record) => {
           try {
-            await stopRunnerProcess(record, container.launcher, container.rmuxBackend);
+            const stopped = await stopRunnerProcess(record, container.launcher, container.rmuxBackend, {
+              registry: container.runnerRegistry,
+              intent: {
+                reason: 'stopped',
+                terminationReason: 'parent_session_cleanup',
+                stopReason: 'session ended',
+              },
+            });
+            if (!stopped && container.processControl.isAlive(record.pid)) {
+              process.emitWarning(`Could not stop runner ${record.id} during session shutdown`);
+              return;
+            }
             await container.runnerRegistry.complete(
               record.id,
               { reason: 'stopped', code: null, signal: null, stopReason: 'session ended' },

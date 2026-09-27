@@ -2,6 +2,10 @@
 export interface ExitResult {
   code: number | null;
   signal: NodeJS.Signals | null;
+  /** Supervisor evidence, never inferred from a numeric exit code or signal. */
+  reason?: 'stopped';
+  terminationReason?: 'owner_lost';
+  stopReason?: string;
 }
 
 export type OutputStream = 'stdout' | 'stderr';

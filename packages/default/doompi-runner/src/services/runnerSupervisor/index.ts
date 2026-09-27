@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { ExitResult } from '../../types/spawner';
 /** What a supervisor needs to run one command. */
 export interface CommandSpec {
   command: string;
@@ -10,10 +11,7 @@ export interface CommandSpec {
 }
 
 /** Exit status the supervisor records once its command is gone. */
-export interface ExitMetadata {
-  code: number | null;
-  signal: NodeJS.Signals | null;
-}
+export type ExitMetadata = ExitResult;
 
 /** Sidecars a supervised run reads and writes beside its log. */
 export interface SupervisorPaths {
@@ -63,7 +61,13 @@ export function readExitMetadata(target: string): ExitMetadata | undefined {
     const metadata = value as Partial<ExitMetadata>;
     const code = typeof metadata.code === 'number' ? metadata.code : null;
     const signal = typeof metadata.signal === 'string' ? (metadata.signal as NodeJS.Signals) : null;
-    return { code, signal };
+    return {
+      code,
+      signal,
+      ...(metadata.reason === 'stopped' ? { reason: metadata.reason } : {}),
+      ...(metadata.terminationReason === 'owner_lost' ? { terminationReason: metadata.terminationReason } : {}),
+      ...(typeof metadata.stopReason === 'string' ? { stopReason: metadata.stopReason } : {}),
+    };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== NOT_FOUND_ERROR_CODE) {
       process.emitWarning(`Could not read runner exit metadata ${target}: ${String(error)}`);

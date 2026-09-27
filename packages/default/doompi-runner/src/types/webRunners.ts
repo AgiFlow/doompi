@@ -1,4 +1,4 @@
-import type { RunnerBackend, RunnerExitReason, RunnerState } from './runnerRegistry';
+import type { RunnerBackend, RunnerExitReason, RunnerState, RunnerTerminationReason } from './runnerRegistry';
 
 /**
  * Runner run view types shared by this package's hub channel and its web
@@ -12,6 +12,7 @@ export interface RunnerRunExitView {
   code: number | null;
   /** The signal name, when the process was signaled. */
   signal: string | null;
+  terminationReason?: RunnerTerminationReason;
   stopReason?: string;
   /** ISO 8601, from the record. */
   finishedAt: string;

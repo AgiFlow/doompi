@@ -28,6 +28,7 @@ import type {
   IRunnerRegistry,
   RegisterRunnerInput,
   RunnerRecord,
+  RunnerTerminationIntent,
 } from '../../types/runnerRegistry';
 import type { IRunnerPaths } from '../runnerPaths/type';
 import { isRunnerRecord } from '../runnerRecord';
@@ -219,6 +220,21 @@ export class RunnerRegistry implements IRunnerRegistry {
     return promoted;
   }
 
+  async requestTermination(
+    id: string,
+    intent: RunnerTerminationIntent | undefined,
+    sessionId?: string,
+  ): Promise<RunnerRecord | undefined> {
+    const record = await this.get(id, sessionId);
+    if (!record) return undefined;
+    if (record.state === 'completed') return record;
+    if (intent !== undefined && record.terminationIntent !== undefined) return record;
+    const { terminationIntent: _previous, ...rest } = record;
+    const updated: RunnerRecord = { ...rest, ...(intent ? { terminationIntent: intent } : {}) };
+    this.writeRecord(updated);
+    return updated;
+  }
+
   async complete(id: string, outcome: CompleteRunnerInput, sessionId?: string): Promise<RunnerRecord | undefined> {
     const persisted = await this.get(id, sessionId);
     if (persisted?.state === 'completed') {
@@ -238,7 +254,14 @@ export class RunnerRegistry implements IRunnerRegistry {
     const completed: RunnerRecord = {
       ...record,
       state: 'completed',
-      exit: { ...outcome, finishedAt: new Date().toISOString() },
+      exit: {
+        ...outcome,
+        ...(outcome.signal !== null && outcome.terminationReason === undefined && record.terminationIntent === undefined
+          ? { terminationReason: 'external_signal' as const }
+          : {}),
+        ...record.terminationIntent,
+        finishedAt: new Date().toISOString(),
+      },
     };
     this.writeRecord(completed);
     await this.release(id, completed.sessionId);

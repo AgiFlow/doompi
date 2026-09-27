@@ -91,6 +91,9 @@ class RecordingRegistry implements IRunnerRegistry {
     return undefined;
   }
 
+  async requestTermination(): Promise<RunnerRecord | undefined> {
+    return undefined;
+  }
   async complete(id: string, outcome: CompleteRunnerInput): Promise<RunnerRecord | undefined> {
     this.completed.push({ id, outcome });
     return undefined;

@@ -354,7 +354,7 @@ describe('session MCP Streamable HTTP handler', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('www-authenticate')).toBeNull();
     await expect(response.json()).resolves.toMatchObject({
-      result: { tools: [{ name: 'load_extra_tools' }, { name: 'use_extra_tools' }] },
+      result: { tools: [{ name: 'load_extra_tools' }, { name: 'use_extra_tools' }, { name: 'session_capabilities' }] },
     });
 
     const wrongPath = await handler(
@@ -526,6 +526,7 @@ describe('session MCP Streamable HTTP handler', () => {
           { name: 'hidden_tool' },
           { name: 'load_extra_tools' },
           { name: 'use_extra_tools' },
+          { name: 'session_capabilities' },
         ],
       },
     });
@@ -539,6 +540,7 @@ describe('session MCP Streamable HTTP handler', () => {
           { name: 'new_tool' },
           { name: 'load_extra_tools' },
           { name: 'use_extra_tools' },
+          { name: 'session_capabilities' },
         ],
       },
     });
@@ -561,6 +563,19 @@ describe('session MCP Streamable HTTP handler', () => {
       });
     }
     expect(f.invokeTool).not.toHaveBeenCalled();
+  });
+
+  it('reports current capabilities when the parent baseline is missing', async () => {
+    const f = fixture('session');
+    const result = rpcResult(
+      await (await f.request('tools/call', { name: 'session_capabilities', arguments: {} })).json(),
+    );
+    expect(result.structuredContent).toMatchObject({
+      baseline: 'missing',
+      inventory: 'active_surface',
+      discovery: 'unknown',
+      tools: expect.arrayContaining([expect.objectContaining({ name: 'allowed_tool' })]),
+    });
   });
 
   it.each([
@@ -646,6 +661,25 @@ describe('session MCP Streamable HTTP handler', () => {
     expect(f.invokeTool).not.toHaveBeenCalled();
     const allowed = await f.request('tools/call', { name: 'use_extra_tools', arguments: { name: 'allowed_tool' } });
     expect(rpcResult(await allowed.json())).toMatchObject({ isError: false, content: [{ text: 'called' }] });
+  });
+
+  it('reports only grant-visible session capabilities', async () => {
+    const f = fixture('restricted', ['session_capabilities', 'allowed_tool']);
+    await f.request('tools/list');
+    const result = rpcResult(
+      await (await f.request('tools/call', { name: 'session_capabilities', arguments: {} })).json(),
+    );
+    expect(result.structuredContent).toMatchObject({
+      baseline: 'available',
+      inventory: 'active_surface',
+      discovery: 'unknown',
+      tools: expect.arrayContaining([
+        expect.objectContaining({ name: 'allowed_tool' }),
+        expect.objectContaining({ name: 'session_capabilities' }),
+      ]),
+      skills: [{ name: 'allowed-skill', description: 'May read' }],
+    });
+    expect(JSON.stringify(result.structuredContent)).not.toContain('hidden');
   });
 
   it('discovers a changed same-name child contract while rejecting a normal call to that name', async () => {

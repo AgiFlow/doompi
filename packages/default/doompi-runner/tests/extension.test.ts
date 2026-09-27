@@ -105,6 +105,7 @@ describe('runner reconciliation', () => {
       registry: {
         list: vi.fn(async () => [active]),
         get: vi.fn(async () => active),
+        requestTermination: vi.fn(async () => active),
         complete,
       } as never,
       launcher: { stop: vi.fn() } as never,
@@ -180,7 +181,12 @@ describe('runner reconciliation', () => {
     const complete = vi.fn();
     const launcherStop = vi.fn(async () => false);
     const result = await reconcileActiveRunners({
-      registry: { list: vi.fn(async () => [active]), get: vi.fn(async () => active), complete } as never,
+      registry: {
+        list: vi.fn(async () => [active]),
+        get: vi.fn(async () => active),
+        requestTermination: vi.fn(async () => active),
+        complete,
+      } as never,
       launcher: { stop: launcherStop } as never,
       rmuxBackend: { readOutcome: vi.fn(), stop: vi.fn(async () => false) } as never,
       processControl: { isAlive: vi.fn((pid: number) => pid === active.pid) } as never,
@@ -198,7 +204,12 @@ describe('runner reconciliation', () => {
     const complete = vi.fn(async () => undefined);
     const stop = vi.fn(async () => true);
     const result = await reconcileActiveRunners({
-      registry: { list: vi.fn(async () => [native]), get: vi.fn(async () => native), complete } as never,
+      registry: {
+        list: vi.fn(async () => [native]),
+        get: vi.fn(async () => native),
+        requestTermination: vi.fn(async () => native),
+        complete,
+      } as never,
       launcher: { stop } as never,
       rmuxBackend: { readOutcome: vi.fn(), stop: vi.fn() } as never,
       processControl: { isAlive: vi.fn(() => true) } as never,
