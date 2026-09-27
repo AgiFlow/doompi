@@ -79,6 +79,19 @@ describe('headless client bridge', () => {
     ]);
     await expect(bridge.client.request({ kind: 'input', title: 'After close' })).rejects.toThrow('closed');
   });
+
+  it('delivers a notification live instead of rejecting when the journal refuses it', async () => {
+    const bridge = setup();
+    bridge.appendCustomEntry.mockRejectedValueOnce(new Error('Direct harness writes are quarantined'));
+    await expect(bridge.client.notify({ body: 'turn failed', level: 'error' })).resolves.toBeUndefined();
+    expect(bridge.frames).toEqual([
+      {
+        type: 'error',
+        code: 'notification_undelivered',
+        error: 'turn failed (not saved to history: Direct harness writes are quarantined)',
+      },
+    ]);
+  });
 });
 
 it('emits a distinct append request for native dictation and rejects it after disposal', () => {

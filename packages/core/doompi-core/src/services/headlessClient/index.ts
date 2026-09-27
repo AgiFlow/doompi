@@ -19,7 +19,17 @@ export function createHeadlessClient(options: HeadlessClientOptions): HeadlessCl
         if (disposed) throw new Error('Headless client is closed');
         const data = createDoomNotificationEntryData(request);
         if (!data) throw new Error('Invalid notification request');
-        await options.appendCustomEntry(DOOM_NOTIFICATION_ENTRY_TYPE, data);
+        try {
+          await options.appendCustomEntry(DOOM_NOTIFICATION_ENTRY_TYPE, data);
+        } catch (error) {
+          // Callers fire notify without awaiting, often to report a journal failure. A rejection here
+          // would crash the session server, so a refused append still reaches the browser live.
+          options.emitFrame({
+            type: 'error',
+            code: 'notification_undelivered',
+            error: `${data.body} (not saved to history: ${error instanceof Error ? error.message : String(error)})`,
+          });
+        }
       },
       setStatus(source, text) {
         if (disposed) throw new Error('Headless client is closed');
