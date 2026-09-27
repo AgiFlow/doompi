@@ -131,6 +131,7 @@
     ],
     "client": "./dist/extensions/web.mjs",
     "scopes": [
+      "workspace",
       "session"
     ]
   },
