@@ -78,6 +78,119 @@ describe('auto-stop Pi factory', () => {
     await provider.dispose();
   });
 
+  it('stops while a workflow run is still listed, since only runners and subagents count', async () => {
+    const session = createSessionHarness();
+    const host = await session.host;
+    const backgroundWork = {
+      generation: 'autostop-workflow-test',
+      register: vi.fn(),
+      snapshot: () => ({
+        items: [{ provider: 'workflow-mcp', id: 'run-1', sessionId: 'autostop-test', status: 'running' }],
+        errors: [{ provider: 'workflow-mcp', message: 'invalid item' }],
+      }),
+    } as unknown as DoomBackgroundWorkService;
+    const provider = host.root.plugin((context) => context.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork));
+    await provider;
+    await autoStopExtension(session.pi);
+
+    await session.fire('agent_settled');
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).toHaveBeenCalledTimes(1);
+
+    await provider.dispose();
+  });
+
+  it('stops once every runner has completed or failed, even while they are still listed', async () => {
+    const session = createSessionHarness();
+    const host = await session.host;
+    let items: BackgroundWorkItem[] = [
+      { provider: 'doom-runner', id: 'runner-1', sessionId: 'autostop-test', status: 'running' },
+      { provider: 'doom-runner', id: 'runner-2', sessionId: 'autostop-test', status: 'failed' },
+    ];
+    const backgroundWork = {
+      generation: 'autostop-runner-state-test',
+      register: vi.fn(),
+      snapshot: () => ({ items, errors: [] }),
+    } as unknown as DoomBackgroundWorkService;
+    const provider = host.root.plugin((context) => context.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork));
+    await provider;
+    await autoStopExtension(session.pi);
+
+    await session.fire('agent_settled');
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).not.toHaveBeenCalled();
+
+    // The runner keeps a finished process listed until its exit message is sent.
+    items = [
+      { provider: 'doom-runner', id: 'runner-1', sessionId: 'autostop-test', status: 'completed' },
+      { provider: 'doom-runner', id: 'runner-2', sessionId: 'autostop-test', status: 'failed' },
+    ];
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).toHaveBeenCalledTimes(1);
+
+    await provider.dispose();
+  });
+
+  it('keeps a session open while a delegated task subagent runs', async () => {
+    const session = createSessionHarness();
+    const host = await session.host;
+    let items: BackgroundWorkItem[] = [
+      { provider: 'doom-task', id: 'task-1', sessionId: 'autostop-test', status: 'running' },
+    ];
+    const backgroundWork = {
+      generation: 'autostop-task-test',
+      register: vi.fn(),
+      snapshot: () => ({ items, errors: [] }),
+    } as unknown as DoomBackgroundWorkService;
+    const provider = host.root.plugin((context) => context.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork));
+    await provider;
+    await autoStopExtension(session.pi);
+
+    await session.fire('agent_settled');
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).not.toHaveBeenCalled();
+
+    items = [];
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).toHaveBeenCalledTimes(1);
+
+    await provider.dispose();
+  });
+
+  it('stays up while background work cannot be read, and stops once it can', async () => {
+    const session = createSessionHarness();
+    const host = await session.host;
+    let failure: 'throws' | 'errors' | undefined = 'throws';
+    const backgroundWork = {
+      generation: 'autostop-background-failure-test',
+      register: vi.fn(),
+      snapshot: () => {
+        if (failure === 'throws') throw new Error('coordinator unavailable');
+        return {
+          items: [],
+          errors: failure === 'errors' ? [{ provider: 'doom-task', message: 'invalid item' }] : [],
+        };
+      },
+    } as unknown as DoomBackgroundWorkService;
+    const provider = host.root.plugin((context) => context.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork));
+    await provider;
+    await autoStopExtension(session.pi);
+
+    await session.fire('agent_settled');
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).not.toHaveBeenCalled();
+
+    failure = 'errors';
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).not.toHaveBeenCalled();
+
+    failure = undefined;
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).toHaveBeenCalledTimes(1);
+
+    await provider.dispose();
+  });
+
   it('leaves a settled session alone while a message is queued', async () => {
     const session = createSessionHarness();
     await autoStopExtension(session.pi);

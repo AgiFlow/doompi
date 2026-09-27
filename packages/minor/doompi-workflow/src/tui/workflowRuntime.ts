@@ -232,6 +232,29 @@ const ERROR_COLOUR = 'error';
  * user in a session that will not close.
  */
 const SHUTDOWN_FINALIZE_TIMEOUT_MS = 10_000;
+/**
+ * Pi awaits extension disposal before it exits the process, so any unbounded
+ * wait in dispose keeps an `--auto-stop` session alive after it asked to stop.
+ */
+const SHUTDOWN_STEP_TIMEOUT_MS = 5_000;
+
+/**
+ * Rejects as soon as the signal aborts, so a registry read that never answers
+ * cannot hold the readiness task, and every disposal waiting on it, open.
+ */
+function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolveWork, rejectWork) => {
+    const onAbort = (): void => rejectWork(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(resolveWork, rejectWork).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
+/** Resolves when the work does or the timeout passes; a rejection still propagates. */
+async function withinTimeout(work: Promise<unknown>, timeoutMs: number): Promise<void> {
+  await Promise.race([work, new Promise((settle) => setTimeout(settle, timeoutMs).unref?.())]);
+}
 const FOLLOW_INTERVAL_MS = 2_000;
 const TAIL_LINES = 24;
 /** Below these a resized run has no room left to draw, so it keeps its own size and the panel clips. */
@@ -2335,10 +2358,10 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
 
         // Subscribed before the first status read, so a transition landing
         // during startup is delivered rather than raced past.
-        await startRunControl(ctx);
+        await untilAborted(startRunControl(ctx), signal);
         signal.throwIfAborted();
         if (retired()) return { value: undefined };
-        await refreshStatus(ctx, false);
+        await untilAborted(refreshStatus(ctx, false), signal);
         signal.throwIfAborted();
         if (retired()) return { value: undefined };
         lifecycleNarrationReady = true;
@@ -2381,7 +2404,10 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
       if (ownedReadiness) {
         await runCleanup('dispose standalone workflow readiness', () => ownedReadiness.dispose());
       } else if (pendingReadiness) {
-        await Promise.allSettled([pendingReadiness.then((handle) => handle.wait())]);
+        await withinTimeout(
+          Promise.allSettled([pendingReadiness.then((handle) => handle.wait())]),
+          SHUTDOWN_STEP_TIMEOUT_MS,
+        );
       }
 
       // A workflow without a `launch-command` runs its engine inside this
@@ -2392,10 +2418,7 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
             service.interrupt('SIGTERM', { phase: 'workflow', source: 'pi-session-shutdown' }),
           );
         }
-        await Promise.race([
-          Promise.allSettled(pendingInlineRuns),
-          new Promise((settle) => setTimeout(settle, SHUTDOWN_FINALIZE_TIMEOUT_MS).unref?.()),
-        ]);
+        await withinTimeout(Promise.allSettled(pendingInlineRuns), SHUTDOWN_FINALIZE_TIMEOUT_MS);
       }
       if (monitorTimer) clearInterval(monitorTimer);
       monitorTimer = undefined;
@@ -2432,13 +2455,22 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
       const activeTelemetry = telemetry;
       telemetry = undefined;
       if (activeTelemetry) {
-        await runCleanup('record the workflow session finish', () =>
-          activeTelemetry.recordEvent('doom_workflow.session_finished', {
-            'workflow.pending_count': pendingCount,
-            outcome: pendingCount === 0 ? 'completed' : 'interrupted',
-          }),
+        // Both wait on the exporter, which may never answer. One bound covers
+        // them so telemetry can delay exit but never prevent it.
+        await runCleanup('stop workflow telemetry', () =>
+          withinTimeout(
+            (async () => {
+              await runCleanup('record the workflow session finish', () =>
+                activeTelemetry.recordEvent('doom_workflow.session_finished', {
+                  'workflow.pending_count': pendingCount,
+                  outcome: pendingCount === 0 ? 'completed' : 'interrupted',
+                }),
+              );
+              await activeTelemetry.shutdown();
+            })(),
+            SHUTDOWN_STEP_TIMEOUT_MS,
+          ),
         );
-        await runCleanup('stop workflow telemetry', () => activeTelemetry.shutdown());
       }
       pendingInlineRuns.clear();
       pendingTerminalRuns.clear();
