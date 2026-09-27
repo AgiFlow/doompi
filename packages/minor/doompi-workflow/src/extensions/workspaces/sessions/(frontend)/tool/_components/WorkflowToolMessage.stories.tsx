@@ -37,7 +37,8 @@ const STATUS = {
   stage: 'running',
   runner: 'rmux',
   startedAt: '2025-01-14T09:12:00.000Z',
-  executionCursor: { job: 'build', phase: 'job', stepName: 'pnpm build' },
+  position: { job: 'build', step: 'pnpm build' },
+  jobs: [{ name: 'build', phase: 'job', status: 'running', steps: [{ name: 'pnpm build', status: 'running' }] }],
 };
 
 const FAILED = {

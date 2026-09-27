@@ -127,7 +127,8 @@ describe('workflow tool result lines', () => {
       workspace: 'ws',
       displayName: 'Release',
       stage: 'running',
-      executionCursor: { job: 'build', stepName: 'compile' },
+      position: { job: 'build', step: 'compile' },
+      jobs: [{ name: 'build', phase: 'job', status: 'running', steps: [{ name: 'compile', status: 'running' }] }],
       runner: 'local',
       dryRun: true,
       exitCode: 0,
@@ -145,11 +146,15 @@ describe('workflow tool result lines', () => {
     };
     const collapsed = texts(workflowResultLines('workflow_run', { action: 'status' }, json(record), done));
     expect(collapsed).toEqual([
-      '◐ Release · ws/r1 · running',
+      'Status retrieved · Release · workflow: running',
+      'workspace ws',
+      'runKey r1',
       '[build] compile',
       'runner local · dry run · exit 0 · started 2026-08-24 10:00:00Z',
     ]);
     const full = texts(workflowResultLines('workflow_run', { action: 'status' }, json(record), expanded));
+    expect(full).toContain('job build · running');
+    expect(full).toContain('step compile · running');
     expect(full).toContain('launcher pi s1');
     expect(full).toContain('finished 2026-08-24 11:00:00Z');
     expect(full).toContain('repair #rep');
@@ -157,14 +162,14 @@ describe('workflow tool result lines', () => {
     expect(full).toContain('pid 42');
 
     const states: Array<[Record<string, unknown>, string]> = [
-      [{ outcome: 'interrupted' }, '! r · r · interrupted'],
-      [{ stage: 'error' }, '✗ r · r · failed'],
-      [{ stage: 'completed', outcome: 'skipped' }, '○ r · r · skipped'],
-      [{ stage: 'completed' }, '✓ r · r · completed'],
-      [{ executionState: 'paused' }, 'Ⅱ r · r · paused'],
-      [{ executionState: 'pause_requested' }, '◐ r · r · pause requested'],
-      [{ executionState: 'resume_requested' }, '◐ r · r · resume requested'],
-      [{ stage: 'queued' }, '○ r · r · queued'],
+      [{ outcome: 'interrupted' }, 'Status retrieved · r · workflow: interrupted'],
+      [{ stage: 'error' }, 'Status retrieved · r · workflow: failed'],
+      [{ stage: 'completed', outcome: 'skipped' }, 'Status retrieved · r · workflow: skipped'],
+      [{ stage: 'completed' }, 'Status retrieved · r · workflow: completed'],
+      [{ executionState: 'paused' }, 'Status retrieved · r · workflow: paused'],
+      [{ executionState: 'pause_requested' }, 'Status retrieved · r · workflow: pause requested'],
+      [{ executionState: 'resume_requested' }, 'Status retrieved · r · workflow: resume requested'],
+      [{ stage: 'queued' }, 'Status retrieved · r · workflow: queued'],
     ];
     for (const [overrides, heading] of states) {
       const lines = workflowResultLines(
@@ -177,6 +182,34 @@ describe('workflow tool result lines', () => {
       expect(texts(lines)).toContain('error boom');
       expect(texts(lines)).toContain('stale old');
     }
+    const legacy = texts(
+      workflowResultLines(
+        'workflow_run',
+        { action: 'status' },
+        json({
+          runKey: 'old',
+          stage: 'running',
+          executionCursor: { job: 'legacy', stepName: 'step' },
+        }),
+        done,
+      ),
+    );
+    expect(legacy).toContain('[legacy] step');
+    const idle = texts(
+      workflowResultLines('workflow_run', { action: 'status' }, json({ runKey: 'idle', stage: 'running' }), done),
+    );
+    expect(idle).not.toContain('[workflow] running');
+    const lookup = texts(
+      workflowResultLines(
+        'workflow_run',
+        { action: 'status', runKey: 'missing' },
+        json({
+          error: 'No matching workflow run was found in this session.',
+        }),
+        { ...done, isError: true },
+      ),
+    );
+    expect(lookup[0]).toBe('✗ Status lookup failed · missing');
     // A status body without a run record falls back to the text.
     expect(texts(workflowResultLines('workflow_run', { action: 'status' }, json({ other: 1 }), done))).toEqual([
       '{"other":1}',
@@ -213,7 +246,14 @@ describe('workflow tool result lines', () => {
       evidence,
       expanded,
     );
-    expect(texts(recovery)).toEqual(['✗ r1 · r1 · failed', 'evidence issue.md', 'issue.md', 'it broke']);
+    expect(texts(recovery)).toEqual([
+      'Status retrieved · r1 · workflow: failed',
+      'workspace unknown',
+      'runKey r1',
+      'evidence issue.md',
+      'issue.md',
+      'it broke',
+    ]);
     expect(
       texts(workflowResultLines('workflow_run', { action: 'recovery-evidence', runKey: 'r1' }, text('nothing'), done)),
     ).toEqual(['✓ recovery evidence · r1', 'no durable evidence files recorded']);

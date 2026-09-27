@@ -304,20 +304,15 @@ function readWorkflowState(record: JsonRecord): WorkflowState {
   return { tone: 'muted', glyph: '○', label: stage };
 }
 
-function recordScope(record: JsonRecord): string {
-  const runKey = readString(record, 'runKey') ?? 'unknown run';
-  const workspace = readString(record, 'workspace');
-  return workspace ? `${workspace}/${runKey}` : runKey;
-}
-
 function currentActivity(record: JsonRecord): ToolLine | undefined {
+  const position = asRecord(record.position);
   const cursor = asRecord(record.executionCursor);
-  const job = readString(cursor, 'job') ?? readString(record, 'job');
-  const step = readString(cursor, 'stepName');
+  const job = readString(position, 'job') ?? readString(cursor, 'job') ?? readString(record, 'job');
+  const step = readString(position, 'step') ?? readString(cursor, 'stepName');
   const phase = readString(cursor, 'phase');
   if (!job && !step && !phase) return undefined;
   const context = job ?? phase ?? 'workflow';
-  return line(`[${context}] ${step ?? phase ?? 'running'}`, 'text', { indent: true });
+  return line(`[${context}] ${step ?? phase ?? 'current job'}`, 'text', { indent: true });
 }
 
 function launcherLabel(record: JsonRecord): string | undefined {
@@ -336,7 +331,9 @@ function workflowRecordLines(record: JsonRecord, expanded: boolean): ToolLine[] 
   const state = readWorkflowState(record);
   const displayName = readString(record, 'displayName') ?? runKey;
   const lines = [
-    line(`${state.glyph} ${displayName} · ${recordScope(record)} · ${state.label}`, state.tone, { bold: true }),
+    line(`Status retrieved · ${displayName} · workflow: ${state.label}`, state.tone, { bold: true }),
+    labelValue('workspace', readString(record, 'workspace') ?? 'unknown'),
+    labelValue('runKey', runKey),
   ];
   const activity = currentActivity(record);
   if (activity) lines.push(activity);
@@ -374,6 +371,23 @@ function workflowRecordLines(record: JsonRecord, expanded: boolean): ToolLine[] 
   ];
   for (const [label, value] of detailedValues) {
     if (value) lines.push(labelValue(label, value));
+  }
+  const jobs = record.jobs;
+  if (Array.isArray(jobs)) {
+    for (const value of jobs) {
+      const job = asRecord(value);
+      const name = readString(job, 'name');
+      const status = readString(job, 'status');
+      if (!name || !status) continue;
+      lines.push(labelValue('job', `${name} · ${status}`));
+      if (!Array.isArray(job?.steps)) continue;
+      for (const value of job.steps) {
+        const step = asRecord(value);
+        const stepName = readString(step, 'name');
+        const stepStatus = readString(step, 'status');
+        if (stepName && stepStatus) lines.push(line(`step ${stepName} · ${stepStatus}`, 'text', { indent: true }));
+      }
+    }
   }
   return lines;
 }
@@ -530,7 +544,13 @@ function failureLines(
   const details = detailLines(result);
   const shown = options.expanded ? details : details.slice(0, COLLAPSED_DETAIL_LINES);
   const lines = [
-    line(`✗ ${action} failed${target ? ` · ${target}` : ''}`, 'error', { bold: true }),
+    line(
+      toolName === 'workflow_run' && action === 'status'
+        ? `✗ Status lookup failed${target ? ` · ${target}` : ''}`
+        : `✗ ${action} failed${target ? ` · ${target}` : ''}`,
+      'error',
+      { bold: true },
+    ),
     ...(shown.length > 0 ? shown.map((entry) => line(entry, 'text')) : [line('Unknown workflow error', 'error')]),
   ];
   const hidden = details.length - shown.length;
