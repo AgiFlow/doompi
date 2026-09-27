@@ -3,10 +3,6 @@
     "scaffold-mcp": {
       "command": "npx",
       "args": ["-y", "@agiflowai/scaffold-mcp@1.3.0", "mcp-serve", "--admin-enable"]
-    },
-    "boomlink-mcp": {
-      "type": "http",
-      "url": "https://boomlink.agimon.win/api/v1/mcp/0.0.1"
     }
   }
 }
