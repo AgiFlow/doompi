@@ -1,3 +1,20 @@
+## 0.0.1-alpha.95 (2026-09-27)
+
+### 🩹 Fixes
+
+- **doompi-core:** keep the session server alive after a harness fault ([#214](https://github.com/AgiFlow/doompi/pull/214))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.17
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.94
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.52
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.48
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.94 (2026-09-27)
 
 ### 🧱 Updated Dependencies

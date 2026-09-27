@@ -1,3 +1,7 @@
+## 0.0.1-alpha.17 (2026-09-27)
+
+This was a version bump only for @agimon-ai/doompi-build to align it with other projects, there were no code changes.
+
 ## 0.0.1-alpha.16 (2026-09-27)
 
 This was a version bump only for @agimon-ai/doompi-build to align it with other projects, there were no code changes.

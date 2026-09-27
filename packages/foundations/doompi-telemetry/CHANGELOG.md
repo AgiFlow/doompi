@@ -1,3 +1,13 @@
+## 0.0.1-alpha.85 (2026-09-27)
+
+### 🩹 Fixes
+
+- **doompi-core:** keep the session server alive after a harness fault ([#214](https://github.com/AgiFlow/doompi/pull/214))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.84 (2026-09-27)
 
 This was a version bump only for @agimon-ai/doompi-telemetry to align it with other projects, there were no code changes.
