@@ -478,6 +478,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   const registration = { dispose: () => undefined };
   const headlessHost = {
     context: executionContext,
+    readSkill: () => undefined,
     changeSelection: async () => undefined,
     assertActive: () => undefined,
     subscribeSelection: () => () => undefined,

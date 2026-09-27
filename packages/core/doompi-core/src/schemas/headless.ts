@@ -330,8 +330,16 @@ export interface DoomHeadlessCapabilitySnapshot {
 }
 
 /** Registrations inherit package ownership from the caller's Cordis facet. */
+/**
+ * The tool a server session loads skills through. When a session carries it, the prompt lists
+ * every skill by name and points here, so a skill needs no file the agent could read.
+ */
+export const DOOM_LOAD_SKILL_TOOL = 'load_skill';
+
 export interface DoomHeadlessHostService {
   readonly context: DoomHeadlessExecutionContext;
+  /** The instructions of an applied skill by exact name, or undefined when none is applied. */
+  readSkill(name: string): string | undefined;
   changeSelection(change: DoomHeadlessSelectionChange): Promise<void>;
   assertActive(source?: string): void;
   subscribeSelection(listener: (selection: DoomHeadlessSelection) => void | Promise<void>): () => void;

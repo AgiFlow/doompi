@@ -32,6 +32,7 @@ import type {
   DoomHeadlessTool,
   DoomHeadlessToolCompletionRequest,
 } from '../../../exports/headless';
+import { DOOM_LOAD_SKILL_TOOL } from '../../../exports/headless';
 import type { DoomSessionContext } from '../../../exports/hubChannel';
 import type { DoomMcpContextSnapshot, DoomMcpSkill, DoomMcpUiResource } from '../../../exports/mcpFacet';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
@@ -61,7 +62,7 @@ import type {
 import { createHeadlessChildSessionServiceProvider } from '../../child/adapters/headlessChildSessionService';
 import type { ResolvedHeadlessResource } from '../types/headlessHost';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/headlessSessionHost';
-import { HeadlessHost, headlessHarnessSkill } from './headlessHost';
+import { describeLoadSkillTool, HeadlessHost, headlessHarnessSkill } from './headlessHost';
 
 type AnyRecord = Record<string, unknown>;
 type HeadlessTool = DoomHeadlessTool;
@@ -526,7 +527,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     // bill these skills to the context panel. Until now nothing emitted it, so the
     // panel charged for an <available_skills> block the model never received. It
     // returns '' for an empty list and leads with a blank line of its own.
-    const skills = formatSkillsForSystemPrompt(mapped.advertised).trim();
+    // With the load tool, its description carries the skill list; without it, the prompt lists
+    // the skills the agent can open with read.
+    const skills = toolGuidance.some((entry) => entry.name === DOOM_LOAD_SKILL_TOOL)
+      ? ''
+      : formatSkillsForSystemPrompt(mapped.advertised).trim();
     // Pi's order for the same sections: operator prompt, project context, tools,
     // skills, package context, then the working directory last.
     return [
@@ -1157,7 +1162,15 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
 
   const applyToolSurface = async (tools: readonly HeadlessTool[]): Promise<void> => {
     toolSurfaceReady = false;
-    const facetTools = tools.map((tool) => toolAdapter(tool, () => headlessHost!.context, reportedToolErrors));
+    const facetTools = tools.map((tool) =>
+      toolAdapter(
+        tool.name === DOOM_LOAD_SKILL_TOOL
+          ? { ...tool, description: describeLoadSkillTool(tool.description, headlessHost?.appliedResources ?? []) }
+          : tool,
+        () => headlessHost!.context,
+        reportedToolErrors,
+      ),
+    );
     // Facet tools win a name collision, including when the collision is with a
     // name the facet surface declared and then gated out. The reconciled set
     // owns the name either way, so a Pi extension tool never fills a slot a
@@ -1306,6 +1319,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           }),
         );
         surfaceRevision += 1;
+        // The load tool lists the skills in its description, so it follows them.
+        if (appliedFacetTools.some((tool) => tool.name === DOOM_LOAD_SKILL_TOOL)) await applyLatestTools();
       },
       onApplied: async (selection) => {
         options.publishSelectionStatus?.((source, text) => client!.client.setStatus(source, text), selection);

@@ -8,6 +8,7 @@ import {
 } from '@agimon-ai/doompi-core/serverFacet';
 
 import { mountMcpSkills } from '../../../../../services/mcpSkills';
+import { createSessionLoadSkillTool } from '../../../../../services/mcpSkillTools';
 import { discoverServerSkills } from '../../../../../services/serverInventory';
 import { createSkillCommands } from './skillCommands';
 
@@ -18,6 +19,7 @@ export async function createSkillServer(
   const { inventory, catalog, groups, mcpGroups, listed } = await discoverServerSkills(agent.context, signal);
   return {
     commands: createSkillCommands(inventory, catalog, groups),
+    tools: [createSessionLoadSkillTool(agent)],
     services: [mountMcpSkills(mcpGroups, signal)],
     resources: [
       // Each skill joins the prompt's one <available_skills> list, gated like the rest.
