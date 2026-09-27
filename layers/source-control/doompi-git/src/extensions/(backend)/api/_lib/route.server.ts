@@ -40,7 +40,11 @@ export const api: DoomApi = {
       directEvents.publish(GIT_WORKTREE_LIFECYCLE_EVENT, sessionId, { version: 1 as const, repositoryRoot });
     };
     const git = createWorktreeGit();
-    const operations = createWorktreeOperations({ git, sessionService: context.sessionService });
+    const operations = createWorktreeOperations({
+      git,
+      sessionService: context.sessionService,
+      ...(context.homeDirectory === undefined ? {} : { homeDir: context.homeDirectory }),
+    });
 
     /**
      * The new-session dialog's routes: the workspace's branches, and a top-level

@@ -6,6 +6,10 @@ Package-owned guidance for Git worktree sessions for DoomPi: spawn an isolated w
 
 - [Use Git](./src/prompts/doompi-use-git/SKILL.md): Run the package command and follow its package-specific usage guidance.
 
+## New-session dialog
+
+In the web cockpit, doompi-git replaces a git workspace's new-session dialog: a worktree on an existing branch (remote-only branches get a local tracking branch), a worktree on a new branch from a base, or a plain session. Dialog worktree sessions are top-level, with no parent session.
+
 ## Resources
 
 - [Package README](./README.md): Installation, development commands, Pi entrypoint, and extension-specific usage.

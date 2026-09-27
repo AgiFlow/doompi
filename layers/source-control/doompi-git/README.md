@@ -27,6 +27,16 @@ Run the registered command in Pi:
 
 Show git worktrees owned by this session
 
+### New-session dialog
+
+In the web cockpit, doompi-git replaces the new-session dialog for a git workspace. It offers three choices:
+
+- **Existing branch**: a worktree session on a local branch, or on a remote-only branch (a local tracking branch is created). Branches already checked out elsewhere are disabled.
+- **New branch**: a worktree session on a new branch from a base, preselected to the repository's default branch.
+- **No branch**: a plain session in the workspace folder.
+
+Worktree sessions opened here start at the top level of the session rail, with no parent. A workspace that is not a git checkout offers the plain session only. For remote devices, creating a worktree session needs the same passkey step-up as any new session.
+
 ## Package behavior
 
 > Before publishing, replace this paragraph with one concrete, copy-pasteable example of the package-specific input, output, configuration, or workflow that is not already demonstrated by the generated command.
