@@ -54,6 +54,7 @@ export const SessionSummarySchema = Type.Object({
   awaitingInput: Flag,
   lastSettledAt: Optional(Text),
   git: Optional(Type.Object({ branch: Text, dirty: Flag })),
+  profile: Optional(Type.Object({ name: Text, displayName: Optional(Text), iconVersion: Optional(Text) })),
   parentSessionId: Optional(Text),
   sessionProvenance: Optional(Text),
   pendingSetups: Optional(

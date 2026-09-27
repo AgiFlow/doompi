@@ -10,6 +10,13 @@ import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 import type { HeadlessSessionHost } from '../../../../../src/systems/main/types/headlessSessionHost';
 import type { DirectHarnessFrame } from '../../../../../src/types/server/directHarnessRuntime';
 
+type SelectionListener = Parameters<NonNullable<HeadlessSessionHost['onSelection']>>[0];
+
+/** Hub profile tracking reads only the profile axis of a selection. */
+function selected(profile?: string): Parameters<SelectionListener>[0] {
+  return (profile === undefined ? {} : { profile }) as Parameters<SelectionListener>[0];
+}
+
 function host() {
   let resolveExit: ((code: number) => void) | undefined;
   let presentationListener: ((frame: DirectHarnessFrame) => void) | undefined;
@@ -577,6 +584,78 @@ describe('createHeadlessHub', () => {
     await vi.waitFor(() => expect(hub.session('one')?.git).toBeUndefined());
     expect(upserts.at(-1)).toBeUndefined();
     expect(upserts).toContainEqual({ branch: 'main', dirty: false });
+  });
+
+  it('tracks the selected profile and serves its icon outside the summary', async () => {
+    const session = host();
+    let selectionListener: SelectionListener | undefined;
+    const png = `data:image/png;base64,${Buffer.from('png-bytes').toString('base64')}`;
+    const resolveProfileIdentity = vi.fn((_root: string, profile: string) => {
+      if (profile === 'ponytail') return { displayName: 'Ponytail', icon: png };
+      if (profile === 'vector') return { icon: 'data:image/svg+xml;base64,PHN2Zy8+' };
+      if (profile === 'plain') return {};
+      throw new Error(`Unknown profile: ${profile}`);
+    });
+    const onNotice = vi.fn();
+    const hub = createHeadlessHub({
+      manager: { closeSession: vi.fn(async () => undefined) } as never,
+      readGitStatus: async () => undefined,
+      resolveProfileIdentity,
+      onNotice,
+    });
+    hub.registerWorkspace({ id: 'ws', root: '/workspace-root' });
+    const upserts: unknown[] = [];
+    hub.onEvent((event) => {
+      if (event.kind === 'upsert') upserts.push(event.session.profile);
+    });
+    hub.register({
+      id: 'one',
+      workspaceId: 'ws',
+      name: 'One',
+      cwd: '/workspace-root/packages/app',
+      createdAt: 'now',
+      host: {
+        ...session.host,
+        onSelection: (listener) => {
+          selectionListener = listener;
+          listener(selected('ponytail'));
+          return () => {
+            selectionListener = undefined;
+          };
+        },
+      },
+    });
+
+    expect(resolveProfileIdentity).toHaveBeenCalledWith('/workspace-root', 'ponytail');
+    expect(hub.session('one')?.profile).toEqual({
+      name: 'ponytail',
+      displayName: 'Ponytail',
+      iconVersion: expect.stringMatching(/^[0-9a-f]{12}$/u),
+    });
+    expect(upserts.at(-1)).not.toHaveProperty('icon');
+    expect(hub.sessionAvatar('one')).toEqual({ mimeType: 'image/png', bytes: Buffer.from('png-bytes') });
+
+    const published = upserts.length;
+    selectionListener?.(selected('ponytail'));
+    expect(upserts).toHaveLength(published);
+
+    selectionListener?.(selected('vector'));
+    expect(hub.sessionAvatar('one')).toBeUndefined();
+    selectionListener?.(selected('plain'));
+    expect(hub.session('one')?.profile).toEqual({ name: 'plain' });
+    expect(hub.sessionAvatar('one')).toBeUndefined();
+
+    selectionListener?.(selected('gone'));
+    expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('profile "gone" could not be resolved'));
+    expect(hub.session('one')?.profile).toEqual({ name: 'gone' });
+
+    selectionListener?.(selected());
+    expect(hub.session('one')?.profile).toBeUndefined();
+
+    selectionListener?.(selected('ponytail'));
+    await hub.closeSession('one');
+    expect(selectionListener).toBeUndefined();
+    expect(hub.sessionAvatar('one')).toBeUndefined();
   });
 
   it('keeps workspace APIs alive without sessions and isolates equal package paths', async () => {

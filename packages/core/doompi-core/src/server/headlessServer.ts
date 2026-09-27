@@ -132,6 +132,7 @@ function sessionView(session: HeadlessHubSession): Record<string, unknown> {
     awaitingInput: session.awaitingInput ?? false,
     ...(session.lastSettledAt === undefined ? {} : { lastSettledAt: session.lastSettledAt }),
     ...(session.git === undefined ? {} : { git: { ...session.git } }),
+    ...(session.profile === undefined ? {} : { profile: { ...session.profile } }),
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
     ...(session.pendingSetups === undefined ? {} : { pendingSetups: session.pendingSetups }),
@@ -952,6 +953,22 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     }
     if (suffix === '/history' && request.method === 'GET' && options.sessionHistory) {
       json(response, 200, { sessions: await options.sessionHistory(session) });
+      return;
+    }
+    if (suffix === '/avatar' && request.method === 'GET') {
+      const avatar = options.headlessHub.sessionAvatar(sessionId);
+      if (avatar === undefined) {
+        json(response, 404, { error: 'This session has no avatar.' });
+        return;
+      }
+      const current = url.searchParams.get('v') === session.profile?.iconVersion;
+      response.writeHead(200, {
+        'content-type': avatar.mimeType,
+        'content-length': String(avatar.bytes.byteLength),
+        'cache-control': current ? 'private, max-age=31536000, immutable' : 'no-store',
+        'x-content-type-options': 'nosniff',
+      });
+      response.end(avatar.bytes);
       return;
     }
     if (suffix === '/file' && request.method === 'GET') {

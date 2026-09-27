@@ -692,6 +692,67 @@ describe('serveHeadlessServer', () => {
     await hub.close();
   });
 
+  it('serves a session profile avatar with cache headers keyed by its icon version', async () => {
+    const icon = `data:image/webp;base64,${Buffer.from('webp-bytes').toString('base64')}`;
+    const hub = createHeadlessHub({
+      manager: { closeSession: vi.fn(async () => undefined) } as never,
+      readGitStatus: async () => undefined,
+      resolveProfileIdentity: (_root, profile) => (profile === 'ponytail' ? { displayName: 'Ponytail', icon } : {}),
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const withProfile = (profile: string) => ({
+      ...host().host,
+      onSelection: (listener: Parameters<NonNullable<HeadlessSessionHost['onSelection']>>[0]) => {
+        listener({ profile } as Parameters<typeof listener>[0]);
+        return () => undefined;
+      },
+    });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: withProfile('ponytail'),
+    });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'two',
+      name: 'Two',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: withProfile('plain'),
+    });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
+    servers.push(server);
+    const headers = { 'x-doompi-token': 'secret' };
+    const sessionUrl = (id: string) => `${server.url}/api/workspaces/test-workspace/sessions/${id}`;
+
+    const view = (await (await fetch(sessionUrl('one'), { headers })).json()) as {
+      profile?: { name: string; displayName?: string; iconVersion?: string };
+    };
+    expect(view.profile).toMatchObject({ name: 'ponytail', displayName: 'Ponytail' });
+    const version = view.profile?.iconVersion ?? '';
+
+    const cached = await fetch(`${sessionUrl('one')}/avatar?v=${version}`, { headers });
+    expect(cached.status).toBe(200);
+    expect(cached.headers.get('content-type')).toBe('image/webp');
+    expect(cached.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
+    expect(cached.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(Buffer.from(await cached.arrayBuffer()).toString()).toBe('webp-bytes');
+
+    const stale = await fetch(`${sessionUrl('one')}/avatar?v=old`, { headers });
+    expect(stale.headers.get('cache-control')).toBe('no-store');
+    expect((await fetch(`${sessionUrl('two')}/avatar`, { headers })).status).toBe(404);
+    expect((await fetch(`${sessionUrl('one')}/avatar`)).status).toBe(401);
+    await hub.close();
+  });
+
   it('routes restart, history, and resume through the live session lifecycle', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
     hub.register({

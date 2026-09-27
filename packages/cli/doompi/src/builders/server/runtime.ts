@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
 import { filterHookDisabledLayers, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
+import { resolveProfile } from '@agimon-ai/doompi-config/profiles';
 import { createHeadlessHub, type HeadlessHub } from '@agimon-ai/doompi-core/headlessHub';
 import { serveHeadlessServer } from '@agimon-ai/doompi-core/headlessServer';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '@agimon-ai/doompi-core/headlessSessionHost';
@@ -259,6 +260,11 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   let hub!: HeadlessHub;
   hub = createHeadlessHub({
     manager: sessionManager,
+    // Throws for an unknown profile; the hub reports that and shows the session without an avatar.
+    resolveProfileIdentity: (root, profile) => {
+      const identity = resolveProfile(root, profile, homeDirectory).identity;
+      return identity === undefined ? undefined : { displayName: identity.name, icon: identity.icon };
+    },
     admitWorkspace: async ({ root, name }) =>
       admitWorkspace(
         root === undefined || root.trim() === '' ? await createDefaultWorkspaceFolder(name ?? '', homeDirectory) : root,

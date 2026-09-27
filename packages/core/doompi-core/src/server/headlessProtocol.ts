@@ -50,6 +50,15 @@ function sessionView(session: HeadlessHubSession): Record<string, JsonValue> {
     awaitingInput: session.awaitingInput ?? false,
     ...(session.lastSettledAt === undefined ? {} : { lastSettledAt: session.lastSettledAt }),
     ...(session.git === undefined ? {} : { git: { branch: session.git.branch, dirty: session.git.dirty } }),
+    ...(session.profile === undefined
+      ? {}
+      : {
+          profile: {
+            name: session.profile.name,
+            ...(session.profile.displayName === undefined ? {} : { displayName: session.profile.displayName }),
+            ...(session.profile.iconVersion === undefined ? {} : { iconVersion: session.profile.iconVersion }),
+          },
+        }),
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
     ...(session.pendingSetups === undefined

@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 
 import type {
@@ -31,6 +33,7 @@ import {
   type InstalledServerFacets,
   type LoadedServerFacet,
 } from '../exports/serverFacet';
+import { PROFILE_ICON_MIME_TYPES } from '../schemas/profileIdentity';
 import { readSessionGitStatus } from '../services/sessionGitStatus';
 import type { SessionGitStatus } from '../services/sessionGitStatus/type';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../systems/main/types/headlessSessionHost';
@@ -39,6 +42,22 @@ import { AGENT_SETTLED_ENTRY_TYPE } from './directHarnessRuntime';
 
 const AUTHORIZATION_HEADER = 'authorization';
 const CHANNEL_PRIORITY = { global: 0, workspace: 1, session: 2 } as const;
+const ICON_VERSION_LENGTH = 12;
+const ICON_DATA_URL = /^data:([a-z/+.-]+);base64,([A-Za-z0-9+/=]+)$/u;
+
+/** The profile a session runs under, as shown on its rail card. The icon itself is served separately. */
+export interface HeadlessSessionProfile {
+  readonly name: string;
+  readonly displayName?: string;
+  /** Changes whenever the icon does, so a client can cache the avatar by it. */
+  readonly iconVersion?: string;
+}
+
+/** A profile's persona presentation: display name and icon as a data: URL. */
+export interface HeadlessProfileIdentity {
+  readonly displayName?: string;
+  readonly icon?: string;
+}
 
 export interface HeadlessHubSession {
   readonly id: string;
@@ -58,6 +77,8 @@ export interface HeadlessHubSession {
   readonly lastSettledAt?: string;
   /** Branch and dirty flag of the session cwd; absent outside a git work tree. */
   readonly git?: SessionGitStatus;
+  /** Selected profile; absent when the session runs without one. */
+  readonly profile?: HeadlessSessionProfile;
   readonly pendingSetups?: readonly DoomPendingSessionSetup[];
   /** Environment admitted for this session, when supplied by the host. */
   readonly environment?: Readonly<Record<string, string | undefined>>;
@@ -98,6 +119,8 @@ export interface HeadlessHubOptions {
   onWorkspaceRemoved?: (workspaceId: string) => void;
   /** Reads a session cwd's git status; defaults to the git CLI. */
   readGitStatus?: (cwd: string) => Promise<SessionGitStatus | undefined>;
+  /** Resolves a profile's persona presentation for a workspace root; sessions show no avatar without it. */
+  resolveProfileIdentity?: (root: string, profile: string) => HeadlessProfileIdentity | undefined;
 }
 
 export interface HeadlessHub {
@@ -109,6 +132,8 @@ export interface HeadlessHub {
   snapshot(): readonly HeadlessHubSession[];
   session(sessionId: string): HeadlessHubSession | undefined;
   runtime(sessionId: string): HeadlessSessionHost['runtime'] | undefined;
+  /** The session's profile avatar image, when its profile has an icon. */
+  sessionAvatar(sessionId: string): { mimeType: string; bytes: Uint8Array } | undefined;
   onEvent(listener: (event: HeadlessHubEvent) => void): () => void;
   register(session: HeadlessHubSession): void;
   create(options: HeadlessSessionHostOptions): Promise<HeadlessHubSession>;
@@ -193,6 +218,8 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   const subscriptions = new Set<() => void>();
   const sessionCleanups = new Map<string, () => void>();
   const presentationCleanups = new Map<string, () => void>();
+  /** Profile icons by session, kept out of summaries because each can be hundreds of kilobytes. */
+  const avatarIcons = new Map<string, string>();
   const sessionShutdowns = new Map<string, { session: HeadlessHubSession; promise: Promise<void>; pending: boolean }>();
   const directEventListeners = new Map<string, Set<(payload: unknown) => void>>();
   const directEventLatest = new Map<string, unknown>();
@@ -590,6 +617,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     sessionCleanups.delete(sessionId);
     presentationCleanups.get(sessionId)?.();
     presentationCleanups.delete(sessionId);
+    avatarIcons.delete(sessionId);
     directEvents.clearSession?.(sessionId);
     emit({ kind: 'removed', sessionId });
   };
@@ -686,7 +714,49 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       emit({ kind: 'upsert', session: current });
       if (type === 'agent_settled') refreshGit();
     });
-    presentationCleanups.set(session.id, stopPresentation);
+    let registered = false;
+    const applyProfile = (profileName: string | undefined): void => {
+      if (closed || sessions.get(session.id)?.host !== session.host) return;
+      let identity: HeadlessProfileIdentity | undefined;
+      if (profileName) {
+        const root = (session.workspaceId && workspaces.get(session.workspaceId)?.root) || session.cwd;
+        try {
+          identity = options.resolveProfileIdentity?.(root, profileName);
+        } catch (error) {
+          options.onNotice?.(
+            `session ${session.id} profile "${profileName}" could not be resolved (${error instanceof Error ? error.message : String(error)})`,
+          );
+        }
+      }
+      const icon = identity?.icon;
+      if (icon) avatarIcons.set(session.id, icon);
+      else avatarIcons.delete(session.id);
+      const profile: HeadlessSessionProfile | undefined = profileName
+        ? {
+            name: profileName,
+            ...(identity?.displayName ? { displayName: identity.displayName } : {}),
+            ...(icon
+              ? { iconVersion: crypto.createHash('sha256').update(icon).digest('hex').slice(0, ICON_VERSION_LENGTH) }
+              : {}),
+          }
+        : undefined;
+      const previous = current.profile;
+      if (
+        previous?.name === profile?.name &&
+        previous?.displayName === profile?.displayName &&
+        previous?.iconVersion === profile?.iconVersion
+      )
+        return;
+      const { profile: _previous, ...rest } = current;
+      current = profile === undefined ? rest : { ...rest, profile };
+      sessions.set(session.id, current);
+      if (registered) emit({ kind: 'upsert', session: current });
+    };
+    const stopSelection = session.host.onSelection?.((selection) => applyProfile(selection.profile));
+    presentationCleanups.set(session.id, () => {
+      stopPresentation();
+      stopSelection?.();
+    });
     for (const { source } of selectedChannels(current)) source.sessionAdded?.(scopeOf(session));
     const active = (): boolean => sessions.get(session.id)?.host === session.host && !closed;
     const cleanup = (): void => {
@@ -702,6 +772,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     sessionCleanups.set(session.id, cleanup);
     void session.host.runtime.exited.then(cleanup, cleanup);
     subscriptions.add(cleanup);
+    registered = true;
     emit({ kind: 'upsert', session: current });
     refreshGit();
   };
@@ -808,6 +879,12 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       if (session) emit({ kind: 'upsert', session: present(session) });
     },
     runtime: (sessionId) => sessions.get(sessionId)?.host.runtime,
+    sessionAvatar(sessionId) {
+      const match = ICON_DATA_URL.exec(avatarIcons.get(sessionId) ?? '');
+      const mimeType = match?.[1];
+      if (match === null || !(PROFILE_ICON_MIME_TYPES as readonly string[]).includes(mimeType ?? '')) return undefined;
+      return { mimeType: mimeType!, bytes: Buffer.from(match[2]!, 'base64') };
+    },
     onEvent(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

@@ -61,6 +61,8 @@ export interface HeadlessSessionHost {
   readonly activateFacets: (installed: InstalledServerFacets) => Promise<void>;
   readonly canDispatch: () => boolean;
   onPresentationFrame(listener: (frame: Record<string, unknown>) => void): () => void;
+  /** Replays the latest selection, then reports each applied change. Optional so lightweight hosts can omit it. */
+  onSelection?(listener: (selection: DoomHeadlessSelection) => void): () => void;
   respondToExtensionUi(frame: Record<string, unknown>): boolean;
   dispose(): Promise<void>;
 }
