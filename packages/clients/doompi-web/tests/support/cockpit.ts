@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -51,6 +52,30 @@ interface CockpitOptions {
   assets: 'packaged' | 'synced';
   assetPackageRoot: string | null;
   backlogLimit: number;
+  /** Makes the workspace a git repository with a local branch and a remote-only branch. */
+  gitWorkspace: boolean;
+}
+
+/** A repository on main with `feature/existing`, and an origin holding the remote-only branch `remote-only`. */
+function initializeGitWorkspace(root: string, workRoot: string): void {
+  const git = (cwd: string, ...args: string[]): void => {
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+  };
+  git(workRoot, 'init', '-q', '-b', 'main');
+  git(workRoot, 'config', 'user.email', 'e2e@example.com');
+  git(workRoot, 'config', 'user.name', 'E2E');
+  git(workRoot, 'config', 'commit.gpgsign', 'false');
+  fs.writeFileSync(path.join(workRoot, 'README.md'), '# e2e\n');
+  git(workRoot, 'add', 'README.md');
+  git(workRoot, 'commit', '-q', '-m', 'init');
+  git(workRoot, 'branch', 'feature/existing');
+  const origin = path.join(root, 'origin.git');
+  git(root, 'init', '-q', '--bare', '-b', 'main', origin);
+  git(workRoot, 'remote', 'add', 'origin', origin);
+  git(workRoot, 'push', '-q', 'origin', 'main');
+  git(workRoot, 'push', '-q', 'origin', 'main:remote-only');
+  git(workRoot, 'fetch', '-q', 'origin');
+  git(workRoot, 'remote', 'set-head', 'origin', 'main');
 }
 
 export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
@@ -59,6 +84,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   assets: ['packaged', { option: true }],
   assetPackageRoot: [null, { option: true }],
   backlogLimit: [512, { option: true }],
+  gitWorkspace: [false, { option: true }],
   page: async ({ page, cockpit, assets }, use) => {
     if (assets === 'synced') {
       await page.addInitScript((expectedStyleCount) => {
@@ -103,7 +129,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       await page.close();
     }
   },
-  cockpit: async ({ context, sessionCount, dormantSessionCount, assets, assetPackageRoot }, use) => {
+  cockpit: async ({ context, sessionCount, dormantSessionCount, assets, assetPackageRoot, gitWorkspace }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-e2e-'));
     const syncedDist = process.env[SYNCED_DIST_ENV];
     if (assets === 'synced' && (syncedDist === undefined || syncedDist === ''))
@@ -116,6 +142,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const teamTemp = path.join(root, 'tmp');
     const workRoot = path.join(root, 'workspaces');
     fs.mkdirSync(workRoot, { recursive: true });
+    if (gitWorkspace) initializeGitWorkspace(root, workRoot);
     fs.mkdirSync(teamTemp, { recursive: true });
     fs.mkdirSync(agentDir, { recursive: true });
 
