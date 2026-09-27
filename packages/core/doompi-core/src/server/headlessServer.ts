@@ -10,6 +10,7 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
 
+import { API_BASE_PATH as CONTEXT_API_BASE_PATH } from '../constants/contextApi';
 import {
   DOOM_API_CALLER_HEADERS,
   DOOM_API_CALLER_LOCALITY_HEADER,
@@ -24,6 +25,7 @@ import { observe, type ServerTelemetry } from '../services/serverTelemetry';
 import { createSessionMcpConversationStore } from '../services/sessionMcpConversations';
 import { createSessionMcpRegistrationStore } from '../services/sessionMcpRegistrationStore';
 import type { SavedSession } from '../services/sqliteSessionHistory';
+import { createContextApi } from './contextApi';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createHeadlessProtocol } from './headlessProtocol';
 import { createSessionMcpRoutes, isPublicSessionMcpRoute, isSessionMcpHostRoute } from './sessionMcpRoutes';
@@ -700,6 +702,18 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         return;
       }
       if (sessionId !== undefined && options.headlessHub.session(sessionId)?.workspaceId !== workspaceId) {
+        // A stopped session still shows the composition it last published, so its context detail
+        // is served from the file it wrote. Nothing else answers until it is woken.
+        const stopped = dormant().some(
+          (record) => record.sessionId === sessionId && record.workspaceId === workspaceId,
+        );
+        if (stopped && pluginMatch[3] === CONTEXT_API_BASE_PATH && request.method === 'GET') {
+          const detail = await createContextApi({ sessionId, environment: process.env }).fetch(
+            new Request(`http://doompi.local/${pluginMatch[4] ?? ''}${url.search}`),
+          );
+          json(response, detail.status, await detail.json());
+          return;
+        }
         json(response, 404, { error: 'Session not found.' });
         return;
       }

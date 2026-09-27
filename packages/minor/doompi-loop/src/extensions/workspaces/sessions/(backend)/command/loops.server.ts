@@ -2,6 +2,6 @@ import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/
 import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/serverFacet';
 
 export default defineRoutedContribution(
-  (context: WithRoot<DoomServerPluginContext, Partial<DoomServerSessionPlugin>>) => context.root.commands?.[1],
+  (context: WithRoot<DoomServerPluginContext, Partial<DoomServerSessionPlugin>>) => context.root.commands?.[0],
   { cardinality: 'optional' },
 );

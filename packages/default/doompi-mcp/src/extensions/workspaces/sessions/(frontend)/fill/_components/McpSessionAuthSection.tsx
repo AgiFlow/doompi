@@ -13,6 +13,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { MCP_SESSION_AUTH_STATUS_KEY, parseMcpSessionAuthStatus } from '../../../../../../types/webMcp';
+import { McpToolDetailDialog, type McpToolTarget } from './McpToolDetailDialog';
 
 /** Requests authorization through Pi's command frame, never through a shell. */
 export function requestMcpSessionAuthorization(
@@ -38,6 +39,7 @@ export function McpSessionAuthSection({
   const [target, setTarget] = useState<{ sessionId: string; name: string } | null>(null);
   const [copyFeedback, setCopyFeedback] = useState('');
   const [popupBlocked, setPopupBlocked] = useState(false);
+  const [toolTarget, setToolTarget] = useState<McpToolTarget | null>(null);
   // Only retain a tab while it is our blank placeholder. Never close the provider's page.
   const pendingTab = useRef<Window | null>(null);
   const selected = target?.sessionId === sessionId ? target : null;
@@ -110,9 +112,12 @@ export function McpSessionAuthSection({
           </div>
           <ul aria-label="MCP servers" className="flex flex-col gap-2">
             {servers.map((item) => {
+              // Tools the model carries itself come from the context inventory; tools reached
+              // through mcp_use come from the server's status and cost nothing until called.
               const tools = contextInventory.filter(
                 (inventoryItem) => inventoryItem.source === 'mcp' && inventoryItem.owner === item.name,
               );
+              const reachable = item.tools ?? [];
               return (
                 <li key={item.name} className="flex min-w-0 flex-col gap-1 px-1 py-0.5">
                   <div className="flex min-w-0 items-center gap-2">
@@ -139,23 +144,75 @@ export function McpSessionAuthSection({
                       {item.state === 'connected' ? 'manage' : 'authorize'}
                     </Button>
                   </div>
-                  {tools.length === 0 ? (
-                    <p className="pl-3 text-2xs text-doom-faint">no tools reported</p>
-                  ) : (
-                    <ul aria-label={`${item.name} tools`} className="flex flex-col">
+                  {tools.length > 0 ? (
+                    <ul aria-label={`${item.name} tools and skills`} className="flex flex-col">
                       {tools.map((tool) => (
-                        <li key={tool.name} className="flex min-w-0 items-center gap-2 py-px pl-3">
+                        <li
+                          key={`${tool.itemKind}:${tool.name}`}
+                          data-active={tool.active}
+                          className="flex min-w-0 items-center gap-2 py-px pl-3"
+                        >
+                          <abbr
+                            title={tool.itemKind}
+                            className={`w-3 shrink-0 text-2xs font-bold no-underline ${tool.active ? 'text-doom-violet' : 'text-doom-faint'}`}
+                          >
+                            {tool.itemKind === 'skill' ? 'S' : 'T'}
+                          </abbr>
                           <span
-                            className={`min-w-0 flex-1 truncate text-2xs ${tool.active ? 'text-doom-dim' : 'text-doom-faint'}`}
+                            className={`min-w-0 flex-1 truncate text-2xs ${tool.active ? 'text-doom-hi' : 'text-doom-faint'}`}
                           >
                             {tool.name}
                           </span>
-                          <span className="w-14 shrink-0 text-right text-2xs text-doom-faint">
+                          <span
+                            className={`w-14 shrink-0 text-right text-2xs ${tool.active ? 'text-doom-text' : 'text-doom-faint'}`}
+                          >
                             {tool.active ? tokenEstimate(tool.tokens) : `(${tokenEstimate(tool.tokens)})`}
                           </span>
                         </li>
                       ))}
                     </ul>
+                  ) : reachable.length > 0 ? (
+                    <div className="flex flex-col">
+                      <p className="pl-3 text-2xs text-doom-faint">
+                        {`${reachable.length} ${reachable.length === 1 ? 'tool' : 'tools'} via mcp_use, not in context`}
+                      </p>
+                      <ul aria-label={`${item.name} reachable tools`} className="flex flex-col">
+                        {reachable.map((tool) => (
+                          <li key={tool.name} className="flex min-w-0">
+                            <Button
+                              variant="ghost"
+                              size="card"
+                              data-testid={`context-mcp-reachable-${item.name}-${tool.name}`}
+                              title="open the tool's description and schema"
+                              disabled={sessionId === null}
+                              onClick={() => {
+                                if (sessionId !== null)
+                                  setToolTarget({ sessionId, server: item.name, tool: tool.name });
+                              }}
+                              className="min-w-0 flex-1 flex-row items-center gap-2 rounded-none py-px pr-0 pl-3"
+                            >
+                              <abbr
+                                title="tool"
+                                className="w-3 shrink-0 text-2xs font-bold text-doom-violet no-underline"
+                              >
+                                T
+                              </abbr>
+                              <span className="min-w-0 flex-1 truncate text-left text-2xs text-doom-text">
+                                {tool.name}
+                              </span>
+                              <span
+                                title="what the schema would cost if added to context directly"
+                                className="w-14 shrink-0 text-right text-2xs text-doom-faint"
+                              >
+                                {tool.tokens === undefined ? '(—)' : `(~${tool.tokens.toLocaleString()})`}
+                              </span>
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="pl-3 text-2xs text-doom-faint">no tools or skills reported</p>
                   )}
                 </li>
               );
@@ -163,6 +220,7 @@ export function McpSessionAuthSection({
           </ul>
         </section>
       )}
+      <McpToolDetailDialog target={toolTarget} onClose={() => setToolTarget(null)} />
       <Dialog
         open={selected !== null}
         onOpenChange={(open) => {

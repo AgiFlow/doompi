@@ -3,7 +3,7 @@ import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/do
 import { defineMinorMode, serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { Cron } from 'croner';
 
-import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../../constants/loop';
+import { LIST_COMMAND_NAME } from '../../constants/loop';
 import { MODE_STATUS_ID, PACKAGE_SOURCE } from '../../constants/piLoop';
 import { DOOM_LOOP_LAUNCHERS_SERVICE, type LoopLaunchRequest } from '../../schemas/loopLaunchers';
 import { CronLoopSchema, IntervalLoopSchema, parseCronLoop, parseIntervalLoop } from '../../schemas/loopTools';
@@ -14,34 +14,10 @@ import type { LoopToolsRoot } from '../loopTools/type';
 
 export type LoopServerState = DoomServerSessionPlugin & LoopToolsRoot;
 
-async function prepareLoop(execution: DoomHeadlessExecutionContext, request: LoopLaunchRequest, cron: boolean) {
-  if (request.input !== undefined) return cron ? parseCronLoop(request.input) : parseIntervalLoop(request.input);
-  if (request.interactive === false) throw new Error('Loop configuration is required for agent launches.');
-  const input = await execution.client.request(
-    { kind: 'input', title: 'Loop prompt', multiline: true },
-    request.signal,
-  );
-  const prompt = typeof input === 'string' ? input.trim() : '';
-  if (!prompt || request.signal.aborted) return undefined;
-  if (cron) {
-    const expression = await execution.client.request(
-      { kind: 'input', title: 'Cron expression (five fields)', initialValue: '0 * * * *' },
-      request.signal,
-    );
-    if (typeof expression !== 'string' || request.signal.aborted) return undefined;
-    const timezone = await execution.client.request(
-      { kind: 'input', title: 'Loop timezone', initialValue: 'UTC' },
-      request.signal,
-    );
-    if (typeof timezone !== 'string' || request.signal.aborted) return undefined;
-    return parseCronLoop({ prompt, cron: expression, timezone: timezone.trim() || 'UTC' });
-  }
-  const interval = await execution.client.request(
-    { kind: 'input', title: 'Loop interval in seconds', initialValue: '300' },
-    request.signal,
-  );
-  if (typeof interval !== 'string' || request.signal.aborted) return undefined;
-  return parseIntervalLoop({ prompt, intervalSeconds: Number(interval.trim() || '300') });
+/** Loops are set by the agent, so a launch always carries its configuration. */
+function prepareLoop(request: LoopLaunchRequest, cron: boolean) {
+  if (request.input === undefined) throw new Error('Loop configuration is required. Ask the agent to set the loop.');
+  return cron ? parseCronLoop(request.input) : parseIntervalLoop(request.input);
 }
 
 export function createSessionState(host: DoomHeadlessHostService): LoopServerState {
@@ -131,7 +107,7 @@ export function createSessionState(host: DoomHeadlessHostService): LoopServerSta
       inputSchema: { ...(cron ? CronLoopSchema : IntervalLoopSchema) },
       async launch(request) {
         const execution = host.context;
-        const prepared = await prepareLoop(execution, request, cron);
+        const prepared = prepareLoop(request, cron);
         if (!prepared || request.signal.aborted) return undefined;
         let stopped = false;
         const tick = async (): Promise<void> => {
@@ -224,26 +200,6 @@ export function createSessionState(host: DoomHeadlessHostService): LoopServerSta
       },
     ],
     commands: [
-      {
-        name: START_COMMAND_NAME,
-        description: 'Start a registered loop manually.',
-        async execute(args: string, execution: DoomHeadlessExecutionContext) {
-          const available = launchers.listLaunchers();
-          const selected =
-            args.trim() ||
-            (await execution.client.request({
-              kind: 'select',
-              title: 'Choose a loop launcher',
-              options: available.map((entry) => ({ label: entry.label, value: entry.id })),
-            }));
-          if (typeof selected !== 'string' || !selected) return;
-          const instance = await launchers.launch(selected);
-          await execution.client.notify({
-            body: instance ? `Loop '${instance.instanceId}' started.` : 'Loop launch was cancelled.',
-            level: 'info',
-          });
-        },
-      },
       {
         name: LIST_COMMAND_NAME,
         description: 'List or stop session loops. Usage: /loops [stop instanceId].',

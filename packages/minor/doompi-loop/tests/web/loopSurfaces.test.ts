@@ -36,7 +36,7 @@ describe('Loop web surfaces', () => {
       { slot: 'loop.items', id: 'instances' },
       { slot: 'activity.loops', id: 'loops' },
     ]);
-    expect(webPlugin.leaderBindings?.map(({ id }) => id)).toEqual(['loop.list', 'loop.start']);
+    expect(webPlugin.leaderBindings?.map(({ id }) => id)).toEqual(['loop.list']);
   });
 
   it('renders semantic rows, lifecycle labels, and full detail text', () => {
@@ -69,28 +69,23 @@ describe('Loop web surfaces', () => {
     expect(html).toContain('loop status unavailable');
   });
 
-  it('keeps the idle activity fill and both launcher surfaces available', () => {
-    const rendered = renderPlugin(
-      loopsActivityFill,
-      slotPropsFixture({
-        slotContent: {
-          'loop.registration': createElement('span', { 'data-testid': 'loop-extension-slot' }, 'Agiflow loop'),
-        },
-      }).props,
-    );
-    expect(rendered.error).toBeUndefined();
-    expect(rendered.html).toContain('data-testid="activity-loops-manage"');
-    expect(rendered.html).toContain('data-testid="activity-loop-default-launch"');
-    expect(rendered.html).toContain('Agiflow loop');
-    expect(rendered.html).toContain('activity-loop-cron-launch');
-    expect(rendered.html).toContain('choose loop type');
+  it('lists loops whatever the mode and tells the user how to set one', () => {
+    const render = (activeMinorModes: string[], raw?: string) =>
+      renderPlugin(loopsActivityFill, {
+        ...slotPropsFixture({
+          ...(raw === undefined ? {} : { statuses: { [LOOP_VIEW_STATUS_KEY]: raw } }),
+          slotContent: { 'loop.items': createElement('span', { 'data-testid': 'loop-items-slot' }) },
+        }).props,
+        activeMinorModes,
+      });
 
-    const withoutSession = renderPlugin(
-      loopsActivityFill,
-      slotPropsFixture({ sessionId: null, statuses: { [LOOP_VIEW_STATUS_KEY]: payload } }).props,
-    );
-    expect(withoutSession.error).toBeUndefined();
-    expect(withoutSession.html).toContain('data-testid="activity-loops-manage"');
-    expect(withoutSession.html).toContain('disabled=""');
+    const inactive = render([], payload);
+    expect(inactive.error).toBeUndefined();
+    expect(inactive.html).toContain('data-testid="loop-items-slot"');
+    expect(inactive.html).toContain('Activate loop minor mode to set loop or cron job.');
+    expect(inactive.html).not.toContain('default loop');
+
+    expect(render(['loop']).html).toContain('Ask the agent to set a loop or cron job.');
+    expect(render(['loop'], payload).html).not.toContain('activity-loops-hint');
   });
 });

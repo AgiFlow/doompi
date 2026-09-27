@@ -56,6 +56,6 @@ describe('mcpServerFacet', () => {
     const harness = hostContext('session');
     const dispose = await mcpServerFacet.apply(harness.context);
     await dispose?.();
-    expect(harness.registered).toEqual([mcpHubApi]);
+    expect(harness.registered).toEqual([mcpHubApi, expect.objectContaining({ basePath: 'mcp-session' })]);
   });
 });

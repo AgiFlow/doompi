@@ -278,7 +278,7 @@ describe('MCP server facet contracts', () => {
     mock.options[0]!.onServerStateChange?.({ serverName: 'pending', state: 'failed', error: 'fixture failure' });
     await vi.waitFor(() =>
       expect(parseMcpSessionAuthStatus(current.statuses[MCP_SESSION_AUTH_STATUS_KEY])).toEqual([
-        { name: 'example', state: 'connected' },
+        { name: 'example', state: 'connected', tools: [expect.objectContaining({ name: 'ping' })] },
         { name: 'pending', state: 'failed' },
       ]),
     );

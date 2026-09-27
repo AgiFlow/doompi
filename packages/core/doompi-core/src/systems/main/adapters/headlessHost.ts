@@ -326,6 +326,7 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
           group: 'extensions' as const,
           owner: resource.source,
           modelInvocable: true,
+          body: skill.content,
           ...(countTokens === undefined
             ? {}
             : { promptTokens: Math.max(0, countTokens(formatSkillsForSystemPrompt([skill])) - framingTokens) }),

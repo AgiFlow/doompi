@@ -115,6 +115,8 @@ export interface ContextSkillInventory {
   readonly modelInvocable: boolean;
   readonly promptTokens?: number;
   readonly filePath?: string;
+  /** The skill's instructions, when the host holds them; read only when a reader opens the row. */
+  readonly body?: string;
   readonly contextAttribution?: ContextConditionalAttribution;
 }
 

@@ -224,7 +224,7 @@ test('the journaled catalog drives the popup and rows send /minor for their mode
             actions: [],
           },
           {
-            id: 'loop.active',
+            id: 'loop',
             label: 'Loop',
             description: '',
             order: 30,

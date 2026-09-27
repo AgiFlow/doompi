@@ -23,6 +23,7 @@ import {
 } from '../../../../../src/exports/sessionProtocol';
 import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 import { serveHeadlessServer, type HeadlessServer } from '../../../../../src/server/headlessServer';
+import { writeContextDetail } from '../../../../../src/services/contextDetailStore';
 import type { HeadlessSessionHost } from '../../../../../src/systems/main/types/headlessSessionHost';
 import type { SessionToolInvocation } from '../../../../../src/types/server/sessionToolSurface';
 import { modernMcpRequest } from './modernMcpRequest';
@@ -792,6 +793,54 @@ describe('serveHeadlessServer', () => {
     // Reaches the reopened session's API instead of the 404 for a missing session.
     expect(await (await plugin).json()).toEqual({ plugin: true });
     await hub.close();
+  });
+
+  it('serves a stopped session its saved context detail and nothing else', async () => {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-context-detail-'));
+    vi.stubEnv('PI_CODING_AGENT_DIR', agentDir);
+    try {
+      writeContextDetail(
+        'asleep',
+        3,
+        [
+          {
+            itemKind: 'skill',
+            name: 'doompi-use-prompt',
+            owner: '@agimon-ai/doompi-prompt',
+            source: 'extension',
+            description: 'Use prompts.',
+            body: '# Prompt',
+          },
+        ] as never,
+        { PI_CODING_AGENT_DIR: agentDir },
+      );
+      const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+      await hub.mountFacets([], {
+        scope: 'workspace',
+        workspaceId: 'test-workspace',
+        workspaceRoot: '/repo',
+        onNotice: vi.fn(),
+      });
+      const server = await serveHeadlessServer({
+        headlessHub: hub,
+        port: 0,
+        dormantSessions: () => [
+          { sessionId: 'asleep', workspaceId: 'test-workspace', cwd: '/repo', name: 'Asleep', createdAt: '2025-01-02' },
+        ],
+      });
+      servers.push(server);
+      const base = `${server.url}/api/workspaces/test-workspace/sessions/asleep/plugins`;
+
+      const detail = await fetch(`${base}/context/item?kind=skill&name=doompi-use-prompt`);
+      expect(detail.status).toBe(200);
+      expect(await detail.json()).toMatchObject({ revision: 3, item: { name: 'doompi-use-prompt' } });
+      expect((await fetch(`${base}/context/item?kind=skill&name=missing`)).status).toBe(404);
+      // Every other package API still needs the session awake.
+      expect(await (await fetch(`${base}/runner/runners`)).json()).toEqual({ error: 'Session not found.' });
+    } finally {
+      vi.unstubAllEnvs();
+      fs.rmSync(agentDir, { recursive: true, force: true });
+    }
   });
 
   it('lists dormant records beside live sessions and revives one on request', async () => {

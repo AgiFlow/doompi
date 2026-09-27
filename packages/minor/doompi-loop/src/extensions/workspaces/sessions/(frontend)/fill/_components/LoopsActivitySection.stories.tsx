@@ -14,8 +14,11 @@ const LOOPS = JSON.stringify([
   { instanceId: 'loop-3', label: 'release watch', detail: 'draining current run', state: 'stopping' },
 ]);
 
-const props = (raw: string, sessionId: string | null = 's1') => {
-  const fixture = slotPropsFixture({ sessionId, statuses: { [LOOP_VIEW_STATUS_KEY]: raw } }).props;
+const props = (raw: string, modeActive = true, sessionId: string | null = 's1') => {
+  const fixture = {
+    ...slotPropsFixture({ sessionId, statuses: { [LOOP_VIEW_STATUS_KEY]: raw } }).props,
+    activeMinorModes: modeActive ? ['loop'] : [],
+  };
   return {
     ...fixture,
     renderSlot: (slot: string) =>
@@ -40,18 +43,23 @@ export const Playground = {
       </div>
 
       <div className="flex w-72 flex-col gap-2">
-        <span className="text-2xs text-doom-dim uppercase tracking-widest">mode off, no loops</span>
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">mode on, no loops</span>
         <LoopsActivitySection {...props('')} />
+      </div>
+
+      <div className="flex w-72 flex-col gap-2">
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">mode off, loops still listed</span>
+        <LoopsActivitySection {...props(LOOPS, false)} />
+      </div>
+
+      <div className="flex w-72 flex-col gap-2">
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">mode off, no loops</span>
+        <LoopsActivitySection {...props('', false)} />
       </div>
 
       <div className="flex w-72 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">malformed status</span>
         <LoopsActivitySection {...props('not json')} />
-      </div>
-
-      <div className="flex w-72 flex-col gap-2">
-        <span className="text-2xs text-doom-dim uppercase tracking-widest">no focused session · manage off</span>
-        <LoopsActivitySection {...props(LOOPS, null)} />
       </div>
     </div>
   ),

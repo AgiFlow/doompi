@@ -6,8 +6,12 @@ import {
   MCP_FLOW_ID_PARAM,
   MCP_REPOSITORY_API_PATH,
   MCP_REPOSITORY_ID_QUERY,
+  MCP_SESSION_TOOL_API_PATH,
+  MCP_SESSION_TOOL_NAME_QUERY,
+  MCP_SESSION_TOOL_SERVER_QUERY,
   type McpAuthorizationFlow,
   type McpRepositoryCatalog,
+  type McpSessionToolDetail,
 } from './webMcp';
 
 /** One authorization flow, addressed by id below the flow collection. */
@@ -57,5 +61,12 @@ export default defineApiRoutes({
     path: AUTHORIZATION_FLOW_PATH,
     query: [MCP_REPOSITORY_ID_QUERY],
     response: apiResponse<McpAuthorizationFlow>(),
+  },
+  /** Session scope: one tool the session reaches through mcp_use, with its description and schema. */
+  sessionTool: {
+    method: 'GET',
+    path: MCP_SESSION_TOOL_API_PATH,
+    query: [MCP_SESSION_TOOL_SERVER_QUERY, MCP_SESSION_TOOL_NAME_QUERY],
+    response: apiResponse<McpSessionToolDetail>(),
   },
 });
