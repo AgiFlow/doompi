@@ -164,6 +164,13 @@ export type {
   WebTemplateContribution,
   WebTemplateHeaderOptions,
   WebTemplateProps,
+  WebTemplateRail,
+  WebTemplateRailActions,
+  WebTemplateRailDirectoryListing,
+  WebTemplateRailPendingSetup,
+  WebTemplateRailResult,
+  WebTemplateRailSession,
+  WebTemplateRailWorkspace,
   WebTemplateSlots,
 } from '../web/types/template';
 export { parseWebTemplate } from '../web/schemas/template';
