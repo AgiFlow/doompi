@@ -323,3 +323,16 @@ test('renders Advanced when composition bootstrap fails while template configura
     releaseConfiguration();
   }
 });
+
+test('opens host dialogs from shortcuts while the Elegant session drawer is closed', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
+  await openAppearance(page);
+  await saveChoice(page, ELEGANT);
+  await page.goto(cockpit.url);
+  await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ELEGANT);
+  await expect(page.getByTestId('session-rail-panel')).toBeHidden();
+
+  await page.keyboard.press('Control+t');
+  await expect(page.getByTestId('new-session-dialog')).toBeVisible();
+});

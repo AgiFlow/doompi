@@ -199,7 +199,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const hub = createHeadlessHub({
       manager,
       createSession: (request) => createSession(request),
-      admitWorkspace: async () => ({ id: workspaceId, root: workRoot }),
+      admitWorkspace: async ({ name }) => ({ id: workspaceId, root: workRoot, ...(name ? { name } : {}) }),
       hubToken: () => E2E_HEADLESS_TOKEN,
       requestSessionApi: async (scope, request) => {
         const server = sessionApis.get(scope.sessionId);
