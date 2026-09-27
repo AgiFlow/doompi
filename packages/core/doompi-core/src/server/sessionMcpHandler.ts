@@ -463,7 +463,20 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           isError: result.isError ?? false,
         });
       } catch (error) {
-        options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=failed`);
+        // The cause is logged because the client may drop the answer, for example on a timeout
+        // during a first call that provisions a worktree, and then nothing else records why. Only a
+        // class or code: a message can carry tool arguments, which notices never do.
+        const cause =
+          error instanceof SessionMcpConversationError
+            ? error.code
+            : signal.aborted
+              ? 'aborted'
+              : error instanceof McpError
+                ? `mcp_${String(error.code)}`
+                : error instanceof Error
+                  ? error.name
+                  : 'unknown';
+        options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=failed cause=${cause}`);
         if (!(error instanceof SessionMcpConversationError)) throw error;
         return widgetResult(widgetTool, {
           content: [{ type: 'text', text: error.message }],

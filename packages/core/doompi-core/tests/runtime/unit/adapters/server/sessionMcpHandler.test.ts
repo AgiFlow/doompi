@@ -411,7 +411,7 @@ describe('session MCP Streamable HTTP handler', () => {
     const notices = current.onNotice.mock.calls.map(([notice]) => notice);
     expect(notices).toHaveLength(2);
     expect(notices[0]).toMatch(/^session MCP invocation id=[0-9a-f-]{36} lifecycle=started$/u);
-    expect(notices[1]).toMatch(/^session MCP invocation id=[0-9a-f-]{36} lifecycle=failed$/u);
+    expect(notices[1]).toMatch(/^session MCP invocation id=[0-9a-f-]{36} lifecycle=failed cause=Error$/u);
     expect(notices[0]!.match(/id=([^ ]+)/u)?.[1]).toBe(notices[1]!.match(/id=([^ ]+)/u)?.[1]);
   });
 
