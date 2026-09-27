@@ -55,6 +55,8 @@ const GATED_ROUTES: readonly { method: string; pattern: RegExp; action: StepUpAc
     pattern: /^\/api\/workspaces\/[^/]+\/(?:resume|sessions(?:\/[^/]+\/(?:resume|revive))?)$/u,
     action: 'session.create',
   },
+  // The git new-session dialog starts a worktree session, which runs code in a directory.
+  { method: 'POST', pattern: /^\/api\/workspaces\/[^/]+\/plugins\/git\/sessions$/u, action: 'session.create' },
   { method: 'POST', pattern: /^\/api\/plugins\/doompi\/logins(?:\/[^/]+\/answer)?$/u, action: 'provider.login' },
   { method: 'DELETE', pattern: /^\/api\/plugins\/doompi\/providers\/[^/]+$/u, action: 'provider.logout' },
   {
