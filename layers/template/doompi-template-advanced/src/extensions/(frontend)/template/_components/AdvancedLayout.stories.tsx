@@ -4,15 +4,6 @@ import { TooltipProvider } from '@agimon-ai/doompi-web-components';
 import { AdvancedLayout } from './AdvancedLayout';
 
 const slots = {
-  navigation: (
-    <div className="p-4 text-sm text-doom-text">
-      Sessions
-      <br />
-      Template architecture
-      <br />
-      Review package contracts
-    </div>
-  ),
   header: () => (
     <div className="flex h-12 items-center border-b border-doom-border px-5 text-base font-bold text-doom-hi">
       Template architecture

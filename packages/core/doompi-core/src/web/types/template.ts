@@ -2,7 +2,6 @@ import type { ComponentType, ReactNode } from 'react';
 
 /** Host content is independent of the selected presentation package. */
 export interface WebTemplateSlots {
-  navigation: ReactNode;
   header: (options: WebTemplateHeaderOptions) => ReactNode;
   notices: ReactNode;
   content: ReactNode;
@@ -125,8 +124,8 @@ export interface WebTemplateRail {
 export interface WebTemplateProps {
   view: 'conversation' | 'panel' | 'settings' | 'welcome';
   slots: WebTemplateSlots;
-  /** Session navigation. A template that renders no rail simply has none. */
-  rail?: WebTemplateRail;
+  /** Session navigation, rendered by the template. A template that ignores it simply shows no rail. */
+  rail: WebTemplateRail;
   navigationOpen: boolean;
   desktopActivityOpen: boolean;
   mobileActivityOpen: boolean;

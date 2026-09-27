@@ -15,7 +15,7 @@ web:
 
 Global defaults live in `~/.pi/.doom/config.yaml`. Workspace defaults live in `.doom/config.yaml` and override the global value. Clearing a workspace default restores inheritance.
 
-A template changes presentation, not the active tools, session runtime, or color theme. The host supplies navigation, header, notices, content, composer, session controls, and activity slots. Approval and security overlays stay outside the template.
+A template changes presentation, not the active tools, session runtime, or color theme. The host supplies header, notices, content, composer, session controls, and activity slots, plus the session rail as data and actions (`rail`). The template renders the rail itself: workspaces, session cards, and the add-workspace dialog (render that dialog at the layout root so it opens while a drawer is closed). The new-session, resume, and remote-access dialogs, the keyboard shortcuts, approval and security overlays stay with the host.
 
 ## Package contract
 

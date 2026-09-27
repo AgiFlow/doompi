@@ -79,7 +79,6 @@ export function SettingsPage() {
         onMobileActivityOpenChange={() => {}}
         rail={rail}
         slots={{
-          navigation: null,
           notices: null,
           composer: null,
           controls: null,

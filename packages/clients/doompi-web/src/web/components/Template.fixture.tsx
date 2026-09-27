@@ -1,4 +1,5 @@
 import { defineWebPlugin, type WebTemplateProps } from '@agimon-ai/doompi-core/web';
+import { templateRailStub } from '@agimon-ai/doompi-core/webTesting';
 
 import type { SettingsConfigView } from '../../types/settings.ts';
 import { installWebPlugins, resetWebPlugins } from '../lib/pluginRegistry.ts';
@@ -25,7 +26,6 @@ export const storyTemplate = defineWebPlugin({
           {slots.notices}
           {slots.header({ navigationToggle: 'always', activityToggle: 'always' })}
           <div className="flex min-h-0 min-w-0 flex-1">
-            {slots.navigation}
             <main className="flex min-h-0 min-w-0 flex-1 flex-col">
               <div className="min-h-0 flex-1 overflow-y-auto">{slots.content}</div>
               {slots.composer}
@@ -65,8 +65,8 @@ export const templateProps: WebTemplateProps = {
   onNavigationOpenChange: () => undefined,
   onDesktopActivityOpenChange: () => undefined,
   onMobileActivityOpenChange: () => undefined,
+  rail: templateRailStub().rail,
   slots: {
-    navigation: null,
     activity: null,
     notices: null,
     controls: null,

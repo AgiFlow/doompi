@@ -29,7 +29,7 @@ export function AdvancedLayout({
         data-testid="session-rail-panel"
         className={`fixed inset-y-0 left-0 z-40 flex w-[min(300px,calc(100vw-48px))] shrink-0 flex-col overflow-y-auto border-r border-doom-border bg-doom-rail transition-transform md:visible md:static md:z-auto md:w-[300px] md:translate-x-0 ${navigationOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'}`}
       >
-        {rail ? <AdvancedRail rail={rail} onClose={() => onNavigationOpenChange(false)} /> : slots.navigation}
+        <AdvancedRail rail={rail} onClose={() => onNavigationOpenChange(false)} />
       </aside>
       {navigationOpen ? (
         <Button
@@ -70,7 +70,7 @@ export function AdvancedLayout({
           onClick={() => onMobileActivityOpenChange(false)}
         />
       ) : null}
-      {rail?.addWorkspace ? (
+      {rail.addWorkspace ? (
         <AdvancedAddWorkspaceDialog suggestedPaths={rail.addWorkspace.suggestedPaths} actions={rail.actions} />
       ) : null}
     </div>

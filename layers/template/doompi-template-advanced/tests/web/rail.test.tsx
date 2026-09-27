@@ -19,7 +19,6 @@ function props(rail: WebTemplateProps['rail']): WebTemplateProps {
     onMobileActivityOpenChange: () => {},
     rail,
     slots: {
-      navigation: <nav>host navigation</nav>,
       header: () => <header>Header</header>,
       notices: null,
       content: <article>Conversation</article>,
@@ -55,7 +54,6 @@ describe('Advanced rail', () => {
   it('renders workspaces with flat headings, avatars, and branches in place of the cwd', () => {
     const markup = render(templateRailStub().rail);
 
-    expect(markup).not.toContain('host navigation');
     expect(markup).toContain('data-testid="workspace-group-doompi"');
     expect(markup).toContain('data-testid="workspace-group-notes"');
     expect(markup).toContain('no sessions · create or resume one');
@@ -116,9 +114,5 @@ describe('Advanced rail', () => {
     expect(open.some((child) => child.type === AdvancedAddWorkspaceDialog)).toBe(true);
     const closed = rootChildren(templateRailStub().rail);
     expect(closed.some((child) => child.type === AdvancedAddWorkspaceDialog)).toBe(false);
-  });
-
-  it('falls back to the host navigation slot when no rail is provided', () => {
-    expect(render(undefined)).toContain('host navigation');
   });
 });

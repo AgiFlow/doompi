@@ -131,7 +131,6 @@ export function CockpitPage() {
         onMobileActivityOpenChange={setMobileActivityOpen}
         rail={rail}
         slots={{
-          navigation: null,
           header: (options) => (
             <TopBar
               {...options}

@@ -25,7 +25,7 @@ export function ElegantLayout({
         data-testid="session-rail-panel"
         backdropTestId="mobile-drawer-backdrop"
       >
-        {rail ? <ElegantRail rail={rail} /> : slots.navigation}
+        <ElegantRail rail={rail} />
       </Drawer>
       {slots.notices}
       {slots.header({ navigationToggle: 'always', activityToggle: 'always' })}
@@ -70,7 +70,7 @@ export function ElegantLayout({
           {slots.activity}
         </Drawer>
       )}
-      {rail?.addWorkspace ? (
+      {rail.addWorkspace ? (
         <ElegantAddWorkspaceDialog suggestedPaths={rail.addWorkspace.suggestedPaths} actions={rail.actions} />
       ) : null}
     </div>

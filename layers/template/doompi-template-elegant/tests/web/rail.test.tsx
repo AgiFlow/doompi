@@ -19,7 +19,6 @@ function props(rail: WebTemplateProps['rail']): WebTemplateProps {
     onMobileActivityOpenChange: () => {},
     rail,
     slots: {
-      navigation: <nav>host navigation</nav>,
       header: () => <header>Header</header>,
       notices: null,
       content: <article>Conversation</article>,
