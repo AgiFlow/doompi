@@ -45,6 +45,8 @@ function directEvents(): DoomDirectEventBus {
 function fakeGit(overrides: Partial<WorktreeGit> = {}): WorktreeGit {
   return {
     addWorktree: vi.fn().mockResolvedValue(undefined),
+    addExistingWorktree: vi.fn().mockResolvedValue(undefined),
+    listBranches: vi.fn().mockResolvedValue({ current: 'main', defaultBase: 'origin/main', local: [], remote: [] }),
     removeWorktree: vi.fn().mockResolvedValue(undefined),
     pruneWorktrees: vi.fn().mockResolvedValue(undefined),
     listWorktreePaths: vi.fn().mockResolvedValue([]),
@@ -133,6 +135,99 @@ describe('spawn', () => {
     );
     expect(record.sessionId).toBe('session-9');
     expect(await ops.list(CONTEXT)).toHaveLength(1);
+  });
+
+  it('opens a top-level worktree session with no parent from the new-session dialog', async () => {
+    const git = fakeGit();
+    const { ops, createSession } = operations(git);
+
+    const record = await ops.spawn({ cwd: '/repo' }, { branch: 'wt/top' });
+
+    expect(createSession).toHaveBeenCalledWith(expect.not.objectContaining({ parentSessionId: expect.anything() }));
+    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ cwd: record.path, name: 'wt/top' }));
+    expect(record).not.toHaveProperty('parentSessionId');
+  });
+
+  it('checks out an existing local branch and never deletes it on rollback', async () => {
+    const git = fakeGit({
+      listBranches: vi.fn().mockResolvedValue({ current: 'main', local: [{ name: 'feature/x' }], remote: [] }),
+    });
+    const failing = vi.fn().mockRejectedValue(new Error('session refused'));
+    const { ops } = operations(git, failing);
+
+    await expect(ops.spawn({ cwd: '/repo' }, { branch: 'feature/x', checkout: 'existing' })).rejects.toThrow(
+      'session refused',
+    );
+    expect(git.addExistingWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ repositoryRoot: repository, branch: 'feature/x' }),
+    );
+    expect(git.addExistingWorktree).toHaveBeenCalledWith(expect.not.objectContaining({ remote: expect.anything() }));
+    expect(git.addWorktree).not.toHaveBeenCalled();
+    expect(git.removeWorktree).toHaveBeenCalled();
+    expect(git.deleteBranch).not.toHaveBeenCalled();
+  });
+
+  it('tracks a remote-only branch and deletes the tracking branch it made on rollback', async () => {
+    const git = fakeGit({
+      listBranches: vi.fn().mockResolvedValue({ local: [], remote: [{ remote: 'origin', name: 'remote-only' }] }),
+    });
+    const failing = vi.fn().mockRejectedValue(new Error('session refused'));
+    const { ops } = operations(git, failing);
+
+    await expect(
+      ops.spawn({ cwd: '/repo' }, { branch: 'remote-only', checkout: 'existing', remote: 'origin' }),
+    ).rejects.toThrow('session refused');
+    expect(git.addExistingWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: 'remote-only', remote: 'origin' }),
+    );
+    expect(git.deleteBranch).toHaveBeenCalledWith({ repositoryRoot: repository, branch: 'remote-only' });
+  });
+
+  it('records an existing-branch worktree with the branch itself as its base', async () => {
+    const git = fakeGit({
+      listBranches: vi.fn().mockResolvedValue({ local: [{ name: 'feature/x' }], remote: [] }),
+    });
+    const { ops } = operations(git);
+
+    const record = await ops.spawn({ cwd: '/repo' }, { branch: 'feature/x', checkout: 'existing' });
+
+    expect(record).toMatchObject({ branch: 'feature/x', baseRef: 'feature/x' });
+  });
+
+  it('refuses a branch that is already checked out, and one that does not exist', async () => {
+    const git = fakeGit({
+      listBranches: vi.fn().mockResolvedValue({
+        local: [{ name: 'main', checkedOutAt: '/repo' }],
+        remote: [{ remote: 'origin', name: 'remote-only' }],
+      }),
+    });
+    const { ops } = operations(git);
+
+    await expect(ops.spawn({ cwd: '/repo' }, { branch: 'main', checkout: 'existing' })).rejects.toMatchObject({
+      code: 'invalid_request',
+      message: expect.stringContaining('The branch main is already checked out at /repo.'),
+    });
+    await expect(ops.spawn({ cwd: '/repo' }, { branch: 'nope', checkout: 'existing' })).rejects.toMatchObject({
+      code: 'invalid_request',
+    });
+    await expect(
+      ops.spawn({ cwd: '/repo' }, { branch: 'remote-only', checkout: 'existing', remote: 'upstream' }),
+    ).rejects.toMatchObject({ code: 'invalid_request' });
+    expect(git.addExistingWorktree).not.toHaveBeenCalled();
+  });
+
+  it('refuses unsafe ref names and a reservation without a parent before touching git', async () => {
+    const git = fakeGit();
+    const { ops } = operations(git);
+
+    await expect(ops.spawn(CONTEXT, { branch: '--upload-pack=x' })).rejects.toMatchObject({ code: 'invalid_request' });
+    await expect(ops.spawn(CONTEXT, { branch: 'ok', baseRef: '-x' })).rejects.toMatchObject({
+      code: 'invalid_request',
+    });
+    await expect(ops.spawn({ cwd: '/repo' }, { branch: 'ok', reservationId: 'r1' })).rejects.toMatchObject({
+      code: 'invalid_request',
+    });
+    expect(git.repositoryRoot).not.toHaveBeenCalled();
   });
 
   it('puts the worktree outside the repository', async () => {

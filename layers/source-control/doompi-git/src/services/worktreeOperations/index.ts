@@ -12,7 +12,7 @@ import { DoomGitExpectedError, HubUnavailableError } from '../errors';
 import { registryFile, worktreesRoot } from '../paths';
 import { repositoryId, repositoryLabel, shortId } from '../repositoryIdentity';
 import { MAX_WORKTREE_MESSAGE_BYTES, type WorktreeMessageInbox, type WorktreeMessageParty } from '../worktreeEvents';
-import { planPrune, reconcile, refuseClose, refuseSpawn, worktreeDirectory } from '../worktreeNaming';
+import { planPrune, reconcile, refuseClose, refuseSpawn, validRefName, worktreeDirectory } from '../worktreeNaming';
 import { createWorktreeRegistry } from '../worktreeRegistry';
 
 const GIT_WORKTREE_DELEGATION_KIND = 'git.worktree.delegation';
@@ -21,8 +21,11 @@ const GIT_WORKTREE_REPORT_KIND = 'git.worktree.report';
 export interface WorktreeContext {
   /** Where the calling session is working, used to find the repository. */
   cwd: string;
-  /** The calling session, recorded as the new session's parent. */
-  sessionId: string;
+  /**
+   * The calling session, recorded as the new session's parent. Absent when the
+   * new-session dialog opens a top-level worktree session for the workspace.
+   */
+  sessionId?: string;
 }
 
 export interface SpawnWorktreeRequest {
@@ -32,6 +35,10 @@ export interface SpawnWorktreeRequest {
   task?: string;
   /** Host-owned execution setup, exposed by the UI rather than the agent tool. */
   reservationId?: string;
+  /** `existing` checks out a branch that already exists instead of creating one from `baseRef`. */
+  checkout?: 'new' | 'existing';
+  /** With `existing`: the branch exists only on this remote; a local tracking branch is created. */
+  remote?: string;
 }
 
 export interface SpawnOptions {
@@ -159,7 +166,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
    */
   const requireOwner = (context: WorktreeContext, record: WorktreeRecord, action: string): void => {
     if (record.parentSessionId === context.sessionId) return;
-    if (!requireSessionService().isLive(record.parentSessionId)) return;
+    if (record.parentSessionId === undefined || !requireSessionService().isLive(record.parentSessionId)) return;
     throw new DoomGitExpectedError(
       'worktree_not_owned',
       `Worktree ${record.id} belongs to another session.`,
@@ -172,6 +179,13 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
     context: WorktreeContext,
     record: WorktreeRecord,
   ): { sessionId: string; party: WorktreeMessageParty } => {
+    if (record.parentSessionId === undefined)
+      throw new DoomGitExpectedError(
+        'worktree_peer_unavailable',
+        `Worktree ${record.id} was opened on its own and has no parent session to message.`,
+        false,
+        'Message a worktree this session created.',
+      );
     if (context.sessionId === record.parentSessionId) return { sessionId: record.sessionId, party: 'parent' };
     if (context.sessionId === record.sessionId) return { sessionId: record.parentSessionId, party: 'child' };
     throw new DoomGitExpectedError(
@@ -195,6 +209,8 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
 
   const operations: WorktreeOperations = {
     async spawn(context, request, options) {
+      const parentSessionId = context.sessionId;
+      const parented = parentSessionId === undefined ? {} : { parentSessionId };
       const { root, store, records } = await resolve(context);
       const reservations = request.reservationId === undefined ? undefined : requireSessionService().reservations;
       if (request.reservationId !== undefined && (!reservations || request.task !== undefined))
@@ -205,7 +221,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           'Create the session from its pending setup card.',
         );
       const reserved =
-        request.reservationId === undefined ? undefined : reservations!.read(request.reservationId, context.sessionId);
+        request.reservationId === undefined ? undefined : reservations!.read(request.reservationId, parentSessionId!);
       const existing =
         reserved === undefined ? undefined : records.find((record) => record.sessionId === reserved.sessionId);
       if (existing) {
@@ -217,7 +233,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           shortId: shortId(reserved!.sessionId),
         });
         if (
-          existing.parentSessionId !== context.sessionId ||
+          existing.parentSessionId !== parentSessionId ||
           existing.repositoryRoot !== root ||
           existing.branch !== request.branch ||
           existing.path !== expectedPath ||
@@ -238,7 +254,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           const session = await requireSessionService().create({
             cwd: existing.path,
             name: request.name ?? request.branch,
-            parentSessionId: context.sessionId,
+            parentSessionId,
             sessionProvenance: 'worktree',
             reservationId: request.reservationId,
             ...(options?.signal === undefined ? {} : { signal: options.signal }),
@@ -246,7 +262,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           if (session.sessionId !== existing.sessionId)
             throw new Error('The host did not use the reserved session identity.');
         }
-        await reservations!.complete(request.reservationId!, context.sessionId);
+        await reservations!.complete(request.reservationId!, parentSessionId!);
         return existing;
       }
       const refusal = refuseSpawn({ branch: request.branch, existing: records });
@@ -254,7 +270,30 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
         throw new DoomGitExpectedError('worktree_exists', refusal, false, 'Pick another branch name, or close it.');
       }
       const taskDelivery = request.task === undefined ? undefined : requireSessionDelivery();
-      const baseRef = request.baseRef ?? (await git.remoteBaseRef(root));
+      const existingBranch = request.checkout === 'existing';
+      if (existingBranch) {
+        const branches = await git.listBranches(root);
+        const local = branches.local.find((branch) => branch.name === request.branch);
+        const available =
+          request.remote === undefined
+            ? local !== undefined && local.checkedOutAt === undefined
+            : local === undefined &&
+              branches.remote.some((branch) => branch.remote === request.remote && branch.name === request.branch);
+        if (!available)
+          throw new DoomGitExpectedError(
+            'invalid_request',
+            local?.checkedOutAt === undefined
+              ? `The branch ${request.branch} is not available to check out.`
+              : `The branch ${request.branch} is already checked out at ${local.checkedOutAt}.`,
+            false,
+            'Pick another branch, or create a new one.',
+          );
+      }
+      const baseRef = existingBranch
+        ? request.remote === undefined
+          ? request.branch
+          : `${request.remote}/${request.branch}`
+        : (request.baseRef ?? (await git.remoteBaseRef(root)));
       if (baseRef === undefined) {
         throw new DoomGitExpectedError(
           'git_failed',
@@ -272,7 +311,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
         shortId: id,
       });
       if (request.reservationId !== undefined) {
-        path = (await reservations!.prepare(request.reservationId, context.sessionId, path)).cwd;
+        path = (await reservations!.prepare(request.reservationId, parentSessionId!, path)).cwd;
       }
       const recovering = reserved?.cwd !== undefined && fs.existsSync(path);
       if (
@@ -292,12 +331,23 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       const rollback = async (): Promise<string> => {
         if (reserved) return ` The reserved checkout at ${path} was retained for recovery.`;
         await git.removeWorktree({ repositoryRoot: root, path, force: true }).catch(() => undefined);
+        // A branch that existed before this spawn is never deleted; only one it created is.
+        if (existingBranch && request.remote === undefined) return '';
         const deleted = await git.deleteBranch({ repositoryRoot: root, branch: request.branch }).catch(() => false);
         return deleted ? '' : ` The branch ${request.branch} has work on it and was kept.`;
       };
 
       options?.onProgress?.(`creating branch ${request.branch}\u2026`);
-      if (!recovering) await git.addWorktree({ repositoryRoot: root, path, branch: request.branch, baseRef });
+      if (!recovering) {
+        if (existingBranch)
+          await git.addExistingWorktree({
+            repositoryRoot: root,
+            path,
+            branch: request.branch,
+            ...(request.remote === undefined ? {} : { remote: request.remote }),
+          });
+        else await git.addWorktree({ repositoryRoot: root, path, branch: request.branch, baseRef });
+      }
 
       // Checked here rather than only inside the session call: this is the
       // point where a checkout exists that nothing has recorded yet, which is
@@ -331,7 +381,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
         const session = await requireSessionService().create({
           cwd: path,
           name: request.name ?? request.branch,
-          parentSessionId: context.sessionId,
+          ...parented,
           sessionProvenance: 'worktree',
           ...(options?.signal === undefined ? {} : { signal: options.signal }),
           ...(request.reservationId === undefined ? {} : { reservationId: request.reservationId }),
@@ -370,7 +420,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
         path,
         repositoryRoot: root,
         sessionId,
-        parentSessionId: context.sessionId,
+        ...parented,
         status: 'running',
         createdAt: now().toISOString(),
       };
@@ -425,7 +475,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           );
         }
       }
-      if (request.reservationId !== undefined) await reservations!.complete(request.reservationId, context.sessionId);
+      if (request.reservationId !== undefined) await reservations!.complete(request.reservationId, parentSessionId!);
       return record;
     },
 
@@ -529,7 +579,8 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       requireMessageInbox().send(peer.sessionId, {
         version: 1,
         worktreeId: record.id,
-        fromSessionId: context.sessionId,
+        // peerFor only answers for the worktree's parent or child session, so the caller has one.
+        fromSessionId: context.sessionId!,
         from: peer.party,
         text: message,
         sentAt,
@@ -639,6 +690,20 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
             'The cockpit session service is unavailable.',
             true,
             'Use the cockpit worktree tool after its Git server facet is available.',
+          ),
+        );
+      // Checked before the repository lock, so unsafe input never reaches git at all.
+      if (!validRefName(request.branch) || (request.baseRef !== undefined && !validRefName(request.baseRef)))
+        return Promise.reject(
+          new DoomGitExpectedError('invalid_request', 'That is not a valid branch name.', false, 'Pick another name.'),
+        );
+      if (request.reservationId !== undefined && context.sessionId === undefined)
+        return Promise.reject(
+          new DoomGitExpectedError(
+            'invalid_request',
+            'A reserved worktree session requires its owning parent.',
+            false,
+            'Create the session from its pending setup card.',
           ),
         );
       return locked(context, () => operations.spawn(context, request, options), options?.signal);

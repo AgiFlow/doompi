@@ -9,6 +9,11 @@
 import type { WorktreeRecord } from '../../types/worktreeRegistry';
 
 const MAX_SLUG_LENGTH = 64;
+/** Anything git forbids in a ref, plus a leading `-` that `worktree add` would read as an option. */
+const INVALID_REF = /(^[-/.])|[\s~^:?*[\\]|\.\.|@\{|\/\/|\/\.|\.lock$|\/$|\.$/u;
+const MAX_REF_LENGTH = 255;
+const FIRST_PRINTABLE = 0x20;
+const DELETE = 0x7f;
 
 /**
  * A branch name reduced to one safe path segment.
@@ -149,4 +154,14 @@ export function planPrune(input: {
     if (path.startsWith(`${input.worktreesRoot}/`) && !known.has(path)) plan.untracked.push(path);
   }
   return plan;
+}
+
+/** Whether a user-supplied branch or base ref is safe to hand to git as a positional argument. */
+export function validRefName(name: string): boolean {
+  if (name === '' || name === '@' || name.length > MAX_REF_LENGTH || INVALID_REF.test(name)) return false;
+  for (const character of name) {
+    const code = character.charCodeAt(0);
+    if (code < FIRST_PRINTABLE || code === DELETE) return false;
+  }
+  return true;
 }

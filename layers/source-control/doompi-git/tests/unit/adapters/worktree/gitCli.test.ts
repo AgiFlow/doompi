@@ -323,3 +323,75 @@ describe('pruneWorktrees', () => {
     await expect(worktreeGit.listWorktreePaths(repository)).resolves.toEqual([repository]);
   });
 });
+
+describe('branches for the new-session dialog', () => {
+  /** A bare origin holding main and a branch that exists only there. */
+  function withRemote(): void {
+    const origin = path.join(root, 'origin.git');
+    git(root, 'init', '--bare', '--initial-branch=main', origin);
+    git(repository, 'remote', 'add', 'origin', origin);
+    git(repository, 'push', '-q', 'origin', 'main');
+    git(repository, 'switch', '-q', '-c', 'remote-only');
+    commit(repository, 'remote.txt', 'remote\n', 'remote work');
+    git(repository, 'push', '-q', 'origin', 'remote-only');
+    git(repository, 'switch', '-q', 'main');
+    git(repository, 'branch', '-q', '-D', 'remote-only');
+    git(repository, 'fetch', '-q', 'origin');
+    git(repository, 'remote', 'set-head', 'origin', 'main');
+  }
+
+  it('lists local branches with their checkouts, remote-only branches, and the default base', async () => {
+    git(repository, 'branch', 'feature/existing');
+    const worktree = path.join(root, 'wt-busy');
+    await worktreeGit.addWorktree({ repositoryRoot: repository, path: worktree, branch: 'wt/busy', baseRef: 'main' });
+    withRemote();
+
+    const branches = await worktreeGit.listBranches(repository);
+
+    expect(branches.current).toBe('main');
+    expect(branches.defaultBase).toBe('origin/main');
+    expect(branches.local).toEqual(
+      expect.arrayContaining([
+        { name: 'main', checkedOutAt: repository },
+        { name: 'feature/existing' },
+        { name: 'wt/busy', checkedOutAt: worktree },
+      ]),
+    );
+    expect(branches.remote).toEqual([{ remote: 'origin', name: 'remote-only' }]);
+  });
+
+  it('falls back to the current branch as the default base without a remote', async () => {
+    expect(await worktreeGit.listBranches(repository)).toMatchObject({
+      current: 'main',
+      defaultBase: 'main',
+      remote: [],
+    });
+  });
+
+  it('opens a worktree on an existing local branch and on a remote-only branch with tracking', async () => {
+    git(repository, 'branch', 'feature/existing');
+    withRemote();
+
+    const local = path.join(root, 'wt-existing');
+    await worktreeGit.addExistingWorktree({ repositoryRoot: repository, path: local, branch: 'feature/existing' });
+    expect(git(local, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('feature/existing');
+
+    const tracking = path.join(root, 'wt-remote');
+    await worktreeGit.addExistingWorktree({
+      repositoryRoot: repository,
+      path: tracking,
+      branch: 'remote-only',
+      remote: 'origin',
+    });
+    expect(git(tracking, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('remote-only');
+    expect(git(tracking, 'rev-parse', '--abbrev-ref', '@{upstream}').trim()).toBe('origin/remote-only');
+    expect(fs.existsSync(path.join(tracking, 'remote.txt'))).toBe(true);
+  });
+
+  it('refuses a branch that is already checked out elsewhere', async () => {
+    const error = await caught(() =>
+      worktreeGit.addExistingWorktree({ repositoryRoot: repository, path: path.join(root, 'wt-main'), branch: 'main' }),
+    );
+    expect(error.message).toMatch(/^git worktree add failed/u);
+  });
+});

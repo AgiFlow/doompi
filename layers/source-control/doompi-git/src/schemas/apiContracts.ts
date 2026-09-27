@@ -13,7 +13,7 @@ const RecordSchema = Type.Object({
   path: S,
   repositoryRoot: S,
   sessionId: S,
-  parentSessionId: S,
+  parentSessionId: Type.Optional(S),
   status: literals(['spawning', 'running', 'closing', 'orphaned']),
   createdAt: S,
 });

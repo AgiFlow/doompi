@@ -6,6 +6,7 @@ import {
   reconcile,
   refuseClose,
   refuseSpawn,
+  validRefName,
   worktreeDirectory,
 } from '../../../src/services/worktreeNaming';
 import { WORKTREE_RECORD_VERSION, type WorktreeRecord } from '../../../src/types/worktreeRegistry';
@@ -177,5 +178,50 @@ describe('planPrune', () => {
       dirtyByPath: new Map(),
     });
     expect(plan.untracked).toEqual(['/wt/stray']);
+  });
+});
+
+describe('validRefName', () => {
+  it('accepts ordinary branch and remote ref names', () => {
+    for (const name of [
+      'main',
+      'feature/login',
+      'wt/fix-auth',
+      'origin/main',
+      'release-1.2',
+      'doompi/conversation-abc',
+    ]) {
+      expect(validRefName(name), name).toBe(true);
+    }
+  });
+
+  it('refuses names git forbids or would read as an option', () => {
+    for (const name of [
+      '',
+      '@',
+      '-x',
+      '--upload-pack=touch',
+      'a b',
+      'a..b',
+      'a~1',
+      'a^',
+      'a:b',
+      'a?',
+      'a*',
+      'a[b',
+      'a\\b',
+      'a@{1}',
+      'a//b',
+      'a/.b',
+      '.hidden',
+      '/lead',
+      'topic.lock',
+      'trailing/',
+      'trailing.',
+      'tab\tname',
+      'x'.repeat(256),
+    ]) {
+      expect(validRefName(name), name).toBe(false);
+    }
   });
 });

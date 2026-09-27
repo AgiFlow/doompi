@@ -171,6 +171,21 @@ describe('what a session is shown', () => {
     expect(published.at(-1)?.payload.worktrees).toEqual([expect.objectContaining({ id: 'wt1', unowned: true })]);
   });
 
+  /** A worktree opened on its own from the new-session dialog belongs to the session inside it. */
+  it('hides a parentless worktree from siblings and shows it, owned, to the session inside it', () => {
+    const { parentSessionId: _parent, ...parentless } = record();
+    seed(parentless);
+    const published: Published[] = [];
+    const { source } = start(published, fakeOperations(), ['parent-1', 'parent-2', 'child-1']);
+
+    source.sessionAdded?.(OWNER);
+    expect(published.at(-1)?.payload.worktrees).toEqual([]);
+    source.sessionAdded?.(STRANGER);
+    expect(published.at(-1)?.payload.worktrees).toEqual([]);
+    source.sessionAdded?.({ sessionId: 'child-1', cwd: repository });
+    expect(published.at(-1)?.payload.worktrees).toEqual([expect.objectContaining({ id: 'wt1', unowned: false })]);
+  });
+
   it('treats an unreadable registry as an empty list', () => {
     const published: Published[] = [];
     const { source } = start(published, fakeOperations());
