@@ -1,3 +1,33 @@
+## 0.0.1-alpha.97 (2026-09-27)
+
+### 🩹 Fixes
+
+- **doompi-core:** keep the session server alive after a harness fault ([#214](https://github.com/AgiFlow/doompi/pull/214))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.93
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.94
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.94
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.94
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.52
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.94
+- Updated @agimon-ai/vibe-lint-plugin-doom-cli to 0.0.1-alpha.20
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.96 (2026-09-27)
 
 ### 🧱 Updated Dependencies
