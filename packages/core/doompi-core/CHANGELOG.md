@@ -1,3 +1,10 @@
+## 0.0.1-alpha.93 (2026-09-27)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.84
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.47
+
 ## 0.0.1-alpha.92 (2026-09-26)
 
 This was a version bump only for @agimon-ai/doompi-core to align it with other projects, there were no code changes.
