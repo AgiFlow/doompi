@@ -24,6 +24,7 @@ import { createPiWebSocketListener, type PiListenerSocket } from '../pi/piWebSoc
 import type { DoomSocketMount } from '../schemas/packageApi';
 import type { OpenSessionRecord } from '../services/openSessionRegistry';
 import type { ServerTelemetry } from '../services/serverTelemetry';
+import { harnessErrorMessage } from './harnessErrorMessage';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createThreadJournals, type ThreadJournals } from './threadJournals';
 
@@ -438,7 +439,7 @@ export async function createHeadlessProtocol(options: {
     {
       listeners: [listener],
       serverId: DOOM_COCKPIT_SERVER_ID,
-      onError: (error) => options.onNotice?.(`headless protocol error (${error.message})`),
+      onError: (error) => options.onNotice?.(`headless protocol error (${harnessErrorMessage(error)})`),
     },
   ).start();
   let closing: Promise<void> | undefined;

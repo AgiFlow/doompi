@@ -37,6 +37,7 @@ import type { DoomSessionContext } from '../../../exports/hubChannel';
 import type { DoomMcpContextSnapshot, DoomMcpSkill, DoomMcpUiResource } from '../../../exports/mcpFacet';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
 import { createDirectHarnessRuntime } from '../../../server/directHarnessRuntime';
+import { harnessErrorMessage } from '../../../server/harnessErrorMessage';
 import { buildContextDetail } from '../../../services/contextDetail';
 import { writeContextDetail } from '../../../services/contextDetailStore';
 import { DOOM_CONTEXT_ENTRY_TYPE, projectContext } from '../../../services/contextProjection';
@@ -1325,8 +1326,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       onApplied: async (selection) => {
         options.publishSelectionStatus?.((source, text) => client!.client.setStatus(source, text), selection);
       },
-      onError: (error) =>
-        options.onNotice?.(`Headless selection failed: ${error instanceof Error ? error.message : String(error)}`),
+      onError: (error) => options.onNotice?.(`Headless selection failed: ${harnessErrorMessage(error)}`),
     });
     publishComposition = createHeadlessCompositionPublisher(
       runtime,
@@ -1393,9 +1393,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     // outlive session startup by minutes.
     void runtime
       .resume()
-      .catch((error: unknown) =>
-        options.onNotice?.(`Session resume failed: ${error instanceof Error ? error.message : String(error)}`),
-      );
+      .catch((error: unknown) => options.onNotice?.(`Session resume failed: ${harnessErrorMessage(error)}`));
   };
 
   const dispose = (): Promise<void> => {
@@ -1450,9 +1448,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     return disposePromise;
   };
   const stop = (): void => {
-    void dispose().catch((error: unknown) =>
-      options.onNotice?.(error instanceof Error ? error.message : String(error)),
-    );
+    void dispose().catch((error: unknown) => options.onNotice?.(harnessErrorMessage(error)));
   };
 
   const invokeSurfaceTool = async (

@@ -27,6 +27,7 @@ import { createSessionMcpConversationStore } from '../services/sessionMcpConvers
 import { createSessionMcpRegistrationStore } from '../services/sessionMcpRegistrationStore';
 import type { SavedSession } from '../services/sqliteSessionHistory';
 import { createContextApi } from './contextApi';
+import { harnessErrorMessage } from './harnessErrorMessage';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createHeadlessProtocol } from './headlessProtocol';
 import { createSessionMcpRoutes, isPublicSessionMcpRoute, isSessionMcpHostRoute } from './sessionMcpRoutes';
@@ -385,7 +386,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         response.destroy();
         return;
       }
-      options.onNotice?.(`Headless request failed: ${String(error)}`);
+      options.onNotice?.(`Headless request failed: ${harnessErrorMessage(error)}`);
       json(response, 500, { error: 'Internal server error.' });
     });
   });

@@ -27,6 +27,7 @@ import {
   promptForAssistantText,
   readDirectHarnessSessionMetadata,
 } from '../../../../../src/server/directHarnessRuntime';
+import { harnessErrorMessage } from '../../../../../src/server/harnessErrorMessage';
 import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../../src/services/historyOwnership';
 
 const model: Model<Api> = {
@@ -829,13 +830,116 @@ describe('direct AgentHarness runtime', () => {
       await expect(runtime.appendCustomEntry('will-fail')).rejects.toThrow('journal write failed');
       expect(runtime.storageQuarantined).toBe(true);
       expect(frames).toContainEqual({ type: 'error', code: 'storage_quarantined', error: 'journal write failed' });
-      await expect(runtime.setName('blocked')).rejects.toThrow('writes are quarantined');
+      await expect(runtime.setName('blocked')).rejects.toThrow('storage failure: journal write failed');
       expect(append).toHaveBeenCalledOnce();
     } finally {
       append.mockRestore();
       await runtime.dispose();
       await repository.close(BACKGROUND_CONTEXT);
     }
+  });
+
+  it.each([false, true])('enforces provider stream start before done (start: %s)', async (started) => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: `provider-stream-${started}` }, BACKGROUND_CONTEXT);
+    const response: AssistantMessage = {
+      role: 'assistant',
+      content: [],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      timestamp: Date.now(),
+      stopReason: 'stop',
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    };
+    const streamSimple = vi.fn<Models['streamSimple']>(() => {
+      const stream = createAssistantMessageEventStream();
+      if (started) stream.push({ type: 'start', partial: response });
+      stream.push({ type: 'done', reason: 'stop', message: response });
+      return stream;
+    });
+    const runtime = await createDirectHarnessRuntime({
+      cwd: '/tmp',
+      session,
+      model,
+      models: { ...models, streamSimple } as unknown as Models,
+    });
+    const frames: Record<string, unknown>[] = [];
+    runtime.onPresentationFrame((frame) => frames.push(frame));
+    try {
+      if (started) {
+        await runtime.prompt('valid empty response');
+        expect(runtime.storageQuarantined).toBe(false);
+        expect(frames.some((frame) => frame.code === 'storage_quarantined')).toBe(false);
+        await runtime.setName('still writable');
+      } else {
+        await expect(runtime.prompt('invalid response')).rejects.toMatchObject({
+          cause: { message: 'Assistant message stream emitted done before start' },
+        });
+        expect(runtime.storageQuarantined).toBe(true);
+        expect(frames).toContainEqual({
+          type: 'error',
+          code: 'storage_quarantined',
+          error: 'AgentHarness storage or invariant fault: Assistant message stream emitted done before start',
+        });
+        await expect(runtime.setName('blocked')).rejects.toMatchObject({
+          cause: { cause: { message: 'Assistant message stream emitted done before start' } },
+        });
+      }
+      expect(streamSimple).toHaveBeenCalledOnce();
+    } finally {
+      await runtime.dispose().catch(() => undefined);
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  it.each([true, false])(
+    'preserves drive failure when lifecycle publication fails (drive failed: %s)',
+    async (driveFailed) => {
+      const repository = new MemorySessionRepo();
+      const session = await repository.create({ id: `drive-projection-${driveFailed}` }, BACKGROUND_CONTEXT);
+      const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+      const primary = new Error('primary drive failure');
+      const projection = new Error('secondary lifecycle failure');
+      const frames: Record<string, unknown>[] = [];
+      runtime.onPresentationFrame((frame) => frames.push(frame));
+      let driven = false;
+      const originalInspect = runtime.lane.inspectExecution.bind(runtime.lane);
+      vi.spyOn(runtime.lane, 'inspectExecution').mockImplementation((context) =>
+        driven ? Promise.reject(projection) : originalInspect(context),
+      );
+      vi.spyOn(runtime.lane, 'drive').mockImplementation(async () => {
+        driven = true;
+        if (driveFailed) throw primary;
+        return { ok: true, value: { kind: 'settled', outcome: {} } } as never;
+      });
+      try {
+        const submission = await runtime.submitPrompt('trigger drive');
+        await expect(submission.settled).rejects.toBe(driveFailed ? primary : projection);
+        expect(frames).toContainEqual({ type: 'error', code: 'lifecycle_projection', error: projection.message });
+      } finally {
+        vi.restoreAllMocks();
+        await runtime.dispose().catch(() => undefined);
+        await repository.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
+
+  it('formats nested fault causes and aggregate failures without looping', () => {
+    const fault = new Error('root');
+    const aggregate = new AggregateError([new Error('first', { cause: 'detail' }), fault], 'shutdown', {
+      cause: fault,
+    });
+    fault.cause = aggregate;
+    expect(harnessErrorMessage(aggregate)).toContain('first: detail');
+    expect(harnessErrorMessage(aggregate)).toContain('[repeated error]');
   });
 
   it('returns a nonzero exit code when runtime cleanup fails and remains idempotent', async () => {
