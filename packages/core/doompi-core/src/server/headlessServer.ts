@@ -20,6 +20,7 @@ import {
 } from '../exports/packageApi';
 import type { TranscriptPage, TranscriptPageRequest } from '../exports/sessionProtocol';
 import type { DoomHubSessionReservations } from '../schemas/hubChannel';
+import { readContextDetail } from '../services/contextDetailStore';
 import type { OpenSessionRecord } from '../services/openSessionRegistry';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
 import { createSessionMcpConversationStore } from '../services/sessionMcpConversations';
@@ -711,7 +712,11 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
           const detail = await createContextApi({ sessionId, environment: process.env }).fetch(
             new Request(`http://doompi.local/${pluginMatch[4] ?? ''}${url.search}`),
           );
-          json(response, detail.status, await detail.json());
+          const body = (await detail.json()) as { error?: string };
+          // The detail file is only kept while the session runs, so a stopped session usually has none.
+          if (readContextDetail(sessionId, process.env) === undefined)
+            json(response, 404, { error: 'This session is stopped. Wake it to read this item.' });
+          else json(response, detail.status, body);
           return;
         }
         json(response, 404, { error: 'Session not found.' });

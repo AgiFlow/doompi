@@ -835,6 +835,10 @@ describe('serveHeadlessServer', () => {
       expect(detail.status).toBe(200);
       expect(await detail.json()).toMatchObject({ revision: 3, item: { name: 'doompi-use-prompt' } });
       expect((await fetch(`${base}/context/item?kind=skill&name=missing`)).status).toBe(404);
+      fs.rmSync(path.join(agentDir, 'doom-context'), { recursive: true, force: true });
+      expect(await (await fetch(`${base}/context/item?kind=skill&name=doompi-use-prompt`)).json()).toEqual({
+        error: 'This session is stopped. Wake it to read this item.',
+      });
       // Every other package API still needs the session awake.
       expect(await (await fetch(`${base}/runner/runners`)).json()).toEqual({ error: 'Session not found.' });
     } finally {
