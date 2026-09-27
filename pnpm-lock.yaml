@@ -1871,6 +1871,9 @@ importers:
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../core/doompi-core
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../doompi-telemetry
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
