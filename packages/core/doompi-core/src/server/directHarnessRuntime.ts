@@ -49,6 +49,7 @@ import type {
   DirectHarnessRuntime,
   DirectHarnessRuntimeOptions,
 } from '../types/server/directHarnessRuntime';
+import { harnessErrorMessage as errorMessage } from './harnessErrorMessage';
 
 const DEFAULT_LANE = 'main';
 const DEFAULT_SESSION_ROOT = '.pi/sessions';
@@ -161,12 +162,6 @@ export async function promptForAssistantText(runtime: DirectHarnessRuntime, text
     return output || undefined;
   }
   return undefined;
-}
-
-function errorMessage(error: unknown): string {
-  if (!(error instanceof Error)) return typeof error === 'string' ? error : 'Direct harness operation failed';
-  // HarnessFault carries only a generic message; the reason lives in its cause.
-  return error.cause instanceof Error ? `${error.message}: ${errorMessage(error.cause)}` : error.message;
 }
 
 function modelReference(model: DirectHarnessModel | undefined, models: AnyModels): Model<Api> {
@@ -633,6 +628,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   let disposed = false;
   let disposePromise: Promise<void> | undefined;
   let storageQuarantined = false;
+  let storageFailure: unknown;
   let requestPreparationFailure: { error: unknown } | undefined;
   let turnPreparationFailure: { error: unknown } | undefined;
   let contextPreparationFailure: { error: unknown } | undefined;
@@ -832,10 +828,15 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   };
   const guardWritable = (): void => {
     guardLive();
-    if (storageQuarantined) throw new Error('Direct harness writes are quarantined after a storage failure');
+    if (storageQuarantined)
+      throw new Error(
+        `Direct harness writes are quarantined after a storage failure: ${errorMessage(storageFailure)}`,
+        { cause: storageFailure },
+      );
   };
   const markStorageFailure = (error: unknown): void => {
     if (!isStorageFailure(error)) return;
+    if (!storageQuarantined) storageFailure = error;
     storageQuarantined = true;
     emitFrame({ type: FRAME_ERROR, code: 'storage_quarantined', error: errorMessage(error) });
   };
@@ -1165,23 +1166,40 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   let drainRequested = false;
   const drive = async (operationId: string): Promise<void> => {
     settlingOperationId = operationId;
+    let failure: unknown;
     try {
       const result = await writable(() => lane.drive({ operationId, waitForRetry: true }, context));
       if (!result.ok) resultError(result);
       if (result.value.kind === 'waiting' && result.value.reason === 'retry') {
         throw new Error(`Direct harness returned an unexpected retry wait for ${operationId}`);
       }
+    } catch (error) {
+      failure = error;
     } finally {
-      await settledEvents;
+      try {
+        await settledEvents;
+      } catch (error) {
+        if (failure === undefined) failure = error;
+        else emitFrame({ type: FRAME_ERROR, code: 'settled_event', error: errorMessage(error) });
+      }
       if (settlingOperationId === operationId) settlingOperationId = undefined;
       if (abortingOperationId === operationId) abortingOperationId = undefined;
       if (!disposed) {
-        await publishLifecycle();
-        void drainAutomatic().catch((error: unknown) =>
-          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-        );
+        let publicationSucceeded = false;
+        try {
+          await publishLifecycle();
+          publicationSucceeded = true;
+        } catch (error) {
+          if (failure === undefined) failure = error;
+          // publishLifecycle already reports this secondary failure as a projection frame.
+        }
+        if (publicationSucceeded && !storageQuarantined)
+          void drainAutomatic().catch((error: unknown) =>
+            emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
+          );
       }
     }
+    if (failure !== undefined) throw failure;
   };
   // Only this function starts automatic follow-up turns. It never holds the Session mutation
   // line during provider/tool work; a claim is persisted before native admission.

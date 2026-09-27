@@ -1773,7 +1773,10 @@ describe('serveHeadlessServer', () => {
   it('returns opaque JSON failures for malformed channel payloads and backend API errors', async () => {
     const session = host();
     const requestSessionApi = vi.fn(async () => {
-      throw new Error('package API unavailable');
+      throw new AggregateError(
+        [new Error('package API unavailable', { cause: new Error('database locked') })],
+        'shutdown failed',
+      );
     });
     const hub = createHeadlessHub({
       manager: { closeSession: vi.fn(async () => undefined) } as never,
@@ -1793,7 +1796,8 @@ describe('serveHeadlessServer', () => {
       workspaceRoot: '/repo',
       onNotice: vi.fn(),
     });
-    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
+    const onNotice = vi.fn();
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret', onNotice });
     servers.push(server);
 
     const malformed = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/channel/updates`, {
@@ -1809,6 +1813,9 @@ describe('serveHeadlessServer', () => {
     });
     expect(backendFailure.status).toBe(500);
     expect(await backendFailure.json()).toEqual({ error: 'Internal server error.' });
+    expect(onNotice).toHaveBeenCalledWith(
+      expect.stringContaining('shutdown failed: package API unavailable: database locked'),
+    );
 
     await server.close();
     await server.close();
