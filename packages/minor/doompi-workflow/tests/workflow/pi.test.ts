@@ -2919,6 +2919,27 @@ describe('workflow-mcp Pi extension shutdown', () => {
     expect(harness.runServiceInterrupt).not.toHaveBeenCalled();
   });
 
+  it('finishes shutdown when a registry read never settles', async () => {
+    const harness = await createHarness([runRecord({ stage: 'running' })]);
+    harness.listRuns.mockReturnValueOnce(new Promise<WorkflowRunRecord[]>(() => undefined));
+    await harness.rawSessionStart?.({}, harness.ctx);
+
+    // Pi exits only after disposal resolves, so a wait with no bound here is
+    // an `--auto-stop` session that never exits.
+    vi.useFakeTimers();
+    try {
+      let finished = false;
+      const shutdown = Promise.resolve(harness.handlers.get(EVENT_SESSION_SHUTDOWN)?.({}, harness.ctx)).then(() => {
+        finished = true;
+      });
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(finished).toBe(true);
+      await shutdown;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('makes repeated session shutdown idempotent', async () => {
     const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx as never);
