@@ -272,14 +272,19 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
       .prepare(
         `UPDATE session_delivery_outbox
          SET state = 'acknowledged', recipient_state = ?, acknowledged_at = ?
-         WHERE delivery_id = ? AND recipient_key = ?`,
+         WHERE delivery_id = ? AND recipient_key = ?
+           AND (recipient_state IS NULL
+             OR (recipient_state = 'accepted' AND ? != 'accepted')
+             OR (recipient_state = 'admitting' AND ? IN ('admitted', 'recovery_required')))`,
       )
-      .run(ack.state, Date.now(), ack.deliveryId, recipientKey);
+      .run(ack.state, Date.now(), ack.deliveryId, recipientKey, ack.state, ack.state);
   };
 
   const publishOutbox = (deliveryId: string): void => {
     const row = database
-      .prepare("SELECT * FROM session_delivery_outbox WHERE delivery_id = ? AND state = 'queued'")
+      .prepare(
+        "SELECT * FROM session_delivery_outbox WHERE delivery_id = ? AND (recipient_state IS NULL OR recipient_state NOT IN ('admitted', 'recovery_required'))",
+      )
       .get(deliveryId) as OutboxRow | undefined;
     if (!row) return;
     const metadata = JSON.parse(row.metadata_json) as DoomSessionDeliveryMetadata;
@@ -295,14 +300,18 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
 
   const publishQueued = (recipientKey: string): void => {
     for (const row of database
-      .prepare("SELECT delivery_id FROM session_delivery_outbox WHERE recipient_key = ? AND state = 'queued'")
+      .prepare(
+        "SELECT delivery_id FROM session_delivery_outbox WHERE recipient_key = ? AND (recipient_state IS NULL OR recipient_state NOT IN ('admitted', 'recovery_required'))",
+      )
       .all(recipientKey) as { delivery_id: string }[]) {
       publishOutbox(row.delivery_id);
     }
   };
   const publishAllQueued = (): void => {
     for (const row of database
-      .prepare("SELECT delivery_id FROM session_delivery_outbox WHERE state = 'queued'")
+      .prepare(
+        "SELECT delivery_id FROM session_delivery_outbox WHERE recipient_state IS NULL OR recipient_state NOT IN ('admitted', 'recovery_required')",
+      )
       .all() as { delivery_id: string }[]) {
       publishOutbox(row.delivery_id);
     }
@@ -325,7 +334,7 @@ export function createSessionDeliveryService(options: SessionDeliveryServiceOpti
   }
   publishAllQueued();
   // A publish only means the transport accepted the envelope. Repeat stable delivery
-  // IDs until the durable acknowledgement arrives, including after a tunnel restart.
+  // IDs until a terminal acknowledgement arrives, including after a tunnel restart.
   const retryTimer = setInterval(publishAllQueued, 1_000);
   retryTimer.unref();
 

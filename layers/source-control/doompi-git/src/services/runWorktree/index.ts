@@ -21,13 +21,14 @@ export const RUN_WORKTREE_DESCRIPTION = `Create and manage git worktrees, each w
 Actions:
 - spawn_worktree: create a worktree on a new branch and start a session in it. Requires 'branch'. Optional 'baseRef' (defaults to the current branch's remote-tracking ref, then the remote default branch), 'name' for the rail, 'task' as the first message.
 - close_worktree: stop a worktree's session, delete its checkout, and remove its generated sync storage. Requires 'id'. Refuses a dirty tree unless 'force' is true.
-- list: every worktree for this repository, with status.
-- status: one worktree and its uncommitted files. Requires 'id'.
+- list: every worktree for this repository, with status and relationship to the calling session.
+- status: one worktree, its relationship to the calling session, and its uncommitted files. Requires 'id'.
 - merge: merge a worktree's branch into this checkout. Requires 'id'. Refuses when this checkout is dirty.
 - prune: remove orphaned worktrees and their generated sync storage. Pass 'dryRun' to see the plan without destroying anything.
 - send: send a message to the other side of a worktree. Requires 'id' and 'message'.
 - messages: read messages waiting for you from a worktree. Requires 'id'.
 
+For a nested worktree session, use the record labelled 'child' in list to report to your parent. Use records labelled 'parent' to contact your own children. Other records are not communication edges.
 Worktrees live outside the repository, under ~/.pi/.doom/git/worktrees.`;
 
 export interface RunWorktreeToolDetails {
@@ -109,8 +110,10 @@ export function validateParams(input: unknown): RunWorktreeToolParams {
   return record as RunWorktreeToolParams;
 }
 
-function describe(record: WorktreeRecord): string {
-  return `${record.id}  ${record.branch}  ${record.status}  ${record.path}`;
+function describe(record: WorktreeRecord, sessionId: string): string {
+  const relationship =
+    record.parentSessionId === sessionId ? 'parent' : record.sessionId === sessionId ? 'child' : 'other session';
+  return `${record.id}  ${record.branch}  ${record.status}  (${relationship})  ${record.path}`;
 }
 
 function text(...lines: readonly string[]): [{ type: 'text'; text: string }] {
@@ -159,7 +162,10 @@ export async function executeRunWorktreeTool(
         content:
           records.length === 0
             ? text('No worktrees for this repository.')
-            : text(`${String(records.length)} worktree(s):`, ...records.map(describe)),
+            : text(
+                `${String(records.length)} worktree(s):`,
+                ...records.map((record) => describe(record, context.sessionId)),
+              ),
         details: { action: params.action, records },
       };
     }
@@ -167,7 +173,7 @@ export async function executeRunWorktreeTool(
       const { record, dirtyFiles } = await operations.status(context, params.id);
       return {
         content: text(
-          describe(record),
+          describe(record, context.sessionId),
           `Session: ${record.sessionId}`,
           dirtyFiles.length === 0
             ? 'Clean.'

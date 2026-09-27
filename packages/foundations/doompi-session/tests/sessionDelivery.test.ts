@@ -268,6 +268,73 @@ describe('session delivery', () => {
     });
   });
 
+  it('replays an acknowledged nonterminal delivery after its final acknowledgement is lost', async () => {
+    const directEvents = createDirectEvents();
+    const sender = createSessionDeliveryService({
+      databasePath: temporaryDatabase('sender'),
+      recipientKey: 'parent',
+      communication: directEvents.bind('parent'),
+      authorizePeer: () => true,
+      admitPrompt: async () => undefined,
+    });
+    const admit = vi.fn(async () => undefined);
+    const receiverCommunication = directEvents.bind('child');
+    let dropped = false;
+    const receiver = createSessionDeliveryService({
+      databasePath: temporaryDatabase('receiver'),
+      recipientKey: 'child',
+      communication: {
+        ...receiverCommunication,
+        publish(target, type, payload) {
+          if (!dropped && target === 'parent' && (payload as { state?: string }).state === 'admitted') {
+            dropped = true;
+            return true;
+          }
+          return receiverCommunication.publish(target, type, payload);
+        },
+      },
+      authorizePeer: () => true,
+      admitPrompt: admit,
+    });
+    services.push(sender, receiver);
+
+    await sender.deliver({ deliveryId: 'lost-final', recipientKey: 'child', kind: 'message', prompt: 'Once' });
+    await vi.waitFor(() => expect(receiver.inbox({ state: 'admitted' })).toHaveLength(1));
+    expect(sender.outbox('lost-final')?.recipientState).toBe('admitting');
+    expect(dropped).toBe(true);
+
+    // Re-delivery asks the durable inbox for its current state without admitting twice.
+    await sender.deliver({ deliveryId: 'lost-final', recipientKey: 'child', kind: 'message', prompt: 'Once' });
+    await vi.waitFor(() => expect(sender.outbox('lost-final')?.recipientState).toBe('admitted'));
+    expect(admit).toHaveBeenCalledOnce();
+  });
+
+  it('ignores stale acknowledgements after admission and after recovery is required', async () => {
+    const directEvents = createDirectEvents();
+    const sender = createSessionDeliveryService({
+      databasePath: temporaryDatabase('sender'),
+      recipientKey: 'parent',
+      communication: directEvents.bind('parent'),
+      authorizePeer: () => true,
+      admitPrompt: async () => undefined,
+    });
+    services.push(sender);
+    for (const [deliveryId, finalState] of [
+      ['admitted-id', 'admitted'],
+      ['recovery-id', 'recovery_required'],
+    ] as const) {
+      await sender.deliver({ deliveryId, recipientKey: 'child', kind: 'message', prompt: 'Once' });
+      sender.receive!('child', 'doom/session-delivery/ack', { deliveryId, state: 'admitting' });
+      sender.receive!('child', 'doom/session-delivery/ack', { deliveryId, state: 'accepted' });
+      expect(sender.outbox(deliveryId)?.recipientState).toBe('admitting');
+      sender.receive!('child', 'doom/session-delivery/ack', { deliveryId, state: finalState });
+      sender.receive!('child', 'doom/session-delivery/ack', { deliveryId, state: 'accepted' });
+      sender.receive!('child', 'doom/session-delivery/ack', { deliveryId, state: 'admitting' });
+      expect(sender.outbox(deliveryId)?.recipientState).toBe(finalState);
+      expect(await sender.waitForAdmission(deliveryId, 0)).toBe(finalState);
+    }
+  });
+
   it('marks an interrupted admission recovery_required and never replays it after restart', async () => {
     const databasePath = temporaryDatabase('receiver');
     const database = new DatabaseSync(databasePath);

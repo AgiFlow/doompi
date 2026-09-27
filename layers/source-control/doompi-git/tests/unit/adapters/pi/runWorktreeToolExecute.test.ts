@@ -121,8 +121,15 @@ describe('execute', () => {
     expect(ops.close).toHaveBeenCalledWith(expect.anything(), 'a1b2c3d4', true);
   });
 
-  it('lists worktrees', async () => {
-    expect(await call(operations(), { action: 'list' })).toContain('wt/one');
+  it('labels list records relative to the calling session', async () => {
+    const child = { ...RECORD, id: 'child', parentSessionId: 'someone-else', sessionId: 'parent-1' };
+    const other = { ...RECORD, id: 'other', parentSessionId: 'someone-else' };
+    const content = await call(operations({ list: vi.fn().mockResolvedValue([RECORD, child, other]) }), {
+      action: 'list',
+    });
+    expect(content).toContain('a1b2c3d4  wt/one  running  (parent)');
+    expect(content).toContain('child  wt/one  running  (child)');
+    expect(content).toContain('other  wt/one  running  (other session)');
   });
 
   it('says so plainly when there are none', async () => {
@@ -131,7 +138,9 @@ describe('execute', () => {
   });
 
   it('reports a clean worktree as clean', async () => {
-    expect(await call(operations(), { action: 'status', id: 'a1b2c3d4' })).toContain('Clean.');
+    const content = await call(operations(), { action: 'status', id: 'a1b2c3d4' });
+    expect(content).toContain('(parent)');
+    expect(content).toContain('Clean.');
   });
 
   it('names the dirty files in status', async () => {
@@ -139,6 +148,7 @@ describe('execute', () => {
       status: vi.fn().mockResolvedValue({ record: RECORD, dirtyFiles: ['src/a.ts', 'src/b.ts'] }),
     });
     const content = await call(ops, { action: 'status', id: 'a1b2c3d4' });
+    expect(content).toContain('(parent)');
     expect(content).toContain('src/a.ts, src/b.ts');
   });
 
