@@ -261,7 +261,8 @@ export function createWorkflowServerRuntime(
         when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: LIST_TOOL,
         label: 'List Workflows',
-        description: 'List workflow definitions available in this repository.',
+        description: 'List workflow definitions in this repository, not existing runs.',
+        promptGuidelines: ['Use list_workflows to discover definitions, not to find an existing run.'],
         parameters: z.toJSONSchema(feature.listWorkflowsTool.getInputSchema()),
         executionMode: 'serial',
         async execute(_toolCallId, parameters, signal, _onUpdate, context) {
@@ -284,7 +285,11 @@ export function createWorkflowServerRuntime(
         when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: LAUNCH_TOOL,
         label: 'Launch Workflow',
-        description: 'Start a workflow run and return its recorded launch result.',
+        description: 'Start a workflow run. A successful launch is not a completed workflow.',
+        promptGuidelines: [
+          'Launch returns when a run starts, not when it finishes. Use the exact run key and separate workspace from its launch result for workflow_run status, not Agiflow project or job identifiers.',
+          'Do not relaunch a healthy running workflow merely because it has not completed.',
+        ],
         parameters: z.toJSONSchema(feature.runTool.getInputSchema()),
         executionMode: 'serial',
         async execute(_toolCallId, parameters, signal, _onUpdate, context) {
@@ -304,13 +309,28 @@ export function createWorkflowServerRuntime(
         when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: RUN_TOOL,
         label: 'Workflow Run',
-        description: 'Inspect the status of a workflow run or request cooperative control.',
+        description:
+          'Inspect a session-owned workflow by exact run key and separate workspace, or request cooperative control.',
+        promptGuidelines: [
+          'Use workflow_run status for the recorded stage, outcome, position, jobs, and steps. A successful status lookup is not evidence that the workflow completed.',
+          'For a healthy running workflow, summarize the recorded progress. Do not automatically search CLI commands or filesystem logs, relaunch, or diagnose failure merely because it remains running.',
+          'Investigate further when the run reports failure or staleness, or when the user requests diagnostics. Only status, pause, resume, and stop are supported here; stop only on user request.',
+          'Use exact registry runKey and separate workspace from the launch or status result. Agiflow project and job identifiers are not workflow run keys.',
+        ],
         parameters: {
           type: 'object',
           properties: {
             action: { type: 'string', enum: ['status', 'pause', 'resume', 'stop'] },
-            runKey: { type: 'string', minLength: 1 },
-            workspace: { type: 'string' },
+            runKey: {
+              type: 'string',
+              minLength: 1,
+              description:
+                'Exact registry run key from the launch result, without the workspace prefix. Not an Agiflow job ID.',
+            },
+            workspace: {
+              type: 'string',
+              description: 'Workspace from the launch result, passed separately from runKey.',
+            },
             reason: { type: 'string' },
             expectedRunId: { type: 'string' },
           },
@@ -338,7 +358,7 @@ export function createWorkflowServerRuntime(
               ...callResult({
                 error:
                   runs.length === 0
-                    ? 'Workflow run was not found in this session.'
+                    ? 'No matching workflow run was found in this session. This is a lookup failure, not evidence that the workflow failed. Use the exact runKey and separate workspace from its launch result, not Agiflow job identifiers.'
                     : 'Specify the workspace for this run key.',
               }),
               isError: true,

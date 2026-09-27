@@ -306,6 +306,15 @@ describe('workflow headless facet', () => {
       | undefined;
     if (!mode || !activity || !list || !launch || !run || !command || !shutdown)
       throw new Error('Workflow headless registrations were not created');
+    expect(list.promptGuidelines?.join(' ')).toContain('not to find an existing run');
+    expect(launch.promptGuidelines?.join(' ')).toContain('not when it finishes');
+    expect(run.promptGuidelines?.join(' ')).toContain('Do not automatically search CLI commands or filesystem logs');
+    expect(run.parameters).toMatchObject({
+      properties: {
+        runKey: { description: expect.stringContaining('Not an Agiflow job ID') },
+        workspace: { description: expect.stringContaining('separately from runKey') },
+      },
+    });
 
     expect(mode.initialState).toMatchObject({ activation: 'inactive', condition: 'ready' });
     await expect(mode.handleAction('activate', {}, operation(test.execution))).resolves.toEqual({
@@ -363,7 +372,7 @@ describe('workflow headless facet', () => {
         await run.execute('missing', { action: 'status', runKey }, undefined, undefined, test.execution),
       ).toMatchObject({
         isError: true,
-        details: { error: 'Workflow run was not found in this session.' },
+        details: { error: expect.stringContaining('lookup failure, not evidence that the workflow failed') },
       });
     }
     const stopActivity = await activity.start(test.execution);
