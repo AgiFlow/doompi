@@ -35,12 +35,32 @@ run_worktree { action: 'status', id: 'a1b2c3d4' }
 run_worktree { action: 'merge', id: 'a1b2c3d4' }
 run_worktree { action: 'close_worktree', id: 'a1b2c3d4' }
 run_worktree { action: 'prune', dryRun: true }
+run_worktree { action: 'send', id: 'a1b2c3d4', message: 'Please report progress' }
+run_worktree { action: 'messages', id: 'a1b2c3d4' }
 ```
 
 `spawn_worktree` takes `branch`, and optionally `baseRef` (defaults to the
 current branch), `name` for the rail, and `task` as the session's first message.
 Every other action identifies a worktree by the short `id` that `list` prints,
-never by path or branch.
+never by path or branch. `list` and `status` label each record relative to the
+calling session: `parent` means you created the worktree, `child` means you are
+its worktree session, and `other session` means neither. To report to your
+parent from a nested worktree, use your own record labelled `child`, not the
+record for your parent's worktree. Use `parent` records to contact your own
+children. These labels do not grant permission to send, merge, or close another
+session's worktree.
+
+`send` delivers between a worktree session and its parent. A `spawn_worktree`
+`task` is the first message to the new session. Both use durable Session delivery
+when available. A delivery error after the worktree is created does not remove
+the worktree. Do not spawn it again to retry the task.
+
+If admission requires recovery, call `messages` from the **recipient** session
+with the worktree id to retrieve the persisted text. Do not resend automatically.
+If admission merely timed out, delivery may still be pending: check the delivery
+id in the sender's outbox or call `messages` from the recipient before deciding
+whether to resend. A timeout does not prove the message was lost. If persistence
+itself failed, inspect the worktree and sender outbox before using `send` again.
 
 ## What it refuses, and why
 

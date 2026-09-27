@@ -214,6 +214,7 @@ describe('spawn', () => {
     await expect(ops.spawn(CONTEXT, { branch: 'wt/task', task: 'Implement it' })).rejects.toMatchObject({
       code: 'task_delivery_failed',
       retryable: true,
+      message: expect.stringMatching(/delivery-1.*requires recovery[\s\S]*Call messages.*Do not resend/u),
     });
     expect(await ops.list(CONTEXT)).toHaveLength(1);
   });
@@ -230,7 +231,9 @@ describe('spawn', () => {
     await expect(ops.spawn(CONTEXT, { branch: 'wt/task', task: 'Implement it' })).rejects.toMatchObject({
       code: 'task_delivery_failed',
       retryable: true,
+      message: expect.stringMatching(/delivery-1.*timeout[\s\S]*sender outbox.*before deciding whether to resend/u),
     });
+    expect(await ops.list(CONTEXT)).toHaveLength(1);
   });
   it('refuses a tasked spawn before creating git state when Session delivery is unavailable', async () => {
     const git = fakeGit();
@@ -797,6 +800,24 @@ describe('direct worktree messages', () => {
     await expect(durable.send(CONTEXT, record.id, 'please finish')).rejects.toMatchObject({
       code: 'message_delivery_failed',
       retryable: true,
+      message: expect.stringMatching(/delivery-1.*requires recovery[\s\S]*Call messages.*Do not resend/u),
+    });
+  });
+
+  it('does not advise resending a message on an admission timeout', async () => {
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    const delivery = fakeDelivery({ waitForAdmission: vi.fn().mockResolvedValue(undefined) });
+    const durable = createWorktreeOperations({
+      git: fakeGit(),
+      sessionService: fakeSessionService(['parent-1', 'session-9']),
+      sessionDelivery: () => delivery,
+      homeDir: home,
+    });
+
+    await expect(durable.send(CONTEXT, record.id, 'please finish')).rejects.toMatchObject({
+      code: 'message_delivery_failed',
+      message: expect.stringMatching(/delivery-1.*timeout[\s\S]*sender outbox.*before deciding whether to resend/u),
     });
   });
   it('delivers messages only to the worktree peer inbox', async () => {

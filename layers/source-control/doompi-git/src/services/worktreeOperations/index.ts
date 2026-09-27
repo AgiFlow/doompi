@@ -406,18 +406,22 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           });
           const admission = await taskDelivery.waitForAdmission(receipt.deliveryId);
           if (admission !== 'admitted') {
-            throw new Error(
+            throw new DoomGitExpectedError(
+              'task_delivery_failed',
+              `Worktree ${record.id} was created and task delivery ${receipt.deliveryId} was persisted, but admission ${admission === 'recovery_required' ? 'requires recovery' : 'was not confirmed before the timeout'}.`,
+              true,
               admission === 'recovery_required'
-                ? 'The recipient could not admit the task.'
-                : 'The recipient did not confirm task admission before the timeout.',
+                ? `Call messages from worktree ${record.id} to recover the task in the recipient session. Do not resend it automatically.`
+                : `Check delivery ${receipt.deliveryId} in the sender outbox or call messages from worktree ${record.id} in the recipient session before deciding whether to resend.`,
             );
           }
         } catch (error) {
+          if (error instanceof DoomGitExpectedError) throw error;
           throw new DoomGitExpectedError(
             'task_delivery_failed',
-            `Worktree ${record.id} was created, but its task admission was not confirmed (${(error as Error).message}).`,
+            `Worktree ${record.id} was created, but task delivery failed (${String(error)}).`,
             true,
-            `Use send with worktree ${record.id} to deliver the task without recreating the worktree.`,
+            `Inspect worktree ${record.id} and the sender outbox before using send to deliver the task. Do not recreate the worktree.`,
           );
         }
       }
@@ -513,11 +517,11 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
         if (admission !== 'admitted') {
           throw new DoomGitExpectedError(
             'message_delivery_failed',
-            `Worktree ${record.id} persisted the message, but its session did not confirm admission.`,
+            `Worktree ${record.id} persisted message delivery ${receipt.deliveryId}, but admission ${admission === 'recovery_required' ? 'requires recovery' : 'was not confirmed before the timeout'}.`,
             true,
             admission === 'recovery_required'
-              ? 'Call messages from the recipient session to recover the persisted text.'
-              : 'The message remains durable; retry after the recipient is ready.',
+              ? `Call messages from the recipient session to recover delivery ${receipt.deliveryId}. Do not resend it automatically.`
+              : `Check delivery ${receipt.deliveryId} in the sender outbox or call messages from the recipient session before deciding whether to resend.`,
           );
         }
         return;
