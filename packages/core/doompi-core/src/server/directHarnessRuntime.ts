@@ -164,7 +164,9 @@ export async function promptForAssistantText(runtime: DirectHarnessRuntime, text
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : typeof error === 'string' ? error : 'Direct harness operation failed';
+  if (!(error instanceof Error)) return typeof error === 'string' ? error : 'Direct harness operation failed';
+  // HarnessFault carries only a generic message; the reason lives in its cause.
+  return error.cause instanceof Error ? `${error.message}: ${errorMessage(error.cause)}` : error.message;
 }
 
 function modelReference(model: DirectHarnessModel | undefined, models: AnyModels): Model<Api> {
