@@ -14,19 +14,38 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-export const createRunnerServerRoot = ({ host }: DoomServerPluginContext) => {
+export const createRunnerServerRoot = ({ host, agent }: DoomServerPluginContext) => {
   if (!host.context.directEvents) throw new Error('Runner headless facet requires the session direct event bus.');
   if (!host.context.cwd || !host.context.environment) {
     throw new Error('Runner headless facet requires session cwd and environment.');
   }
   const dependencies = createRunnerDependencies({ cwd: host.context.cwd, environment: host.context.environment });
-  const runtime = createRunnerServerRuntime(dependencies, host.context.directEvents);
+  const execution = agent?.context;
+  const wakeAgent =
+    execution &&
+    (async (content: string): Promise<void> => {
+      try {
+        // 'steer' joins a running turn and starts one on an idle session.
+        // `session.prompt(_, 'steer')` is enqueue-only and would park the
+        // message on an idle lane, which is the bug this exists to fix.
+        if (!execution.session.admitPrompt) throw new Error('The session cannot admit a runner notification.');
+        await execution.session.admitPrompt(content, 'steer');
+      } catch (error) {
+        // The runner already finished; a failed wake-up costs the model its
+        // prompt, not the result, so tell the operator instead.
+        await execution.client.notify({ body: String(error), level: 'warning' });
+      }
+    });
+  const runtime = createRunnerServerRuntime(dependencies, host.context.directEvents, wakeAgent);
   const value = {
     tool: createHeadlessBashTool(
       {
         run: async (request) => {
           await runtime.ensureSession(request.sessionId);
-          return dependencies.bashRunService.run(request);
+          const result = await dependencies.bashRunService.run(request);
+          // Without this, nothing tells the agent the runner ended.
+          if (result.kind === 'promoted') runtime.watchRunner(result.id);
+          return result;
         },
       },
       summarizeLog,

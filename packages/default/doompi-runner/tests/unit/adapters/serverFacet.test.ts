@@ -36,7 +36,8 @@ const lifecycleMocks = vi.hoisted(() => {
         },
       ]),
       listAll: vi.fn(async () => []),
-      subscribe: vi.fn(() => () => undefined),
+      get: vi.fn(async (): Promise<unknown> => undefined),
+      subscribe: vi.fn((_listener: () => void, _sessionId: string) => () => undefined),
       complete: vi.fn(async () => undefined),
       close: vi.fn(),
     },
@@ -123,6 +124,7 @@ function headlessFacetContext() {
       entries: () => [],
       appendCustomEntry: vi.fn(async () => undefined),
       prompt: vi.fn(async () => undefined),
+      admitPrompt: vi.fn(async () => undefined),
       abort: vi.fn(async () => undefined),
       compact: vi.fn(async () => undefined),
       activity: vi.fn(async () => ({ hasPendingMessages: false, isIdle: true })),
@@ -146,6 +148,12 @@ function headlessFacetContext() {
   return {
     context,
     execution,
+    tool: (name: string) => {
+      const registerTool = headless.registerTool as unknown as ReturnType<typeof vi.fn>;
+      const found = registerTool.mock.calls.map(([tool]) => tool).find((tool) => tool.name === name);
+      if (found === undefined) throw new Error(`${name} tool was not registered`);
+      return found as { execute: (...args: unknown[]) => Promise<unknown> };
+    },
     activity: () => {
       if (activity === undefined) throw new Error('runner activity was not registered');
       return activity;
@@ -234,5 +242,83 @@ describe('runnerServerFacet', () => {
     expect(lifecycleMocks.container.ptyHost.disposeAll).toHaveBeenCalledOnce();
     expect(lifecycleMocks.container.lifeline.dispose).toHaveBeenCalledOnce();
     expect(lifecycleMocks.container.runnerRegistry.close).toHaveBeenCalledOnce();
+  });
+
+  describe('background runner wake-up', () => {
+    const runner = {
+      id: 'runner-b',
+      name: 'build',
+      pid: 43,
+      command: 'sleep 5',
+      cwd: '/repo',
+      logPath: '/tmp/build.log',
+      interactive: false,
+      sessionId: 'session-a',
+      startedAt: '2026-08-07T00:00:00.000Z',
+      promoted: true,
+      backend: 'native',
+      hostPid: 7,
+    };
+    const promote = async () => {
+      const harness = headlessFacetContext();
+      let notifyRegistry = (): void => undefined;
+      lifecycleMocks.container.runnerRegistry.subscribe.mockImplementationOnce((listener) => {
+        notifyRegistry = listener;
+        return () => undefined;
+      });
+      lifecycleMocks.container.runnerRegistry.get.mockResolvedValueOnce({ ...runner, state: 'running' });
+      lifecycleMocks.container.bashRunService.run.mockResolvedValueOnce({
+        kind: 'promoted',
+        id: runner.id,
+        name: runner.name,
+        pid: runner.pid,
+        logPath: runner.logPath,
+        backend: 'native',
+        reason: 'requested',
+      });
+      const dispose = (await runnerServerFacet.apply(harness.context)) as () => Promise<void>;
+      await harness
+        .tool('bash')
+        .execute('call-1', { command: runner.command, background: true }, undefined, undefined, harness.execution);
+      await vi.waitFor(() => expect(lifecycleMocks.container.runnerRegistry.get).toHaveBeenCalledOnce());
+      const finish = () => {
+        lifecycleMocks.container.runnerRegistry.get.mockResolvedValueOnce({
+          ...runner,
+          state: 'completed',
+          exit: { reason: 'completed', code: 0, signal: null, finishedAt: '2026-08-07T00:00:05.000Z' },
+        });
+        notifyRegistry();
+        notifyRegistry();
+      };
+      return { harness, dispose, finish };
+    };
+
+    it('steers the agent exactly once when a runner it promoted exits', async () => {
+      const { harness, dispose, finish } = await promote();
+      expect(harness.execution.session.admitPrompt).not.toHaveBeenCalled();
+
+      finish();
+
+      await vi.waitFor(() => expect(harness.execution.session.admitPrompt).toHaveBeenCalled());
+      expect(harness.execution.session.admitPrompt).toHaveBeenCalledOnce();
+      expect(harness.execution.session.admitPrompt).toHaveBeenCalledWith(
+        expect.stringContaining('Background runner build exited: completed, exit code 0.'),
+        'steer',
+      );
+      await dispose();
+    });
+
+    it('does not start a turn for runners that session cleanup stops', async () => {
+      const { harness, dispose, finish } = await promote();
+
+      await dispose();
+      finish();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(harness.execution.session.admitPrompt).not.toHaveBeenCalled();
+      expect(lifecycleMocks.container.runnerRegistry.get).toHaveBeenCalledOnce();
+      // finish() queued a completed record nobody read; drop it so it cannot leak into later tests.
+      lifecycleMocks.container.runnerRegistry.get.mockReset();
+    });
   });
 });
