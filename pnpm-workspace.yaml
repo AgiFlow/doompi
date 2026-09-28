@@ -53,6 +53,7 @@ onlyBuiltDependencies:
 minimumReleaseAge: 2880
 minimumReleaseAgeExclude:
   - "@agimon-ai/*"
+  - "@agiflowai/*"
   - "@earendil-works/chord@0.85.0||0.85.1||0.86.0||0.87.0||0.87.1"
   - "@earendil-works/pi-agent-core@0.85.0||0.85.1||0.86.0||0.87.0||0.87.1"
   - "@earendil-works/pi-ai@0.85.0||0.85.1||0.86.0||0.87.0||0.87.1"
