@@ -1,3 +1,10 @@
+## 0.0.1-alpha.96 (2026-09-28)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.87
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.50
+
 ## 0.0.1-alpha.95 (2026-09-27)
 
 ### 🩹 Fixes
