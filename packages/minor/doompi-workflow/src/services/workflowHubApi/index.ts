@@ -16,6 +16,7 @@ import { streamSSE } from 'hono/streaming';
 import { createStepPaneTerminal, createStepPaneTerminalDependencies } from '../../services/stepPaneTerminal';
 import { createWorkflowTerminalService } from '../../services/workflowTerminal';
 import routes, { ARTIFACT_DOWNLOAD_PARAM, ARTIFACT_RAW_PARAM } from '../../types/apiRoutes';
+import { STEP_SESSION_REF_KIND } from '../../types/webWorkflows';
 import {
   WORKFLOW_API_BASE_PATH,
   WORKFLOW_SCREEN_EVENT,
@@ -24,7 +25,10 @@ import {
   type WorkflowArtifactView,
   type WorkflowControlResponse,
   type WorkflowDeleteResponse,
+  type WorkflowLaunchResponse,
   type WorkflowScreenEvent,
+  type WorkflowSteerResponse,
+  type WorkflowStopResponse,
 } from '../../types/webWorkflowTerminal';
 
 /** Stages a run can be recorded under, newest first: a live run is the common case. */
@@ -37,6 +41,8 @@ const STREAM_TICK_MS = 500;
 const SETTLED_POLL_TICKS = 4;
 /** Bytes of one textual artifact returned as JSON; binary previews use a stream. */
 const MAX_ARTIFACT_BYTES = 512 * 1024;
+/** Recorded with a stop the web panel asks for, so the run log says where it came from. */
+const WEB_STOP_REASON = 'Stopped from the web workflow panel.';
 /** Path segments a client supplies are names, never paths. */
 const SAFE_SEGMENT = /^[\w.@-]+$/;
 const ARTIFACT_MIME_TYPES: Readonly<Record<string, string>> = {
@@ -107,6 +113,16 @@ export interface WorkflowHubApiOptions {
   registry?: WorkflowRegistryService;
   terminal?: WorkflowTerminalFacade;
   now?: () => number;
+  /**
+   * Guides a live session that the mounting session started. Present only on a
+   * session mount, whose session service refuses sessions it did not start.
+   */
+  steer?: (sessionId: string, message: string) => Promise<void>;
+  /**
+   * Runs a workflow in the mounting session, which then owns it. Present only on
+   * the mount of a session with a workflow runtime.
+   */
+  launch?: (parameters: Record<string, unknown>) => Promise<WorkflowLaunchResponse>;
 }
 
 /**
@@ -121,9 +137,10 @@ export interface WorkflowHubApiOptions {
 export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono {
   const registry = options.registry ?? new WorkflowRegistryService();
   const facade = options.terminal ?? new WorkflowTerminalFacade();
+  const stepPanes = createStepPaneTerminalDependencies(registry);
   const terminal = createWorkflowTerminalService<WorkflowRunRecord>({
     // A run executing in the server has a pane per command step instead of one for the whole run.
-    terminal: createStepPaneTerminal(facade, createStepPaneTerminalDependencies(registry)),
+    terminal: createStepPaneTerminal(facade, stepPanes),
     now: options.now ?? (() => Date.now()),
   });
   const app = new Hono();
@@ -243,6 +260,60 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     } catch (error) {
       return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
+  });
+
+  app.post(routes.stop.path, async (context) => {
+    const workspace = context.req.param('workspace');
+    const runKey = context.req.param('runKey');
+    const record = await runOf(workspace, runKey);
+    if (record === undefined) return context.json(missing(workspace, runKey), 404);
+    if (record.stage !== 'running' || record.runId === undefined) {
+      return context.json({ error: 'Only a running workflow can be stopped.' }, 409);
+    }
+    try {
+      // The same request the workflow tool's stop writes; the engine that owns the
+      // run reads it wherever that engine lives, in this server or in a terminal.
+      await registry.requestStop(workspace, runKey, WEB_STOP_REASON, record.runId);
+    } catch (error) {
+      return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
+    const response: WorkflowStopResponse = { requested: true };
+    return context.json(response);
+  });
+
+  app.post(routes.steer.path, async (context) => {
+    const workspace = context.req.param('workspace');
+    const runKey = context.req.param('runKey');
+    const record = await runOf(workspace, runKey);
+    if (record === undefined) return context.json(missing(workspace, runKey), 404);
+    const body = await jsonBody(context);
+    const message = typeof body.message === 'string' ? body.message.trim() : '';
+    if (message === '') return context.json({ error: 'Guidance needs a message.' }, 400);
+    if (record.stage !== 'running') return context.json({ error: 'Only a running workflow can be steered.' }, 409);
+    // Only the step running now, and only when it is an agent session: a browser
+    // names a run, never the session it wants to reach.
+    const current = stepPanes.stepRefs(record).current;
+    if (current?.kind !== STEP_SESSION_REF_KIND) {
+      return context.json({ error: 'The running step is not an agent session.' }, 409);
+    }
+    if (options.steer === undefined) {
+      return context.json({ error: 'Steering is available from the session that launched this run.' }, 409);
+    }
+    try {
+      await options.steer(current.id, message);
+    } catch (error) {
+      return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
+    const response: WorkflowSteerResponse = { delivered: true };
+    return context.json(response);
+  });
+
+  app.post(routes.launch.path, async (context) => {
+    if (options.launch === undefined) {
+      return context.json({ error: 'Launching needs the mount of a session with a workflow runtime.' }, 409);
+    }
+    const response: WorkflowLaunchResponse = await options.launch(await jsonBody(context));
+    return context.json(response);
   });
 
   app.delete(routes.remove.path, async (context) => {
@@ -466,18 +537,31 @@ function streamArtifact(
   return new Response(body, { status: partial ? 206 : 200, headers });
 }
 
+/**
+ * This package's API, mounted by a session with its runtime's `launch` and by
+ * the hub without one.
+ */
+export function createWorkflowApi(launch?: WorkflowHubApiOptions['launch']): DoomApi {
+  return {
+    basePath: WORKFLOW_API_BASE_PATH,
+    start(context: DoomApiContext): DoomApiHandler {
+      // A run is addressed by its registry identity, which is machine-wide. Only
+      // steering and launching need a session: the one mounting this API, which
+      // may guide only the step sessions it started.
+      const steer = context.sessionService?.steer?.bind(context.sessionService);
+      const app = createWorkflowHubApi({
+        ...(steer === undefined ? {} : { steer: (sessionId, message) => steer(sessionId, message) }),
+        ...(launch === undefined ? {} : { launch }),
+      });
+      return {
+        fetch: (request) => app.fetch(request),
+        // Nothing outlives a request: a stream's loop ends when its own socket
+        // aborts, and the caches it touched are per run rather than per client.
+        close: () => undefined,
+      };
+    },
+  };
+}
+
 /** The named export a host imports from this package's built hub entry. */
-export const api: DoomApi = {
-  basePath: WORKFLOW_API_BASE_PATH,
-  start(_context: DoomApiContext): DoomApiHandler {
-    // Hub-scoped: the host hands no session, and these routes want none. A run
-    // is addressed by its registry identity, which is machine-wide.
-    const app = createWorkflowHubApi();
-    return {
-      fetch: (request) => app.fetch(request),
-      // Nothing outlives a request: a stream's loop ends when its own socket
-      // aborts, and the caches it touched are per run rather than per client.
-      close: () => undefined,
-    };
-  },
-};
+export const api: DoomApi = createWorkflowApi();

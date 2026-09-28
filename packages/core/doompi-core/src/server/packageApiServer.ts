@@ -112,6 +112,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
   const communication = owningSessionService?.bindCommunication?.(options.sessionId);
   const ownedPrompt = owningSessionService?.prompt?.bind(owningSessionService);
   const ownedAbort = owningSessionService?.abort?.bind(owningSessionService);
+  const ownedSteer = owningSessionService?.steer?.bind(owningSessionService);
   const exposedSessionService: DoomHubSessionService | undefined =
     owningSessionService === undefined
       ? undefined
@@ -133,6 +134,12 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
             ? {}
             : {
                 abort: (sessionId: string) => ownedAbort(sessionId, { parentSessionId: options.sessionId }),
+              }),
+          ...(ownedSteer === undefined
+            ? {}
+            : {
+                steer: (sessionId: string, message: string) =>
+                  ownedSteer(sessionId, message, { parentSessionId: options.sessionId }),
               }),
           ...(owningSessionService.canCommunicate === undefined
             ? {}

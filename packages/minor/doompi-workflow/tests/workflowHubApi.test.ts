@@ -47,6 +47,7 @@ function fakeRegistry(current: WorkflowRunRecord, runDir: string): WorkflowRegis
         ? Promise.resolve(current)
         : Promise.reject(new Error('not found')),
     runDirectoryFor: () => runDir,
+    requestStop: vi.fn(() => Promise.resolve({ runId: current.runId })),
   } as unknown as WorkflowRegistryService;
 }
 
@@ -63,13 +64,14 @@ function fakeTerminal(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 function api(current = record(), runDir = runDirectory(), terminal = fakeTerminal()) {
+  const registry = fakeRegistry(current, runDir);
   const app = createWorkflowHubApi({
-    registry: fakeRegistry(current, runDir),
+    registry,
     // The facade is a class in the engine; the routes only use these four.
     terminal: terminal as never,
     now: () => 1_000,
   });
-  return { app, runDir, terminal };
+  return { app, registry, runDir, terminal };
 }
 
 const BASE = 'http://hub/runs/repo/blog-writing-4';
@@ -193,6 +195,135 @@ describe('workflow hub api: deletion', () => {
   });
 });
 
+/** A progress log whose running step sits in the given place. */
+function progressWithRef(ref: { kind: string; id: string }): string {
+  return [
+    { type: 'job', status: 'running', job: 'report', at: '2026-01-01T00:00:00.000Z' },
+    { type: 'step', status: 'running', job: 'report', step: 'Report', at: '2026-01-01T00:00:00.000Z' },
+    { type: 'step', status: 'running', job: 'report', step: 'Report', ref, at: '2026-01-01T00:00:01.000Z' },
+  ]
+    .map((event) => JSON.stringify(event))
+    .join('\n');
+}
+
+function steerApi(current: WorkflowRunRecord, runDir: string, steer?: (id: string, message: string) => Promise<void>) {
+  return createWorkflowHubApi({
+    registry: fakeRegistry(current, runDir),
+    terminal: fakeTerminal() as never,
+    now: () => 1_000,
+    ...(steer === undefined ? {} : { steer }),
+  });
+}
+
+const STEER = { method: 'POST', body: JSON.stringify({ message: '  focus on the failing test  ' }) };
+
+describe('workflow hub api: steer', () => {
+  it('guides the agent session the running step is in', async () => {
+    const steer = vi.fn(async () => undefined);
+    const app = steerApi(
+      record(),
+      runDirectory({ 'progress.ndjson': progressWithRef({ kind: 'session', id: 'step-1' }) }),
+      steer,
+    );
+
+    const response = await app.request(`${BASE}/steer`, STEER);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ delivered: true });
+    expect(steer).toHaveBeenCalledWith('step-1', 'focus on the failing test');
+  });
+
+  it('refuses a step that runs in a terminal pane', async () => {
+    const steer = vi.fn(async () => undefined);
+    const app = steerApi(
+      record(),
+      runDirectory({ 'progress.ndjson': progressWithRef({ kind: 'pane', id: '/tmp/p.sock' }) }),
+      steer,
+    );
+
+    const response = await app.request(`${BASE}/steer`, STEER);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'The running step is not an agent session.' });
+    expect(steer).not.toHaveBeenCalled();
+  });
+
+  it('refuses a settled run, an empty message, and a mount without a session', async () => {
+    const progress = { 'progress.ndjson': progressWithRef({ kind: 'session', id: 'step-1' }) };
+    const steer = vi.fn(async () => undefined);
+
+    const settled = await steerApi(record({ stage: 'completed' }), runDirectory(progress), steer).request(
+      `${BASE}/steer`,
+      STEER,
+    );
+    expect(settled.status).toBe(409);
+    const empty = await steerApi(record(), runDirectory(progress), steer).request(`${BASE}/steer`, {
+      method: 'POST',
+      body: JSON.stringify({ message: '   ' }),
+    });
+    expect(empty.status).toBe(400);
+    const hub = await steerApi(record(), runDirectory(progress)).request(`${BASE}/steer`, STEER);
+    expect(hub.status).toBe(409);
+    expect(await hub.json()).toEqual({ error: 'Steering is available from the session that launched this run.' });
+    expect(steer).not.toHaveBeenCalled();
+  });
+
+  it('passes on why the session refused the guidance', async () => {
+    const steer = vi.fn(async () => {
+      throw new Error('Only the parent session can drive this session.');
+    });
+    const app = steerApi(
+      record(),
+      runDirectory({ 'progress.ndjson': progressWithRef({ kind: 'session', id: 'step-1' }) }),
+      steer,
+    );
+
+    const response = await app.request(`${BASE}/steer`, STEER);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Only the parent session can drive this session.' });
+  });
+});
+
+describe('workflow hub api: stop', () => {
+  const RUN_ID = '6c1f4a3e-0b7d-4c55-9a8e-2f1d3b4c5a6e';
+
+  it('records a stop request against the running run it read', async () => {
+    const { app, registry } = api(record({ runId: RUN_ID }));
+
+    const response = await app.request(`${BASE}/stop`, { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ requested: true });
+    expect(registry.requestStop).toHaveBeenCalledWith(
+      'repo',
+      'blog-writing-4',
+      'Stopped from the web workflow panel.',
+      RUN_ID,
+    );
+  });
+
+  it('refuses to stop a settled run', async () => {
+    const { app, registry } = api(record({ stage: 'completed', runId: RUN_ID }));
+
+    const response = await app.request(`${BASE}/stop`, { method: 'POST' });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Only a running workflow can be stopped.' });
+    expect(registry.requestStop).not.toHaveBeenCalled();
+  });
+
+  it('passes on why the engine refused the request', async () => {
+    const { app, registry } = api(record({ runId: RUN_ID }));
+    vi.mocked(registry.requestStop).mockRejectedValueOnce(new Error('Running workflow is stale: repo/blog-writing-4'));
+
+    const response = await app.request(`${BASE}/stop`, { method: 'POST' });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Running workflow is stale: repo/blog-writing-4' });
+  });
+});
+
 describe('workflow hub api: artifacts', () => {
   it('lists the declared entries first, with what is on disk beside them', async () => {
     const runDir = runDirectory({ 'research.md': 'facts', 'context.md': 'the prompt' });
@@ -280,5 +411,35 @@ describe('workflow hub api: artifacts', () => {
     const { app } = api(record(), runDirectory({ 'post.md': 'x' }));
     const escaped = await app.request(`${BASE}/artifacts/..%2F..%2Fetc%2Fpasswd`);
     expect(escaped.status).toBe(400);
+  });
+});
+
+describe('workflow hub api: launch', () => {
+  const LAUNCH = { method: 'POST', body: JSON.stringify({ workflowPath: '/tmp/build.workflow.yml', runner: 'runA' }) };
+
+  it('launches into the mounting session and answers what the launch reported', async () => {
+    const launch = vi.fn(async () => ({ text: 'Run key: run-1' }));
+    const app = createWorkflowHubApi({
+      registry: fakeRegistry(record(), runDirectory()),
+      terminal: fakeTerminal() as never,
+      launch,
+    });
+
+    const response = await app.request('/launch', LAUNCH);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ text: 'Run key: run-1' });
+    expect(launch).toHaveBeenCalledWith({ workflowPath: '/tmp/build.workflow.yml', runner: 'runA' });
+  });
+
+  it('refuses a mount with no session runtime to launch into', async () => {
+    const app = createWorkflowHubApi({
+      registry: fakeRegistry(record(), runDirectory()),
+      terminal: fakeTerminal() as never,
+    });
+
+    const response = await app.request('/launch', LAUNCH);
+
+    expect(response.status).toBe(409);
   });
 });

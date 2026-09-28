@@ -19,3 +19,12 @@ export const WORKFLOW_PI_TOOL_NAMES = [
   LAUNCH_WORKFLOW_TOOL_NAME,
   WORKFLOW_RUN_TOOL_NAME,
 ] as const;
+
+/**
+ * Names the session that owns runs this session launches.
+ *
+ * A dispatcher session started for a root session sets it, so the root runs the
+ * workflow and keeps it after the dispatcher closes: the run registers under
+ * the root, and the root's step sessions are its own children.
+ */
+export const WORKFLOW_LAUNCH_SESSION_ENV = 'DOOMPI_WORKFLOW_LAUNCH_SESSION';

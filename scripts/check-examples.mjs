@@ -14,6 +14,7 @@ const workflowNames = [
   'dev-feature.workflow.yml',
   'dev-fix.workflow.yml',
   'in-process-smoke.workflow.yml',
+  'runner-choice.workflow.yml',
 ];
 const defaultPackagePaths = [
   './packages/minor/doompi-help',

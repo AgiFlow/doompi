@@ -827,6 +827,9 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     abort: async (sessionId, abortOptions) => {
       await promptTarget(sessionId, abortOptions?.parentSessionId).host.runtime.abort();
     },
+    steer: async (sessionId, message, steerOptions) => {
+      await promptTarget(sessionId, steerOptions?.parentSessionId).host.runtime.steer(message);
+    },
     reservations: options.sessionReservations,
     provisionReservedWorktree: async (request) => {
       const parent = sessions.get(request.parentSessionId);

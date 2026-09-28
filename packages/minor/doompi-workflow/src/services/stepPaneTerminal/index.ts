@@ -23,7 +23,8 @@ const PANE_LOG_CAPABILITIES: WorkflowTerminalCapabilitiesView = {
   resizable: false,
   reason: 'That step has finished; this is the output it left.',
 };
-const SESSION_STEP_REASON = 'This step runs as an agent session; open the step to follow its conversation.';
+const SESSION_STEP_REASON =
+  'This step runs as an agent session; its conversation appears here as soon as the session starts.';
 const PANE_GONE_LINE = 'The step pane has closed.';
 
 /**

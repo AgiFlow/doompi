@@ -1,12 +1,7 @@
-import type { DoomHubSessionCreateRequest } from '@agimon-ai/doompi-core/hubChannel';
+import { type DoomHubSessionCreateRequest, WORKFLOW_STEP_SESSION_PROVENANCE } from '@agimon-ai/doompi-core/hubChannel';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  createStepExecutor,
-  readDoompiRunConfig,
-  stepEnvironment,
-  WORKFLOW_SESSION_PROVENANCE,
-} from '../../../src/services/stepExecutor';
+import { createStepExecutor, readDoompiRunConfig, stepEnvironment } from '../../../src/services/stepExecutor';
 import type { StepExecutorDependencies, StepPane } from '../../../src/services/stepExecutor/type';
 
 const STEP_ENV = {
@@ -97,7 +92,7 @@ describe('createStepExecutor', () => {
         cwd: '/repo',
         name: 'dev-fix: diagnose > Diagnose the defect',
         parentSessionId: 'parent',
-        sessionProvenance: WORKFLOW_SESSION_PROVENANCE,
+        sessionProvenance: WORKFLOW_STEP_SESSION_PROVENANCE,
         selection: { majorMode: 'examples', minorModes: ['plan'], domains: ['engineering'] },
         model: 'p/m',
         thinking: 'high',
@@ -117,6 +112,25 @@ describe('createStepExecutor', () => {
 
     harness.settle();
     await expect(execution.completion).resolves.toEqual({ exitCode: 0 });
+  });
+
+  it("appends the entry's system prompt to the step session", async () => {
+    const harness = dependencies();
+
+    await createStepExecutor(harness.deps).custom!({
+      cwd: '/repo',
+      env: STEP_ENV,
+      stepName: 'Develop',
+      customRun: { prompt: 'Implement the task', systemPrompt: 'You are running job "development".' },
+      runConfig: { model: 'claude-bridge/claude-opus-5-5', thinking: 'medium' },
+    });
+
+    expect(harness.created[0]).toMatchObject({
+      model: 'claude-bridge/claude-opus-5-5',
+      thinking: 'medium',
+      appendSystemPrompt: 'You are running job "development".',
+    });
+    expect(harness.sessionService.prompt).toHaveBeenCalledWith('step-session', 'Implement the task');
   });
 
   it('reports a harness fault as an error outcome and aborts on stop', async () => {

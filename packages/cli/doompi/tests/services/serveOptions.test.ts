@@ -137,4 +137,11 @@ describe('sessionSelectionArgs', () => {
     });
     expect(sessionSelectionArgs({})).toEqual({ args: [], pinned: [] });
   });
+
+  it('passes an appended system prompt on to Pi without pinning anything', () => {
+    expect(sessionSelectionArgs({ appendSystemPrompt: 'Stay on the job.\nReport in handoff.md.' })).toEqual({
+      args: ['--append-system-prompt', 'Stay on the job.\nReport in handoff.md.'],
+      pinned: [],
+    });
+  });
 });

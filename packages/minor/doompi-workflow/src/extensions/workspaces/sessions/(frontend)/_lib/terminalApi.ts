@@ -9,6 +9,8 @@ import {
   type WorkflowControlResponse,
   type WorkflowDeleteResponse,
   type WorkflowScreenEvent,
+  type WorkflowSteerResponse,
+  type WorkflowStopResponse,
 } from '../../../../../types/webWorkflowTerminal';
 
 /**
@@ -181,6 +183,35 @@ export async function deleteWorkflowRun(
   if (!result.ok) return { error: messageOf(result, 'The workflow could not be deleted.') };
   if (result.data.deleted === true) return { result: { deleted: true } };
   return { error: 'The workflow hub returned an invalid deletion response.' };
+}
+
+export type StopWorkflowResult = { result: WorkflowStopResponse } | { error: string };
+
+/** Asks the engine running a workflow to stop it; the run settles on its own shortly after. */
+export async function stopWorkflowRun(
+  workspace: string,
+  runKey: string,
+  sessionId?: string | null,
+): Promise<StopWorkflowResult> {
+  const result = await scoped(sessionId).stop({ params: runParams(workspace, runKey) });
+  if (!result.ok) return { error: messageOf(result, 'The workflow could not be stopped.') };
+  if (result.data.requested === true) return { result: { requested: true } };
+  return { error: 'The workflow hub returned an invalid stop response.' };
+}
+
+export type SteerStepResult = { result: WorkflowSteerResponse } | { error: string };
+
+/** Sends guidance to the agent session the run's current step is in. */
+export async function steerStep(
+  workspace: string,
+  runKey: string,
+  message: string,
+  sessionId?: string | null,
+): Promise<SteerStepResult> {
+  const result = await scoped(sessionId).steer({ params: runParams(workspace, runKey), body: { message } });
+  if (!result.ok) return { error: messageOf(result, 'The step would not take that guidance.') };
+  if (result.data.delivered === true) return { result: { delivered: true } };
+  return { error: 'The workflow hub returned an invalid steer response.' };
 }
 
 export type ArtifactsResult = { artifacts: WorkflowArtifactsResponse } | { error: string };

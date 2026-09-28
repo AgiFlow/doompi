@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-import type { DoomHubSessionSelection } from '@agimon-ai/doompi-core/hubChannel';
+import { type DoomHubSessionSelection, WORKFLOW_STEP_SESSION_PROVENANCE } from '@agimon-ai/doompi-core/hubChannel';
 import {
   NativeTerminalService,
   serveNativeTerminal,
@@ -13,8 +13,6 @@ import { type DoompiRunConfig, doompiRunConfigSchema } from '../../schemas/runCo
 import { STEP_PANE_REF_KIND, STEP_SESSION_REF_KIND } from '../../types/webWorkflows';
 import type { StepExecutorDependencies, StepPaneLauncher } from './type';
 
-/** Marks sessions a workflow step opened, so the rail can tell them from ones a person started. */
-export const WORKFLOW_SESSION_PROVENANCE = 'workflow';
 const STEP_DISPLAY_ENV = 'WORKFLOW_STEP_DISPLAY';
 const WORKFLOW_NAME_ENV = 'WORKFLOW_NAME';
 
@@ -83,10 +81,12 @@ export function createStepExecutor(dependencies: StepExecutorDependencies): Step
         cwd: request.cwd,
         name,
         parentSessionId: dependencies.parentSessionId,
-        sessionProvenance: WORKFLOW_SESSION_PROVENANCE,
+        // Keeps the session out of the rail: its conversation is read in the workflow's view.
+        sessionProvenance: WORKFLOW_STEP_SESSION_PROVENANCE,
         selection: sessionSelection(config),
         ...(config.model === undefined ? {} : { model: config.model }),
         ...(config.thinking === undefined ? {} : { thinking: config.thinking }),
+        ...(request.customRun.systemPrompt === undefined ? {} : { appendSystemPrompt: request.customRun.systemPrompt }),
         environment: stepEnvironment(request.env, dependencies.hostEnvironment),
       });
       const receipt = await prompt(scope.sessionId, request.customRun.prompt);

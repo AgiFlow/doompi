@@ -1,3 +1,7 @@
+import {
+  WORKFLOW_DISPATCHER_SESSION_PROVENANCE,
+  WORKFLOW_STEP_SESSION_PROVENANCE,
+} from '@agimon-ai/doompi-core/hubChannel';
 import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
@@ -79,6 +83,9 @@ export function resolveParentId(byId: Record<string, SessionMeta>, id: string): 
  * replaces.
  */
 function sortedOrder(byId: Record<string, SessionMeta>): string[] {
+  // A workflow step's session is read inside its workflow, never from the rail, so it
+  // takes no row and no ordinal. It stays in `byId` for that view to follow. A
+  // workflow dispatcher is a short-lived helper whose runs belong to its parent.
   const byCreation = (left: string, right: string): number => {
     const a = byId[left].summary;
     const b = byId[right].summary;
@@ -87,6 +94,9 @@ function sortedOrder(byId: Record<string, SessionMeta>): string[] {
   const children = new Map<string, string[]>();
   const roots: string[] = [];
   for (const id of Object.keys(byId)) {
+    const provenance = byId[id].summary.sessionProvenance;
+    if (provenance === WORKFLOW_STEP_SESSION_PROVENANCE || provenance === WORKFLOW_DISPATCHER_SESSION_PROVENANCE)
+      continue;
     const parent = resolveParentId(byId, id);
     if (parent === undefined) {
       roots.push(id);

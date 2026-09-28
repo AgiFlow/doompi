@@ -8,16 +8,20 @@ import {
   useEffect,
   useRef,
   useState,
+  useMemo,
 } from 'react';
 
 import {
   STEP_SESSION_REF_KIND,
   type WorkflowRunView,
   type WorkflowStepRefView,
+  type WorkflowStepView,
 } from '../../../../../types/webWorkflows';
 import type { WorkflowTerminalCapabilitiesView } from '../../../../../types/webWorkflowTerminal';
+import { createKeySender } from '../_lib/keySender';
 import { followScreen, releaseControl, sendKeys, takeControl } from '../_lib/terminalApi';
 import { workflows } from '../_lib/workflowsStore';
+import { StepSteerComposer } from './StepSteerComposer';
 
 /** The tab id doubles as the URL segment, so it stays plain and unique across plugins. */
 const TAB_ID_PREFIX = 'workflows-step-';
@@ -69,12 +73,17 @@ export function stepTerminalTab(run: WorkflowRunView, job: string, step?: string
  * A step tab follows that step. A job tab follows the job's latest step only,
  * so a job that moved on to a command step shows its terminal again.
  */
+/** The step a tab points at: the named one, or the job's last step when it names none. */
+function targetStep(run: WorkflowRunView | undefined, target: StepTabTarget): WorkflowStepView | undefined {
+  const steps = run?.jobs.find((job) => job.name === target.job)?.steps ?? [];
+  return target.step === undefined ? steps.at(-1) : steps.find((candidate) => candidate.name === target.step);
+}
+
 export function stepSessionRef(
   run: WorkflowRunView | undefined,
   target: StepTabTarget,
 ): WorkflowStepRefView | undefined {
-  const steps = run?.jobs.find((job) => job.name === target.job)?.steps ?? [];
-  const step = target.step === undefined ? steps.at(-1) : steps.find((candidate) => candidate.name === target.step);
+  const step = targetStep(run, target);
   return step?.ref?.kind === STEP_SESSION_REF_KIND ? step.ref : undefined;
 }
 
@@ -143,6 +152,9 @@ export function StepTerminalPanel(props: WebPluginSlotProps & { target: StepTabT
         <div data-testid="step-conversation" className="flex min-h-0 flex-1 flex-col">
           {renderSessionTranscript(sessionRef.id)}
         </div>
+        {run !== undefined && targetStep(run, target)?.status === 'running' ? (
+          <StepSteerComposer key={sessionRef.id} run={run} sessionId={sessionId} />
+        ) : null}
       </div>
     );
   }
@@ -233,14 +245,20 @@ function StepTerminal({
     setToken(undefined);
   }, []);
 
-  const type = async (data: string): Promise<void> => {
-    if (token === undefined) return;
-    const { error } = await sendKeys(target.workspace, target.runKey, token, data, sessionId);
-    if (error !== undefined) {
-      setNotice(error);
-      setToken(undefined);
-    }
-  };
+  const typeKeys = useMemo(
+    () =>
+      token === undefined
+        ? undefined
+        : createKeySender(async (data) => {
+            const { error } = await sendKeys(target.workspace, target.runKey, token, data, sessionId);
+            if (error === undefined) return true;
+            setNotice(error);
+            setToken(undefined);
+            return false;
+          }),
+    [token, target.workspace, target.runKey, sessionId],
+  );
+  const type = (data: string): void => typeKeys?.(data);
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (token === undefined) return;
@@ -252,18 +270,18 @@ function StepTerminal({
     const control = CONTROL_KEYS[event.key];
     if (control !== undefined) {
       event.preventDefault();
-      void type(control);
+      type(control);
       return;
     }
     if (event.ctrlKey && event.key.length === 1) {
       event.preventDefault();
       const letter = event.key.toUpperCase().charCodeAt(0);
-      void type(event.key === 'c' ? CTRL_C : event.key === 'd' ? CTRL_D : String.fromCharCode(letter - CTRL_A_CODE));
+      type(event.key === 'c' ? CTRL_C : event.key === 'd' ? CTRL_D : String.fromCharCode(letter - CTRL_A_CODE));
       return;
     }
     if (event.key.length === 1 && !event.metaKey && !event.altKey) {
       event.preventDefault();
-      void type(event.key);
+      type(event.key);
     }
   };
 

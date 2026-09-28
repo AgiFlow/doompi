@@ -7,6 +7,7 @@ const DOMAINS_OPTION = '--domains';
 const NO_DOMAINS_OPTION = '--no-domains';
 const MODEL_OPTION = '--model';
 const THINKING_OPTION = '--thinking';
+const APPEND_SYSTEM_PROMPT_OPTION = '--append-system-prompt';
 export interface SessionIdentity {
   sessionId: string;
   sessionName: string;
@@ -43,11 +44,13 @@ export type PinnedSelectionAxis = 'majorMode' | 'domains' | 'profile';
  * a `doompi --major-mode ... --model ...` launch checks these. Minor modes have
  * no flag; the caller seeds them into the selection state directly.
  */
-export function sessionSelectionArgs(request: Pick<DoomHubSessionCreateRequest, 'selection' | 'model' | 'thinking'>): {
+export function sessionSelectionArgs(
+  request: Pick<DoomHubSessionCreateRequest, 'selection' | 'model' | 'thinking' | 'appendSystemPrompt'>,
+): {
   args: string[];
   pinned: PinnedSelectionAxis[];
 } {
-  const { selection, model, thinking } = request;
+  const { selection, model, thinking, appendSystemPrompt } = request;
   const args: string[] = [];
   const pinned: PinnedSelectionAxis[] = [];
   if (selection?.majorMode !== undefined) {
@@ -65,6 +68,8 @@ export function sessionSelectionArgs(request: Pick<DoomHubSessionCreateRequest, 
   }
   if (model !== undefined) args.push(MODEL_OPTION, model);
   if (thinking !== undefined) args.push(THINKING_OPTION, thinking);
+  // Unknown to the harness parser, so it reaches Pi, which appends it to the system prompt.
+  if (appendSystemPrompt !== undefined) args.push(APPEND_SYSTEM_PROMPT_OPTION, appendSystemPrompt);
   return { args, pinned };
 }
 

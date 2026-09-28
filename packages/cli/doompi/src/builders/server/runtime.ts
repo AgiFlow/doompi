@@ -569,7 +569,11 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           sessionProvenance?: string;
         },
         workspace: { id: string; root: string },
-        explicit: { pinned: readonly PinnedSelectionAxis[]; minorModes?: readonly string[] } = { pinned: [] },
+        explicit: {
+          pinned: readonly PinnedSelectionAxis[];
+          minorModes?: readonly string[];
+          allowedTools?: readonly string[];
+        } = { pinned: [] },
       ): HeadlessSessionHostOptions => {
         const policyOptions = context.options;
         const sessionSelection = {
@@ -604,6 +608,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           environment: Object.freeze({ ...context.environment }),
           piExtensionPaths: [piBootstrap.bootstrap],
           selection: sessionSelection,
+          ...(explicit.allowedTools === undefined ? {} : { allowedTools: explicit.allowedTools }),
           selectionOverrides: (['majorMode', 'domains', 'profile'] as const).filter((axis) => {
             if (explicit.pinned.includes(axis)) return true;
             const flag = axis === 'majorMode' ? '--major-mode' : `--${axis}`;
@@ -872,6 +877,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               sessionHostOptions(childContext, bundle, mcpBundle, registration, identity, workspace, {
                 pinned: explicit.pinned,
                 ...(request.selection?.minorModes === undefined ? {} : { minorModes: request.selection.minorModes }),
+                ...(request.tools === undefined ? {} : { allowedTools: request.tools }),
               }),
             );
             request.signal?.throwIfAborted();

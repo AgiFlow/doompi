@@ -50,6 +50,22 @@ export interface WorkflowDeleteResponse {
   deleted: true;
 }
 
+/** Answer once a stop request is recorded; the engine ends the run at its next check. */
+export interface WorkflowStopResponse {
+  requested: true;
+}
+
+/** Answer once guidance reached the running step's agent session. */
+export interface WorkflowSteerResponse {
+  delivered: true;
+}
+
+/** What launching a workflow into a session answered, as the launch tool reports it. */
+export interface WorkflowLaunchResponse {
+  text: string;
+  isError?: boolean;
+}
+
 /** How a declared run-directory entry compares with what is on disk. */
 export type WorkflowArtifactState = 'written' | 'empty' | 'pending' | 'unreadable';
 

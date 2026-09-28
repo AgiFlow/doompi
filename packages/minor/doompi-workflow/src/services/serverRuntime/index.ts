@@ -11,10 +11,12 @@ import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agim
 import { createEmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
 import { z } from 'zod';
 
+import { WORKFLOW_LAUNCH_SESSION_ENV } from '../../constants/workflow';
 import { registerRunProvider, type RunProviderHandle } from '../../services/backgroundWork';
 import { createNativeStepPaneLauncher, createStepExecutor } from '../../services/stepExecutor';
 import { createWorkflowCatalogReader, presentWorkflowCatalog } from '../../services/webWorkflowCatalog';
 import { defaultCatalogDeps } from '../../services/workflowCatalogDeps';
+import { createWorkflowApi } from '../../services/workflowHubApi';
 import {
   parseWorkflowLaunchCommand,
   resolveWorkflowEntry,
@@ -23,7 +25,9 @@ import {
 import { readWorkflowSkill as skill } from '../../services/workflowResource';
 import { PI_SESSION_ENV, presentWorkflowRuns, runBelongsToSession } from '../../services/workflowRuns';
 import { readWorkflowRuns } from '../../services/workflowWatcher';
+import routes from '../../types/apiRoutes';
 import { WORKFLOW_CATALOG_TYPE, WORKFLOW_RUNS_TYPE } from '../../types/webWorkflows';
+import { WORKFLOW_API_BASE_PATH, type WorkflowLaunchResponse } from '../../types/webWorkflowTerminal';
 
 const SOURCE = '@agimon-ai/doompi-workflow';
 const WORKFLOW_MODE_ID = 'workflow';
@@ -36,11 +40,23 @@ const LAUNCH_ACK_POLL_MS = 250;
 const LAUNCH_ACK_TIMEOUT_MS = 15_000;
 /** Tolerance for a run stamping its start a moment before the launch clock read. */
 const LAUNCH_ACK_CLOCK_SKEW_MS = 1_000;
+/** Origin of a request dispatched in process to another mount; nothing resolves it. */
+const IN_PROCESS_ORIGIN = 'http://doompi.local';
 
 type LaunchResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
 
 function textResult(text: string, isError = false): LaunchResult {
   return { content: [{ type: 'text', text }], ...(isError ? { isError: true } : {}) };
+}
+
+function isLaunchResponse(value: unknown): value is WorkflowLaunchResponse {
+  return typeof value === 'object' && value !== null && 'text' in value && typeof value.text === 'string';
+}
+
+function errorOf(value: unknown): string | undefined {
+  return typeof value === 'object' && value !== null && 'error' in value && typeof value.error === 'string'
+    ? value.error
+    : undefined;
 }
 
 /** Resolves undefined after `ms`, so a race against it reads as "nothing settled yet". */
@@ -127,6 +143,7 @@ export function createWorkflowServerRuntime(
           }),
         },
   );
+  type LaunchParameters = Parameters<typeof feature.runTool.execute>[0];
   /**
    * Run a workflow in this process and answer once it has registered.
    *
@@ -135,7 +152,7 @@ export function createWorkflowServerRuntime(
    * a service of its own so concurrent runs never share an active step, and the
    * caller hears back when the registry shows the run rather than when it ends.
    */
-  const launch = async (parameters: Parameters<typeof feature.runTool.execute>[0]): Promise<LaunchResult> => {
+  const launchHere = async (parameters: LaunchParameters): Promise<LaunchResult> => {
     const input = feature.runTool.getInputSchema().parse(parameters);
     const sessionId = host.context.sessionId;
     const since = Date.now();
@@ -177,6 +194,51 @@ export function createWorkflowServerRuntime(
       if (Date.now() >= deadline) {
         return textResult(`Launch started for ${input.workflowPath}, but no run has registered yet.`);
       }
+    }
+  };
+  /**
+   * Hand a launch to the session that owns this session's runs, through that
+   * session's own mount of this package's API. The owner runs it, so the run
+   * and its step sessions outlive this session, as a dispatcher's launches must.
+   */
+  const launchIn = async (owner: string, parameters: LaunchParameters): Promise<LaunchResult> => {
+    if (serverHost.context.requestApi === undefined) {
+      return textResult(`Error: this host cannot reach session ${owner} to launch the workflow there.`, true);
+    }
+    const response = await serverHost.context.requestApi(
+      { scope: 'session', sessionId: owner },
+      WORKFLOW_API_BASE_PATH,
+      new Request(`${IN_PROCESS_ORIGIN}${routes.launch.path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(parameters),
+      }),
+    );
+    const body: unknown = await response.json().catch((error: unknown) => ({ error: String(error) }));
+    if (response.ok && isLaunchResponse(body)) return textResult(body.text, body.isError === true);
+    const reason = errorOf(body) ?? `HTTP ${String(response.status)}`;
+    return textResult(`Error: session ${owner} did not launch the workflow (${reason}).`, true);
+  };
+  const launch = async (parameters: LaunchParameters): Promise<LaunchResult> => {
+    const owner = host.context.environment[WORKFLOW_LAUNCH_SESSION_ENV]?.trim();
+    return owner === undefined || owner === '' || owner === host.context.sessionId
+      ? launchHere(parameters)
+      : launchIn(owner, parameters);
+  };
+  /** A launch another session handed this one: this session runs and owns it. */
+  const launchFromApi = async (parameters: Record<string, unknown>): Promise<WorkflowLaunchResponse> => {
+    try {
+      const result = await launchHere(parameters as LaunchParameters);
+      // No tool call ends here to refresh the panel, so publish the new run now.
+      void publishLifecycle(host.context).catch((error: unknown) => {
+        process.emitWarning(`Could not publish headless workflow state: ${String(error)}`);
+      });
+      return {
+        text: result.content.map((item) => item.text).join('\n'),
+        ...(result.isError === true ? { isError: true } : {}),
+      };
+    } catch (error) {
+      return { text: `Error: ${error instanceof Error ? error.message : String(error)}`, isError: true };
     }
   };
   let control: ReturnType<typeof feature.createRunControl> | undefined;
@@ -248,6 +310,7 @@ export function createWorkflowServerRuntime(
     },
   }).createOwner(undefined);
   return {
+    api: [createWorkflowApi(launchFromApi)],
     services: [
       serverMinorModes([modeOwner]),
       (context) => {
