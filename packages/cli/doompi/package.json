@@ -335,7 +335,7 @@
     "@modelcontextprotocol/server": "2.1.0",
     "@playwright/test": "1.63.0",
     "@types/cross-spawn": "6.0.6",
-    "@types/node": "26.6.1",
+    "@types/node": "26.6.2",
     "@types/ws": "8.18.1",
     "@vitest/coverage-v8": "5.0.1",
     "tsdown": "0.23.0",

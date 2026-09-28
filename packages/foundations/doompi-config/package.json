@@ -165,7 +165,7 @@
     "@modelcontextprotocol/ext-apps": "2.0.0",
     "@modelcontextprotocol/server": "2.1.0",
     "@playwright/test": "1.63.0",
-    "@types/node": "26.6.1",
+    "@types/node": "26.6.2",
     "@types/react": "19.3.0",
     "@vitest/coverage-v8": "5.0.1",
     "react": "19.3.0",
