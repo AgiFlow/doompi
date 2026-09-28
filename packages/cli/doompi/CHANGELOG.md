@@ -1,3 +1,9 @@
+## 0.0.1-alpha.100 (2026-09-28)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.97
+
 ## 0.0.1-alpha.99 (2026-09-28)
 
 ### 🧱 Updated Dependencies
