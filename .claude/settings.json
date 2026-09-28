@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "REPO=\"${CLAUDE_PROJECT_DIR:-$PWD}\" && [ -f \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" ] && node \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" claude-stop-hook || true",
+            "command": "if [ -n \"$WORKFLOW_DECISION_FILE\" ]; then workflow-mcp claude-stop-hook || true; else REPO=\"${CLAUDE_PROJECT_DIR:-$PWD}\" && [ -f \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" ] && node \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" claude-stop-hook || true; fi",
             "timeout": 10
           }
         ]

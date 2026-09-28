@@ -153,7 +153,7 @@ export function StepTerminalPanel(props: WebPluginSlotProps & { target: StepTabT
           {renderSessionTranscript(sessionRef.id)}
         </div>
         {run !== undefined && targetStep(run, target)?.status === 'running' ? (
-          <StepSteerComposer key={sessionRef.id} run={run} sessionId={sessionId} />
+          <StepSteerComposer key={sessionRef.id} run={run} sessionId={sessionId} step={sessionRef.id} />
         ) : null}
       </div>
     );

@@ -39,6 +39,8 @@ export interface WorkflowStepView {
   ref?: WorkflowStepRefView;
   /** Why the step is in its state, when the engine recorded one (e.g. a skip condition). */
   reason?: string;
+  /** The parallel group the step ran in, beside the group's other steps. */
+  group?: string;
   /** ISO 8601 of the step's first running event. */
   startedAt?: string;
   /** ISO 8601 of the step's terminal event. */
@@ -127,6 +129,10 @@ export interface WorkflowCatalogEntryView {
   artifacts: WorkflowCatalogArtifactView[];
   /** Absent when the workflow names no runner map, which means any runner will do. */
   runners?: string[];
+  /** Commands every templated step offers; absent when no step is templated. */
+  commands?: string[];
+  /** Declared model choices; `default` is used when a launch names none. */
+  choices?: string[];
   /** Set when the file could not be parsed; the row shows this instead of guessing. */
   error?: string;
 }

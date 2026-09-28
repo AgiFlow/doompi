@@ -15,7 +15,8 @@ export interface StepPaneRequest {
 export interface StepPane {
   /** Where a terminal view reaches the pane: the socket that serves it. */
   readonly target: string;
-  readonly completion: Promise<{ exitCode: number }>;
+  /** `outputTail` is the pane's last screen, kept for a failing step's report. */
+  readonly completion: Promise<{ exitCode: number; outputTail?: string }>;
   stop(): Promise<boolean>;
 }
 

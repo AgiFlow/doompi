@@ -25,7 +25,27 @@ jobs:
 
 `needs` expresses job ordering. Keep steps small enough that failure evidence identifies the command that needs attention. Use runner-specific `interactiveRun` configuration when a command genuinely requires a TTY.
 
-For an agent step, prefer `runConfig` plus `customRun` over a `doompi ...` shell line. `runConfig` takes `majorMode`, `minorModes`, `profile`, `domains`, `model`, and `thinking`; `customRun.prompt` is interpolated like a command, so reference `${{ env.JOB_SYSTEM_PROMPT }}` and `${{ env.WORKFLOW_CONTEXT }}` explicitly. Launched from the DoomPi server, the step runs as a child session with those settings. Keep an `interactiveRun` fallback that reads `${{ runConfig.<key> }}`, because the CLI and the TUI cannot run `customRun`.
+For an agent step, declare the command once under `commands` (usually in an imported file) and let the step name it. A command is a Liquid template; `inProcess: true` lets the DoomPi server run it as a child session instead of the shell, and the CLI and the TUI run the rendered command:
+
+```yaml
+imports: [commands.yml]
+choices:
+  default: { model: openai-codex/gpt-6-sol, thinking: medium }
+jobs:
+  develop:
+    steps:
+      - name: Develop
+        runConfig: { majorMode: dev, domains: [engineering] }
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun: [{ command: doompi }, { command: claude }]
+```
+
+`runConfig` takes `majorMode`, `minorModes`, `profile`, `domains`, `model`, and `thinking`, plus any key the template reads. `choices` compose model and thinking, with per-command overrides such as `claude: { model: opus }`; a step can pin `choice:`, and a launch picks `command=` and `choice=` for the rest. Templates must quote prompts with `{{ prompt | shell }}`.
+
+An agent step ends by recording its outcome: `workflow-mcp step complete`, `step fix --restart-from <job> --reason ...`, or `step fail --reason ...`. The engine puts the instructions in the step's system prompt, and an agent that stops without deciding is sent back until it does. Write repair contracts in those terms, not as `fix.md`.
+
+Put independent checks in a `parallel` group. A `run:` check with `restart-from: <job>` turns a failure into a fix request, and every fix request of the job merges into one repair, so one loop back fixes all of them. Keep steps that edit files out of a group: its steps share the checkout.
 
 Every `run` command executes on the workflow host with that process's environment and privileges. There is no VM, container, or sandbox. Review workflow changes as executable code, avoid embedding secrets, and make retry-sensitive external side effects explicit.
 

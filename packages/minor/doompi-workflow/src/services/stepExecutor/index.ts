@@ -2,23 +2,32 @@ import fs from 'node:fs';
 
 import { type DoomHubSessionSelection, WORKFLOW_STEP_SESSION_PROVENANCE } from '@agimon-ai/doompi-core/hubChannel';
 import {
+  gateStepDecision,
   NativeTerminalService,
   serveNativeTerminal,
+  type StepExecution,
   type StepExecutionOutcome,
   type StepExecutor,
   terminalSocketPath,
+  WORKFLOW_DECISION_STEERING_ENV,
+  WORKFLOW_DECISION_STEERING_HOST,
 } from '@agimon-ai/workflow-mcp';
 
-import { type DoompiRunConfig, doompiRunConfigSchema } from '../../schemas/runConfig';
+import { type DoompiRunConfig, doompiRunConfigSchema, doompiTemplateRunConfigSchema } from '../../schemas/runConfig';
 import { STEP_PANE_REF_KIND, STEP_SESSION_REF_KIND } from '../../types/webWorkflows';
 import type { StepExecutorDependencies, StepPaneLauncher } from './type';
 
 const STEP_DISPLAY_ENV = 'WORKFLOW_STEP_DISPLAY';
 const WORKFLOW_NAME_ENV = 'WORKFLOW_NAME';
+/** The engine's completion signal for terminal agents; a session this host steers never uses it. */
+const WORKFLOW_STATUS_FILE_ENV = 'WORKFLOW_STATUS_FILE';
 
-/** A step's `runConfig`, validated against the keys DoomPi understands. */
-export function readDoompiRunConfig(runConfig: unknown): DoompiRunConfig {
-  const parsed = doompiRunConfigSchema.safeParse(runConfig ?? {});
+/**
+ * A step's `runConfig`, validated against the keys DoomPi understands. A
+ * templated step's may carry keys for its command template, which are ignored.
+ */
+export function readDoompiRunConfig(runConfig: unknown, templated = false): DoompiRunConfig {
+  const parsed = (templated ? doompiTemplateRunConfigSchema : doompiRunConfigSchema).safeParse(runConfig ?? {});
   if (parsed.success) return parsed.data;
   const problems = parsed.error.issues.map((issue) => `${issue.path.join('.') || 'runConfig'}: ${issue.message}`);
   throw new Error(`Invalid runConfig: ${problems.join('; ')}`);
@@ -59,6 +68,18 @@ function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
+/** What one step session runs: its settings, what it is asked, and the step it reports on. */
+interface StepSessionRequest {
+  readonly cwd: string;
+  readonly env: Readonly<Record<string, string>>;
+  readonly stepName: string;
+  readonly runConfig: unknown;
+  readonly prompt: string;
+  readonly systemPrompt?: string;
+  /** A templated step: its runConfig also feeds the command template. */
+  readonly templated: boolean;
+}
+
 /**
  * Runs workflow steps inside DoomPi instead of a shell.
  *
@@ -70,61 +91,107 @@ function asError(error: unknown): Error {
  */
 export function createStepExecutor(dependencies: StepExecutorDependencies): StepExecutor {
   const { sessionService, launchPane } = dependencies;
+  const prompt = sessionService.prompt?.bind(sessionService);
+
+  /**
+   * Run a step as a child session of the launching session, with the step's
+   * major mode, minor modes, profile, domains and model.
+   *
+   * The session keeps going until the step has what the workflow needs: each
+   * time the agent settles, the engine's decision gate is asked, and while
+   * the step still lacks a decision (or its declared artifacts) the session is
+   * prompted with the gate's reminder. The gate counts reminders against its
+   * cap, so a stuck agent ends and the engine fails the step.
+   */
+  async function runSession(request: StepSessionRequest): Promise<StepExecution> {
+    if (prompt === undefined) throw new Error('This host cannot prompt sessions, so this step cannot run here.');
+    const config = readDoompiRunConfig(request.runConfig, request.templated);
+    const name = stepSessionName(request.env, request.stepName);
+    const environment = stepEnvironment(request.env, dependencies.hostEnvironment);
+    // This host ends the step when the agent settles and steers it itself, so
+    // hooks inside the session must neither end the step nor nudge the agent.
+    delete environment[WORKFLOW_STATUS_FILE_ENV];
+    environment[WORKFLOW_DECISION_STEERING_ENV] = WORKFLOW_DECISION_STEERING_HOST;
+    const scope = await sessionService.create({
+      cwd: request.cwd,
+      name,
+      parentSessionId: dependencies.parentSessionId,
+      // Keeps the session out of the rail: its conversation is read in the workflow's view.
+      sessionProvenance: WORKFLOW_STEP_SESSION_PROVENANCE,
+      selection: sessionSelection(config),
+      ...(config.model === undefined ? {} : { model: config.model }),
+      ...(config.thinking === undefined ? {} : { thinking: config.thinking }),
+      ...(request.systemPrompt === undefined ? {} : { appendSystemPrompt: request.systemPrompt }),
+      environment,
+    });
+    let stopped = false;
+    const completion = async (): Promise<StepExecutionOutcome> => {
+      let receipt = await prompt(scope.sessionId, request.prompt);
+      for (;;) {
+        await receipt.settled;
+        if (stopped) return { exitCode: 0 };
+        const gate = await gateStepDecision(request.env);
+        if (gate.action === 'allow') return { exitCode: 0 };
+        receipt = await prompt(scope.sessionId, gate.message);
+      }
+    };
+    return {
+      ref: { kind: STEP_SESSION_REF_KIND, id: scope.sessionId, label: name },
+      completion: completion().catch((error: unknown): StepExecutionOutcome => ({ error: asError(error) })),
+      // The session stays open once its turn ends, so the run can be read or continued.
+      stop: async () => {
+        stopped = true;
+        await sessionService.abort?.(scope.sessionId);
+      },
+    };
+  }
+
   return {
     async custom(request) {
-      const config = readDoompiRunConfig(request.runConfig);
-      const prompt = sessionService.prompt?.bind(sessionService);
-      if (prompt === undefined)
-        throw new Error('This host cannot prompt sessions, so customRun steps cannot run here.');
-      const name = stepSessionName(request.env, request.stepName);
-      const scope = await sessionService.create({
+      return runSession({
         cwd: request.cwd,
-        name,
-        parentSessionId: dependencies.parentSessionId,
-        // Keeps the session out of the rail: its conversation is read in the workflow's view.
-        sessionProvenance: WORKFLOW_STEP_SESSION_PROVENANCE,
-        selection: sessionSelection(config),
-        ...(config.model === undefined ? {} : { model: config.model }),
-        ...(config.thinking === undefined ? {} : { thinking: config.thinking }),
-        ...(request.customRun.systemPrompt === undefined ? {} : { appendSystemPrompt: request.customRun.systemPrompt }),
-        environment: stepEnvironment(request.env, dependencies.hostEnvironment),
+        env: request.env,
+        stepName: request.stepName,
+        runConfig: request.runConfig,
+        templated: false,
+        prompt: request.customRun.prompt,
+        ...(request.customRun.systemPrompt === undefined ? {} : { systemPrompt: request.customRun.systemPrompt }),
       });
-      const receipt = await prompt(scope.sessionId, request.customRun.prompt);
+    },
+    async command(request) {
+      // A templated command that allows it runs in-process from its values;
+      // its rendered shell command is only the fallback for other hosts.
+      const template = request.template;
+      if (template?.inProcess && prompt !== undefined) {
+        return runSession({
+          cwd: request.cwd,
+          env: request.env,
+          stepName: request.stepName,
+          runConfig: request.runConfig,
+          templated: true,
+          prompt: template.prompt,
+          ...(template.systemPrompt === undefined ? {} : { systemPrompt: template.systemPrompt }),
+        });
+      }
+      if (launchPane === undefined) return undefined;
+      const pane = await launchPane({
+        id: dependencies.createId(),
+        command: request.command,
+        cwd: request.cwd,
+        env: request.env,
+      });
+      if (pane === undefined) return undefined;
       return {
-        ref: { kind: STEP_SESSION_REF_KIND, id: scope.sessionId, label: name },
-        completion: receipt.settled.then(
-          (): StepExecutionOutcome => ({ exitCode: 0 }),
+        ref: { kind: STEP_PANE_REF_KIND, id: pane.target, label: request.stepName },
+        completion: pane.completion.then(
+          (result): StepExecutionOutcome => result,
           (error: unknown): StepExecutionOutcome => ({ error: asError(error) }),
         ),
-        // The session stays open once its turn ends, so the run can be read or continued.
         stop: async () => {
-          await sessionService.abort?.(scope.sessionId);
+          await pane.stop();
         },
       };
     },
-    ...(launchPane === undefined
-      ? {}
-      : {
-          async command(request) {
-            const pane = await launchPane({
-              id: dependencies.createId(),
-              command: request.command,
-              cwd: request.cwd,
-              env: request.env,
-            });
-            if (pane === undefined) return undefined;
-            return {
-              ref: { kind: STEP_PANE_REF_KIND, id: pane.target, label: request.stepName },
-              completion: pane.completion.then(
-                (result): StepExecutionOutcome => result,
-                (error: unknown): StepExecutionOutcome => ({ error: asError(error) }),
-              ),
-              stop: async () => {
-                await pane.stop();
-              },
-            };
-          },
-        }),
   };
 }
 
@@ -175,19 +242,21 @@ export function createNativeStepPaneLauncher(service = new NativeTerminalService
     });
     const target = terminalSocketPath(STEP_PANE_SOCKET_SCOPE, request.id);
     const server = await serveNativeTerminal({ service, runKey: request.id, socketPath: target });
-    let finishing: Promise<void> | undefined;
-    const finish = (): Promise<void> =>
+    let finishing: Promise<string | undefined> | undefined;
+    const finish = (): Promise<string | undefined> =>
       (finishing ??= (async () => {
         const screen = await lastScreen(service, request.id);
         if (screen !== undefined) await fs.promises.writeFile(stepPaneLogPath(target), screen, 'utf8');
         await server.close();
         await service.kill(request.id);
+        return screen;
       })());
     return {
       target,
+      // The last screen is the step's output tail, the reason a failing restart-from check reports.
       completion: service.ended(request.id).then(async (exitCode) => {
-        await finish();
-        return { exitCode };
+        const screen = (await finish())?.trimEnd();
+        return screen ? { exitCode, outputTail: screen } : { exitCode };
       }),
       stop: async () => {
         await finish();

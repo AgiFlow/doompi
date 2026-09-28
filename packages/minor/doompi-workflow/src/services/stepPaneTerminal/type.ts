@@ -9,8 +9,10 @@ export interface StepRef {
 
 /** The refs a run's terminal is chosen from, folded from its progress log. */
 export interface RunStepRefs {
-  /** The step still running, when a host executor placed it. */
+  /** The latest-started step still running, when a host executor placed it. */
   readonly current?: StepRef;
+  /** Every step still running that a host executor placed; more than one inside a parallel group. */
+  readonly running?: readonly StepRef[];
   /** The latest command step's pane, running or finished. */
   readonly lastPane?: StepRef;
 }

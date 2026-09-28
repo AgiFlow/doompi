@@ -5,6 +5,8 @@ import {
   STATUS_PREFIX,
   FAILURE_MESSAGE_TYPE,
   CONTEXT_MESSAGE_TYPE,
+  STOP_BLOCK_MESSAGE_TYPE,
+  FOLLOW_UP_TURN,
   STEER,
   BLOCKED_BY_HOOK,
   SUBAGENT_ENVIRONMENT_FLAG,
@@ -241,7 +243,7 @@ function createToolResult(_pi: ExtensionAPI, resolveRuntime: HookRuntimeResolver
   };
 }
 
-function createAgentSettled(_pi: ExtensionAPI, resolveRuntime: HookRuntimeResolver): PiEventHandlers['agent_settled'] {
+function createAgentSettled(pi: ExtensionAPI, resolveRuntime: HookRuntimeResolver): PiEventHandlers['agent_settled'] {
   return async (_event, ctx) => {
     const runtime = resolveRuntime();
     if (!runtime?.isCurrent()) return;
@@ -251,7 +253,7 @@ function createAgentSettled(_pi: ExtensionAPI, resolveRuntime: HookRuntimeResolv
     if (!runtime.isCurrent()) return;
     // skipInSubagent on the workflow-stop binding keeps subagents from closing
     // the parent's workflow step.
-    await runHooks(
+    const outcomes = await runHooks(
       runtime.session,
       ctx,
       dispatch,
@@ -259,6 +261,12 @@ function createAgentSettled(_pi: ExtensionAPI, resolveRuntime: HookRuntimeResolv
       `${STATUS_PREFIX}:${dispatch.sessionId}:stop`,
       'Running stop hooks',
     );
+    if (!runtime.isCurrent()) return;
+    // A Stop hook that refuses the stop, like a workflow step still waiting
+    // for its decision, sends the agent back with its reason. The new turn
+    // also keeps auto-stop from ending the session in between.
+    const reason = decisionReason(decisionsFrom(outcomes).find(isDenied));
+    if (reason) pi.sendMessage({ customType: STOP_BLOCK_MESSAGE_TYPE, content: reason, display: true }, FOLLOW_UP_TURN);
   };
 }
 

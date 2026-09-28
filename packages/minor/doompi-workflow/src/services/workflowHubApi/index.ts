@@ -290,9 +290,12 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     const message = typeof body.message === 'string' ? body.message.trim() : '';
     if (message === '') return context.json({ error: 'Guidance needs a message.' }, 400);
     if (record.stage !== 'running') return context.json({ error: 'Only a running workflow can be steered.' }, 409);
-    // Only the step running now, and only when it is an agent session: a browser
-    // names a run, never the session it wants to reach.
-    const current = stepPanes.stepRefs(record).current;
+    // Only a step running now, and only an agent session. A browser names the
+    // run, and inside a parallel group the step's own session; any other
+    // session is out of reach.
+    const refs = stepPanes.stepRefs(record);
+    const step = typeof body.step === 'string' ? body.step : undefined;
+    const current = step === undefined ? refs.current : (refs.running ?? []).find((candidate) => candidate.id === step);
     if (current?.kind !== STEP_SESSION_REF_KIND) {
       return context.json({ error: 'The running step is not an agent session.' }, 409);
     }

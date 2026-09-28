@@ -6,9 +6,11 @@ tags:
   - example
 
 max-workflows: 2
-# The DoomPi server runs this workflow in-process: each step's customRun becomes a
-# child session of the launching session. The CLI and the TUI have no in-process
-# executor, so they launch through launch-command and run the interactiveRun fallback.
+imports:
+  - commands.yml
+# The DoomPi server runs this workflow in-process: each step's doompi command
+# becomes a child session of the launching session. The CLI and the TUI launch
+# through launch-command and run the same command in the step's pane.
 launch-command: 'pnpm exec workflow-mcp launch-process --launcher "${WORKFLOW_LAUNCHER:-tmux}" --name "{name}" --cwd "$PWD" --command "{command}"'
 
 run-directory:
@@ -46,10 +48,12 @@ system-prompt: |
   - Never use em dash characters in prose or artifacts.
 
   Repair contract:
-  - Verification may request an in-scope repair by writing $WORKFLOW_RUN_DIR/fix.md.
-  - The file must have YAML frontmatter with `restart-from: fix`, followed by the failed criterion, expected
-    and actual behavior, reproduction, evidence, affected files, and required repair.
-  - Do not request repairs for unrelated failures or missing external prerequisites. Record those as blockers.
+  - Every step ends by recording its outcome with `workflow-mcp step complete`, `step fix` or `step fail`.
+  - Verification may request an in-scope repair with `workflow-mcp step fix --restart-from fix --reason-file <file>`,
+    where the file holds the failed criterion, expected and actual behavior, reproduction, evidence, affected
+    files, and required repair.
+  - Do not request repairs for unrelated failures or missing external prerequisites. Record those as blockers,
+    and use `workflow-mcp step fail` only when a blocker makes the run impossible to finish.
   - The runner limits repair cycles through FIX_LOOP_MAX_CYCLES.
 
 env:
@@ -83,15 +87,12 @@ jobs:
         runConfig:
           majorMode: examples
           domains: [engineering]
-        customRun:
-          prompt: |
-            ${{ env.JOB_SYSTEM_PROMPT }}
-
-            Defect report:
-            ${{ env.WORKFLOW_CONTEXT }}
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode ${{ runConfig.majorMode }} --domains ${{ runConfig.domains }} --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Defect report:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   fix:
     description: Apply the smallest fix supported by the diagnosis.
@@ -116,15 +117,12 @@ jobs:
         runConfig:
           majorMode: examples
           domains: [engineering]
-        customRun:
-          prompt: |
-            ${{ env.JOB_SYSTEM_PROMPT }}
-
-            Defect report:
-            ${{ env.WORKFLOW_CONTEXT }}
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode ${{ runConfig.majorMode }} --domains ${{ runConfig.domains }} --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Defect report:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   verify:
     description: Prove the defect is fixed and focused regressions pass.
@@ -138,8 +136,8 @@ jobs:
       Separate verified results from inference and identify any test that could not run.
 
       Write $WORKFLOW_RUN_DIR/verification.md with commands, exit results, reproduction outcome, regression
-      coverage, and blockers. For a repairable in-scope failure, also write fix.md using the workflow repair
-      contract and set `restart-from: fix`.
+      coverage, and blockers. For a repairable in-scope failure, request it with
+      `workflow-mcp step fix --restart-from fix` using the workflow repair contract.
     steps:
       - name: Verify the fix
         timeout-minutes: 60
@@ -148,15 +146,12 @@ jobs:
         runConfig:
           majorMode: examples
           domains: [engineering]
-        customRun:
-          prompt: |
-            ${{ env.JOB_SYSTEM_PROMPT }}
-
-            Defect report:
-            ${{ env.WORKFLOW_CONTEXT }}
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode ${{ runConfig.majorMode }} --domains ${{ runConfig.domains }} --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Defect report:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   summarize:
     description: Produce a concise evidence-backed fix handoff.
@@ -175,12 +170,9 @@ jobs:
         runConfig:
           majorMode: examples
           domains: [engineering]
-        customRun:
-          prompt: |
-            ${{ env.JOB_SYSTEM_PROMPT }}
-
-            Defect report:
-            ${{ env.WORKFLOW_CONTEXT }}
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode ${{ runConfig.majorMode }} --domains ${{ runConfig.domains }} --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Defect report:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi

@@ -20,6 +20,8 @@ import { type KeyboardEvent as ReactKeyboardEvent, useState } from 'react';
 
 import type { WorkflowCatalogEntryView, WorkflowCatalogInputView } from '../../../../../types/webWorkflows';
 import {
+  initialChoice,
+  initialCommand,
   initialInputs,
   initialRunner,
   launchProblems,
@@ -89,6 +91,42 @@ function InputField({
   );
 }
 
+/** A reserved launch value the workflow declares options for, such as its command or model choice. */
+function PickField({
+  label,
+  testId,
+  options,
+  value,
+  hint,
+  onChange,
+}: {
+  label: string;
+  testId: string;
+  options: readonly string[];
+  value: string | undefined;
+  hint: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <FieldLabel>{label}</FieldLabel>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger data-testid={testId} className="h-7 w-full min-w-0 text-xs sm:min-w-[160px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <span className="text-2xs text-doom-faint">{hint}</span>
+    </div>
+  );
+}
+
 /**
  * Launches one workflow from the catalog: the prompt, every input the file
  * declares, the runner when it declares a runner map, then the exact line the
@@ -114,9 +152,13 @@ export function LaunchWorkflowDialog({
   const [prompt, setPrompt] = useState(initialPrompt);
   const [inputs, setInputs] = useState<Record<string, string>>(() => initialInputs(workflow));
   const [runner, setRunner] = useState<string | undefined>(() => initialRunner(workflow));
+  const [command, setCommand] = useState<string | undefined>(() => initialCommand(workflow));
+  const [choice, setChoice] = useState<string | undefined>(() => initialChoice(workflow));
   const request: WorkflowLaunchRequest = {
     workflow: workflow.name === '' ? workflow.relativePath : workflow.name,
     ...(runner === undefined ? {} : { runner }),
+    ...(command === undefined ? {} : { command }),
+    ...(choice === undefined ? {} : { choice }),
     inputs,
     ...(prompt.trim() === '' ? {} : { prompt: prompt.trim() }),
   };
@@ -210,6 +252,26 @@ export function LaunchWorkflowDialog({
                 {workflow.runners === undefined ? 'no runner map declared' : 'the runners every step agrees on'}
               </span>
             </div>
+            {workflow.commands === undefined || workflow.commands.length === 0 ? null : (
+              <PickField
+                label="COMMAND"
+                testId="launch-command"
+                options={workflow.commands}
+                value={command}
+                hint="what agent steps run through"
+                onChange={setCommand}
+              />
+            )}
+            {workflow.choices === undefined || workflow.choices.length === 0 ? null : (
+              <PickField
+                label="CHOICE"
+                testId="launch-choice"
+                options={workflow.choices}
+                value={choice}
+                hint="model and thinking, unless a step pins one"
+                onChange={setChoice}
+              />
+            )}
             <div className="flex flex-col gap-1.5">
               <FieldLabel>JOBS</FieldLabel>
               <span className="flex h-7 items-center text-xs text-doom-dim">

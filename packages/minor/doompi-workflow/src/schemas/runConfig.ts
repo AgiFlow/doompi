@@ -26,4 +26,10 @@ export const doompiRunConfigSchema = z
   })
   .strict();
 
+/**
+ * The same keys for a templated step, whose `runConfig` is also the data its
+ * command template reads: keys DoomPi does not use are left to the template.
+ */
+export const doompiTemplateRunConfigSchema = doompiRunConfigSchema.strip();
+
 export type DoompiRunConfig = z.infer<typeof doompiRunConfigSchema>;

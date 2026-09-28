@@ -428,6 +428,21 @@ describe('repository hook Pi lifecycle', () => {
     await state.handlers.get('agent_settled')?.({}, state.ctx);
 
     expect(state.calls.map((call) => call.hook.command)).toEqual(['close-step']);
+    expect(state.messages).toEqual([]);
+  });
+
+  it('sends the agent back with the reason when a stop hook refuses the stop', async () => {
+    writeRegistry(registry('Stop', 'workflow-mcp step stop-hook'));
+    const state = await session(
+      {},
+      { 'workflow-mcp step stop-hook': { decision: { decision: 'block', reason: 'Record the step outcome first.' } } },
+    );
+
+    await state.handlers.get('agent_settled')?.({}, state.ctx);
+
+    expect(state.messages).toEqual([
+      { customType: 'repository-hook-stop-block', content: 'Record the step outcome first.', display: true },
+    ]);
   });
 
   it('filters registry hooks by selected group, matcher, and subagent policy', async () => {

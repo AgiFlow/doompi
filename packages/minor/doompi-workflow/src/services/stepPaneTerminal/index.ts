@@ -28,27 +28,34 @@ const SESSION_STEP_REASON =
 const PANE_GONE_LINE = 'The step pane has closed.';
 
 /**
- * The step a run is on and its latest pane, folded from its progress log.
+ * The steps a run is on and its latest pane, folded from its progress log.
  *
- * Later events win, as in the engine's own summary. Only a step still running
- * is current; the latest pane is kept after it finishes so a run between steps,
- * or one that has ended, can still show what its last command printed.
+ * Later events win, as in the engine's own summary. Steps of a parallel group
+ * run at once, so every running step is kept, and the current one is the
+ * latest-started step still running. The latest pane is kept after it finishes
+ * so a run between steps, or one that has ended, can still show what its last
+ * command printed.
  */
 export function stepRefsFrom(events: readonly WorkflowProgressEvent[]): RunStepRefs {
+  // Insertion order is start order: a step that starts again moves to the end.
   const steps = new Map<string, { running: boolean; ref?: StepRef }>();
-  let current: string | undefined;
   let lastPane: StepRef | undefined;
   for (const event of events) {
     if (event.type !== 'step' || event.step === undefined) continue;
     const key = `${event.job}\u0000${event.step}`;
     const known = steps.get(key);
-    steps.set(key, { running: event.status === 'running', ref: event.ref ?? known?.ref });
-    if (event.status === 'running') current = key;
+    const running = event.status === 'running';
+    if (running && known?.running !== true) steps.delete(key);
+    steps.set(key, { running, ref: event.ref ?? known?.ref });
     if (event.ref?.kind === STEP_PANE_REF_KIND) lastPane = event.ref;
   }
-  const step = current === undefined ? undefined : steps.get(current);
+  const running = [...steps.values()]
+    .filter((step) => step.running && step.ref !== undefined)
+    .map((step) => step.ref as StepRef);
+  const current = running.at(-1);
   return {
-    ...(step?.running && step.ref ? { current: step.ref } : {}),
+    ...(current === undefined ? {} : { current }),
+    ...(running.length === 0 ? {} : { running }),
     ...(lastPane === undefined ? {} : { lastPane }),
   };
 }

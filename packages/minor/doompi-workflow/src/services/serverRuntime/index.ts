@@ -559,6 +559,8 @@ export function createWorkflowServerRuntime(
               await launch({
                 workflowPath: entry.path,
                 ...(parsed.runner === undefined ? {} : { runner: parsed.runner }),
+                ...(parsed.command === undefined ? {} : { command: parsed.command }),
+                ...(parsed.choice === undefined ? {} : { choice: parsed.choice }),
                 ...(Object.keys(parsed.inputs).length === 0 ? {} : { inputs: parsed.inputs }),
                 ...(parsed.prompt === undefined ? {} : { prompt: parsed.prompt }),
               }),

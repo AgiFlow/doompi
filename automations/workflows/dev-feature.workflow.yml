@@ -5,6 +5,8 @@ tags:
   - example
 
 max-workflows: 2
+imports:
+  - commands.yml
 launch-command: 'pnpm exec workflow-mcp launch-process --launcher "${WORKFLOW_LAUNCHER:-tmux}" --name "{name}" --cwd "$PWD" --command "{command}"'
 
 run-directory:
@@ -46,9 +48,9 @@ system-prompt: |
   - Never use em dash characters in prose or artifacts.
 
   Repair contract:
-  - Verification or review may request an in-scope repair by writing $WORKFLOW_RUN_DIR/fix.md.
-  - The file must have YAML frontmatter with `restart-from: implement`, followed by the failed criterion, expected and actual behavior, evidence, affected files, and required repair.
-  - Do not request repairs for unrelated failures or missing external prerequisites. Record those as blockers in the current report.
+  - Every step ends by recording its outcome with `workflow-mcp step complete`, `step fix` or `step fail`.
+  - Verification or review may request an in-scope repair with `workflow-mcp step fix --restart-from implement --reason-file <file>`, where the file holds the failed criterion, expected and actual behavior, evidence, affected files, and required repair.
+  - Do not request repairs for unrelated failures or missing external prerequisites. Record those as blockers in the current report, and use `workflow-mcp step fail` only when a blocker makes the run impossible to finish.
   - The runner limits repair cycles through FIX_LOOP_MAX_CYCLES.
 
 env:
@@ -77,9 +79,15 @@ jobs:
         timeout-minutes: 30
         artifacts:
           - plan.md
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nFeature request:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        runConfig:
+          majorMode: examples
+          domains: [engineering]
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Feature request:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   implement:
     description: Implement the approved plan in the current checkout.
@@ -101,9 +109,15 @@ jobs:
         timeout-minutes: 120
         artifacts:
           - implementation.md
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nFeature request:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        runConfig:
+          majorMode: examples
+          domains: [engineering]
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Feature request:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   verify:
     description: Run focused and repository-required checks without editing source files.
@@ -117,16 +131,22 @@ jobs:
       Map evidence to every acceptance criterion. Separate verified results from inferred conclusions.
 
       Write $WORKFLOW_RUN_DIR/verification.md with commands, exit results, relevant output, acceptance coverage,
-      and any environmental or unrelated blockers. For a repairable in-scope failure, also write fix.md using
-      the workflow repair contract and set `restart-from: implement`.
+      and any environmental or unrelated blockers. For a repairable in-scope failure, request it with
+      `workflow-mcp step fix --restart-from implement` using the workflow repair contract.
     steps:
       - name: Verify the implementation
         timeout-minutes: 75
         artifacts:
           - verification.md
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nFeature request:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        runConfig:
+          majorMode: examples
+          domains: [engineering]
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Feature request:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   review:
     description: Review the implementation independently for correctness and regression risk.
@@ -140,16 +160,22 @@ jobs:
       security implications, and test quality. Findings must cite files and concrete evidence.
 
       Write $WORKFLOW_RUN_DIR/review.md with a PASS, NEEDS_REPAIR, or BLOCKED verdict and prioritized findings.
-      For a repairable in-scope blocking finding, also write fix.md using the workflow repair contract and set
-      `restart-from: implement`. Report non-blocking or unrelated findings without expanding scope.
+      For a repairable in-scope blocking finding, request it with `workflow-mcp step fix --restart-from implement`
+      using the workflow repair contract. Report non-blocking or unrelated findings without expanding scope.
     steps:
       - name: Review the implementation
         timeout-minutes: 45
         artifacts:
           - review.md
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nFeature request:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        runConfig:
+          majorMode: examples
+          domains: [engineering]
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Feature request:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   finalize:
     description: Produce a concise evidence-backed handoff.
@@ -165,6 +191,12 @@ jobs:
         timeout-minutes: 20
         artifacts:
           - summary.md
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nFeature request:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        runConfig:
+          majorMode: examples
+          domains: [engineering]
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Feature request:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi

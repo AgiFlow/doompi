@@ -233,6 +233,29 @@ describe('workflow hub api: steer', () => {
     expect(steer).toHaveBeenCalledWith('step-1', 'focus on the failing test');
   });
 
+  it('guides the session of the step it names inside a parallel group', async () => {
+    const steer = vi.fn(async () => undefined);
+    const events = [
+      { type: 'step', status: 'running', job: 'checks', step: 'A', ref: { kind: 'session', id: 'step-a' } },
+      { type: 'step', status: 'running', job: 'checks', step: 'B', ref: { kind: 'session', id: 'step-b' } },
+    ].map((event) => JSON.stringify({ ...event, at: '2026-01-01T00:00:00.000Z' }));
+    const app = steerApi(record(), runDirectory({ 'progress.ndjson': events.join('\n') }), steer);
+
+    const named = await app.request(`${BASE}/steer`, {
+      method: 'POST',
+      body: JSON.stringify({ message: 'check the fixture', step: 'step-a' }),
+    });
+    const unknown = await app.request(`${BASE}/steer`, {
+      method: 'POST',
+      body: JSON.stringify({ message: 'x', step: 'another-session' }),
+    });
+
+    expect(named.status).toBe(200);
+    expect(steer).toHaveBeenCalledWith('step-a', 'check the fixture');
+    expect(unknown.status).toBe(409);
+    expect(steer).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses a step that runs in a terminal pane', async () => {
     const steer = vi.fn(async () => undefined);
     const app = steerApi(

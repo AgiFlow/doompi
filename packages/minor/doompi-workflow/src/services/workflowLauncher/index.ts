@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-import { type EmbeddedWorkflowFeature, type Workflow } from '@agimon-ai/workflow-mcp';
+import { compatibleCommands, type EmbeddedWorkflowFeature, type Workflow } from '@agimon-ai/workflow-mcp';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { CallToolResult } from '@modelcontextprotocol/server';
 
@@ -208,11 +208,15 @@ export function summarizeWorkflowFile(
   try {
     const workflow = options.parseWorkflow(workflowPath);
     const runners = options.compatibleRunners(workflow);
+    const commands = compatibleCommands(workflow);
+    const choices = Object.keys(workflow.choices ?? {});
     return {
       triggers: Object.keys(workflowTriggerBlock(workflow)),
       inputs: catalogInputs(workflow),
       jobs: catalogJobs(workflow),
       ...(runners ? { runners } : {}),
+      ...(commands ? { commands } : {}),
+      ...(choices.length > 0 ? { choices } : {}),
     };
   } catch (cause) {
     return {
@@ -238,11 +242,28 @@ export async function launchWorkflowEntry(
     if (runner === undefined) return undefined;
   }
 
+  // A templated workflow runs through one of its commands and one of its model
+  // choices; a single option needs no question.
+  const commands = compatibleCommands(workflow) ?? [];
+  let command: string | undefined;
+  if (commands.length > 1) {
+    command = await options.ui.select('Select the command agent steps run through', commands);
+    if (command === undefined) return undefined;
+  }
+  const choices = Object.keys(workflow.choices ?? {});
+  let choice: string | undefined;
+  if (choices.length > 1) {
+    choice = await options.ui.select('Select a model choice', choices);
+    if (choice === undefined) return undefined;
+  }
+
   const triggerInputs = await collectWorkflowInputs(workflow, options.ui);
   if (triggerInputs === undefined) return undefined;
   const launchInput: WorkflowLaunchInput = {
     workflowPath: selected.path,
     ...(runner === undefined ? {} : { runner }),
+    ...(command === undefined ? {} : { command }),
+    ...(choice === undefined ? {} : { choice }),
     ...(typeof workflow.workspace === 'string' ? { workspace: workflow.workspace } : {}),
     ...triggerInputs,
   };

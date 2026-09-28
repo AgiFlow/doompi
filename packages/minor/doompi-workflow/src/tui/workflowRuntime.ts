@@ -2050,6 +2050,8 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
     const input: WorkflowLaunchInput = {
       workflowPath: entry.path,
       ...(parsed.runner === undefined ? {} : { runner: parsed.runner }),
+      ...(parsed.command === undefined ? {} : { command: parsed.command }),
+      ...(parsed.choice === undefined ? {} : { choice: parsed.choice }),
       ...(typeof workflow.workspace === 'string' ? { workspace: workflow.workspace } : {}),
       ...(parsed.prompt === undefined ? {} : { prompt: parsed.prompt }),
       ...(Object.keys(parsed.inputs).length === 0 ? {} : { inputs: parsed.inputs }),
@@ -2064,7 +2066,8 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
     [
       WORKFLOW_LAUNCH_COMMAND,
       {
-        description: 'Launch a workflow: /workflow-launch <workflow> [runner=x] [key=value …] [prompt]',
+        description:
+          'Launch a workflow: /workflow-launch <workflow> [runner=x] [command=x] [choice=x] [key=value …] [prompt]',
         handler: async (args, ctx) => {
           await waitForReadiness();
           try {

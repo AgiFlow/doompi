@@ -10,7 +10,7 @@ Enable model-visible Workflow tools with `SPC w e`. In a non-interactive harness
 Use the tools in this order:
 
 1. `list_workflows` discovers available workflow definitions.
-2. `launch_workflow` registers and starts a run. A successful launch response does not mean the jobs have finished.
+2. `launch_workflow` registers and starts a run. A successful launch response does not mean the jobs have finished. For a workflow whose agent steps name commands, pass `command` (such as `doompi` or `claude`) and `choice` (a declared model choice); both default to what the workflow lists first and to `default`.
 3. `workflow_run` inspects status, follows progress, or applies a supported control action.
 4. Wait for a terminal notification and verify the final job and step states before reporting success.
 

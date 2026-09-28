@@ -342,6 +342,12 @@ function StepRow({
         >
           {step.name}
         </span>
+        {step.group === undefined ? null : (
+          // Steps of one group run side by side; the group names them together.
+          <span data-testid={`step-group-${step.name}`} className="max-w-24 shrink-0 truncate text-2xs text-doom-faint">
+            ∥ {step.group}
+          </span>
+        )}
         <span className="shrink-0 text-2xs text-doom-faint">
           {spanDuration(step.startedAt, step.endedAt, now) ?? ''}
         </span>
@@ -394,7 +400,7 @@ function InlineStepOutput(props: InlineStepOutputProps) {
         </Button>
       </div>
       <div className="flex min-h-0 flex-1 flex-col px-3 py-2">{renderSessionTranscript(sessionRef.id)}</div>
-      {live ? <StepSteerComposer key={sessionRef.id} run={run} sessionId={sessionId} /> : null}
+      {live ? <StepSteerComposer key={sessionRef.id} run={run} sessionId={sessionId} step={sessionRef.id} /> : null}
     </div>
   );
 }

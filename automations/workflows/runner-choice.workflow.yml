@@ -1,24 +1,23 @@
 name: Runner Choice
-description: Run one agent step on runA or runB (gpt-6-luna at low or high thinking) in-process, or on terminal in its own pane.
+description: Run one agent step at low or high thinking, in-process as a DoomPi session or in its own pane through the terminal command.
 tags:
   - example
   - testing
 
+imports:
+  - commands.yml
+
 # Launched from the DoomPi server this is ignored: the run executes in-process.
 launch-command: 'pnpm exec workflow-mcp launch-process --launcher "${WORKFLOW_LAUNCHER:-tmux}" --name "{name}" --cwd "$PWD" --command "{command}"'
 
-# Named custom runners. Selecting one lays its runConfig over every customRun
-# step. The launch dialog lists runA, runB and the command map's terminal.
-runner: runA
-runners:
-  runA:
-    runConfig:
-      model: openai-codex/gpt-6-luna
-      thinking: low
-  runB:
-    runConfig:
-      model: openai-codex/gpt-6-luna
-      thinking: high
+# Model compositions a launch selects with --choice; `default` when it names none.
+choices:
+  default:
+    model: openai-codex/gpt-6-luna
+    thinking: low
+  high:
+    model: openai-codex/gpt-6-luna
+    thinking: high
 
 run-directory:
   description: What the agent step leaves behind.
@@ -33,20 +32,18 @@ on:
 
 jobs:
   report:
-    description: An agent step whose runner decides its model and thinking level.
+    description: An agent step whose choice decides its model and thinking level.
     steps:
-      - name: Report the runner
+      - name: Report the choice
         timeout-minutes: 10
         artifacts:
           - runner.md
         runConfig:
           majorMode: examples
           domains: []
-        customRun:
-          prompt: |
-            Use one shell command to write the single line "model=${{ runConfig.model }} thinking=${{ runConfig.thinking }}" to ${{ env.WORKFLOW_RUN_DIR }}/runner.md.
-            Then reply with one short sentence naming the model and thinking level you run with. Do nothing else.
-        # The terminal runner runs the same step as an interactive doompi in its own pane.
+        prompt: |
+          Use one shell command to write the single line "model=${{ runConfig.model }} thinking=${{ runConfig.thinking }}" to ${{ env.WORKFLOW_RUN_DIR }}/runner.md.
+          Then record the step as complete. Do nothing else.
         interactiveRun:
-          terminal: |
-            doompi --major-mode examples --no-domains --auto-stop "Use one shell command to write the single line \"model=terminal\" to $WORKFLOW_RUN_DIR/runner.md. Do nothing else."
+          - command: doompi
+          - command: terminal

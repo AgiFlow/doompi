@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { type DoomHubSessionCreateRequest, WORKFLOW_STEP_SESSION_PROVENANCE } from '@agimon-ai/doompi-core/hubChannel';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -100,6 +104,7 @@ describe('createStepExecutor', () => {
           WORKFLOW_NAME: 'dev-fix',
           WORKFLOW_STEP_DISPLAY: 'diagnose > Diagnose the defect',
           WORKFLOW_RUN_DIR: '/runs/r1',
+          WORKFLOW_DECISION_STEERING: 'host',
         },
       },
     ]);
@@ -195,7 +200,101 @@ describe('createStepExecutor', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('leaves commands to the engine without a pane launcher', () => {
-    expect(createStepExecutor(dependencies().deps).command).toBeUndefined();
+  it('leaves commands to the engine without a pane launcher', async () => {
+    await expect(
+      createStepExecutor(dependencies().deps).command!({
+        cwd: '/repo',
+        env: STEP_ENV,
+        stepName: 'Install',
+        command: 'pnpm install',
+        interactive: false,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('runs an in-process templated command as a step session from its values', async () => {
+    const launchPane = vi.fn();
+    const harness = dependencies({ launchPane });
+    const execution = await createStepExecutor(harness.deps).command!({
+      cwd: '/repo',
+      env: { ...STEP_ENV, WORKFLOW_STATUS_FILE: '/tmp/step.status' },
+      stepName: 'Develop',
+      command: "./pi.sh --model 'p/m' 'Implement it'",
+      interactive: true,
+      runConfig: { majorMode: 'dev', domains: ['development'], model: 'p/m', thinking: 'xhigh', script: 'custom' },
+      template: { name: 'pi', inProcess: true, choice: 'deep', prompt: 'Implement it', systemPrompt: 'Decide.' },
+    });
+
+    expect(launchPane).not.toHaveBeenCalled();
+    expect(harness.created[0]).toMatchObject({
+      selection: { majorMode: 'dev', domains: ['development'] },
+      model: 'p/m',
+      thinking: 'xhigh',
+      appendSystemPrompt: 'Decide.',
+    });
+    // The host ends the step, so hooks in the session get no status file and stand down.
+    expect(harness.created[0]?.environment).not.toHaveProperty('WORKFLOW_STATUS_FILE');
+    expect(harness.created[0]?.environment).toMatchObject({ WORKFLOW_DECISION_STEERING: 'host' });
+    expect(harness.sessionService.prompt).toHaveBeenCalledWith('step-session', 'Implement it');
+    expect(execution?.ref).toMatchObject({ kind: 'session', id: 'step-session' });
+  });
+
+  it('sends a templated command without in-process to a pane', async () => {
+    const pane: StepPane = { target: '/tmp/p.sock', completion: Promise.resolve({ exitCode: 0 }), stop: vi.fn() };
+    const launchPane = vi.fn(async () => pane);
+    const harness = dependencies({ launchPane });
+    await createStepExecutor(harness.deps).command!({
+      cwd: '/repo',
+      env: STEP_ENV,
+      stepName: 'Review',
+      command: "./claude.sh 'Review it'",
+      interactive: true,
+      template: { name: 'claude', inProcess: false, prompt: 'Review it' },
+    });
+    expect(launchPane).toHaveBeenCalledOnce();
+    expect(harness.sessionService.create).not.toHaveBeenCalled();
+  });
+
+  it('prompts an idle session that has not decided, until it records a decision', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'step-decision-'));
+    const decisionFile = path.join(directory, 'decision.json');
+    const write = (extra: Record<string, unknown> = {}) =>
+      fs.writeFileSync(
+        decisionFile,
+        JSON.stringify({
+          schemaVersion: 1,
+          job: 'develop',
+          step: 'Develop',
+          restartTargets: [],
+          required: true,
+          nudges: 0,
+          ...extra,
+        }),
+      );
+    write();
+    const prompts: string[] = [];
+    const sessionService = {
+      create: vi.fn(async (request: DoomHubSessionCreateRequest) => ({ sessionId: 's1', cwd: request.cwd })),
+      // The agent settles at once; on its second turn it records a decision.
+      prompt: vi.fn(async (_id: string, text: string) => {
+        prompts.push(text);
+        if (prompts.length === 2) write({ nudges: 1, decision: { decision: 'complete' } });
+        return { settled: Promise.resolve() };
+      }),
+      abort: vi.fn(async () => undefined),
+    };
+    const execution = await createStepExecutor({ ...dependencies().deps, sessionService }).command!({
+      cwd: '/repo',
+      env: { ...STEP_ENV, WORKFLOW_DECISION_FILE: decisionFile },
+      stepName: 'Develop',
+      command: 'unused',
+      interactive: true,
+      template: { name: 'pi', inProcess: true, prompt: 'Implement it' },
+    });
+
+    await expect(execution?.completion).resolves.toEqual({ exitCode: 0 });
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain('has no recorded outcome yet');
+    fs.rmSync(directory, { recursive: true, force: true });
   });
 });

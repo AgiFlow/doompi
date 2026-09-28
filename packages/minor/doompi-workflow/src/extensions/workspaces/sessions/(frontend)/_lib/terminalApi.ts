@@ -201,14 +201,21 @@ export async function stopWorkflowRun(
 
 export type SteerStepResult = { result: WorkflowSteerResponse } | { error: string };
 
-/** Sends guidance to the agent session the run's current step is in. */
+/**
+ * Sends guidance to the agent session a running step is in: the run's current
+ * step, or `step`, the session of one step of a parallel group.
+ */
 export async function steerStep(
   workspace: string,
   runKey: string,
   message: string,
   sessionId?: string | null,
+  step?: string,
 ): Promise<SteerStepResult> {
-  const result = await scoped(sessionId).steer({ params: runParams(workspace, runKey), body: { message } });
+  const result = await scoped(sessionId).steer({
+    params: runParams(workspace, runKey),
+    body: step === undefined ? { message } : { message, step },
+  });
   if (!result.ok) return { error: messageOf(result, 'The step would not take that guidance.') };
   if (result.data.delivered === true) return { result: { delivered: true } };
   return { error: 'The workflow hub returned an invalid steer response.' };

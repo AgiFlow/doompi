@@ -10,7 +10,16 @@ import { steerStep } from '../_lib/terminalApi';
  * working on. The caller shows it only while the step runs, since guidance
  * after the step settles would no longer shape the workflow.
  */
-export function StepSteerComposer({ run, sessionId }: { run: WorkflowRunView; sessionId: string | null }) {
+export function StepSteerComposer({
+  run,
+  sessionId,
+  step,
+}: {
+  run: WorkflowRunView;
+  sessionId: string | null;
+  /** The step's own session, so guidance reaches it even beside other running steps. */
+  step?: string;
+}) {
   const [guidance, setGuidance] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>();
@@ -22,7 +31,7 @@ export function StepSteerComposer({ run, sessionId }: { run: WorkflowRunView; se
     setSending(true);
     setError(undefined);
     try {
-      const result = await steerStep(run.workspace, run.runKey, message, sessionId);
+      const result = await steerStep(run.workspace, run.runKey, message, sessionId, step);
       if ('error' in result) {
         setError(result.error);
         return;

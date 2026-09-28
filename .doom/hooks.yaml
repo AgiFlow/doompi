@@ -34,11 +34,23 @@ groups:
       - id: workflow-stop
         event: Stop
         claude:
+          # A step that takes decisions puts its run's workflow-mcp launcher
+          # first on PATH, keeping the hook on the engine version running it.
           command: >-
-            REPO="${CLAUDE_PROJECT_DIR:-$PWD}" &&
+            if [ -n "$WORKFLOW_DECISION_FILE" ]; then workflow-mcp claude-stop-hook || true;
+            else REPO="${CLAUDE_PROJECT_DIR:-$PWD}" &&
             [ -f "$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs" ] &&
-            node "$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs" claude-stop-hook || true
+            node "$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs" claude-stop-hook || true; fi
           timeout: 10
+        pi:
+          # A workflow step puts its run's workflow-mcp launcher first on PATH,
+          # so the gate runs the engine version that runs the step. It sends
+          # the agent back until the step records its decision.
+          command: '[ -n "$WORKFLOW_DECISION_FILE" ] && workflow-mcp step stop-hook || true'
+          timeout: 10
+          # Only the root agent reports settled; subagents must not hold the
+          # parent's workflow step.
+          skipInSubagent: true
 
       - id: workflow-notification
         event: Notification

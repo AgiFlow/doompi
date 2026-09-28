@@ -42,6 +42,7 @@ describe('stepRefsFrom', () => {
   it('keeps the running step ref and the latest pane, even after it finished', () => {
     expect(stepRefsFrom([event('running', 'Install'), event('running', 'Install', PANE)])).toEqual({
       current: PANE,
+      running: [PANE],
       lastPane: PANE,
     });
     expect(stepRefsFrom([event('running', 'Install', PANE), event('completed', 'Install')])).toEqual({
@@ -54,7 +55,20 @@ describe('stepRefsFrom', () => {
         event('running', 'Diagnose'),
         event('running', 'Diagnose', SESSION),
       ]),
-    ).toEqual({ current: SESSION, lastPane: PANE });
+    ).toEqual({ current: SESSION, running: [SESSION], lastPane: PANE });
+  });
+
+  it('keeps every running step of a parallel group, the latest-started one current', () => {
+    const other: StepRef = { kind: 'session', id: 'other-session', label: 'Review' };
+    const events = [
+      event('running', 'Diagnose'),
+      event('running', 'Review'),
+      event('running', 'Diagnose', SESSION),
+      event('running', 'Review', other),
+    ];
+    expect(stepRefsFrom(events)).toEqual({ current: other, running: [SESSION, other] });
+    // A later step finishing leaves the earlier one running and current.
+    expect(stepRefsFrom([...events, event('completed', 'Review')])).toEqual({ current: SESSION, running: [SESSION] });
   });
 });
 

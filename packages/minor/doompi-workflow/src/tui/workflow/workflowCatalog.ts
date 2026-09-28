@@ -77,6 +77,10 @@ export interface WorkflowCatalogDetail {
   inputs: readonly WorkflowInputSummary[];
   jobs: readonly WorkflowJobSummary[];
   runners?: readonly string[];
+  /** Commands every templated step offers; absent when no step is templated. */
+  commands?: readonly string[];
+  /** Declared model choices. */
+  choices?: readonly string[];
   /** Set when the file could not be parsed; the pane shows this instead of guessing. */
   error?: string;
 }

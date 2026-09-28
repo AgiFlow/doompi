@@ -1,8 +1,11 @@
 name: In-process Smoke
-description: Exercise one run, one interactiveRun and one customRun step when the DoomPi server runs a workflow in-process.
+description: Exercise a run step, an interactive step, a templated agent step and a parallel group when the DoomPi server runs a workflow in-process.
 tags:
   - example
   - testing
+
+imports:
+  - commands.yml
 
 # Launched from the DoomPi server this is ignored: the run executes in-process.
 launch-command: 'pnpm exec workflow-mcp launch-process --launcher "${WORKFLOW_LAUNCHER:-tmux}" --name "{name}" --cwd "$PWD" --command "{command}"'
@@ -12,7 +15,7 @@ run-directory:
   entries:
     - path: agent.md
       kind: file
-      description: Written by the customRun agent.
+      description: Written by the agent step.
       produced-by: [agent]
 
 on:
@@ -28,7 +31,7 @@ jobs:
           sleep 5
 
   interactive:
-    description: A command that needs a terminal and a person.
+    description: A command that needs a terminal and a person, and records its own outcome.
     needs: shell
     steps:
       - name: Answer an interactive prompt
@@ -36,12 +39,10 @@ jobs:
         interactiveRun: |
           printf 'type a word and press enter: '
           read -r word
-          echo "you typed: $word"
-          echo YES > "$WORKFLOW_STATUS_FILE"
-          sleep 600
+          workflow-mcp step complete --summary "typed $word"
 
   agent:
-    description: An agent step that runs as a child session.
+    description: An agent step that runs as a child session under the DoomPi server.
     needs: interactive
     steps:
       - name: Agent writes a note
@@ -51,10 +52,25 @@ jobs:
         runConfig:
           majorMode: examples
           domains: []
-        customRun:
-          prompt: |
-            Use one shell command to write the single line "in-process customRun ok" to ${{ env.WORKFLOW_RUN_DIR }}/agent.md.
-            Then reply with one short sentence confirming it. Do nothing else.
-        interactiveRun: |
-          echo "This step needs the DoomPi server's in-process executor." >&2
-          exit 1
+        prompt: |
+          Use one shell command to write the single line "in-process agent step ok" to ${{ env.WORKFLOW_RUN_DIR }}/agent.md.
+          Then record the step as complete. Do nothing else.
+        interactiveRun:
+          - command: doompi
+
+  checks:
+    description: Two checks side by side, each in its own pane.
+    needs: agent
+    steps:
+      - name: Checks
+        parallel:
+          - name: first check
+            run: |
+              echo "first check running beside the second"
+              sleep 5
+            restart-from: agent
+          - name: second check
+            run: |
+              echo "second check running beside the first"
+              sleep 5
+            restart-from: agent
