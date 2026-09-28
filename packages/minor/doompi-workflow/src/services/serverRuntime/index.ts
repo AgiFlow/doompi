@@ -323,10 +323,15 @@ export function createWorkflowServerRuntime(
               })
               .catch(reportFailure);
           };
+          // Job and step transitions live only in the progress log. A step's execution
+          // ref, which tells the web view to show an agent session instead of a
+          // terminal, lands there after the step started, with no run record change.
           controlDisposers = [
             ownedControl.on('runStarted', refresh),
             ownedControl.on('runUpdated', refresh),
             ownedControl.on('runFinished', refresh),
+            ownedControl.on('job', refresh),
+            ownedControl.on('step', refresh),
           ];
           try {
             await ownedControl.start();

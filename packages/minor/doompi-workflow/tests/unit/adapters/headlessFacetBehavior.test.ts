@@ -570,6 +570,22 @@ describe('workflow headless facet', () => {
     }
   });
 
+  it('republishes run state on job and step transitions, which only the progress log records', async () => {
+    const test = await fixture();
+    try {
+      const activity = test.activities[0]!;
+      const stop = await activity.start(test.execution);
+      for (const transition of ['step', 'job'] as const) {
+        const calls = test.backgroundUpdate.mock.calls.length;
+        embeddedFeature.emit(transition);
+        await vi.waitFor(() => expect(test.backgroundUpdate.mock.calls.length).toBeGreaterThan(calls));
+      }
+      await stop();
+    } finally {
+      await test.close?.();
+    }
+  });
+
   it('reports only active owned workflow runs as background work', async () => {
     const test = await fixture();
     const startedAt = new Date().toISOString();
