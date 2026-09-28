@@ -1,3 +1,13 @@
+## 0.0.1-alpha.97 (2026-09-28)
+
+### 🩹 Fixes
+
+- **doompi-runner:** keep promoted runners alive after the tool call signal aborts ([#230](https://github.com/AgiFlow/doompi/pull/230))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.96 (2026-09-28)
 
 ### 🩹 Fixes
