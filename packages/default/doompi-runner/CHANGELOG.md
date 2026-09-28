@@ -1,3 +1,30 @@
+## 0.0.1-alpha.96 (2026-09-28)
+
+### 🩹 Fixes
+
+- **doompi-runner:** wake agent when server-hosted background runner exits ([#227](https://github.com/AgiFlow/doompi/pull/227))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.19
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.96
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.85
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.87
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.96
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.50
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.95 (2026-09-27)
 
 ### 🩹 Fixes
