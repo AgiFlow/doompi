@@ -300,10 +300,10 @@ export class BashRunService implements IBashRunService {
           return false;
         });
     };
-    if (signal) {
-      if (signal.aborted) abort();
-      else signal.addEventListener('abort', abort, { once: true });
-    }
+    // The signal belongs to the tool call, which ends when this returns, and
+    // Pi aborts it at that point. A promoted runner outlives the call, so only
+    // an abort that landed before the handoff stops it.
+    if (signal?.aborted) abort();
     void handle
       .completion()
       .then(
@@ -325,8 +325,7 @@ export class BashRunService implements IBashRunService {
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
         process.emitWarning(`Failed to complete runner ${handle.id}: ${message}`);
-      })
-      .finally(() => signal?.removeEventListener('abort', abort));
+      });
 
     return {
       kind: 'promoted',
