@@ -13,6 +13,7 @@ import { createElement, type ReactNode } from 'react';
 import { fileTabForPath } from './composition';
 import { pluginContextActions, slotFills } from './pluginRegistry';
 import { renderSessionActivity } from './sessionActivityRenderer';
+import { renderSessionTranscript } from './sessionTranscriptRenderer';
 import { renderThread } from './threadRenderer';
 import { sendFrame } from './transport';
 /** The id-only session context a plugin sees, from the hub's summary of the target session. */
@@ -94,6 +95,9 @@ export function pluginSlotProps(
     },
     renderSessionActivity(): ReactNode {
       return sessionId === null ? null : renderSessionActivity(sessionId, () => openTab(null));
+    },
+    renderSessionTranscript(targetSessionId, options): ReactNode {
+      return renderSessionTranscript(targetSessionId, options);
     },
     renderSlot(slot): ReactNode {
       return slotFills(slot).flatMap((fill) =>

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 
 import {
@@ -11,6 +12,7 @@ import { createEmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
 import { z } from 'zod';
 
 import { registerRunProvider, type RunProviderHandle } from '../../services/backgroundWork';
+import { createNativeStepPaneLauncher, createStepExecutor } from '../../services/stepExecutor';
 import { createWorkflowCatalogReader, presentWorkflowCatalog } from '../../services/webWorkflowCatalog';
 import { defaultCatalogDeps } from '../../services/workflowCatalogDeps';
 import {
@@ -28,6 +30,26 @@ const WORKFLOW_MODE_ID = 'workflow';
 const LIST_TOOL = 'list_workflows';
 const LAUNCH_TOOL = 'launch_workflow';
 const RUN_TOOL = 'workflow_run';
+/** How often the registry is asked whether an in-process launch has registered its run. */
+const LAUNCH_ACK_POLL_MS = 250;
+/** How long a launch waits for that before answering without a run key. */
+const LAUNCH_ACK_TIMEOUT_MS = 15_000;
+/** Tolerance for a run stamping its start a moment before the launch clock read. */
+const LAUNCH_ACK_CLOCK_SKEW_MS = 1_000;
+
+type LaunchResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
+
+function textResult(text: string, isError = false): LaunchResult {
+  return { content: [{ type: 'text', text }], ...(isError ? { isError: true } : {}) };
+}
+
+/** Resolves undefined after `ms`, so a race against it reads as "nothing settled yet". */
+function sleep(ms: number): Promise<undefined> {
+  return new Promise((settle) => {
+    const timer = setTimeout(() => settle(undefined), ms);
+    timer.unref?.();
+  });
+}
 
 function callResult(value: unknown): DoomHeadlessToolResult {
   const content: DoomHeadlessContent[] = [];
@@ -90,12 +112,73 @@ export function createWorkflowServerRuntime(
     }
     return activeItems.length > 0;
   };
-  const feature = createEmbeddedWorkflowFeature();
-  const launch = (parameters: Parameters<typeof feature.runTool.execute>[0]) =>
-    feature.runTool.execute({
-      ...parameters,
-      env: { ...parameters.env, [PI_SESSION_ENV]: host.context.sessionId },
+  // Steps run in this process: customRun as child sessions of this one, commands in their own panes.
+  const sessionService = serverHost.context.sessionService;
+  const feature = createEmbeddedWorkflowFeature(
+    sessionService === undefined
+      ? {}
+      : {
+          stepExecutor: createStepExecutor({
+            sessionService,
+            parentSessionId: host.context.sessionId,
+            hostEnvironment: process.env,
+            launchPane: createNativeStepPaneLauncher(),
+            createId: () => `workflow-${randomUUID()}`,
+          }),
+        },
+  );
+  /**
+   * Run a workflow in this process and answer once it has registered.
+   *
+   * `skipLaunch` keeps `launch-command` from handing the run to a terminal
+   * launcher, where the host's step executor could not reach it. Each run gets
+   * a service of its own so concurrent runs never share an active step, and the
+   * caller hears back when the registry shows the run rather than when it ends.
+   */
+  const launch = async (parameters: Parameters<typeof feature.runTool.execute>[0]): Promise<LaunchResult> => {
+    const input = feature.runTool.getInputSchema().parse(parameters);
+    const sessionId = host.context.sessionId;
+    const since = Date.now();
+    const runner = input.runner ?? input.cliAgent;
+    const running = feature.createRunService().run({
+      ...input,
+      ...(runner === undefined ? {} : { runner }),
+      env: { ...input.env, [PI_SESSION_ENV]: sessionId },
+      skipLaunch: true,
     });
+    // Folded before anything races it: a run this function stops awaiting must
+    // never reject unobserved and take the server down with it.
+    const settled = running.then(
+      (result) =>
+        result.exitCode === 0 || result.exitCode === 2
+          ? textResult(result.output || 'Workflow completed.')
+          : textResult(`Workflow failed (exit code ${result.exitCode}):\n\n${result.output}`, true),
+      (error: unknown) => textResult(`Error: ${error instanceof Error ? error.message : String(error)}`, true),
+    );
+    const deadline = since + LAUNCH_ACK_TIMEOUT_MS;
+    for (;;) {
+      const outcome = await Promise.race([settled, sleep(LAUNCH_ACK_POLL_MS)]);
+      if (outcome) return outcome;
+      const registered = readWorkflowRuns({ environment: host.context.environment }).find(
+        (run) =>
+          runBelongsToSession(run, sessionId) &&
+          Date.parse(run.view.startedAt) >= since - LAUNCH_ACK_CLOCK_SKEW_MS &&
+          resolve(run.view.workflowPath) === resolve(input.workflowPath),
+      );
+      if (registered) {
+        return textResult(
+          [
+            `Started ${registered.view.displayName} in workspace ${registered.view.workspace}.`,
+            `Run key: ${registered.view.runKey}`,
+            'The run is registered and going in this server; this call returned without waiting for it to finish.',
+          ].join('\n'),
+        );
+      }
+      if (Date.now() >= deadline) {
+        return textResult(`Launch started for ${input.workflowPath}, but no run has registered yet.`);
+      }
+    }
+  };
   let control: ReturnType<typeof feature.createRunControl> | undefined;
   let controlDisposers: (() => void)[] = [];
   const disposeControl = (): void => {

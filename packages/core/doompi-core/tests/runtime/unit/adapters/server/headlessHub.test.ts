@@ -1184,4 +1184,39 @@ describe('createHeadlessHub', () => {
     await hub.close();
     await expect(hub.mountFacets([])).rejects.toThrow('closed');
   });
+
+  it('prompts and aborts a live session, only for its parent when one is named', async () => {
+    const parent = host();
+    const child = host();
+    let settle: (() => void) | undefined;
+    const settled = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    const submitPrompt = vi.fn(async () => ({ settled }));
+    const abort = vi.fn(async () => undefined);
+    Object.assign(child.host.runtime, { submitPrompt, abort });
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({ id: 'parent', name: 'Parent', cwd: '/repo', createdAt: 'now', host: parent.host });
+    hub.register({
+      id: 'child',
+      name: 'Child',
+      cwd: '/repo',
+      createdAt: 'now',
+      parentSessionId: 'parent',
+      host: child.host,
+    });
+
+    const receipt = await hub.sessionService.prompt!('child', 'diagnose', { parentSessionId: 'parent' });
+    expect(submitPrompt).toHaveBeenCalledWith('diagnose');
+    settle?.();
+    await expect(receipt.settled).resolves.toBeUndefined();
+
+    await expect(hub.sessionService.prompt!('parent', 'escalate', { parentSessionId: 'child' })).rejects.toThrow(
+      'Only the parent session can drive this session.',
+    );
+    await expect(hub.sessionService.prompt!('missing', 'hello')).rejects.toThrow('The session is not live.');
+
+    await hub.sessionService.abort!('child', { parentSessionId: 'parent' });
+    expect(abort).toHaveBeenCalledTimes(1);
+  });
 });

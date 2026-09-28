@@ -50,6 +50,11 @@ jobs:
 no VM, container, or sandbox. Review workflow files as executable code. Runner-specific
 `interactiveRun` mappings are available for commands that require a TTY.
 
+A step can also declare `runConfig` (major mode, minor modes, profile, domains, model, thinking)
+and `customRun` (a prompt). Launched from the DoomPi server, a `customRun` step runs as a child
+session of the launching session with those settings, and `run` and `interactiveRun` steps each
+get their own RMUX pane. See `docs/automation.md` for the full contract and the CLI fallback.
+
 ## Launch and monitor
 
 Core tools are:

@@ -1,9 +1,20 @@
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { AnsiLine, Badge, Button, StatusBadge, StreamCursor } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
-import type { WorkflowRunView } from '../../../../../types/webWorkflows';
+import {
+  STEP_SESSION_REF_KIND,
+  type WorkflowRunView,
+  type WorkflowStepRefView,
+} from '../../../../../types/webWorkflows';
 import type { WorkflowTerminalCapabilitiesView } from '../../../../../types/webWorkflowTerminal';
 import { followScreen, releaseControl, sendKeys, takeControl } from '../_lib/terminalApi';
 import { workflows } from '../_lib/workflowsStore';
@@ -52,11 +63,90 @@ export function stepTerminalTab(run: WorkflowRunView, job: string, step?: string
   };
 }
 
+/**
+ * The child session a customRun step ran as, when the tab shows one.
+ *
+ * A step tab follows that step. A job tab follows the job's latest step only,
+ * so a job that moved on to a command step shows its terminal again.
+ */
+export function stepSessionRef(
+  run: WorkflowRunView | undefined,
+  target: StepTabTarget,
+): WorkflowStepRefView | undefined {
+  const steps = run?.jobs.find((job) => job.name === target.job)?.steps ?? [];
+  const step = target.step === undefined ? steps.at(-1) : steps.find((candidate) => candidate.name === target.step);
+  return step?.ref?.kind === STEP_SESSION_REF_KIND ? step.ref : undefined;
+}
+
 function ScreenLine({ line }: { line: string }) {
   // A blank row still has to hold the grid open, so an empty line keeps its
   // height rather than collapsing the screen by one row.
   if (line.length === 0) return <span className="block h-[15px]" />;
   return <AnsiLine line={line} className="block whitespace-pre" />;
+}
+
+/** The run, job and step the tab was opened from, with the run's stage and any controls. */
+function StepHeader({
+  run,
+  target,
+  children,
+}: {
+  run: WorkflowRunView | undefined;
+  target: StepTabTarget;
+  children?: ReactNode;
+}) {
+  return (
+    <div data-testid="step-terminal-head" className="flex items-center gap-2.5 pb-3">
+      <span className="shrink-0 truncate text-sm font-bold text-doom-hi">{run?.displayName ?? target.runKey}</span>
+      <span className="text-xs text-doom-faint">›</span>
+      <span className="shrink-0 truncate text-sm font-bold text-doom-blue">{target.job}</span>
+      {target.step === undefined ? null : (
+        <>
+          <span className="text-xs text-doom-faint">›</span>
+          <span className="min-w-0 truncate text-sm text-doom-text">{target.step}</span>
+        </>
+      )}
+      {run === undefined ? null : (
+        <StatusBadge
+          tone={run.stage === 'running' ? 'running' : run.stage === 'error' ? 'error' : 'ok'}
+          data-testid="step-terminal-stage"
+        >
+          {run.stage}
+        </StatusBadge>
+      )}
+      <span className="min-w-0 flex-1" />
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One step of a run: the agent conversation for a customRun step, else the run's terminal.
+ *
+ * A customRun step runs as a child session, so its real messages replace the
+ * screen a shell step would paint. The session outlives the step, so a
+ * finished step still reads back.
+ */
+export function StepTerminalPanel(props: WebPluginSlotProps & { target: StepTabTarget }) {
+  const { sessionId, target, renderSessionTranscript } = props;
+  const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
+  const run = runs.find((candidate) => candidate.workspace === target.workspace && candidate.runKey === target.runKey);
+  const sessionRef = stepSessionRef(run, target);
+  if (sessionRef !== undefined && renderSessionTranscript !== undefined) {
+    return (
+      <div data-testid="step-conversation-panel" className="flex min-h-0 flex-1 flex-col px-[26px] py-[18px]">
+        <StepHeader run={run} target={target}>
+          <Badge size="xs" tone="blue" data-testid="step-conversation-session">
+            agent session
+          </Badge>
+        </StepHeader>
+        <div data-testid="step-conversation" className="flex min-h-0 flex-1 flex-col">
+          {renderSessionTranscript(sessionRef.id)}
+        </div>
+      </div>
+    );
+  }
+  return <StepTerminal sessionId={sessionId} target={target} run={run} />;
 }
 
 /**
@@ -67,9 +157,15 @@ function ScreenLine({ line }: { line: string }) {
  * takes the keyboard first, because the pane belongs to whoever is answering
  * whatever the nested agent asked.
  */
-export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { target: StepTabTarget }) {
-  const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
-  const run = runs.find((candidate) => candidate.workspace === target.workspace && candidate.runKey === target.runKey);
+function StepTerminal({
+  sessionId,
+  target,
+  run,
+}: {
+  sessionId: string | null;
+  target: StepTabTarget;
+  run: WorkflowRunView | undefined;
+}) {
   const [lines, setLines] = useState<string[]>([]);
   const [capabilities, setCapabilities] = useState<WorkflowTerminalCapabilitiesView>();
   const [ended, setEnded] = useState(false);
@@ -176,25 +272,7 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
 
   return (
     <div data-testid="step-terminal-panel" className="flex min-h-0 flex-1 flex-col px-[26px] py-[18px]">
-      <div data-testid="step-terminal-head" className="flex items-center gap-2.5 pb-3">
-        <span className="shrink-0 truncate text-sm font-bold text-doom-hi">{run?.displayName ?? target.runKey}</span>
-        <span className="text-xs text-doom-faint">›</span>
-        <span className="shrink-0 truncate text-sm font-bold text-doom-blue">{target.job}</span>
-        {target.step === undefined ? null : (
-          <>
-            <span className="text-xs text-doom-faint">›</span>
-            <span className="min-w-0 truncate text-sm text-doom-text">{target.step}</span>
-          </>
-        )}
-        {run === undefined ? null : (
-          <StatusBadge
-            tone={run.stage === 'running' ? 'running' : run.stage === 'error' ? 'error' : 'ok'}
-            data-testid="step-terminal-stage"
-          >
-            {run.stage}
-          </StatusBadge>
-        )}
-        <span className="min-w-0 flex-1" />
+      <StepHeader run={run} target={target}>
         <Badge
           size="xs"
           tone={held ? 'blue' : 'neutral'}
@@ -213,7 +291,7 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
             {held ? 'release keyboard' : 'take control'}
           </Button>
         ) : null}
-      </div>
+      </StepHeader>
       <div
         ref={screenRef}
         data-testid="step-terminal-screen"

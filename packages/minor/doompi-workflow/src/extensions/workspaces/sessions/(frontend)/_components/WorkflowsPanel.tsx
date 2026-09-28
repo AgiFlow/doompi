@@ -43,7 +43,7 @@ import { workflowRunIdentity } from '../_lib/workflowActivity';
 import { focusRun, removeRun, workflows } from '../_lib/workflowsStore';
 import { ArtifactsPane, artifactTab } from './ArtifactsPane';
 import { LaunchWorkflowDialog } from './LaunchWorkflowDialog';
-import { stepTerminalTab } from './StepTerminalPanel';
+import { stepSessionRef, stepTerminalTab } from './StepTerminalPanel';
 import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer';
 
 /** One workflows tab per session; the surface is singular, so the id needs nothing else. */
@@ -337,19 +337,43 @@ function ScreenLine({ line }: { line: string }) {
   return <AnsiLine line={line} className="block whitespace-pre" />;
 }
 
-function InlineStepOutput({
-  run,
-  job,
-  step,
-  sessionId,
-  onOpenTerminal,
-}: {
+interface InlineStepOutputProps {
   run: WorkflowRunView;
   job: WorkflowJobView;
   step: WorkflowStepView | undefined;
   sessionId: string | null;
   onOpenTerminal: () => void;
-}) {
+  renderSessionTranscript: WebPluginSlotProps['renderSessionTranscript'];
+}
+
+/** A step's output: its agent conversation when it ran as a session, else the run's terminal. */
+function InlineStepOutput(props: InlineStepOutputProps) {
+  const { run, job, step, onOpenTerminal, renderSessionTranscript } = props;
+  const sessionRef = stepSessionRef(run, {
+    workspace: run.workspace,
+    runKey: run.runKey,
+    job: job.name,
+    step: step?.name,
+  });
+  if (sessionRef === undefined || renderSessionTranscript === undefined) return <InlineTerminalOutput {...props} />;
+  const live = step?.status === 'running';
+  return (
+    <div data-testid="workflow-inline-conversation" className="flex min-h-0 flex-1 flex-col bg-doom-deep">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-doom-border-soft px-3">
+        <Dot tone={live ? 'blue' : 'neutral'} pulse={live} />
+        <span className={cn('text-2xs font-bold', live ? 'text-doom-blue' : 'text-doom-faint')}>AGENT SESSION</span>
+        <span className="min-w-0 truncate text-xs font-bold text-doom-hi">{step?.name ?? job.name}</span>
+        <span className="min-w-0 flex-1" />
+        <Button variant="outline" size="xs" data-testid="workflow-open-conversation" onClick={onOpenTerminal}>
+          open conversation
+        </Button>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col px-3 py-2">{renderSessionTranscript(sessionRef.id)}</div>
+    </div>
+  );
+}
+
+function InlineTerminalOutput({ run, job, step, sessionId, onOpenTerminal }: InlineStepOutputProps) {
   const [lines, setLines] = useState<string[]>([]);
   const [capabilities, setCapabilities] = useState<WorkflowTerminalCapabilitiesView>();
   const [ended, setEnded] = useState(false);
@@ -501,7 +525,12 @@ function DetailPane({ children }: { children: ReactNode }) {
 }
 
 /** The canonical workflow surface: a scalable picker, compact step navigation, and one dominant detail pane. */
-export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }: WebPluginSlotProps) {
+export function WorkflowsPanel({
+  sessionId,
+  openTransientTab,
+  sendSessionFrame,
+  renderSessionTranscript,
+}: WebPluginSlotProps) {
   const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
   const selectedRun = useStore(workflows.store, (state) => workflows.select(state, sessionId).focusedRun);
   const catalogState = useStore(catalog.store, (state) => catalog.select(state, sessionId));
@@ -701,6 +730,7 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
                     step={step}
                     sessionId={sessionId}
                     onOpenTerminal={() => openTransientTab(stepTerminalTab(run, job.name, step?.name))}
+                    renderSessionTranscript={renderSessionTranscript}
                   />
                 )}
               </DetailPane>

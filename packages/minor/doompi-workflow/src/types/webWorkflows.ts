@@ -20,9 +20,23 @@ export type WorkflowProgressState =
   | 'paused'
   | 'resumed';
 
+/** A customRun step ran as this child session. */
+export const STEP_SESSION_REF_KIND = 'session';
+/** A command step ran in this terminal pane. */
+export const STEP_PANE_REF_KIND = 'pane';
+
+/** Where a host executor ran a step: `session` for a customRun agent, `pane` for a command. */
+export interface WorkflowStepRefView {
+  kind: string;
+  id: string;
+  label?: string;
+}
+
 export interface WorkflowStepView {
   name: string;
   status: WorkflowProgressState;
+  /** Kept after the step ends, so a finished agent step still opens its conversation. */
+  ref?: WorkflowStepRefView;
   /** Why the step is in its state, when the engine recorded one (e.g. a skip condition). */
   reason?: string;
   /** ISO 8601 of the step's first running event. */

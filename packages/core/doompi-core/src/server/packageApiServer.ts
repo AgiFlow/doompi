@@ -1,6 +1,6 @@
 import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 
-import type { DoomDirectEventBus, DoomHubSessionService } from '../exports/hubChannel';
+import type { DoomDirectEventBus, DoomHubSessionPromptOptions, DoomHubSessionService } from '../exports/hubChannel';
 import { DOOM_API_ROUTE_PREFIX, type DoomApi, type DoomApiContext } from '../exports/packageApi';
 import type { DoomPluginRegistry } from '../exports/pluginProtocol';
 import { createDoomServerHost, type CreateDoomServerHostOptions, type DoomServerFacet } from '../exports/serverFacet';
@@ -110,6 +110,8 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
 
   const owningSessionService = options.sessionService;
   const communication = owningSessionService?.bindCommunication?.(options.sessionId);
+  const ownedPrompt = owningSessionService?.prompt?.bind(owningSessionService);
+  const ownedAbort = owningSessionService?.abort?.bind(owningSessionService);
   const exposedSessionService: DoomHubSessionService | undefined =
     owningSessionService === undefined
       ? undefined
@@ -117,6 +119,21 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
           create: (request) => owningSessionService.create(request),
           close: (sessionId) => owningSessionService.close(sessionId),
           isLive: (sessionId) => owningSessionService.isLive(sessionId),
+          // A session may drive only the children it started, never its parent or a sibling.
+          ...(ownedPrompt === undefined
+            ? {}
+            : {
+                prompt: (sessionId: string, text: string, promptOptions?: DoomHubSessionPromptOptions) =>
+                  ownedPrompt(sessionId, text, {
+                    ...(promptOptions?.signal === undefined ? {} : { signal: promptOptions.signal }),
+                    parentSessionId: options.sessionId,
+                  }),
+              }),
+          ...(ownedAbort === undefined
+            ? {}
+            : {
+                abort: (sessionId: string) => ownedAbort(sessionId, { parentSessionId: options.sessionId }),
+              }),
           ...(owningSessionService.canCommunicate === undefined
             ? {}
             : {

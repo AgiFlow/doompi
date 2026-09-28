@@ -25,6 +25,8 @@ jobs:
 
 `needs` expresses job ordering. Keep steps small enough that failure evidence identifies the command that needs attention. Use runner-specific `interactiveRun` configuration when a command genuinely requires a TTY.
 
+For an agent step, prefer `runConfig` plus `customRun` over a `doompi ...` shell line. `runConfig` takes `majorMode`, `minorModes`, `profile`, `domains`, `model`, and `thinking`; `customRun.prompt` is interpolated like a command, so reference `${{ env.JOB_SYSTEM_PROMPT }}` and `${{ env.WORKFLOW_CONTEXT }}` explicitly. Launched from the DoomPi server, the step runs as a child session with those settings. Keep an `interactiveRun` fallback that reads `${{ runConfig.<key> }}`, because the CLI and the TUI cannot run `customRun`.
+
 Every `run` command executes on the workflow host with that process's environment and privileges. There is no VM, container, or sandbox. Review workflow changes as executable code, avoid embedding secrets, and make retry-sensitive external side effects explicit.
 
 Before relying on the graph, enable Workflow mode, discover it with `list_workflows`, launch a disposable run, and inspect job and step status with `workflow_run`. Test a failure path when recovery behavior matters.

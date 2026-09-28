@@ -1,5 +1,12 @@
+import type { DoomHubSessionCreateRequest } from '@agimon-ai/doompi-core/hubChannel';
+
 const SESSION_ID_OPTION = '--session-id';
 const NAME_OPTION = '--name';
+const PROFILE_OPTION = '--profile';
+const DOMAINS_OPTION = '--domains';
+const NO_DOMAINS_OPTION = '--no-domains';
+const MODEL_OPTION = '--model';
+const THINKING_OPTION = '--thinking';
 export interface SessionIdentity {
   sessionId: string;
   sessionName: string;
@@ -25,6 +32,41 @@ export function resolveSessionIdentity(
 }
 
 const MAJOR_MODE_OPTION = '--major-mode';
+
+/** Selection axes a request pins, which later inherited defaults must not replace. */
+export type PinnedSelectionAxis = 'majorMode' | 'domains' | 'profile';
+
+/**
+ * The harness arguments for a session a package created with explicit settings.
+ *
+ * Translating to flags keeps one validation path: the same parser that checks
+ * a `doompi --major-mode ... --model ...` launch checks these. Minor modes have
+ * no flag; the caller seeds them into the selection state directly.
+ */
+export function sessionSelectionArgs(request: Pick<DoomHubSessionCreateRequest, 'selection' | 'model' | 'thinking'>): {
+  args: string[];
+  pinned: PinnedSelectionAxis[];
+} {
+  const { selection, model, thinking } = request;
+  const args: string[] = [];
+  const pinned: PinnedSelectionAxis[] = [];
+  if (selection?.majorMode !== undefined) {
+    args.push(MAJOR_MODE_OPTION, selection.majorMode);
+    pinned.push('majorMode');
+  }
+  if (selection?.profile !== undefined) {
+    args.push(PROFILE_OPTION, selection.profile);
+    pinned.push('profile');
+  }
+  if (selection?.domains !== undefined) {
+    if (selection.domains.length === 0) args.push(NO_DOMAINS_OPTION);
+    else args.push(DOMAINS_OPTION, selection.domains.join(','));
+    pinned.push('domains');
+  }
+  if (model !== undefined) args.push(MODEL_OPTION, model);
+  if (thinking !== undefined) args.push(THINKING_OPTION, thinking);
+  return { args, pinned };
+}
 
 /**
  * The agent arguments with the major mode pinned to a relaunch target.

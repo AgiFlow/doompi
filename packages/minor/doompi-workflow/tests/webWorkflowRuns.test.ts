@@ -70,6 +70,21 @@ describe('workflowRuns', () => {
     ).toBeUndefined();
   });
 
+  it('keeps where a host executor ran a step after the step finishes', () => {
+    const ref = { kind: 'session', id: 'child-session', label: 'dev-fix: diagnose > Diagnose' };
+    const events: WorkflowProgressEvent[] = [
+      { type: 'step', status: 'running', job: 'diagnose', step: 'Diagnose', at: '2026-09-27T10:00:00.000Z' },
+      { type: 'step', status: 'running', job: 'diagnose', step: 'Diagnose', ref, at: '2026-09-27T10:00:01.000Z' },
+      { type: 'step', status: 'completed', job: 'diagnose', step: 'Diagnose', at: '2026-09-27T10:05:00.000Z' },
+    ];
+    const raw = [
+      ...events.map((event) => JSON.stringify(event)),
+      JSON.stringify({ ...events[0], ref: { kind: 'session' } }),
+    ].join('\n');
+    const [job] = foldWorkflowProgress(parseWorkflowProgress(raw));
+    expect(job?.steps).toEqual([expect.objectContaining({ name: 'Diagnose', status: 'running', ref })]);
+  });
+
   it('folds the progress log into the job tree, pinned to observed real-world lines', () => {
     // Verbatim shape of a dev-fix.workflow.yml run's progress.ndjson, plus a
     // failing job to cover the terminal states.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { sessionSelectionArgs } from '../../src/builders/server/sessionArguments';
 import { parseServeOptions, relaunchAgentArgs, resolveSessionIdentity } from '../../src/cli/server/options';
 
 describe('parseServeOptions', () => {
@@ -101,5 +102,39 @@ describe('relaunchAgentArgs', () => {
       '--major-mode',
       'minimal',
     ]);
+  });
+});
+
+describe('sessionSelectionArgs', () => {
+  it('turns a package session request into harness flags and pins each given axis', () => {
+    expect(
+      sessionSelectionArgs({
+        selection: { majorMode: 'dev', profile: 'work', domains: ['engineering', 'review'], minorModes: ['plan'] },
+        model: 'openai-codex/gpt-6-sol',
+        thinking: 'medium',
+      }),
+    ).toEqual({
+      args: [
+        '--major-mode',
+        'dev',
+        '--profile',
+        'work',
+        '--domains',
+        'engineering,review',
+        '--model',
+        'openai-codex/gpt-6-sol',
+        '--thinking',
+        'medium',
+      ],
+      pinned: ['majorMode', 'profile', 'domains'],
+    });
+  });
+
+  it('pins an empty domain list as no domains and leaves unset axes to the workspace', () => {
+    expect(sessionSelectionArgs({ selection: { domains: [] } })).toEqual({
+      args: ['--no-domains'],
+      pinned: ['domains'],
+    });
+    expect(sessionSelectionArgs({})).toEqual({ args: [], pinned: [] });
   });
 });

@@ -803,6 +803,14 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     await startSessionShutdown(session);
   };
 
+  const promptTarget = (sessionId: string, parentSessionId: string | undefined): HeadlessHubSession => {
+    const session = closed ? undefined : sessions.get(sessionId);
+    if (session === undefined) throw new Error('The session is not live.');
+    if (parentSessionId !== undefined && session.parentSessionId !== parentSessionId)
+      throw new Error('Only the parent session can drive this session.');
+    return session;
+  };
+
   sessionService = {
     create: async (request) => {
       if (options.createSession === undefined)
@@ -811,6 +819,14 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     },
     close: closeSession,
     isLive: (sessionId) => !closed && sessions.has(sessionId),
+    prompt: async (sessionId, text, promptOptions) => {
+      promptOptions?.signal?.throwIfAborted();
+      const { settled } = await promptTarget(sessionId, promptOptions?.parentSessionId).host.runtime.submitPrompt(text);
+      return { settled };
+    },
+    abort: async (sessionId, abortOptions) => {
+      await promptTarget(sessionId, abortOptions?.parentSessionId).host.runtime.abort();
+    },
     reservations: options.sessionReservations,
     provisionReservedWorktree: async (request) => {
       const parent = sessions.get(request.parentSessionId);

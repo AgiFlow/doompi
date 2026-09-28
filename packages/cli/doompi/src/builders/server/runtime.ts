@@ -58,7 +58,7 @@ import { createDefaultWorkspaceFolder } from './defaultWorkspace';
 import { createExecutionBudget } from './executionBudget';
 import { ensureGlobalLogSink } from './logSink';
 import { publishHeadlessSelectionStatus } from './selectionStatus';
-import { resolveSessionIdentity } from './sessionArguments';
+import { type PinnedSelectionAxis, resolveSessionIdentity, sessionSelectionArgs } from './sessionArguments';
 import { resolveSessionArtifact, resolveWorktreeRestart } from './sessionArtifact';
 import { withShutdownDeadline } from './shutdown';
 import type { ServeOptions, ServerRuntimeEnvironment } from './types';
@@ -569,6 +569,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           sessionProvenance?: string;
         },
         workspace: { id: string; root: string },
+        explicit: { pinned: readonly PinnedSelectionAxis[]; minorModes?: readonly string[] } = { pinned: [] },
       ): HeadlessSessionHostOptions => {
         const policyOptions = context.options;
         const sessionSelection = {
@@ -577,7 +578,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           activeLayers: context.selectedLayers,
           domains: policyOptions.domains,
           profile: context.profile,
-          state: { 'minor-mode': [] },
+          state: { 'minor-mode': [...(explicit.minorModes ?? [])] },
         };
         const piBootstrap = readRegisteredBootstrapStatus(registration, undefined, homeDirectory);
         if (!piBootstrap.fresh || piBootstrap.bootstrap === undefined) {
@@ -604,6 +605,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           piExtensionPaths: [piBootstrap.bootstrap],
           selection: sessionSelection,
           selectionOverrides: (['majorMode', 'domains', 'profile'] as const).filter((axis) => {
+            if (explicit.pinned.includes(axis)) return true;
             const flag = axis === 'majorMode' ? '--major-mode' : `--${axis}`;
             return (
               identity.sessionId === resolved.identity.sessionId &&
@@ -805,9 +807,10 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             : (sessionArtifacts.get(request.parentSessionId)?.registration ??
               pendingSessions.get(request.parentSessionId)?.registration ??
               openSessions.list().find((record) => record.sessionId === request.parentSessionId)?.artifact);
+        const explicit = sessionSelectionArgs(request);
         const start = (async (): Promise<DoomHubSessionScope> => {
           const childIdentity = resolveSessionIdentity([], identity);
-          const childEnvironment = { ...baseEnvironment };
+          const childEnvironment = { ...baseEnvironment, ...request.environment };
           for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete childEnvironment[key];
           // The workspace is settled first: a member checkout reads its workspace's configuration.
           const workspace =
@@ -820,7 +823,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           const member = isMemberCheckout(request.cwd, workspace);
           const childContext = await buildHarnessContext(
             resolveHarnessOptions({
-              args: ['--cwd', request.cwd, ...childIdentity.agentArgs],
+              args: ['--cwd', request.cwd, ...childIdentity.agentArgs, ...explicit.args],
               cwd: request.cwd,
               environment: childEnvironment,
               ...(member ? { configRoot: workspace.root } : {}),
@@ -866,7 +869,10 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               registration,
             });
             const created = await hub.create(
-              sessionHostOptions(childContext, bundle, mcpBundle, registration, identity, workspace),
+              sessionHostOptions(childContext, bundle, mcpBundle, registration, identity, workspace, {
+                pinned: explicit.pinned,
+                ...(request.selection?.minorModes === undefined ? {} : { minorModes: request.selection.minorModes }),
+              }),
             );
             request.signal?.throwIfAborted();
             if (created.workspaceId !== undefined) {

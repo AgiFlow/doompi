@@ -54,6 +54,40 @@ jobs:
 
 `--auto-stop` closes the interactive Pi session after its agent settles. Timeouts remain workflow policy and should reflect the cost and expected duration of each job.
 
+### In-process steps: `runConfig` and `customRun`
+
+A step can declare its DoomPi settings as data instead of CLI flags. `runConfig` holds what every runner of the step shares, and `customRun` holds only what the in-process runner needs:
+
+```yaml
+- name: Diagnose the defect
+  artifacts: [diagnosis.md]
+  runConfig:
+    majorMode: examples
+    minorModes: [plan]
+    profile: work
+    domains: [engineering]
+    model: openai-codex/gpt-6-sol
+    thinking: medium
+  customRun:
+    prompt: |
+      ${{ env.JOB_SYSTEM_PROMPT }}
+
+      Defect report:
+      ${{ env.WORKFLOW_CONTEXT }}
+  interactiveRun: |
+    doompi --major-mode ${{ runConfig.majorMode }} --domains ${{ runConfig.domains }} \
+      --auto-stop --cwd "$PWD" "$JOB_SYSTEM_PROMPT"
+```
+
+When the DoomPi server launches a workflow (the `launch_workflow` tool, `/workflow-launch`, or the web launch dialog), the run executes in the server process and `launch-command` is not used:
+
+- A `customRun` step becomes a child session of the launching session, pinned to the step's major mode, minor modes, profile, domains, and model. The step's view in the workflow panel shows that session's live conversation where a command step shows its terminal, and it stays readable after the step finishes. The step completes when the agent settles, fails on a harness fault, and fails when a declared artifact was not written. The session stays open afterwards.
+- `run` and `interactiveRun` steps each get their own RMUX pane, which the job's terminal view follows. Without a compatible RMUX binary, the step is spawned by the engine as before.
+
+`runConfig` keys are validated: `majorMode`, `profile`, `model`, and `thinking` take one name, while `minorModes` and `domains` take a list or a comma-separated string (an empty list selects no domains). An unknown key fails the step. `${{ runConfig.<key> }}` interpolates into any command, with lists joined by commas, and `WORKFLOW_RUN_CONFIG` holds the whole map as JSON.
+
+The CLI and the TUI have no in-process executor. They run a step's `interactiveRun` or `run` instead, so keep one as a fallback. A step with only `customRun` fails there with an explicit error.
+
 ## Repository examples
 
 This repository carries a small native plugin and workflow stack:

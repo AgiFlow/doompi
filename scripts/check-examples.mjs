@@ -9,7 +9,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pluginNames = ['blog-writing', 'development', 'testing'];
-const workflowNames = ['blog-writing.workflow.yml', 'dev-feature.workflow.yml', 'dev-fix.workflow.yml'];
+const workflowNames = [
+  'blog-writing.workflow.yml',
+  'dev-feature.workflow.yml',
+  'dev-fix.workflow.yml',
+  'in-process-smoke.workflow.yml',
+];
 const defaultPackagePaths = [
   './packages/minor/doompi-help',
   './packages/default/doompi-hook',

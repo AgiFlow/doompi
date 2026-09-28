@@ -63,6 +63,8 @@ export interface SlotPropsOptions {
   slotData?: Readonly<Record<string, readonly SlotDataFill[]>>;
   /** What `renderThread` returns for a plugin that renders one. */
   thread?: (threadId: string, options?: ThreadViewOptions) => ReactNode;
+  /** What `renderSessionTranscript` returns; omitted, the prop is absent as in a host that has none. */
+  sessionTranscript?: (sessionId: string, options?: ThreadViewOptions) => ReactNode;
   /** The tab a path opens; by default no path opens one, as with no file plugin installed. */
   fileTab?: (path: string) => TransientTab | undefined;
   /** Context actions installed plugins should offer for the item under test. */
@@ -101,6 +103,7 @@ export function slotPropsFixture(options: SlotPropsOptions = {}): SlotPropsFixtu
       actions.push({ action: 'sendSessionFrame', target: sessionId, frame });
     },
     renderThread: (threadId, threadOptions) => options.thread?.(threadId, threadOptions) ?? null,
+    ...(options.sessionTranscript === undefined ? {} : { renderSessionTranscript: options.sessionTranscript }),
     renderSlot: (slot) => options.slotContent?.[slot] ?? null,
     // The host resolves fills by slot name and hands the owner its own typed
     // view, so a test declares them by name too.

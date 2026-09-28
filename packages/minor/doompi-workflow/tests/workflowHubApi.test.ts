@@ -75,6 +75,26 @@ function api(current = record(), runDir = runDirectory(), terminal = fakeTermina
 const BASE = 'http://hub/runs/repo/blog-writing-4';
 
 describe('workflow hub api: control and keys', () => {
+  // A panel closing its screen stream happens every time a reader moves from the
+  // inline output to the step tab; it must not take the new tab's keyboard away.
+  it('keeps a lease when a screen stream of a running run closes', async () => {
+    const { app } = api();
+    const control = (await (
+      await app.request(`${BASE}/control`, { method: 'POST', body: '{}' })
+    ).json()) as WorkflowControlResponse;
+    const stream = await app.request(`${BASE}/screen/stream`);
+    const frames = stream.body?.getReader();
+    await frames?.read();
+    await frames?.cancel();
+    await new Promise((settle) => setTimeout(settle, 700));
+
+    const typed = await app.request(`${BASE}/keys`, {
+      method: 'POST',
+      body: JSON.stringify({ token: control.token, data: 'y' }),
+    });
+    expect(typed.status).toBe(204);
+  });
+
   it('hands out a control token and takes the keystrokes that carry it', async () => {
     const { app, terminal } = api();
     const taken = await app.request(`${BASE}/control`, { method: 'POST', body: '{}' });

@@ -64,6 +64,15 @@ export type DoomHubReservedWorktreeProvisioner = (
   request: DoomHubReservedWorktreeRequest,
 ) => Promise<DoomHubSessionScope>;
 
+/** Selection axes a caller pins for a new session instead of the workspace defaults. */
+export interface DoomHubSessionSelection {
+  readonly majorMode?: string;
+  readonly minorModes?: readonly string[];
+  readonly profile?: string;
+  /** An empty list starts the session with no domains. */
+  readonly domains?: readonly string[];
+}
+
 export interface DoomHubSessionCreateRequest {
   readonly cwd: string;
   readonly name: string;
@@ -72,6 +81,25 @@ export interface DoomHubSessionCreateRequest {
   readonly signal?: AbortSignal;
   /** Host-issued reservation, not a caller-chosen target session id. */
   readonly reservationId?: string;
+  /** Pinned axes stay put when the workspace defaults change between turns. */
+  readonly selection?: DoomHubSessionSelection;
+  /** Pi model selector, `provider/id`, validated like `--model`. */
+  readonly model?: string;
+  /** Pi thinking level, validated like `--thinking`. */
+  readonly thinking?: string;
+  /** Variables layered over the host environment for the new session and the tools it runs. */
+  readonly environment?: Readonly<Record<string, string>>;
+}
+
+export interface DoomHubSessionPromptOptions {
+  readonly signal?: AbortSignal;
+  /** Refuses the prompt unless the target is a direct child of this session. */
+  readonly parentSessionId?: string;
+}
+
+/** A prompt the session admitted. `settled` resolves once the agent settles and rejects on a harness fault. */
+export interface DoomHubSessionPromptReceipt {
+  readonly settled: Promise<void>;
 }
 
 /** Host-bound inter-session events. The source identity is attached by the hub, never by payload data. */
@@ -104,6 +132,10 @@ export interface DoomHubSessionService {
   create(request: DoomHubSessionCreateRequest): Promise<DoomHubSessionScope>;
   close(sessionId: string): Promise<void>;
   isLive(sessionId: string): boolean;
+  /** Starts a turn in a live session, as if its user had submitted `text`. */
+  prompt?(sessionId: string, text: string, options?: DoomHubSessionPromptOptions): Promise<DoomHubSessionPromptReceipt>;
+  /** Aborts the live session's current turn. The session stays open. */
+  abort?(sessionId: string, options?: Pick<DoomHubSessionPromptOptions, 'parentSessionId'>): Promise<void>;
   readonly reservations?: DoomHubSessionReservations;
   /** Provisions a host-reserved Git worktree child. This is not exposed to remote MCP clients. */
   provisionReservedWorktree?(request: DoomHubReservedWorktreeRequest): Promise<DoomHubSessionScope>;

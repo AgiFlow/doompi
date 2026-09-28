@@ -8,6 +8,7 @@ import type {
   WorkflowProgressState,
   WorkflowRunView,
   WorkflowStage,
+  WorkflowStepRefView,
   WorkflowStepView,
 } from '../../types/webWorkflows';
 
@@ -177,7 +178,17 @@ interface WorkflowProgressEvent {
   index?: number;
   total?: number;
   reason?: string;
+  ref?: WorkflowStepRefView;
   at: string;
+}
+
+function parseStepRef(value: unknown): WorkflowStepRefView | undefined {
+  if (!isRecord(value)) return undefined;
+  const kind = asOptionalString(value.kind);
+  const id = asOptionalString(value.id);
+  if (!kind || !id) return undefined;
+  const label = asOptionalString(value.label);
+  return { kind, id, ...(label === undefined ? {} : { label }) };
 }
 
 /**
@@ -207,6 +218,7 @@ export function parseWorkflowProgress(raw: string): WorkflowProgressEvent[] {
     const index = asOptionalNumber(parsed.index);
     const total = asOptionalNumber(parsed.total);
     const reason = asOptionalString(parsed.reason);
+    const ref = parseStepRef(parsed.ref);
     events.push({
       type,
       status: status as WorkflowProgressState,
@@ -215,6 +227,7 @@ export function parseWorkflowProgress(raw: string): WorkflowProgressEvent[] {
       ...(index === undefined ? {} : { index }),
       ...(total === undefined ? {} : { total }),
       ...(reason === undefined ? {} : { reason }),
+      ...(ref === undefined ? {} : { ref }),
       at,
     });
   }
@@ -259,6 +272,7 @@ export function foldWorkflowProgress(events: readonly WorkflowProgressEvent[]): 
     }
     step.status = event.status;
     if (event.reason !== undefined) step.reason = event.reason;
+    if (event.ref !== undefined) step.ref = event.ref;
     if (event.status === 'running' && step.startedAt === undefined) step.startedAt = event.at;
     if (STEP_TERMINAL_STATES.has(event.status)) step.endedAt = event.at;
   }

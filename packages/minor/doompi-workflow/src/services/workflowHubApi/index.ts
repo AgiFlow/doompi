@@ -13,6 +13,7 @@ import {
 import { type Context, Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 
+import { createStepPaneTerminal, createStepPaneTerminalDependencies } from '../../services/stepPaneTerminal';
 import { createWorkflowTerminalService } from '../../services/workflowTerminal';
 import routes, { ARTIFACT_DOWNLOAD_PARAM, ARTIFACT_RAW_PARAM } from '../../types/apiRoutes';
 import {
@@ -121,7 +122,8 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
   const registry = options.registry ?? new WorkflowRegistryService();
   const facade = options.terminal ?? new WorkflowTerminalFacade();
   const terminal = createWorkflowTerminalService<WorkflowRunRecord>({
-    terminal: facade,
+    // A run executing in the server has a pane per command step instead of one for the whole run.
+    terminal: createStepPaneTerminal(facade, createStepPaneTerminalDependencies(registry)),
     now: options.now ?? (() => Date.now()),
   });
   const app = new Hono();
@@ -154,11 +156,13 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     return streamSSE(context, async (stream) => {
       let settledTicks = 0;
       let running = true;
+      let latest = record;
       stream.onAbort(() => {
         running = false;
       });
       while (running) {
         const current = (await runOf(workspace, runKey)) ?? record;
+        latest = current;
         const capabilities = terminal.capabilities(current);
         const lines = capabilities.readable ? await terminal.screen(identity, current, SCREEN_LINES) : [];
         // A settled run is read a few more times before the stream closes: the
@@ -172,7 +176,10 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
         if (ended) break;
         await stream.sleep(STREAM_TICK_MS);
       }
-      terminal.forget(new Set());
+      // Only a settled run is forgotten, and only this one. A reader closing its
+      // stream, which happens whenever a panel unmounts, must not drop the
+      // keyboard lease someone just took on another panel, or on another run.
+      if (latest.stage !== 'running') terminal.forgetRun(identity);
     });
   });
 

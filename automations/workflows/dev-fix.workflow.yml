@@ -6,6 +6,9 @@ tags:
   - example
 
 max-workflows: 2
+# The DoomPi server runs this workflow in-process: each step's customRun becomes a
+# child session of the launching session. The CLI and the TUI have no in-process
+# executor, so they launch through launch-command and run the interactiveRun fallback.
 launch-command: 'pnpm exec workflow-mcp launch-process --launcher "${WORKFLOW_LAUNCHER:-tmux}" --name "{name}" --cwd "$PWD" --command "{command}"'
 
 run-directory:
@@ -77,9 +80,18 @@ jobs:
         timeout-minutes: 45
         artifacts:
           - diagnosis.md
+        runConfig:
+          majorMode: examples
+          domains: [engineering]
+        customRun:
+          prompt: |
+            ${{ env.JOB_SYSTEM_PROMPT }}
+
+            Defect report:
+            ${{ env.WORKFLOW_CONTEXT }}
         interactiveRun: |
           printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+          doompi --major-mode ${{ runConfig.majorMode }} --domains ${{ runConfig.domains }} --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
 
   fix:
     description: Apply the smallest fix supported by the diagnosis.
@@ -101,9 +113,18 @@ jobs:
         timeout-minutes: 90
         artifacts:
           - implementation.md
+        runConfig:
+          majorMode: examples
+          domains: [engineering]
+        customRun:
+          prompt: |
+            ${{ env.JOB_SYSTEM_PROMPT }}
+
+            Defect report:
+            ${{ env.WORKFLOW_CONTEXT }}
         interactiveRun: |
           printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+          doompi --major-mode ${{ runConfig.majorMode }} --domains ${{ runConfig.domains }} --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
 
   verify:
     description: Prove the defect is fixed and focused regressions pass.
@@ -124,9 +145,18 @@ jobs:
         timeout-minutes: 60
         artifacts:
           - verification.md
+        runConfig:
+          majorMode: examples
+          domains: [engineering]
+        customRun:
+          prompt: |
+            ${{ env.JOB_SYSTEM_PROMPT }}
+
+            Defect report:
+            ${{ env.WORKFLOW_CONTEXT }}
         interactiveRun: |
           printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+          doompi --major-mode ${{ runConfig.majorMode }} --domains ${{ runConfig.domains }} --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
 
   summarize:
     description: Produce a concise evidence-backed fix handoff.
@@ -142,6 +172,15 @@ jobs:
         timeout-minutes: 20
         artifacts:
           - summary.md
+        runConfig:
+          majorMode: examples
+          domains: [engineering]
+        customRun:
+          prompt: |
+            ${{ env.JOB_SYSTEM_PROMPT }}
+
+            Defect report:
+            ${{ env.WORKFLOW_CONTEXT }}
         interactiveRun: |
           printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+          doompi --major-mode ${{ runConfig.majorMode }} --domains ${{ runConfig.domains }} --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"

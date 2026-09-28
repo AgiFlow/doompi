@@ -41,6 +41,13 @@ const embeddedFeature = vi.hoisted(() => {
     }),
   };
   const statuses = { execute: vi.fn(async () => []) };
+  // Launches run in-process: each gets its own run service, whose run() is this mock.
+  const run = vi.fn(
+    async (_input?: {
+      env?: Record<string, string>;
+      workflowPath?: string;
+    }): Promise<{ exitCode: number; output: string }> => ({ exitCode: 0, output: 'workflow launched' }),
+  );
   let recordFilter: ((record: Record<string, unknown>) => boolean) | undefined;
   const feature = {
     createListStatusesTool: vi.fn((options: { recordFilter: (record: Record<string, unknown>) => boolean }) => {
@@ -48,6 +55,7 @@ const embeddedFeature = vi.hoisted(() => {
       return statuses;
     }),
     createRunControl: vi.fn(() => control),
+    createRunService: vi.fn(() => ({ run })),
     listWorkflowsTool: {
       getInputSchema: vi.fn(() => ({})),
       execute: vi.fn(async () => ({
@@ -60,7 +68,7 @@ const embeddedFeature = vi.hoisted(() => {
       })),
     },
     runTool: {
-      getInputSchema: vi.fn(() => ({})),
+      getInputSchema: vi.fn(() => ({ parse: (value: unknown) => value })),
       execute: vi.fn(
         async (_parameters?: {
           env?: Record<string, string>;
@@ -76,6 +84,7 @@ const embeddedFeature = vi.hoisted(() => {
     control,
     statuses,
     feature,
+    run,
     getRecordFilter: () => recordFilter,
     emit: (event: string) => {
       for (const listener of listeners.get(event) ?? []) listener();
@@ -127,6 +136,11 @@ vi.mock('../../../src/services/workflowWatcher', () => ({
   readWorkflowRuns: () => workflowWatcher.records,
 }));
 vi.mock('zod', () => ({ z: { toJSONSchema: vi.fn(() => ({ type: 'object' })) } }));
+// The executor has its own tests; this suite covers how the facet launches and controls runs.
+vi.mock('../../../src/services/stepExecutor', () => ({
+  createStepExecutor: vi.fn(() => ({})),
+  createNativeStepPaneLauncher: vi.fn(),
+}));
 
 async function fixture() {
   workflowWatcher.records = [
@@ -345,7 +359,7 @@ describe('workflow headless facet', () => {
       ...test.execution,
       cwd: '/external/worktree/subdir',
     });
-    expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith(
+    expect(embeddedFeature.run).toHaveBeenLastCalledWith(
       expect.objectContaining({ workflowPath: '/external/worktree/subdir/automations/build.yml' }),
     );
     expect(
@@ -413,12 +427,13 @@ describe('workflow headless facet', () => {
       level: 'error',
     });
     await command.execute('build runner=local environment=prod Deploy now', test.execution);
-    expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith({
+    expect(embeddedFeature.run).toHaveBeenLastCalledWith({
       workflowPath: '/tmp/build.workflow.yml',
       runner: 'local',
       inputs: { environment: 'prod' },
       prompt: 'Deploy now',
       env: { PI_SESSION_ID: test.execution.sessionId },
+      skipLaunch: true,
     });
     expect(test.execution.client.notify).toHaveBeenLastCalledWith({ body: 'workflow launched', level: 'info' });
 
@@ -436,12 +451,12 @@ describe('workflow headless facet', () => {
       const command = test.commands[0]!;
       const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
       const status = test.tools.find(({ name }) => name === 'workflow_run')!;
-      embeddedFeature.feature.runTool.execute.mockImplementationOnce(async (parameters) => {
+      embeddedFeature.run.mockImplementationOnce(async (parameters) => {
         workflowWatcher.records.push({
           piSessionId: parameters?.env?.PI_SESSION_ID,
           view: { runKey: 'browser-run', workspace: '/tmp' },
         });
-        return { content: [{ type: 'text', text: 'workflow launched' }] };
+        return { exitCode: 0, output: 'workflow launched' };
       });
       const line = workflowLaunchLine({
         workflow: 'Blog Writing',
@@ -449,11 +464,12 @@ describe('workflow headless facet', () => {
         prompt: 'Draft it',
       });
       await command.execute(line.slice('/workflow-launch '.length), test.execution);
-      expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith({
+      expect(embeddedFeature.run).toHaveBeenLastCalledWith({
         workflowPath: '/tmp/blog.workflow.yml',
         inputs: { brief: 'a good post' },
         prompt: 'Draft it',
         env: { PI_SESSION_ID: test.execution.sessionId },
+        skipLaunch: true,
       });
       expect(
         await status.execute(
@@ -465,12 +481,12 @@ describe('workflow headless facet', () => {
         ),
       ).toMatchObject({ details: { runKey: 'browser-run', workspace: '/tmp' } });
 
-      embeddedFeature.feature.runTool.execute.mockImplementationOnce(async (parameters) => {
+      embeddedFeature.run.mockImplementationOnce(async (parameters) => {
         workflowWatcher.records.push({
           piSessionId: parameters?.env?.PI_SESSION_ID,
           view: { runKey: 'tool-run', workspace: '/tmp' },
         });
-        return { content: [{ type: 'text', text: 'workflow launched' }] };
+        return { exitCode: 0, output: 'workflow launched' };
       });
       await launch.execute(
         'launch',
@@ -479,13 +495,44 @@ describe('workflow headless facet', () => {
         undefined,
         test.execution,
       );
-      expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith({
+      expect(embeddedFeature.run).toHaveBeenLastCalledWith({
         workflowPath: '/tmp/build.workflow.yml',
         env: { CUSTOM: 'kept', PI_SESSION_ID: test.execution.sessionId },
+        skipLaunch: true,
       });
       expect(
         await status.execute('status', { action: 'status', runKey: 'tool-run' }, undefined, undefined, test.execution),
       ).toMatchObject({ details: { runKey: 'tool-run', workspace: '/tmp' } });
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('answers a launch once the in-process run registers, without waiting for it to finish', async () => {
+    const test = await fixture();
+    try {
+      const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
+      embeddedFeature.run.mockImplementationOnce(async (parameters) => {
+        workflowWatcher.records.push({
+          piSessionId: parameters?.env?.PI_SESSION_ID,
+          view: {
+            runKey: 'long-run',
+            workspace: '/tmp',
+            displayName: 'build-long',
+            workflowPath: '/tmp/build.workflow.yml',
+            startedAt: new Date().toISOString(),
+          },
+        });
+        return new Promise<never>(() => undefined);
+      });
+      const result = await launch.execute(
+        'launch',
+        { workflowPath: '/tmp/build.workflow.yml' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(result.content).toEqual([{ type: 'text', text: expect.stringContaining('Run key: long-run') }]);
     } finally {
       await test.close?.();
     }
@@ -496,16 +543,13 @@ describe('workflow headless facet', () => {
     try {
       const command = test.commands[0]!;
       const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
-      const calls = embeddedFeature.feature.runTool.execute.mock.calls.length;
+      const calls = embeddedFeature.run.mock.calls.length;
       for (const name of ['missing', 'broken', 'Blog Writing']) {
         await command.execute(name, test.execution);
         expect(test.execution.client.notify).toHaveBeenLastCalledWith(expect.objectContaining({ level: 'error' }));
       }
-      expect(embeddedFeature.feature.runTool.execute).toHaveBeenCalledTimes(calls);
-      embeddedFeature.feature.runTool.execute.mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'engine failed' }],
-        isError: true,
-      });
+      expect(embeddedFeature.run).toHaveBeenCalledTimes(calls);
+      embeddedFeature.run.mockResolvedValueOnce({ exitCode: 1, output: 'engine failed' });
       expect(
         await launch.execute(
           'launch',
@@ -515,12 +559,12 @@ describe('workflow headless facet', () => {
           test.execution,
         ),
       ).toMatchObject({ isError: true });
-      embeddedFeature.feature.runTool.execute.mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'engine failed' }],
-        isError: true,
-      });
+      embeddedFeature.run.mockResolvedValueOnce({ exitCode: 1, output: 'engine failed' });
       await command.execute('build', test.execution);
-      expect(test.execution.client.notify).toHaveBeenLastCalledWith({ body: 'engine failed', level: 'error' });
+      expect(test.execution.client.notify).toHaveBeenLastCalledWith({
+        body: 'Workflow failed (exit code 1):\n\nengine failed',
+        level: 'error',
+      });
     } finally {
       await test.close?.();
     }
