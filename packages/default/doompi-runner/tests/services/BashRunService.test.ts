@@ -461,7 +461,7 @@ describe('BashRunService', () => {
     ]);
   });
 
-  it('keeps abort ownership after promoting a background runner', async () => {
+  it('keeps a promoted runner alive when the tool call signal aborts after the handoff', async () => {
     let finish: (result: ExitResult) => void = () => undefined;
     const completion = new Promise<ExitResult>((resolve) => {
       finish = resolve;
@@ -489,6 +489,49 @@ describe('BashRunService', () => {
       kind: 'promoted',
     });
     controller.abort();
+    await flushPromises();
+
+    expect(stop).not.toHaveBeenCalled();
+    expect(registry.completed).toEqual([]);
+
+    finish({ code: 0, signal: null });
+    await flushPromises();
+
+    expect(registry.completed).toEqual([
+      { id: registry.registered[0]?.id, outcome: { reason: 'completed', code: 0, signal: null } },
+    ]);
+  });
+
+  it('stops a runner whose tool call aborted while it was being promoted', async () => {
+    let finish: (result: ExitResult) => void = () => undefined;
+    const completion = new Promise<ExitResult>((resolve) => {
+      finish = resolve;
+    });
+    const stop = vi.fn(async () => {
+      finish({ code: null, signal: 'SIGTERM' });
+      return true;
+    });
+    const handle: RunHandle = {
+      id: 'rmux-promotion-abort',
+      name: 'derived-name',
+      pid: 4242,
+      logPath: '/logs/rmux-promotion-abort.log',
+      backend: 'rmux',
+      output: () => '',
+      completion: () => completion,
+      detach: () => undefined,
+      stop,
+    };
+    const backend: IRmuxBackend = { ...rmuxBackend, launch: async ({ id }) => ({ ...handle, id }) };
+    const { service, registry } = harness(4242, backend);
+    const controller = new AbortController();
+    const markPromoted = registry.markPromoted.bind(registry);
+    registry.markPromoted = async () => {
+      controller.abort();
+      return markPromoted();
+    };
+
+    await service.run({ ...request, background: true, signal: controller.signal });
     await flushPromises();
 
     expect(stop).toHaveBeenCalledOnce();
@@ -521,9 +564,14 @@ describe('BashRunService', () => {
     const controller = new AbortController();
     const warning = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
 
+    const markPromoted = registry.markPromoted.bind(registry);
+    registry.markPromoted = async () => {
+      controller.abort();
+      return markPromoted();
+    };
+
     try {
       await service.run({ ...request, background: true, signal: controller.signal });
-      controller.abort();
       await flushPromises();
 
       expect(warning).toHaveBeenCalledWith(expect.stringContaining('Failed to stop aborted runner'));
