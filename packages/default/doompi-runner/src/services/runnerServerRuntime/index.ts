@@ -12,6 +12,7 @@ import { BACKGROUND_WORK_PROVIDER } from '../../constants/runnerRuntime';
 import { RUNNER_RUNS_TYPE } from '../../constants/webRunners';
 import { reconcileActiveRunners, stopRunnerProcess } from '../reconcile';
 import type { RunnerDependencies } from '../runnerDependencies/type';
+import { formatRunnerFinished } from '../runnerRecord';
 import { presentRunnerRuns } from '../webRunnerRuns';
 
 export interface RunnerServerRuntime {
@@ -19,17 +20,27 @@ export interface RunnerServerRuntime {
   readonly activity: DoomHeadlessActivity;
   readonly backgroundWorkPlugin: (context: Context) => void;
   ensureSession(sessionId: string): Promise<void>;
+  /** Wakes the agent once when this runner, which it sent to the background, exits. */
+  watchRunner(id: string): void;
   dispose(this: void): Promise<void>;
 }
 export function createRunnerServerRuntime(
   container: RunnerDependencies,
   directEvents: NonNullable<DoomServerHostService['context']['directEvents']>,
+  /** Absent when no agent runs in this session, so there is nobody to wake. */
+  wakeAgent?: (content: string) => Promise<void>,
 ): RunnerServerRuntime {
   let sessionId: string | undefined;
   let supervision: Promise<void> | undefined;
   let runtimeDisposal: Promise<void> | undefined;
   let backgroundWorkItems: BackgroundProviderWorkItem[] = [];
   let backgroundWorkProvider: BackgroundWorkProviderHandle | undefined;
+  // Nothing else tells the model a background runner ended, so without this an
+  // agent that finished its turn waiting on one idles until a person prompts it.
+  const watched = new Set<string>();
+  let unsubscribeWatched: (() => void) | undefined;
+  let wakes: Promise<void> = Promise.resolve();
+  let closing = false;
 
   // The activity is optional and source-gated. The retained facet owns the
   // session runtime, so disabling the activity must not tear down its jobs.
@@ -141,6 +152,40 @@ export function createRunnerServerRuntime(
       });
   };
 
+  // Sequenced so two runners exiting in the same tick each wake the agent once.
+  const wakeForFinished = (ownedSessionId: string): void => {
+    wakes = wakes
+      .then(async () => {
+        // Deleting the entry being visited is safe for a Set iterator.
+        for (const id of watched) {
+          const record = await container.runnerRegistry.get(id, ownedSessionId);
+          if (closing) return;
+          if (record?.state === 'running') continue;
+          watched.delete(id);
+          // A record swept before it was seen leaves nothing to report.
+          if (record) await wakeAgent?.(formatRunnerFinished(record));
+        }
+        if (watched.size === 0) {
+          unsubscribeWatched?.();
+          unsubscribeWatched = undefined;
+        }
+      })
+      .catch((error: unknown) => {
+        process.emitWarning(`Could not report a finished runner: ${String(error)}`);
+      });
+  };
+
+  const watchRunner = (id: string): void => {
+    const ownedSessionId = sessionId;
+    if (!wakeAgent || closing || ownedSessionId === undefined) return;
+    watched.add(id);
+    // Independent of the optional activity: the wake-up must not depend on a
+    // browser watching the runner list.
+    unsubscribeWatched ??= container.runnerRegistry.subscribe(() => wakeForFinished(ownedSessionId), ownedSessionId);
+    // It may already have exited between promotion and subscription.
+    wakeForFinished(ownedSessionId);
+  };
+
   const activity: DoomHeadlessActivity = {
     name: 'runner',
     start: async (executionContext: DoomHeadlessExecutionContext) => {
@@ -164,6 +209,7 @@ export function createRunnerServerRuntime(
     container,
     activity,
     ensureSession,
+    watchRunner,
     backgroundWorkPlugin: (context) => {
       context.inject([DOOM_BACKGROUND_WORK_SERVICE], (serviceContext) => {
         const service = readDoomBackgroundWorkService(serviceContext);
@@ -180,6 +226,12 @@ export function createRunnerServerRuntime(
       });
     },
     async dispose() {
+      // Session cleanup completes every runner it stops, and none of those may
+      // start a turn in a session that is going away.
+      closing = true;
+      watched.clear();
+      unsubscribeWatched?.();
+      unsubscribeWatched = undefined;
       unsubscribeRunnerUpdates?.();
       unsubscribeRunnerUpdates = undefined;
       await disposeRuntime();

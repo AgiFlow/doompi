@@ -18,3 +18,15 @@ export function isRunnerRecord(value: unknown): value is RunnerRecord {
     (record.backend === 'rmux' || record.backend === 'tmux' || record.backend === 'native')
   );
 }
+
+/** What the agent reads when a runner it sent to the background exits. Shared by the Pi and server hosts. */
+export function formatRunnerFinished(record: RunnerRecord): string {
+  const outcome = record.exit?.reason ?? record.state;
+  const code = record.exit?.code === null || record.exit?.code === undefined ? '' : `, exit code ${record.exit.code}`;
+  return [
+    `Background runner ${record.name} exited: ${outcome}${code}.`,
+    `Runner ID: ${record.id}`,
+    `Log: ${record.logPath}`,
+    `Inspect: doom-runner logs ${record.id}`,
+  ].join('\n');
+}

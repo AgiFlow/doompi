@@ -41,6 +41,7 @@ import { getLogTtlMs } from '../services/runnerConfig';
 import { setRunnerSettings } from '../services/runnerConfig';
 import { createRunnerDependencies } from '../services/runnerDependencies';
 import type { RunnerDependencies } from '../services/runnerDependencies/type';
+import { formatRunnerFinished } from '../services/runnerRecord';
 import { parseRunnersCommand } from '../services/runnersCommand';
 import { RunnerSettingsLoader } from '../services/runnerSettings';
 import type { IBashRunService } from '../types/bashRunService';
@@ -243,17 +244,8 @@ export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
     for (const record of monitored) {
       if (!record || record.sessionId !== activeSessionId || record.state !== COMPLETED_STATE) continue;
       if (notifiedRunnerIds.has(record.id)) continue;
-      const outcome = record.exit?.reason ?? COMPLETED_STATE;
-      const code =
-        record.exit?.code === null || record.exit?.code === undefined ? '' : `, exit code ${record.exit.code}`;
-      const content = [
-        `Background runner ${record.name} exited: ${outcome}${code}.`,
-        `Runner ID: ${record.id}`,
-        `Log: ${record.logPath}`,
-        `Inspect: doom-runner logs ${record.id}`,
-      ].join('\n');
       pi.sendMessage(
-        { customType: RUNNER_FINISHED_MESSAGE, content, display: true },
+        { customType: RUNNER_FINISHED_MESSAGE, content: formatRunnerFinished(record), display: true },
         { triggerTurn: true, deliverAs: 'steer' },
       );
       notifiedRunnerIds.add(record.id);
