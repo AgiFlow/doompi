@@ -1,3 +1,38 @@
+## 0.0.1-alpha.101 (2026-09-29)
+
+### 🚀 Features
+
+- **root:** run doompi workflows in-process with customRun steps ([#228](https://github.com/AgiFlow/doompi/pull/228))
+- **doompi-plan:** replace Fable with code review ([#236](https://github.com/AgiFlow/doompi/pull/236))
+
+### 🔥 Performance
+
+- reduce multi-agent runtime overhead ([#237](https://github.com/AgiFlow/doompi/pull/237))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.74
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.96
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.97
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.74
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.21
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.98
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.97
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.97
+- Updated @agimon-ai/vibe-lint-plugin-doom-cli to 0.0.1-alpha.23
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.100 (2026-09-28)
 
 ### 🧱 Updated Dependencies

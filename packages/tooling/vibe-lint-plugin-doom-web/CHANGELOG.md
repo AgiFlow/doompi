@@ -1,3 +1,17 @@
+## 0.0.1-alpha.85 (2026-09-29)
+
+### 🚀 Features
+
+- **root:** run doompi workflows in-process with customRun steps ([#228](https://github.com/AgiFlow/doompi/pull/228))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.20
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.84 (2026-09-28)
 
 ### 🧱 Updated Dependencies
