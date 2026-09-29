@@ -176,7 +176,7 @@ describe('host-wide resource admission', () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
-  it('does not launch a queued command when admission is cancelled', async () => {
+  it.each([false, true])('does not launch a cancelled queued command (interactive=%s)', async (interactive) => {
     const acquire = vi.fn(
       (signal?: AbortSignal) =>
         new Promise<() => void>((_resolve, reject) => {
@@ -188,7 +188,7 @@ describe('host-wide resource admission', () => {
       acquire,
       getSnapshot: () => ({ running: 2, queued: 1, limit: 2 }),
     });
-    const running = service.run({ ...request, command: 'pnpm test', signal: controller.signal });
+    const running = service.run({ ...request, command: 'pnpm test', interactive, signal: controller.signal });
     await flushPromises();
     controller.abort(new Error('queue cancelled'));
     await expect(running).resolves.toMatchObject({ kind: 'failed', error: 'queue cancelled' });
@@ -205,8 +205,8 @@ describe('host-wide resource admission', () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
-  it.each([{ command: 'git status' }, { command: 'pnpm test', interactive: true }])(
-    'does not queue $command with interactive=$interactive',
+  it.each([{ command: 'git status' }, { command: 'git status', interactive: true }])(
+    'does not queue the lightweight command $command with interactive=$interactive',
     async (options) => {
       const acquire = vi.fn(async () => () => undefined);
       const { service, spawner } = harness(4242, rmuxBackend, new FakeRtkProcessor(), {
@@ -218,6 +218,19 @@ describe('host-wide resource admission', () => {
       if (spawner.children.length) spawner.last.exit({ code: 0, signal: null });
     },
   );
+  it('releases an interactive heavy slot when RMUX is unavailable', async () => {
+    const release = vi.fn();
+    const acquire = vi.fn(async () => release);
+    const { service } = harness(4242, rmuxBackend, new FakeRtkProcessor(), {
+      acquire,
+      getSnapshot: () => ({ running: 1, queued: 0, limit: 2 }),
+    });
+    await expect(service.run({ ...request, command: 'pnpm test', interactive: true })).resolves.toMatchObject({
+      kind: 'failed',
+    });
+    expect(acquire).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledOnce();
+  });
 });
 
 describe('BashRunService', () => {

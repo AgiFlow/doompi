@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import type { DoomHostExecutionBudget } from '@agimon-ai/doompi-core/packageApi';
+import type { DoomHostExecutionBudget, DoomHostExecutionPermit } from '@agimon-ai/doompi-core/packageApi';
 
 import {
   COMPLETED,
@@ -60,9 +60,9 @@ export class BashRunService implements IBashRunService {
     if (request.signal?.aborted) return { kind: FAILED, id, name, error: 'Operation aborted' };
 
     let handle: RunHandle;
-    let releaseSlot: (() => void) | undefined;
+    let releaseSlot: DoomHostExecutionPermit | undefined;
     try {
-      if (!interactive && this.executionBudget && isHeavyCommand(request.command)) {
+      if (this.executionBudget && isHeavyCommand(request.command)) {
         releaseSlot = await this.executionBudget.acquire(request.signal);
       }
       request.signal?.throwIfAborted();
@@ -75,6 +75,7 @@ export class BashRunService implements IBashRunService {
         interactive,
       });
       if (interactive && !rmuxHandle) {
+        releaseSlot?.();
         return { kind: FAILED, id, name, error: 'RMUX is required for interactive commands but is unavailable' };
       }
       handle =
@@ -89,7 +90,15 @@ export class BashRunService implements IBashRunService {
       return { kind: FAILED, id, name, error: 'The command did not start, so it cannot be supervised' };
     }
     // A background promotion is not process completion. Keep the slot until actual exit.
-    if (releaseSlot) void handle.completion().then(releaseSlot, releaseSlot);
+    if (releaseSlot) {
+      void handle.completion().then(releaseSlot, releaseSlot);
+      try {
+        await releaseSlot.attachProcess?.(handle.pid);
+      } catch (error) {
+        await handle.stop();
+        return { kind: FAILED, id, name, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
     if (request.signal?.aborted) {
       await handle.stop();
       return { kind: FAILED, id, name, error: 'Operation aborted' };

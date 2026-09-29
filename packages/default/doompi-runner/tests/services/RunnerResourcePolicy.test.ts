@@ -15,6 +15,20 @@ describe('known heavy commands', () => {
     'cd /workspace && pnpm nx run-many -t build,test --parallel=2',
     'tsc --noEmit',
     'env pnpm build',
+    'pnpm exec nx fixcode example',
+    'pnpm exec playwright test',
+    'pnpm exec oxlint src',
+    './node_modules/.bin/nx build example',
+    '"/workspace with spaces/node_modules/.bin/nx" run example:build',
+    'pnpm --filter=@scope/example run build',
+    'env CI=1 command pnpm exec nx run-many --targets=build,test-unit',
+    'pnpm exec nx run-many -t=fixcode',
+    'pnpm exec vite build',
+    'node tools/scripts/build.mjs',
+    'node node_modules/vitest/vitest.mjs run',
+    'python -m pytest tests',
+    'cargo test',
+    'bun tools/scripts/dev.ts agiflow api,app,mcp',
   ])('budgets %s', (command) => expect(isHeavyCommand(command)).toBe(true));
 
   it.each([
@@ -26,6 +40,12 @@ describe('known heavy commands', () => {
     'pnpm exec vitest --help',
     'node server.mjs',
     'pnpm dev',
+    'pnpm exec playwright --help',
+    'pnpm exec nx show project build --json',
+    './node_modules/.bin/nx show project build',
+    'node tools/scripts/read-logs.mjs',
+    'echo "build && pnpm test"',
+    'git log --format="test; pnpm build"',
   ])('does not budget %s', (command) => expect(isHeavyCommand(command)).toBe(false));
 });
 
@@ -33,8 +53,10 @@ describe('noninteractive process defaults', () => {
   it('disables nested Nx terminal handling and bounds default parallelism', () => {
     expect(noninteractiveEnvironment({})).toEqual({
       NX_NATIVE_COMMAND_RUNNER: 'false',
+      DOOM_RUNNER_MAX_WORKERS: '2',
+      PLAYWRIGHT_WORKERS: '1',
       NX_TUI: 'false',
-      NX_PARALLEL: '2',
+      NX_PARALLEL: '1',
       VITEST_MAX_WORKERS: '2',
     });
   });
@@ -48,6 +70,8 @@ describe('noninteractive process defaults', () => {
       OTHER: 'unchanged',
     });
     expect(noninteractiveEnvironment(environment)).toEqual({
+      DOOM_RUNNER_MAX_WORKERS: '2',
+      PLAYWRIGHT_WORKERS: '1',
       NX_TUI: 'true',
       NX_PARALLEL: '1',
       VITEST_MAX_WORKERS: '4',

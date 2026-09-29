@@ -535,6 +535,11 @@
       "types": "./dist/mcpWidget.d.mts",
       "import": "./dist/mcpWidget.mjs",
       "require": "./dist/mcpWidget.cjs"
+    },
+    "./executionBudget": {
+      "types": "./dist/executionBudget.d.mts",
+      "import": "./dist/executionBudget.mjs",
+      "require": "./dist/executionBudget.cjs"
     }
   },
   "publishConfig": {
