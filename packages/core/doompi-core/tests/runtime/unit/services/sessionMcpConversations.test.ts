@@ -127,6 +127,18 @@ describe('conversation routing state', () => {
     expect(store.fail(worktree.id, 'parent', 'SESSION_UNAVAILABLE').state).toBe('bound');
   });
 
+  it('reloads a failed binding closed with its session without reopening the conversation', () => {
+    const root = directory();
+    const store = createSessionMcpConversationStore(root);
+    const record = store.reserve('client', 'parent', 'workspace', digest('failed-chat'));
+    store.fail(record.id, 'parent', 'SESSION_WORKTREE_PROVISION_FAILED');
+    store.closeSession(record.id);
+
+    const reopened = createSessionMcpConversationStore(root);
+    expect(reopened.list()).toMatchObject([{ id: record.id, state: 'closed' }]);
+    expect(() => reopened.get(record.id, 'parent')).toThrow('unavailable');
+  });
+
   it('rejects ambiguous prepared legacy setup and malformed optional metadata without losing evidence', () => {
     const root = directory();
     const store = createSessionMcpConversationStore(root);

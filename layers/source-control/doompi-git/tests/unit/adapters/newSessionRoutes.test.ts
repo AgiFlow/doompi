@@ -68,6 +68,29 @@ describe('new-session dialog routes', () => {
     expect(listed.local.map((branch) => branch.name).sort()).toEqual(['feature/existing', 'main']);
   });
 
+  it('returns a useful conflict for a duplicate new branch without starting a session', async () => {
+    git(root, 'init', '-q', '-b', 'main');
+    git(root, 'config', 'user.email', 'test@example.com');
+    git(root, 'config', 'user.name', 'Test');
+    git(root, 'config', 'commit.gpgsign', 'false');
+    fs.writeFileSync(path.join(root, 'file.txt'), 'one\n');
+    git(root, 'add', 'file.txt');
+    git(root, 'commit', '-q', '-m', 'init');
+    git(root, 'branch', 'feature/existing');
+    const created = context();
+
+    const response = await api
+      .start(created)
+      .fetch(request('POST', '/sessions', { mode: 'new-branch', branch: 'feature/existing', baseRef: 'main' }));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      code: 'invalid_request',
+      error: expect.stringContaining('The branch feature/existing already exists.'),
+    });
+    expect(created.sessionService?.create).not.toHaveBeenCalled();
+  });
+
   it('refuses an invalid create request before any git work', async () => {
     const created = context();
     const handler = api.start(created);

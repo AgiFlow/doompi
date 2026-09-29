@@ -137,6 +137,19 @@ describe('spawn', () => {
     expect(await ops.list(CONTEXT)).toHaveLength(1);
   });
 
+  it('refuses a new branch that already exists before creating a worktree', async () => {
+    const git = fakeGit({
+      listBranches: vi.fn().mockResolvedValue({ local: [{ name: 'wt/dup' }], remote: [] }),
+    });
+    const { ops } = operations(git);
+
+    await expect(ops.spawn(CONTEXT, { branch: 'wt/dup', checkout: 'new' })).rejects.toMatchObject({
+      code: 'invalid_request',
+      message: expect.stringContaining('The branch wt/dup already exists.'),
+    });
+    expect(git.addWorktree).not.toHaveBeenCalled();
+  });
+
   it('opens a top-level worktree session with no parent from the new-session dialog', async () => {
     const git = fakeGit();
     const { ops, createSession } = operations(git);
