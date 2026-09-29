@@ -29,8 +29,12 @@ const HOME_ALIAS_PREFIX = '~/';
 export const DOOM_EXTENSION = DOOM_PACKAGE_NAME;
 /** Suppresses Pi's ambient extension-directory scan while leaving explicit sources intact. */
 export const AMBIENT_EXTENSION_FILTER = '!extensions/**';
-/** Pi built-in extensions DoomPi replaces. doompi-mcp owns `/mcp` and MCP servers, so Pi's own stack stays off. */
-export const DISABLED_PI_BUILTINS: readonly string[] = ['-builtin:mcp'];
+/**
+ * Pi built-in extensions kept off under DoomPi. doompi-mcp owns `/mcp` and MCP servers. Codemode and
+ * tool search are opt-in in plain Pi, but DoomPi activates every registered tool, so leaving them
+ * loaded would declare both to the model in every session.
+ */
+export const DISABLED_PI_BUILTINS: readonly string[] = ['-builtin:mcp', '-builtin:codemode', '-builtin:tool-search'];
 export interface PiSettingsUpdate {
   /** Absolute path to the synchronized user theme file. */
   themePath: string;

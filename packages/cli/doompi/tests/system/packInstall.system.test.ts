@@ -2417,7 +2417,13 @@ describe('RPC-LIFECYCLE installed runtime', () => {
       };
       expect(settings).toMatchObject({
         quietStartup: true,
-        extensions: ['@agimon-ai/doompi', '!extensions/**', '-builtin:mcp'],
+        extensions: [
+          '@agimon-ai/doompi',
+          '!extensions/**',
+          '-builtin:mcp',
+          '-builtin:codemode',
+          '-builtin:tool-search',
+        ],
         themes: ['themes/doom-pi-dark.json'],
       });
       expect(settings.extensions?.some((entry) => entry.includes('bootstrap.'))).toBe(false);
