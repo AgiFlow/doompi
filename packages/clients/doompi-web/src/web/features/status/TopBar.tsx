@@ -72,12 +72,14 @@ function TransientTabChip({ tab, sessionId, active }: { tab: TransientTab; sessi
 
 export function TopBar({
   view = 'conversation',
+  mcpEnabled = false,
   onShowSessions,
   onShowActivity,
   navigationToggle = 'mobile',
   activityToggle = 'mobile',
 }: {
   view?: string;
+  mcpEnabled?: boolean;
   onShowSessions?: () => void;
   onShowActivity?: () => void;
   navigationToggle?: 'mobile' | 'always';
@@ -166,6 +168,18 @@ export function TopBar({
                 conversation
               </Link>
             </NavTab>
+            {mcpEnabled ? (
+              <NavTab asChild active={view === 'mcp'}>
+                <Link
+                  to="/session/$sessionId/$tabId"
+                  params={{ sessionId: activeId, tabId: 'mcp' }}
+                  data-testid="tab-mcp"
+                  className="shrink-0"
+                >
+                  MCP
+                </Link>
+              </NavTab>
+            ) : null}
             {webTabs().map((tab) => (
               <PluginTab key={tab.id} tab={tab} sessionId={activeId} active={view === tab.id} />
             ))}

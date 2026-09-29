@@ -23,6 +23,7 @@ import type { DoomHubSessionReservations } from '../schemas/hubChannel';
 import { readContextDetail } from '../services/contextDetailStore';
 import type { OpenSessionRecord } from '../services/openSessionRegistry';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
+import { createSessionMcpActivityStore } from '../services/sessionMcpActivity';
 import { createSessionMcpConversationStore } from '../services/sessionMcpConversations';
 import { createSessionMcpRegistrationStore } from '../services/sessionMcpRegistrationStore';
 import type { SavedSession } from '../services/sqliteSessionHistory';
@@ -441,6 +442,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     publicOriginRevision: options.sessionMcpPublicOriginRevision,
     onNotice: options.onNotice,
     isSessionPersisted: options.isSessionPersisted,
+    activityStore: createSessionMcpActivityStore(sessionMcpStateDir),
     conversationStore: createSessionMcpConversationStore(sessionMcpStateDir),
     registrationStore: createSessionMcpRegistrationStore({ stateDir: sessionMcpStateDir, onNotice: options.onNotice }),
   });

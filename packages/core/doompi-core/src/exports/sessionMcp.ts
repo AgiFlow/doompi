@@ -1,3 +1,9 @@
+export type {
+  SessionMcpCall,
+  SessionMcpCallStatus,
+  SessionMcpAvailableTool,
+  SessionMcpActivitySnapshot,
+} from '../schemas/sessionMcpActivity';
 export { createSessionMcpHttpHandler } from '../server/sessionMcpHandler';
 export type {
   SessionMcpHttpHandler,

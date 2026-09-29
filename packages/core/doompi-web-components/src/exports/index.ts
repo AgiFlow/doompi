@@ -42,6 +42,7 @@ export {
   DropdownMenuTrigger,
 } from '../components/DropdownMenu';
 export { Checkbox } from '../components/Checkbox';
+export { CodeBlock, type CodeBlockProps } from '../components/CodeBlock';
 export { CodeEditor } from '../components/CodeEditor';
 export { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../components/Collapsible';
 export {

@@ -6,7 +6,9 @@ import { TemplateHost } from '../components/TemplateHost';
 import { ActivityDock } from '../features/activity/ActivityDock';
 import { SelectionBar } from '../features/selection/SelectionBar';
 import { Composer } from '../features/session/Composer';
+import { SessionMcp } from '../features/session/SessionMcp';
 import { Timeline } from '../features/session/Timeline';
+import { useSessionMcp } from '../features/session/useSessionMcp';
 import { SessionRailDialogs } from '../features/sessions/SessionRailDialogs';
 import { useSessionRail } from '../features/sessions/useSessionRail';
 import { WelcomePanel } from '../features/sessions/WelcomePanel';
@@ -35,6 +37,9 @@ export function CockpitPage() {
   );
   const selectedWorkspaceId = useStore(workspacesStore, (state) => state.selectedId);
   const workspaceId = sessionId === undefined ? (selectedWorkspaceId ?? undefined) : sessionWorkspaceId;
+  const mcp = useSessionMcp(workspaceId, sessionId);
+  const mcpView = tabId === 'mcp';
+  const mcpEnabled = mcp.snapshot?.enabled === true || mcpView;
   // The landing redirect and deep-link hydration must finish before choosing a template scope.
   const templateScopeReady = hydrated && (sessionId === undefined ? order.length === 0 : order.includes(sessionId));
   const transferLabel = useStore(sessionsStore, (state) => {
@@ -92,7 +97,7 @@ export function CockpitPage() {
   useEffect(() => {
     if (!hydrated) return;
     if (sessionId !== undefined && order.includes(sessionId)) {
-      if (tabId !== undefined && tab === undefined) {
+      if (tabId !== undefined && tabId !== 'mcp' && tab === undefined) {
         void navigate({ to: '/session/$sessionId', params: { sessionId }, replace: true });
       }
       return;
@@ -122,7 +127,7 @@ export function CockpitPage() {
               ? { scope: 'workspace', workspaceId }
               : { scope: 'session', workspaceId, sessionId }
         }
-        view={tab ? 'panel' : noSessions ? 'welcome' : 'conversation'}
+        view={mcpView || tab ? 'panel' : noSessions ? 'welcome' : 'conversation'}
         navigationOpen={railOpen}
         desktopActivityOpen={dockOpen}
         mobileActivityOpen={mobileActivityOpen}
@@ -134,7 +139,8 @@ export function CockpitPage() {
           header: (options) => (
             <TopBar
               {...options}
-              view={tab?.id ?? 'conversation'}
+              view={mcpView ? 'mcp' : (tab?.id ?? 'conversation')}
+              mcpEnabled={mcpEnabled}
               onShowSessions={() => {
                 setMobileActivityOpen(false);
                 setRailOpen(true);
@@ -154,11 +160,27 @@ export function CockpitPage() {
                 Transferring voice to {transferLabel}...
               </output>
             ),
-          content: tab ? <tab.panel {...slotProps} /> : noSessions ? <WelcomePanel /> : <Timeline />,
-          // A plugin panel may replace the conversation; retained composers still own wake gating.
-          composer: tab ? tab.retainComposer === true ? <Composer /> : null : noSessions ? null : <Composer />,
-          controls: !tab && !noSessions && dormantMeta === null ? <SelectionBar /> : null,
-          activity: <ActivityDock onClose={closeActivity} onOpenContent={() => setMobileActivityOpen(false)} />,
+          content: mcpView ? (
+            <SessionMcp key={sessionId} state={mcp} />
+          ) : tab ? (
+            <tab.panel {...slotProps} />
+          ) : noSessions ? (
+            <WelcomePanel />
+          ) : (
+            <Timeline />
+          ),
+          // MCP history is a read-only surface, not an alternative prompt composer.
+          composer: mcpView ? null : tab ? (
+            tab.retainComposer === true ? (
+              <Composer />
+            ) : null
+          ) : noSessions ? null : (
+            <Composer />
+          ),
+          controls: !mcpView && !tab && !noSessions && dormantMeta === null ? <SelectionBar /> : null,
+          activity: (
+            <ActivityDock mcp={mcp} onClose={closeActivity} onOpenContent={() => setMobileActivityOpen(false)} />
+          ),
         }}
       />
       <SessionRailDialogs />

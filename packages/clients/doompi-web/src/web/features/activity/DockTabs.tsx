@@ -10,9 +10,19 @@ const HOST_TABS: readonly { id: DockTab; label: string }[] = [
 ];
 
 /** Host faces followed by the active session's plugin-contributed faces. */
-export function DockTabs({ contributed = [] }: { contributed?: readonly DockFaceContribution[] }) {
+export function DockTabs({
+  contributed = [],
+  mcpEnabled = false,
+}: {
+  contributed?: readonly DockFaceContribution[];
+  mcpEnabled?: boolean;
+}) {
   const active = useStore(uiStore, (state) => state.dockTab);
-  const tabs = [...HOST_TABS, ...contributed.map(({ id, label }) => ({ id, label }))];
+  const tabs = [
+    ...HOST_TABS,
+    ...(mcpEnabled ? [{ id: 'mcp', label: 'MCP' }] : []),
+    ...contributed.map(({ id, label }) => ({ id, label })),
+  ];
 
   return (
     <div className="flex items-center gap-3" role="tablist" aria-label="dock view">
