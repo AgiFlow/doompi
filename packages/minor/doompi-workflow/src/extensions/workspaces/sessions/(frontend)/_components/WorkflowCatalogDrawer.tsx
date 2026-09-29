@@ -78,7 +78,7 @@ function WorkflowRow({
         ))}
         <span className="min-w-0 flex-1" />
         <span className={`shrink-0 text-2xs ${workflow.error === undefined ? 'text-doom-cyan' : 'text-doom-red'}`}>
-          {workflow.error === undefined ? `${jobs} job${jobs === 1 ? '' : 's'}` : 'unreadable'}
+          {workflow.error === undefined ? `${jobs} job${jobs === 1 ? '' : 's'}` : 'needs fixing'}
         </span>
       </div>
       <span className="truncate text-xs text-doom-dim">{workflow.description || workflow.relativePath}</span>

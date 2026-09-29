@@ -33,3 +33,6 @@ export const doompiRunConfigSchema = z
 export const doompiTemplateRunConfigSchema = doompiRunConfigSchema.strip();
 
 export type DoompiRunConfig = z.infer<typeof doompiRunConfigSchema>;
+
+/** The runConfig keys DoomPi reads itself, the host keys `workflow-mcp doctor` checks steps against. */
+export const DOOMPI_RUN_CONFIG_KEYS: readonly string[] = doompiRunConfigSchema.keyof().options;

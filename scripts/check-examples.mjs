@@ -9,6 +9,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pluginNames = ['blog-writing', 'development', 'testing'];
+/** The runConfig keys DoomPi reads itself; see DOOMPI_RUN_CONFIG_KEYS in packages/minor/doompi-workflow/src/schemas/runConfig.ts. */
+const doompiRunConfigKeys = ['majorMode', 'minorModes', 'profile', 'domains', 'model', 'thinking'];
 const workflowNames = [
   'blog-writing.workflow.yml',
   'dev-feature.workflow.yml',
@@ -218,6 +220,13 @@ function validateWorkflows() {
   try {
     const env = { ...process.env, WORKFLOW_MCP_HOME: workflowHome };
     runCheck(workflowBinary, ['list-workflows', workflowDirectory, '--format', 'json'], 'Workflow discovery', { env });
+    // What a dry run cannot see: runConfig keys DoomPi would reject mid-run, unknown needs, missing fallbacks.
+    runCheck(
+      workflowBinary,
+      ['doctor', workflowDirectory, '--run-config-keys', doompiRunConfigKeys.join(','), '--strict'],
+      'Workflow doctor',
+      { env },
+    );
     for (const workflowName of workflowNames) {
       const workspace = `doompi-examples-check-${process.pid}-${workflowName.replace(/\W+/g, '-')}`;
       runCheck(

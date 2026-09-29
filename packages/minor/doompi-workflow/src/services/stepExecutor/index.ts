@@ -15,7 +15,12 @@ import {
   WORKFLOW_DECISION_STEERING_HOST,
 } from '@agimon-ai/workflow-mcp';
 
-import { type DoompiRunConfig, doompiRunConfigSchema, doompiTemplateRunConfigSchema } from '../../schemas/runConfig';
+import {
+  DOOMPI_RUN_CONFIG_KEYS,
+  type DoompiRunConfig,
+  doompiRunConfigSchema,
+  doompiTemplateRunConfigSchema,
+} from '../../schemas/runConfig';
 import { STEP_PANE_REF_KIND, STEP_SESSION_REF_KIND } from '../../types/webWorkflows';
 import type { StepExecutorDependencies, StepPaneLauncher, StepTelemetry } from './type';
 
@@ -42,7 +47,7 @@ export interface RunConfigTemplate {
   readonly reads?: readonly string[];
 }
 
-const DOOMPI_RUN_CONFIG_KEYS: ReadonlySet<string> = new Set(doompiRunConfigSchema.keyof().options);
+const DOOMPI_KEYS: ReadonlySet<string> = new Set(DOOMPI_RUN_CONFIG_KEYS);
 
 /**
  * A step's `runConfig`, validated against the keys DoomPi understands.
@@ -62,7 +67,7 @@ export function readDoompiRunConfig(runConfig: unknown, template?: RunConfigTemp
   }
   if (template?.reads !== undefined && typeof runConfig === 'object' && runConfig !== null) {
     const reads = new Set(template.reads);
-    const unknown = Object.keys(runConfig).filter((key) => !DOOMPI_RUN_CONFIG_KEYS.has(key) && !reads.has(key));
+    const unknown = Object.keys(runConfig).filter((key) => !DOOMPI_KEYS.has(key) && !reads.has(key));
     if (unknown.length > 0) {
       throw new Error(
         `Invalid runConfig: ${unknown.join(', ')} is neither a DoomPi setting nor read by the "${template.name}" command.`,

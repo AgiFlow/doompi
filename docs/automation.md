@@ -86,7 +86,15 @@ When the DoomPi server launches a workflow (the `launch_workflow` tool, `/workfl
 - Closing the session that launched a run asks the run to stop.
 - `run` and `interactiveRun` steps each get their own RMUX pane, which the job's terminal view follows. Without a compatible RMUX binary, the step is spawned by the engine as before.
 
-`runConfig` keys are validated: `majorMode`, `profile`, `model`, and `thinking` take one name, while `minorModes` and `domains` take a list or a comma-separated string (an empty list selects no domains). An unknown key fails the step; on a templated step, a key the command's template reads is known too. `${{ runConfig.<key> }}` interpolates into any command, with lists joined by commas, and `WORKFLOW_RUN_CONFIG` holds the whole map as JSON.
+`runConfig` keys are validated: `majorMode`, `profile`, `model`, and `thinking` take one name, while `minorModes` and `domains` take a list or a comma-separated string (an empty list selects no domains). An unknown key fails the step; on a templated step, a key the template of any command the step offers reads is known too.
+
+Check workflows before running them with `workflow-mcp doctor`, which reports what a run would otherwise only meet mid-step: schema and import problems, runConfig keys nothing reads, jobs that need a missing job, runner maps no runner satisfies, customRun steps without a terminal fallback, and inputs a workflow does not declare. Pass DoomPi's keys so runConfig typos are errors:
+
+```bash
+workflow-mcp doctor automations/workflows --run-config-keys majorMode,minorModes,profile,domains,model,thinking
+```
+
+It exits non-zero on errors (and on warnings with `--strict`), and `--format json` reports each finding with its code and location. The DoomPi server runs the same check on its workflow catalog: a workflow with errors shows as needing fixing and cannot be launched until it is fixed. `${{ runConfig.<key> }}` interpolates into any command, with lists joined by commas, and `WORKFLOW_RUN_CONFIG` holds the whole map as JSON.
 
 The CLI and the TUI have no in-process executor. They run a step's `interactiveRun` or `run` instead, so keep one as a fallback. A step with only `customRun` fails there with an explicit error.
 

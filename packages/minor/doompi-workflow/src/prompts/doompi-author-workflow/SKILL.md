@@ -43,6 +43,8 @@ jobs:
 
 `doompi` and `terminal` are the commands `commands.yml` declares; a step can only name a declared command. `runConfig` takes `majorMode`, `minorModes`, `profile`, `domains`, `model`, and `thinking`, plus any key the template reads; any other key fails the step, so a typo such as `majormode` never runs on workspace defaults. `choices` compose model and thinking, with per-command overrides such as `terminal: { model: openai-codex/gpt-6-luna }`; a step can pin `choice:`, and a launch picks `command=` and `choice=` for the rest. Templates must quote prompts with `{{ prompt | shell }}`.
 
+Before committing a workflow, run `workflow-mcp doctor <file-or-directory> --run-config-keys majorMode,minorModes,profile,domains,model,thinking` and fix every error it reports; the DoomPi server refuses to launch a workflow with errors.
+
 An agent step ends by recording its outcome: `workflow-mcp step complete`, `step fix --restart-from <job> --reason ...`, or `step fail --reason ...`. The engine puts the instructions in the step's system prompt, and an agent that stops without deciding is sent back until it does. Write repair contracts in those terms, not as `fix.md`.
 
 Put independent checks in a `parallel` group. A `run:` check with `restart-from: <job>` turns a failure into a fix request, and every fix request of the job merges into one repair, so one loop back fixes all of them. Keep steps that edit files out of a group: its steps share the checkout.
