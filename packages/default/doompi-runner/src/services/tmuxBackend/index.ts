@@ -19,7 +19,7 @@ import type { PtyRun } from '../../types/ptyHost';
 import type { IRmuxBackend, RmuxLaunchRequest } from '../../types/rmuxBackend';
 import type { ExitResult } from '../../types/spawner';
 import type { ITmuxClient } from '../../types/tmuxClient';
-import { getLogMaxBytes, getResultMaxBytes } from '../runnerConfig';
+import { getLogMaxBytes, getResultMaxBytes, noninteractiveEnvironment } from '../runnerConfig';
 import type { IRunnerPaths } from '../runnerPaths/type';
 import {
   type CommandSpec,
@@ -326,7 +326,7 @@ function environment(
 ): Record<string, string> {
   const values: NodeJS.ProcessEnv = {
     ...env,
-    ...(interactive ? {} : NON_INTERACTIVE_ENV),
+    ...(interactive ? {} : { ...NON_INTERACTIVE_ENV, ...noninteractiveEnvironment(env) }),
     ...NO_TERMINAL_INPUT_ENV,
     PI_SESSION_ID: sessionId,
   };

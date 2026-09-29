@@ -14,12 +14,16 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-export const createRunnerServerRoot = ({ host, agent }: DoomServerPluginContext) => {
+export const createRunnerServerRoot = ({ host, agent, signal }: DoomServerPluginContext) => {
   if (!host.context.directEvents) throw new Error('Runner headless facet requires the session direct event bus.');
   if (!host.context.cwd || !host.context.environment) {
     throw new Error('Runner headless facet requires session cwd and environment.');
   }
-  const dependencies = createRunnerDependencies({ cwd: host.context.cwd, environment: host.context.environment });
+  const dependencies = createRunnerDependencies({
+    cwd: host.context.cwd,
+    environment: host.context.environment,
+    ...(host.context.executionBudget === undefined ? {} : { executionBudget: host.context.executionBudget }),
+  });
   const execution = agent?.context;
   const wakeAgent =
     execution &&
@@ -42,7 +46,10 @@ export const createRunnerServerRoot = ({ host, agent }: DoomServerPluginContext)
       {
         run: async (request) => {
           await runtime.ensureSession(request.sessionId);
-          const result = await dependencies.bashRunService.run(request);
+          const result = await dependencies.bashRunService.run({
+            ...request,
+            ...(signal ? { signal: request.signal ? AbortSignal.any([signal, request.signal]) : signal } : {}),
+          });
           // Without this, nothing tells the agent the runner ended.
           if (result.kind === 'promoted') runtime.watchRunner(result.id);
           return result;

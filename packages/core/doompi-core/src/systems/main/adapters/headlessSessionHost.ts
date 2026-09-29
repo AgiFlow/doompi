@@ -1280,6 +1280,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         getThinkingLevel: () => resolved.thinkingLevel ?? 'off',
         client: () => client?.client,
         onActiveToolsChanged: scheduleToolReapply,
+        serverServices: {
+          sessionId: options.sessionId,
+          get: <T>(name: string) => root.get(name) as T | undefined,
+        },
         ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
       });
     }

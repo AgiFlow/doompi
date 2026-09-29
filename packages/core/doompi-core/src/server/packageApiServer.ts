@@ -34,6 +34,7 @@ export interface PackageApiServerOptions {
   readonly directEvents: DoomDirectEventBus;
   readonly computerUse?: DoomApiContext['computerUse'];
   readonly mediaArbitration?: DoomApiContext['mediaArbitration'];
+  readonly executionBudget?: DoomApiContext['executionBudget'];
   readonly peerAgents?: DoomApiContext['peerAgents'];
   readonly requestApi?: DoomApiContext['requestApi'];
   internalToken?: string;
@@ -135,6 +136,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     directEvents: options.directEvents,
     ...(options.computerUse === undefined ? {} : { computerUse: options.computerUse }),
     ...(options.mediaArbitration === undefined ? {} : { mediaArbitration: options.mediaArbitration }),
+    ...(options.executionBudget === undefined ? {} : { executionBudget: options.executionBudget }),
     ...(options.peerAgents === undefined ? {} : { peerAgents: options.peerAgents }),
     ...(options.requestApi === undefined ? {} : { requestApi: options.requestApi }),
     ...(options.internalToken === undefined ? {} : { internalToken: options.internalToken }),

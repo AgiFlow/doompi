@@ -2,7 +2,12 @@ import path from 'node:path';
 
 import { DOOM_CHILD_SESSION_MCP_TOOL_SERVICE } from '@agimon-ai/doompi-core/childSession';
 import type { DoomCordisRuntimeService } from '@agimon-ai/doompi-core/cordisHost';
-import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordisHost';
+import {
+  DOOM_CORDIS_SESSION_SERVICE,
+  DOOM_CORDIS_SERVER_SERVICES,
+  type DoomCordisSessionService,
+  type DoomCordisServerServices,
+} from '@agimon-ai/doompi-core/cordisHost';
 import { DOOM_MCP_PROJECTION_SERVICE, readDoomMcpProjectionService } from '@agimon-ai/doompi-core/mcpProjection';
 import { DOOM_MCP_STATUS_SERVICE, type DoomMcpStatusService } from '@agimon-ai/doompi-core/mcpStatus';
 import {
@@ -71,6 +76,16 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
           const hostSession = sessionContext.get(DOOM_CORDIS_SESSION_SERVICE) as DoomCordisSessionService;
           const context = hostSession.context;
           const expectedSessionId = hostSession.sessionId;
+          const serverServices = sessionContext.get(DOOM_CORDIS_SERVER_SERVICES) as
+            | DoomCordisServerServices
+            | undefined;
+          // The server facet already supplies the tools, commands and status for this host.
+          // Do not start a second proxy from the preloaded Pi facet. Standalone Pi has no lender.
+          if (serverServices !== undefined) {
+            if (serverServices.sessionId !== expectedSessionId)
+              throw new Error('MCP server services belong to a different session');
+            if (serverServices.get(MCP_SESSION_TOOLS_SERVICE) !== undefined) return;
+          }
           let sessionActive = true;
           activeContext = context;
           // The legacy server-name status remains available to every UI. The compact

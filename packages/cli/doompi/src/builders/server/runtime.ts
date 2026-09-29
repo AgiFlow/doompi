@@ -55,27 +55,20 @@ import { readRegisteredBootstrapStatus } from '../cli/bootstrapLocator';
 import { buildHarnessContext } from '../cli/harnessContext';
 import { createComputerUseBinding } from './computerUseBinding';
 import { createDefaultWorkspaceFolder } from './defaultWorkspace';
+import { createExecutionBudget } from './executionBudget';
 import { ensureGlobalLogSink } from './logSink';
 import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { resolveSessionIdentity } from './sessionArguments';
 import { resolveSessionArtifact, resolveWorktreeRestart } from './sessionArtifact';
+import { withShutdownDeadline } from './shutdown';
 import type { ServeOptions, ServerRuntimeEnvironment } from './types';
 import { checkoutWorkspaceId } from './workspaceCheckout';
-const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 2_000;
 
 async function bounded(operation: Promise<unknown>, label: string, notice: (message: string) => void): Promise<void> {
-  let timeout: NodeJS.Timeout | undefined;
   try {
-    await Promise.race([
-      operation,
-      new Promise<void>((resolve) => {
-        timeout = setTimeout(resolve, TELEMETRY_SHUTDOWN_TIMEOUT_MS);
-      }),
-    ]);
+    await withShutdownDeadline(() => operation, label);
   } catch (error) {
     notice(`${label} failed: ${error instanceof Error ? error.message : String(error)}`);
-  } finally {
-    if (timeout) clearTimeout(timeout);
   }
 }
 
@@ -91,6 +84,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   // Keep this selection local to this server and its admitted sessions. The
   // process environment may also serve unrelated hosts and must not be changed.
   const baseEnvironment: NodeJS.ProcessEnv = { ...incomingEnvironment, LOG_SINK_INSTANCE: 'global' };
+  const executionBudget = createExecutionBudget(Number(baseEnvironment.DOOM_RUNNER_MAX_HEAVY_JOBS ?? 2));
   await ensureGlobalLogSink({ cwd: baseCwd, env: baseEnvironment, notice }).catch((error: unknown) =>
     notice(`Global log sink unavailable: ${error instanceof Error ? error.message : String(error)}`),
   );
@@ -131,9 +125,23 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     homeDirectory,
     onNotice: notice,
   });
+  let lastBudgetSnapshot = '';
   let nextEventLoopTick = performance.now() + 1_000;
   const eventLoopMonitor = setInterval(() => {
     const now = performance.now();
+    const budget = executionBudget.getSnapshot();
+    const snapshot = JSON.stringify(budget);
+    if (snapshot !== lastBudgetSnapshot) {
+      lastBudgetSnapshot = snapshot;
+      void telemetry
+        .recordEvent('doompi_server.execution_budget', {
+          host_pid: process.pid,
+          running_jobs: budget.running,
+          queued_jobs: budget.queued,
+          limit: budget.limit,
+        })
+        .catch((error: unknown) => notice(`execution budget telemetry failed: ${String(error)}`));
+    }
     const delay = Math.max(0, now - nextEventLoopTick);
     nextEventLoopTick = now + 1_000;
     if (delay >= 100)
@@ -183,17 +191,20 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     // The host goes first, as on the create-failure path: it stops the running turn and
     // dispatches session_shutdown while the facets that own those hooks are still installed.
     try {
-      await baseSessionManager.closeSession(sessionId);
+      await withShutdownDeadline(
+        () => baseSessionManager.closeSession(sessionId),
+        `Session '${sessionId}' runtime shutdown`,
+      );
     } catch (error) {
       failures.push(error);
     }
     try {
-      await artifacts?.apis.close();
+      await withShutdownDeadline(() => artifacts?.apis.close(), `Session '${sessionId}' API shutdown`);
     } catch (error) {
       failures.push(error);
     }
     try {
-      await artifacts?.cleanup();
+      await withShutdownDeadline(() => artifacts?.cleanup(), `Session '${sessionId}' artifact cleanup`);
     } catch (error) {
       failures.push(error);
     }
@@ -375,6 +386,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         hubToken: token,
         sessionService: hub.sessionService,
         mediaArbitration,
+        executionBudget,
         peerAgents,
         directEvents: hub.directEvents,
         requestApi: (mount: Parameters<HeadlessHub['requestApi']>[0], basePath: string, request: Request) =>
@@ -654,6 +666,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           hubToken: token,
           sessionService: hub.sessionService,
           mediaArbitration,
+          executionBudget,
           peerAgents,
           pluginRegistry: hub.pluginRegistry,
           apis: [],
@@ -1113,29 +1126,50 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     }
   } finally {
     shuttingDown = true;
+    executionBudget.close();
     stopPersistSessionNames();
     clearInterval(eventLoopMonitor);
     await bounded(telemetry.recordEvent('doompi_server.shutdown'), 'shutdown telemetry', notice);
-    await Promise.allSettled([cockpit?.close()]);
+    await bounded(
+      withShutdownDeadline(() => cockpit?.close(), 'listener shutdown'),
+      'listener shutdown',
+      notice,
+    );
     await bounded(remoteRuntime?.close() ?? Promise.resolve(), 'remote control shutdown', notice);
-    try {
-      await hub.close();
-    } catch (error) {
-      notice(error instanceof Error ? error.message : String(error));
-    }
-    try {
-      await requestReceipts.close();
-    } catch (error) {
-      notice(error instanceof Error ? error.message : String(error));
-    }
+    // Session hooks and MCP owners must unwind before their shared hub services.
+    // Each session phase has its own deadline, so one stalled session cannot block the rest.
     try {
       await sessionManager.close();
     } catch (error) {
       notice(error instanceof Error ? error.message : String(error));
     }
-    computerUse?.close?.();
-    webCompositions?.close();
-    const pendingCleanups = [...pendingSessions.values()].map((setup) => setup.cleanup());
+    await bounded(
+      withShutdownDeadline(() => hub.close(), 'hub shutdown'),
+      'hub shutdown',
+      notice,
+    );
+    await bounded(
+      withShutdownDeadline(() => requestReceipts.close(), 'receipt shutdown'),
+      'receipt shutdown',
+      notice,
+    );
+    await bounded(
+      withShutdownDeadline(() => computerUse?.close?.(), 'computer use shutdown'),
+      'computer use shutdown',
+      notice,
+    );
+    await bounded(
+      withShutdownDeadline(() => webCompositions?.close(), 'web composition shutdown'),
+      'web composition shutdown',
+      notice,
+    );
+    const pendingCleanups = [...pendingSessions.values()].map((setup) =>
+      bounded(
+        withShutdownDeadline(() => setup.cleanup(), 'pending session cleanup'),
+        'pending session cleanup',
+        notice,
+      ),
+    );
     pendingSessions.clear();
     await Promise.allSettled(pendingCleanups);
     await bounded(harnessTelemetry.flush(), 'harness telemetry flush', notice);

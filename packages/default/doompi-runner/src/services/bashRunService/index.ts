@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
+import type { DoomHostExecutionBudget } from '@agimon-ai/doompi-core/packageApi';
+
 import {
   COMPLETED,
   FAILED,
@@ -22,6 +24,7 @@ import { type IRtkProcessor, RTK_FAILED_WARNING } from '../../types/rtkProcessor
 import type { IRunnerRegistry } from '../../types/runnerRegistry';
 import { getBackgroundThresholdMs } from '../runnerConfig';
 import type { IRunnerNamer } from '../runnerNamer/type';
+import { isHeavyCommand } from './resources';
 
 /** The command outlived the background threshold and should be promoted. */
 const TIMED_OUT = Symbol('threshold-reached');
@@ -46,6 +49,7 @@ export class BashRunService implements IBashRunService {
     private readonly rtkProcessor: IRtkProcessor,
     private readonly cwd: string = process.cwd(),
     private readonly env: Readonly<Record<string, string | undefined>> = process.env,
+    private readonly executionBudget?: DoomHostExecutionBudget,
   ) {}
 
   async run(request: BashRunRequest): Promise<BashRunResult> {
@@ -56,7 +60,12 @@ export class BashRunService implements IBashRunService {
     if (request.signal?.aborted) return { kind: FAILED, id, name, error: 'Operation aborted' };
 
     let handle: RunHandle;
+    let releaseSlot: (() => void) | undefined;
     try {
+      if (!interactive && this.executionBudget && isHeavyCommand(request.command)) {
+        releaseSlot = await this.executionBudget.acquire(request.signal);
+      }
+      request.signal?.throwIfAborted();
       const rmuxHandle = await this.rmuxBackend.launch({
         id,
         name,
@@ -71,12 +80,16 @@ export class BashRunService implements IBashRunService {
       handle =
         rmuxHandle ?? this.launcher.launch({ id, name, command: request.command, cwd, sessionId: request.sessionId });
     } catch (error) {
+      releaseSlot?.();
       return { kind: FAILED, id, name, error: error instanceof Error ? error.message : String(error) };
     }
 
     if (handle.pid === undefined) {
+      releaseSlot?.();
       return { kind: FAILED, id, name, error: 'The command did not start, so it cannot be supervised' };
     }
+    // A background promotion is not process completion. Keep the slot until actual exit.
+    if (releaseSlot) void handle.completion().then(releaseSlot, releaseSlot);
     if (request.signal?.aborted) {
       await handle.stop();
       return { kind: FAILED, id, name, error: 'Operation aborted' };

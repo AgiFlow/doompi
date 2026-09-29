@@ -190,6 +190,29 @@ Commands inherit the DoomPi process environment and the operating system user's 
 may contain prompts, source, command output, credentials, or other secrets; restrict access and
 retention accordingly.
 
+### Host-wide resource budget
+
+The headless DoomPi server shares one heavy-job queue across its sessions. Known
+noninteractive build, test, lint, and typecheck commands acquire a slot before
+launching. The default is two concurrent jobs; set `DOOM_RUNNER_MAX_HEAVY_JOBS`
+to a positive integer in the server's environment to change it. The waiting queue
+is bounded to 128 jobs. Cancellation removes queued work without launching it.
+
+A background promotion keeps its slot until the process exits. Closing one
+session does not release another session's slot. Interactive commands and ordinary
+inspection commands bypass this queue. This is admission for recognized command
+forms, not an operating-system CPU quota or a parser for arbitrary shell scripts.
+
+For noninteractive native, RMUX, and tmux launches, unset child environment values
+default to `NX_NATIVE_COMMAND_RUNNER=false`, `NX_TUI=false`, `NX_PARALLEL=2`, and
+`VITEST_MAX_WORKERS=2`. Explicit environment values still win; interactive launches
+keep their original settings. Standalone Pi gets the child defaults but does not
+receive a headless host's cross-session queue.
+
+The server records changed queue counts as `doompi_server.execution_budget`
+events with the host PID, running jobs, queued jobs, and limit. These are not
+per-session memory measurements.
+
 ## Native artifacts
 
 Runner selects the matching optional dependencies automatically:
