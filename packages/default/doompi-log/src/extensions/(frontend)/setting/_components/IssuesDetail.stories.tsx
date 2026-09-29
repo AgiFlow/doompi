@@ -127,3 +127,16 @@ export const Playground = {
     </div>
   ),
 };
+
+// The observed metrics summary counted one issue while the bounded incident query returned zero.
+export const SummaryMismatch = {
+  render: () => (
+    <div className="w-screen max-w-5xl bg-doom-bg p-6">
+      <IssuesDetail
+        summaryCount={1}
+        tools={[]}
+        view={{ totalIssues: 0, uniqueIncidents: 0, byCategory: {}, byTool: {}, byErrorType: {}, samples: [] }}
+      />
+    </div>
+  ),
+};

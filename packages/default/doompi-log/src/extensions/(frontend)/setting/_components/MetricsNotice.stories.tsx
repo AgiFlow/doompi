@@ -6,7 +6,7 @@
  * things the page says instead of, or above, a report. `component` names the
  * one with variants worth comparing; both are drawn below.
  */
-import { EmptyForReason, FocusNotice } from './MetricsNotice';
+import { EmptyForReason, FocusNotice, MetricsLoading } from './MetricsNotice';
 
 const meta = {
   title: 'Log/MetricsNotice',
@@ -67,6 +67,14 @@ export const Playground = {
         </span>
         <FocusNotice requested="" applied={undefined} dimension="session" onClear={() => undefined} />
       </div>
+    </div>
+  ),
+};
+
+export const Loading = {
+  render: () => (
+    <div className="@container w-screen max-w-5xl bg-doom-bg p-6">
+      <MetricsLoading />
     </div>
   ),
 };

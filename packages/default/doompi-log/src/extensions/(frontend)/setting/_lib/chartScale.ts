@@ -17,7 +17,7 @@ export function barFraction(value: number, max: number): number {
 
 /** The largest value in a series, or 0 for an empty one. */
 export function seriesMax(values: readonly number[]): number {
-  return values.reduce((highest, value) => (value > highest ? value : highest), 0);
+  return values.reduce((highest, value) => (Number.isFinite(value) && value > highest ? value : highest), 0);
 }
 
 /**
@@ -28,7 +28,7 @@ export function formatTokens(value: number): string {
   // A field the hub did not send is unknown, not zero. Rendering it as '0'
   // states a fact nobody measured, which is how a version skew between the
   // page bundle and the hub API turns into a confident wrong number.
-  if (!Number.isFinite(value)) return '\u2014';
+  if (!Number.isFinite(value)) return 'Not reported';
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
   return String(Math.round(value));

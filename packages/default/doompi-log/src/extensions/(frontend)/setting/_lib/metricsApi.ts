@@ -6,6 +6,7 @@ import {
   METRICS_QUERY_PARAMS,
   type MetricsDimension,
   type MetricsPeriod,
+  type MetricsReport,
   type MetricsResponse,
   type IssuesResponse,
 } from '../../../../types/webMetrics';
@@ -106,9 +107,13 @@ export type IssuesResult = { issues: IssuesResponse } | { error: string };
  * Separate call because the hub answers it from a subprocess: folding it into
  * the report would make every refresh wait on the slowest transport.
  */
-export async function fetchIssues(focus?: string, signal?: AbortSignal): Promise<IssuesResult> {
+export async function fetchIssues(
+  focus?: string,
+  signal?: AbortSignal,
+  window: Pick<MetricsReport, 'startTime' | 'endTime'> = {},
+): Promise<IssuesResult> {
   const result = await api.global.issues({
-    query: { [METRICS_QUERY_PARAMS.focus]: focus === '' ? undefined : focus },
+    query: { [METRICS_QUERY_PARAMS.focus]: focus === '' ? undefined : focus, ...window },
     ...(signal === undefined ? {} : { signal }),
   });
 

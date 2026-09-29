@@ -152,4 +152,15 @@ describe('the issues browser client', () => {
     sealedFetch.mockResolvedValueOnce(new Response('nope', { status: 502 }));
     expect(await fetchIssues()).toEqual({ error: 'The hub answered 502.' });
   });
+  it('forwards the exact issue window through the generated sealed client', async () => {
+    sealedFetch.mockResolvedValue(jsonResponse({ totalIssues: 0, samples: [] }));
+    await fetchIssues('id_abc', undefined, {
+      startTime: '2026-09-22T00:23:58.904Z',
+      endTime: '2026-09-29T00:23:58.946Z',
+    });
+    const url = new URL(String(sealedFetch.mock.calls[0]?.[0]), 'http://hub');
+    expect(url.searchParams.get('startTime')).toBe('2026-09-22T00:23:58.904Z');
+    expect(url.searchParams.get('endTime')).toBe('2026-09-29T00:23:58.946Z');
+    expect(url.searchParams.get('focus')).toBe('id_abc');
+  });
 });

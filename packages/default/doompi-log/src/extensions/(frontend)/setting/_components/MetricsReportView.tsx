@@ -1,19 +1,10 @@
-import { Badge } from '@agimon-ai/doompi-web-components';
-
-import type { MetricsDimension, MetricsReport } from '../../../../types/webMetrics';
+import type { MetricsDimension, MetricsPeriod, MetricsReport } from '../../../../types/webMetrics';
 import { formatTokens } from '../_lib/chartScale';
 import { GroupBars } from './charts/GroupBars';
 import { TimelineChart } from './charts/TimelineChart';
 import { IssuesSection } from './IssuesSection';
-
-/**
- * One report, drawn.
- *
- * Separated from the panel so the loaded shape is a pure function of a report:
- * the panel owns the selects, the fetch and the empty states, and this owns
- * what a report looks like. That split is what lets the degenerate shapes, a
- * single bucket or an all-zero series, be rendered and asserted directly.
- */
+import { MetricsSummary } from './MetricsSummary';
+import { ToolMetrics } from './ToolMetrics';
 
 export const DIMENSION_LABELS: Record<MetricsDimension, string> = {
   session: 'session',
@@ -21,113 +12,153 @@ export const DIMENSION_LABELS: Record<MetricsDimension, string> = {
   model: 'model',
   provider: 'provider',
 };
-
-/**
- * The session dimension shows an opaque hash. doompi-telemetry hashes
- * identifier-shaped attributes before export, by design, so there is no
- * session here the cockpit could open even if the row were clickable.
- */
 export const DIMENSION_NOTES: Partial<Record<MetricsDimension, string>> = {
-  session: 'session ids are hashed before export, so these identify a session without naming one',
+  session: 'Session ids are hashed before export. Select a row to filter usage, not to open a session.',
 };
 
 export interface MetricsReportViewProps {
   report: MetricsReport;
   onFocus: (key: string) => void;
+  onPeriodChange?: (period: MetricsPeriod) => void;
 }
 
-export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
+/** The same data-only dashboard is rendered by the stories and the settings panel. */
+export function MetricsReportView({ report, onFocus, onPeriodChange }: MetricsReportViewProps) {
+  const label = DIMENSION_LABELS[report.dimension];
+  const unattributed = report.groups
+    .filter((group) => group.key === 'unknown' || group.key === '')
+    .reduce((sum, group) => sum + group.totalTokens, 0);
+  const counters = [
+    { name: 'Cache reads', value: report.totals.cachedTokens },
+    { name: 'Reasoning tokens', value: report.totals.reasoningTokens },
+    { name: 'Usage events', value: report.totals.usageEventCount },
+    { name: 'Log and span records', value: report.totals.totalRecords },
+  ];
+  const generated = new Date(report.generatedAt);
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-3 text-xs text-doom-dim">
-          <span>
-            <span className="text-doom-hi">{formatTokens(report.totals.totalTokens)}</span> total
-          </span>
-          <span>
-            <span className="text-doom-hi">{formatTokens(report.totals.cachedTokens)}</span> cache reads
-          </span>
-          <span>
-            <span className="text-doom-hi">{formatTokens(report.totals.outputTokens)}</span> out
-          </span>
-          <span>
-            <span className="text-doom-hi">{formatTokens(report.totals.inputTokens)}</span> in
-          </span>
-          {report.totals.reasoningTokens === 0 ? null : (
-            <span>
-              <span className="text-doom-hi">{formatTokens(report.totals.reasoningTokens)}</span> reasoning
-            </span>
-          )}
-          {report.totals.issueCount === 0 ? null : <Badge tone="red">{report.totals.issueCount} issues</Badge>}
-          {report.totals.failedGroups === 0 ? null : (
-            <span className="text-doom-faint">
-              {report.totals.failedGroups} of {report.totals.groupCount} {DIMENSION_LABELS[report.dimension]}s failed
-            </span>
-          )}
-        </div>
-        {/*
-            The total is the providers' own figure, and on a cached workload
-            the named parts are a fraction of a percent of it. Listing them
-            beside it without this line reads as a breakdown that does not
-            add up, which is worse than not showing them.
-          */}
-        <span className="text-2xs text-doom-faint">
-          total is what the providers reported and is dominated by cache traffic; the parts beside it are counted
-          separately and do not sum to it
-        </span>
-      </div>
-
-      <section className="flex flex-col gap-1">
-        <span className="text-2xs font-bold text-doom-faint">tokens over time</span>
-        <TimelineChart buckets={report.timeline} bucketUnit={report.bucketUnit} />
-      </section>
-
-      <section className="flex flex-col gap-1">
-        <span className="text-2xs font-bold text-doom-faint">tokens by {DIMENSION_LABELS[report.dimension]}</span>
-        {DIMENSION_NOTES[report.dimension] === undefined ? null : (
-          <span className="text-2xs text-doom-faint">{DIMENSION_NOTES[report.dimension]}</span>
-        )}
-        <GroupBars groups={report.groups} focus={report.focus} onFocus={onFocus} />
-      </section>
-
-      <section className="flex flex-col gap-1">
-        <span className="text-2xs font-bold text-doom-faint">tool token samples</span>
-        {/*
-            The token column is a ranking hint, not a measurement. The sink
-            attributes a turn's whole total to every tool that ran in that
-            turn, so saying otherwise here would be a lie the chart repeats.
-          */}
-        <span className="text-2xs text-doom-faint">
-          only calls with recorded token attribution appear here; external MCP calls remain in the logs. The token
-          column ranks tools by their turns, not each tool&apos;s own consumption.
-        </span>
-        <table className="w-full text-xs" data-testid="metrics-tools">
-          {/* Without heads the two right columns are just numbers; "1006" and
-              "325.9k" do not say which is a call count and which is tokens. */}
-          <thead>
-            <tr className="text-2xs text-doom-faint">
-              <th className="py-1 text-left font-normal">tool</th>
-              <th className="w-20 py-1 text-right font-normal">sampled calls</th>
-              <th className="w-20 py-1 text-right font-normal">tokens</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.tools.map((tool) => (
-              <tr key={tool.name} className="border-b border-doom-border/40">
-                <td className="min-w-0 truncate py-1 text-doom-dim">{tool.name}</td>
-                <td className="w-20 py-1 text-right text-doom-hi">{tool.calls}</td>
-                <td className="w-20 py-1 text-right text-doom-faint">{formatTokens(tool.p90TotalTokens)}</td>
-              </tr>
+    <div className="@container flex w-full min-w-0 flex-col gap-4" data-testid="metrics-report">
+      <MetricsSummary totals={report.totals} />
+      <div className="grid min-w-0 grid-cols-1 gap-4 @3xl:grid-cols-3">
+        <section
+          className="flex min-w-0 flex-col gap-4 rounded-lg border border-doom-border bg-doom-panel p-4 @3xl:col-span-2"
+          aria-label="Usage over time"
+        >
+          <div>
+            <h3 className="text-base font-semibold text-doom-hi">Usage over time</h3>
+            <p className="mt-1 text-sm text-doom-dim">Recorded tokens, not estimated spend.</p>
+          </div>
+          <TimelineChart
+            buckets={report.timeline}
+            bucketUnit={report.bucketUnit}
+            onShorterPeriod={
+              report.period === 'day' || onPeriodChange === undefined ? undefined : () => onPeriodChange('day')
+            }
+          />
+        </section>
+        <section
+          className="flex min-w-0 flex-col gap-4 rounded-lg border border-doom-border bg-doom-panel p-4"
+          aria-label="Reported counters"
+        >
+          <h3 className="text-base font-semibold text-doom-hi">Reported counters</h3>
+          <dl className="flex flex-col gap-3">
+            {counters.map((counter) => (
+              <div
+                key={counter.name}
+                className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-doom-border/40 pb-3"
+              >
+                <dt className="text-sm text-doom-dim">{counter.name}</dt>
+                <dd
+                  className="text-base font-semibold tabular-nums text-doom-hi"
+                  title={counter.value === undefined ? 'Not reported' : String(counter.value)}
+                >
+                  {formatTokens(counter.value ?? Number.NaN)}
+                </dd>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </section>
-
-      <IssuesSection tools={report.tools} focus={report.dimension === 'session' ? report.focus : undefined} />
-
-      <span className="text-2xs text-doom-faint" data-testid="metrics-provenance">
-        read over {report.transport ?? 'an unreported transport'} · generated {report.generatedAt}
-      </span>
+          </dl>
+          <p className="text-xs leading-relaxed text-doom-dim">Monetary cost is not included in this metrics report.</p>
+          <details className="text-xs leading-relaxed text-doom-dim">
+            <summary className="cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-1 focus-visible:outline-doom-blue">
+              Why the counters may not add up
+            </summary>
+            <p className="mt-2">
+              The total is reported by providers. Input, output, cache reads and reasoning are independent counters and
+              may overlap or be incomplete. They are not a breakdown and may not sum to the total. A gap is not evidence
+              of cache traffic. Missing fields say Not reported; a recorded zero stays zero.
+            </p>
+          </details>
+        </section>
+      </div>
+      <div className="grid min-w-0 grid-cols-1 items-start gap-4 @3xl:grid-cols-2">
+        <section
+          className="flex min-w-0 flex-col gap-3 rounded-lg border border-doom-border bg-doom-panel p-4"
+          aria-label={`Tokens by ${label}`}
+        >
+          <div>
+            <h3 className="text-base font-semibold text-doom-hi">Tokens by {label}</h3>
+            <p className="mt-1 text-sm text-doom-dim">Largest recorded consumers. Select a named row to filter.</p>
+          </div>
+          {unattributed > 0 ? (
+            <div
+              className="rounded-md border border-doom-edge-yellow bg-doom-tint-yellow p-3"
+              data-testid="metrics-attribution-notice"
+            >
+              <p className="text-sm font-semibold text-doom-yellow">
+                {label.charAt(0).toUpperCase() + label.slice(1)} attribution missing
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-doom-dim">
+                {formatTokens(unattributed)} tokens have no {label} recorded. They are included in the total, but cannot
+                be assigned to a named {label}.
+              </p>
+            </div>
+          ) : null}
+          {DIMENSION_NOTES[report.dimension] === undefined ? null : (
+            <p className="text-xs leading-relaxed text-doom-dim">{DIMENSION_NOTES[report.dimension]}</p>
+          )}
+          <GroupBars
+            key={`${report.dimension}:${report.focus ?? ''}`}
+            groups={report.groups}
+            totalTokens={report.totals.totalTokens}
+            focus={report.focus}
+            onFocus={onFocus}
+          />
+          <p className="text-xs text-doom-dim">
+            Showing {report.groups.length} of {formatTokens(report.totals.groupCount)} {label} groups. Bars show share
+            of the reported total.
+          </p>
+          {report.totals.failedGroups > 0 ? (
+            <p className="text-sm text-doom-yellow">
+              {report.totals.failedGroups} of {report.totals.groupCount} {label}s failed
+            </p>
+          ) : null}
+        </section>
+        <ToolMetrics tools={report.tools} />
+      </div>
+      <IssuesSection
+        key={`${report.generatedAt}:${report.dimension}:${report.focus ?? ''}`}
+        tools={report.tools}
+        focus={report.dimension === 'session' ? report.focus : undefined}
+        count={report.totals.issueCount}
+        startTime={report.startTime}
+        endTime={report.endTime}
+        broaderScope={report.focus !== undefined && report.dimension !== 'session'}
+      />
+      <footer
+        className="flex flex-wrap justify-between gap-2 border-t border-doom-border pt-3 text-xs text-doom-dim"
+        data-testid="metrics-provenance"
+      >
+        <span>
+          Source: LogSink ·{' '}
+          {report.transport === 'http'
+            ? 'HTTP'
+            : report.transport === 'worker'
+              ? 'database worker'
+              : 'transport not reported'}
+        </span>
+        <span title={report.generatedAt}>
+          Report generated {Number.isNaN(generated.getTime()) ? report.generatedAt : generated.toLocaleString()}
+        </span>
+      </footer>
     </div>
   );
 }

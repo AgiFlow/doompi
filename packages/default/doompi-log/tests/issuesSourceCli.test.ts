@@ -82,4 +82,16 @@ describe('the issues subprocess', () => {
 
     await expect(createIssuesSource({}).query({ limit: 5 })).rejects.toThrow(/cannot read/);
   });
+  it('uses supported CLI time bounds rather than scanning unrelated history', async () => {
+    answerWith(JSON.stringify({ totalIssues: 1 }));
+    await createIssuesSource({}).query({
+      limit: 5,
+      startTime: '2026-09-22T00:00:00Z',
+      endTime: '2026-09-29T00:00:00Z',
+    });
+    const args = execFile.mock.calls[0]?.[1] as string[];
+    expect(args[args.indexOf('--start-time') + 1]).toBe('2026-09-22T00:00:00Z');
+    expect(args[args.indexOf('--end-time') + 1]).toBe('2026-09-29T00:00:00Z');
+    expect(args).not.toContain('--model');
+  });
 });

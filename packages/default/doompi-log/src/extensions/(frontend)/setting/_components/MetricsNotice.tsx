@@ -41,21 +41,48 @@ export function FocusNotice({ requested, applied, dimension, onClear }: FocusNot
     // whole numbers. Saying "showing model X" over them would be a lie, so the
     // drill-down is reported as refused instead.
     return (
-      <span className="text-xs text-doom-yellow" data-testid="metrics-focus-refused">
+      <span
+        className="rounded-md border border-doom-edge-yellow bg-doom-tint-yellow p-3 text-sm text-doom-yellow"
+        data-testid="metrics-focus-refused"
+      >
         this log sink does not support narrowing by {DIMENSION_LABELS[dimension]}, so the numbers below are still
         everything
-        <Button variant="ghost" size="xs" className="ml-2 text-2xs" onClick={onClear}>
+        <Button variant="ghost" size="md" className="ml-2" onClick={onClear}>
           clear
         </Button>
       </span>
     );
   }
   return (
-    <span className="text-xs text-doom-dim" data-testid="metrics-focus">
-      narrowed to <span className="text-doom-hi">{applied}</span>
-      <Button variant="ghost" size="xs" className="ml-2 text-2xs" onClick={onClear}>
+    <span
+      className="flex flex-wrap items-center gap-2 rounded-md border border-doom-border bg-doom-panel p-3 text-sm text-doom-dim"
+      data-testid="metrics-focus"
+    >
+      narrowed to <span className="min-w-0 break-all text-doom-hi">{applied}</span>
+      <Button variant="ghost" size="md" className="ml-2" onClick={onClear}>
         clear
       </Button>
     </span>
+  );
+}
+
+/** First load and filter changes have no report to display yet. */
+export function MetricsLoading() {
+  return (
+    <div className="flex flex-col gap-4" role="status" aria-live="polite" data-testid="metrics-loading">
+      <span className="text-sm text-doom-dim">Loading recorded metrics...</span>
+      <div aria-hidden="true" className="grid grid-cols-2 gap-3 @3xl:grid-cols-4">
+        {[0, 1, 2, 3].map((index) => (
+          <div
+            key={index}
+            className="h-24 animate-pulse rounded-lg border border-doom-border bg-doom-panel motion-reduce:animate-none"
+          />
+        ))}
+      </div>
+      <div
+        aria-hidden="true"
+        className="h-48 animate-pulse rounded-lg border border-doom-border bg-doom-panel motion-reduce:animate-none"
+      />
+    </div>
   );
 }

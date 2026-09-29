@@ -24,7 +24,7 @@ export default meta;
 
 export const Playground = {
   render: () => (
-    <div className="flex flex-col gap-6 bg-doom-bg p-6">
+    <div className="flex w-screen max-w-5xl flex-col gap-6 bg-doom-bg p-6">
       <div className="flex flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">collapsed, the whole-window view</span>
         <IssuesSection tools={tools} />
@@ -34,6 +34,20 @@ export const Playground = {
         <span className="text-2xs text-doom-dim uppercase tracking-widest">collapsed, narrowed to one session</span>
         <IssuesSection tools={tools} focus="9f2c41ae" />
       </div>
+    </div>
+  ),
+};
+
+export const BroaderScope = {
+  render: () => (
+    <div className="w-screen max-w-5xl bg-doom-bg p-6">
+      <IssuesSection
+        tools={[]}
+        count={1}
+        broaderScope
+        startTime="2026-09-22T00:23:58.904Z"
+        endTime="2026-09-29T00:23:58.946Z"
+      />
     </div>
   ),
 };
