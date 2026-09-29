@@ -79,9 +79,9 @@
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@agimon-ai/workflow-mcp": "0.24.3",
-    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/cordis": "4.0.4",
     "@modelcontextprotocol/server": "2.1.0",
-    "hono": "4.13.8",
+    "hono": "4.13.9",
     "typebox": "1.3.34",
     "zod": "4.6.5"
   },
