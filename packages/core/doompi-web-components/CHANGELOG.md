@@ -1,3 +1,17 @@
+## 0.0.1-alpha.56 (2026-09-29)
+
+### 🩹 Fixes
+
+- load closed conversation bindings with a failure code, plus worktree and dialog fixes ([#240](https://github.com/AgiFlow/doompi/pull/240))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.98
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.55 (2026-09-29)
 
 ### 🚀 Features
