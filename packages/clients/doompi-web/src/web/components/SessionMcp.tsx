@@ -13,7 +13,7 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
 
-import type { SessionMcpViewState } from './useSessionMcp';
+import type { SessionMcpViewState } from '../lib/useSessionMcp';
 
 const TONES = {
   running: 'running',

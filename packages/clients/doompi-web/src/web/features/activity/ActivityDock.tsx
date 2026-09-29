@@ -3,15 +3,15 @@ import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef } from 'react';
 
 import { PluginSurface } from '../../components/PluginSurface';
+import { SessionMcpTools } from '../../components/SessionMcp';
 import { type ActivityGroup, useActivityGroups, useDockFaces } from '../../lib/composition';
 import { activityGroupSlot, HOST_SLOTS, slotFills } from '../../lib/pluginRegistry';
 import { retryWebPluginCompositions, webPluginCompositionStore, webPluginMountState } from '../../lib/pluginRuntime';
+import type { SessionMcpViewState } from '../../lib/useSessionMcp';
 import { sessionsStore } from '../../stores/sessionsStore';
 import { useActiveSession } from '../../stores/sessionStore';
 import { setDockTab, uiStore } from '../../stores/uiStore';
 import { usePluginSlotProps } from '../../stores/usePluginSlotProps';
-import { SessionMcpTools } from '../session/SessionMcp';
-import type { SessionMcpViewState } from '../session/useSessionMcp';
 import { ContextPanel } from './ContextPanel';
 import { DockTabs } from './DockTabs';
 

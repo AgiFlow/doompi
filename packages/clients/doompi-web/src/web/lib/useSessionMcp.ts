@@ -1,7 +1,7 @@
 import type { SessionMcpActivitySnapshot } from '@agimon-ai/doompi-core/sessionMcp';
 import { useEffect, useState } from 'react';
 
-import { readSessionMcpActivity } from '../../lib/sessionMcpApi';
+import { readSessionMcpActivity } from './sessionMcpApi';
 
 const REFRESH_MS = 2000;
 
