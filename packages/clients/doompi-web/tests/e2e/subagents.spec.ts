@@ -419,7 +419,13 @@ test('a dialog with an open select dismisses and reopens with working controls',
   await expect(launchDialog).toBeVisible();
   await page.getByTestId('launch-model').click();
   await expect(page.locator('[data-slot="select-content"]')).toBeVisible();
-
+  const box = await launchDialog.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.click(box!.x + 12, box!.y + 12);
+  await expect(page.locator('[data-slot="select-content"]')).toHaveCount(0);
+  await expect(launchDialog).toBeVisible();
+  await page.getByTestId('launch-model').click();
+  await expect(page.locator('[data-slot="select-content"]')).toBeVisible();
   await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 8, y: 8 } });
   await expect(page.locator('[data-slot="select-content"]')).toHaveCount(0);
   await expect(launchDialog).toBeHidden();

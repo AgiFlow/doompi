@@ -48,6 +48,16 @@ export function DialogOverlay({
         const dialogContent = event.currentTarget.nextElementSibling;
         const openSelectTrigger = dialogContent?.querySelector('[data-slot="select-trigger"][data-state="open"]');
         if (openSelectTrigger === null || openSelectTrigger === undefined) return;
+        // An open Select disables pointer events on the dialog; an inside press falls through to this overlay.
+        const bounds = dialogContent?.getBoundingClientRect();
+        if (
+          bounds &&
+          event.clientX >= bounds.left &&
+          event.clientX <= bounds.right &&
+          event.clientY >= bounds.top &&
+          event.clientY <= bounds.bottom
+        )
+          return;
 
         // Radix's parent outside listener can lag one render behind a nested
         // modal Select. Own this backdrop press so the complete stack closes.
