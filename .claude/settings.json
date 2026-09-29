@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -n \"$WORKFLOW_DECISION_FILE\" ]; then workflow-mcp claude-stop-hook || true; else REPO=\"${CLAUDE_PROJECT_DIR:-$PWD}\" && [ -f \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" ] && node \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" claude-stop-hook || true; fi",
+            "command": "if [ -n \"$WORKFLOW_DECISION_FILE\" ]; then CLI=\"$WORKFLOW_RUN_DIR/bin/workflow-mcp\"; if [ -x \"$CLI\" ]; then \"$CLI\" claude-stop-hook; else echo \"workflow-stop: $CLI is missing, so this step cannot record how it ended\" >&2; exit 1; fi; else CLI=\"${CLAUDE_PROJECT_DIR:-$PWD}/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\"; if [ -n \"$WORKFLOW_STATUS_FILE\" ]; then if [ -f \"$CLI\" ]; then node \"$CLI\" claude-stop-hook; else echo \"workflow-stop: $CLI is missing, so this step cannot record that it ended\" >&2; exit 1; fi; elif [ -f \"$CLI\" ]; then node \"$CLI\" claude-stop-hook || true; fi; fi",
             "timeout": 10
           }
         ]

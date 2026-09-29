@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
 import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessContent,
@@ -8,14 +9,18 @@ import {
 } from '@agimon-ai/doompi-core/headless';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
+import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { createEmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
-import { WORKFLOW_LAUNCH_SESSION_ENV } from '../../constants/workflow';
 import { registerRunProvider, type RunProviderHandle } from '../../services/backgroundWork';
+import { createServerLauncher } from '../../services/serverLaunch';
 import { createNativeStepPaneLauncher, createStepExecutor } from '../../services/stepExecutor';
 import { createWorkflowCatalogReader, presentWorkflowCatalog } from '../../services/webWorkflowCatalog';
 import { defaultCatalogDeps } from '../../services/workflowCatalogDeps';
+import type { WorkflowLaunchInput } from '../../services/workflowExecution';
+import { isWorkflowDispatcherProcess, resolveDispatcherParentSession } from '../../services/workflowFence';
 import { createWorkflowApi } from '../../services/workflowHubApi';
 import {
   parseWorkflowLaunchCommand,
@@ -23,7 +28,7 @@ import {
   validateWorkflowLaunch,
 } from '../../services/workflowLaunchCommand';
 import { readWorkflowSkill as skill } from '../../services/workflowResource';
-import { PI_SESSION_ENV, presentWorkflowRuns, runBelongsToSession } from '../../services/workflowRuns';
+import { presentWorkflowRuns, runBelongsToSession } from '../../services/workflowRuns';
 import { readWorkflowRuns } from '../../services/workflowWatcher';
 import routes from '../../types/apiRoutes';
 import { WORKFLOW_CATALOG_TYPE, WORKFLOW_RUNS_TYPE } from '../../types/webWorkflows';
@@ -34,16 +39,16 @@ const WORKFLOW_MODE_ID = 'workflow';
 const LIST_TOOL = 'list_workflows';
 const LAUNCH_TOOL = 'launch_workflow';
 const RUN_TOOL = 'workflow_run';
-/** How often the registry is asked whether an in-process launch has registered its run. */
-const LAUNCH_ACK_POLL_MS = 250;
-/** How long a launch waits for that before answering without a run key. */
-const LAUNCH_ACK_TIMEOUT_MS = 15_000;
-/** Tolerance for a run stamping its start a moment before the launch clock read. */
-const LAUNCH_ACK_CLOCK_SKEW_MS = 1_000;
 /** Origin of a request dispatched in process to another mount; nothing resolves it. */
 const IN_PROCESS_ORIGIN = 'http://doompi.local';
+/** A burst of job and step events is published once, this long after the first. */
+const RUNS_PUBLISH_DEBOUNCE_MS = 100;
+/** A notification body's limit; a longer failure is cut to it. */
+const NOTICE_BODY_LIMIT = 4_000;
 
 type LaunchResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
+/** Where a launch comes from: the directory it names paths against, and the repository they must stay in. */
+type LaunchLocation = { readonly cwd: string; readonly repoRoot: string };
 
 function textResult(text: string, isError = false): LaunchResult {
   return { content: [{ type: 'text', text }], ...(isError ? { isError: true } : {}) };
@@ -59,12 +64,17 @@ function errorOf(value: unknown): string | undefined {
     : undefined;
 }
 
-/** Resolves undefined after `ms`, so a race against it reads as "nothing settled yet". */
-function sleep(ms: number): Promise<undefined> {
-  return new Promise((settle) => {
-    const timer = setTimeout(() => settle(undefined), ms);
-    timer.unref?.();
-  });
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** The text of a launch's tool result, as the launch tool and the API report it. */
+function launchResultOf(result: CallToolResult): LaunchResult {
+  const text = result.content
+    .map((item) => (item.type === 'text' ? item.text : ''))
+    .filter((line) => line !== '')
+    .join('\n');
+  return textResult(text || 'Workflow launch requested.', result.isError === true);
 }
 
 function callResult(value: unknown): DoomHeadlessToolResult {
@@ -99,8 +109,18 @@ export function createWorkflowServerRuntime(
     throw new Error('Workflow headless facet requires the session direct event bus.');
   const directEvents = serverHost.context.directEvents;
   let runProvider: RunProviderHandle | undefined;
-  const catalogReader = createWorkflowCatalogReader(defaultCatalogDeps());
-  const publishLifecycle = async (executionContext: typeof host.context): Promise<boolean> => {
+  const catalogDeps = defaultCatalogDeps();
+  const catalogReader = createWorkflowCatalogReader(catalogDeps);
+  const telemetry = createDoomTelemetry({
+    serviceName: 'doom-workflow',
+    packageName: SOURCE,
+    cwd: host.context.cwd,
+    env: host.context.environment,
+    enableLogs: true,
+    enableTraces: true,
+  });
+  /** This session's runs, published to its panel and counted as its background work. */
+  const publishRuns = (executionContext: typeof host.context): boolean => {
     const records = readWorkflowRuns({ environment: executionContext.environment }).filter((run) =>
       runBelongsToSession(run, executionContext.sessionId),
     );
@@ -113,6 +133,10 @@ export function createWorkflowServerRuntime(
       Date.now(),
     );
     directEvents.publish(WORKFLOW_RUNS_TYPE, executionContext.sessionId, { runs });
+    return activeItems.length > 0;
+  };
+  /** The workflows this session can launch. Runs moving on do not change them, so their events skip this. */
+  const publishCatalog = async (executionContext: typeof host.context): Promise<void> => {
     try {
       directEvents.publish(WORKFLOW_CATALOG_TYPE, executionContext.sessionId, {
         cwd: executionContext.cwd,
@@ -126,7 +150,25 @@ export function createWorkflowServerRuntime(
         warning,
       });
     }
-    return activeItems.length > 0;
+  };
+  const publishLifecycle = async (executionContext: typeof host.context): Promise<boolean> => {
+    const active = publishRuns(executionContext);
+    await publishCatalog(executionContext);
+    return active;
+  };
+  let runsTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Publishes the runs once for a burst of job and step events, which a fix loop can produce by the dozen. */
+  const publishRunsSoon = (executionContext: typeof host.context, after?: (active: boolean) => void): void => {
+    if (runsTimer !== undefined) return;
+    runsTimer = setTimeout(() => {
+      runsTimer = undefined;
+      try {
+        after?.(publishRuns(executionContext));
+      } catch (error) {
+        void telemetry.recordWarning('doom_workflow.publish_failed', error);
+      }
+    }, RUNS_PUBLISH_DEBOUNCE_MS);
+    runsTimer.unref?.();
   };
   // Steps run in this process: customRun as child sessions of this one, commands in their own panes.
   const sessionService = serverHost.context.sessionService;
@@ -138,62 +180,70 @@ export function createWorkflowServerRuntime(
             sessionService,
             parentSessionId: host.context.sessionId,
             hostEnvironment: process.env,
-            launchPane: createNativeStepPaneLauncher(),
+            launchPane: createNativeStepPaneLauncher(undefined, telemetry),
             createId: () => `workflow-${randomUUID()}`,
+            telemetry,
           }),
         },
   );
   type LaunchParameters = Parameters<typeof feature.runTool.execute>[0];
+  const launcher = createServerLauncher({
+    feature,
+    sessionId: host.context.sessionId,
+    environment: host.context.environment,
+    telemetry,
+    notify: (body, level) => host.context.client.notify({ body: body.slice(0, NOTICE_BODY_LIMIT), level }),
+    onRunsChanged: () => publishRunsSoon(host.context),
+  });
+  /**
+   * Why this session cannot run a launch, or undefined when it can.
+   *
+   * The checks the slash command makes through the catalog, made for every
+   * launch whatever asked for it: the launch tool, another session, or the
+   * browser. The workflow must be a file in the repository the launch comes
+   * from, a worktree's own when it runs in one, and its runner, command,
+   * choice, inputs and prompt must be ones it declares.
+   */
+  const refuseLaunch = (input: WorkflowLaunchInput, where: LaunchLocation): string | undefined => {
+    if (typeof input.workflowPath !== 'string' || input.workflowPath === '') return 'A launch needs a workflowPath.';
+    const workflowPath = resolve(where.cwd, input.workflowPath);
+    const inside = relative(where.repoRoot, workflowPath);
+    if (inside.startsWith('..') || isAbsolute(inside)) {
+      return `Workflow ${input.workflowPath} is outside this session's repository, so it cannot be launched here.`;
+    }
+    const detail = catalogDeps.summarize(workflowPath);
+    if (detail.error !== undefined) return detail.error;
+    const problems = validateWorkflowLaunch(detail, {
+      inputs: input.inputs ?? {},
+      ...(input.prompt === undefined ? {} : { prompt: input.prompt }),
+      ...((input.runner ?? input.cliAgent) === undefined ? {} : { runner: input.runner ?? input.cliAgent }),
+      ...(input.command === undefined ? {} : { command: input.command }),
+      ...(input.choice === undefined ? {} : { choice: input.choice }),
+    });
+    return problems.length === 0 ? undefined : problems.join('\n');
+  };
   /**
    * Run a workflow in this process and answer once it has registered.
    *
-   * `skipLaunch` keeps `launch-command` from handing the run to a terminal
-   * launcher, where the host's step executor could not reach it. Each run gets
-   * a service of its own so concurrent runs never share an active step, and the
-   * caller hears back when the registry shows the run rather than when it ends.
+   * The launch goes through the same executor the Pi extension uses; see
+   * `createServerLauncher` for what the server adds around it.
    */
-  const launchHere = async (parameters: LaunchParameters): Promise<LaunchResult> => {
-    const input = feature.runTool.getInputSchema().parse(parameters);
-    const sessionId = host.context.sessionId;
-    const since = Date.now();
-    const runner = input.runner ?? input.cliAgent;
-    const running = feature.createRunService().run({
-      ...input,
-      ...(runner === undefined ? {} : { runner }),
-      env: { ...input.env, [PI_SESSION_ENV]: sessionId },
-      skipLaunch: true,
-    });
-    // Folded before anything races it: a run this function stops awaiting must
-    // never reject unobserved and take the server down with it.
-    const settled = running.then(
-      (result) =>
-        result.exitCode === 0 || result.exitCode === 2
-          ? textResult(result.output || 'Workflow completed.')
-          : textResult(`Workflow failed (exit code ${result.exitCode}):\n\n${result.output}`, true),
-      (error: unknown) => textResult(`Error: ${error instanceof Error ? error.message : String(error)}`, true),
-    );
-    const deadline = since + LAUNCH_ACK_TIMEOUT_MS;
-    for (;;) {
-      const outcome = await Promise.race([settled, sleep(LAUNCH_ACK_POLL_MS)]);
-      if (outcome) return outcome;
-      const registered = readWorkflowRuns({ environment: host.context.environment }).find(
-        (run) =>
-          runBelongsToSession(run, sessionId) &&
-          Date.parse(run.view.startedAt) >= since - LAUNCH_ACK_CLOCK_SKEW_MS &&
-          resolve(run.view.workflowPath) === resolve(input.workflowPath),
-      );
-      if (registered) {
-        return textResult(
-          [
-            `Started ${registered.view.displayName} in workspace ${registered.view.workspace}.`,
-            `Run key: ${registered.view.runKey}`,
-            'The run is registered and going in this server; this call returned without waiting for it to finish.',
-          ].join('\n'),
-        );
-      }
-      if (Date.now() >= deadline) {
-        return textResult(`Launch started for ${input.workflowPath}, but no run has registered yet.`);
-      }
+  const launchHere = async (
+    parameters: LaunchParameters,
+    where: LaunchLocation = host.context,
+  ): Promise<LaunchResult> => {
+    let input: WorkflowLaunchInput;
+    try {
+      input = feature.runTool.getInputSchema().parse(parameters);
+    } catch (error) {
+      return textResult(`Error: ${errorMessage(error)}`, true);
+    }
+    const refusal = refuseLaunch(input, where);
+    if (refusal !== undefined) return textResult(`Error: ${refusal}`, true);
+    try {
+      return launchResultOf(await launcher.launch({ ...input, workflowPath: resolve(where.cwd, input.workflowPath) }));
+    } catch (error) {
+      return textResult(`Error: ${errorMessage(error)}`, true);
     }
   };
   /**
@@ -219,27 +269,32 @@ export function createWorkflowServerRuntime(
     const reason = errorOf(body) ?? `HTTP ${String(response.status)}`;
     return textResult(`Error: session ${owner} did not launch the workflow (${reason}).`, true);
   };
-  const launch = async (parameters: LaunchParameters): Promise<LaunchResult> => {
-    const owner = host.context.environment[WORKFLOW_LAUNCH_SESSION_ENV]?.trim();
-    return owner === undefined || owner === '' || owner === host.context.sessionId
-      ? launchHere(parameters)
-      : launchIn(owner, parameters);
+  /**
+   * A workflow dispatcher launches for its root session, the way a CLI
+   * dispatcher child does: the same markers name it, and the root runs what
+   * it launches. Any other session runs its own launches.
+   */
+  const dispatcher = isWorkflowDispatcherProcess(host.context.environment);
+  const launchOwner = (): string | undefined => {
+    if (!dispatcher) return undefined;
+    const parent = resolveDispatcherParentSession(host.context.environment);
+    if (parent === undefined) return undefined;
+    const owner = resolveRootSessionId(parent, host.context.environment);
+    return owner === host.context.sessionId ? undefined : owner;
+  };
+  const launch = async (parameters: LaunchParameters, where?: LaunchLocation): Promise<LaunchResult> => {
+    const owner = launchOwner();
+    return owner === undefined ? launchHere(parameters, where) : launchIn(owner, parameters);
   };
   /** A launch another session handed this one: this session runs and owns it. */
   const launchFromApi = async (parameters: Record<string, unknown>): Promise<WorkflowLaunchResponse> => {
-    try {
-      const result = await launchHere(parameters as LaunchParameters);
-      // No tool call ends here to refresh the panel, so publish the new run now.
-      void publishLifecycle(host.context).catch((error: unknown) => {
-        process.emitWarning(`Could not publish headless workflow state: ${String(error)}`);
-      });
-      return {
-        text: result.content.map((item) => item.text).join('\n'),
-        ...(result.isError === true ? { isError: true } : {}),
-      };
-    } catch (error) {
-      return { text: `Error: ${error instanceof Error ? error.message : String(error)}`, isError: true };
-    }
+    const result = await launchHere(parameters as LaunchParameters);
+    // No tool call ends here to refresh the panel, so publish the new run now.
+    publishRunsSoon(host.context);
+    return {
+      text: result.content.map((item) => item.text).join('\n'),
+      ...(result.isError === true ? { isError: true } : {}),
+    };
   };
   let control: ReturnType<typeof feature.createRunControl> | undefined;
   let controlDisposers: (() => void)[] = [];
@@ -380,11 +435,9 @@ export function createWorkflowServerRuntime(
           control = feature.createRunControl({});
           const ownedControl = control;
           const refresh = (): void => {
-            void publishLifecycle(executionContext)
-              .then((active) => {
-                if (!active && !modeSelected() && control === ownedControl) disposeControl();
-              })
-              .catch(reportFailure);
+            publishRunsSoon(executionContext, (active) => {
+              if (!active && !modeSelected() && control === ownedControl) disposeControl();
+            });
           };
           // Job and step transitions live only in the progress log. A step's execution
           // ref, which tells the web view to show an agent session instead of a
@@ -447,12 +500,15 @@ export function createWorkflowServerRuntime(
           signal?.throwIfAborted();
           const input = parameters as Parameters<typeof feature.runTool.execute>[0];
           return callResult(
-            await launch({
-              ...input,
-              ...(typeof input.workflowPath === 'string'
-                ? { workflowPath: resolve(context.cwd, input.workflowPath) }
-                : {}),
-            }),
+            await launch(
+              {
+                ...input,
+                ...(typeof input.workflowPath === 'string'
+                  ? { workflowPath: resolve(context.cwd, input.workflowPath) }
+                  : {}),
+              },
+              context,
+            ),
           );
         },
       },
@@ -556,14 +612,17 @@ export function createWorkflowServerRuntime(
               return;
             }
             const result = callResult(
-              await launch({
-                workflowPath: entry.path,
-                ...(parsed.runner === undefined ? {} : { runner: parsed.runner }),
-                ...(parsed.command === undefined ? {} : { command: parsed.command }),
-                ...(parsed.choice === undefined ? {} : { choice: parsed.choice }),
-                ...(Object.keys(parsed.inputs).length === 0 ? {} : { inputs: parsed.inputs }),
-                ...(parsed.prompt === undefined ? {} : { prompt: parsed.prompt }),
-              }),
+              await launch(
+                {
+                  workflowPath: entry.path,
+                  ...(parsed.runner === undefined ? {} : { runner: parsed.runner }),
+                  ...(parsed.command === undefined ? {} : { command: parsed.command }),
+                  ...(parsed.choice === undefined ? {} : { choice: parsed.choice }),
+                  ...(Object.keys(parsed.inputs).length === 0 ? {} : { inputs: parsed.inputs }),
+                  ...(parsed.prompt === undefined ? {} : { prompt: parsed.prompt }),
+                },
+                execution,
+              ),
             );
             const rendered = result.content.find((item) => item.type === 'text');
             await execution.client.notify({
@@ -576,10 +635,16 @@ export function createWorkflowServerRuntime(
         },
       },
     ],
-    onDispose() {
+    // A dispatcher launches for its root and never works a run itself, as a CLI dispatcher child.
+    ...(dispatcher ? { toolRestrictions: [{ excludedTools: [RUN_TOOL] }] } : {}),
+    async onDispose() {
       disposeControl();
+      if (runsTimer !== undefined) clearTimeout(runsTimer);
+      // Runs this session is running stop with it, rather than going on under a parent that is gone.
+      await launcher.dispose();
       runProvider?.dispose();
       runProvider = undefined;
+      await telemetry.shutdown();
     },
   };
 }

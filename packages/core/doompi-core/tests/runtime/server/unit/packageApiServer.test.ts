@@ -117,6 +117,7 @@ describe('serving a session package APIs', () => {
     const prompt = vi.fn(async () => ({ settled }));
     const abort = vi.fn(async () => undefined);
     const steer = vi.fn(async () => undefined);
+    const release = vi.fn(async () => undefined);
     const server = await serveSessionApis({
       ...requiredSessionCapabilities,
       sessionId: 's1',
@@ -128,6 +129,7 @@ describe('serving a session package APIs', () => {
         prompt,
         abort,
         steer,
+        release,
       },
       apis: [echoApi('runner', seen)],
       onNotice: () => undefined,
@@ -141,6 +143,8 @@ describe('serving a session package APIs', () => {
     expect(abort).toHaveBeenCalledWith('child', { parentSessionId: 's1' });
     await seen.context?.sessionService?.steer?.('child', 'narrow it down', { parentSessionId: 'someone-else' });
     expect(steer).toHaveBeenCalledWith('child', 'narrow it down', { parentSessionId: 's1' });
+    await seen.context?.sessionService?.release?.('child', { parentSessionId: 'someone-else' });
+    expect(release).toHaveBeenCalledWith('child', { parentSessionId: 's1' });
   });
 
   it('returns a closed 404 dispatcher when no package declares an API', async () => {

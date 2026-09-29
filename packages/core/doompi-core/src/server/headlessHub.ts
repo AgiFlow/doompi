@@ -37,7 +37,7 @@ import { PROFILE_ICON_MIME_TYPES } from '../schemas/profileIdentity';
 import { readSessionGitStatus } from '../services/sessionGitStatus';
 import type { SessionGitStatus } from '../services/sessionGitStatus/type';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../systems/main/types/headlessSessionHost';
-import type { HeadlessSessionManager } from '../systems/main/types/headlessSessionManager';
+import type { HeadlessSessionCloseOptions, HeadlessSessionManager } from '../systems/main/types/headlessSessionManager';
 import { AGENT_SETTLED_ENTRY_TYPE } from './directHarnessRuntime';
 
 const AUTHORIZATION_HEADER = 'authorization';
@@ -100,7 +100,8 @@ export interface HeadlessWorkspaceAdmission {
 
 export type HeadlessHubEvent =
   | { kind: 'upsert'; session: HeadlessHubSession }
-  | { kind: 'removed'; sessionId: string }
+  /** `dormant`: the session stopped running but keeps its record, so it lists as dormant. */
+  | { kind: 'removed'; sessionId: string; dormant?: true }
   | { kind: 'workspace_upsert'; workspace: HeadlessWorkspace }
   | { kind: 'workspace_removed'; workspaceId: string }
   | { kind: 'channel'; frameType: string; sessionId: string; payload: unknown; connectionId?: string };
@@ -144,7 +145,7 @@ export interface HeadlessHub {
   onEvent(listener: (event: HeadlessHubEvent) => void): () => void;
   register(session: HeadlessHubSession): void;
   create(options: HeadlessSessionHostOptions): Promise<HeadlessHubSession>;
-  closeSession(sessionId: string): Promise<void>;
+  closeSession(sessionId: string, options?: HeadlessSessionCloseOptions): Promise<void>;
   /** Publishes removal of a persisted session that has no live host. */
   notifySessionRemoved(sessionId: string): void;
   /** Publishes setup-only children through the parent's normal session updates. */
@@ -619,7 +620,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     return true;
   };
 
-  const unregisterSession = (sessionId: string): void => {
+  const unregisterSession = (sessionId: string, options?: HeadlessSessionCloseOptions): void => {
     const current = sessions.get(sessionId);
     if (current === undefined) return;
     const cleanup = sessionCleanups.get(sessionId);
@@ -633,14 +634,21 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     presentationCleanups.delete(sessionId);
     avatarIcons.delete(sessionId);
     directEvents.clearSession?.(sessionId);
-    emit({ kind: 'removed', sessionId });
+    emit({ kind: 'removed', sessionId, ...(options?.keepDormant === true ? { dormant: true as const } : {}) });
   };
 
-  const startSessionShutdown = (session: HeadlessHubSession): Promise<void> => {
+  const startSessionShutdown = (
+    session: HeadlessHubSession,
+    closeOptions?: HeadlessSessionCloseOptions,
+  ): Promise<void> => {
     const existing = sessionShutdowns.get(session.id);
     if (existing !== undefined) return existing.promise;
     const shutdown = { session, promise: Promise.resolve(), pending: true };
-    const promise = Promise.resolve().then(() => options.manager.closeSession(session.id));
+    const promise = Promise.resolve().then(() =>
+      closeOptions === undefined
+        ? options.manager.closeSession(session.id)
+        : options.manager.closeSession(session.id, closeOptions),
+    );
     shutdown.promise = promise;
     sessionShutdowns.set(session.id, shutdown);
     void promise.then(
@@ -791,7 +799,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     refreshGit();
   };
 
-  const closeSession = async (sessionId: string): Promise<void> => {
+  const closeSession = async (sessionId: string, closeOptions?: HeadlessSessionCloseOptions): Promise<void> => {
     const pending = sessionShutdowns.get(sessionId);
     if (pending !== undefined) {
       await pending.promise;
@@ -799,8 +807,8 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     }
     const session = sessions.get(sessionId);
     if (session === undefined) return;
-    unregisterSession(sessionId);
-    await startSessionShutdown(session);
+    unregisterSession(sessionId, closeOptions);
+    await startSessionShutdown(session, closeOptions);
   };
 
   const promptTarget = (sessionId: string, parentSessionId: string | undefined): HeadlessHubSession => {
@@ -829,6 +837,10 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     },
     steer: async (sessionId, message, steerOptions) => {
       await promptTarget(sessionId, steerOptions?.parentSessionId).host.runtime.steer(message);
+    },
+    release: async (sessionId, releaseOptions) => {
+      promptTarget(sessionId, releaseOptions?.parentSessionId);
+      await closeSession(sessionId, { keepDormant: true });
     },
     reservations: options.sessionReservations,
     provisionReservedWorktree: async (request) => {

@@ -21,10 +21,9 @@ export const WORKFLOW_PI_TOOL_NAMES = [
 ] as const;
 
 /**
- * Names the session that owns runs this session launches.
+ * One launch's own id, carried in the run's environment.
  *
- * A dispatcher session started for a root session sets it, so the root runs the
- * workflow and keeps it after the dispatcher closes: the run registers under
- * the root, and the root's step sessions are its own children.
+ * A launch answers once its run registers; matching on this id, rather than on
+ * the workflow and the time, keeps two launches of one workflow apart.
  */
-export const WORKFLOW_LAUNCH_SESSION_ENV = 'DOOMPI_WORKFLOW_LAUNCH_SESSION';
+export const WORKFLOW_LAUNCH_ID_ENV = 'DOOMPI_WORKFLOW_LAUNCH_ID';

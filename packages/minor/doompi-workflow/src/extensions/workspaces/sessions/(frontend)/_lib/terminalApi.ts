@@ -1,7 +1,12 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 import { api } from '../../../../../../generated/client';
-import { ARTIFACT_DOWNLOAD_PARAM, ARTIFACT_NAME_PARAM, ARTIFACT_RAW_PARAM } from '../../../../../types/apiRoutes';
+import {
+  ARTIFACT_DOWNLOAD_PARAM,
+  ARTIFACT_NAME_PARAM,
+  ARTIFACT_RAW_PARAM,
+  STEP_TARGET_PARAM,
+} from '../../../../../types/apiRoutes';
 import {
   WORKFLOW_SCREEN_EVENT,
   type WorkflowArtifactContentResponse,
@@ -82,6 +87,11 @@ function artifactUrl(
     .replace(ARTIFACT_NAME_PARAM, artifactPath.split('/').map(encodeURIComponent).join('/'));
 }
 
+/** The pane a terminal call names, when it reads one step's rather than the run's current one. */
+function stepBody(step: string | undefined): { step?: string } {
+  return step === undefined ? {} : { step };
+}
+
 /**
  * Follows one run's screen until the run settles or the caller stops.
  *
@@ -96,8 +106,14 @@ export function followScreen(
   runKey: string,
   onEvent: (event: WorkflowScreenEvent) => void,
   sessionId?: string | null,
+  step?: string,
 ): () => void {
-  const source = new EventSource(scoped(sessionId).screen.url({ params: runParams(workspace, runKey) }));
+  const source = new EventSource(
+    scoped(sessionId).screen.url({
+      params: runParams(workspace, runKey),
+      ...(step === undefined ? {} : { query: { [STEP_TARGET_PARAM]: step } }),
+    }),
+  );
   const stop = (): void => {
     source.removeEventListener(WORKFLOW_SCREEN_EVENT, handler as EventListener);
     source.close();
@@ -126,8 +142,12 @@ export async function takeControl(
   runKey: string,
   token?: string,
   sessionId?: string | null,
+  step?: string,
 ): Promise<WorkflowControlResponse> {
-  const result = await scoped(sessionId).control({ params: runParams(workspace, runKey), body: { token } });
+  const result = await scoped(sessionId).control({
+    params: runParams(workspace, runKey),
+    body: { token, ...stepBody(step) },
+  });
   if (result.status === 0) return { held: false, reason: UNREACHABLE };
   // A refusal carries the same shape as a grant, so the body is read before the
   // status: a 409 says who holds the keyboard and why, which is the answer.
@@ -142,8 +162,12 @@ export async function releaseControl(
   runKey: string,
   token: string,
   sessionId?: string | null,
+  step?: string,
 ): Promise<void> {
-  await scoped(sessionId).control({ params: runParams(workspace, runKey), body: { token, release: true } });
+  await scoped(sessionId).control({
+    params: runParams(workspace, runKey),
+    body: { token, release: true, ...stepBody(step) },
+  });
 }
 
 /** Sends literal keystrokes; the reason comes back when the lease has moved on. */
@@ -153,8 +177,12 @@ export async function sendKeys(
   token: string,
   data: string,
   sessionId?: string | null,
+  step?: string,
 ): Promise<{ error?: string }> {
-  const result = await scoped(sessionId).keys({ params: runParams(workspace, runKey), body: { token, data } });
+  const result = await scoped(sessionId).keys({
+    params: runParams(workspace, runKey),
+    body: { token, data, ...stepBody(step) },
+  });
   if (result.ok) return {};
   return { error: messageOf(result, 'The run would not take those keys.') };
 }
@@ -167,8 +195,12 @@ export async function resizeRun(
   columns: number,
   rows: number,
   sessionId?: string | null,
+  step?: string,
 ): Promise<void> {
-  await scoped(sessionId).resize({ params: runParams(workspace, runKey), body: { token, columns, rows } });
+  await scoped(sessionId).resize({
+    params: runParams(workspace, runKey),
+    body: { token, columns, rows, ...stepBody(step) },
+  });
 }
 
 export type DeleteWorkflowResult = { result: WorkflowDeleteResponse } | { error: string };

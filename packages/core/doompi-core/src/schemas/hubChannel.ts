@@ -165,6 +165,12 @@ export interface DoomHubSessionService {
     message: string,
     options?: Pick<DoomHubSessionPromptOptions, 'parentSessionId'>,
   ): Promise<void>;
+  /**
+   * Stops a live session's runtime and keeps it dormant: its history stays
+   * readable where it is shown, and it can be woken later. A session that has
+   * done its work no longer holds a model, tools and extensions in the host.
+   */
+  release?(sessionId: string, options?: Pick<DoomHubSessionPromptOptions, 'parentSessionId'>): Promise<void>;
   readonly reservations?: DoomHubSessionReservations;
   /** Provisions a host-reserved Git worktree child. This is not exposed to remote MCP clients. */
   provisionReservedWorktree?(request: DoomHubReservedWorktreeRequest): Promise<DoomHubSessionScope>;

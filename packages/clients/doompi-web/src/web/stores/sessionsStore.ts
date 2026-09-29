@@ -72,6 +72,27 @@ export function resolveParentId(byId: Record<string, SessionMeta>, id: string): 
   return parent;
 }
 
+/** A session read somewhere other than the rail: a workflow step's, or a workflow dispatcher's. */
+function railHidden(meta: SessionMeta): boolean {
+  const provenance = meta.summary.sessionProvenance;
+  return provenance === WORKFLOW_STEP_SESSION_PROVENANCE || provenance === WORKFLOW_DISPATCHER_SESSION_PROVENANCE;
+}
+
+/**
+ * Where a session sits in the rail: under its nearest ancestor the rail shows.
+ *
+ * A fork or worktree a step session opens is a real session, and under a
+ * parent the rail leaves out it would never be listed, so it moves up to the
+ * first ancestor that is, or becomes a root.
+ */
+function railParentId(byId: Record<string, SessionMeta>, id: string): string | undefined {
+  let parent = resolveParentId(byId, id);
+  let hops = 0;
+  const limit = Object.keys(byId).length;
+  while (parent !== undefined && railHidden(byId[parent]) && hops++ <= limit) parent = resolveParentId(byId, parent);
+  return parent;
+}
+
 /**
  * The rail's order: roots by creation, each immediately followed by its own
  * children.
@@ -94,10 +115,8 @@ function sortedOrder(byId: Record<string, SessionMeta>): string[] {
   const children = new Map<string, string[]>();
   const roots: string[] = [];
   for (const id of Object.keys(byId)) {
-    const provenance = byId[id].summary.sessionProvenance;
-    if (provenance === WORKFLOW_STEP_SESSION_PROVENANCE || provenance === WORKFLOW_DISPATCHER_SESSION_PROVENANCE)
-      continue;
-    const parent = resolveParentId(byId, id);
+    if (railHidden(byId[id])) continue;
+    const parent = railParentId(byId, id);
     if (parent === undefined) {
       roots.push(id);
       continue;

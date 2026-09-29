@@ -1245,4 +1245,29 @@ describe('createHeadlessHub', () => {
     await expect(hub.sessionService.steer!('missing', 'hello')).rejects.toThrow('The session is not live.');
     expect(steer).toHaveBeenCalledTimes(1);
   });
+
+  it('releases a child to dormant only for its parent', async () => {
+    const closeSession = vi.fn(async () => undefined);
+    const hub = createHeadlessHub({ manager: { closeSession } as never });
+    hub.register({ id: 'parent', name: 'Parent', cwd: '/repo', createdAt: 'now', host: host().host });
+    hub.register({
+      id: 'child',
+      name: 'Child',
+      cwd: '/repo',
+      createdAt: 'now',
+      parentSessionId: 'parent',
+      host: host().host,
+    });
+    const events: unknown[] = [];
+    hub.onEvent((event) => events.push(event));
+
+    await expect(hub.sessionService.release!('parent', { parentSessionId: 'child' })).rejects.toThrow(
+      'Only the parent session can drive this session.',
+    );
+    await hub.sessionService.release!('child', { parentSessionId: 'parent' });
+
+    expect(closeSession).toHaveBeenCalledExactlyOnceWith('child', { keepDormant: true });
+    expect(hub.session('child')).toBeUndefined();
+    expect(events).toContainEqual({ kind: 'removed', sessionId: 'child', dormant: true });
+  });
 });

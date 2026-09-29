@@ -1000,6 +1000,63 @@ describe('serveHeadlessServer', () => {
     expect(removeDormantSession).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'asleep' }));
     await hub.close();
   });
+  it('shows a released session as dormant instead of removing it', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'parent',
+      name: 'Parent',
+      cwd: '/repo',
+      createdAt: '2025-01-01',
+      host: host().host,
+    });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'step',
+      name: 'Step',
+      cwd: '/repo',
+      createdAt: '2025-01-02',
+      parentSessionId: 'parent',
+      host: host().host,
+    });
+    const records = [
+      { sessionId: 'step', workspaceId: 'test-workspace', cwd: '/repo', name: 'Step', createdAt: '2025-01-02' },
+    ];
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, dormantSessions: () => records });
+    servers.push(server);
+    const client = await Client.connect({
+      serverId: DOOM_COCKPIT_SERVER_ID,
+      transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/ws`),
+    });
+    const binding = createRemoteServiceBinding({
+      services: [DoomHubService],
+      transport: createClientServiceTransport(client, () => ({ serverId: DOOM_COCKPIT_SERVER_ID })),
+    });
+    const hubService = binding.use(DoomHubService);
+    await binding.ready(BACKGROUND_CONTEXT);
+
+    await hub.sessionService.release!('step', { parentSessionId: 'parent' });
+
+    await vi.waitFor(() => {
+      const frames = (hubService.state.value?.events ?? []).map(
+        (event) => event.frame as unknown as Record<string, unknown>,
+      );
+      expect(frames).toContainEqual({
+        type: 'session_upsert',
+        session: expect.objectContaining({ id: 'step', dormant: true }),
+      });
+      expect(frames).not.toContainEqual(expect.objectContaining({ type: 'session_removed', sessionId: 'step' }));
+    });
+    await binding.dispose(BACKGROUND_CONTEXT);
+    await client.dispose();
+    await hub.close();
+  });
   it('reads a dormant transcript without reviving it or accepting another workspace', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
     const records = [

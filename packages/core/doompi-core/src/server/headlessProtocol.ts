@@ -230,6 +230,16 @@ function managementHost(
         }
         if (event.kind === 'removed') {
           if (!visible.delete(event.sessionId)) return;
+          // A released session keeps its record: it lists as dormant, as after a
+          // restart, so its history stays readable where it is shown.
+          const record =
+            event.dormant === true
+              ? dormantSessions().find((candidate) => candidate.sessionId === event.sessionId)
+              : undefined;
+          if (record !== undefined && permitsDormant(mount, record)) {
+            publish({ type: 'session_upsert', session: dormantView(record) });
+            return;
+          }
         } else {
           const id = event.kind === 'upsert' ? event.session.id : event.sessionId;
           if (!permitsSession(hub, mount, id, authorizeSession)) return;

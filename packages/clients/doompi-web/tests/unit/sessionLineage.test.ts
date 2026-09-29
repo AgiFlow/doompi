@@ -208,6 +208,17 @@ describe('workflow step sessions', () => {
     expect(sessionsStore.state.byId.step).toBeDefined();
   });
 
+  it('lists a session a hidden step opened under the nearest ancestor the rail shows', () => {
+    snapshot(
+      summary('parent', at(10)),
+      summary('step', at(20), { parentSessionId: 'parent', sessionProvenance: WORKFLOW_STEP_SESSION_PROVENANCE }),
+      summary('fork', at(30), { parentSessionId: 'step', sessionProvenance: 'fork' }),
+      summary('other', at(40)),
+    );
+
+    expect(sessionsStore.state.order).toEqual(['parent', 'fork', 'other']);
+  });
+
   it('keeps a workflow dispatcher out of the rail order too', () => {
     snapshot(
       summary('parent', at(10)),

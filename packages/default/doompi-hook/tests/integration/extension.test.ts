@@ -445,6 +445,27 @@ describe('repository hook Pi lifecycle', () => {
     ]);
   });
 
+  it('tells a stop hook it already sent the agent back, and lets the agent stop after five refusals', async () => {
+    writeRegistry(registry('Stop', 'never-done'));
+    const state = await session({}, { 'never-done': { decision: { decision: 'block', reason: 'Tests still fail.' } } });
+
+    for (let settle = 0; settle < 6; settle += 1) await state.handlers.get('agent_settled')?.({}, state.ctx);
+
+    expect(state.calls.map((call) => call.payload.stop_hook_active)).toEqual([false, true, true, true, true, true]);
+    expect(state.messages.slice(0, 5).every((message) => message.customType === 'repository-hook-stop-block')).toBe(
+      true,
+    );
+    expect(state.messages[5]).toEqual({
+      customType: 'repository-hook-failure',
+      content: expect.stringContaining('refused 5 stops in a row'),
+      display: true,
+    });
+
+    // The count starts again, so a later turn gets the hook's full say.
+    await state.handlers.get('agent_settled')?.({}, state.ctx);
+    expect(state.calls.at(-1)?.payload.stop_hook_active).toBe(false);
+  });
+
   it('filters registry hooks by selected group, matcher, and subagent policy', async () => {
     process.env.PI_SUBAGENT_CHILD = '1';
     writeRegistry(

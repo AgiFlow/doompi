@@ -32,7 +32,10 @@ import type { DoomHostMediaArbitration, DoomPeerAgentRegistry } from '@agimon-ai
 import { serveSessionApis, type PackageApiServer } from '@agimon-ai/doompi-core/packageApiServer';
 import { piAgentDirectory } from '@agimon-ai/doompi-core/piSettings';
 import { createRemoteRuntime, type RemoteRuntime } from '@agimon-ai/doompi-core/remoteRuntime';
-import type { HeadlessSessionManager } from '@agimon-ai/doompi-core/runtimeHeadlessSessionManager';
+import type {
+  HeadlessSessionCloseOptions,
+  HeadlessSessionManager,
+} from '@agimon-ai/doompi-core/runtimeHeadlessSessionManager';
 import { createHarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
 import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/serverFacet';
 import { createServerTelemetry } from '@agimon-ai/doompi-core/serverTelemetry';
@@ -182,8 +185,9 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
    */
   let shuttingDown = false;
 
-  const closeManagedSession = async (sessionId: string): Promise<void> => {
-    if (!shuttingDown) openSessions.remove(sessionId);
+  const closeManagedSession = async (sessionId: string, options?: HeadlessSessionCloseOptions): Promise<void> => {
+    // A released session keeps its record, which is what lists it as dormant.
+    if (!shuttingDown && options?.keepDormant !== true) openSessions.remove(sessionId);
     const artifacts = sessionArtifacts.get(sessionId);
     sessionArtifacts.delete(sessionId);
     webCompositions?.remove({ scope: 'session', sessionId });

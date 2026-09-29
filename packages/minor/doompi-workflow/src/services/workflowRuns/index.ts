@@ -97,8 +97,13 @@ function asOptionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/** Text without its terminal escape codes, as a log file or a reader wants it. */
+export function withoutAnsi(text: string): string {
+  return text.replace(ANSI_ESCAPE_PATTERN, '');
+}
+
 function stripAnsi(text: string): string {
-  return text.replace(ANSI_ESCAPE_PATTERN, '').trim();
+  return withoutAnsi(text).trim();
 }
 
 /**
@@ -272,6 +277,14 @@ export function foldWorkflowProgress(events: readonly WorkflowProgressEvent[]): 
     if (step === undefined) {
       step = { name: event.step, status: event.status };
       job.steps.push(step);
+    } else if (event.status === 'running' && step.status !== 'running') {
+      // Started again, as a fix loop does: nothing of the previous attempt, its
+      // session or pane included, belongs to this one. Guidance for the old
+      // session would wake an agent working beside the new attempt.
+      delete step.ref;
+      delete step.reason;
+      delete step.endedAt;
+      delete step.startedAt;
     }
     step.status = event.status;
     if (event.reason !== undefined) step.reason = event.reason;

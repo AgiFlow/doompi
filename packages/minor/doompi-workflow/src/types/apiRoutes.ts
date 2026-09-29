@@ -42,6 +42,12 @@ const RUN = '/runs/:workspace/:runKey';
  */
 export const ARTIFACT_NAME_PARAM = ':name{.+}';
 
+/**
+ * The step whose pane a terminal route reads: a step ref's id. Absent, the
+ * route follows the run's current step, which is one of a parallel group's.
+ */
+export const STEP_TARGET_PARAM = 'step';
+
 /** Query parameters the artifact route reads, spelled once for both halves. */
 export const ARTIFACT_RAW_PARAM = 'raw';
 export const ARTIFACT_DOWNLOAD_PARAM = 'download';
@@ -56,6 +62,7 @@ export default defineApiRoutes({
   screen: {
     method: 'GET',
     path: `${RUN}/screen/stream`,
+    query: [STEP_TARGET_PARAM],
     stream: true,
   },
   control: {

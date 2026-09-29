@@ -13,9 +13,14 @@ import {
 import { type Context, Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 
-import { createStepPaneTerminal, createStepPaneTerminalDependencies } from '../../services/stepPaneTerminal';
+import {
+  createStepPaneTerminal,
+  createStepPaneTerminalDependencies,
+  removeStepPaneLogs,
+} from '../../services/stepPaneTerminal';
+import type { RunTerminalTarget } from '../../services/stepPaneTerminal/type';
 import { createWorkflowTerminalService } from '../../services/workflowTerminal';
-import routes, { ARTIFACT_DOWNLOAD_PARAM, ARTIFACT_RAW_PARAM } from '../../types/apiRoutes';
+import routes, { ARTIFACT_DOWNLOAD_PARAM, ARTIFACT_RAW_PARAM, STEP_TARGET_PARAM } from '../../types/apiRoutes';
 import { STEP_SESSION_REF_KIND } from '../../types/webWorkflows';
 import {
   WORKFLOW_API_BASE_PATH,
@@ -59,6 +64,8 @@ const ARTIFACT_MIME_TYPES: Readonly<Record<string, string>> = {
   '.js': 'text/javascript',
   '.json': 'application/json',
   '.jsx': 'text/jsx',
+  // A run's engine log, which a reader opens to see why a step failed.
+  '.log': 'text/plain',
   '.m4a': 'audio/mp4',
   '.markdown': 'text/markdown',
   '.md': 'text/markdown',
@@ -104,9 +111,17 @@ function isSafeSegment(value: string): boolean {
   return value !== '' && value !== '../adapters' && value !== '..' && SAFE_SEGMENT.test(value);
 }
 
-/** One run's identity for caches and leases, stable across stage moves. */
-function runIdentityOf(workspace: string, runKey: string): string {
-  return `${workspace}/${runKey}`;
+/**
+ * One terminal's identity for caches and leases, stable across stage moves: a
+ * run's, or one step's pane in it, which keeps its own screen and keyboard.
+ */
+function runIdentityOf(workspace: string, runKey: string, step?: string): string {
+  return step === undefined ? `${workspace}/${runKey}` : `${workspace}/${runKey}#${step}`;
+}
+
+/** The step a terminal request names, from its query or body; absent follows the current step. */
+function stepOf(value: unknown): string | undefined {
+  return typeof value === 'string' && value !== '' ? value : undefined;
 }
 
 export interface WorkflowHubApiOptions {
@@ -138,7 +153,7 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
   const registry = options.registry ?? new WorkflowRegistryService();
   const facade = options.terminal ?? new WorkflowTerminalFacade();
   const stepPanes = createStepPaneTerminalDependencies(registry);
-  const terminal = createWorkflowTerminalService<WorkflowRunRecord>({
+  const terminal = createWorkflowTerminalService<RunTerminalTarget>({
     // A run executing in the server has a pane per command step instead of one for the whole run.
     terminal: createStepPaneTerminal(facade, stepPanes),
     now: options.now ?? (() => Date.now()),
@@ -168,7 +183,8 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
     if (record === undefined) return context.json(missing(workspace, runKey), 404);
-    const identity = runIdentityOf(workspace, runKey);
+    const step = stepOf(context.req.query(STEP_TARGET_PARAM));
+    const identity = runIdentityOf(workspace, runKey, step);
 
     return streamSSE(context, async (stream) => {
       let settledTicks = 0;
@@ -180,8 +196,9 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
       while (running) {
         const current = (await runOf(workspace, runKey)) ?? record;
         latest = current;
-        const capabilities = terminal.capabilities(current);
-        const lines = capabilities.readable ? await terminal.screen(identity, current, SCREEN_LINES) : [];
+        const target: RunTerminalTarget = { record: current, ...(step === undefined ? {} : { step }) };
+        const capabilities = terminal.capabilities(target);
+        const lines = capabilities.readable ? await terminal.screen(identity, target, SCREEN_LINES) : [];
         // A settled run is read a few more times before the stream closes: the
         // last thing a failing step printed is what the reader came for, and it
         // lands after the record has already moved to its final stage.
@@ -205,9 +222,10 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
     if (record === undefined) return context.json(missing(workspace, runKey), 404);
-    const identity = runIdentityOf(workspace, runKey);
     const body = await jsonBody(context);
-    const capabilities = terminal.capabilities(record);
+    const step = stepOf(body.step);
+    const identity = runIdentityOf(workspace, runKey, step);
+    const capabilities = terminal.capabilities({ record, ...(step === undefined ? {} : { step }) });
 
     if (body.release === true) {
       if (typeof body.token === 'string') terminal.releaseControl(identity, body.token);
@@ -236,8 +254,14 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     if (typeof body.token !== 'string' || typeof body.data !== 'string') {
       return context.json({ error: 'A keystroke needs a control token and its data.' }, 400);
     }
+    const step = stepOf(body.step);
     try {
-      await terminal.write(runIdentityOf(workspace, runKey), record, body.token, body.data);
+      await terminal.write(
+        runIdentityOf(workspace, runKey, step),
+        { record, ...(step === undefined ? {} : { step }) },
+        body.token,
+        body.data,
+      );
     } catch (error) {
       return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
@@ -254,8 +278,15 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     if (typeof token !== 'string' || typeof columns !== 'number' || typeof rows !== 'number') {
       return context.json({ error: 'A resize needs a control token, columns and rows.' }, 400);
     }
+    const step = stepOf(body.step);
     try {
-      const resized = await terminal.resize(runIdentityOf(workspace, runKey), record, token, columns, rows);
+      const resized = await terminal.resize(
+        runIdentityOf(workspace, runKey, step),
+        { record, ...(step === undefined ? {} : { step }) },
+        token,
+        columns,
+        rows,
+      );
       return context.json({ resized });
     } catch (error) {
       return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
@@ -327,8 +358,11 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     if (record.stage === 'running') {
       return context.json({ error: 'A running workflow must be stopped before it can be deleted.' }, 409);
     }
+    // Read before the run directory goes: its progress log is what names the panes.
+    const refs = stepPanes.stepRefs(record);
     try {
       fs.rmSync(registry.runDirectoryFor(record), { recursive: true, force: true });
+      await removeStepPaneLogs(refs);
     } catch (error) {
       return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }

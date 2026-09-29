@@ -30,11 +30,12 @@ import {
 import { useStore } from '@tanstack/react-store';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
-import type {
-  WorkflowJobView,
-  WorkflowProgressState,
-  WorkflowRunView,
-  WorkflowStepView,
+import {
+  STEP_PANE_REF_KIND,
+  type WorkflowJobView,
+  type WorkflowProgressState,
+  type WorkflowRunView,
+  type WorkflowStepView,
 } from '../../../../../types/webWorkflows';
 import type { WorkflowTerminalCapabilitiesView } from '../../../../../types/webWorkflowTerminal';
 import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from '../_lib/catalogStore';
@@ -353,7 +354,11 @@ function StepRow({
         </span>
       </span>
       {step.reason === undefined ? null : (
-        <span className={cn('truncate pl-5 text-2xs', step.status === 'failed' ? 'text-doom-red' : 'text-doom-faint')}>
+        <span
+          data-testid={`step-reason-${step.name}`}
+          title={step.reason}
+          className={cn('truncate pl-5 text-2xs', step.status === 'failed' ? 'text-doom-red' : 'text-doom-faint')}
+        >
           {step.reason}
         </span>
       )}
@@ -406,6 +411,8 @@ function InlineStepOutput(props: InlineStepOutputProps) {
 }
 
 function InlineTerminalOutput({ run, job, step, sessionId, onOpenTerminal }: InlineStepOutputProps) {
+  // The selected step's own pane: inside a parallel group, the current pane is only one of them.
+  const pane = step?.ref?.kind === STEP_PANE_REF_KIND ? step.ref.id : undefined;
   const [lines, setLines] = useState<string[]>([]);
   const [capabilities, setCapabilities] = useState<WorkflowTerminalCapabilitiesView>();
   const [ended, setEnded] = useState(false);
@@ -427,8 +434,9 @@ function InlineTerminalOutput({ run, job, step, sessionId, onOpenTerminal }: Inl
         if (event.ended === true) setEnded(true);
       },
       sessionId,
+      pane,
     );
-  }, [run.workspace, run.runKey, sessionId]);
+  }, [run.workspace, run.runKey, sessionId, pane]);
 
   useEffect(() => {
     screenRef.current?.scrollTo({ top: screenRef.current.scrollHeight });

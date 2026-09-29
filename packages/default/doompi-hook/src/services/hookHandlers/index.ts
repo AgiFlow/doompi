@@ -7,7 +7,10 @@ import {
   CONTEXT_MESSAGE_TYPE,
   STOP_BLOCK_MESSAGE_TYPE,
   FOLLOW_UP_TURN,
+  MAX_STOP_REFUSALS,
+  NO_TURN,
   STEER,
+  STOP_HOOK_ACTIVE_FIELD,
   BLOCKED_BY_HOOK,
   SUBAGENT_ENVIRONMENT_FLAG,
   CONTEXT_SEPARATOR,
@@ -244,6 +247,8 @@ function createToolResult(_pi: ExtensionAPI, resolveRuntime: HookRuntimeResolver
 }
 
 function createAgentSettled(pi: ExtensionAPI, resolveRuntime: HookRuntimeResolver): PiEventHandlers['agent_settled'] {
+  // Stops refused in a row. A hook reads it as Claude's stop_hook_active, and it caps the loop.
+  let refusals = 0;
   return async (_event, ctx) => {
     const runtime = resolveRuntime();
     if (!runtime?.isCurrent()) return;
@@ -257,7 +262,7 @@ function createAgentSettled(pi: ExtensionAPI, resolveRuntime: HookRuntimeResolve
       runtime.session,
       ctx,
       dispatch,
-      sessionHookPayload(dispatch.sessionId, dispatch.repoRoot),
+      { ...sessionHookPayload(dispatch.sessionId, dispatch.repoRoot), [STOP_HOOK_ACTIVE_FIELD]: refusals > 0 },
       `${STATUS_PREFIX}:${dispatch.sessionId}:stop`,
       'Running stop hooks',
     );
@@ -266,7 +271,24 @@ function createAgentSettled(pi: ExtensionAPI, resolveRuntime: HookRuntimeResolve
     // for its decision, sends the agent back with its reason. The new turn
     // also keeps auto-stop from ending the session in between.
     const reason = decisionReason(decisionsFrom(outcomes).find(isDenied));
-    if (reason) pi.sendMessage({ customType: STOP_BLOCK_MESSAGE_TYPE, content: reason, display: true }, FOLLOW_UP_TURN);
+    if (!reason) {
+      refusals = 0;
+      return;
+    }
+    if (refusals >= MAX_STOP_REFUSALS) {
+      refusals = 0;
+      pi.sendMessage(
+        {
+          customType: FAILURE_MESSAGE_TYPE,
+          content: `A Stop hook refused ${String(MAX_STOP_REFUSALS)} stops in a row, so the agent stops here. Its last reason: ${reason}`,
+          display: true,
+        },
+        NO_TURN,
+      );
+      return;
+    }
+    refusals += 1;
+    pi.sendMessage({ customType: STOP_BLOCK_MESSAGE_TYPE, content: reason, display: true }, FOLLOW_UP_TURN);
   };
 }
 

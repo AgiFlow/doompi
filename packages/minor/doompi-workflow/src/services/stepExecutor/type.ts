@@ -1,7 +1,11 @@
 import type { DoomHubSessionService } from '@agimon-ai/doompi-core/hubChannel';
+import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 
 /** The part of the hub session service a customRun step drives. */
-export type StepSessionService = Pick<DoomHubSessionService, 'create' | 'prompt' | 'abort'>;
+export type StepSessionService = Pick<DoomHubSessionService, 'create' | 'prompt' | 'abort' | 'release'>;
+
+/** Where a step records what happened to its session or pane, for telemetry. */
+export type StepTelemetry = Pick<DoomTelemetry, 'recordEvent' | 'recordWarning' | 'recordError'>;
 
 export interface StepPaneRequest {
   /** Unique per step execution; it names the pane. */
@@ -31,4 +35,9 @@ export interface StepExecutorDependencies {
   readonly hostEnvironment: Readonly<Record<string, string | undefined>>;
   readonly launchPane?: StepPaneLauncher;
   readonly createId: () => string;
+  readonly telemetry?: StepTelemetry;
+  /** How long a busy session is left to finish its own turn before a reminder is tried again. */
+  readonly busyRetryMs?: number;
+  /** How long ending a step's session may take before the step stops waiting on it. */
+  readonly releaseTimeoutMs?: number;
 }

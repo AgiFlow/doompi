@@ -12,6 +12,7 @@ import {
 } from 'react';
 
 import {
+  STEP_PANE_REF_KIND,
   STEP_SESSION_REF_KIND,
   type WorkflowRunView,
   type WorkflowStepRefView,
@@ -77,6 +78,12 @@ export function stepTerminalTab(run: WorkflowRunView, job: string, step?: string
 function targetStep(run: WorkflowRunView | undefined, target: StepTabTarget): WorkflowStepView | undefined {
   const steps = run?.jobs.find((job) => job.name === target.job)?.steps ?? [];
   return target.step === undefined ? steps.at(-1) : steps.find((candidate) => candidate.name === target.step);
+}
+
+/** The pane of the step a tab points at, so a parallel group's steps each read their own. */
+export function stepPaneId(run: WorkflowRunView | undefined, target: StepTabTarget): string | undefined {
+  const ref = targetStep(run, target)?.ref;
+  return ref?.kind === STEP_PANE_REF_KIND ? ref.id : undefined;
 }
 
 export function stepSessionRef(
@@ -184,9 +191,11 @@ function StepTerminal({
   const [token, setToken] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const screenRef = useRef<HTMLDivElement>(null);
+  // The step's own pane, so each step of a parallel group has its own screen and keyboard.
+  const pane = stepPaneId(run, target);
   // The run the panel shows right now, cleared on unmount. A keyboard grant that comes back for
   // any other run is released at once instead of being held for a panel that moved on.
-  const targetKey = `${sessionId ?? ''}\0${target.workspace}\0${target.runKey}`;
+  const targetKey = `${sessionId ?? ''}\0${target.workspace}\0${target.runKey}\0${pane ?? ''}`;
   const currentTarget = useRef<string | undefined>(targetKey);
   useEffect(() => {
     currentTarget.current = targetKey;
@@ -208,17 +217,18 @@ function StepTerminal({
         if (event.ended === true) setEnded(true);
       },
       sessionId,
+      pane,
     );
-  }, [sessionId, target.workspace, target.runKey]);
+  }, [sessionId, target.workspace, target.runKey, pane]);
 
   // The keyboard is a lease on the hub, so a tab that goes away must hand it
   // back rather than leaving the next reader locked out until it expires.
   useEffect(() => {
     if (token === undefined) return;
     return () => {
-      void releaseControl(target.workspace, target.runKey, token, sessionId);
+      void releaseControl(target.workspace, target.runKey, token, sessionId, pane);
     };
-  }, [sessionId, token, target.workspace, target.runKey]);
+  }, [sessionId, token, target.workspace, target.runKey, pane]);
 
   useEffect(() => {
     screenRef.current?.scrollTo({ top: screenRef.current.scrollHeight });
@@ -226,10 +236,10 @@ function StepTerminal({
 
   const arm = useCallback(async () => {
     const requested = targetKey;
-    const result = await takeControl(target.workspace, target.runKey, undefined, sessionId);
+    const result = await takeControl(target.workspace, target.runKey, undefined, sessionId, pane);
     if (currentTarget.current !== requested) {
       if (result.held && result.token !== undefined)
-        void releaseControl(target.workspace, target.runKey, result.token, sessionId);
+        void releaseControl(target.workspace, target.runKey, result.token, sessionId, pane);
       return;
     }
     if (result.held && result.token !== undefined) {
@@ -238,7 +248,7 @@ function StepTerminal({
       return;
     }
     setNotice(result.reason ?? 'The keyboard is not available for this run.');
-  }, [sessionId, target.workspace, target.runKey, targetKey]);
+  }, [sessionId, target.workspace, target.runKey, targetKey, pane]);
 
   // Dropping the token is the release: the lease effect's cleanup hands it back exactly once.
   const disarm = useCallback(() => {
@@ -250,13 +260,13 @@ function StepTerminal({
       token === undefined
         ? undefined
         : createKeySender(async (data) => {
-            const { error } = await sendKeys(target.workspace, target.runKey, token, data, sessionId);
+            const { error } = await sendKeys(target.workspace, target.runKey, token, data, sessionId, pane);
             if (error === undefined) return true;
             setNotice(error);
             setToken(undefined);
             return false;
           }),
-    [token, target.workspace, target.runKey, sessionId],
+    [token, target.workspace, target.runKey, sessionId, pane],
   );
   const type = (data: string): void => typeKeys?.(data);
 

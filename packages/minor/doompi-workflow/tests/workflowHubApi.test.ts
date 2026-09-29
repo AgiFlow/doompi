@@ -177,6 +177,28 @@ describe('workflow hub api: deletion', () => {
     expect(fs.existsSync(runDir)).toBe(false);
   });
 
+  it('removes the screens its finished panes left, which live outside the run directory', async () => {
+    const panes = runDirectory();
+    const pane = { kind: 'pane', id: path.join(panes, 'step.sock') };
+    fs.writeFileSync(`${pane.id}.log`, 'last screen');
+    const runDir = runDirectory({
+      'progress.ndjson': JSON.stringify({
+        type: 'step',
+        status: 'completed',
+        job: 'build',
+        step: 'Install',
+        ref: pane,
+        at: 'now',
+      }),
+    });
+    const { app } = api(record({ stage: 'completed' }), runDir);
+
+    const response = await app.request(BASE, { method: 'DELETE' });
+
+    expect(response.status).toBe(200);
+    expect(fs.existsSync(`${pane.id}.log`)).toBe(false);
+  });
+
   it('refuses to delete a running workflow and preserves its files', async () => {
     const runDir = runDirectory({ 'run.log': 'still working' });
     const { app } = api(record(), runDir);
