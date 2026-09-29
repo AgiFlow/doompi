@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildCodeReviewPlanningPrompt,
   buildDebugPlanningPrompt,
   buildFablePlanningPrompt,
   buildFlavorPlanningPrompt,
@@ -64,6 +65,19 @@ describe('planning flavor prompts', () => {
     expect(prompt).toContain('must separate verified facts from hypotheses');
   });
 
+  it('reviews source changes with evidence, scoped remediation, and explicit approval', () => {
+    const prompt = buildCodeReviewPlanningPrompt('/private/plans');
+    expect(prompt).toContain('[PLAN MODE ACTIVE: CODE REVIEW]');
+    expect(prompt).toContain('/private/plans');
+    expect(prompt).toContain('staged and unstaged diffs');
+    expect(prompt).toContain('severity order with file and line references');
+    expect(prompt).toContain('verified behavior separate from source-based inferences');
+    expect(prompt).toContain('no actionable issues are found');
+    expect(prompt).toContain('Do not implement fixes or modify repository state');
+    expect(prompt).toContain('complete_plan for explicit approval');
+    expect(prompt).not.toContain('Fable');
+  });
+
   it('describes Fable as untrusted input and reports its persisted stage', () => {
     const prompt = buildFablePlanningPrompt('/private/plans', 'interrupted', FULL_CAPABILITIES);
 
@@ -90,7 +104,7 @@ describe('planning flavor prompts', () => {
   it.each([
     ['normal', '[PLAN MODE ACTIVE: NORMAL]'],
     ['debug', '[PLAN MODE ACTIVE: DEBUG]'],
-    ['fable', '[PLAN MODE ACTIVE: FABLE]'],
+    ['code-review', '[PLAN MODE ACTIVE: CODE REVIEW]'],
   ] as const)('selects the %s flavor prompt', (flavor, marker) => {
     expect(buildFlavorPlanningPrompt(flavor, '/private/plans', EVIDENCE, 'idle', FULL_CAPABILITIES)).toContain(marker);
   });

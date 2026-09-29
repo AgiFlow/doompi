@@ -1,4 +1,4 @@
-export type PlanningFlavor = 'normal' | 'debug' | 'fable';
+export type PlanningFlavor = 'normal' | 'debug' | 'code-review';
 
 export interface DebugEvidencePacket {
   issue: string;
@@ -89,12 +89,9 @@ export function buildPlanModeBasePrompt(plansDirectory: string, capabilities: Pl
   return `[PLAN MODE ACTIVE]\nYou are in repository read-only plan mode. The dedicated write_plan tool may write one unique Markdown plan file under ${plansDirectory}.\n\nExplore the codebase and produce a concrete implementation plan. For every plan, first call subagent with action "agents", cluster the exploration by independent domain, subsystem, or integration boundary, and create a provisional task graph with the task tool. Select specialized agents by matching their names and descriptions to each cluster. Assign every unblocked delegated task through the task tool, and use a one-shot inlineAgent with a focused systemPrompt when no discovered specialist fits. Treat the initial graph as provisional, not as a fixed contract. After findings arrive, review the entire graph at least once and perform one to three review passes in total. In each pass, use the evidence to add, rewrite, delete, cancel, reassign, or change blockedBy relationships for tasks when warranted. Do not keep following tasks that new information has made stale. Stop revising early when the graph is stable, or after the third pass.\n\nEvery plan must end with a delegated planning-draft stage blocked by all exploration and decision tasks. A single-boundary plan gets one planning draft. A complex plan spanning multiple subsystems, domains, packages, apps, or integration boundaries gets two planning drafts concurrently. Use three concurrent drafts instead when the work is cross-layer, migration-sensitive, security-sensitive, or similarly high risk. Assign each draft through the task tool to the discovered "planner" agent with context "fork" so it receives the conversation and gathered evidence. If the planner agent is unavailable, assign the same draft task through the task tool with a focused inlineAgent. All children receive read, Bash, grep, find, ls, and configured MCP tools with artifacts disabled. Bash and MCP tools are for read-only inspection and must not modify files, external systems, or repository state. Doom Team runs asynchronously, so do not poll. After launch, continue non-overlapping exploration or end your turn; completion notifications wake the parent session.\n\nAfter all planning drafts complete, the main agent must compare the candidates, pick the strongest draft, cross-check it against the gathered evidence and the other drafts, resolve conflicts and gaps, and ask the user only for product decisions. A child produces the draft, but the main agent owns and synthesizes the final plan. The edit and write tools are withheld while plan mode is active; do not modify files or repository state except through write_plan. Start the final plan with a meaningful Markdown H1 because write_plan derives the filename from it. Present the complete plan as visible Markdown in chat, then call write_plan with no arguments. After write_plan succeeds, clear the completed durable task graph and call complete_plan so the user can review the plan and choose whether to begin implementation or continue planning. Do not exit plan mode without explicit approval.${review.length === 0 ? '' : `\n\n${review.join('\n')}`}`;
 }
 
-/**
- * Normal planning adds only what the base block cannot say: that this flavor carries no debug
- * packet and no Fable draft. Everything else it used to repeat now lives in the base block once.
- */
+/** Normal planning adds only the flavor-specific brief to the shared planning workflow. */
 export function buildNormalPlanningPrompt(): string {
-  return `[PLAN MODE ACTIVE: NORMAL]\nStandard planning: no debug evidence packet and no Fable draft, so follow the plan mode brief above using the read-only tools directly.`;
+  return `[PLAN MODE ACTIVE: NORMAL]\nStandard planning: follow the plan mode brief above using the read-only tools directly.`;
 }
 
 export function buildDebugPlanningPrompt(plansDirectory: string, evidence: DebugEvidencePacket | undefined): string {
@@ -104,6 +101,11 @@ export function buildDebugPlanningPrompt(plansDirectory: string, evidence: Debug
   return `[PLAN MODE ACTIVE: DEBUG]\nYou are in repository read-only adaptive debug planning. The dedicated write_plan tool may write one unique Markdown plan file under ${plansDirectory}.\n\n${guidance}\n\nUse the exact read-only tools available for the issue. Bash is available for repository inspection, but commands must not modify files or repository state. Treat unavailable evidence as unavailable, never invent its contents, and keep verified facts separate from hypotheses. ${evidence ? 'The final plan must separate verified facts from hypotheses and must not present an unsupported root cause as verified.' : 'You may call record_debug_evidence when structured notes would help, but continue investigating without it when it is not relevant.'}`;
 }
 
+export function buildCodeReviewPlanningPrompt(plansDirectory: string): string {
+  return `[PLAN MODE ACTIVE: CODE REVIEW]\nYou are in repository read-only code review planning. The dedicated write_plan tool may write one unique Markdown review and remediation plan under ${plansDirectory}.\n\nReview the user-specified change, commit range, or files. When no target is specified, inspect git status and the staged and unstaged diffs; ask for the review target when there are no changes to review. Trace changed behavior through callers, contracts, and relevant tests. Focus on concrete bugs, regressions, security risks, error handling, and missing regression coverage rather than unrelated cleanup or style preferences.\n\nPresent actionable findings in severity order with file and line references, the affected scenario, supporting evidence, and a minimal proposed fix. Keep verified behavior separate from source-based inferences and clearly state which checks were not run. Do not invent findings; explicitly report when no actionable issues are found and note remaining risks or test gaps. Turn supported findings into a scoped remediation plan with validation steps. Do not implement fixes or modify repository state during review. Present the final review plan, save it with write_plan, and use complete_plan for explicit approval before implementation.`;
+}
+
+/** @deprecated Fable is no longer an activatable planning flavor. Retained for API compatibility. */
 export function buildFablePlanningPrompt(
   plansDirectory: string,
   stage: string,
@@ -119,10 +121,10 @@ export function buildFlavorPlanningPrompt(
   flavor: PlanningFlavor,
   plansDirectory: string,
   evidence: DebugEvidencePacket | undefined,
-  fableStage: string,
-  capabilities: PlanHostCapabilities,
+  _fableStage?: string,
+  _capabilities?: PlanHostCapabilities,
 ): string {
   if (flavor === 'debug') return buildDebugPlanningPrompt(plansDirectory, evidence);
-  if (flavor === 'fable') return buildFablePlanningPrompt(plansDirectory, fableStage, capabilities);
+  if (flavor === 'code-review') return buildCodeReviewPlanningPrompt(plansDirectory);
   return buildNormalPlanningPrompt();
 }

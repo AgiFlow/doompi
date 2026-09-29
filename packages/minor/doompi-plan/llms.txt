@@ -6,4 +6,4 @@
 
 ## How to use
 
-- [doompi-use-plan](./src/prompts/doompi-use-plan/SKILL.md): Draft reviewable normal, debug, or Fable-assisted plans, persist them, and exit safely.
+- [doompi-use-plan](./src/prompts/doompi-use-plan/SKILL.md): Draft reviewable normal, debug, or code review plans, persist them, and exit safely.

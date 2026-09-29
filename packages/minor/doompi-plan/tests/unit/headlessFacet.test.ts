@@ -157,6 +157,20 @@ describe('headless planning resources and selection', () => {
     expect(await test.resources[0]!.read(test.execution)).toBe(
       await readFile(new URL('../../src/prompts/doompi-use-plan/SKILL.md', import.meta.url), 'utf8'),
     );
+    expect(test.tools.map(({ name }) => name).sort()).toEqual(['complete_plan', 'record_debug_evidence', 'write_plan']);
+    expect(test.mode.descriptor.actions.find(({ id }) => id === 'activate')?.parameters).toEqual([
+      {
+        name: 'flavor',
+        label: 'Flavor',
+        kind: 'enum',
+        required: true,
+        choices: [
+          { value: 'normal', label: 'Normal' },
+          { value: 'debug', label: 'Debug' },
+          { value: 'code-review', label: 'Code Review' },
+        ],
+      },
+    ]);
     for (const contribution of [
       ...test.resources,
       ...test.tools,
@@ -168,10 +182,10 @@ describe('headless planning resources and selection', () => {
       });
     }
     await test.close?.();
-    expect(test.dispose).toHaveBeenCalledTimes(10);
+    expect(test.dispose).toHaveBeenCalledTimes(9);
   });
 
-  it.each(['normal', 'debug', 'fable'])(
+  it.each(['normal', 'debug', 'code-review'])(
     'publishes %s activation and restores other minor modes on exit',
     async (flavor) => {
       const test = await fixture();
@@ -190,6 +204,7 @@ describe('headless planning resources and selection', () => {
   it('rejects invalid flavors, unknown actions and aborted activation without changing selection', async () => {
     const test = await fixture();
     await expect(test.action('activate', { flavor: 'invalid' })).rejects.toThrow('valid plan flavor');
+    await expect(test.action('activate', { flavor: 'fable' })).rejects.toThrow('valid plan flavor');
     await expect(test.action('unknown')).rejects.toThrow('Unknown plan mode action');
     await expect(test.action('activate', { flavor: 'normal' }, AbortSignal.abort())).rejects.toThrow();
     expect(test.execution.selection.state?.['minor-mode']).toEqual(['retained']);

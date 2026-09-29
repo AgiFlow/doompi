@@ -26,7 +26,7 @@ export default defineRoot((context: PiPluginContext<undefined>): RootDeclaration
           {
             name: 'doompi-use-plan',
             description:
-              'Use Doom Pi Plan to draft reviewable normal, debug, or Fable-assisted plans, persist them, and exit safely.',
+              'Use Doom Pi Plan to draft reviewable normal, debug, or code review plans, persist them, and exit safely.',
           },
         ],
       },

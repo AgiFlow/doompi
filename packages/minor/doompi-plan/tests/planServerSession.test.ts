@@ -432,17 +432,27 @@ describe('server planning system prompt', () => {
     expect(systemPrompt).toContain('issue: Tools leak when the mode is off');
   });
 
-  it('reports Fable as unavailable rather than idle, because this host has no broker', async () => {
+  it('provides Code Review planning without exposing Fable tools or activation', async () => {
     const f = fixture();
-    const plugin = await activated(f, 'fable');
-
+    const plugin = await activated(f, 'code-review');
     const prompt = await promptFor(f, plugin);
+    expect(prompt).toContain('[PLAN MODE ACTIVE: CODE REVIEW]');
+    expect(prompt).toContain('severity order with file and line references');
+    expect(prompt).not.toContain('Fable');
+    expect(plugin.tools.map((tool) => tool.name)).toEqual(['record_debug_evidence', 'write_plan', 'complete_plan']);
+    await expect(f.mount()('activate', { flavor: 'fable' })).rejects.toThrow('valid plan flavor');
+  });
 
-    expect(prompt).toContain('[PLAN MODE ACTIVE: FABLE]');
-    // This host declares no Fable broker, so the brief says so outright instead of describing a
-    // run_fable_plan handoff the stub tool would refuse.
-    expect(prompt).toContain('Fable planning is unavailable in this host');
-    expect(prompt).not.toContain('call run_fable_plan');
+  it('restores retired Fable sessions as normal planning and preserves model restoration', async () => {
+    const f = fixture();
+    await f.mount()('activate', { flavor: 'normal' });
+    await f.host.context.session.appendCustomEntry('plan-server-flavor', { flavor: 'fable' });
+    const plugin = createPlanServerSession(f.host);
+    await plugin.hooks?.find((hook) => hook.event === 'session_start')?.handle({}, f.host.context);
+    expect(await promptFor(f, plugin)).toContain('[PLAN MODE ACTIVE: NORMAL]');
+    expect(await promptFor(f, plugin)).not.toContain('Fable');
+    await f.mount()('deactivate');
+    expect(f.settings()).toEqual({ model: { provider: 'test', id: 'chat' }, thinkingLevel: 'medium' });
   });
 
   it('keeps the flavor across a restart instead of silently planning as normal', async () => {

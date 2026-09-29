@@ -1,6 +1,6 @@
 # @agimon-ai/doompi-plan
 
-Create and review stored plans in Pi with file edits withheld, explicit completion, and normal, debug, or Fable-assisted flows.
+Create and review stored plans in Pi with file edits withheld, explicit completion, and normal, debug, or code review flows.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
@@ -34,16 +34,18 @@ DoomPi and standalone Pi use the same `@agimon-ai/doompi-plan/extensions/pi` ext
 | --------- | ------------------------------------------------------ |
 | `SPC p e` | Normal planning, and the way out once any flavor is on |
 | `SPC p d` | Debug planning with a bounded evidence packet          |
-| `SPC p f` | Fable-assisted drafting followed by Pi verification    |
+| `SPC p r` | Code Review planning with findings and proposed fixes  |
 
 `SPC p e` reads `enter` while the mode is off and `exit` while it is on, where exiting restores the
 prior model, thinking level, and tool state.
 
 Normal planning expects repository exploration and delegation where available. Debug planning
-separates verified evidence from hypotheses. Fable is an optional Team-provided planning service.
-When Team provides `doom/fable-plan`, Plan treats returned text as untrusted and requires Pi to
-verify and synthesize the final plan. Its child capability ceiling comes from
-`doom/subagent-policy` and is removed when either provider or Plan unloads.
+separates verified evidence from hypotheses. Code Review planning inspects changes read-only,
+reports actionable findings with severity and file references, and proposes scoped fixes with
+validation steps. All three flavors use the same stored-plan and explicit approval workflow.
+Saved Fable sessions resume as normal planning while retaining their original model settings.
+The child capability ceiling comes from `doom/subagent-policy` and is removed when either
+provider or Plan unloads.
 
 A model restoration failure leaves Plan active and reports the failure rather than pretending
 the session was restored.
@@ -102,8 +104,9 @@ calls consume provider quota.
 
 ## Public API
 
-The root exports planning configuration schemas, prompts, Fable flow helpers, and the Plan mode
-service. Focused exports include `/config`, `/plan-config`, `/plan-mode`, `/fable-flow`, and `/prompts`.
+The root exports planning configuration schemas, prompts, and the Plan mode service.
+Legacy Fable helpers remain exported for compatibility but are not registered as planning modes or tools.
+Focused exports include `/config`, `/planConfig`, `/planMode`, `/fableFlow`, and `/prompts`.
 The session-scoped server plugin owns the cockpit plan API. Pi and server entries live in
 `src/extensions`; their public modules are `/extensions/pi` and `/extensions/server`.
 Controllers compose tools and services. Services live in named folders, and `src/exports`

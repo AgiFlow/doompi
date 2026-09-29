@@ -437,8 +437,8 @@ configured.
 A promise to "only plan" is not a permission boundary. [`@agimon-ai/doompi-plan`][pkg-doompi-plan]
 removes Pi's `edit` and `write` tools while the agent explores, persists the plan, and hands it back
 for approval. It does not sandbox Bash, external tools, or the operating system. `SPC p e` enters
-normal planning and leaves it again once on; `SPC p d` is debug planning and `SPC p f` the Fable
-flow.
+normal planning and leaves it again once on; `SPC p d` is debug planning and `SPC p r` is Code Review
+planning, with actionable findings and proposed fixes for approval.
 Turn it on when the approach should be settled before the files move.
 
 #### Loop mode

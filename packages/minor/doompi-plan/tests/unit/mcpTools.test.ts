@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { bindMcpTool, type McpToolCatalog, PLAN_MCP_TOOLS_SERVICE } from '../../src/services/mcpTools';
 
-const TOOL_NAMES = ['complete_plan', 'record_debug_evidence', 'run_fable_plan', 'write_plan'] as const;
+const TOOL_NAMES = ['complete_plan', 'record_debug_evidence', 'write_plan'] as const;
 
 function fixture() {
   let activeModes: string[] = [];
@@ -69,7 +69,7 @@ describe('plan remote MCP tool gate', () => {
     const test = fixture();
 
     expect(() => test.gated.execute('inactive', {}, undefined, undefined, {} as DoomHeadlessExecutionContext)).toThrow(
-      'Plan minor mode is inactive. Inactive Plan tools: complete_plan, record_debug_evidence, run_fable_plan, write_plan.',
+      'Plan minor mode is inactive. Inactive Plan tools: complete_plan, record_debug_evidence, write_plan.',
     );
     expect(test.execute).not.toHaveBeenCalled();
 

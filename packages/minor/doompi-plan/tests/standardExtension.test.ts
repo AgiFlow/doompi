@@ -11,7 +11,7 @@ const { extension: activatePlanExtension } = await import('../generated/pi');
 function runtime(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   const handler = vi.fn();
   return {
-    tools: ['record_debug_evidence', 'run_fable_plan', 'write_plan', 'complete_plan'].map((name) => ({
+    tools: ['record_debug_evidence', 'write_plan', 'complete_plan'].map((name) => ({
       name,
       label: name,
       description: name,

@@ -49,21 +49,11 @@ import {
   resolvePlanningPlansDirectory,
 } from '../../schemas/plan/config';
 import { type PlanModelChoice, planConfigSections, planSettingByFieldId } from '../../schemas/plan/planConfig';
-import {
-  createFablePlanFlow,
-  FABLE_PLAN_PROFILE,
-  FABLE_PLAN_REQUESTER,
-  type FablePlanBroker,
-  type FablePlanResult,
-  type FableStage,
-} from '../../services/fableFlow';
+import type { FablePlanBroker, FableStage } from '../../services/fableFlow';
 import { createPlanTelemetry, PLAN_EVENT, type PlanTelemetry } from '../../services/logSinkTelemetry';
 import {
-  DOOM_FABLE_PLAN_SERVICE,
   DOOM_SUBAGENT_POLICY_SERVICE,
-  type DoomFablePlanService,
   type DoomSubagentPolicyService,
-  readDoomFablePlanService,
   readDoomSubagentPolicyService,
   type SubagentPolicyHandle,
 } from '../../services/optionalTeamServices';
@@ -88,13 +78,13 @@ import {
 import type { PlanPointerPort } from '../../types/planPointer';
 
 /**
- * What this facet's tools accept: complete_plan declares a `decision` enum, the voice path
- * narrates the review, and a Fable broker is resolved for run_fable_plan.
+ * What this facet's tools accept: complete_plan declares a `decision` enum and the voice path
+ * narrates the review.
  */
 export const PLAN_CLI_CAPABILITIES: PlanHostCapabilities = {
   completePlanTakesDecision: true,
   narratesReview: true,
-  fableAvailable: true,
+  fableAvailable: false,
 };
 
 const PLAN_MODE_ENTRY = 'agent-harness-plan-mode';
@@ -192,7 +182,7 @@ const PLAN_VOICE_ACTIVATE_ID = 'plan-activate';
 const PLAN_VOICE_EXIT_ID = 'plan-exit';
 const PLAN_VOICE_ACTIVATE_NAME = 'activate_plan';
 const PLAN_VOICE_EXIT_NAME = 'exit_plan';
-const PLAN_VOICE_FLAVORS = ['normal', 'debug', 'fable'] as const;
+const PLAN_VOICE_FLAVORS = ['normal', 'debug', 'code-review'] as const;
 const PLAN_VOICE_FLAVOR_SCHEMA = { type: 'string', enum: [...PLAN_VOICE_FLAVORS] } as const;
 const PLAN_VOICE_ACTIVATE_INPUT_SCHEMA = {
   type: 'object',
@@ -256,6 +246,7 @@ type PlanModeTrigger =
   | typeof PLAN_MODE_TRIGGER_VOICE_TOOL;
 
 export interface PlanModeExtensionOptions {
+  /** @deprecated Fable planning has been removed; this option is no longer used. */
   fableBroker?: FablePlanBroker;
   debugDiagnosticTools?: readonly string[];
   doomIntegrations?: boolean;
@@ -435,12 +426,13 @@ function parsePlanSnapshot(value: unknown): PlanSnapshot | undefined {
 }
 
 function parsePlanningFlavor(value: unknown): PlanningFlavor | undefined {
-  return value === 'normal' || value === 'debug' || value === 'fable' ? value : undefined;
+  return value === 'normal' || value === 'debug' || value === 'code-review' ? value : undefined;
 }
 
 function parseVersionedPlanState(value: Record<string, unknown>): PersistedPlanModeState | undefined {
   if (value.version !== PLAN_STATE_VERSION) return undefined;
-  const activeFlavor = value.activeFlavor === undefined ? undefined : parsePlanningFlavor(value.activeFlavor);
+  // Restore retired Fable sessions as normal planning without losing their original model snapshot.
+  const activeFlavor = value.activeFlavor === 'fable' ? 'normal' : parsePlanningFlavor(value.activeFlavor);
   if (value.activeFlavor !== undefined && !activeFlavor) return undefined;
   const originalSnapshot = value.originalSnapshot === undefined ? undefined : parsePlanSnapshot(value.originalSnapshot);
   if (value.originalSnapshot !== undefined && !originalSnapshot) return undefined;
@@ -588,7 +580,7 @@ export function planToolRestriction(
   return (incoming) =>
     incoming.filter((name) => {
       if (name === COMPLETE_PLAN_TOOL || name === WRITE_PLAN_TOOL) return flavor !== undefined;
-      if (name === RUN_FABLE_PLAN_TOOL) return flavor === 'fable';
+      if (name === RUN_FABLE_PLAN_TOOL) return false;
       if (name === RECORD_DEBUG_EVIDENCE_TOOL) return flavor === 'debug';
       if (flavor === undefined) return true;
       return !PLAN_MODE_EXCLUDED_TOOLS.has(name);
@@ -706,7 +698,7 @@ export function loadPlanningModeConfig(
  *
  * One entry on `e` rather than an enter row beside an exit row: only one of the
  * two ever does anything, and a menu that prints both makes the reader check the
- * mode line to find out which. `d` and `f` stay on their own keys because they
+ * mode line to find out which. `d` and `r` stay on their own keys because they
  * are flavors of the same mode, reachable whether or not it is already on.
  */
 function planLeaderBindings(active: boolean): LeaderBinding[] {
@@ -734,9 +726,9 @@ function planLeaderBindings(active: boolean): LeaderBinding[] {
       action: { name: 'plan.debug' },
     },
     {
-      id: 'plan.fable',
-      path: [group, { key: 'f', label: 'fable', detail: 'repository-aware draft' }],
-      action: { name: 'plan.fable' },
+      id: 'plan.code-review',
+      path: [group, { key: 'r', label: 'Code Review', detail: 'read-only code review planning' }],
+      action: { name: 'plan.code-review' },
     },
   ];
 }
@@ -774,7 +766,6 @@ export function createPlanModeRuntime(
   let activePlanningConfig: PlanningModeConfig | undefined;
   let capabilityCeiling: SubagentPolicyHandle | undefined;
   let subagentPolicyService: DoomSubagentPolicyService | undefined;
-  let fablePlanService: DoomFablePlanService | undefined;
   let currentPlan: PlanDocument | undefined;
   let activePlanId: string | undefined;
   let planReadyForReview = false;
@@ -783,11 +774,7 @@ export function createPlanModeRuntime(
   let awaitingVoicePlanDecision = false;
   let voiceReviewServices: PlanVoiceReviewServices | undefined;
   let debugEvidence: DebugEvidencePacket | undefined;
-  let fableStage: FableStage = 'idle';
-  let interruptedFableStage: FableStage | undefined;
   let activeContext: ExtensionContext | undefined;
-  let activeFableRun: Promise<FablePlanResult> | undefined;
-  let fableFlow: ReturnType<typeof createFablePlanFlow> | undefined;
   let transitionQueue: Promise<void> = Promise.resolve();
   const doomIntegrations = options.doomIntegrations ?? true;
   const planPointers: PlanPointerPort = options.planPointers ?? new PlanPointerService({ env: process.env });
@@ -800,18 +787,6 @@ export function createPlanModeRuntime(
   };
 
   const runtimeAbortController = new AbortController();
-
-  const fableBroker: FablePlanBroker = options.fableBroker ?? {
-    start: (request, signal) => {
-      const service = fablePlanService;
-      if (!service) throw new Error('The session-bound Fable broker is unavailable.');
-      return service.start(request, signal);
-    },
-    cancel: (operationId, reason) => {
-      fablePlanService?.cancel({ requester: FABLE_PLAN_REQUESTER, operationId, reason });
-    },
-  };
-  const isFableBrokerAvailable = (): boolean => options.fableBroker !== undefined || fablePlanService !== undefined;
 
   function assertRuntimeActive(generation = sessionGeneration): void {
     if (!active || generation !== sessionGeneration) throw new Error('Plan runtime is disposed or stale.');
@@ -875,8 +850,7 @@ export function createPlanModeRuntime(
       const cleanupContext = activeContext;
       const cleanupSnapshot = planSnapshot;
       const cleanupErrors: unknown[] = [];
-      fableFlow?.cancel('Plan runtime is shutting down.');
-      const pendingWork = [transitionQueue, ...(activeFableRun ? [activeFableRun] : [])];
+      const pendingWork = [transitionQueue];
       const settledWork = await Promise.allSettled(pendingWork);
       for (const result of settledWork) {
         if (result.status === 'rejected') cleanupErrors.push(result.reason);
@@ -915,7 +889,6 @@ export function createPlanModeRuntime(
       planConfigContribution = undefined;
       leaderContribution = undefined;
       modeOwner = undefined;
-      activeFableRun = undefined;
       activeContext = undefined;
       awaitingVoicePlanDecision = false;
       enabled = false;
@@ -940,12 +913,11 @@ export function createPlanModeRuntime(
 
   function currentPlanModeState(): MinorModeState {
     const flavor = activeFlavor;
-    const stage = flavor === 'fable' && fableStage !== 'idle' ? ` · ${fableStage}` : '';
     return {
       activation: enabled ? 'active' : 'inactive',
-      condition: fableStage === 'failed' ? 'failed' : fableStage === 'interrupted' ? 'degraded' : 'ready',
+      condition: 'ready',
       ...(enabled && flavor
-        ? { detail: `${flavor}${stage} - ${READ_ONLY_DETAIL}`, color: WARNING_STYLE, modelContextVariant: flavor }
+        ? { detail: `${flavor} - ${READ_ONLY_DETAIL}`, color: WARNING_STYLE, modelContextVariant: flavor }
         : {}),
       actions: [
         { id: MODE_ACTIVATE_ACTION, enabled: true },
@@ -1037,13 +1009,12 @@ export function createPlanModeRuntime(
   function updateCapabilityCeiling(): void {
     if (!active || !doomIntegrations || !enabled || !activeFlavor || !activeContext) return;
     const allowedTools = [...CHILD_EXPLORATION_TOOLS];
-    const allowedExternalProfiles = activeFlavor === 'fable' ? [FABLE_PLAN_PROFILE] : [];
     const policy = {
       owner: PLAN_LEADER_SOURCE,
       allowedTools,
       requiredTools: [BASH_TOOL],
       allowMcpTools: true,
-      allowedExternalProfiles,
+      allowedExternalProfiles: [],
       denyExtensions: false,
     };
     if (capabilityCeiling) capabilityCeiling.update(policy);
@@ -1065,7 +1036,6 @@ export function createPlanModeRuntime(
           }
         : {}),
       ...(activePlanId ? { planId: activePlanId } : {}),
-      ...(interruptedFableStage ? { interruptedFableStage } : {}),
     } satisfies PersistedPlanModeState);
   }
 
@@ -1166,32 +1136,6 @@ export function createPlanModeRuntime(
     return queued;
   }
 
-  async function cancelFableOperation(reason: string): Promise<void> {
-    const generation = sessionGeneration;
-    assertRuntimeActive(generation);
-    if (!activeFableRun && !fableStage.match(/^(draft|review)$/u)) return;
-    if (fableStage === 'draft' || fableStage === 'review') interruptedFableStage = fableStage;
-    fableFlow?.cancel(reason);
-    const pending = activeFableRun;
-    if (pending) {
-      try {
-        await pending;
-        assertRuntimeActive(generation);
-      } catch (error) {
-        assertRuntimeActive(generation);
-        void telemetry.recordError(PLAN_EVENT.modeDisabled, error, {
-          [PLAN_FLAVOR_ATTRIBUTE]: 'fable',
-          'plan.fable.reason': 'cancel_failed',
-        });
-      }
-    }
-    assertRuntimeActive(generation);
-    activeFableRun = undefined;
-    if (interruptedFableStage) fableStage = 'interrupted';
-    if (activeContext) updateStatus(activeContext);
-    persistState();
-  }
-
   async function activateFlavor(
     ctx: ExtensionContext,
     flavor: PlanningFlavor,
@@ -1206,7 +1150,6 @@ export function createPlanModeRuntime(
         reportCurrentFlavor(ctx);
         return;
       }
-      if (activeFlavor === 'fable') await cancelFableOperation(`Leaving Fable for plan:${flavor}.`);
       assertRuntimeActive(generation);
       activeFlavor = flavor;
       updateCapabilityCeiling();
@@ -1234,8 +1177,6 @@ export function createPlanModeRuntime(
       planReadyForReview = false;
       awaitingVoicePlanDecision = false;
       activePlanId = createPlanIdentifier();
-      interruptedFableStage = undefined;
-      fableStage = 'idle';
     } else {
       activePlanId ??= createPlanIdentifier();
     }
@@ -1269,7 +1210,6 @@ export function createPlanModeRuntime(
       reportCurrentFlavor(ctx);
       return false;
     }
-    await cancelFableOperation('Plan mode is exiting.');
     assertRuntimeActive(generation);
     const snapshot = planSnapshot;
     const restored = await restoreMainAgent(ctx, snapshot);
@@ -1296,8 +1236,6 @@ export function createPlanModeRuntime(
     awaitingVoicePlanDecision = false;
     planSnapshot = undefined;
     debugEvidence = undefined;
-    fableStage = 'idle';
-    interruptedFableStage = undefined;
     updateStatus(ctx);
     persistState();
     void telemetry.recordEvent(PLAN_EVENT.modeDisabled, {
@@ -1308,25 +1246,6 @@ export function createPlanModeRuntime(
     });
     return true;
   }
-
-  fableFlow = createFablePlanFlow({
-    broker: fableBroker,
-    isAuthorized: () => active && enabled && activeFlavor === 'fable' && isFableBrokerAvailable(),
-    onStage: (stage) => {
-      if (!active) return;
-      fableStage = stage;
-      if (stage === 'completed' || stage === 'failed' || stage === 'cancelled') interruptedFableStage = undefined;
-      if (activeContext) updateStatus(activeContext);
-      if (enabled) persistState();
-    },
-    onError: (error) => {
-      if (!active) return;
-      void telemetry.recordError(PLAN_EVENT.modeEnabled, error, {
-        [PLAN_FLAVOR_ATTRIBUTE]: 'fable',
-        'plan.fable.reason': 'flow_error',
-      });
-    },
-  });
 
   async function applyPlanReviewDecision(
     decision: typeof EXIT_PLAN_DECISION | typeof CONTINUE_PLAN_DECISION,
@@ -1372,16 +1291,6 @@ export function createPlanModeRuntime(
             handle.dispose();
           };
         });
-        cordis.inject([DOOM_FABLE_PLAN_SERVICE], (serviceContext) => {
-          const service = readDoomFablePlanService(serviceContext);
-          if (!service) return undefined;
-          fablePlanService = service;
-          return () => {
-            if (fablePlanService !== service) return;
-            fablePlanService = undefined;
-            if (activeFableRun) fableFlow?.cancel('The Team Fable service was unloaded.');
-          };
-        });
         cordis.inject([DOOM_SUBAGENT_POLICY_SERVICE], (serviceContext) => {
           const service = readDoomSubagentPolicyService(serviceContext);
           if (!service) return undefined;
@@ -1411,7 +1320,7 @@ export function createPlanModeRuntime(
                 source: PLAN_LEADER_SOURCE,
                 id: MODE_ID,
                 label: MODE_LABEL,
-                description: 'Read-only planning with normal, debug, and Fable flavors.',
+                description: 'Read-only planning with normal, debug, and code review flavors.',
                 order: MODE_ORDER,
                 actions: [
                   {
@@ -1428,7 +1337,7 @@ export function createPlanModeRuntime(
                         choices: [
                           { value: 'normal', label: 'Normal' },
                           { value: 'debug', label: 'Debug' },
-                          { value: 'fable', label: 'Fable' },
+                          { value: 'code-review', label: 'Code Review' },
                         ],
                       },
                     ],
@@ -1447,7 +1356,7 @@ export function createPlanModeRuntime(
                 if (!active) throw new Error('Plan runtime is disposed.');
                 if (actionId === MODE_ACTIVATE_ACTION) {
                   const flavor = argumentsValue.flavor;
-                  if (flavor !== 'normal' && flavor !== 'debug' && flavor !== 'fable') {
+                  if (flavor !== 'normal' && flavor !== 'debug' && flavor !== 'code-review') {
                     throw new Error('A valid plan flavor is required.');
                   }
                   await queueTransition(() =>
@@ -1614,10 +1523,10 @@ export function createPlanModeRuntime(
                     ? queueTransition(() => activateFlavor(ctx, 'debug', PLAN_MODE_TRIGGER_LEADER, false))
                     : undefined;
                 },
-                'plan.fable': () => {
+                'plan.code-review': () => {
                   const ctx = active ? activeContext : undefined;
                   return ctx
-                    ? queueTransition(() => activateFlavor(ctx, 'fable', PLAN_MODE_TRIGGER_LEADER, false))
+                    ? queueTransition(() => activateFlavor(ctx, 'code-review', PLAN_MODE_TRIGGER_LEADER, false))
                     : undefined;
                 },
               },
@@ -1692,61 +1601,6 @@ export function createPlanModeRuntime(
             content: [{ type: 'text', text: 'Debug evidence recorded as optional planning context.' }],
             details: { recorded: true },
           };
-        },
-      },
-      {
-        name: RUN_FABLE_PLAN_TOOL,
-        label: 'Run Fable Plan',
-        description:
-          'Send a bounded, sanitized planning packet to the local Fable broker for one repository-aware draft.',
-        promptSnippet: 'Run the local Fable draft with the bounded planning packet',
-        parameters: {
-          type: 'object',
-          properties: {
-            goal: { type: 'array', items: { type: 'string' } },
-            constraints: { type: 'array', items: { type: 'string' } },
-            decisions: { type: 'array', items: { type: 'string' } },
-            verifiedFindings: { type: 'array', items: { type: 'object' } },
-            inferredFindings: { type: 'array', items: { type: 'string' } },
-            unresolvedQuestions: { type: 'array', items: { type: 'string' } },
-            currentPlan: { type: 'string' },
-          },
-          additionalProperties: false,
-        },
-        async execute(_toolCallId, params, signal) {
-          const generation = sessionGeneration;
-          assertRuntimeActive(generation);
-          if (!enabled || activeFlavor !== 'fable') {
-            return {
-              content: [{ type: 'text', text: 'Fable planning is not active.' }],
-              details: { started: false } as Record<string, unknown>,
-            };
-          }
-          if (!isFableBrokerAvailable()) {
-            return {
-              content: [
-                { type: 'text', text: 'The local Fable broker is unavailable. Fable planning remains disabled.' },
-              ],
-              details: { started: false, errorCode: 'broker_unavailable' } as Record<string, unknown>,
-            };
-          }
-          const flow = fableFlow;
-          if (!flow) throw new Error('Fable planning flow is unavailable.');
-          const operation = flow.run(params, signal);
-          activeFableRun = operation;
-          try {
-            const result = await operation;
-            assertRuntimeActive(generation);
-            const text = result.draft
-              ? `Fable draft:\n${result.draft}`
-              : `Fable planning ${result.status}: ${result.errorCode ?? 'no output'}.`;
-            return {
-              content: [{ type: 'text', text }],
-              details: { ...result, started: true } as Record<string, unknown>,
-            };
-          } finally {
-            if (active && generation === sessionGeneration && activeFableRun === operation) activeFableRun = undefined;
-          }
         },
       },
       {
@@ -2057,7 +1911,7 @@ export function createPlanModeRuntime(
           );
           sections.push(
             buildPlanModeBasePrompt(plansDirectory, PLAN_CLI_CAPABILITIES),
-            buildFlavorPlanningPrompt(activeFlavor!, plansDirectory, debugEvidence, fableStage, PLAN_CLI_CAPABILITIES),
+            buildFlavorPlanningPrompt(activeFlavor!, plansDirectory, debugEvidence),
           );
         }
         if (currentPlan) {
@@ -2128,8 +1982,6 @@ export function createPlanModeRuntime(
         // would otherwise still offer the exit the previous session left on it.
         updateLeader();
         planSnapshot = state?.originalSnapshot;
-        interruptedFableStage = state?.interruptedFableStage;
-        fableStage = interruptedFableStage ? 'interrupted' : 'idle';
         activeContext = ctx;
         if (state?.activeFlavor) {
           await activateFlavor(ctx, state.activeFlavor, PLAN_MODE_TRIGGER_SESSION_RESTORE, true);
