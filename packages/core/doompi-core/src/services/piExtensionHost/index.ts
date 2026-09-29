@@ -39,7 +39,12 @@ import {
   type ToolInfo,
 } from '@earendil-works/pi-coding-agent';
 
-import type { DoomHeadlessClient, DoomHeadlessClientRequest, DoomHeadlessToolResult } from '../../exports/headless';
+import {
+  toDoomHeadlessToolResult,
+  type DoomHeadlessClient,
+  type DoomHeadlessClientRequest,
+  type DoomHeadlessToolResult,
+} from '../../exports/headless';
 import {
   connectDoomCordisHost,
   DOOM_CORDIS_SERVER_SERVICES,
@@ -181,6 +186,8 @@ export interface PiExtensionHostOptions {
   readonly cwd: string;
   readonly agentDir: string;
   readonly models: ModelRuntime;
+  /** Backs Pi's `getSettings()`, the same manager that resolved the settings packages. */
+  readonly settings: SettingsManager;
   readonly runtime: DirectHarnessRuntime;
   /**
    * Extensions already loaded by `preloadPiExtensions`, or undefined when this worktree
@@ -321,10 +328,12 @@ async function executePiTool(
     toolCallId,
     prepared,
     signal,
-    (partial) => onUpdate?.({ content: partial.content, details: partial.details }),
-    runner().createContext(),
+    (partial) => onUpdate?.(toDoomHeadlessToolResult(partial)),
+    // ponytail: the runner has no executeTool bound, so nested calls return an isError result.
+    // Bind contextActions.executeTool/getCallableTools in bindCore when codemode must run here.
+    runner().createToolContext(toolCallId, signal),
   );
-  return { content: result.content, details: result.details };
+  return toDoomHeadlessToolResult(result);
 }
 
 function toHarnessTool(
@@ -349,6 +358,11 @@ function toHarnessTool(
         context.abortSignal,
         (partial) => onUpdate({ content: partial.content, details: partial.details }),
       );
+      // Pi 0.99 lets a tool report failure without throwing. The harness reads a throw as the failed call.
+      if (result.isError) {
+        const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('\n');
+        throw new Error(text || `Tool '${definition.name}' failed`);
+      }
       return { content: result.content, details: result.details };
     },
   };
@@ -701,6 +715,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     },
     // Harness SessionMetadata carries no display name, and Pi allows this to be absent.
     getSessionName: () => undefined,
+    getSettings: () => options.settings.getSettings(),
     setLabel: (entryId, label) => {
       void runtime
         .setLabel(sessionSync?.toHarnessId(entryId) ?? entryId, label)
@@ -712,6 +727,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         name: tool.definition.name,
         description: tool.definition.description,
         parameters: tool.definition.parameters,
+        exposure: tool.definition.exposure ?? 'direct',
         ...(tool.definition.promptGuidelines === undefined
           ? {}
           : { promptGuidelines: tool.definition.promptGuidelines }),

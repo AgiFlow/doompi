@@ -4,7 +4,12 @@ import path from 'node:path';
 
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { DOOM_MCP_BUNDLE_FILE } from '@agimon-ai/doompi-core/mcpFacet';
-import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '@agimon-ai/doompi-core/piSettings';
+import {
+  AMBIENT_EXTENSION_FILTER,
+  DISABLED_PI_BUILTINS,
+  readPiSettings,
+  writePiSettings,
+} from '@agimon-ai/doompi-core/piSettings';
 import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/serverFacet';
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/syncLocation';
 import {
@@ -637,7 +642,7 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(fs.existsSync(location.statePath)).toBe(false);
     expect(readPiSettings(agentDirectory(root))).toMatchObject({
       quietStartup: true,
-      extensions: ['@agimon-ai/doompi', AMBIENT_EXTENSION_FILTER],
+      extensions: ['@agimon-ai/doompi', AMBIENT_EXTENSION_FILTER, ...DISABLED_PI_BUILTINS],
       themes: [`themes/${DEFAULT_THEME_NAME}.json`],
     });
     const dispatcherPath = piExtensionAliasPath(agentDirectory(root));

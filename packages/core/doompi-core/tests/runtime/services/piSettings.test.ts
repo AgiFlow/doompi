@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   AMBIENT_EXTENSION_FILTER,
+  DISABLED_PI_BUILTINS,
   mergePiSettings,
   piAgentDirectory,
   piSettingsPath,
@@ -52,7 +53,7 @@ describe('mergePiSettings', () => {
     const merged = mergePiSettings({}, '/agent', UPDATE);
 
     expect(merged.quietStartup).toBe(true);
-    expect(merged.extensions).toEqual(['@agimon-ai/doompi', AMBIENT_EXTENSION_FILTER]);
+    expect(merged.extensions).toEqual(['@agimon-ai/doompi', AMBIENT_EXTENSION_FILTER, ...DISABLED_PI_BUILTINS]);
     expect(merged.themes).toEqual(['themes/doom-pi-dark.json']);
   });
 
@@ -80,7 +81,12 @@ describe('mergePiSettings', () => {
       UPDATE,
     );
 
-    expect(merged.extensions).toEqual(['@agimon-ai/doompi', AMBIENT_EXTENSION_FILTER, ...existing]);
+    expect(merged.extensions).toEqual([
+      '@agimon-ai/doompi',
+      AMBIENT_EXTENSION_FILTER,
+      ...DISABLED_PI_BUILTINS,
+      ...existing,
+    ]);
     expect(merged.themes).toEqual(['themes/doom-pi-dark.json', './mine.json']);
   });
 
@@ -91,7 +97,12 @@ describe('mergePiSettings', () => {
       UPDATE,
     );
 
-    expect(merged.extensions).toEqual(['@agimon-ai/doompi', AMBIENT_EXTENSION_FILTER, './mine.ts']);
+    expect(merged.extensions).toEqual([
+      '@agimon-ai/doompi',
+      AMBIENT_EXTENSION_FILTER,
+      ...DISABLED_PI_BUILTINS,
+      './mine.ts',
+    ]);
   });
 
   it('keeps a theme the user picked rather than reimposing the Doom one', () => {
@@ -116,7 +127,7 @@ describe('writePiSettings', () => {
     expect(readPiSettings(agentDirectory)).toMatchObject({
       defaultProvider: 'anthropic',
       quietStartup: true,
-      extensions: ['@agimon-ai/doompi', AMBIENT_EXTENSION_FILTER],
+      extensions: ['@agimon-ai/doompi', AMBIENT_EXTENSION_FILTER, ...DISABLED_PI_BUILTINS],
       themes: ['themes/doom-pi-dark.json'],
     });
   });

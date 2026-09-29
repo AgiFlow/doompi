@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { AMBIENT_EXTENSION_FILTER, DOOM_EXTENSION, readPiSettings } from '@agimon-ai/doompi-core/runtimePiSettings';
+import {
+  AMBIENT_EXTENSION_FILTER,
+  DISABLED_PI_BUILTINS,
+  DOOM_EXTENSION,
+  readPiSettings,
+} from '@agimon-ai/doompi-core/runtimePiSettings';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { piExtensionAliasPath } from '../../src/builders/cli/piExtensionAlias';
@@ -64,7 +69,7 @@ describe('InitCommand', () => {
 
     expect(readPiSettings(agentDirectory)).toEqual({
       quietStartup: true,
-      extensions: [DOOM_EXTENSION, AMBIENT_EXTENSION_FILTER],
+      extensions: [DOOM_EXTENSION, AMBIENT_EXTENSION_FILTER, ...DISABLED_PI_BUILTINS],
       themes: ['themes/doom-pi-dark.json'],
       theme: 'doom-pi-dark',
     });
@@ -113,7 +118,7 @@ describe('InitCommand', () => {
     expect(readPiSettings(agentDirectory)).toEqual({
       defaultProvider: 'anthropic',
       quietStartup: true,
-      extensions: [DOOM_EXTENSION, AMBIENT_EXTENSION_FILTER, './mine.ts'],
+      extensions: [DOOM_EXTENSION, AMBIENT_EXTENSION_FILTER, ...DISABLED_PI_BUILTINS, './mine.ts'],
       themes: ['themes/doom-pi-dark.json', './mine.json'],
       theme: 'light',
       subagents: { agentOverrides: {} },

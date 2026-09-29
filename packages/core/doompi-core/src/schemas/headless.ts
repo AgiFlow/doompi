@@ -47,6 +47,27 @@ export interface DoomHeadlessToolResult {
   isError?: boolean;
 }
 
+/**
+ * Narrows a Pi tool result to the headless contract. Pi types `structuredContent` as any JSON
+ * value, while MCP only accepts an object, so anything else is dropped rather than forwarded.
+ */
+export function toDoomHeadlessToolResult(result: {
+  readonly content: DoomHeadlessContent[];
+  readonly details?: unknown;
+  readonly structuredContent?: unknown;
+  readonly isError?: boolean;
+}): DoomHeadlessToolResult {
+  const { structuredContent } = result;
+  return {
+    content: result.content,
+    details: result.details,
+    ...(typeof structuredContent === 'object' && structuredContent !== null && !Array.isArray(structuredContent)
+      ? { structuredContent: structuredContent as Record<string, unknown> }
+      : {}),
+    ...(result.isError === undefined ? {} : { isError: result.isError }),
+  };
+}
+
 export interface DoomHeadlessClientRequest {
   kind: 'confirm' | 'select' | 'input';
   title: string;
