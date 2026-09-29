@@ -67,3 +67,11 @@ describe('evenPositions', () => {
     expect(evenPositions(0)).toEqual([]);
   });
 });
+
+describe('unavailable counters', () => {
+  it('does not turn missing values into measured zeros', () => {
+    expect(formatTokens(Number.NaN)).toBe('Not reported');
+    expect(formatTokens(Number.POSITIVE_INFINITY)).toBe('Not reported');
+    expect(formatTokens(0)).toBe('0');
+  });
+});

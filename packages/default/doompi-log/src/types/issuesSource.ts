@@ -8,6 +8,8 @@
  */
 
 export interface IssuesQueryParams {
+  startTime?: string;
+  endTime?: string;
   /** Narrows to one hashed session, matching the metrics session dimension. */
   sessionId?: string;
   /** How many incidents to return; the counts are unaffected. */

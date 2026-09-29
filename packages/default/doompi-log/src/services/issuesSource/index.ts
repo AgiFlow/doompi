@@ -46,6 +46,8 @@ function runCli(params: IssuesQueryParams, dbPath: string | undefined): Promise<
         '--limit',
         String(params.limit),
         ...(params.sessionId === undefined ? [] : ['--session-id', params.sessionId]),
+        ...(params.startTime === undefined ? [] : ['--start-time', params.startTime]),
+        ...(params.endTime === undefined ? [] : ['--end-time', params.endTime]),
         ...(dbPath === undefined ? [] : ['--db-path', dbPath]),
       ],
       { timeout: CLI_TIMEOUT_MS, maxBuffer: MAX_CLI_BUFFER },

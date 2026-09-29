@@ -115,9 +115,9 @@ function appliedFocus(report: LogMetricsReport, dimension: MetricsDimension): st
  * arrives is an ISO string. Trusting the declared type here throws on every
  * real response, which no test using a hand-built Date would ever catch.
  */
-function generatedAtIso(value: LogMetricsReport['generatedAt']): string {
+function generatedAtIso(value: Date | string): string {
   if (value instanceof Date) return value.toISOString();
-  const parsed = new Date(value as unknown as string);
+  const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? new Date(0).toISOString() : parsed.toISOString();
 }
 
@@ -125,12 +125,16 @@ function toReport(report: LogMetricsReport, source: MetricsSource, dimension: Me
   const focus = appliedFocus(report, dimension);
   return {
     generatedAt: generatedAtIso(report.generatedAt),
+    ...(report.filters?.startTime === undefined ? {} : { startTime: generatedAtIso(report.filters.startTime) }),
+    endTime: generatedAtIso(report.filters?.endTime ?? report.generatedAt),
     dimension: report.groupBy as MetricsDimension,
     period: report.period as MetricsPeriod,
     bucketUnit: String(report.bucket),
     transport: source.lastTransport(),
     ...(focus === undefined ? {} : { focus }),
     totals: {
+      usageEventCount: report.totals.usageEventCount,
+      totalRecords: report.totals.totalRecords,
       totalTokens: report.totals.totalTokens,
       inputTokens: report.totals.inputTokens,
       outputTokens: report.totals.outputTokens,
@@ -226,9 +230,25 @@ export function createLogHubApi(options: HubApiOptions = {}): Hono {
    */
   app.get(routes.issues.path, async (context) => {
     const focus = context.req.query(METRICS_QUERY_PARAMS.focus);
+    const startTime = context.req.query('startTime');
+    const endTime = context.req.query('endTime');
+    // Only ISO instants are accepted at this boundary, not locale-dependent dates.
+    const validTime = (value: string | undefined): boolean =>
+      value === undefined ||
+      (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
+        Number.isFinite(Date.parse(value)));
+    if (
+      !validTime(startTime) ||
+      !validTime(endTime) ||
+      (startTime !== undefined && endTime !== undefined && Date.parse(startTime) > Date.parse(endTime))
+    ) {
+      return context.json({ error: 'Issue time bounds must be valid ISO instants in chronological order.' }, 400);
+    }
     try {
       const report = await issues.query({
         limit: ISSUE_SAMPLE_LIMIT,
+        ...(startTime === undefined ? {} : { startTime }),
+        ...(endTime === undefined ? {} : { endTime }),
         ...(focus === undefined || focus === '' ? {} : { sessionId: focus }),
       });
       return context.json(report satisfies IssuesView);

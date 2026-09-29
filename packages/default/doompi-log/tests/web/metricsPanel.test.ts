@@ -61,7 +61,10 @@ describe('the metrics panel', () => {
     expect(rendered.html).toContain('data-testid="metrics-panel"');
     // The controls are usable before any data lands, so the reader can change
     // dimension or period while the first request is still in flight.
-    expect(rendered.includes('refresh')).toBe(true);
+    expect(rendered.html).toContain('data-testid="metrics-refresh"');
+    expect(rendered.html).toContain('aria-label="Group metrics by"');
+    expect(rendered.html).toContain('aria-label="Metrics period"');
+    expect(rendered.includes('Loading recorded metrics')).toBe(true);
   });
 });
 
@@ -109,7 +112,7 @@ describe('the group bars', () => {
     expect(rendered.error).toBeUndefined();
     expect(rendered.html).toContain('aria-pressed="true"');
     expect(rendered.includes('sonnet')).toBe(true);
-    expect(rendered.includes('ok')).toBe(true);
+    expect(rendered.includes('0 issues')).toBe(true);
   });
 
   it('renders as plain rows when the caller offers no drill-down', () => {
@@ -125,8 +128,9 @@ describe('the issues section', () => {
     const rendered = renderPlugin(IssuesSection, { tools: TOOLS });
 
     expect(rendered.error).toBeUndefined();
-    expect(rendered.includes('show detail')).toBe(true);
-    expect(rendered.includes('no issues endpoint')).toBe(true);
+    expect(rendered.includes('Inspect issues')).toBe(true);
+    expect(rendered.includes('loaded on demand')).toBe(true);
+    expect(rendered.html).toContain('aria-expanded="false"');
   });
 });
 
@@ -167,7 +171,8 @@ describe('the report view', () => {
     const rendered = renderPlugin(MetricsReportView, { report, onFocus: () => undefined });
 
     expect(rendered.includes('cache reads')).toBe(true);
-    expect(rendered.includes('do not sum to it')).toBe(true);
+    expect(rendered.includes('may not sum to the total')).toBe(true);
+    expect(rendered.includes('A gap is not evidence of cache traffic')).toBe(true);
   });
 
   it('warns that session keys are hashed and cannot be opened', () => {
@@ -190,7 +195,8 @@ describe('the report view', () => {
 
     // '0 cache reads' was on a real page while the hub simply had not sent it.
     expect(rendered.includes('0 cache reads')).toBe(false);
-    expect(rendered.includes('\u2014 cache reads')).toBe(true);
+    expect(rendered.includes('Not reported')).toBe(true);
+    expect(rendered.html).toMatch(/Cache reads<\/dt><dd[^>]*>Not reported<\/dd>/);
   });
 });
 

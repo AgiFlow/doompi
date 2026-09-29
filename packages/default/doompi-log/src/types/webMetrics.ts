@@ -10,7 +10,7 @@
  * package. What crosses the wire is what a chart reads.
  *
  * Two things the sink does not have, so this contract does not pretend to:
- * money, and per-tool failures. The sink records tokens only, and its tool rows
+ * money, and per-tool failures. This metrics report records tokens, and its tool rows
  * carry an invocation count with no error field.
  */
 
@@ -100,16 +100,19 @@ export interface MetricsTool {
 export type MetricsTransport = 'http' | 'worker';
 
 export interface MetricsTotals {
+  /** Optional so an older hub remains distinguishable from a measured zero. */
+  usageEventCount?: number;
+  totalRecords?: number;
   /**
    * The providers' own reported total. It is not inputTokens + outputTokens:
-   * on a cached agent workload it is dominated by cache traffic, and those two
-   * fields are a fraction of a percent of it. The page must never present the
-   * three as a breakdown.
+   * providers report these counters independently. Their relationship cannot
+   * be inferred from a difference, so the page must not stack them as parts
+   * of the total or label the difference as cache traffic.
    */
   totalTokens: number;
   inputTokens: number;
   outputTokens: number;
-  /** Cache reads, usually the largest real component of totalTokens. */
+  /** Independently reported cache reads, not an inferred remainder. */
   cachedTokens: number;
   reasoningTokens: number;
   groupCount: number;
@@ -119,6 +122,9 @@ export interface MetricsTotals {
 }
 
 export interface MetricsReport {
+  /** Echoed query window, so issue details can use the same recorded period. */
+  startTime?: string;
+  endTime?: string;
   generatedAt: string;
   dimension: MetricsDimension;
   period: MetricsPeriod;

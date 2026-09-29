@@ -278,4 +278,72 @@ describe('the log hub API', () => {
     expect(response.status).toBe(200);
     expect(((await response.json()) as MetricsUnavailable).unavailable).toBe('query-error');
   });
+  it('preserves observed counters and the sink window without inferring cache usage', async () => {
+    const base = reportWith();
+    const source = sourceReturning(
+      reportWith({
+        generatedAt: new Date('2026-09-29T00:23:58.946Z'),
+        filters: { startTime: '2026-09-22T00:23:58.904Z' },
+        totals: {
+          ...base.totals,
+          totalTokens: 178845,
+          inputTokens: 25428,
+          outputTokens: 969,
+          cachedInputTokens: 0,
+          usageEventCount: 8,
+          totalRecords: 3336,
+        },
+      }),
+    );
+    const app = createLogHubApi({ source });
+    const body = (await (await app.fetch(new Request('http://hub/metrics'))).json()) as MetricsReport;
+    expect(body.totals).toMatchObject({
+      totalTokens: 178845,
+      inputTokens: 25428,
+      outputTokens: 969,
+      cachedTokens: 0,
+      usageEventCount: 8,
+      totalRecords: 3336,
+    });
+    expect(body.startTime).toBe('2026-09-22T00:23:58.904Z');
+    expect(body.endTime).toBe('2026-09-29T00:23:58.946Z');
+  });
+
+  it('leaves counters absent when an older sink omitted them', async () => {
+    const app = createLogHubApi({ source: sourceReturning(reportWith()) });
+    const body = (await (await app.fetch(new Request('http://hub/metrics'))).json()) as MetricsReport;
+    expect(body.totals.usageEventCount).toBeUndefined();
+    expect(body.totals.totalRecords).toBeUndefined();
+  });
+
+  it('passes the exact issue-analysis window alongside the session filter', async () => {
+    const issues = { query: vi.fn().mockResolvedValue({ samples: [] }) } as unknown as IssuesSource;
+    const app = createLogHubApi({ source: sourceReturning(reportWith()), issues });
+    const params = new URLSearchParams({
+      focus: 'id_abc',
+      startTime: '2026-09-22T00:23:58.904Z',
+      endTime: '2026-09-29T00:23:58.946Z',
+    });
+    const response = await app.fetch(new Request(`http://hub/issues?${params.toString()}`));
+    expect(response.status).toBe(200);
+    expect(issues.query).toHaveBeenCalledWith({
+      limit: 50,
+      sessionId: 'id_abc',
+      startTime: '2026-09-22T00:23:58.904Z',
+      endTime: '2026-09-29T00:23:58.946Z',
+    });
+  });
+
+  it('rejects malformed or reversed issue windows before starting a subprocess', async () => {
+    const issues = { query: vi.fn() } as unknown as IssuesSource;
+    const app = createLogHubApi({ source: sourceReturning(reportWith()), issues });
+    for (const query of [
+      'startTime=not-a-date',
+      'endTime=2026-09-29',
+      'startTime=2026-09-29T00:00:00Z&endTime=2026-09-28T00:00:00Z',
+    ]) {
+      expect((await app.fetch(new Request(`http://hub/issues?${query}`))).status).toBe(400);
+    }
+    expect(issues.query).not.toHaveBeenCalled();
+  });
 });

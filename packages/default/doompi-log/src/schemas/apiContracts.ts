@@ -8,18 +8,22 @@ const O = Type.Optional;
 const literals = <T extends string>(values: T[]) => Type.Union(values.map((value) => Type.Literal(value)));
 const Dimension = literals(['session', 'agent', 'model', 'provider']);
 const Period = literals(['day', 'week', 'month', 'all']);
-const Unavailable = Type.Object({ unavailable: literals(['no-sink', 'no-data', 'no-api']), detail: S });
+const Unavailable = Type.Object({ unavailable: literals(['no-sink', 'no-data', 'no-api', 'query-error']), detail: S });
 const Tokens = { totalTokens: N, inputTokens: N, outputTokens: N };
 export const MetricsResponseSchema = Type.Union([
   Unavailable,
   Type.Object({
     generatedAt: S,
+    startTime: O(S),
+    endTime: O(S),
     dimension: Dimension,
     period: Period,
     bucketUnit: S,
     focus: O(S),
-    transport: O(literals(['http', 'cli'])),
+    transport: O(literals(['http', 'worker'])),
     totals: Type.Object({
+      usageEventCount: O(N),
+      totalRecords: O(N),
       ...Tokens,
       cachedTokens: N,
       reasoningTokens: N,
@@ -87,7 +91,11 @@ export const apiContracts = defineApiContract({
       method: 'GET',
       authentication: 'owner',
       description: 'Read log issue details.',
-      parameters: [{ name: 'focus', in: 'query', required: false, schema: S }],
+      parameters: [
+        { name: 'focus', in: 'query', required: false, schema: S },
+        { name: 'startTime', in: 'query', required: false, schema: S },
+        { name: 'endTime', in: 'query', required: false, schema: S },
+      ],
       responses: jsonApiResponses(IssuesResponseSchema),
     },
   ]),

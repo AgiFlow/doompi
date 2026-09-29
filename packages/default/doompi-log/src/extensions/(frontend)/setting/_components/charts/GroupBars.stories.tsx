@@ -51,3 +51,35 @@ export const Empty = {
     </div>
   ),
 };
+
+export const Unattributed = {
+  render: () => (
+    <div className="w-screen max-w-sm bg-doom-bg p-4">
+      <GroupBars
+        groups={[
+          { key: 'unknown', totalTokens: 178845, inputTokens: 25428, outputTokens: 969, issueCount: 1, failed: false },
+        ]}
+        totalTokens={178845}
+        onFocus={() => undefined}
+      />
+    </div>
+  ),
+};
+export const ManyGroups = {
+  render: () => (
+    <div className="w-screen max-w-sm bg-doom-bg p-4">
+      <GroupBars
+        groups={Array.from({ length: 12 }, (_, i) => ({
+          key: `session-hash-with-a-long-identifier-${i}`,
+          totalTokens: 12000 - i * 1000,
+          inputTokens: 0,
+          outputTokens: 0,
+          issueCount: i % 3,
+          failed: false,
+        }))}
+        totalTokens={78000}
+        onFocus={() => undefined}
+      />
+    </div>
+  ),
+};
