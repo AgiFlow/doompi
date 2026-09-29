@@ -47,6 +47,8 @@ Before committing a workflow, run `workflow-mcp doctor <file-or-directory> --run
 
 An agent step ends by recording its outcome: `workflow-mcp step complete`, `step fix --restart-from <job> --reason ...`, or `step fail --reason ...`. The engine puts the instructions in the step's system prompt, and an agent that stops without deciding is sent back until it does. Write repair contracts in those terms, not as `fix.md`.
 
+What a step or job must leave is held the same way. A step's `artifacts` must be written during the step. A job must write each run-directory entry it produces (`produced-by`) during its run, even one an earlier job already wrote, and removing a file counts; `writes.ndjson` in the run directory records which job and step last wrote each entry. An agent step that ends its job is sent back until those entries are written, and the job fails when one was not. Write a `description` for every entry: the reminder tells the agent what the file holds from it.
+
 Put independent checks in a `parallel` group. A `run:` check with `restart-from: <job>` turns a failure into a fix request, and every fix request of the job merges into one repair, so one loop back fixes all of them. Keep steps that edit files out of a group: its steps share the checkout.
 
 Every `run` command executes on the workflow host with that process's environment and privileges. There is no VM, container, or sandbox. Review workflow changes as executable code, avoid embedding secrets, and make retry-sensitive external side effects explicit.

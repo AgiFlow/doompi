@@ -52,7 +52,8 @@ groups:
         pi:
           # A workflow step's gate is its run's own workflow-mcp, by path, the
           # engine version that runs the step. It sends the agent back until
-          # the step records its decision; a missing CLI is reported, not skipped.
+          # the step records its decision and writes the artifacts it must
+          # leave; a missing CLI is reported, not skipped.
           command: >-
             if [ -z "$WORKFLOW_DECISION_FILE" ]; then exit 0; fi; CLI="$WORKFLOW_RUN_DIR/bin/workflow-mcp";
             if [ -x "$CLI" ]; then exec "$CLI" step stop-hook; fi;
