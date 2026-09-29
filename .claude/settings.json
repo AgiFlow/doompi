@@ -66,5 +66,30 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(pnpm exec scaffold-mcp *)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp status)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp status *)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp port)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp port *)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs services)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs services *)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs stats)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs stats *)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs search)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs search *)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs query)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs query *)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs trace)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs trace *)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs agent-issues)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs agent-issues *)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs metrics)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs metrics *)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs analyze-errors)",
+      "Bash(pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs analyze-errors *)"
+    ]
   }
 }
