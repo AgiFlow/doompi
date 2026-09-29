@@ -998,6 +998,7 @@ describe('serveHeadlessServer', () => {
     const removed = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/asleep`, { method: 'DELETE' });
     expect(removed.status).toBe(200);
     expect(removeDormantSession).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'asleep' }));
+    expect(reviveSession).toHaveBeenCalledTimes(1);
     await hub.close();
   });
   it('shows a released session as dormant instead of removing it', async () => {

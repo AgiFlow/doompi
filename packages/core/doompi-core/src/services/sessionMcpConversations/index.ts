@@ -99,7 +99,6 @@ function validRecord(value: unknown): value is SessionMcpConversation {
     (record.failureCode === undefined ||
       record.failureCode === 'SESSION_WORKTREE_PROVISION_FAILED' ||
       record.failureCode === 'SESSION_UNAVAILABLE') &&
-    (record.failureCode === undefined || record.state === 'pending') &&
     (record.cwd === undefined ||
       (typeof record.cwd === 'string' && path.isAbsolute(record.cwd) && !record.cwd.includes('\0'))) &&
     (record.workspaceId === undefined || (typeof record.workspaceId === 'string' && record.workspaceId.length > 0)) &&
