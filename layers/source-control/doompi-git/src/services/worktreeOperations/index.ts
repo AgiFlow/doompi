@@ -288,6 +288,15 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
             false,
             'Pick another branch, or create a new one.',
           );
+      } else {
+        // ponytail: the branch list caps at 2,000 refs; use show-ref --verify if older duplicates need covering.
+        if ((await git.listBranches(root)).local.some((branch) => branch.name === request.branch))
+          throw new DoomGitExpectedError(
+            'invalid_request',
+            `The branch ${request.branch} already exists.`,
+            false,
+            'Pick another name, or open it as an existing branch.',
+          );
       }
       const baseRef = existingBranch
         ? request.remote === undefined
