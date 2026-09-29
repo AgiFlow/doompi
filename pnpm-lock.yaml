@@ -89,8 +89,8 @@ importers:
         specifier: workspace:*
         version: link:packages/tooling/vibe-lint-plugin-doom-web
       '@agimon-ai/workflow-mcp':
-        specifier: 0.24.0
-        version: 0.24.0(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)
+        specifier: 0.24.1
+        version: 0.24.1(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)
       '@commitlint/cli':
         specifier: 21.2.3
         version: 21.2.3(@types/node@26.6.2)(conventional-commits-parser@7.1.2)(typescript@7.0.2)
@@ -2932,8 +2932,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/workflow-mcp':
-        specifier: 0.24.0
-        version: 0.24.0(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)
+        specifier: 0.24.1
+        version: 0.24.1(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -3152,8 +3152,8 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/foundation-port-registry@0.30.0':
-    resolution: {integrity: sha512-vXTsaDSb3NBkTH0q5F3cPj2v8ojDYJjYg04MOJ5Hg1O9EBbjgxQhzEJEKD052vU1BjN8UoJBS4POV4XllukpnA==}
+  '@agimon-ai/foundation-port-registry@0.30.1':
+    resolution: {integrity: sha512-0wCZI62QF4NOlhomrBOOjBEg1fXA5YJjlx/H9ss8jVoXyREVKsqVRxwjiTvUH//APPs2/a6aoBsMoUbxMLf8OA==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
@@ -3164,8 +3164,8 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/foundation-process-registry@0.30.0':
-    resolution: {integrity: sha512-H0RiFX2nJvlyOqv9dIxqcORYB21GvLbpabz78VRYIDyi4EMjpr+wwSuUs4dcLP/D2eo3RAir5cF7lhcAOnJFWA==}
+  '@agimon-ai/foundation-process-registry@0.30.1':
+    resolution: {integrity: sha512-vBi5X07zVQhz4T4q2czlsXcosozQ6soou+7l8T5nevjGvvlTpcK4F5rpq7sxKQOl5ed9orWsSdVkJfmGNftehw==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
@@ -3175,8 +3175,8 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/foundation-validator@0.27.0':
-    resolution: {integrity: sha512-wHzPd4Jbm1KGKNPv+jLemm9RV8TXwyP98p7iLY3/rXZ8l0eFt+khnx0HT2LnqEB4+2El8XE+U8A0G0uHjLoXUw==}
+  '@agimon-ai/foundation-validator@0.27.1':
+    resolution: {integrity: sha512-YSRAMdsETbhtQ6fETn/iOgsW+CnqnFf0IYvHOGWsghyhLjj1DHtHM87ZQfT/I/NrMAuncPQj2dWe4gYUXdT3VA==}
     peerDependencies:
       zod: ^4.4.3
 
@@ -3191,8 +3191,8 @@ packages:
       '@earendil-works/pi-coding-agent':
         optional: true
 
-  '@agimon-ai/log-sink-mcp@0.30.0':
-    resolution: {integrity: sha512-ZbYvcRwKrls4B9cVK0rRWWyMwkhDeNPBZtXz+Z8scgaR/CAXpAPDVV3w5eNYHaAgji9bDCLCw/SRNPY31n9Bow==}
+  '@agimon-ai/log-sink-mcp@0.30.1':
+    resolution: {integrity: sha512-9oZA+uMJwCPPtrq9kvIZU/s+Gyxblz2VIbfSKrPkBt8tIHLtK5CWL2eeGeXw/yLz9hWbK/tOsTQfKsyMrrIjXw==}
     engines: {node: '>=22.13.0'}
     hasBin: true
     peerDependencies:
@@ -3209,24 +3209,18 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/rmux-darwin-arm64@0.10.0':
-    resolution: {integrity: sha512-pJf6e6fgwEhbvz0ZmPk/fSawDy7WJb9GoPAxDGlrfcRuCRMLpbDuQEr6GbVK7pfAs8CLAtqQarbIgY/k8BjwSg==}
+  '@agimon-ai/rmux-darwin-arm64@0.10.1':
+    resolution: {integrity: sha512-p13OVYQfuBcvrhZEOFyhPRlaGS3gJ1E3y/whK5nlaLpFyZfRKQZL5jUpADJCkMyjRQkv54zmKETK+dvjLSJaYg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@agimon-ai/rmux-darwin-x64@0.10.0':
-    resolution: {integrity: sha512-tn35JbmQ/+H4PMtaS8Vs3aO93Vba7A6itFubPqDJDLKgD3Q1VektGApaNx7eSs0ME+v1JOVnfCDl8+Hb65eVNQ==}
+  '@agimon-ai/rmux-darwin-x64@0.10.1':
+    resolution: {integrity: sha512-Au/GiwGcaOn1a4Fu2ExNWAe1P2pjqeK9dmXVe/aQM3qKJtx2HVRi/SMtfxLhG2qmVIb2JhRDSsGrFMk1MkwkRA==}
     cpu: [x64]
     os: [darwin]
 
-  '@agimon-ai/rmux-linux-arm64@0.10.0':
-    resolution: {integrity: sha512-pDzQFB6ijgPc2qns8MjACFKC6CBJMSkpH48pidgULaXIz0QH8YkNc5dfxLjOGINHFRawxnPO7Zh6xt+ZSJjyIg==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@agimon-ai/rmux-linux-x64@0.10.0':
-    resolution: {integrity: sha512-fvh+bu1UgcKWRHO07/znqPfP/Bv9Zxl31Yv56xA2BA1rH2vNvVANnfoY39+2duB8F4q5mEwE7fhg4huszPhd4Q==}
+  '@agimon-ai/rmux-linux-x64@0.10.1':
+    resolution: {integrity: sha512-VvFCDhj/7Km9RynD6G9XIBxzcHY981LGuT3ABVIck8zG5PHUEZW9qy/okkR5aoQT4mE8JdA1nwnouTRQp0KTFA==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
@@ -3242,8 +3236,8 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  '@agimon-ai/workflow-mcp@0.24.0':
-    resolution: {integrity: sha512-8ZhKS3xka+jNlvFL+7b151Ub+fy+evwbBsNCfcq5e9wRNX6gF9aIMns1g0Aq3j+vS2U1ptLdCU3MnqWUdrVpgA==}
+  '@agimon-ai/workflow-mcp@0.24.1':
+    resolution: {integrity: sha512-RSoozpiIiblQD3gfK3bOIeYqbk4m8PtR11KxCitw2Za20SOsBM6iKRN5jN5ty+RRhub/Q5zXe3loKkA7H8d6DQ==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
@@ -11428,7 +11422,7 @@ snapshots:
       '@tursodatabase/database': 0.7.2
       zod: 4.6.5
 
-  '@agimon-ai/foundation-port-registry@0.30.0(zod@4.6.5)':
+  '@agimon-ai/foundation-port-registry@0.30.1(zod@4.6.5)':
     dependencies:
       '@tursodatabase/database': 0.7.2
       zod: 4.6.5
@@ -11445,9 +11439,9 @@ snapshots:
       '@tursodatabase/database': 0.7.2
       zod: 4.6.5
 
-  '@agimon-ai/foundation-process-registry@0.30.0(zod@4.6.5)':
+  '@agimon-ai/foundation-process-registry@0.30.1(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.30.0(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.30.1(zod@4.6.5)
       '@tursodatabase/database': 0.7.2
       zod: 4.6.5
 
@@ -11459,7 +11453,7 @@ snapshots:
     dependencies:
       zod: 4.6.5
 
-  '@agimon-ai/foundation-validator@0.27.0(zod@4.6.5)':
+  '@agimon-ai/foundation-validator@0.27.1(zod@4.6.5)':
     dependencies:
       zod: 4.6.5
 
@@ -11585,11 +11579,11 @@ snapshots:
       - sqlite3
       - unstorage
 
-  '@agimon-ai/log-sink-mcp@0.30.0(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)':
+  '@agimon-ai/log-sink-mcp@0.30.1(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.30.0(zod@4.6.5)
-      '@agimon-ai/foundation-process-registry': 0.30.0(zod@4.6.5)
-      '@agimon-ai/foundation-validator': 0.27.0(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.30.1(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.30.1(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.27.1(zod@4.6.5)
       '@hono/node-server': 2.0.10(hono@4.13.8)
       '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.6.5)
       '@modelcontextprotocol/server': 2.1.0
@@ -11696,16 +11690,13 @@ snapshots:
       - sqlite3
       - unstorage
 
-  '@agimon-ai/rmux-darwin-arm64@0.10.0':
+  '@agimon-ai/rmux-darwin-arm64@0.10.1':
     optional: true
 
-  '@agimon-ai/rmux-darwin-x64@0.10.0':
+  '@agimon-ai/rmux-darwin-x64@0.10.1':
     optional: true
 
-  '@agimon-ai/rmux-linux-arm64@0.10.0':
-    optional: true
-
-  '@agimon-ai/rmux-linux-x64@0.10.0':
+  '@agimon-ai/rmux-linux-x64@0.10.1':
     optional: true
 
   '@agimon-ai/style-system@0.1.13(@types/node@26.6.2)(@types/react@19.3.0)(esbuild@0.28.2)(hono@4.13.8)(jiti@2.7.0)(yaml@2.9.1)(zod@4.6.5)':
@@ -11809,12 +11800,12 @@ snapshots:
       - sqlite3
       - unstorage
 
-  '@agimon-ai/workflow-mcp@0.24.0(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)':
+  '@agimon-ai/workflow-mcp@0.24.1(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.30.0(zod@4.6.5)
-      '@agimon-ai/foundation-process-registry': 0.30.0(zod@4.6.5)
-      '@agimon-ai/foundation-validator': 0.27.0(zod@4.6.5)
-      '@agimon-ai/log-sink-mcp': 0.30.0(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.30.1(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.30.1(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.27.1(zod@4.6.5)
+      '@agimon-ai/log-sink-mcp': 0.30.1(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)
       '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.8)
       '@modelcontextprotocol/server': 2.1.0
       '@rmux/sdk': 0.6.5
@@ -11825,10 +11816,9 @@ snapshots:
       proper-lockfile: 4.1.2
       zod: 4.6.5
     optionalDependencies:
-      '@agimon-ai/rmux-darwin-arm64': 0.10.0
-      '@agimon-ai/rmux-darwin-x64': 0.10.0
-      '@agimon-ai/rmux-linux-arm64': 0.10.0
-      '@agimon-ai/rmux-linux-x64': 0.10.0
+      '@agimon-ai/rmux-darwin-arm64': 0.10.1
+      '@agimon-ai/rmux-darwin-x64': 0.10.1
+      '@agimon-ai/rmux-linux-x64': 0.10.1
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cloudflare/workers-types'
