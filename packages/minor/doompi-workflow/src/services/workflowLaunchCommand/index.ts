@@ -13,18 +13,25 @@
  *
  * Key-value pairs come first and stop at the first token that is not one, so
  * everything after them is the prompt exactly as it was typed, including any
- * `=` inside it. `runner` is the one reserved key; the rest are the workflow's
- * own `workflow_dispatch` inputs. Values may be double quoted to hold spaces.
+ * `=` inside it. `runner`, `command` and `choice` are reserved keys; the rest
+ * are the workflow's own `workflow_dispatch` inputs. Values may be double
+ * quoted to hold spaces.
  */
 
-/** The reserved key: which runner map entry the run executes with. */
+/** Reserved key: which runner map entry the run executes with. */
 const RUNNER_KEY = 'runner';
+/** Reserved key: which command templated steps run through. */
+const COMMAND_KEY = 'command';
+/** Reserved key: which model choice steps without their own run with. */
+const CHOICE_KEY = 'choice';
 const KEY_VALUE = /^([A-Za-z_][\w.-]*)=(.*)$/s;
 
 export interface ParsedWorkflowLaunch {
   /** The workflow's name or its path, as typed; resolution belongs to the caller. */
   workflow: string;
   runner?: string;
+  command?: string;
+  choice?: string;
   inputs: Record<string, string>;
   prompt?: string;
 }
@@ -74,7 +81,7 @@ export function parseWorkflowLaunchCommand(args: string): ParsedWorkflowLaunch |
   if (first === undefined) return { error: 'Usage: /workflow-launch <workflow> [key=value …] [prompt]' };
 
   const inputs: Record<string, string> = {};
-  let runner: string | undefined;
+  const reserved: { runner?: string; command?: string; choice?: string } = {};
   let index = 1;
   for (; index < tokens.length; index += 1) {
     const token = tokens[index] as { text: string; start: number };
@@ -82,7 +89,7 @@ export function parseWorkflowLaunchCommand(args: string): ParsedWorkflowLaunch |
     if (!match) break;
     const key = match[1] as string;
     const value = unquote(match[2] as string);
-    if (key === RUNNER_KEY) runner = value;
+    if (key === RUNNER_KEY || key === COMMAND_KEY || key === CHOICE_KEY) reserved[key] = value;
     else inputs[key] = value;
   }
 
@@ -90,7 +97,7 @@ export function parseWorkflowLaunchCommand(args: string): ParsedWorkflowLaunch |
   const prompt = rest === undefined ? undefined : args.trim().slice(rest.start).trim();
   return {
     workflow: unquote(first.text),
-    ...(runner === undefined ? {} : { runner }),
+    ...reserved,
     inputs,
     ...(prompt === undefined || prompt === '' ? {} : { prompt }),
   };
@@ -101,6 +108,8 @@ export function workflowLaunchCommand(request: ParsedWorkflowLaunch): string {
   const quote = (value: string): string => (/\s/.test(value) ? `"${value}"` : value);
   const pairs = [
     ...(request.runner === undefined ? [] : [`${RUNNER_KEY}=${quote(request.runner)}`]),
+    ...(request.command === undefined ? [] : [`${COMMAND_KEY}=${quote(request.command)}`]),
+    ...(request.choice === undefined ? [] : [`${CHOICE_KEY}=${quote(request.choice)}`]),
     ...Object.entries(request.inputs).map(([key, value]) => `${key}=${quote(value)}`),
   ];
   const prompt = request.prompt?.trim();
@@ -138,6 +147,10 @@ export interface LaunchRequirements {
   inputs: readonly { name: string; required?: boolean; options?: readonly string[] }[];
   /** Absent means the workflow names no runner map, so any runner will do. */
   runners?: readonly string[];
+  /** Commands every templated step offers; absent when no step is templated. */
+  commands?: readonly string[];
+  /** Declared model choices. */
+  choices?: readonly string[];
 }
 
 /** The trigger that makes a prompt mandatory: the run waits for one otherwise. */
@@ -153,7 +166,7 @@ const USER_PROMPT_TRIGGER = 'user_prompt';
  */
 export function validateWorkflowLaunch(
   requirements: LaunchRequirements,
-  parsed: Pick<ParsedWorkflowLaunch, 'inputs' | 'prompt' | 'runner'>,
+  parsed: Pick<ParsedWorkflowLaunch, 'inputs' | 'prompt' | 'runner' | 'command' | 'choice'>,
 ): string[] {
   const problems: string[] = [];
   if (requirements.triggers.includes(USER_PROMPT_TRIGGER) && (parsed.prompt ?? '') === '') {
@@ -175,6 +188,18 @@ export function validateWorkflowLaunch(
       declared.length === 0
         ? 'This workflow declares no runner its steps agree on.'
         : `Runner ${parsed.runner} is not one this workflow declares: ${declared.join(', ')}.`,
+    );
+  }
+  if (parsed.command !== undefined && !(requirements.commands ?? []).includes(parsed.command)) {
+    problems.push(
+      requirements.commands === undefined || requirements.commands.length === 0
+        ? 'This workflow has no templated steps to run through a command.'
+        : `Command ${parsed.command} is not one every step offers: ${requirements.commands.join(', ')}.`,
+    );
+  }
+  if (parsed.choice !== undefined && !(requirements.choices ?? []).includes(parsed.choice)) {
+    problems.push(
+      `Choice ${parsed.choice} is not declared${requirements.choices?.length ? `: ${requirements.choices.join(', ')}` : ''}.`,
     );
   }
   return problems;

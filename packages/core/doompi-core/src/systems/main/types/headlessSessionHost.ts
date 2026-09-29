@@ -30,6 +30,8 @@ export interface HeadlessSessionHostOptions {
   environment: Readonly<Record<string, string | undefined>>;
   selection: DoomHeadlessSelection;
   selectionOverrides?: readonly ('majorMode' | 'domains' | 'profile')[];
+  /** The only tools the agent may see or call, whatever the selection and packages contribute. */
+  allowedTools?: readonly string[];
   inheritedSelection?: () => Partial<DoomHeadlessSelection> | Promise<Partial<DoomHeadlessSelection>>;
   candidates: readonly DoomServerBundleEntry[];
   /** Explicit remote-only plugins loaded from the admitted MCP bundle. */

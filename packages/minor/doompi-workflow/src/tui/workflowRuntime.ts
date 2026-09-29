@@ -53,6 +53,7 @@ import {
   LEADER_MANAGE_ACTION,
   LEADER_RECOVER_ACTION,
   PACKAGE_SOURCE,
+  WORKFLOW_LAUNCH_ID_ENV,
 } from '../constants/workflow';
 import { type RunProviderHandle, registerRunProvider } from '../services/backgroundWork';
 import {
@@ -969,10 +970,13 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
     // one would cost the caller the whole acknowledgement budget for a run
     // that had already registered. A sweep costs the registry read this used
     // to do on its own, and every other surface gets its events from it.
-    findLaunchedRun: async ({ sessionId, since, workflowPath }) => {
+    findLaunchedRun: async ({ launchId, sessionId, since, workflowPath }) => {
       const expectedId = workflowIdFor(workflowPath);
       const matches = (record: WorkflowRunRecord): boolean => {
         if (!isSessionRun(record, sessionId) || record.stale) return false;
+        // A run carrying a launch id belongs to exactly that launch.
+        const carried = record.env?.[WORKFLOW_LAUNCH_ID_ENV];
+        if (carried !== undefined) return carried === launchId;
         // Matched on identity as well as time so two launches in flight from
         // one session cannot report each other's run key.
         if (record.workflowId && record.workflowId !== expectedId) return false;
@@ -2050,6 +2054,8 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
     const input: WorkflowLaunchInput = {
       workflowPath: entry.path,
       ...(parsed.runner === undefined ? {} : { runner: parsed.runner }),
+      ...(parsed.command === undefined ? {} : { command: parsed.command }),
+      ...(parsed.choice === undefined ? {} : { choice: parsed.choice }),
       ...(typeof workflow.workspace === 'string' ? { workspace: workflow.workspace } : {}),
       ...(parsed.prompt === undefined ? {} : { prompt: parsed.prompt }),
       ...(Object.keys(parsed.inputs).length === 0 ? {} : { inputs: parsed.inputs }),
@@ -2064,7 +2070,8 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
     [
       WORKFLOW_LAUNCH_COMMAND,
       {
-        description: 'Launch a workflow: /workflow-launch <workflow> [runner=x] [key=value …] [prompt]',
+        description:
+          'Launch a workflow: /workflow-launch <workflow> [runner=x] [command=x] [choice=x] [key=value …] [prompt]',
         handler: async (args, ctx) => {
           await waitForReadiness();
           try {

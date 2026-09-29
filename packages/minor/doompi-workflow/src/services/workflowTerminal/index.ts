@@ -76,6 +76,13 @@ export interface WorkflowTerminalService<Record> {
   resize(identity: string, record: Record, token: string, columns: number, rows: number): Promise<boolean>;
   /** Drops what is remembered for runs that can never change again. */
   forget(live: ReadonlySet<string>): void;
+  /**
+   * Drops what is remembered for one run that has settled.
+   *
+   * A surface that only knows its own run uses this rather than `forget`, which
+   * would also clear every other run's screen and keyboard lease.
+   */
+  forgetRun(identity: string): void;
 }
 
 export function createWorkflowTerminalService<Record>(
@@ -141,6 +148,10 @@ export function createWorkflowTerminalService<Record>(
       for (const identity of leases.keys()) {
         if (!live.has(identity)) leases.delete(identity);
       }
+    },
+    forgetRun(identity) {
+      screens.delete(identity);
+      leases.delete(identity);
     },
   };
 }

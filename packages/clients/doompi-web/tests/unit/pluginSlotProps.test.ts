@@ -12,6 +12,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry';
 import { pluginSessionContext, pluginSlotProps } from '../../src/web/lib/pluginSlotProps';
 import { bindSessionActivityRenderer, releaseSessionActivityRenderer } from '../../src/web/lib/sessionActivityRenderer';
+import {
+  bindSessionTranscriptRenderer,
+  releaseSessionTranscriptRenderer,
+} from '../../src/web/lib/sessionTranscriptRenderer';
 import { bindThreadRenderer, releaseThreadRenderer } from '../../src/web/lib/threadRenderer';
 import { bindTransport, releaseTransport } from '../../src/web/lib/transport';
 import {
@@ -38,6 +42,7 @@ afterEach(() => {
   resetComposerStore();
   releaseThreadRenderer();
   releaseSessionActivityRenderer();
+  releaseSessionTranscriptRenderer();
   releaseTransport();
 });
 
@@ -297,6 +302,21 @@ describe('the runtime tabs and threads a plugin component may open', () => {
     expect(isValidElement(rendered)).toBe(true);
     expect(rendered.key).toBe('s1');
     expect(pluginSlotProps(null, () => undefined, {}, noTabs, noAppend, noAttach).renderSessionActivity?.()).toBeNull();
+  });
+
+  it('renders another session transcript by id, focused session or not', () => {
+    const props = pluginSlotProps('s1', () => undefined, {}, noTabs, noAppend, noAttach);
+    expect(props.renderSessionTranscript?.('child')).toBeNull();
+
+    bindSessionTranscriptRenderer((sessionId, options) =>
+      createElement('section', { key: `${sessionId}/${options?.limit ?? 'all'}` }),
+    );
+    const rendered = props.renderSessionTranscript?.('child', { limit: 5 }) as ReactElement;
+    expect(isValidElement(rendered)).toBe(true);
+    expect(rendered.key).toBe('child/5');
+    const unfocused = pluginSlotProps(null, () => undefined, {}, noTabs, noAppend, noAttach).renderSessionTranscript;
+    if (unfocused === undefined) throw new Error('renderSessionTranscript is always provided by the host');
+    expect((unfocused('child') as ReactElement).key).toBe('child/all');
   });
 });
 

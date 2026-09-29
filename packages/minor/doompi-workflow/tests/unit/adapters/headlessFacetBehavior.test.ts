@@ -1,4 +1,6 @@
-import { resolve } from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+import path, { resolve } from 'node:path';
 
 import { DOOM_BACKGROUND_WORK_SERVICE, type BackgroundWorkProvider } from '@agimon-ai/doompi-core/backgroundWork';
 import {
@@ -15,6 +17,7 @@ import {
   type DoomHeadlessResource,
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
+import type { DoomApi, DoomApiContext } from '@agimon-ai/doompi-core/packageApi';
 import { DOOM_SERVER_HOST_SERVICE as TEST_SERVER, type DoomServerFacet } from '@agimon-ai/doompi-core/serverFacet';
 import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/serverFacet';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE as TEST_CATALOG } from '@agimon-ai/doompi-minor-mode';
@@ -41,6 +44,37 @@ const embeddedFeature = vi.hoisted(() => {
     }),
   };
   const statuses = { execute: vi.fn(async () => []) };
+  // Launches run in-process: each gets its own run service, whose run() is this mock.
+  type Registration = { runKey: string; runId: string; workspace: string; runDir: string; displayName: string };
+  const run = vi.fn(
+    async (input?: {
+      env?: Record<string, string>;
+      workflowPath?: string;
+      onRegistered?: (registration: Registration) => void;
+    }): Promise<{ exitCode: number; output: string }> => {
+      input?.onRegistered?.({
+        runKey: 'registered-run',
+        runId: 'run-id',
+        workspace: '/tmp',
+        runDir: '/tmp/no-such-run-dir',
+        displayName: 'registered-run',
+      });
+      return { exitCode: 0, output: 'workflow launched' };
+    },
+  );
+  const runLoggers: { error: (message: string) => void }[] = [];
+  // A run a test leaves going ends when the session asks it to stop, as the engine's would.
+  const pendingRuns: (() => void)[] = [];
+  const registry = {
+    readRunByKey: vi.fn(async (workspace: string, _stage: string, runKey: string) => ({
+      runKey,
+      workspace,
+      displayName: runKey,
+    })),
+    requestStop: vi.fn(async () => {
+      for (const settle of pendingRuns.splice(0)) settle();
+    }),
+  };
   let recordFilter: ((record: Record<string, unknown>) => boolean) | undefined;
   const feature = {
     createListStatusesTool: vi.fn((options: { recordFilter: (record: Record<string, unknown>) => boolean }) => {
@@ -48,6 +82,11 @@ const embeddedFeature = vi.hoisted(() => {
       return statuses;
     }),
     createRunControl: vi.fn(() => control),
+    createRunService: vi.fn((options?: { logger?: { error: (message: string) => void } }) => {
+      if (options?.logger) runLoggers.push(options.logger);
+      return { run };
+    }),
+    registry,
     listWorkflowsTool: {
       getInputSchema: vi.fn(() => ({})),
       execute: vi.fn(async () => ({
@@ -60,7 +99,7 @@ const embeddedFeature = vi.hoisted(() => {
       })),
     },
     runTool: {
-      getInputSchema: vi.fn(() => ({})),
+      getInputSchema: vi.fn(() => ({ parse: (value: unknown) => value })),
       execute: vi.fn(
         async (_parameters?: {
           env?: Record<string, string>;
@@ -76,6 +115,10 @@ const embeddedFeature = vi.hoisted(() => {
     control,
     statuses,
     feature,
+    run,
+    registry,
+    runLoggers,
+    pendingRuns,
     getRecordFilter: () => recordFilter,
     emit: (event: string) => {
       for (const listener of listeners.get(event) ?? []) listener();
@@ -91,7 +134,9 @@ const workflowWatcher = vi.hoisted(() => ({
   ] as Array<{ piSessionId?: string; view: Record<string, unknown> }>,
 }));
 
-vi.mock('@agimon-ai/workflow-mcp', () => ({
+vi.mock('@agimon-ai/workflow-mcp', async (importOriginal) => ({
+  // The session API builds the real registry; only the engine is replaced.
+  ...(await importOriginal<typeof import('@agimon-ai/workflow-mcp')>()),
   createEmbeddedWorkflowFeature: () => embeddedFeature.feature,
 }));
 vi.mock('../../../src/services/workflowCatalogDeps', () => ({
@@ -127,8 +172,22 @@ vi.mock('../../../src/services/workflowWatcher', () => ({
   readWorkflowRuns: () => workflowWatcher.records,
 }));
 vi.mock('zod', () => ({ z: { toJSONSchema: vi.fn(() => ({ type: 'object' })) } }));
+const telemetry = vi.hoisted(() => ({
+  recordEvent: vi.fn(async () => undefined),
+  recordWarning: vi.fn(async () => undefined),
+  recordError: vi.fn(async () => undefined),
+  shutdown: vi.fn(async () => undefined),
+}));
+vi.mock('@agimon-ai/doompi-telemetry', () => ({ createDoomTelemetry: () => telemetry }));
+// The executor has its own tests; this suite covers how the facet launches and controls runs.
+vi.mock('../../../src/services/stepExecutor', () => ({
+  createStepExecutor: vi.fn(() => ({})),
+  createNativeStepPaneLauncher: vi.fn(),
+}));
 
-async function fixture() {
+async function fixture(
+  options: { environment?: Record<string, string>; requestApi?: DoomApiContext['requestApi'] } = {},
+) {
   workflowWatcher.records = [
     { piSessionId: 'workflow-headless-test', view: { runKey: 'run-1', workspace: '/tmp' } },
     { piSessionId: 'other', view: { runKey: 'foreign', workspace: '/tmp' } },
@@ -137,8 +196,10 @@ async function fixture() {
   let minorModes: string[] = [];
   const execution = {
     cwd: process.cwd(),
-    repoRoot: process.cwd(),
+    // The mocked catalog lists workflows under /tmp, which launches must be inside.
+    repoRoot: '/tmp',
     sessionId: 'workflow-headless-test',
+    environment: options.environment ?? {},
     get selection() {
       return { majorMode: 'copilot', activeLayers: [], domains: [], state: { 'minor-mode': minorModes } };
     },
@@ -203,11 +264,18 @@ async function fixture() {
       return registration;
     },
   } as unknown as DoomHeadlessHostService;
+  const apis: DoomApi[] = [];
   const serverHost = {
     scope: 'session',
-    registerApi: () => registration,
+    registerApi: (api: DoomApi) => {
+      apis.push(api);
+      return { mounted: true, dispose: vi.fn() };
+    },
     registerChannel: () => registration,
-    context: { directEvents: { publish: vi.fn() } },
+    context: {
+      directEvents: { publish: vi.fn() },
+      ...(options.requestApi === undefined ? {} : { requestApi: options.requestApi }),
+    },
   } as unknown as DoomServerHostService;
   const context = new Context();
   context.provide(DOOM_SERVER_HOST_SERVICE, serverHost);
@@ -221,6 +289,7 @@ async function fixture() {
   await vi.waitFor(() => expect(registerBackground).toHaveBeenCalledOnce());
   return {
     execution,
+    apis,
     modes,
     activities,
     tools,
@@ -337,15 +406,16 @@ describe('workflow headless facet', () => {
       { type: 'text', text: 'workflow-one' },
       { type: 'image', data: 'workflow-image', mimeType: 'image/png' },
     ]);
-    expect(await launch.execute('launch', {}, undefined, undefined, test.execution)).toEqual({
-      content: [{ type: 'text', text: 'workflow launched' }],
-      details: { content: [{ type: 'text', text: 'workflow launched' }] },
+    expect(await launch.execute('launch', {}, undefined, undefined, test.execution)).toMatchObject({
+      content: [{ type: 'text', text: 'Error: A launch needs a workflowPath.' }],
+      isError: true,
     });
     await launch.execute('launch', { workflowPath: 'automations/build.yml' }, undefined, undefined, {
       ...test.execution,
       cwd: '/external/worktree/subdir',
+      repoRoot: '/external/worktree',
     });
-    expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith(
+    expect(embeddedFeature.run).toHaveBeenLastCalledWith(
       expect.objectContaining({ workflowPath: '/external/worktree/subdir/automations/build.yml' }),
     );
     expect(
@@ -413,12 +483,14 @@ describe('workflow headless facet', () => {
       level: 'error',
     });
     await command.execute('build runner=local environment=prod Deploy now', test.execution);
-    expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith({
+    expect(embeddedFeature.run).toHaveBeenLastCalledWith({
       workflowPath: '/tmp/build.workflow.yml',
       runner: 'local',
       inputs: { environment: 'prod' },
       prompt: 'Deploy now',
-      env: { PI_SESSION_ID: test.execution.sessionId },
+      env: { PI_SESSION_ID: test.execution.sessionId, DOOMPI_WORKFLOW_LAUNCH_ID: expect.any(String) },
+      skipLaunch: true,
+      onRegistered: expect.any(Function),
     });
     expect(test.execution.client.notify).toHaveBeenLastCalledWith({ body: 'workflow launched', level: 'info' });
 
@@ -436,12 +508,12 @@ describe('workflow headless facet', () => {
       const command = test.commands[0]!;
       const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
       const status = test.tools.find(({ name }) => name === 'workflow_run')!;
-      embeddedFeature.feature.runTool.execute.mockImplementationOnce(async (parameters) => {
+      embeddedFeature.run.mockImplementationOnce(async (parameters) => {
         workflowWatcher.records.push({
           piSessionId: parameters?.env?.PI_SESSION_ID,
           view: { runKey: 'browser-run', workspace: '/tmp' },
         });
-        return { content: [{ type: 'text', text: 'workflow launched' }] };
+        return { exitCode: 0, output: 'workflow launched' };
       });
       const line = workflowLaunchLine({
         workflow: 'Blog Writing',
@@ -449,11 +521,13 @@ describe('workflow headless facet', () => {
         prompt: 'Draft it',
       });
       await command.execute(line.slice('/workflow-launch '.length), test.execution);
-      expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith({
+      expect(embeddedFeature.run).toHaveBeenLastCalledWith({
         workflowPath: '/tmp/blog.workflow.yml',
         inputs: { brief: 'a good post' },
         prompt: 'Draft it',
-        env: { PI_SESSION_ID: test.execution.sessionId },
+        env: { PI_SESSION_ID: test.execution.sessionId, DOOMPI_WORKFLOW_LAUNCH_ID: expect.any(String) },
+        skipLaunch: true,
+        onRegistered: expect.any(Function),
       });
       expect(
         await status.execute(
@@ -465,12 +539,12 @@ describe('workflow headless facet', () => {
         ),
       ).toMatchObject({ details: { runKey: 'browser-run', workspace: '/tmp' } });
 
-      embeddedFeature.feature.runTool.execute.mockImplementationOnce(async (parameters) => {
+      embeddedFeature.run.mockImplementationOnce(async (parameters) => {
         workflowWatcher.records.push({
           piSessionId: parameters?.env?.PI_SESSION_ID,
           view: { runKey: 'tool-run', workspace: '/tmp' },
         });
-        return { content: [{ type: 'text', text: 'workflow launched' }] };
+        return { exitCode: 0, output: 'workflow launched' };
       });
       await launch.execute(
         'launch',
@@ -479,13 +553,232 @@ describe('workflow headless facet', () => {
         undefined,
         test.execution,
       );
-      expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith({
+      expect(embeddedFeature.run).toHaveBeenLastCalledWith({
         workflowPath: '/tmp/build.workflow.yml',
-        env: { CUSTOM: 'kept', PI_SESSION_ID: test.execution.sessionId },
+        env: {
+          CUSTOM: 'kept',
+          PI_SESSION_ID: test.execution.sessionId,
+          DOOMPI_WORKFLOW_LAUNCH_ID: expect.any(String),
+        },
+        skipLaunch: true,
+        onRegistered: expect.any(Function),
       });
       expect(
         await status.execute('status', { action: 'status', runKey: 'tool-run' }, undefined, undefined, test.execution),
       ).toMatchObject({ details: { runKey: 'tool-run', workspace: '/tmp' } });
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('answers a launch once the in-process run registers, without waiting for it to finish', async () => {
+    const test = await fixture();
+    try {
+      const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
+      embeddedFeature.run.mockImplementationOnce((parameters) => {
+        parameters?.onRegistered?.({
+          runKey: 'long-run',
+          runId: 'long-id',
+          workspace: '/tmp',
+          runDir: '/tmp/no-such-run-dir',
+          displayName: 'build-long',
+        });
+        return new Promise((resolve) => embeddedFeature.pendingRuns.push(() => resolve({ exitCode: 0, output: '' })));
+      });
+      const result = await launch.execute(
+        'launch',
+        { workflowPath: '/tmp/build.workflow.yml' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(result.content).toEqual([{ type: 'text', text: expect.stringContaining('Run key: long-run') }]);
+      expect(telemetry.recordEvent).toHaveBeenCalledWith('doom_workflow.run_started', { outcome: 'started' });
+    } finally {
+      await test.close?.();
+    }
+    // Closing the session stops the run it was still running.
+    expect(embeddedFeature.registry.requestStop).toHaveBeenCalledWith(
+      '/tmp',
+      'long-run',
+      'The session that runs this workflow closed.',
+      'long-id',
+    );
+  });
+
+  it('keeps the engine log in the run directory and reports its errors and a late failure', async () => {
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-run-'));
+    const test = await fixture();
+    try {
+      const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
+      let fail: () => void = () => undefined;
+      embeddedFeature.run.mockImplementationOnce((parameters) => {
+        const logger = embeddedFeature.runLoggers.at(-1)!;
+        logger.error('\u001b[31merror\u001b[0m step "Build" failed: No configured model matched p/unknown.');
+        parameters?.onRegistered?.({
+          runKey: 'logged-run',
+          runId: 'logged-id',
+          workspace: '/tmp',
+          runDir,
+          displayName: 'logged-run',
+        });
+        return new Promise((resolve) => {
+          fail = () => resolve({ exitCode: 1, output: 'step "Build" failed' });
+        });
+      });
+
+      await launch.execute('launch', { workflowPath: '/tmp/build.workflow.yml' }, undefined, undefined, test.execution);
+      fail();
+
+      await vi.waitFor(() =>
+        expect(test.execution.client.notify).toHaveBeenCalledWith({
+          body: expect.stringContaining('Workflow launch failed after it was reported started.'),
+          level: 'warning',
+        }),
+      );
+      expect(fs.readFileSync(path.join(runDir, 'engine.log'), 'utf8')).toBe(
+        'error step "Build" failed: No configured model matched p/unknown.\n',
+      );
+      expect(telemetry.recordError).toHaveBeenCalledWith(
+        'doom_workflow.engine_error',
+        new Error('error step "Build" failed: No configured model matched p/unknown.'),
+        {},
+        { includeException: true },
+      );
+      expect(telemetry.recordError).toHaveBeenCalledWith(
+        'doom_workflow.run_failed',
+        expect.any(Error),
+        { exit_code: 1 },
+        { includeException: true },
+      );
+    } finally {
+      await test.close?.();
+      fs.rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a workflow outside the session repository, whoever asks', async () => {
+    const test = await fixture();
+    try {
+      const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
+      const calls = embeddedFeature.run.mock.calls.length;
+      const refused = await launch.execute(
+        'launch',
+        { workflowPath: '/etc/elsewhere.workflow.yml' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      const handler = test.apis
+        .find(({ basePath }) => basePath === 'workflow')!
+        .start({ scope: 'session' } as DoomApiContext);
+      const viaApi = await handler.fetch(
+        new Request('http://doompi.local/launch', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          // A prompt-less launch of a workflow that needs its brief input.
+          body: JSON.stringify({ workflowPath: '/tmp/blog.workflow.yml' }),
+        }),
+      );
+
+      expect(refused).toMatchObject({
+        isError: true,
+        content: [{ text: expect.stringContaining('outside this session') }],
+      });
+      expect(await viaApi.json()).toEqual({
+        text: expect.stringContaining('Missing required input: brief'),
+        isError: true,
+      });
+      expect(embeddedFeature.run).toHaveBeenCalledTimes(calls);
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('hands a dispatcher launch to its root session, which runs and keeps it', async () => {
+    const requestApi = vi.fn(async (_mount: unknown, _basePath: string, _request: Request) =>
+      Response.json({ text: 'Started build.\nRun key: root-run' }),
+    );
+    const test = await fixture({
+      environment: { PI_SUBAGENT_CHILD_AGENT: 'agiflow-dispatcher', PI_SUBAGENT_PARENT_SESSION: 'root-session' },
+      requestApi,
+    });
+    try {
+      const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
+      const calls = embeddedFeature.run.mock.calls.length;
+      const result = await launch.execute(
+        'launch',
+        { workflowPath: '/tmp/build.workflow.yml', runner: 'pi-codex' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+
+      expect(result.content).toEqual([{ type: 'text', text: 'Started build.\nRun key: root-run' }]);
+      expect(result.isError).toBeUndefined();
+      expect(embeddedFeature.run).toHaveBeenCalledTimes(calls);
+      const [mount, basePath, request] = requestApi.mock.calls[0]!;
+      expect(mount).toEqual({ scope: 'session', sessionId: 'root-session' });
+      expect(basePath).toBe('workflow');
+      expect(request.method).toBe('POST');
+      expect(new URL(request.url).pathname).toBe('/launch');
+      expect(await request.json()).toEqual({ workflowPath: '/tmp/build.workflow.yml', runner: 'pi-codex' });
+      // A dispatcher never works a run itself, as a CLI dispatcher child cannot.
+      expect(test.registerToolRestriction).toHaveBeenCalledWith(
+        expect.objectContaining({ excludedTools: ['workflow_run'] }),
+      );
+
+      requestApi.mockResolvedValueOnce(Response.json({ error: 'Session not found.' }, { status: 404 }));
+      expect(
+        await launch.execute(
+          'launch',
+          { workflowPath: '/tmp/build.workflow.yml' },
+          undefined,
+          undefined,
+          test.execution,
+        ),
+      ).toMatchObject({
+        isError: true,
+        content: [
+          { type: 'text', text: 'Error: session root-session did not launch the workflow (Session not found.).' },
+        ],
+      });
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('runs a launch another session hands it through its own API mount', async () => {
+    const test = await fixture();
+    try {
+      embeddedFeature.run.mockImplementationOnce((parameters) => {
+        parameters?.onRegistered?.({
+          runKey: 'handed-run',
+          runId: 'handed-id',
+          workspace: '/tmp',
+          runDir: '/tmp/no-such-run-dir',
+          displayName: 'build-handed',
+        });
+        return new Promise((resolve) => embeddedFeature.pendingRuns.push(() => resolve({ exitCode: 0, output: '' })));
+      });
+      const api = test.apis.find(({ basePath }) => basePath === 'workflow')!;
+      const handler = api.start({ scope: 'session' } as DoomApiContext);
+      const response = await handler.fetch(
+        new Request('http://doompi.local/launch', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ workflowPath: '/tmp/build.workflow.yml' }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ text: expect.stringContaining('Run key: handed-run') });
+      expect(embeddedFeature.run).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          env: expect.objectContaining({ PI_SESSION_ID: 'workflow-headless-test' }),
+          skipLaunch: true,
+        }),
+      );
     } finally {
       await test.close?.();
     }
@@ -496,16 +789,35 @@ describe('workflow headless facet', () => {
     try {
       const command = test.commands[0]!;
       const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
-      const calls = embeddedFeature.feature.runTool.execute.mock.calls.length;
+      const calls = embeddedFeature.run.mock.calls.length;
       for (const name of ['missing', 'broken', 'Blog Writing']) {
         await command.execute(name, test.execution);
         expect(test.execution.client.notify).toHaveBeenLastCalledWith(expect.objectContaining({ level: 'error' }));
       }
-      expect(embeddedFeature.feature.runTool.execute).toHaveBeenCalledTimes(calls);
-      embeddedFeature.feature.runTool.execute.mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'engine failed' }],
+      // A refusal names the workflow and says nothing ran, since the findings only name a job and a step.
+      expect(test.execution.client.notify).toHaveBeenCalledWith({
+        body: 'Workflow "broken" was not launched: it needs fixing.\nInvalid workflow',
+        level: 'error',
+      });
+      expect(
+        await launch.execute(
+          'launch',
+          { workflowPath: '/tmp/broken.workflow.yml' },
+          undefined,
+          undefined,
+          test.execution,
+        ),
+      ).toMatchObject({
+        content: [
+          {
+            type: 'text',
+            text: 'Error: Workflow "broken.workflow.yml" was not launched: it needs fixing.\nInvalid workflow',
+          },
+        ],
         isError: true,
       });
+      expect(embeddedFeature.run).toHaveBeenCalledTimes(calls);
+      embeddedFeature.run.mockResolvedValueOnce({ exitCode: 1, output: 'engine failed' });
       expect(
         await launch.execute(
           'launch',
@@ -515,12 +827,30 @@ describe('workflow headless facet', () => {
           test.execution,
         ),
       ).toMatchObject({ isError: true });
-      embeddedFeature.feature.runTool.execute.mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'engine failed' }],
-        isError: true,
-      });
+      embeddedFeature.run.mockResolvedValueOnce({ exitCode: 1, output: '\u001b[31mengine failed\u001b[0m' });
       await command.execute('build', test.execution);
-      expect(test.execution.client.notify).toHaveBeenLastCalledWith({ body: 'engine failed', level: 'error' });
+      expect(test.execution.client.notify).toHaveBeenLastCalledWith({
+        body: expect.stringContaining('Workflow failed (exit code 1):\n\nengine failed'),
+        level: 'error',
+      });
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('republishes run state on job and step transitions, which only the progress log records', async () => {
+    const test = await fixture();
+    try {
+      // With the mode off and nothing running, a refresh retires the monitor, as it should.
+      await test.modes[0]!.handleAction('activate', {}, operation(test.execution));
+      const activity = test.activities[0]!;
+      const stop = await activity.start(test.execution);
+      for (const transition of ['step', 'job'] as const) {
+        const calls = test.backgroundUpdate.mock.calls.length;
+        embeddedFeature.emit(transition);
+        await vi.waitFor(() => expect(test.backgroundUpdate.mock.calls.length).toBeGreaterThan(calls));
+      }
+      await stop();
     } finally {
       await test.close?.();
     }

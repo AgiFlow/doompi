@@ -1,3 +1,7 @@
+import {
+  WORKFLOW_DISPATCHER_SESSION_PROVENANCE,
+  WORKFLOW_STEP_SESSION_PROVENANCE,
+} from '@agimon-ai/doompi-core/hubChannel';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { SessionSummary } from '../../src/types/hub';
@@ -175,5 +179,55 @@ describe('lineage that cannot be trusted', () => {
   it('answers undefined for a session the rail does not hold', () => {
     snapshot(summary('a', at(10)));
     expect(resolveParentId(sessionsStore.state.byId, 'ghost')).toBeUndefined();
+  });
+});
+
+describe('workflow step sessions', () => {
+  it('stay out of the rail order but remain known to the store', () => {
+    snapshot(
+      summary('parent', at(10)),
+      summary('step', at(20), { parentSessionId: 'parent', sessionProvenance: WORKFLOW_STEP_SESSION_PROVENANCE }),
+      summary('fork', at(30), { parentSessionId: 'parent', sessionProvenance: 'fork' }),
+    );
+
+    expect(sessionsStore.state.order).toEqual(['parent', 'fork']);
+    expect(sessionsStore.state.byId.step?.summary.sessionProvenance).toBe(WORKFLOW_STEP_SESSION_PROVENANCE);
+  });
+
+  it('keeps an upserted step session out of the rail order', () => {
+    snapshot(summary('parent', at(10)));
+    applySessionUpsert({
+      type: 'session_upsert',
+      session: summary('step', at(20), {
+        parentSessionId: 'parent',
+        sessionProvenance: WORKFLOW_STEP_SESSION_PROVENANCE,
+      }),
+    });
+
+    expect(sessionsStore.state.order).toEqual(['parent']);
+    expect(sessionsStore.state.byId.step).toBeDefined();
+  });
+
+  it('lists a session a hidden step opened under the nearest ancestor the rail shows', () => {
+    snapshot(
+      summary('parent', at(10)),
+      summary('step', at(20), { parentSessionId: 'parent', sessionProvenance: WORKFLOW_STEP_SESSION_PROVENANCE }),
+      summary('fork', at(30), { parentSessionId: 'step', sessionProvenance: 'fork' }),
+      summary('other', at(40)),
+    );
+
+    expect(sessionsStore.state.order).toEqual(['parent', 'fork', 'other']);
+  });
+
+  it('keeps a workflow dispatcher out of the rail order too', () => {
+    snapshot(
+      summary('parent', at(10)),
+      summary('dispatcher', at(20), {
+        parentSessionId: 'parent',
+        sessionProvenance: WORKFLOW_DISPATCHER_SESSION_PROVENANCE,
+      }),
+    );
+
+    expect(sessionsStore.state.order).toEqual(['parent']);
   });
 });

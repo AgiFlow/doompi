@@ -13,8 +13,15 @@ import {
 import { type Context, Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 
+import {
+  createStepPaneTerminal,
+  createStepPaneTerminalDependencies,
+  removeStepPaneLogs,
+} from '../../services/stepPaneTerminal';
+import type { RunTerminalTarget } from '../../services/stepPaneTerminal/type';
 import { createWorkflowTerminalService } from '../../services/workflowTerminal';
-import routes, { ARTIFACT_DOWNLOAD_PARAM, ARTIFACT_RAW_PARAM } from '../../types/apiRoutes';
+import routes, { ARTIFACT_DOWNLOAD_PARAM, ARTIFACT_RAW_PARAM, STEP_TARGET_PARAM } from '../../types/apiRoutes';
+import { STEP_SESSION_REF_KIND } from '../../types/webWorkflows';
 import {
   WORKFLOW_API_BASE_PATH,
   WORKFLOW_SCREEN_EVENT,
@@ -23,7 +30,10 @@ import {
   type WorkflowArtifactView,
   type WorkflowControlResponse,
   type WorkflowDeleteResponse,
+  type WorkflowLaunchResponse,
   type WorkflowScreenEvent,
+  type WorkflowSteerResponse,
+  type WorkflowStopResponse,
 } from '../../types/webWorkflowTerminal';
 
 /** Stages a run can be recorded under, newest first: a live run is the common case. */
@@ -36,6 +46,8 @@ const STREAM_TICK_MS = 500;
 const SETTLED_POLL_TICKS = 4;
 /** Bytes of one textual artifact returned as JSON; binary previews use a stream. */
 const MAX_ARTIFACT_BYTES = 512 * 1024;
+/** Recorded with a stop the web panel asks for, so the run log says where it came from. */
+const WEB_STOP_REASON = 'Stopped from the web workflow panel.';
 /** Path segments a client supplies are names, never paths. */
 const SAFE_SEGMENT = /^[\w.@-]+$/;
 const ARTIFACT_MIME_TYPES: Readonly<Record<string, string>> = {
@@ -52,6 +64,8 @@ const ARTIFACT_MIME_TYPES: Readonly<Record<string, string>> = {
   '.js': 'text/javascript',
   '.json': 'application/json',
   '.jsx': 'text/jsx',
+  // A run's engine log, which a reader opens to see why a step failed.
+  '.log': 'text/plain',
   '.m4a': 'audio/mp4',
   '.markdown': 'text/markdown',
   '.md': 'text/markdown',
@@ -97,15 +111,33 @@ function isSafeSegment(value: string): boolean {
   return value !== '' && value !== '../adapters' && value !== '..' && SAFE_SEGMENT.test(value);
 }
 
-/** One run's identity for caches and leases, stable across stage moves. */
-function runIdentityOf(workspace: string, runKey: string): string {
-  return `${workspace}/${runKey}`;
+/**
+ * One terminal's identity for caches and leases, stable across stage moves: a
+ * run's, or one step's pane in it, which keeps its own screen and keyboard.
+ */
+function runIdentityOf(workspace: string, runKey: string, step?: string): string {
+  return step === undefined ? `${workspace}/${runKey}` : `${workspace}/${runKey}#${step}`;
+}
+
+/** The step a terminal request names, from its query or body; absent follows the current step. */
+function stepOf(value: unknown): string | undefined {
+  return typeof value === 'string' && value !== '' ? value : undefined;
 }
 
 export interface WorkflowHubApiOptions {
   registry?: WorkflowRegistryService;
   terminal?: WorkflowTerminalFacade;
   now?: () => number;
+  /**
+   * Guides a live session that the mounting session started. Present only on a
+   * session mount, whose session service refuses sessions it did not start.
+   */
+  steer?: (sessionId: string, message: string) => Promise<void>;
+  /**
+   * Runs a workflow in the mounting session, which then owns it. Present only on
+   * the mount of a session with a workflow runtime.
+   */
+  launch?: (parameters: Record<string, unknown>) => Promise<WorkflowLaunchResponse>;
 }
 
 /**
@@ -120,8 +152,10 @@ export interface WorkflowHubApiOptions {
 export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono {
   const registry = options.registry ?? new WorkflowRegistryService();
   const facade = options.terminal ?? new WorkflowTerminalFacade();
-  const terminal = createWorkflowTerminalService<WorkflowRunRecord>({
-    terminal: facade,
+  const stepPanes = createStepPaneTerminalDependencies(registry);
+  const terminal = createWorkflowTerminalService<RunTerminalTarget>({
+    // A run executing in the server has a pane per command step instead of one for the whole run.
+    terminal: createStepPaneTerminal(facade, stepPanes),
     now: options.now ?? (() => Date.now()),
   });
   const app = new Hono();
@@ -149,18 +183,22 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
     if (record === undefined) return context.json(missing(workspace, runKey), 404);
-    const identity = runIdentityOf(workspace, runKey);
+    const step = stepOf(context.req.query(STEP_TARGET_PARAM));
+    const identity = runIdentityOf(workspace, runKey, step);
 
     return streamSSE(context, async (stream) => {
       let settledTicks = 0;
       let running = true;
+      let latest = record;
       stream.onAbort(() => {
         running = false;
       });
       while (running) {
         const current = (await runOf(workspace, runKey)) ?? record;
-        const capabilities = terminal.capabilities(current);
-        const lines = capabilities.readable ? await terminal.screen(identity, current, SCREEN_LINES) : [];
+        latest = current;
+        const target: RunTerminalTarget = { record: current, ...(step === undefined ? {} : { step }) };
+        const capabilities = terminal.capabilities(target);
+        const lines = capabilities.readable ? await terminal.screen(identity, target, SCREEN_LINES) : [];
         // A settled run is read a few more times before the stream closes: the
         // last thing a failing step printed is what the reader came for, and it
         // lands after the record has already moved to its final stage.
@@ -172,7 +210,10 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
         if (ended) break;
         await stream.sleep(STREAM_TICK_MS);
       }
-      terminal.forget(new Set());
+      // Only a settled run is forgotten, and only this one. A reader closing its
+      // stream, which happens whenever a panel unmounts, must not drop the
+      // keyboard lease someone just took on another panel, or on another run.
+      if (latest.stage !== 'running') terminal.forgetRun(identity);
     });
   });
 
@@ -181,9 +222,10 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
     if (record === undefined) return context.json(missing(workspace, runKey), 404);
-    const identity = runIdentityOf(workspace, runKey);
     const body = await jsonBody(context);
-    const capabilities = terminal.capabilities(record);
+    const step = stepOf(body.step);
+    const identity = runIdentityOf(workspace, runKey, step);
+    const capabilities = terminal.capabilities({ record, ...(step === undefined ? {} : { step }) });
 
     if (body.release === true) {
       if (typeof body.token === 'string') terminal.releaseControl(identity, body.token);
@@ -212,8 +254,14 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     if (typeof body.token !== 'string' || typeof body.data !== 'string') {
       return context.json({ error: 'A keystroke needs a control token and its data.' }, 400);
     }
+    const step = stepOf(body.step);
     try {
-      await terminal.write(runIdentityOf(workspace, runKey), record, body.token, body.data);
+      await terminal.write(
+        runIdentityOf(workspace, runKey, step),
+        { record, ...(step === undefined ? {} : { step }) },
+        body.token,
+        body.data,
+      );
     } catch (error) {
       return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
@@ -230,12 +278,76 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     if (typeof token !== 'string' || typeof columns !== 'number' || typeof rows !== 'number') {
       return context.json({ error: 'A resize needs a control token, columns and rows.' }, 400);
     }
+    const step = stepOf(body.step);
     try {
-      const resized = await terminal.resize(runIdentityOf(workspace, runKey), record, token, columns, rows);
+      const resized = await terminal.resize(
+        runIdentityOf(workspace, runKey, step),
+        { record, ...(step === undefined ? {} : { step }) },
+        token,
+        columns,
+        rows,
+      );
       return context.json({ resized });
     } catch (error) {
       return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
+  });
+
+  app.post(routes.stop.path, async (context) => {
+    const workspace = context.req.param('workspace');
+    const runKey = context.req.param('runKey');
+    const record = await runOf(workspace, runKey);
+    if (record === undefined) return context.json(missing(workspace, runKey), 404);
+    if (record.stage !== 'running' || record.runId === undefined) {
+      return context.json({ error: 'Only a running workflow can be stopped.' }, 409);
+    }
+    try {
+      // The same request the workflow tool's stop writes; the engine that owns the
+      // run reads it wherever that engine lives, in this server or in a terminal.
+      await registry.requestStop(workspace, runKey, WEB_STOP_REASON, record.runId);
+    } catch (error) {
+      return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
+    const response: WorkflowStopResponse = { requested: true };
+    return context.json(response);
+  });
+
+  app.post(routes.steer.path, async (context) => {
+    const workspace = context.req.param('workspace');
+    const runKey = context.req.param('runKey');
+    const record = await runOf(workspace, runKey);
+    if (record === undefined) return context.json(missing(workspace, runKey), 404);
+    const body = await jsonBody(context);
+    const message = typeof body.message === 'string' ? body.message.trim() : '';
+    if (message === '') return context.json({ error: 'Guidance needs a message.' }, 400);
+    if (record.stage !== 'running') return context.json({ error: 'Only a running workflow can be steered.' }, 409);
+    // Only a step running now, and only an agent session. A browser names the
+    // run, and inside a parallel group the step's own session; any other
+    // session is out of reach.
+    const refs = stepPanes.stepRefs(record);
+    const step = typeof body.step === 'string' ? body.step : undefined;
+    const current = step === undefined ? refs.current : (refs.running ?? []).find((candidate) => candidate.id === step);
+    if (current?.kind !== STEP_SESSION_REF_KIND) {
+      return context.json({ error: 'The running step is not an agent session.' }, 409);
+    }
+    if (options.steer === undefined) {
+      return context.json({ error: 'Steering is available from the session that launched this run.' }, 409);
+    }
+    try {
+      await options.steer(current.id, message);
+    } catch (error) {
+      return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
+    const response: WorkflowSteerResponse = { delivered: true };
+    return context.json(response);
+  });
+
+  app.post(routes.launch.path, async (context) => {
+    if (options.launch === undefined) {
+      return context.json({ error: 'Launching needs the mount of a session with a workflow runtime.' }, 409);
+    }
+    const response: WorkflowLaunchResponse = await options.launch(await jsonBody(context));
+    return context.json(response);
   });
 
   app.delete(routes.remove.path, async (context) => {
@@ -246,8 +358,11 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     if (record.stage === 'running') {
       return context.json({ error: 'A running workflow must be stopped before it can be deleted.' }, 409);
     }
+    // Read before the run directory goes: its progress log is what names the panes.
+    const refs = stepPanes.stepRefs(record);
     try {
       fs.rmSync(registry.runDirectoryFor(record), { recursive: true, force: true });
+      await removeStepPaneLogs(refs);
     } catch (error) {
       return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
@@ -459,18 +574,31 @@ function streamArtifact(
   return new Response(body, { status: partial ? 206 : 200, headers });
 }
 
+/**
+ * This package's API, mounted by a session with its runtime's `launch` and by
+ * the hub without one.
+ */
+export function createWorkflowApi(launch?: WorkflowHubApiOptions['launch']): DoomApi {
+  return {
+    basePath: WORKFLOW_API_BASE_PATH,
+    start(context: DoomApiContext): DoomApiHandler {
+      // A run is addressed by its registry identity, which is machine-wide. Only
+      // steering and launching need a session: the one mounting this API, which
+      // may guide only the step sessions it started.
+      const steer = context.sessionService?.steer?.bind(context.sessionService);
+      const app = createWorkflowHubApi({
+        ...(steer === undefined ? {} : { steer: (sessionId, message) => steer(sessionId, message) }),
+        ...(launch === undefined ? {} : { launch }),
+      });
+      return {
+        fetch: (request) => app.fetch(request),
+        // Nothing outlives a request: a stream's loop ends when its own socket
+        // aborts, and the caches it touched are per run rather than per client.
+        close: () => undefined,
+      };
+    },
+  };
+}
+
 /** The named export a host imports from this package's built hub entry. */
-export const api: DoomApi = {
-  basePath: WORKFLOW_API_BASE_PATH,
-  start(_context: DoomApiContext): DoomApiHandler {
-    // Hub-scoped: the host hands no session, and these routes want none. A run
-    // is addressed by its registry identity, which is machine-wide.
-    const app = createWorkflowHubApi();
-    return {
-      fetch: (request) => app.fetch(request),
-      // Nothing outlives a request: a stream's loop ends when its own socket
-      // aborts, and the caches it touched are per run rather than per client.
-      close: () => undefined,
-    };
-  },
-};
+export const api: DoomApi = createWorkflowApi();

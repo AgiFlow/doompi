@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog';
 import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog';
 import { SessionActivity } from '../features/session/SessionActivity';
+import { SessionTranscriptView } from '../features/session/SessionTranscriptView';
 import { ThreadView } from '../features/session/ThreadView';
 import { onComposerSubmitted } from '../lib/composerSubmissions';
 import { restoreLivePushRegistration } from '../lib/livePush';
@@ -14,12 +15,14 @@ import { installWebPlugins, webPluginDiagnostics, webPluginsInstalled } from '..
 import { startSessionWebPluginRuntime } from '../lib/pluginRuntime';
 import { restoreSealedSession } from '../lib/sealedSession';
 import { bindSessionActivityRenderer } from '../lib/sessionActivityRenderer';
+import { bindSessionTranscriptRenderer } from '../lib/sessionTranscriptRenderer';
 import { bindThreadRenderer } from '../lib/threadRenderer';
 import { invokeServerMethod, onHubConnected, sendFrame, sendHubFrame } from '../lib/transport';
 import { routeTree } from '../routes/routeTree';
 import { onCaptureStatus } from '../stores/captureStore';
 import { refreshRemoteState, remoteAccessStore } from '../stores/remoteAccessStore';
 import { startSessionRuntime } from './sessionRuntime';
+import { watchSessionTranscript } from './sessionTranscriptWatch';
 import { webPlugins } from './webPlugins.generated';
 
 // Module scope: the registry is complete before the first render reads it.
@@ -38,6 +41,9 @@ bindThreadRenderer((sessionId, threadId, options) => (
 ));
 bindSessionActivityRenderer((sessionId, onOpenConversation) => (
   <SessionActivity sessionId={sessionId} onOpenConversation={onOpenConversation} />
+));
+bindSessionTranscriptRenderer((sessionId, options) => (
+  <SessionTranscriptView sessionId={sessionId} options={options} watch={watchSessionTranscript} />
 ));
 
 const router = createRouter({ routeTree });

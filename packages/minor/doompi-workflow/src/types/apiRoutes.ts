@@ -5,6 +5,9 @@ import type {
   WorkflowArtifactsResponse,
   WorkflowControlResponse,
   WorkflowDeleteResponse,
+  WorkflowLaunchResponse,
+  WorkflowSteerResponse,
+  WorkflowStopResponse,
 } from './webWorkflowTerminal';
 
 /**
@@ -39,6 +42,12 @@ const RUN = '/runs/:workspace/:runKey';
  */
 export const ARTIFACT_NAME_PARAM = ':name{.+}';
 
+/**
+ * The step whose pane a terminal route reads: a step ref's id. Absent, the
+ * route follows the run's current step, which is one of a parallel group's.
+ */
+export const STEP_TARGET_PARAM = 'step';
+
 /** Query parameters the artifact route reads, spelled once for both halves. */
 export const ARTIFACT_RAW_PARAM = 'raw';
 export const ARTIFACT_DOWNLOAD_PARAM = 'download';
@@ -53,6 +62,7 @@ export default defineApiRoutes({
   screen: {
     method: 'GET',
     path: `${RUN}/screen/stream`,
+    query: [STEP_TARGET_PARAM],
     stream: true,
   },
   control: {
@@ -73,6 +83,26 @@ export default defineApiRoutes({
     method: 'DELETE',
     path: RUN,
     response: apiResponse<WorkflowDeleteResponse>(),
+  },
+  stop: {
+    method: 'POST',
+    path: `${RUN}/stop`,
+    response: apiResponse<WorkflowStopResponse>(),
+  },
+  /** Guidance for the agent session the running step is in, like steering a Team sub-agent. */
+  steer: {
+    method: 'POST',
+    path: `${RUN}/steer`,
+    response: apiResponse<WorkflowSteerResponse>(),
+  },
+  /**
+   * Launch a workflow into the mounting session's own runtime, which then owns
+   * the run. A dispatcher session reaches its root's session mount through this.
+   */
+  launch: {
+    method: 'POST',
+    path: '/launch',
+    response: apiResponse<WorkflowLaunchResponse>(),
   },
   artifacts: {
     method: 'GET',

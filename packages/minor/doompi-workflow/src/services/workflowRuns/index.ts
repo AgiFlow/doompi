@@ -8,6 +8,7 @@ import type {
   WorkflowProgressState,
   WorkflowRunView,
   WorkflowStage,
+  WorkflowStepRefView,
   WorkflowStepView,
 } from '../../types/webWorkflows';
 
@@ -96,8 +97,13 @@ function asOptionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/** Text without its terminal escape codes, as a log file or a reader wants it. */
+export function withoutAnsi(text: string): string {
+  return text.replace(ANSI_ESCAPE_PATTERN, '');
+}
+
 function stripAnsi(text: string): string {
-  return text.replace(ANSI_ESCAPE_PATTERN, '').trim();
+  return withoutAnsi(text).trim();
 }
 
 /**
@@ -177,7 +183,18 @@ interface WorkflowProgressEvent {
   index?: number;
   total?: number;
   reason?: string;
+  ref?: WorkflowStepRefView;
+  group?: string;
   at: string;
+}
+
+function parseStepRef(value: unknown): WorkflowStepRefView | undefined {
+  if (!isRecord(value)) return undefined;
+  const kind = asOptionalString(value.kind);
+  const id = asOptionalString(value.id);
+  if (!kind || !id) return undefined;
+  const label = asOptionalString(value.label);
+  return { kind, id, ...(label === undefined ? {} : { label }) };
 }
 
 /**
@@ -207,6 +224,8 @@ export function parseWorkflowProgress(raw: string): WorkflowProgressEvent[] {
     const index = asOptionalNumber(parsed.index);
     const total = asOptionalNumber(parsed.total);
     const reason = asOptionalString(parsed.reason);
+    const ref = parseStepRef(parsed.ref);
+    const group = asOptionalString(parsed.group);
     events.push({
       type,
       status: status as WorkflowProgressState,
@@ -215,6 +234,8 @@ export function parseWorkflowProgress(raw: string): WorkflowProgressEvent[] {
       ...(index === undefined ? {} : { index }),
       ...(total === undefined ? {} : { total }),
       ...(reason === undefined ? {} : { reason }),
+      ...(ref === undefined ? {} : { ref }),
+      ...(group === undefined ? {} : { group }),
       at,
     });
   }
@@ -256,9 +277,19 @@ export function foldWorkflowProgress(events: readonly WorkflowProgressEvent[]): 
     if (step === undefined) {
       step = { name: event.step, status: event.status };
       job.steps.push(step);
+    } else if (event.status === 'running' && step.status !== 'running') {
+      // Started again, as a fix loop does: nothing of the previous attempt, its
+      // session or pane included, belongs to this one. Guidance for the old
+      // session would wake an agent working beside the new attempt.
+      delete step.ref;
+      delete step.reason;
+      delete step.endedAt;
+      delete step.startedAt;
     }
     step.status = event.status;
     if (event.reason !== undefined) step.reason = event.reason;
+    if (event.ref !== undefined) step.ref = event.ref;
+    if (event.group !== undefined) step.group = event.group;
     if (event.status === 'running' && step.startedAt === undefined) step.startedAt = event.at;
     if (STEP_TERMINAL_STATES.has(event.status)) step.endedAt = event.at;
   }

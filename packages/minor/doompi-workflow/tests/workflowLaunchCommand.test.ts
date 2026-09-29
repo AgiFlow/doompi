@@ -141,6 +141,18 @@ describe('validateWorkflowLaunch', () => {
   it('accepts any runner when the workflow declares no runner map', () => {
     expect(validateWorkflowLaunch({ triggers: [], inputs: [] }, { inputs: {}, runner: 'cmux' })).toEqual([]);
   });
+
+  it('holds command and choice to what the workflow offers', () => {
+    const requirements = { triggers: [], inputs: [], commands: ['pi', 'claude'], choices: ['default', 'deep'] };
+    expect(validateWorkflowLaunch(requirements, { inputs: {}, command: 'claude', choice: 'deep' })).toEqual([]);
+    expect(validateWorkflowLaunch(requirements, { inputs: {}, command: 'codex', choice: 'fast' })).toEqual([
+      'Command codex is not one every step offers: pi, claude.',
+      'Choice fast is not declared: default, deep.',
+    ]);
+    expect(validateWorkflowLaunch({ triggers: [], inputs: [] }, { inputs: {}, command: 'pi' })).toEqual([
+      'This workflow has no templated steps to run through a command.',
+    ]);
+  });
 });
 
 // The cockpit builds this line and the session parses it, in two halves that
@@ -151,6 +163,8 @@ describe('the line the cockpit builds and the session parses', () => {
     const request = {
       workflow: 'Blog Writing',
       runner: 'tmux',
+      command: 'claude',
+      choice: 'deep',
       inputs: { brief: 'a post about context budgets', tone: 'practical' },
       prompt: 'Draft it, and keep a=b in the prose.',
     };

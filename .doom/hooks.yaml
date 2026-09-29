@@ -34,11 +34,34 @@ groups:
       - id: workflow-stop
         event: Stop
         claude:
+          # A step that takes decisions runs its run's own workflow-mcp, by
+          # path rather than through PATH, which a harness may reset: the
+          # engine version running the step. A missing CLI is an error the
+          # agent's hook output shows, never a silent no-op, since without it
+          # the step cannot record how it ended.
           command: >-
-            REPO="${CLAUDE_PROJECT_DIR:-$PWD}" &&
-            [ -f "$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs" ] &&
-            node "$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs" claude-stop-hook || true
+            if [ -n "$WORKFLOW_DECISION_FILE" ]; then CLI="$WORKFLOW_RUN_DIR/bin/workflow-mcp";
+            if [ -x "$CLI" ]; then "$CLI" claude-stop-hook;
+            else echo "workflow-stop: $CLI is missing, so this step cannot record how it ended" >&2; exit 1; fi;
+            else CLI="${CLAUDE_PROJECT_DIR:-$PWD}/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs";
+            if [ -n "$WORKFLOW_STATUS_FILE" ]; then
+            if [ -f "$CLI" ]; then node "$CLI" claude-stop-hook;
+            else echo "workflow-stop: $CLI is missing, so this step cannot record that it ended" >&2; exit 1; fi;
+            elif [ -f "$CLI" ]; then node "$CLI" claude-stop-hook || true; fi; fi
           timeout: 10
+        pi:
+          # A workflow step's gate is its run's own workflow-mcp, by path, the
+          # engine version that runs the step. It sends the agent back until
+          # the step records its decision and writes the artifacts it must
+          # leave; a missing CLI is reported, not skipped.
+          command: >-
+            if [ -z "$WORKFLOW_DECISION_FILE" ]; then exit 0; fi; CLI="$WORKFLOW_RUN_DIR/bin/workflow-mcp";
+            if [ -x "$CLI" ]; then exec "$CLI" step stop-hook; fi;
+            echo "workflow-stop: $CLI is missing, so the step decision gate cannot run" >&2; exit 1
+          timeout: 10
+          # Only the root agent reports settled; subagents must not hold the
+          # parent's workflow step.
+          skipInSubagent: true
 
       - id: workflow-notification
         event: Notification

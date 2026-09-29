@@ -11,12 +11,16 @@ import type { WorkflowCatalogEntryView } from '../../../../../types/webWorkflows
  */
 
 export const WORKFLOW_LAUNCH_VERB = '/workflow-launch';
-/** The reserved key; every other pair is one of the workflow's own inputs. */
+/** Reserved keys; every other pair is one of the workflow's own inputs. */
 export const RUNNER_KEY = 'runner';
+export const COMMAND_KEY = 'command';
+export const CHOICE_KEY = 'choice';
 
 export interface WorkflowLaunchRequest {
   workflow: string;
   runner?: string;
+  command?: string;
+  choice?: string;
   inputs: Record<string, string>;
   prompt?: string;
 }
@@ -26,9 +30,15 @@ function quote(value: string): string {
   return /\s/.test(value) ? `"${value}"` : value;
 }
 
+function reservedPair(key: string, value: string | undefined): string[] {
+  return value === undefined || value === '' ? [] : [`${key}=${quote(value)}`];
+}
+
 export function workflowLaunchLine(request: WorkflowLaunchRequest): string {
   const pairs = [
-    ...(request.runner === undefined || request.runner === '' ? [] : [`${RUNNER_KEY}=${quote(request.runner)}`]),
+    ...reservedPair(RUNNER_KEY, request.runner),
+    ...reservedPair(COMMAND_KEY, request.command),
+    ...reservedPair(CHOICE_KEY, request.choice),
     ...Object.entries(request.inputs)
       .filter(([, value]) => value !== '')
       .map(([key, value]) => `${key}=${quote(value)}`),
@@ -63,4 +73,15 @@ export function initialInputs(workflow: WorkflowCatalogEntryView): Record<string
 /** The runner a launch starts on: the workflow's first declared one, when it declares any. */
 export function initialRunner(workflow: WorkflowCatalogEntryView): string | undefined {
   return workflow.runners?.[0];
+}
+
+/** The command templated steps start on: the one their steps list first. */
+export function initialCommand(workflow: WorkflowCatalogEntryView): string | undefined {
+  return workflow.commands?.[0];
+}
+
+/** The choice a launch starts on: `default` when declared, else the first. */
+export function initialChoice(workflow: WorkflowCatalogEntryView): string | undefined {
+  const choices = workflow.choices ?? [];
+  return choices.includes('default') ? 'default' : choices[0];
 }

@@ -1,12 +1,28 @@
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { AnsiLine, Badge, Button, StatusBadge, StreamCursor } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+} from 'react';
 
-import type { WorkflowRunView } from '../../../../../types/webWorkflows';
+import {
+  STEP_PANE_REF_KIND,
+  STEP_SESSION_REF_KIND,
+  type WorkflowRunView,
+  type WorkflowStepRefView,
+  type WorkflowStepView,
+} from '../../../../../types/webWorkflows';
 import type { WorkflowTerminalCapabilitiesView } from '../../../../../types/webWorkflowTerminal';
+import { createKeySender } from '../_lib/keySender';
 import { followScreen, releaseControl, sendKeys, takeControl } from '../_lib/terminalApi';
 import { workflows } from '../_lib/workflowsStore';
+import { StepSteerComposer } from './StepSteerComposer';
 
 /** The tab id doubles as the URL segment, so it stays plain and unique across plugins. */
 const TAB_ID_PREFIX = 'workflows-step-';
@@ -52,11 +68,104 @@ export function stepTerminalTab(run: WorkflowRunView, job: string, step?: string
   };
 }
 
+/**
+ * The child session a customRun step ran as, when the tab shows one.
+ *
+ * A step tab follows that step. A job tab follows the job's latest step only,
+ * so a job that moved on to a command step shows its terminal again.
+ */
+/** The step a tab points at: the named one, or the job's last step when it names none. */
+function targetStep(run: WorkflowRunView | undefined, target: StepTabTarget): WorkflowStepView | undefined {
+  const steps = run?.jobs.find((job) => job.name === target.job)?.steps ?? [];
+  return target.step === undefined ? steps.at(-1) : steps.find((candidate) => candidate.name === target.step);
+}
+
+/** The pane of the step a tab points at, so a parallel group's steps each read their own. */
+export function stepPaneId(run: WorkflowRunView | undefined, target: StepTabTarget): string | undefined {
+  const ref = targetStep(run, target)?.ref;
+  return ref?.kind === STEP_PANE_REF_KIND ? ref.id : undefined;
+}
+
+export function stepSessionRef(
+  run: WorkflowRunView | undefined,
+  target: StepTabTarget,
+): WorkflowStepRefView | undefined {
+  const step = targetStep(run, target);
+  return step?.ref?.kind === STEP_SESSION_REF_KIND ? step.ref : undefined;
+}
+
 function ScreenLine({ line }: { line: string }) {
   // A blank row still has to hold the grid open, so an empty line keeps its
   // height rather than collapsing the screen by one row.
   if (line.length === 0) return <span className="block h-[15px]" />;
   return <AnsiLine line={line} className="block whitespace-pre" />;
+}
+
+/** The run, job and step the tab was opened from, with the run's stage and any controls. */
+function StepHeader({
+  run,
+  target,
+  children,
+}: {
+  run: WorkflowRunView | undefined;
+  target: StepTabTarget;
+  children?: ReactNode;
+}) {
+  return (
+    <div data-testid="step-terminal-head" className="flex items-center gap-2.5 pb-3">
+      <span className="shrink-0 truncate text-sm font-bold text-doom-hi">{run?.displayName ?? target.runKey}</span>
+      <span className="text-xs text-doom-faint">›</span>
+      <span className="shrink-0 truncate text-sm font-bold text-doom-blue">{target.job}</span>
+      {target.step === undefined ? null : (
+        <>
+          <span className="text-xs text-doom-faint">›</span>
+          <span className="min-w-0 truncate text-sm text-doom-text">{target.step}</span>
+        </>
+      )}
+      {run === undefined ? null : (
+        <StatusBadge
+          tone={run.stage === 'running' ? 'running' : run.stage === 'error' ? 'error' : 'ok'}
+          data-testid="step-terminal-stage"
+        >
+          {run.stage}
+        </StatusBadge>
+      )}
+      <span className="min-w-0 flex-1" />
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One step of a run: the agent conversation for a customRun step, else the run's terminal.
+ *
+ * A customRun step runs as a child session, so its real messages replace the
+ * screen a shell step would paint. The session outlives the step, so a
+ * finished step still reads back.
+ */
+export function StepTerminalPanel(props: WebPluginSlotProps & { target: StepTabTarget }) {
+  const { sessionId, target, renderSessionTranscript } = props;
+  const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
+  const run = runs.find((candidate) => candidate.workspace === target.workspace && candidate.runKey === target.runKey);
+  const sessionRef = stepSessionRef(run, target);
+  if (sessionRef !== undefined && renderSessionTranscript !== undefined) {
+    return (
+      <div data-testid="step-conversation-panel" className="flex min-h-0 flex-1 flex-col px-[26px] py-[18px]">
+        <StepHeader run={run} target={target}>
+          <Badge size="xs" tone="blue" data-testid="step-conversation-session">
+            agent session
+          </Badge>
+        </StepHeader>
+        <div data-testid="step-conversation" className="flex min-h-0 flex-1 flex-col">
+          {renderSessionTranscript(sessionRef.id)}
+        </div>
+        {run !== undefined && targetStep(run, target)?.status === 'running' ? (
+          <StepSteerComposer key={sessionRef.id} run={run} sessionId={sessionId} step={sessionRef.id} />
+        ) : null}
+      </div>
+    );
+  }
+  return <StepTerminal sessionId={sessionId} target={target} run={run} />;
 }
 
 /**
@@ -67,18 +176,26 @@ function ScreenLine({ line }: { line: string }) {
  * takes the keyboard first, because the pane belongs to whoever is answering
  * whatever the nested agent asked.
  */
-export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { target: StepTabTarget }) {
-  const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
-  const run = runs.find((candidate) => candidate.workspace === target.workspace && candidate.runKey === target.runKey);
+function StepTerminal({
+  sessionId,
+  target,
+  run,
+}: {
+  sessionId: string | null;
+  target: StepTabTarget;
+  run: WorkflowRunView | undefined;
+}) {
   const [lines, setLines] = useState<string[]>([]);
   const [capabilities, setCapabilities] = useState<WorkflowTerminalCapabilitiesView>();
   const [ended, setEnded] = useState(false);
   const [token, setToken] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const screenRef = useRef<HTMLDivElement>(null);
+  // The step's own pane, so each step of a parallel group has its own screen and keyboard.
+  const pane = stepPaneId(run, target);
   // The run the panel shows right now, cleared on unmount. A keyboard grant that comes back for
   // any other run is released at once instead of being held for a panel that moved on.
-  const targetKey = `${sessionId ?? ''}\0${target.workspace}\0${target.runKey}`;
+  const targetKey = `${sessionId ?? ''}\0${target.workspace}\0${target.runKey}\0${pane ?? ''}`;
   const currentTarget = useRef<string | undefined>(targetKey);
   useEffect(() => {
     currentTarget.current = targetKey;
@@ -100,17 +217,18 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
         if (event.ended === true) setEnded(true);
       },
       sessionId,
+      pane,
     );
-  }, [sessionId, target.workspace, target.runKey]);
+  }, [sessionId, target.workspace, target.runKey, pane]);
 
   // The keyboard is a lease on the hub, so a tab that goes away must hand it
   // back rather than leaving the next reader locked out until it expires.
   useEffect(() => {
     if (token === undefined) return;
     return () => {
-      void releaseControl(target.workspace, target.runKey, token, sessionId);
+      void releaseControl(target.workspace, target.runKey, token, sessionId, pane);
     };
-  }, [sessionId, token, target.workspace, target.runKey]);
+  }, [sessionId, token, target.workspace, target.runKey, pane]);
 
   useEffect(() => {
     screenRef.current?.scrollTo({ top: screenRef.current.scrollHeight });
@@ -118,10 +236,10 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
 
   const arm = useCallback(async () => {
     const requested = targetKey;
-    const result = await takeControl(target.workspace, target.runKey, undefined, sessionId);
+    const result = await takeControl(target.workspace, target.runKey, undefined, sessionId, pane);
     if (currentTarget.current !== requested) {
       if (result.held && result.token !== undefined)
-        void releaseControl(target.workspace, target.runKey, result.token, sessionId);
+        void releaseControl(target.workspace, target.runKey, result.token, sessionId, pane);
       return;
     }
     if (result.held && result.token !== undefined) {
@@ -130,21 +248,27 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
       return;
     }
     setNotice(result.reason ?? 'The keyboard is not available for this run.');
-  }, [sessionId, target.workspace, target.runKey, targetKey]);
+  }, [sessionId, target.workspace, target.runKey, targetKey, pane]);
 
   // Dropping the token is the release: the lease effect's cleanup hands it back exactly once.
   const disarm = useCallback(() => {
     setToken(undefined);
   }, []);
 
-  const type = async (data: string): Promise<void> => {
-    if (token === undefined) return;
-    const { error } = await sendKeys(target.workspace, target.runKey, token, data, sessionId);
-    if (error !== undefined) {
-      setNotice(error);
-      setToken(undefined);
-    }
-  };
+  const typeKeys = useMemo(
+    () =>
+      token === undefined
+        ? undefined
+        : createKeySender(async (data) => {
+            const { error } = await sendKeys(target.workspace, target.runKey, token, data, sessionId, pane);
+            if (error === undefined) return true;
+            setNotice(error);
+            setToken(undefined);
+            return false;
+          }),
+    [token, target.workspace, target.runKey, sessionId, pane],
+  );
+  const type = (data: string): void => typeKeys?.(data);
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (token === undefined) return;
@@ -156,18 +280,18 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
     const control = CONTROL_KEYS[event.key];
     if (control !== undefined) {
       event.preventDefault();
-      void type(control);
+      type(control);
       return;
     }
     if (event.ctrlKey && event.key.length === 1) {
       event.preventDefault();
       const letter = event.key.toUpperCase().charCodeAt(0);
-      void type(event.key === 'c' ? CTRL_C : event.key === 'd' ? CTRL_D : String.fromCharCode(letter - CTRL_A_CODE));
+      type(event.key === 'c' ? CTRL_C : event.key === 'd' ? CTRL_D : String.fromCharCode(letter - CTRL_A_CODE));
       return;
     }
     if (event.key.length === 1 && !event.metaKey && !event.altKey) {
       event.preventDefault();
-      void type(event.key);
+      type(event.key);
     }
   };
 
@@ -176,25 +300,7 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
 
   return (
     <div data-testid="step-terminal-panel" className="flex min-h-0 flex-1 flex-col px-[26px] py-[18px]">
-      <div data-testid="step-terminal-head" className="flex items-center gap-2.5 pb-3">
-        <span className="shrink-0 truncate text-sm font-bold text-doom-hi">{run?.displayName ?? target.runKey}</span>
-        <span className="text-xs text-doom-faint">›</span>
-        <span className="shrink-0 truncate text-sm font-bold text-doom-blue">{target.job}</span>
-        {target.step === undefined ? null : (
-          <>
-            <span className="text-xs text-doom-faint">›</span>
-            <span className="min-w-0 truncate text-sm text-doom-text">{target.step}</span>
-          </>
-        )}
-        {run === undefined ? null : (
-          <StatusBadge
-            tone={run.stage === 'running' ? 'running' : run.stage === 'error' ? 'error' : 'ok'}
-            data-testid="step-terminal-stage"
-          >
-            {run.stage}
-          </StatusBadge>
-        )}
-        <span className="min-w-0 flex-1" />
+      <StepHeader run={run} target={target}>
         <Badge
           size="xs"
           tone={held ? 'blue' : 'neutral'}
@@ -213,7 +319,7 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
             {held ? 'release keyboard' : 'take control'}
           </Button>
         ) : null}
-      </div>
+      </StepHeader>
       <div
         ref={screenRef}
         data-testid="step-terminal-screen"

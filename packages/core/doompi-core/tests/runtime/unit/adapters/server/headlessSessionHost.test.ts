@@ -48,6 +48,7 @@ async function fixture(
     modes?: string[];
     inheritedSelection?: Parameters<typeof createHeadlessSessionHost>[0]['inheritedSelection'];
     streamSimple?: ModelRuntime['streamSimple'];
+    allowedTools?: readonly string[];
   } = {},
 ): Promise<{
   host: Awaited<ReturnType<typeof createHeadlessSessionHost>>;
@@ -88,6 +89,7 @@ async function fixture(
     piExtensions: false,
     selection: { majorMode: 'test', activeLayers: [], domains: [], state: { 'minor-mode': options.modes ?? [] } },
     ...(options.inheritedSelection ? { inheritedSelection: options.inheritedSelection } : {}),
+    ...(options.allowedTools ? { allowedTools: options.allowedTools } : {}),
   });
   host.prepareFacets(context);
   cleanup.push(async () => {
@@ -475,6 +477,40 @@ describe('headless session facet surface', () => {
       expect(names()).toEqual(['read']);
     },
   );
+  it('keeps every tool outside the session allowlist off the agent surface', async () => {
+    const candidate: DoomServerBundleEntry = {
+      packageName: '@test/allowlist',
+      entry: './server.ts',
+      module: './server.mjs',
+      scopes: ['session'],
+      required: true,
+      owners: [{ majorMode: 'test', layer: 'default' }],
+    };
+    const current = await fixture([], { candidates: [candidate], allowedTools: ['read', 'launch_workflow'] });
+    const execute = vi.fn<DoomHeadlessTool['execute']>(async () => ({ content: [{ type: 'text', text: 'facet' }] }));
+    await current.context
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin((context: Context) => {
+        const host = requireDoomHeadlessHost(context);
+        for (const name of ['read', 'edit', 'write', 'launch_workflow'])
+          host.registerTool({ name, description: name, parameters: Type.Object({}), execute });
+      })
+      .await();
+    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
+    await current.host.activateFacets({
+      root: current.context,
+      installedPackages: [candidate.packageName],
+      dispose: async () => {},
+    });
+
+    const surface = current.host.toolSurface.readSurface();
+    expect(surface.tools.map(({ name }) => name).sort()).toEqual(['launch_workflow', 'read']);
+    await expect(
+      current.host.toolSurface.invokeTool({ revision: surface.revision, name: 'edit', arguments: {} }),
+    ).rejects.toThrow();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('maps prompt and admitPrompt deliveries onto the runtime', async () => {
     const { session, runtime } = await fixture();
     const prompt = vi.spyOn(runtime, 'prompt').mockResolvedValue(undefined);

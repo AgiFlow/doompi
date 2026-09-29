@@ -34,6 +34,8 @@ export interface CatalogDetail {
   jobs: WorkflowCatalogJobView[];
   artifacts: WorkflowCatalogArtifactView[];
   runners?: string[];
+  commands?: string[];
+  choices?: string[];
   error?: string;
 }
 
@@ -98,6 +100,8 @@ export function createWorkflowCatalogReader(deps: WorkflowCatalogReaderDeps): Wo
           jobs: detail.jobs,
           artifacts: detail.artifacts,
           ...(detail.runners === undefined ? {} : { runners: detail.runners }),
+          ...(detail.commands === undefined ? {} : { commands: detail.commands }),
+          ...(detail.choices === undefined ? {} : { choices: detail.choices }),
           ...(detail.error === undefined ? {} : { error: detail.error }),
         };
       });

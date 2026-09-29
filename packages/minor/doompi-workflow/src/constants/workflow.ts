@@ -19,3 +19,11 @@ export const WORKFLOW_PI_TOOL_NAMES = [
   LAUNCH_WORKFLOW_TOOL_NAME,
   WORKFLOW_RUN_TOOL_NAME,
 ] as const;
+
+/**
+ * One launch's own id, carried in the run's environment.
+ *
+ * A launch answers once its run registers; matching on this id, rather than on
+ * the workflow and the time, keeps two launches of one workflow apart.
+ */
+export const WORKFLOW_LAUNCH_ID_ENV = 'DOOMPI_WORKFLOW_LAUNCH_ID';

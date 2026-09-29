@@ -1,0 +1,49 @@
+name: Runner Choice
+description: Run one agent step at low or high thinking, in-process as a DoomPi session or in its own pane through the terminal command.
+tags:
+  - example
+  - testing
+
+imports:
+  - commands.yml
+
+# Launched from the DoomPi server this is ignored: the run executes in-process.
+launch-command: 'pnpm exec workflow-mcp launch-process --launcher "${WORKFLOW_LAUNCHER:-tmux}" --name "{name}" --cwd "$PWD" --command "{command}"'
+
+# Model compositions a launch selects with --choice; `default` when it names none.
+choices:
+  default:
+    model: openai-codex/gpt-6-luna
+    thinking: low
+  high:
+    model: openai-codex/gpt-6-luna
+    thinking: high
+
+run-directory:
+  description: What the agent step leaves behind.
+  entries:
+    - path: runner.md
+      kind: file
+      description: The model and thinking level the agent ran with.
+      produced-by: [report]
+
+on:
+  workflow_dispatch:
+
+jobs:
+  report:
+    description: An agent step whose choice decides its model and thinking level.
+    steps:
+      - name: Report the choice
+        timeout-minutes: 10
+        artifacts:
+          - runner.md
+        runConfig:
+          majorMode: examples
+          domains: []
+        prompt: |
+          Use one shell command to write the single line "model=${{ runConfig.model }} thinking=${{ runConfig.thinking }}" to ${{ env.WORKFLOW_RUN_DIR }}/runner.md.
+          Then record the step as complete. Do nothing else.
+        interactiveRun:
+          - command: doompi
+          - command: terminal

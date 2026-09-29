@@ -70,6 +70,44 @@ describe('workflowRuns', () => {
     ).toBeUndefined();
   });
 
+  it('keeps where a host executor ran a step after the step finishes', () => {
+    const ref = { kind: 'session', id: 'child-session', label: 'dev-fix: diagnose > Diagnose' };
+    const events: WorkflowProgressEvent[] = [
+      { type: 'step', status: 'running', job: 'diagnose', step: 'Diagnose', at: '2026-09-27T10:00:00.000Z' },
+      { type: 'step', status: 'running', job: 'diagnose', step: 'Diagnose', ref, at: '2026-09-27T10:00:01.000Z' },
+      { type: 'step', status: 'completed', job: 'diagnose', step: 'Diagnose', at: '2026-09-27T10:05:00.000Z' },
+    ];
+    // A malformed ref inside the same attempt is skipped, not taken for a new one.
+    const raw = [
+      JSON.stringify(events[0]),
+      JSON.stringify(events[1]),
+      JSON.stringify({ ...events[1], ref: { kind: 'session' } }),
+      JSON.stringify(events[2]),
+    ].join('\n');
+    const [job] = foldWorkflowProgress(parseWorkflowProgress(raw));
+    expect(job?.steps).toEqual([expect.objectContaining({ name: 'Diagnose', status: 'completed', ref })]);
+  });
+
+  it('forgets the previous attempt of a step that starts again', () => {
+    const ref = { kind: 'session', id: 'child-session', label: 'Diagnose' };
+    const events: WorkflowProgressEvent[] = [
+      { type: 'step', status: 'running', job: 'diagnose', step: 'Diagnose', ref, at: '2026-09-27T10:00:00.000Z' },
+      {
+        type: 'step',
+        status: 'failed',
+        job: 'diagnose',
+        step: 'Diagnose',
+        reason: 'artifact missing',
+        at: '2026-09-27T10:05:00.000Z',
+      },
+      { type: 'step', status: 'running', job: 'diagnose', step: 'Diagnose', at: '2026-09-27T10:06:00.000Z' },
+    ];
+    const [job] = foldWorkflowProgress(parseWorkflowProgress(events.map((event) => JSON.stringify(event)).join('\n')));
+
+    // Until the new attempt records its session, there is none to show or guide.
+    expect(job?.steps).toEqual([{ name: 'Diagnose', status: 'running', startedAt: '2026-09-27T10:06:00.000Z' }]);
+  });
+
   it('folds the progress log into the job tree, pinned to observed real-world lines', () => {
     // Verbatim shape of a dev-fix.workflow.yml run's progress.ndjson, plus a
     // failing job to cover the terminal states.

@@ -7,7 +7,7 @@ const B = Type.Boolean();
 const O = Type.Optional;
 const values = <T extends string>(items: T[]) => Type.Union(items.map((item) => Type.Literal(item)));
 const Progress = values(['running', 'completed', 'skipped', 'failed', 'pause_requested', 'paused', 'resumed']);
-const Step = { name: S, status: Progress, reason: O(S), startedAt: O(S), endedAt: O(S) };
+const Step = { name: S, status: Progress, reason: O(S), group: O(S), startedAt: O(S), endedAt: O(S) };
 const Run = Type.Object({
   runKey: S,
   workspace: S,
@@ -62,6 +62,8 @@ export const WorkflowCatalogSchema = Type.Object({
       jobs: Type.Array(Type.Object({ name: S, steps: Type.Array(S) })),
       artifacts: Type.Array(Type.Object(Artifact)),
       runners: O(Type.Array(S)),
+      commands: O(Type.Array(S)),
+      choices: O(Type.Array(S)),
       error: O(S),
     }),
   ),

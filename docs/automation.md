@@ -54,6 +54,52 @@ jobs:
 
 `--auto-stop` closes the interactive Pi session after its agent settles. Timeouts remain workflow policy and should reflect the cost and expected duration of each job.
 
+### In-process steps: `runConfig` and `customRun`
+
+A step can declare its DoomPi settings as data instead of CLI flags. `runConfig` holds what every runner of the step shares, and `customRun` holds only what the in-process runner needs:
+
+```yaml
+- name: Diagnose the defect
+  artifacts: [diagnosis.md]
+  runConfig:
+    majorMode: examples
+    minorModes: [plan]
+    profile: work
+    domains: [engineering]
+    model: openai-codex/gpt-6-sol
+    thinking: medium
+  customRun:
+    prompt: |
+      ${{ env.JOB_SYSTEM_PROMPT }}
+
+      Defect report:
+      ${{ env.WORKFLOW_CONTEXT }}
+  interactiveRun: |
+    doompi --major-mode ${{ runConfig.majorMode }} --domains ${{ runConfig.domains }} \
+      --auto-stop --cwd "$PWD" "$JOB_SYSTEM_PROMPT"
+```
+
+When the DoomPi server launches a workflow (the `launch_workflow` tool, `/workflow-launch`, or the web launch dialog), the run executes in the server process and `launch-command` is not used:
+
+- A `customRun` step, or a templated command that allows `inProcess`, becomes a child session of the launching session, pinned to the step's major mode, minor modes, profile, domains, and model. The step's view in the workflow panel shows that session's live conversation where a command step shows its terminal. Each time the agent settles, the engine's gate is asked: while the step still lacks its decision or declared artifacts, the agent is reminded, up to the gate's cap, and guidance sent from the web while it works is left to finish first. The step fails on a harness fault, on a session that cannot be opened (with the host's reason), and when a declared artifact was not written. Once the step ends, its session is released: it stops holding a model and tools but stays readable, as a dormant session, in the workflow's view.
+- Every run keeps its engine log in `engine.log` in its run directory, which the artifacts pane lists, and a failed step records why in its progress entry. Engine errors, run starts, finishes, and failures also go to telemetry as `doom_workflow.*` events.
+- Closing the session that launched a run asks the run to stop.
+- `run` and `interactiveRun` steps each get their own RMUX pane, which the job's terminal view follows. Without a compatible RMUX binary, the step is spawned by the engine as before.
+
+Every job must be the last to have written each run-directory entry it produces. After each step, workflow-mcp records in the run's `writes.ndjson` each declared entry that changed (new content, the same content written again, or removal) with the job and step that changed it. A job attempt fails, naming the entry and who wrote it last, unless this job is the latest writer of every entry it produces, and its retries apply. A retry, or a job that skips work it already did, keeps its own output; an entry another job wrote after it must be written again, so several jobs can produce one file and each is held to its own write. When an agent step ends the job, it is held to the entries it has yet to write before it stops, as it is to its own `artifacts` (which must also not be empty): the in-process runner asks the gate each time the agent settles, and a terminal agent is held the same way by its Stop hook (Claude Code, Codex, and DoomPi's `workflow-stop`). Each reminder names the files and what the run directory says each holds, so give every entry a `description`. After the gate's cap (3 reminders by default, set with `WORKFLOW_DECISION_NUDGE_CAP`), the agent may stop, and the step or job fails with what is still missing. A job that ends with a script is only checked once it ends, since that script may still write its entries.
+
+`runConfig` keys are validated: `majorMode`, `profile`, `model`, and `thinking` take one name, while `minorModes` and `domains` take a list or a comma-separated string (an empty list selects no domains). An unknown key fails the step; on a templated step, a key the template of any command the step offers reads is known too.
+
+Check workflows before running them with `workflow-mcp doctor`, which reports what a run would otherwise only meet mid-step: schema and import problems, runConfig keys nothing reads, jobs that need a missing job, runner maps no runner satisfies, customRun steps without a terminal fallback, and inputs a workflow does not declare. Pass DoomPi's keys so runConfig typos are errors:
+
+```bash
+workflow-mcp doctor automations/workflows --run-config-keys majorMode,minorModes,profile,domains,model,thinking
+```
+
+It exits non-zero on errors (and on warnings with `--strict`), and `--format json` reports each finding with its code and location. The DoomPi server runs the same check on its workflow catalog: a workflow with errors shows as needing fixing and cannot be launched until it is fixed. `${{ runConfig.<key> }}` interpolates into any command, with lists joined by commas, and `WORKFLOW_RUN_CONFIG` holds the whole map as JSON.
+
+The CLI and the TUI have no in-process executor. They run a step's `interactiveRun` or `run` instead, so keep one as a fallback. A step with only `customRun` fails there with an explicit error.
+
 ## Repository examples
 
 This repository carries a small native plugin and workflow stack:

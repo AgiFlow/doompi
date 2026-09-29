@@ -1300,6 +1300,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       ],
       context: executionContext,
       resolveSelection: options.resolveSelection,
+      ...(options.allowedTools === undefined ? {} : { allowedTools: () => options.allowedTools }),
       applyTools: async (tools) => {
         appliedFacetTools = tools;
         await applyLatestTools();

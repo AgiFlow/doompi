@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
 import type { DoomToolRestriction } from '@agimon-ai/doompi-core/toolSurface';
 import { type EmbeddedWorkflowFeature, type WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
@@ -19,7 +21,7 @@ const AGIFLOW_JOB_ID_ENV = 'AGIFLOW_JOB_ID';
 const AGIFLOW_JOB_KIND_ENV = 'AGIFLOW_JOB_KIND';
 const AGIFLOW_PROJECT_ID_ENV = 'AGIFLOW_PROJECT_ID';
 
-import { WORKFLOW_PI_TOOL_NAMES, LAUNCH_WORKFLOW_TOOL_NAME } from '../../constants/workflow';
+import { WORKFLOW_LAUNCH_ID_ENV, WORKFLOW_PI_TOOL_NAMES, LAUNCH_WORKFLOW_TOOL_NAME } from '../../constants/workflow';
 
 /**
  * What workflow mode does to the tool surface: nothing but hide its own tools.
@@ -61,19 +63,26 @@ const LAUNCH_ACK_POLL_MS = 500;
 const LAUNCH_ACK_TIMEOUT_MS = 15_000;
 
 export interface LaunchedRunQuery {
+  /** The id this launch put in its run's environment; a run carrying it is this launch's. */
+  launchId: string;
   sessionId: string | undefined;
   /** Epoch milliseconds the launch began, so an earlier run cannot match. */
   since: number;
   workflowPath: string;
 }
 
-export interface WorkflowLaunchExecutorDependencies {
+/** What a launch reads off its caller: whose run it is. A Pi context is one; a server session adapts to it. */
+export interface WorkflowLaunchContext {
+  readonly sessionManager: { getSessionId(): string };
+}
+
+export interface WorkflowLaunchExecutorDependencies<Ctx extends WorkflowLaunchContext = ExtensionContext> {
   readonly environment: Readonly<Record<string, string | undefined>>;
   activeRunCount?: () => Promise<number>;
-  onLaunch?: (ctx: ExtensionContext) => Promise<void> | void;
+  onLaunch?: (ctx: Ctx) => Promise<void> | void;
   observeSession?: (sessionId: string | undefined) => void;
   rejectRunner?: (workflowPath: string, runner: string) => string | undefined;
-  runTool: EmbeddedWorkflowFeature['runTool'];
+  runTool: Pick<EmbeddedWorkflowFeature['runTool'], 'execute'>;
   trackPendingRun: <T>(run: Promise<T>) => Promise<T>;
   /**
    * The run this launch registered, or undefined while none has appeared.
@@ -84,15 +93,15 @@ export interface WorkflowLaunchExecutorDependencies {
    */
   findLaunchedRun?: (query: LaunchedRunQuery) => Promise<WorkflowRunRecord | undefined>;
   /** Report a launch that fails after this call already answered "started". */
-  onLateFailure?: (error: unknown, ctx: ExtensionContext) => void;
+  onLateFailure?: (error: unknown, ctx: Ctx) => void;
   launchAckPollMs?: number;
   launchAckTimeoutMs?: number;
 }
 
-export interface WorkflowLaunchExecutor {
+export interface WorkflowLaunchExecutor<Ctx extends WorkflowLaunchContext = ExtensionContext> {
   execute(
     input: WorkflowLaunchInput,
-    ctx: ExtensionContext,
+    ctx: Ctx,
     onUpdate?: AgentToolUpdateCallback<{ tool: string }>,
   ): Promise<CallToolResult>;
 }
@@ -209,9 +218,9 @@ function sleep(ms: number): Promise<undefined> {
  * minutes after the run itself was registered and working. The registry is the
  * earlier and more truthful signal: a run recorded there is a run that started.
  */
-async function awaitLaunchAck(
+async function awaitLaunchAck<Ctx extends WorkflowLaunchContext>(
   settled: Promise<LaunchOutcome>,
-  dependencies: WorkflowLaunchExecutorDependencies,
+  dependencies: WorkflowLaunchExecutorDependencies<Ctx>,
   query: LaunchedRunQuery,
 ): Promise<LaunchAck> {
   const findLaunchedRun = dependencies.findLaunchedRun;
@@ -237,10 +246,10 @@ async function awaitLaunchAck(
  * code entirely is not part of the trade: a launch that fails a minute later
  * would otherwise leave a user waiting on a run that never existed.
  */
-function reportLateFailure(
+function reportLateFailure<Ctx extends WorkflowLaunchContext>(
   settled: Promise<LaunchOutcome>,
-  dependencies: WorkflowLaunchExecutorDependencies,
-  ctx: ExtensionContext,
+  dependencies: WorkflowLaunchExecutorDependencies<Ctx>,
+  ctx: Ctx,
 ): void {
   void settled.then((outcome) => {
     if (outcome.kind === 'error') {
@@ -253,7 +262,9 @@ function reportLateFailure(
   });
 }
 
-export function createWorkflowLaunchExecutor(dependencies: WorkflowLaunchExecutorDependencies): WorkflowLaunchExecutor {
+export function createWorkflowLaunchExecutor<Ctx extends WorkflowLaunchContext = ExtensionContext>(
+  dependencies: WorkflowLaunchExecutorDependencies<Ctx>,
+): WorkflowLaunchExecutor<Ctx> {
   return {
     async execute(input, ctx, onUpdate) {
       const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId(), dependencies.environment);
@@ -320,10 +331,11 @@ export function createWorkflowLaunchExecutor(dependencies: WorkflowLaunchExecuto
         }
       }
       const since = Date.now();
+      const launchId = randomUUID();
       const launch = dependencies.trackPendingRun(
         dependencies.runTool.execute({
           ...input,
-          env: { ...workflowEnv, [PI_SESSION_ENV]: sessionId },
+          env: { ...workflowEnv, [PI_SESSION_ENV]: sessionId, [WORKFLOW_LAUNCH_ID_ENV]: launchId },
         }),
       );
       // Folded into a value before anything races it. A promise this function
@@ -335,6 +347,7 @@ export function createWorkflowLaunchExecutor(dependencies: WorkflowLaunchExecuto
       );
 
       const ack = await awaitLaunchAck(settled, dependencies, {
+        launchId,
         sessionId,
         since,
         workflowPath: input.workflowPath,

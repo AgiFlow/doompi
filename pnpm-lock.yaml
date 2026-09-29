@@ -23,8 +23,8 @@ importers:
   .:
     devDependencies:
       '@agiflowai/scaffold-mcp':
-        specifier: 1.3.0
-        version: 1.3.0(@types/node@26.6.2)(supports-color@7.2.0)
+        specifier: 2.0.1
+        version: 2.0.1(@types/node@26.6.2)(hono@4.13.8)(supports-color@7.2.0)
       '@agimon-ai/doompi-author':
         specifier: workspace:*
         version: link:packages/minor/doompi-author
@@ -71,11 +71,11 @@ importers:
         specifier: workspace:*
         version: link:packages/clients/doompi-web
       '@agimon-ai/style-system':
-        specifier: 0.1.12
-        version: 0.1.12(@types/node@26.6.2)(@types/react@19.3.0)(esbuild@0.28.2)(hono@4.13.8)(jiti@2.7.0)(yaml@2.9.1)(zod@4.6.5)
+        specifier: 0.1.13
+        version: 0.1.13(@types/node@26.6.2)(@types/react@19.3.0)(esbuild@0.28.2)(hono@4.13.8)(jiti@2.7.0)(yaml@2.9.1)(zod@4.6.5)
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.44
-        version: 0.0.1-alpha.44(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))
+        specifier: 0.0.1-alpha.45
+        version: 0.0.1-alpha.45(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))
       '@agimon-ai/vibe-lint-plugin-doom-cli':
         specifier: workspace:*
         version: link:packages/tooling/vibe-lint-plugin-doom-cli
@@ -89,8 +89,8 @@ importers:
         specifier: workspace:*
         version: link:packages/tooling/vibe-lint-plugin-doom-web
       '@agimon-ai/workflow-mcp':
-        specifier: 0.23.35
-        version: 0.23.35(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)
+        specifier: 0.24.3
+        version: 0.24.3(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)
       '@commitlint/cli':
         specifier: 21.2.3
         version: 21.2.3(@types/node@26.6.2)(conventional-commits-parser@7.1.2)(typescript@7.0.2)
@@ -166,7 +166,7 @@ importers:
         version: link:../../../packages/minor/doompi-voice
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -213,8 +213,8 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-security
       '@agimon-ai/style-system':
-        specifier: 0.1.12
-        version: 0.1.12(@types/node@26.6.2)(@types/react@19.3.0)(esbuild@0.28.2)(hono@4.13.8)(jiti@2.7.0)(yaml@2.9.1)(zod@4.6.5)
+        specifier: 0.1.13
+        version: 0.1.13(@types/node@26.6.2)(@types/react@19.3.0)(esbuild@0.28.2)(hono@4.13.8)(jiti@2.7.0)(yaml@2.9.1)(zod@4.6.5)
       hono:
         specifier: 4.13.8
         version: 4.13.8
@@ -227,7 +227,7 @@ importers:
         version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -273,7 +273,7 @@ importers:
         version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -307,7 +307,7 @@ importers:
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -356,10 +356,10 @@ importers:
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-agent-core':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -411,7 +411,7 @@ importers:
         version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -487,13 +487,13 @@ importers:
         version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-agent-core':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-ai':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -542,7 +542,7 @@ importers:
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -585,7 +585,7 @@ importers:
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -659,8 +659,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/log-sink-mcp':
-        specifier: 0.29.34
-        version: 0.29.34(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
+        specifier: 0.29.35
+        version: 0.29.35(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -669,19 +669,19 @@ importers:
         version: 0.87.1
       '@earendil-works/pi-agent-core':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-protocol':
         specifier: 0.87.1
         version: 0.87.1
       '@earendil-works/pi-server':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-session-backend-sqlite-node':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.8)
@@ -736,7 +736,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-cli
       '@earendil-works/pi-ai':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-client':
         specifier: 0.87.1
         version: 0.87.1
@@ -957,22 +957,22 @@ importers:
         version: 0.87.1
       '@earendil-works/pi-agent-core':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-ai':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-protocol':
         specifier: 0.87.1
         version: 0.87.1
       '@earendil-works/pi-server':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-session-backend-sqlite-node':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.8)
@@ -1218,7 +1218,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -1258,7 +1258,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -1334,7 +1334,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -1401,7 +1401,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -1465,7 +1465,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -1497,8 +1497,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/log-sink-mcp':
-        specifier: 0.29.34
-        version: 0.29.34(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
+        specifier: 0.29.35
+        version: 0.29.35(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1517,7 +1517,7 @@ importers:
         version: link:../../foundations/doompi-ui
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -1573,8 +1573,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/mcp-proxy':
-        specifier: 0.31.34
-        version: 0.31.34(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
+        specifier: 0.31.35
+        version: 0.31.35(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1602,7 +1602,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -1669,7 +1669,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -1730,7 +1730,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -1783,8 +1783,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/foundation-process-registry':
-        specifier: 0.29.34
-        version: 0.29.34(zod@4.6.5)
+        specifier: 0.29.35
+        version: 0.29.35(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1806,7 +1806,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -1886,7 +1886,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -1919,7 +1919,7 @@ importers:
         version: 4.0.2
       pi-cache-optimizer:
         specifier: 2.8.10
-        version: 2.8.10(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))
+        version: 2.8.10(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))
     devDependencies:
       '@agimon-ai/doompi-build':
         specifier: workspace:*
@@ -1929,7 +1929,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -1972,7 +1972,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@modelcontextprotocol/ext-apps':
         specifier: 2.0.0
         version: 2.0.0(@modelcontextprotocol/client@2.1.0)(@modelcontextprotocol/core@2.1.0)(@modelcontextprotocol/server@2.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
@@ -2042,7 +2042,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -2097,7 +2097,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -2140,7 +2140,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -2177,7 +2177,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -2229,7 +2229,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -2269,7 +2269,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -2324,7 +2324,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -2353,8 +2353,8 @@ importers:
   packages/foundations/doompi-telemetry:
     dependencies:
       '@agimon-ai/log-sink-mcp':
-        specifier: 0.29.34
-        version: 0.29.34(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
+        specifier: 0.29.35
+        version: 0.29.35(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)
       '@opentelemetry/api':
         specifier: 1.9.1
         version: 1.9.1
@@ -2407,7 +2407,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2483,7 +2483,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2559,7 +2559,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2614,7 +2614,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -2678,7 +2678,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -2733,7 +2733,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -2800,7 +2800,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2879,7 +2879,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2932,8 +2932,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/workflow-mcp':
-        specifier: 0.23.35
-        version: 0.23.35(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)
+        specifier: 0.24.3
+        version: 0.24.3(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -2955,7 +2955,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.87.1
         version: 0.87.1
@@ -3000,8 +3000,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.44
-        version: 0.0.1-alpha.44(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))
+        specifier: 0.0.1-alpha.45
+        version: 0.0.1-alpha.45(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -3022,8 +3022,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.44
-        version: 0.0.1-alpha.44(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))
+        specifier: 0.0.1-alpha.45
+        version: 0.0.1-alpha.45(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -3047,8 +3047,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.44
-        version: 0.0.1-alpha.44(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))
+        specifier: 0.0.1-alpha.45
+        version: 0.0.1-alpha.45(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -3072,8 +3072,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.44
-        version: 0.0.1-alpha.44(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))
+        specifier: 0.0.1-alpha.45
+        version: 0.0.1-alpha.45(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -3126,45 +3126,62 @@ packages:
   '@adobe/css-tools@4.5.0':
     resolution: {integrity: sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==}
 
-  '@agiflowai/aicode-utils@1.3.0':
-    resolution: {integrity: sha512-dzM6sU2TrqxIGiGt2aN2M3+yMVrK/3dzmBRi8Xi4HSaNxbvyYPinFa9SbT2LGEhu5GQhTizurF1gq1APizvtSA==}
+  '@agiflowai/aicode-utils@2.0.0':
+    resolution: {integrity: sha512-nPMJg17/1Vp4Jswp7q910lv2xks9Wshc58xRy3nkjA7UWLEvwDhyDNc4Zh3tmftxzG6BG94U/N1+0VMucCYEXA==}
 
-  '@agiflowai/architect-mcp@1.3.0':
-    resolution: {integrity: sha512-Chifjn8FzuGJik8HlFHZmTTUOGZ74H00sHA7jBCxrERIE09RIBqSeQvvQ/ZfU8ABMEF34CS8vMzU6Yr6H5KWTQ==}
+  '@agiflowai/architect-mcp@2.0.0':
+    resolution: {integrity: sha512-4Vv75kwRTbVawAARY/R6baDswh5ba/OhYxhWF88kVZejfORBgn/LMZXUSbkUxhTMEe7/qLBWLIGFHBHaMq/Cbw==}
     hasBin: true
 
-  '@agiflowai/coding-agent-bridge@1.3.0':
-    resolution: {integrity: sha512-0HKA/OGiL3tvg4uO4GAugkeG8sRHNa3aPsvv8oOir/dIJRn/6YTQgg0OksCBX9zCS3VPPYflnUe6Fup9mDENEA==}
+  '@agiflowai/coding-agent-bridge@2.0.0':
+    resolution: {integrity: sha512-f5fOTZxAQy0uO/+veLZD1oCc368k90YJT6ZgkGIw0qWTNOWLbWzX0B9Wc54/rRW4Pk6am0BRiD5r6Ku9K8/mnQ==}
 
-  '@agiflowai/hooks-adapter@0.1.2':
-    resolution: {integrity: sha512-S2093PEcAuEhuksG4MhztUtiVhViY3mJDJjwvlcrQU+2iLFJAV7KFtTk7cvS4INyF3O9zJUKqifWUVuIXkCerw==}
+  '@agiflowai/hooks-adapter@0.2.0':
+    resolution: {integrity: sha512-3/kYQ1X4FhH88+8t//HSVW6krEZwG2fFLR+WoR7ReNAj5DZeqqz/kOM5VjvKxTAQBENRXT/aKPH4AzDr18lWrA==}
 
-  '@agiflowai/scaffold-mcp@1.3.0':
-    resolution: {integrity: sha512-qed0biDNj7N89SD7293daRKf5fROjpEeFPQr/DnWDXVlvaarqv+6r54mnGcUb2J+yx6QJx+anzVzcVYvkTs2RA==}
+  '@agiflowai/scaffold-mcp@2.0.1':
+    resolution: {integrity: sha512-OLQ09xgH4QVTxn5JdyNBdJl8QyXbWyUUTHRYHSk21amp2u70Xlkyx6ndGyeMYEUjgr8x2kwANVRjXeYN7ic5Mg==}
     hasBin: true
 
-  '@agimon-ai/foundation-exec@0.26.34':
-    resolution: {integrity: sha512-SAbBQFZYZQOy61NX7wjwUkXONgDgrx4CLdTyzCKwcCsfSsdtGSJqO1Zqut2u/1lq3LMEl9U2c+qNBDHsaAU+OA==}
+  '@agimon-ai/foundation-exec@0.26.35':
+    resolution: {integrity: sha512-Rg+6uN2idLvQlNDpafmoWyzeiquE99vTcNss7pJerod6Yd+pPtzoe9RKx+SMqFDueIl9oos/qMOHjpZnBYag4g==}
 
-  '@agimon-ai/foundation-port-registry@0.29.34':
-    resolution: {integrity: sha512-McpLqJlCEBSsOHgiHBy5Mvc369ZG3BtT4wqEr0Kv8LRO9uoWyw6GnRjQKklnJ/GaTcTbxmO6/5Qf8VoVyGsH+g==}
-    hasBin: true
-    peerDependencies:
-      zod: ^4.4.3
-
-  '@agimon-ai/foundation-process-registry@0.29.34':
-    resolution: {integrity: sha512-JC4jJUplEAOG6DOcabPkPXfolhKf3GQS2kmEcZtlICpeDZGpKNYV/tMghBXKF/AVH6YTpjl6XjMJ8/V3rP5l/A==}
+  '@agimon-ai/foundation-port-registry@0.29.35':
+    resolution: {integrity: sha512-eMZ5coJ3xD6kRD6SIP3Xf9dX1qHInaQT3o45dMOdUUmrxB5pGC+MCG7Cq4QPvNwMjCwnzNzZih3NUN4LPdANfA==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/foundation-validator@0.26.34':
-    resolution: {integrity: sha512-3fjoJ7kMK0Vkm41SADBNA02vjB439k2U+lQkPhj4VvQNoUsIJ2rpMhMdC0VJyPlQgTa9Pkf9GS2baWOR/MXBtg==}
+  '@agimon-ai/foundation-port-registry@0.30.3':
+    resolution: {integrity: sha512-pLIsIXlV7sBwMs0gzvbZNb59CU4I3mJPbIAXUx3ibFBbrq22xRkfVbdqVvE/uGkzr3yKXBeit5Qgquu15QaxNA==}
+    hasBin: true
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/log-sink-mcp@0.29.34':
-    resolution: {integrity: sha512-o3IuEFTU21wmR2my+ZlghFxU3uOGSoqRMcUY2G4FW8+aPlF71/n9Hz0t9hCbJJbD4VRpb9873bkhs0ef2zkdDA==}
+  '@agimon-ai/foundation-process-registry@0.29.35':
+    resolution: {integrity: sha512-Y4RSARIY0gCQTLHDCt2YgCoM9U5Pb4wrGsF1c4mwbTVOUkANVycz5c6ygga5jggGNUaF+4x3H6T5tuw7YB35Jg==}
+    hasBin: true
+    peerDependencies:
+      zod: ^4.4.3
+
+  '@agimon-ai/foundation-process-registry@0.30.3':
+    resolution: {integrity: sha512-VwKYGDmUzOfJL8Aoz8ojnuiaQgEZG6HaIhJzMfhS8dndfmq2fA8K9FRPyCmH/56bPNzKyyNTTeWYE+bynuGO/Q==}
+    hasBin: true
+    peerDependencies:
+      zod: ^4.4.3
+
+  '@agimon-ai/foundation-validator@0.26.35':
+    resolution: {integrity: sha512-EMlCwuehBvt57TzJBqXCHyujuTF85vlsTDyRtgRP261C+k4rJv7Z7VrWIXoswNgEga3N/a3t6+3kDHX0ihYDpA==}
+    peerDependencies:
+      zod: ^4.4.3
+
+  '@agimon-ai/foundation-validator@0.27.3':
+    resolution: {integrity: sha512-+8iboJTKCl0W9tEglejiomypq3BQVzQi3K4GnSHl/CFT1/RzJadlwojr3KhMTiRR3ns0eRm6J9oUdF/HpNWo9Q==}
+    peerDependencies:
+      zod: ^4.4.3
+
+  '@agimon-ai/log-sink-mcp@0.29.35':
+    resolution: {integrity: sha512-alRWF5AhxAHDGNqwzed8CNRSaEmowWcNNZSorvwfU3V+6ExHDvvd2KsEBZGy91JvSjvYE6mmRbIfR7f2T1tS3g==}
     engines: {node: '>=22.13.0'}
     hasBin: true
     peerDependencies:
@@ -3174,48 +3191,59 @@ packages:
       '@earendil-works/pi-coding-agent':
         optional: true
 
-  '@agimon-ai/mcp-proxy@0.31.34':
-    resolution: {integrity: sha512-nTSk65gf+LJBeakVCedKlCkdeGsLc8mvp3f+/2jqzwJmuA4Lk4L2MFd+QJbdl/4/yXkE+en88sPvRT4lnymPgw==}
+  '@agimon-ai/log-sink-mcp@0.30.3':
+    resolution: {integrity: sha512-y569hluAhr4WnnHZPCjlzVUCAGiL+sTHw5I9dZ/odrTVZZHNDmGELeDayuJfz+R50mv7h6V3LDtXv0HuIycOXw==}
+    engines: {node: '>=22.13.0'}
+    hasBin: true
+    peerDependencies:
+      '@earendil-works/pi-coding-agent': '*'
+      zod: ^4.4.3
+    peerDependenciesMeta:
+      '@earendil-works/pi-coding-agent':
+        optional: true
+
+  '@agimon-ai/mcp-proxy@0.31.35':
+    resolution: {integrity: sha512-GStUcNytakM79SDjrG+gbDldX8FxGZve0gFFa5/w7rqovh+h/E50d/RmcKdhS9i1Z6wZ81PUU9JlRkxm2erckQ==}
     engines: {node: '>=20'}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/rmux-darwin-arm64@0.9.11':
-    resolution: {integrity: sha512-tej8uLuZPcLnSqlF4DHl3iRejs6xPrzlTsiknd9UGxVCbgMHiAi5lh1uQyQAL/hLZyQ+Ay7VUoy/UrF28q/JeQ==}
+  '@agimon-ai/rmux-darwin-arm64@0.10.3':
+    resolution: {integrity: sha512-LMPXq8FMOG9xCRu4s4Lg3CxZkEoT+BojSDROje7HpiMaHmwApjYMrPiUUYhJkqkqDHuU2m5ZGi+rb8ObdFOZnQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@agimon-ai/rmux-darwin-x64@0.9.11':
-    resolution: {integrity: sha512-cDexVS+pvPlQw1/GzJJVn6trL/lxbYi0eddoohdS0+evuPdtiwnDJv8UUo9OU6wiFJyA812fFoVChxnjsfk8Iw==}
+  '@agimon-ai/rmux-darwin-x64@0.10.3':
+    resolution: {integrity: sha512-Ku7plJocVHgreLfxCBs0O+qq6x2eQFBD9LJDpEtPWvsyAp7V6LmY9K7/F7B/mOabLTzAGNiIoEms27O0hG1iPg==}
     cpu: [x64]
     os: [darwin]
 
-  '@agimon-ai/rmux-linux-arm64@0.9.11':
-    resolution: {integrity: sha512-BCL7HjAnM5Zn77EqNdfbv2y7zGj1hcmjBIZ944mrnHBNVmrnpbqz+4FYiHBqC5V+qNuY7DfOmvkcSXXyySp6Tw==}
+  '@agimon-ai/rmux-linux-arm64@0.10.3':
+    resolution: {integrity: sha512-FaTjA4yffbydgaiMQXEQa6cQIAo7Yz0q7gYKwEZpt5JwsOFGTiWzvdpRrqSfoPTd6qBejsuQO0M1ABuTsPa2+w==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@agimon-ai/rmux-linux-x64@0.9.11':
-    resolution: {integrity: sha512-YD7aiGysb9Osnm8Ya9K/9OLi8blI4JfY8II9JvMmuzlF6wMdZZAT0XdFZ8WUtFGf1MQzwbC0e22hvznI0Ff42g==}
+  '@agimon-ai/rmux-linux-x64@0.10.3':
+    resolution: {integrity: sha512-M5uTlHGqNtbXL9RhVL3OOiTIQLiKUOJi8r4D0/pN6NBsytBhWw4zS2mjZrL92LBX9yZ7z6/eMUghiHF5ch3ucA==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@agimon-ai/style-system@0.1.12':
-    resolution: {integrity: sha512-47qx6vW95+vK1FB11ohBBtTAwRRnC5P5A2Nz2dyYbo1EELVFMYbMXgm1RpNsmdKLpXVBUR8qPv2fcb0XP1y1Hg==}
+  '@agimon-ai/style-system@0.1.13':
+    resolution: {integrity: sha512-3MYRpeJ+VSse5U/z/mTl7/RJ3kWAQvnlYbAUmD0uE0LjdKUOq6Z+M9/3fowWasrLZcI6zWcWRLgyKcuMHQryMw==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/vibe-lint@0.0.1-alpha.44':
-    resolution: {integrity: sha512-dJp1i63Nt1Ol4kBjgaftyASP79cu1tKW9x2uq3gVrUEamOxwvFDDmcYvRTF93dQBT5qgTts3JY7e8XuybW1QYA==}
+  '@agimon-ai/vibe-lint@0.0.1-alpha.45':
+    resolution: {integrity: sha512-P6mwBjL7i4fWicrXmxzscEOyIqvYAHESKNJzbbnwsmpSLfx42Vtgx4co0N5Iu12zVqaAsB1sB09ENd76d/OVAw==}
     engines: {node: '>=20'}
     hasBin: true
 
-  '@agimon-ai/workflow-mcp@0.23.35':
-    resolution: {integrity: sha512-OaEXbBdKalrZ5tH1UecpKJeH8zrfTJd94gJrOzmjcpvkNLrc7BxTEa2mG5OpjxtJLib+o4fig+DZuIDCx/f6Pw==}
+  '@agimon-ai/workflow-mcp@0.24.3':
+    resolution: {integrity: sha512-fnFgR14WorTNfjXEKTmfL5ihp1sEM0ZE1D8pwNLSvAz92Xd1FN1/Qji5Fh+bimmIZl2lAiWgEjG+hotXhtpEdA==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
@@ -3887,6 +3915,9 @@ packages:
   '@braintree/sanitize-url@7.1.2':
     resolution: {integrity: sha512-jigsZK+sMF/cuiB7sERuo9V7N9jx+dhmHHnQyDSVdpZwVutaBu7WvNYqMDLSgFgfB30n452TP3vjDAvFC973mA==}
 
+  '@cfworker/json-schema@4.1.1':
+    resolution: {integrity: sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og==}
+
   '@chevrotain/types@11.1.2':
     resolution: {integrity: sha512-U+HFai5+zmJCkK86QsaJtoITlboZHBqrVketcO2ROv865xfCMSFpELQoz1GkX5GzME8pTa+3kbKrZHQtI0gdbw==}
 
@@ -4021,8 +4052,9 @@ packages:
     resolution: {integrity: sha512-sGEA473TlCvhCGNoTBY9OXZVWdscIXdGt0dm8EpB+2MRfmt8LNh/X56P/T3nCtEB+eH5qGEa3odphSAoUxSfSQ==}
     engines: {node: '>=22.12.0'}
 
-  '@composio/json-schema-to-zod@0.1.20':
-    resolution: {integrity: sha512-d4V34itLrUWG/VBh7ciznKcxF/T22MBLHmuEzHoX0zsBOHsUmjYz5qtDh20S2p3FE+HHvLZxpXiv8yfdd4yI+Q==}
+  '@composio/json-schema-to-zod@0.3.3':
+    resolution: {integrity: sha512-QmgYo4IeK5/34Iqo1jSx6fSnLEyL++07FlW5Y6SfGFOhyb5htnY+vZPjs/tL8puJYhiEU7FV7kXdu5EAQoGrSA==}
+    engines: {node: '>=22.22.3'}
     peerDependencies:
       zod: '>=3.25.76 <5'
 
@@ -4512,21 +4544,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@inquirer/ansi@2.0.7':
-    resolution: {integrity: sha512-3eTuUO1vH2cZm2ZKHeQxnOqlTi9EfZDGgIe3BL3I4u+rJHocr9Fz86M4fjYABPvFnQG/gGK551HqDiIcETwU6Q==}
+  '@inquirer/ansi@2.0.8':
+    resolution: {integrity: sha512-WpQM+Ti6Z40EFwwt+uL2p4UabT+W179zHp6HhLVOzfbwnVn05IPO/eXIZXGNqcT1jbQ15SujNLzQ39k4QPPxBQ==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
 
-  '@inquirer/checkbox@5.2.2':
-    resolution: {integrity: sha512-Y5/bAScMy5Y+9isCx0SKbyJebMCaXXX5em0kxkj115eZNscgV9srOHrgyfS0e5xAVymIfOh9piYBKDILktsMMg==}
-    engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
-    peerDependencies:
-      '@types/node': '>=18'
-    peerDependenciesMeta:
-      '@types/node':
-        optional: true
-
-  '@inquirer/confirm@6.2.0':
-    resolution: {integrity: sha512-SKXarWrYhtpqOEctf9XGCGy29QjsvJAM0Aq9ZR9z4Ns94OmpqudOly+aSEfNqUf9SwsQaUgY9+Z8hyzG0xX8fw==}
+  '@inquirer/checkbox@5.2.5':
+    resolution: {integrity: sha512-bRt8J8m+Fot9CXv+zNQGXUq2ET0MggR1fPz7v6edN6MFYmsbfGnMmkmWZJEegMKqrAC8ej/o1sqisHZXZJMAfQ==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4534,8 +4557,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/core@12.0.0':
-    resolution: {integrity: sha512-+nnvFEXIB08CZNVXpvW3B+zHW96QXvGUjNKJ8NJIPqAZi5Kd4WhYt2S3C234ReepG1qw2HOlEUbjYVHBowXObA==}
+  '@inquirer/confirm@6.3.2':
+    resolution: {integrity: sha512-Xvr/0HggjddPtGppuqVmxhTw+Hr8PvsZ/k0HmOEaAqQEt80OITNkFWnsdNmyT0/eM4Ab+iJLx2R8rctlEyfSVg==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4543,8 +4566,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/editor@5.3.0':
-    resolution: {integrity: sha512-nnsP/IdJ8s83q7ZuObmgn12QM+uLCkab9E0Oordojbn62WUg1c+v9Ou/F/057pgh0ppX0W+Hj5bO/Dp5hsxQtA==}
+  '@inquirer/core@12.0.3':
+    resolution: {integrity: sha512-wsSy0sznmXwkty+2PzZwx00Cazc/E0r0B7mAzdGROz2Ct+DFZXaK7WDjGZvgjRldxH5ZhFVfF2lgkYrqgOw2KA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4552,8 +4575,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/expand@5.1.2':
-    resolution: {integrity: sha512-OWIH1IyyWqEKIyqC9Xy+Bnga7NkGMovFdo4atYZMUOTRqf6rO2WCv9E/1MyzvOErDBCxs+9UFliRUDc50xs/jw==}
+  '@inquirer/editor@5.3.3':
+    resolution: {integrity: sha512-YsKkS2q63IiLtaDK/9nqzdComN97SDQrmKiyNggN+ceP4ty+Z6VwyTz3FpjeUWeW1Efss2xHFKCC9sx7hnrsxg==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4561,8 +4584,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/external-editor@3.0.4':
-    resolution: {integrity: sha512-tZbbaK2ovq6vlrRBNQvjrypmrED/p5x2ncIHQ79cD55tei3dD96v5glMMA+6tiq7K104i/25DVYKWVPJuV6ptA==}
+  '@inquirer/expand@5.1.5':
+    resolution: {integrity: sha512-uHuXLmXW+TtIfT/9vSBotypAkqn1n34Ul+CLGPos/xANyO4Ff5xZzkYhbKR4NEcfVK4a9mHQOpwVZzluSHFRGw==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4570,12 +4593,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/figures@2.0.8':
-    resolution: {integrity: sha512-tApbon79GM9ry56ja/Ud3SY2CL4TQsao9fIwDQbgTeNY55025GdMzQ2+UdegV/lx51VNGUB59M0v0nMpybYY4Q==}
-    engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
-
-  '@inquirer/input@5.1.3':
-    resolution: {integrity: sha512-F/BZHtyEzP+HO+IGVd4AjBRgvX/ywm42bx8S0+dENk2YclzE9tJ3X/15THwtT6ehApmKvdYDMsVTuyyDod0gOQ==}
+  '@inquirer/external-editor@3.0.5':
+    resolution: {integrity: sha512-f3QQJRIX5ZEneBHNUIuPjmbdzHnmRFJA8r2dkcb8q+OM5Uv5KtnuAttQumnrjcBVBM3mcTX1CkmtAkU58VRZxg==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4583,8 +4602,12 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/number@4.2.0':
-    resolution: {integrity: sha512-ew+fSDijsQ/WhD4TV3XLb+if400cDuzTzHfGR8sTNBXkK9CYDWoGE8fhaO8GbT312pNv1AJEOsDxy/z/HVettA==}
+  '@inquirer/figures@2.0.9':
+    resolution: {integrity: sha512-EAWgUTGQ/Umgga51dE3B2PUHbufuXarDfg86uVgoSgNHNNQnyFKcOrQLWVqYMghuSyHh8+2HUH0Js9cTC1WAdg==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
+
+  '@inquirer/input@5.1.6':
+    resolution: {integrity: sha512-HtcJhB2QFVXbLuJ5S3syhNbTUVxYvwqV4VRBDkQceBloC9bmTViUoRFP5PbSaDZb3HzfPmpuU/gG4ybVBz4FHA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4592,8 +4615,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/password@5.1.2':
-    resolution: {integrity: sha512-nSdufycW8xynEVssFkNQEYIzTySilog0UlfOVRwh3pXzPSk4frXUT2jZWjHnKae6RU9PaoF9wfy1pGwewQuqGw==}
+  '@inquirer/number@4.2.3':
+    resolution: {integrity: sha512-6Yuwh1NGSbu1Lo4N1EWjXs1jKRntLg/ZCwhmeorEHde90v1XxAozdbd4Iu30eOQLW+6h1hp2O9ujNfLSbTPJnA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4601,17 +4624,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/prompts@8.4.1':
-    resolution: {integrity: sha512-AH5xPQ997K7e0F0vulPlteIHke2awMkFi8F0dBemrDfmvtPmHJo82mdHbONC4F/t8d1NHwrbI5cGVI+RbLWdoQ==}
-    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
-    peerDependencies:
-      '@types/node': '>=18'
-    peerDependenciesMeta:
-      '@types/node':
-        optional: true
-
-  '@inquirer/rawlist@5.3.2':
-    resolution: {integrity: sha512-oPSKrYK1X1bMkjXDzIKHUkJp195LFSfgbnVtXnjSKGFjrCbS6I+wyvfAZTwKE9BSt3HwWgfD7JfsXALBgCogzQ==}
+  '@inquirer/password@5.2.2':
+    resolution: {integrity: sha512-W9zYdyzogK+6110mqwaSJWCBu2yA5Q/OfnGSjjZB1bNpHlmUozXxTl0+QOZBNeVd6Qo81/qT75gW05gLAtITxw==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4619,8 +4633,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/search@4.3.0':
-    resolution: {integrity: sha512-HFxXE5w727ctSUcAwrDquftJGjMgu36OeV5SHEXMlr2j/ahzmRX9xSEeVolV8tzYnTf45cg6vGkdMMRdm3RPhQ==}
+  '@inquirer/prompts@8.7.2':
+    resolution: {integrity: sha512-QoRB4wFIjgH5iOhSjoIKMkTvSHDuV+O3OITlIqAYO0oK5x364GJILXiMBvlPiE+klg7Xx9tq5XVqQHcGUDYYPA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4628,8 +4642,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/select@5.2.2':
-    resolution: {integrity: sha512-RkI8dRHWt+bh04oLixvF1kFzKC7e5rqJoHKkzcqSHATebBXFC6GmrT8ddbVkgSzLV0HnHs2cPFuBINr8otij8Q==}
+  '@inquirer/rawlist@5.3.5':
+    resolution: {integrity: sha512-1oHky1ONfCOwNrnkQGDE1oaSij/3fI6HFMSf2H/WsGO2lEyDX9My82iggITSy9ddSZ8yk8j9v41OI0fVoSIoaA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4637,8 +4651,26 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/type@4.0.7':
-    resolution: {integrity: sha512-t28inv14nMQ1PhKpsJPY+kEs/c00qzeCOS2gTNRyTjG5d6qsVA2fItxW4hkvGZ5lvanGLdtCzVIx5dwdRpN1+g==}
+  '@inquirer/search@4.3.3':
+    resolution: {integrity: sha512-fyuIU1Nbpvwlikjg3gXwJFDI11+EFjqQ7P+iByfmivIKQ1vmaykNrD/vy5unHuUqUpsOsnvJ25//tPF7E/RBRA==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/select@5.2.5':
+    resolution: {integrity: sha512-9kc15hr8r/kI+3DO/xLog5nOzTz1jqsHXa6JBFzmQKhkoJ8Slda1I1L/uD8ZSZ9tF1yp79wwXe7mclvX1rqR2Q==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/type@4.1.1':
+    resolution: {integrity: sha512-yJoHYrMnxIsJZCY+0Vb66Dy3he3kL3e2wOBKhoSwWWAzZAY82emlxwgprCtp6yRixvNRNq9ztfRWQYPNr3Go7A==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -4804,16 +4836,6 @@ packages:
       hono:
         optional: true
 
-  '@modelcontextprotocol/sdk@1.29.0':
-    resolution: {integrity: sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      '@cfworker/json-schema': ^4.1.1
-      zod: ^3.25 || ^4.0
-    peerDependenciesMeta:
-      '@cfworker/json-schema':
-        optional: true
-
   '@modelcontextprotocol/sdk@1.30.0':
     resolution: {integrity: sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==}
     engines: {node: '>=18'}
@@ -4822,6 +4844,16 @@ packages:
       zod: ^3.25 || ^4.0
     peerDependenciesMeta:
       '@cfworker/json-schema':
+        optional: true
+
+  '@modelcontextprotocol/server-legacy@2.1.0':
+    resolution: {integrity: sha512-Ax84OEIzSQw+GIYeuJmlQZP/Yg+jvPVfUd5GYdpChn9fCHrSsDNxE+X+klvxB6hjmacRsa1S11EnZ6P6P2WXgQ==}
+    engines: {node: '>=20'}
+    deprecated: This package is a frozen copy of v1's SSE transport and OAuth Authorization Server helpers for migration purposes only. Use StreamableHTTP from @modelcontextprotocol/server and a dedicated OAuth server in production. Will not receive new features.
+    peerDependencies:
+      express: ^4.18.0 || ^5.0.0
+    peerDependenciesMeta:
+      express:
         optional: true
 
   '@modelcontextprotocol/server@2.1.0':
@@ -7872,6 +7904,10 @@ packages:
     resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
     engines: {node: '>=20'}
 
+  commander@15.0.0:
+    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
+    engines: {node: '>=22.12.0'}
+
   commander@7.2.0:
     resolution: {integrity: sha512-QrWXB+ZQSVPmIWIhtEO9H+gwHaMGYiF5ChvoJ+K9ZGHG/sVsa6yiesAD1GC/x46sET00Xlwo1u49RVVVzvcSkw==}
     engines: {node: '>= 10'}
@@ -8511,9 +8547,9 @@ packages:
     resolution: {integrity: sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA==}
     engines: {node: '>=18.0.0'}
 
-  execa@9.6.1:
-    resolution: {integrity: sha512-9Be3ZoN4LmYR90tUoVu2te2BsbzHfhJyfEiAVfz7N5/zv+jduIfLrV2xdQXOHbaD6KgpGdO9PRPM1Y4Q9QkPkA==}
-    engines: {node: ^18.19.0 || >=20.5.0}
+  execa@10.0.1:
+    resolution: {integrity: sha512-ge98qjkRK4IB7tL7Ju/6qmm5LHoH1eEMt5FNZrz3f4UIYhF28lggX20z3FaX1sgc67msLEn0N0BscOs29iuwyw==}
+    engines: {node: '>=22'}
 
   expect-type@1.4.0:
     resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
@@ -9877,8 +9913,8 @@ packages:
     resolution: {integrity: sha512-5b6Y85tPxZZ7QytO+BQzysW31HJku27cRIlkbAXaNx+BdcVi+LlRFmVXzeF6a7JCwJpyw5c4b+YSVImQIrBpuQ==}
     engines: {node: '>=10'}
 
-  ora@9.3.0:
-    resolution: {integrity: sha512-lBX72MWFduWEf7v7uWf5DHp9Jn5BI8bNPGuFgtXMmr2uDz2Gz2749y3am3agSDdkhHPHYmmxEGSKH85ZLGzgXw==}
+  ora@9.4.1:
+    resolution: {integrity: sha512-6VlU9MLXbjVQD04AZCMX28hVtA5bUoadvUqO76MUCVA0ilwJbMiHsITRPfyVm6p/BC0Av/BXMujx39WCe1LEqw==}
     engines: {node: '>=20'}
 
   own-keys@1.0.2:
@@ -11023,6 +11059,10 @@ packages:
     resolution: {integrity: sha512-9ezox2roIft6ExBVTVqibSd5dc5/47Sw/uY6b4SjQUT2TzQ0tltNquWA46y4xPQmdZYqvnio22SgWd41M86+jw==}
     hasBin: true
 
+  uuid@14.0.2:
+    resolution: {integrity: sha512-xZe/16rV4aa+HGSOCiY2YeLT1OybRLrrkL/Rqaq7p7GMVXjFh+6wN4oMYgjFmnSnhY8t6Xpdl2l9qmnHYuMHwQ==}
+    hasBin: true
+
   vary@1.1.2:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
@@ -11159,6 +11199,11 @@ packages:
     resolution: {integrity: sha512-K4jVyjnBdgvc86Y6BkaLZEN933SwYOuBFkdmBu9ZfkcAbdVbpITnDmjvZ/aQjRXQrv5EPkTnD1s39GiiqbngCw==}
     engines: {node: '>= 0.4'}
 
+  which-command@0.1.0:
+    resolution: {integrity: sha512-XZyoF5/5hZtXitIwzrU4NKK+Wtbb9aB9CezUEw2Q0wlYK8NUYQxC1rRXgNueYLtBAJwXIb+/tFVk4dozciNJMA==}
+    engines: {node: '>=22'}
+    hasBin: true
+
   which-typed-array@1.1.22:
     resolution: {integrity: sha512-fvO4ExWMFsqyhG3AiPAObMuY1lxaqgYcxbc49CNdWDDECOJNgQyvsOWVwbZc+qf3rzRtxojBK+CMEv0Ld5CYpw==}
     engines: {node: '>= 0.4'}
@@ -11282,9 +11327,6 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
-  zod@4.3.6:
-    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
-
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
@@ -11298,115 +11340,134 @@ snapshots:
 
   '@adobe/css-tools@4.5.0': {}
 
-  '@agiflowai/aicode-utils@1.3.0':
+  '@agiflowai/aicode-utils@2.0.0':
     dependencies:
-      chalk: 5.6.2
-      execa: 9.6.1
-      js-yaml: 4.3.2
-      ora: 9.3.0
+      chalk: 6.0.0
+      execa: 10.0.1
+      js-yaml: 5.4.2
+      ora: 9.4.1
       pino: 10.3.1
 
-  '@agiflowai/architect-mcp@1.3.0(supports-color@7.2.0)':
+  '@agiflowai/architect-mcp@2.0.0(hono@4.13.8)(supports-color@7.2.0)':
     dependencies:
-      '@agiflowai/aicode-utils': 1.3.0
-      '@agiflowai/coding-agent-bridge': 1.3.0
-      '@agiflowai/hooks-adapter': 0.1.2
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.3.6)
+      '@agiflowai/aicode-utils': 2.0.0
+      '@agiflowai/coding-agent-bridge': 2.0.0
+      '@agiflowai/hooks-adapter': 0.2.0
+      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.8)
+      '@modelcontextprotocol/server': 2.1.0
+      '@modelcontextprotocol/server-legacy': 2.1.0(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)
       '@types/express': 5.0.6
-      chalk: 5.6.2
-      commander: 14.0.3
-      execa: 9.6.1
+      chalk: 6.0.0
+      commander: 15.0.0
+      execa: 10.0.1
       express: 5.2.1(supports-color@7.2.0)
-      js-yaml: 4.3.2
-      minimatch: 10.2.5
-      uuid: 13.0.1
-      zod: 4.3.6
+      js-yaml: 5.4.2
+      minimatch: 10.2.6
+      uuid: 14.0.2
+      zod: 4.6.5
     transitivePeerDependencies:
-      - '@cfworker/json-schema'
+      - hono
       - supports-color
 
-  '@agiflowai/coding-agent-bridge@1.3.0':
+  '@agiflowai/coding-agent-bridge@2.0.0':
     dependencies:
-      '@agiflowai/aicode-utils': 1.3.0
-      execa: 9.6.1
-      uuid: 13.0.1
+      '@agiflowai/aicode-utils': 2.0.0
+      execa: 10.0.1
+      uuid: 14.0.2
 
-  '@agiflowai/hooks-adapter@0.1.2':
+  '@agiflowai/hooks-adapter@0.2.0':
     dependencies:
-      '@agiflowai/aicode-utils': 1.3.0
-      '@agiflowai/coding-agent-bridge': 1.3.0
+      '@agiflowai/aicode-utils': 2.0.0
+      '@agiflowai/coding-agent-bridge': 2.0.0
 
-  '@agiflowai/scaffold-mcp@1.3.0(@types/node@26.6.2)(supports-color@7.2.0)':
+  '@agiflowai/scaffold-mcp@2.0.1(@types/node@26.6.2)(hono@4.13.8)(supports-color@7.2.0)':
     dependencies:
-      '@agiflowai/aicode-utils': 1.3.0
-      '@agiflowai/architect-mcp': 1.3.0(supports-color@7.2.0)
-      '@agiflowai/coding-agent-bridge': 1.3.0
-      '@agiflowai/hooks-adapter': 0.1.2
-      '@composio/json-schema-to-zod': 0.1.20(zod@4.3.6)
-      '@inquirer/prompts': 8.4.1(@types/node@26.6.2)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.3.6)
-      chalk: 5.6.2
-      commander: 14.0.3
-      execa: 9.6.1
+      '@agiflowai/aicode-utils': 2.0.0
+      '@agiflowai/architect-mcp': 2.0.0(hono@4.13.8)(supports-color@7.2.0)
+      '@agiflowai/coding-agent-bridge': 2.0.0
+      '@agiflowai/hooks-adapter': 0.2.0
+      '@composio/json-schema-to-zod': 0.3.3(zod@4.6.5)
+      '@inquirer/prompts': 8.7.2(@types/node@26.6.2)
+      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.8)
+      '@modelcontextprotocol/server': 2.1.0
+      '@modelcontextprotocol/server-legacy': 2.1.0(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)
+      chalk: 6.0.0
+      commander: 15.0.0
+      execa: 10.0.1
       express: 5.2.1(supports-color@7.2.0)
-      js-yaml: 4.3.2
+      js-yaml: 5.4.2
       liquidjs: 10.29.0
-      minimatch: 10.2.5
+      minimatch: 10.2.6
       pino: 10.3.1
       pino-pretty: 13.1.3
-      zod: 4.3.6
+      zod: 4.6.5
     transitivePeerDependencies:
-      - '@cfworker/json-schema'
       - '@types/node'
+      - hono
       - supports-color
 
-  '@agimon-ai/foundation-exec@0.26.34(zod@4.4.3)':
+  '@agimon-ai/foundation-exec@0.26.35(zod@4.4.3)':
     dependencies:
-      '@agimon-ai/foundation-process-registry': 0.29.34(zod@4.4.3)
+      '@agimon-ai/foundation-process-registry': 0.29.35(zod@4.4.3)
     transitivePeerDependencies:
       - zod
 
-  '@agimon-ai/foundation-exec@0.26.34(zod@4.6.5)':
+  '@agimon-ai/foundation-exec@0.26.35(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-process-registry': 0.29.34(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.29.35(zod@4.6.5)
     transitivePeerDependencies:
       - zod
 
-  '@agimon-ai/foundation-port-registry@0.29.34(zod@4.4.3)':
+  '@agimon-ai/foundation-port-registry@0.29.35(zod@4.4.3)':
     dependencies:
       '@tursodatabase/database': 0.7.2
       zod: 4.4.3
 
-  '@agimon-ai/foundation-port-registry@0.29.34(zod@4.6.5)':
+  '@agimon-ai/foundation-port-registry@0.29.35(zod@4.6.5)':
     dependencies:
       '@tursodatabase/database': 0.7.2
       zod: 4.6.5
 
-  '@agimon-ai/foundation-process-registry@0.29.34(zod@4.4.3)':
+  '@agimon-ai/foundation-port-registry@0.30.3(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.34(zod@4.4.3)
+      '@tursodatabase/database': 0.7.2
+      zod: 4.6.5
+
+  '@agimon-ai/foundation-process-registry@0.29.35(zod@4.4.3)':
+    dependencies:
+      '@agimon-ai/foundation-port-registry': 0.29.35(zod@4.4.3)
       '@tursodatabase/database': 0.7.2
       zod: 4.4.3
 
-  '@agimon-ai/foundation-process-registry@0.29.34(zod@4.6.5)':
+  '@agimon-ai/foundation-process-registry@0.29.35(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.34(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.29.35(zod@4.6.5)
       '@tursodatabase/database': 0.7.2
       zod: 4.6.5
 
-  '@agimon-ai/foundation-validator@0.26.34(zod@4.4.3)':
+  '@agimon-ai/foundation-process-registry@0.30.3(zod@4.6.5)':
+    dependencies:
+      '@agimon-ai/foundation-port-registry': 0.30.3(zod@4.6.5)
+      '@tursodatabase/database': 0.7.2
+      zod: 4.6.5
+
+  '@agimon-ai/foundation-validator@0.26.35(zod@4.4.3)':
     dependencies:
       zod: 4.4.3
 
-  '@agimon-ai/foundation-validator@0.26.34(zod@4.6.5)':
+  '@agimon-ai/foundation-validator@0.26.35(zod@4.6.5)':
     dependencies:
       zod: 4.6.5
 
-  '@agimon-ai/log-sink-mcp@0.29.34(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.4.3)':
+  '@agimon-ai/foundation-validator@0.27.3(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.34(zod@4.4.3)
-      '@agimon-ai/foundation-process-registry': 0.29.34(zod@4.4.3)
-      '@agimon-ai/foundation-validator': 0.26.34(zod@4.4.3)
+      zod: 4.6.5
+
+  '@agimon-ai/log-sink-mcp@0.29.35(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.4.3)':
+    dependencies:
+      '@agimon-ai/foundation-port-registry': 0.29.35(zod@4.4.3)
+      '@agimon-ai/foundation-process-registry': 0.29.35(zod@4.4.3)
+      '@agimon-ai/foundation-validator': 0.26.35(zod@4.4.3)
       '@hono/node-server': 2.0.10(hono@4.13.8)
       '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.4.3)
       '@modelcontextprotocol/server': 2.1.0
@@ -11431,7 +11492,7 @@ snapshots:
       yaml: 2.8.3
       zod: 4.4.3
     optionalDependencies:
-      '@earendil-works/pi-coding-agent': 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-coding-agent': 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cloudflare/workers-types'
@@ -11463,11 +11524,11 @@ snapshots:
       - sqlite3
       - unstorage
 
-  '@agimon-ai/log-sink-mcp@0.29.34(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)':
+  '@agimon-ai/log-sink-mcp@0.29.35(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.34(zod@4.6.5)
-      '@agimon-ai/foundation-process-registry': 0.29.34(zod@4.6.5)
-      '@agimon-ai/foundation-validator': 0.26.34(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.29.35(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.29.35(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.26.35(zod@4.6.5)
       '@hono/node-server': 2.0.10(hono@4.13.8)
       '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.6.5)
       '@modelcontextprotocol/server': 2.1.0
@@ -11492,7 +11553,7 @@ snapshots:
       yaml: 2.8.3
       zod: 4.6.5
     optionalDependencies:
-      '@earendil-works/pi-coding-agent': 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-coding-agent': 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cloudflare/workers-types'
@@ -11524,12 +11585,73 @@ snapshots:
       - sqlite3
       - unstorage
 
-  '@agimon-ai/mcp-proxy@0.31.34(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)':
+  '@agimon-ai/log-sink-mcp@0.30.3(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.34(zod@4.6.5)
-      '@agimon-ai/foundation-process-registry': 0.29.34(zod@4.6.5)
-      '@agimon-ai/foundation-validator': 0.26.34(zod@4.6.5)
-      '@agimon-ai/log-sink-mcp': 0.29.34(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.30.3(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.30.3(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.27.3(zod@4.6.5)
+      '@hono/node-server': 2.0.10(hono@4.13.8)
+      '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.6.5)
+      '@modelcontextprotocol/server': 2.1.0
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/api-logs': 0.219.0
+      '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/exporter-trace-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-transformer': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.8.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-logs': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-node': 2.8.0(@opentelemetry/api@1.9.1)
+      chalk: 5.6.2
+      commander: 14.0.3
+      drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
+      hono: 4.13.8
+      hono-rate-limiter: 0.5.3(hono@4.13.8)
+      inversify: 8.1.0(reflect-metadata@0.2.2)
+      reflect-metadata: 0.2.2
+      ruvector-onnx-embeddings-wasm: 0.1.2
+      sqlite-vec: 0.1.9
+      ulidx: 2.4.1
+      yaml: 2.8.3
+      zod: 4.6.5
+    optionalDependencies:
+      '@earendil-works/pi-coding-agent': 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@cloudflare/workers-types'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@neondatabase/serverless'
+      - '@op-engineering/op-sqlite'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - postgres
+      - prisma
+      - sql.js
+      - sqlite3
+      - unstorage
+
+  '@agimon-ai/mcp-proxy@0.31.35(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)':
+    dependencies:
+      '@agimon-ai/foundation-port-registry': 0.29.35(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.29.35(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.26.35(zod@4.6.5)
+      '@agimon-ai/log-sink-mcp': 0.29.35(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)
       '@hono/node-server': 2.0.10(hono@4.13.8)
       '@modelcontextprotocol/client': 2.1.0
       '@modelcontextprotocol/core': 2.1.0
@@ -11574,22 +11696,22 @@ snapshots:
       - sqlite3
       - unstorage
 
-  '@agimon-ai/rmux-darwin-arm64@0.9.11':
+  '@agimon-ai/rmux-darwin-arm64@0.10.3':
     optional: true
 
-  '@agimon-ai/rmux-darwin-x64@0.9.11':
+  '@agimon-ai/rmux-darwin-x64@0.10.3':
     optional: true
 
-  '@agimon-ai/rmux-linux-arm64@0.9.11':
+  '@agimon-ai/rmux-linux-arm64@0.10.3':
     optional: true
 
-  '@agimon-ai/rmux-linux-x64@0.9.11':
+  '@agimon-ai/rmux-linux-x64@0.10.3':
     optional: true
 
-  '@agimon-ai/style-system@0.1.12(@types/node@26.6.2)(@types/react@19.3.0)(esbuild@0.28.2)(hono@4.13.8)(jiti@2.7.0)(yaml@2.9.1)(zod@4.6.5)':
+  '@agimon-ai/style-system@0.1.13(@types/node@26.6.2)(@types/react@19.3.0)(esbuild@0.28.2)(hono@4.13.8)(jiti@2.7.0)(yaml@2.9.1)(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-exec': 0.26.34(zod@4.6.5)
-      '@agimon-ai/foundation-validator': 0.26.34(zod@4.6.5)
+      '@agimon-ai/foundation-exec': 0.26.35(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.26.35(zod@4.6.5)
       '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.8)
       '@modelcontextprotocol/server': 2.1.0
       '@tailwindcss/vite': 4.3.3(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -11636,11 +11758,11 @@ snapshots:
       - vite-plus
       - yaml
 
-  '@agimon-ai/vibe-lint@0.0.1-alpha.44(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))':
+  '@agimon-ai/vibe-lint@0.0.1-alpha.45(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))':
     dependencies:
-      '@agimon-ai/foundation-exec': 0.26.34(zod@4.4.3)
-      '@agimon-ai/foundation-validator': 0.26.34(zod@4.4.3)
-      '@agimon-ai/log-sink-mcp': 0.29.34(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.4.3)
+      '@agimon-ai/foundation-exec': 0.26.35(zod@4.4.3)
+      '@agimon-ai/foundation-validator': 0.26.35(zod@4.4.3)
+      '@agimon-ai/log-sink-mcp': 0.29.35(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.4.3)
       '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.8)
       '@modelcontextprotocol/server': 2.1.0
       chalk: 5.6.2
@@ -11653,8 +11775,8 @@ snapshots:
       typescript: 6.0.3
       zod: 4.4.3
     optionalDependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.34(zod@4.4.3)
-      '@agimon-ai/foundation-process-registry': 0.29.34(zod@4.4.3)
+      '@agimon-ai/foundation-port-registry': 0.29.35(zod@4.4.3)
+      '@agimon-ai/foundation-process-registry': 0.29.35(zod@4.4.3)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cloudflare/workers-types'
@@ -11687,25 +11809,26 @@ snapshots:
       - sqlite3
       - unstorage
 
-  '@agimon-ai/workflow-mcp@0.23.35(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)':
+  '@agimon-ai/workflow-mcp@0.24.3(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(hono@4.13.8)(zod@4.6.5)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.34(zod@4.6.5)
-      '@agimon-ai/foundation-process-registry': 0.29.34(zod@4.6.5)
-      '@agimon-ai/foundation-validator': 0.26.34(zod@4.6.5)
-      '@agimon-ai/log-sink-mcp': 0.29.34(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
+      '@agimon-ai/foundation-port-registry': 0.30.3(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.30.3(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.27.3(zod@4.6.5)
+      '@agimon-ai/log-sink-mcp': 0.30.3(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)
       '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.8)
       '@modelcontextprotocol/server': 2.1.0
       '@rmux/sdk': 0.6.5
       chalk: 5.6.2
       commander: 14.0.3
       js-yaml: 4.3.2
+      liquidjs: 10.29.0
       proper-lockfile: 4.1.2
       zod: 4.6.5
     optionalDependencies:
-      '@agimon-ai/rmux-darwin-arm64': 0.9.11
-      '@agimon-ai/rmux-darwin-x64': 0.9.11
-      '@agimon-ai/rmux-linux-arm64': 0.9.11
-      '@agimon-ai/rmux-linux-x64': 0.9.11
+      '@agimon-ai/rmux-darwin-arm64': 0.10.3
+      '@agimon-ai/rmux-darwin-x64': 0.10.3
+      '@agimon-ai/rmux-linux-arm64': 0.10.3
+      '@agimon-ai/rmux-linux-x64': 0.10.3
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cloudflare/workers-types'
@@ -12707,6 +12830,8 @@ snapshots:
 
   '@braintree/sanitize-url@7.1.2': {}
 
+  '@cfworker/json-schema@4.1.1': {}
+
   '@chevrotain/types@11.1.2': {}
 
   '@clack/core@1.4.3':
@@ -12949,9 +13074,11 @@ snapshots:
       conventional-commits-parser: 7.1.2
       picocolors: 1.1.1
 
-  '@composio/json-schema-to-zod@0.1.20(zod@4.3.6)':
+  '@composio/json-schema-to-zod@0.3.3(zod@4.6.5)':
     dependencies:
-      zod: 4.3.6
+      '@cfworker/json-schema': 4.1.1
+      dequal: 2.0.3
+      zod: 4.6.5
 
   '@conventional-changelog/git-client@3.1.2(conventional-commits-parser@7.1.2)':
     dependencies:
@@ -12974,10 +13101,10 @@ snapshots:
     dependencies:
       esbuild: 0.28.2
 
-  '@earendil-works/pi-agent-core@0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)':
+  '@earendil-works/pi-agent-core@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)':
     dependencies:
       '@earendil-works/chord': 0.87.1
-      '@earendil-works/pi-ai': 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-ai': 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-telemetry': 0.87.1
       diff: 8.0.4
       ignore: 7.0.8
@@ -12992,12 +13119,12 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)':
+  '@earendil-works/pi-ai@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)':
     dependencies:
       '@anthropic-ai/sdk': 0.124.0(zod@4.6.5)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
       '@earendil-works/pi-telemetry': 0.87.1
-      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)
+      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)
       '@smithy/node-http-handler': 4.12.1
       http-proxy-agent: 9.1.0(supports-color@7.2.0)
       https-proxy-agent: 9.1.0(supports-color@7.2.0)
@@ -13018,11 +13145,11 @@ snapshots:
       '@earendil-works/chord': 0.87.1
       '@earendil-works/pi-protocol': 0.87.1
 
-  '@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)':
+  '@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)':
     dependencies:
       '@earendil-works/chord': 0.87.1
-      '@earendil-works/pi-agent-core': 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
-      '@earendil-works/pi-ai': 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-agent-core': 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-ai': 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-tui': 0.87.1
       '@silvia-odwyer/photon-node': 0.3.4
       chalk: 6.0.0
@@ -13053,10 +13180,10 @@ snapshots:
       '@earendil-works/chord': 0.87.1
       typebox: 1.3.27
 
-  '@earendil-works/pi-server@0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)':
+  '@earendil-works/pi-server@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)':
     dependencies:
       '@earendil-works/chord': 0.87.1
-      '@earendil-works/pi-agent-core': 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-agent-core': 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-protocol': 0.87.1
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
@@ -13067,10 +13194,10 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-session-backend-sqlite-node@0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)':
+  '@earendil-works/pi-session-backend-sqlite-node@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)':
     dependencies:
-      '@earendil-works/pi-agent-core': 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
-      '@earendil-works/pi-ai': 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-agent-core': 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-ai': 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - bufferutil
@@ -13244,14 +13371,14 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@google/genai@2.21.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)':
+  '@google/genai@2.21.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)':
     dependencies:
       google-auth-library: 10.9.1(supports-color@7.2.0)
       p-retry: 4.6.2
       protobufjs: 7.6.6
       ws: 8.21.3
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.30.0(supports-color@7.2.0)(zod@4.6.5)
+      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -13395,29 +13522,29 @@ snapshots:
   '@img/sharp-win32-x64@0.35.4':
     optional: true
 
-  '@inquirer/ansi@2.0.7': {}
+  '@inquirer/ansi@2.0.8': {}
 
-  '@inquirer/checkbox@5.2.2(@types/node@26.6.2)':
+  '@inquirer/checkbox@5.2.5(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/ansi': 2.0.7
-      '@inquirer/core': 12.0.0(@types/node@26.6.2)
-      '@inquirer/figures': 2.0.8
-      '@inquirer/type': 4.0.7(@types/node@26.6.2)
+      '@inquirer/ansi': 2.0.8
+      '@inquirer/core': 12.0.3(@types/node@26.6.2)
+      '@inquirer/figures': 2.0.9
+      '@inquirer/type': 4.1.1(@types/node@26.6.2)
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/confirm@6.2.0(@types/node@26.6.2)':
+  '@inquirer/confirm@6.3.2(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/core': 12.0.0(@types/node@26.6.2)
-      '@inquirer/type': 4.0.7(@types/node@26.6.2)
+      '@inquirer/core': 12.0.3(@types/node@26.6.2)
+      '@inquirer/type': 4.1.1(@types/node@26.6.2)
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/core@12.0.0(@types/node@26.6.2)':
+  '@inquirer/core@12.0.3(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/ansi': 2.0.7
-      '@inquirer/figures': 2.0.8
-      '@inquirer/type': 4.0.7(@types/node@26.6.2)
+      '@inquirer/ansi': 2.0.8
+      '@inquirer/figures': 2.0.9
+      '@inquirer/type': 4.1.1(@types/node@26.6.2)
       cli-width: 4.1.0
       fast-wrap-ansi: 0.2.2
       mute-stream: 3.0.0
@@ -13425,92 +13552,92 @@ snapshots:
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/editor@5.3.0(@types/node@26.6.2)':
+  '@inquirer/editor@5.3.3(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/core': 12.0.0(@types/node@26.6.2)
-      '@inquirer/external-editor': 3.0.4(@types/node@26.6.2)
-      '@inquirer/type': 4.0.7(@types/node@26.6.2)
+      '@inquirer/core': 12.0.3(@types/node@26.6.2)
+      '@inquirer/external-editor': 3.0.5(@types/node@26.6.2)
+      '@inquirer/type': 4.1.1(@types/node@26.6.2)
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/expand@5.1.2(@types/node@26.6.2)':
+  '@inquirer/expand@5.1.5(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/core': 12.0.0(@types/node@26.6.2)
-      '@inquirer/type': 4.0.7(@types/node@26.6.2)
+      '@inquirer/core': 12.0.3(@types/node@26.6.2)
+      '@inquirer/type': 4.1.1(@types/node@26.6.2)
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/external-editor@3.0.4(@types/node@26.6.2)':
+  '@inquirer/external-editor@3.0.5(@types/node@26.6.2)':
     dependencies:
       chardet: 2.2.0
       iconv-lite: 0.7.3
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/figures@2.0.8': {}
+  '@inquirer/figures@2.0.9': {}
 
-  '@inquirer/input@5.1.3(@types/node@26.6.2)':
+  '@inquirer/input@5.1.6(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/core': 12.0.0(@types/node@26.6.2)
-      '@inquirer/type': 4.0.7(@types/node@26.6.2)
+      '@inquirer/core': 12.0.3(@types/node@26.6.2)
+      '@inquirer/type': 4.1.1(@types/node@26.6.2)
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/number@4.2.0(@types/node@26.6.2)':
+  '@inquirer/number@4.2.3(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/core': 12.0.0(@types/node@26.6.2)
-      '@inquirer/type': 4.0.7(@types/node@26.6.2)
+      '@inquirer/core': 12.0.3(@types/node@26.6.2)
+      '@inquirer/type': 4.1.1(@types/node@26.6.2)
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/password@5.1.2(@types/node@26.6.2)':
+  '@inquirer/password@5.2.2(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/ansi': 2.0.7
-      '@inquirer/core': 12.0.0(@types/node@26.6.2)
-      '@inquirer/type': 4.0.7(@types/node@26.6.2)
+      '@inquirer/ansi': 2.0.8
+      '@inquirer/core': 12.0.3(@types/node@26.6.2)
+      '@inquirer/type': 4.1.1(@types/node@26.6.2)
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/prompts@8.4.1(@types/node@26.6.2)':
+  '@inquirer/prompts@8.7.2(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/checkbox': 5.2.2(@types/node@26.6.2)
-      '@inquirer/confirm': 6.2.0(@types/node@26.6.2)
-      '@inquirer/editor': 5.3.0(@types/node@26.6.2)
-      '@inquirer/expand': 5.1.2(@types/node@26.6.2)
-      '@inquirer/input': 5.1.3(@types/node@26.6.2)
-      '@inquirer/number': 4.2.0(@types/node@26.6.2)
-      '@inquirer/password': 5.1.2(@types/node@26.6.2)
-      '@inquirer/rawlist': 5.3.2(@types/node@26.6.2)
-      '@inquirer/search': 4.3.0(@types/node@26.6.2)
-      '@inquirer/select': 5.2.2(@types/node@26.6.2)
+      '@inquirer/checkbox': 5.2.5(@types/node@26.6.2)
+      '@inquirer/confirm': 6.3.2(@types/node@26.6.2)
+      '@inquirer/editor': 5.3.3(@types/node@26.6.2)
+      '@inquirer/expand': 5.1.5(@types/node@26.6.2)
+      '@inquirer/input': 5.1.6(@types/node@26.6.2)
+      '@inquirer/number': 4.2.3(@types/node@26.6.2)
+      '@inquirer/password': 5.2.2(@types/node@26.6.2)
+      '@inquirer/rawlist': 5.3.5(@types/node@26.6.2)
+      '@inquirer/search': 4.3.3(@types/node@26.6.2)
+      '@inquirer/select': 5.2.5(@types/node@26.6.2)
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/rawlist@5.3.2(@types/node@26.6.2)':
+  '@inquirer/rawlist@5.3.5(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/core': 12.0.0(@types/node@26.6.2)
-      '@inquirer/type': 4.0.7(@types/node@26.6.2)
+      '@inquirer/core': 12.0.3(@types/node@26.6.2)
+      '@inquirer/type': 4.1.1(@types/node@26.6.2)
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/search@4.3.0(@types/node@26.6.2)':
+  '@inquirer/search@4.3.3(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/core': 12.0.0(@types/node@26.6.2)
-      '@inquirer/figures': 2.0.8
-      '@inquirer/type': 4.0.7(@types/node@26.6.2)
+      '@inquirer/core': 12.0.3(@types/node@26.6.2)
+      '@inquirer/figures': 2.0.9
+      '@inquirer/type': 4.1.1(@types/node@26.6.2)
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/select@5.2.2(@types/node@26.6.2)':
+  '@inquirer/select@5.2.5(@types/node@26.6.2)':
     dependencies:
-      '@inquirer/ansi': 2.0.7
-      '@inquirer/core': 12.0.0(@types/node@26.6.2)
-      '@inquirer/figures': 2.0.8
-      '@inquirer/type': 4.0.7(@types/node@26.6.2)
+      '@inquirer/ansi': 2.0.8
+      '@inquirer/core': 12.0.3(@types/node@26.6.2)
+      '@inquirer/figures': 2.0.9
+      '@inquirer/type': 4.1.1(@types/node@26.6.2)
     optionalDependencies:
       '@types/node': 26.6.2
 
-  '@inquirer/type@4.0.7(@types/node@26.6.2)':
+  '@inquirer/type@4.1.1(@types/node@26.6.2)':
     optionalDependencies:
       '@types/node': 26.6.2
 
@@ -13700,29 +13827,7 @@ snapshots:
     optionalDependencies:
       hono: 4.13.8
 
-  '@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.3.6)':
-    dependencies:
-      '@hono/node-server': 1.19.17(hono@4.13.8)
-      ajv: 8.20.0
-      ajv-formats: 3.0.1(ajv@8.20.0)
-      content-type: 1.0.5
-      cors: 2.8.6
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.1.1
-      express: 5.2.1(supports-color@7.2.0)
-      express-rate-limit: 8.6.2(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)
-      hono: 4.13.8
-      jose: 6.2.9
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.1
-      raw-body: 3.0.2
-      zod: 4.3.6
-      zod-to-json-schema: 3.25.2(zod@4.3.6)
-    transitivePeerDependencies:
-      - supports-color
-
-  '@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5)':
+  '@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.8)
       ajv: 8.20.0
@@ -13741,9 +13846,25 @@ snapshots:
       raw-body: 3.0.2
       zod: 4.6.5
       zod-to-json-schema: 3.25.2(zod@4.6.5)
+    optionalDependencies:
+      '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
       - supports-color
     optional: true
+
+  '@modelcontextprotocol/server-legacy@2.1.0(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)':
+    dependencies:
+      '@modelcontextprotocol/core': 2.1.0
+      content-type: 1.0.5
+      cors: 2.8.6
+      express-rate-limit: 8.6.2(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 4.6.5
+    optionalDependencies:
+      express: 5.2.1(supports-color@7.2.0)
+    transitivePeerDependencies:
+      - supports-color
 
   '@modelcontextprotocol/server@2.1.0':
     dependencies:
@@ -16180,6 +16301,7 @@ snapshots:
   ajv-formats@3.0.1(ajv@8.20.0):
     optionalDependencies:
       ajv: 8.20.0
+    optional: true
 
   ajv@8.20.0:
     dependencies:
@@ -16517,6 +16639,8 @@ snapshots:
   commander@10.0.1: {}
 
   commander@14.0.3: {}
+
+  commander@15.0.0: {}
 
   commander@7.2.0: {}
 
@@ -17131,10 +17255,9 @@ snapshots:
     dependencies:
       eventsource-parser: 3.1.1
 
-  execa@9.6.1:
+  execa@10.0.1:
     dependencies:
       '@sindresorhus/merge-streams': 4.0.0
-      cross-spawn: 7.0.6
       figures: 6.1.0
       get-stream: 9.0.1
       human-signals: 8.0.1
@@ -17144,6 +17267,7 @@ snapshots:
       pretty-ms: 9.3.0
       signal-exit: 4.1.0
       strip-final-newline: 4.0.0
+      which-command: 0.1.0
       yoctocolors: 2.2.0
 
   expect-type@1.4.0: {}
@@ -17814,7 +17938,8 @@ snapshots:
 
   json-schema-traverse@1.0.0: {}
 
-  json-schema-typed@8.0.2: {}
+  json-schema-typed@8.0.2:
+    optional: true
 
   json5@2.2.3: {}
 
@@ -18722,7 +18847,7 @@ snapshots:
       strip-ansi: 6.0.1
       wcwidth: 1.0.1
 
-  ora@9.3.0:
+  ora@9.4.1:
     dependencies:
       chalk: 5.6.2
       cli-cursor: 5.0.0
@@ -18902,9 +19027,9 @@ snapshots:
 
   pend@1.2.0: {}
 
-  pi-cache-optimizer@2.8.10(@earendil-works/pi-coding-agent@0.87.1(supports-color@7.2.0)(zod@4.6.5)):
+  pi-cache-optimizer@2.8.10(@earendil-works/pi-coding-agent@0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)):
     dependencies:
-      '@earendil-works/pi-coding-agent': 0.87.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-coding-agent': 0.87.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
 
   picocolors@1.1.1: {}
 
@@ -20123,6 +20248,8 @@ snapshots:
 
   uuid@13.0.1: {}
 
+  uuid@14.0.2: {}
+
   vary@1.1.2: {}
 
   verkit@0.4.0: {}
@@ -20224,6 +20351,8 @@ snapshots:
       is-set: 2.0.3
       is-weakmap: 2.0.2
       is-weakset: 2.0.4
+
+  which-command@0.1.0: {}
 
   which-typed-array@1.1.22:
     dependencies:
@@ -20361,16 +20490,10 @@ snapshots:
       '@yuku-parser/binding-win32-arm64': 0.9.3
       '@yuku-parser/binding-win32-x64': 0.9.3
 
-  zod-to-json-schema@3.25.2(zod@4.3.6):
-    dependencies:
-      zod: 4.3.6
-
   zod-to-json-schema@3.25.2(zod@4.6.5):
     dependencies:
       zod: 4.6.5
     optional: true
-
-  zod@4.3.6: {}
 
   zod@4.4.3: {}
 

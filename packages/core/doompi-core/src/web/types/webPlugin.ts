@@ -248,6 +248,12 @@ export interface WebPluginSlotProps {
   renderThread: (threadId: string, options?: ThreadViewOptions) => ReactNode;
   /** The host's compact live session activity view, or nothing before the host binds it. */
   renderSessionActivity?: () => ReactNode;
+  /**
+   * The host's live conversation view of another session, such as a child session a
+   * plugin started, drawn like that session's own timeline. The host subscribes to the
+   * session while the view is mounted, without focusing it.
+   */
+  renderSessionTranscript?: (sessionId: string, options?: ThreadViewOptions) => ReactNode;
   /** Appends text to the focused session's current composer draft. Bound, so a component may destructure it. */
   appendComposerDraft: (text: string) => void;
   /** Adds browser-safe structured context as a removable chip without changing the visible draft. */

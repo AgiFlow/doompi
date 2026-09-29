@@ -5,6 +5,8 @@ tags:
   - example
 
 max-workflows: 2
+imports:
+  - commands.yml
 launch-command: 'pnpm exec workflow-mcp launch-process --launcher "${WORKFLOW_LAUNCHER:-tmux}" --name "{name}" --cwd "$PWD" --command "{command}"'
 
 run-directory:
@@ -59,10 +61,10 @@ system-prompt: |
   - Never use em dash characters in prose or artifacts.
 
   Repair contract:
-  - A review job may request an in-scope repair by writing $WORKFLOW_RUN_DIR/fix.md.
-  - The file must start with YAML frontmatter containing `restart-from: draft` for blocking copy
-    problems or `restart-from: research` for unsupported or incorrect factual claims.
-  - After the frontmatter, include the failed criterion, evidence, affected passages, and required correction.
+  - Every step ends by recording its outcome with `workflow-mcp step complete`, `step fix` or `step fail`.
+  - A review job may request an in-scope repair with `workflow-mcp step fix --restart-from draft` for blocking
+    copy problems or `--restart-from research` for unsupported or incorrect factual claims.
+  - Give the failed criterion, evidence, affected passages, and required correction with `--reason-file <file>`.
   - The runner limits repair cycles through FIX_LOOP_MAX_CYCLES.
 
 env:
@@ -92,9 +94,15 @@ jobs:
         artifacts:
           - research.md
           - sources.md
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        runConfig:
+          majorMode: examples
+          domains: [blog]
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Blog brief:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   outline:
     description: Build a focused article structure grounded in the research.
@@ -112,9 +120,15 @@ jobs:
         timeout-minutes: 30
         artifacts:
           - outline.md
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        runConfig:
+          majorMode: examples
+          domains: [blog]
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Blog brief:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   draft:
     description: Write a complete article draft from the approved research and outline.
@@ -134,9 +148,15 @@ jobs:
         timeout-minutes: 60
         artifacts:
           - draft.md
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        runConfig:
+          majorMode: examples
+          domains: [blog]
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Blog brief:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   copy-review:
     description: Review the draft for clarity, structure, tone, and reader value.
@@ -149,15 +169,21 @@ jobs:
       Review the headline and opening, promise delivery, structure, clarity, repetition, tone, examples,
       conclusion, call to action, and compliance with the no-em-dash rule.
       Write $WORKFLOW_RUN_DIR/copy-review.md with a PASS or NEEDS_REPAIR verdict and precise passage-level edits.
-      If blocking writing changes are required, also write fix.md with `restart-from: draft`.
+      If blocking writing changes are required, request them with `workflow-mcp step fix --restart-from draft`.
     steps:
       - name: Review the copy
         timeout-minutes: 35
         artifacts:
           - copy-review.md
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        runConfig:
+          majorMode: examples
+          domains: [blog]
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Blog brief:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   fact-check:
     description: Validate material claims and citation coverage independently.
@@ -171,16 +197,22 @@ jobs:
       Update $WORKFLOW_RUN_DIR/sources.md with final claim mappings and verification statuses.
       Write $WORKFLOW_RUN_DIR/fact-check.md with a PASS, NEEDS_REPAIR, or BLOCKED verdict, listing each checked
       claim, supporting source, citation suitability, and any unsupported, stale, or overstated passage.
-      If research or factual corrections are required, also write fix.md with `restart-from: research`.
+      If research or factual corrections are required, request them with `workflow-mcp step fix --restart-from research`.
     steps:
       - name: Fact-check the draft
         timeout-minutes: 50
         artifacts:
           - fact-check.md
           - sources.md
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        runConfig:
+          majorMode: examples
+          domains: [blog]
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Blog brief:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi
 
   finalize:
     description: Apply approved review feedback and package review-ready artifacts.
@@ -203,6 +235,12 @@ jobs:
         artifacts:
           - post.md
           - publication-checklist.md
-        interactiveRun: |
-          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
-          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+        runConfig:
+          majorMode: examples
+          domains: [blog]
+        systemPrompt: ${{ env.JOB_SYSTEM_PROMPT }}
+        prompt: |
+          Blog brief:
+          ${{ env.WORKFLOW_CONTEXT }}
+        interactiveRun:
+          - command: doompi

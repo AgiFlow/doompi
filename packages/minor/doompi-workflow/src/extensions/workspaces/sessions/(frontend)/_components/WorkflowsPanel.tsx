@@ -23,27 +23,30 @@ import {
   PopoverHeader,
   PopoverTrigger,
   SearchIcon,
+  SectionLabel,
   StatusBadge,
   StreamCursor,
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
-import type {
-  WorkflowJobView,
-  WorkflowProgressState,
-  WorkflowRunView,
-  WorkflowStepView,
+import {
+  STEP_PANE_REF_KIND,
+  type WorkflowJobView,
+  type WorkflowProgressState,
+  type WorkflowRunView,
+  type WorkflowStepView,
 } from '../../../../../types/webWorkflows';
 import type { WorkflowTerminalCapabilitiesView } from '../../../../../types/webWorkflowTerminal';
 import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from '../_lib/catalogStore';
 import { formatRunDuration } from '../_lib/runDuration';
-import { deleteWorkflowRun, followScreen } from '../_lib/terminalApi';
+import { deleteWorkflowRun, followScreen, stopWorkflowRun } from '../_lib/terminalApi';
 import { workflowRunIdentity } from '../_lib/workflowActivity';
 import { focusRun, removeRun, workflows } from '../_lib/workflowsStore';
 import { ArtifactsPane, artifactTab } from './ArtifactsPane';
 import { LaunchWorkflowDialog } from './LaunchWorkflowDialog';
-import { stepTerminalTab } from './StepTerminalPanel';
+import { StepSteerComposer } from './StepSteerComposer';
+import { stepSessionRef, stepTerminalTab } from './StepTerminalPanel';
 import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer';
 
 /** One workflows tab per session; the surface is singular, so the id needs nothing else. */
@@ -98,6 +101,17 @@ function runState(run: WorkflowRunView): string {
   return run.outcome ?? run.stage;
 }
 
+/** The statuses the picker filters by, in the order its status row lists them. */
+const RUN_FILTERS = ['all', 'running', 'paused', 'failed', 'done'] as const;
+type RunFilter = (typeof RUN_FILTERS)[number];
+
+function runFilterOf(run: WorkflowRunView): Exclude<RunFilter, 'all'> {
+  if (run.stage === 'error') return 'failed';
+  if (run.executionState === 'paused' || run.executionState === 'pause_requested') return 'paused';
+  if (run.stage === 'running') return 'running';
+  return 'done';
+}
+
 function runPriority(run: WorkflowRunView): number {
   if (attentionFor(run) !== undefined) return 0;
   if (run.stage === 'running') return 1;
@@ -130,13 +144,12 @@ function WorkflowPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<RunFilter>('all');
   const ordered = useMemo(() => [...runs].sort((left, right) => runPriority(left) - runPriority(right)), [runs]);
-  const matching = ordered.filter((run) => runSearchText(run).includes(query.trim().toLowerCase()));
-  const sections = [
-    { label: 'needs you', runs: matching.filter((run) => attentionFor(run) !== undefined) },
-    { label: 'active', runs: matching.filter((run) => attentionFor(run) === undefined && run.stage === 'running') },
-    { label: 'recent', runs: matching.filter((run) => run.stage !== 'running' && attentionFor(run) === undefined) },
-  ].filter((section) => section.runs.length > 0);
+  const needle = query.trim().toLowerCase();
+  const shown = ordered.filter(
+    (run) => (filter === 'all' || runFilterOf(run) === filter) && runSearchText(run).includes(needle),
+  );
 
   return (
     <Popover
@@ -159,68 +172,81 @@ function WorkflowPicker({
           <ChevronDownIcon className="h-3 w-3 shrink-0 text-doom-dim" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent side="bottom" align="start" data-testid="workflow-picker-popover" className="w-[600px]">
+      <PopoverContent
+        side="bottom"
+        align="start"
+        data-testid="workflow-picker-popover"
+        className="w-[440px] border-doom-edge-blue"
+      >
         <PopoverHeader>
-          <span className="relative flex w-full items-center">
-            <SearchIcon className="pointer-events-none absolute left-2.5 h-3 w-3 text-doom-blue" />
-            <Input
-              autoFocus
-              size="sm"
-              data-testid="workflow-picker-search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={`Search ${String(runs.length)} workflows by name, job, or status`}
-              className="w-full pl-8"
-            />
-          </span>
+          <SectionLabel className="tracking-wide text-doom-blue">workflow</SectionLabel>
+          <span className="truncate text-2xs text-doom-faint">{selected.displayName}</span>
         </PopoverHeader>
-        <div className="grid max-h-[360px] grid-cols-1 gap-2 overflow-y-auto p-2 sm:grid-cols-2">
-          {sections.length === 0 ? (
-            <span className="px-2 py-5 text-center text-xs text-doom-faint sm:col-span-2">no matching workflows</span>
-          ) : (
-            sections.map((section) => (
-              <div key={section.label} className="flex min-w-0 flex-col gap-0.5">
-                <span className="px-2 py-1 text-2xs font-bold uppercase tracking-wider text-doom-faint">
-                  {section.label} · {section.runs.length}
-                </span>
-                {section.runs.map((run) => {
-                  const active = workflowRunIdentity(run) === workflowRunIdentity(selected);
-                  return (
-                    <button
-                      key={workflowRunIdentity(run)}
-                      type="button"
-                      data-testid={`workflow-option-${run.runKey}`}
-                      data-run-stage={run.stage}
-                      data-active={active}
-                      onClick={() => {
-                        onSelect(run);
-                        setOpen(false);
-                      }}
-                      className={cn(
-                        'flex min-w-0 flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-doom-deep',
-                        active && 'bg-doom-tint-blue ring-1 ring-inset ring-doom-blue/50',
-                      )}
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <Dot tone={runDot(run)} pulse={run.stage === 'running'} />
-                        <span className={cn('min-w-0 flex-1 truncate text-xs', active && 'font-bold text-doom-hi')}>
-                          {run.displayName}
-                        </span>
-                        <span className="shrink-0 text-2xs text-doom-faint">{runState(run)}</span>
-                      </span>
-                      <span className="truncate pl-3.5 text-2xs text-doom-dim">
-                        {[run.position?.job, run.position?.step].filter(Boolean).join(' · ') || 'settled'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ))
-          )}
+        <div className="border-b border-doom-border-soft p-1.5">
+          <Input
+            autoFocus
+            data-testid="workflow-picker-search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="filter workflows…"
+            className="w-full px-2 py-1 text-sm"
+          />
         </div>
-        <PopoverFooter>
-          <span>needs you and active stay first</span>
-          <span>esc closes</span>
+        <div
+          role="listbox"
+          aria-label="workflows"
+          className="flex max-h-[300px] flex-col gap-0.5 overflow-y-auto p-1.5"
+        >
+          {shown.length === 0 ? <EmptyState className="py-4" title="no workflow matches" /> : null}
+          {shown.map((run) => {
+            const active = workflowRunIdentity(run) === workflowRunIdentity(selected);
+            return (
+              <OptionRow
+                key={workflowRunIdentity(run)}
+                density="compact"
+                active={active}
+                data-testid={`workflow-option-${run.runKey}`}
+                data-run-stage={run.stage}
+                data-active={active}
+                onClick={() => {
+                  onSelect(run);
+                  setOpen(false);
+                }}
+                className={cn(
+                  'w-full gap-2.5 py-1.5 transition-colors hover:bg-doom-deep focus-visible:bg-doom-deep',
+                  active && 'bg-doom-tint-blue hover:brightness-125',
+                )}
+              >
+                <span className="w-14 shrink-0 truncate text-2xs text-doom-faint">{runState(run)}</span>
+                <OptionLabel density="compact" className={active ? 'text-doom-blue' : 'text-doom-hi'}>
+                  {run.displayName}
+                </OptionLabel>
+                <span className="max-w-[40%] truncate text-2xs text-doom-faint">
+                  {[run.position?.job, run.position?.step].filter(Boolean).join(' · ')}
+                </span>
+                <Dot tone={runDot(run)} pulse={run.stage === 'running'} />
+              </OptionRow>
+            );
+          })}
+        </div>
+        <PopoverFooter className="flex-wrap justify-start gap-1 py-1.5">
+          <SectionLabel className="mr-1 tracking-wide">status</SectionLabel>
+          {RUN_FILTERS.map((candidate) => {
+            const current = filter === candidate;
+            return (
+              <Button
+                key={candidate}
+                variant="ghost"
+                size="xs"
+                data-testid={`workflow-filter-${candidate}`}
+                data-current={current}
+                onClick={() => setFilter(candidate)}
+                className={cn('text-xs', current && 'bg-doom-blue/25 font-bold text-doom-blue hover:bg-doom-blue/25')}
+              >
+                {candidate}
+              </Button>
+            );
+          })}
         </PopoverFooter>
       </PopoverContent>
     </Popover>
@@ -317,12 +343,22 @@ function StepRow({
         >
           {step.name}
         </span>
+        {step.group === undefined ? null : (
+          // Steps of one group run side by side; the group names them together.
+          <span data-testid={`step-group-${step.name}`} className="max-w-24 shrink-0 truncate text-2xs text-doom-faint">
+            ∥ {step.group}
+          </span>
+        )}
         <span className="shrink-0 text-2xs text-doom-faint">
           {spanDuration(step.startedAt, step.endedAt, now) ?? ''}
         </span>
       </span>
       {step.reason === undefined ? null : (
-        <span className={cn('truncate pl-5 text-2xs', step.status === 'failed' ? 'text-doom-red' : 'text-doom-faint')}>
+        <span
+          data-testid={`step-reason-${step.name}`}
+          title={step.reason}
+          className={cn('truncate pl-5 text-2xs', step.status === 'failed' ? 'text-doom-red' : 'text-doom-faint')}
+        >
           {step.reason}
         </span>
       )}
@@ -337,19 +373,46 @@ function ScreenLine({ line }: { line: string }) {
   return <AnsiLine line={line} className="block whitespace-pre" />;
 }
 
-function InlineStepOutput({
-  run,
-  job,
-  step,
-  sessionId,
-  onOpenTerminal,
-}: {
+interface InlineStepOutputProps {
   run: WorkflowRunView;
   job: WorkflowJobView;
   step: WorkflowStepView | undefined;
   sessionId: string | null;
   onOpenTerminal: () => void;
-}) {
+  renderSessionTranscript: WebPluginSlotProps['renderSessionTranscript'];
+}
+
+/** A step's output: its agent conversation when it ran as a session, else the run's terminal. */
+function InlineStepOutput(props: InlineStepOutputProps) {
+  const { run, job, step, sessionId, onOpenTerminal, renderSessionTranscript } = props;
+  const sessionRef = stepSessionRef(run, {
+    workspace: run.workspace,
+    runKey: run.runKey,
+    job: job.name,
+    step: step?.name,
+  });
+  if (sessionRef === undefined || renderSessionTranscript === undefined) return <InlineTerminalOutput {...props} />;
+  const live = step?.status === 'running';
+  return (
+    <div data-testid="workflow-inline-conversation" className="flex min-h-0 flex-1 flex-col bg-doom-deep">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-doom-border-soft px-3">
+        <Dot tone={live ? 'blue' : 'neutral'} pulse={live} />
+        <span className={cn('text-2xs font-bold', live ? 'text-doom-blue' : 'text-doom-faint')}>AGENT SESSION</span>
+        <span className="min-w-0 truncate text-xs font-bold text-doom-hi">{step?.name ?? job.name}</span>
+        <span className="min-w-0 flex-1" />
+        <Button variant="outline" size="xs" data-testid="workflow-open-conversation" onClick={onOpenTerminal}>
+          open conversation
+        </Button>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col px-3 py-2">{renderSessionTranscript(sessionRef.id)}</div>
+      {live ? <StepSteerComposer key={sessionRef.id} run={run} sessionId={sessionId} step={sessionRef.id} /> : null}
+    </div>
+  );
+}
+
+function InlineTerminalOutput({ run, job, step, sessionId, onOpenTerminal }: InlineStepOutputProps) {
+  // The selected step's own pane: inside a parallel group, the current pane is only one of them.
+  const pane = step?.ref?.kind === STEP_PANE_REF_KIND ? step.ref.id : undefined;
   const [lines, setLines] = useState<string[]>([]);
   const [capabilities, setCapabilities] = useState<WorkflowTerminalCapabilitiesView>();
   const [ended, setEnded] = useState(false);
@@ -371,8 +434,9 @@ function InlineStepOutput({
         if (event.ended === true) setEnded(true);
       },
       sessionId,
+      pane,
     );
-  }, [run.workspace, run.runKey, sessionId]);
+  }, [run.workspace, run.runKey, sessionId, pane]);
 
   useEffect(() => {
     screenRef.current?.scrollTo({ top: screenRef.current.scrollHeight });
@@ -492,6 +556,43 @@ function DeleteWorkflowDialog({
   );
 }
 
+/** Ends a running workflow; the button holds its busy state until the run settles and it unmounts. */
+function StopWorkflowButton({ run, sessionId }: { run: WorkflowRunView; sessionId: string | null }) {
+  const [stopping, setStopping] = useState(false);
+  const [error, setError] = useState<string>();
+
+  const stop = (): void => {
+    setStopping(true);
+    setError(undefined);
+    void stopWorkflowRun(run.workspace, run.runKey, sessionId).then((result) => {
+      if (!('error' in result)) return;
+      setStopping(false);
+      setError(result.error);
+    });
+  };
+
+  return (
+    <div className="flex shrink-0 flex-col gap-1 border-t border-doom-border-soft p-1.5">
+      {error === undefined ? null : (
+        <span data-testid="stop-workflow-error" className="px-1 text-2xs text-doom-red">
+          {error}
+        </span>
+      )}
+      <Button
+        variant="danger-outline"
+        size="xs"
+        data-testid="stop-workflow"
+        loading={stopping}
+        loadingLabel="stopping workflow"
+        onClick={stop}
+        className="w-full"
+      >
+        stop workflow
+      </Button>
+    </div>
+  );
+}
+
 function DetailPane({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-doom-border">
@@ -501,7 +602,12 @@ function DetailPane({ children }: { children: ReactNode }) {
 }
 
 /** The canonical workflow surface: a scalable picker, compact step navigation, and one dominant detail pane. */
-export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }: WebPluginSlotProps) {
+export function WorkflowsPanel({
+  sessionId,
+  openTransientTab,
+  sendSessionFrame,
+  renderSessionTranscript,
+}: WebPluginSlotProps) {
   const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
   const selectedRun = useStore(workflows.store, (state) => workflows.select(state, sessionId).focusedRun);
   const catalogState = useStore(catalog.store, (state) => catalog.select(state, sessionId));
@@ -563,14 +669,6 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
           <>
             <div className="flex h-[46px] shrink-0 items-center gap-2 rounded-md border border-doom-border bg-doom-panel px-2.5">
               <WorkflowPicker runs={runs} selected={run} onSelect={selectRun} />
-              <StatusBadge tone={run.stage === 'error' ? 'error' : run.stage === 'running' ? 'info' : 'ok'}>
-                {runState(run)}
-              </StatusBadge>
-              <span className="truncate text-2xs text-doom-dim">
-                {[run.position?.job, run.position?.step].filter(Boolean).join(' · ') ||
-                  run.workflowName ||
-                  run.displayName}
-              </span>
               <span className="min-w-0 flex-1" />
               <span data-testid="workflows-tally" className="text-2xs text-doom-faint">
                 {runs.filter((candidate) => candidate.stage === 'running').length} running · {runs.length} total
@@ -600,62 +698,67 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
             <div className="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row">
               <div
                 data-testid="jobs-pane"
-                className="flex max-h-44 w-full shrink-0 flex-col overflow-y-auto rounded-md border border-doom-border bg-doom-panel p-1.5 sm:max-h-none sm:w-[214px]"
+                className="flex max-h-44 w-full shrink-0 flex-col overflow-hidden rounded-md border border-doom-border bg-doom-panel sm:max-h-none sm:w-[214px]"
               >
-                <div className="flex items-center px-2 pb-1 pt-1">
-                  <span className="text-2xs font-bold tracking-wider text-doom-faint">JOBS</span>
-                  <span className="min-w-0 flex-1" />
-                  <span className="text-2xs text-doom-faint">
-                    {jobs.filter((candidate) => candidate.status === 'completed').length}/{jobs.length}
-                  </span>
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-1.5">
+                  <div className="flex items-center px-2 pb-1 pt-1">
+                    <span className="text-2xs font-bold tracking-wider text-doom-faint">JOBS</span>
+                    <span className="min-w-0 flex-1" />
+                    <span className="text-2xs text-doom-faint">
+                      {jobs.filter((candidate) => candidate.status === 'completed').length}/{jobs.length}
+                    </span>
+                  </div>
+                  {jobs.length === 0 ? (
+                    <EmptyState className="py-4" title="no progress recorded yet" />
+                  ) : (
+                    jobs.map((candidate) => (
+                      <JobRow
+                        key={candidate.name}
+                        job={candidate}
+                        now={now}
+                        selected={job !== undefined && candidate.name === job.name}
+                        onSelect={() => {
+                          setSelectedJob(candidate.name);
+                          setSelectedStep(null);
+                          setPane('output');
+                        }}
+                      />
+                    ))
+                  )}
+                  {job === undefined ? null : (
+                    <>
+                      <div className="mx-1 my-1.5 border-t border-doom-border-soft" />
+                      <div className="flex items-center px-2 pb-1">
+                        <span
+                          data-testid="job-pane-name"
+                          className="min-w-0 flex-1 truncate text-2xs font-bold text-doom-hi"
+                        >
+                          {job.name}
+                        </span>
+                        <span className="text-2xs text-doom-faint">
+                          {spanDuration(job.startedAt, job.endedAt, now) ?? ''}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        {job.steps.map((candidate) => (
+                          <StepRow
+                            key={candidate.name}
+                            step={candidate}
+                            now={now}
+                            selected={step !== undefined && candidate.name === step.name}
+                            onSelect={() => {
+                              setSelectedStep(candidate.name);
+                              setPane('output');
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
-                {jobs.length === 0 ? (
-                  <EmptyState className="py-4" title="no progress recorded yet" />
-                ) : (
-                  jobs.map((candidate) => (
-                    <JobRow
-                      key={candidate.name}
-                      job={candidate}
-                      now={now}
-                      selected={job !== undefined && candidate.name === job.name}
-                      onSelect={() => {
-                        setSelectedJob(candidate.name);
-                        setSelectedStep(null);
-                        setPane('output');
-                      }}
-                    />
-                  ))
-                )}
-                {job === undefined ? null : (
-                  <>
-                    <div className="mx-1 my-1.5 border-t border-doom-border-soft" />
-                    <div className="flex items-center px-2 pb-1">
-                      <span
-                        data-testid="job-pane-name"
-                        className="min-w-0 flex-1 truncate text-2xs font-bold text-doom-hi"
-                      >
-                        {job.name}
-                      </span>
-                      <span className="text-2xs text-doom-faint">
-                        {spanDuration(job.startedAt, job.endedAt, now) ?? ''}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      {job.steps.map((candidate) => (
-                        <StepRow
-                          key={candidate.name}
-                          step={candidate}
-                          now={now}
-                          selected={step !== undefined && candidate.name === step.name}
-                          onSelect={() => {
-                            setSelectedStep(candidate.name);
-                            setPane('output');
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
+                {run.stage === 'running' ? (
+                  <StopWorkflowButton key={workflowRunIdentity(run)} run={run} sessionId={sessionId} />
+                ) : null}
               </div>
               <DetailPane>
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-doom-border-soft bg-doom-panel px-3">
@@ -701,6 +804,7 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
                     step={step}
                     sessionId={sessionId}
                     onOpenTerminal={() => openTransientTab(stepTerminalTab(run, job.name, step?.name))}
+                    renderSessionTranscript={renderSessionTranscript}
                   />
                 )}
               </DetailPane>

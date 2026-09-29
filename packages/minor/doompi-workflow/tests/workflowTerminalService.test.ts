@@ -69,6 +69,15 @@ describe('workflow terminal service: reading', () => {
 });
 
 describe('workflow terminal service: the keyboard', () => {
+  it('forgets one settled run without touching another run', async () => {
+    const { api } = service();
+    expect(api.takeControl(IDENTITY, 'mine')).toBe(true);
+    expect(api.takeControl('other/run', 'theirs')).toBe(true);
+    api.forgetRun('other/run');
+    await expect(api.write(IDENTITY, run, 'mine', 'y')).resolves.toBeUndefined();
+    expect(api.takeControl('other/run', 'someone-else')).toBe(true);
+  });
+
   it('lets the holder write and renews the lease as it goes', async () => {
     const { terminal, api } = service();
     expect(api.takeControl(IDENTITY, 'mine')).toBe(true);

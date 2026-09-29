@@ -64,6 +64,31 @@ export type DoomHubReservedWorktreeProvisioner = (
   request: DoomHubReservedWorktreeRequest,
 ) => Promise<DoomHubSessionScope>;
 
+/** Selection axes a caller pins for a new session instead of the workspace defaults. */
+export interface DoomHubSessionSelection {
+  readonly majorMode?: string;
+  readonly minorModes?: readonly string[];
+  readonly profile?: string;
+  /** An empty list starts the session with no domains. */
+  readonly domains?: readonly string[];
+}
+
+/**
+ * Provenance of a session a workflow step opened.
+ *
+ * The step's conversation belongs to the workflow that ran it and is read in
+ * that workflow's view, so the session rail leaves such sessions out.
+ */
+export const WORKFLOW_STEP_SESSION_PROVENANCE = 'workflow';
+
+/**
+ * Provenance of a session opened to launch workflows for its parent.
+ *
+ * It picks and starts work, then closes; the runs it started belong to its
+ * parent. Like a detached helper, it takes no row in the session rail.
+ */
+export const WORKFLOW_DISPATCHER_SESSION_PROVENANCE = 'workflow-dispatcher';
+
 export interface DoomHubSessionCreateRequest {
   readonly cwd: string;
   readonly name: string;
@@ -72,6 +97,29 @@ export interface DoomHubSessionCreateRequest {
   readonly signal?: AbortSignal;
   /** Host-issued reservation, not a caller-chosen target session id. */
   readonly reservationId?: string;
+  /** Pinned axes stay put when the workspace defaults change between turns. */
+  readonly selection?: DoomHubSessionSelection;
+  /** Pi model selector, `provider/id`, validated like `--model`. */
+  readonly model?: string;
+  /** Pi thinking level, validated like `--thinking`. */
+  readonly thinking?: string;
+  /** Text appended to the session's system prompt, like `--append-system-prompt`. */
+  readonly appendSystemPrompt?: string;
+  /** Variables layered over the host environment for the new session and the tools it runs. */
+  readonly environment?: Readonly<Record<string, string>>;
+  /** The only tools the new session's agent may see or call, like a Team agent's `tools:` list. */
+  readonly tools?: readonly string[];
+}
+
+export interface DoomHubSessionPromptOptions {
+  readonly signal?: AbortSignal;
+  /** Refuses the prompt unless the target is a direct child of this session. */
+  readonly parentSessionId?: string;
+}
+
+/** A prompt the session admitted. `settled` resolves once the agent settles and rejects on a harness fault. */
+export interface DoomHubSessionPromptReceipt {
+  readonly settled: Promise<void>;
 }
 
 /** Host-bound inter-session events. The source identity is attached by the hub, never by payload data. */
@@ -104,6 +152,25 @@ export interface DoomHubSessionService {
   create(request: DoomHubSessionCreateRequest): Promise<DoomHubSessionScope>;
   close(sessionId: string): Promise<void>;
   isLive(sessionId: string): boolean;
+  /** Starts a turn in a live session, as if its user had submitted `text`. */
+  prompt?(sessionId: string, text: string, options?: DoomHubSessionPromptOptions): Promise<DoomHubSessionPromptReceipt>;
+  /** Aborts the live session's current turn. The session stays open. */
+  abort?(sessionId: string, options?: Pick<DoomHubSessionPromptOptions, 'parentSessionId'>): Promise<void>;
+  /**
+   * Adds guidance to a live session's running turn. A session with no turn in
+   * progress takes it as its next message instead.
+   */
+  steer?(
+    sessionId: string,
+    message: string,
+    options?: Pick<DoomHubSessionPromptOptions, 'parentSessionId'>,
+  ): Promise<void>;
+  /**
+   * Stops a live session's runtime and keeps it dormant: its history stays
+   * readable where it is shown, and it can be woken later. A session that has
+   * done its work no longer holds a model, tools and extensions in the host.
+   */
+  release?(sessionId: string, options?: Pick<DoomHubSessionPromptOptions, 'parentSessionId'>): Promise<void>;
   readonly reservations?: DoomHubSessionReservations;
   /** Provisions a host-reserved Git worktree child. This is not exposed to remote MCP clients. */
   provisionReservedWorktree?(request: DoomHubReservedWorktreeRequest): Promise<DoomHubSessionScope>;

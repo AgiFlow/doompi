@@ -1,0 +1,29 @@
+# Commands the example workflows import. Not a workflow itself: only
+# *.workflow.yml files are listed as workflows.
+#
+# A step names the commands it can run through and gives its prompt, system
+# prompt and runConfig once; the launch picks one with --command (default: the
+# first a step lists) and a model choice with --choice.
+commands:
+  # The DoomPi server runs this in-process as a child session of the launching
+  # session. The CLI and the TUI run it as this shell command in the step's pane.
+  doompi:
+    inProcess: true
+    run: >-
+      doompi --auto-stop --cwd "$PWD"
+      {% if majorMode %}--major-mode {{ majorMode | shell }}{% endif %}
+      {% if domains %}{% if domains.size > 0 %}--domains {{ domains | shell }}{% else %}--no-domains{% endif %}{% endif %}
+      {% if model %}--model {{ model | shell }}{% endif %}
+      {% if thinking %}--thinking {{ thinking | shell }}{% endif %}
+      {% if systemPrompt %}--append-system-prompt {{ systemPrompt | shell }}{% endif %}
+      {{ prompt | shell }}
+  # The same agent in a terminal pane of its own, even under the DoomPi server.
+  terminal:
+    run: >-
+      doompi --auto-stop --cwd "$PWD"
+      {% if majorMode %}--major-mode {{ majorMode | shell }}{% endif %}
+      {% if domains %}{% if domains.size > 0 %}--domains {{ domains | shell }}{% else %}--no-domains{% endif %}{% endif %}
+      {% if model %}--model {{ model | shell }}{% endif %}
+      {% if thinking %}--thinking {{ thinking | shell }}{% endif %}
+      {% if systemPrompt %}--append-system-prompt {{ systemPrompt | shell }}{% endif %}
+      {{ prompt | shell }}
