@@ -1,3 +1,18 @@
+## 0.0.1-alpha.55 (2026-09-29)
+
+### 🚀 Features
+
+- **web:** expose child-scoped remote MCP activity ([#232](https://github.com/AgiFlow/doompi/pull/232))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.97
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.85
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.54 (2026-09-28)
 
 ### 🧱 Updated Dependencies

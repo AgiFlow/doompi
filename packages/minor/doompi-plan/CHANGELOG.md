@@ -1,3 +1,26 @@
+## 0.0.1-alpha.97 (2026-09-29)
+
+### 🚀 Features
+
+- **doompi-plan:** replace Fable with code review ([#236](https://github.com/AgiFlow/doompi/pull/236))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.20
+- Updated @agimon-ai/doompi-author to 0.0.1-alpha.35
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.96
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.97
+- Updated @agimon-ai/doompi-team to 0.0.1-alpha.97
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-voice to 0.0.1-alpha.98
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.97
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.96 (2026-09-28)
 
 ### 🧱 Updated Dependencies

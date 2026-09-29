@@ -1,3 +1,13 @@
+## 0.0.1-alpha.23 (2026-09-29)
+
+### 🚀 Features
+
+- **root:** run doompi workflows in-process with customRun steps ([#228](https://github.com/AgiFlow/doompi/pull/228))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.22 (2026-09-28)
 
 This was a version bump only for @agimon-ai/vibe-lint-plugin-doom-cli to align it with other projects, there were no code changes.
