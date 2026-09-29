@@ -51,10 +51,13 @@
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
     "@agimon-ai/workflow-mcp": "0.24.3",
+    "@aws-sdk/credential-provider-node": "3.972.83",
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "21.2.3",
     "@commitlint/config-nx-scopes": "21.2.3",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@nx/js": "23.2.1",
+    "@smithy/signature-v4": "5.7.3",
     "husky": "9.1.7",
     "lint-staged": "17.5.1",
     "nx": "23.2.1",
@@ -65,6 +68,7 @@
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vitest": "5.0.1",
+    "ws": "8.21.3",
     "zod": "4.6.5"
   },
   "engines": {
