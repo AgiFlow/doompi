@@ -50,6 +50,16 @@ type LaunchResult = { content: { type: 'text'; text: string }[]; isError?: boole
 /** Where a launch comes from: the directory it names paths against, and the repository they must stay in. */
 type LaunchLocation = { readonly cwd: string; readonly repoRoot: string };
 
+/**
+ * A launch refused because the workflow needs fixing. The doctor's findings
+ * name only a job and a step, so the notice names the workflow and says
+ * nothing ran; in a conversation it otherwise reads as part of whatever run
+ * was reported just before it.
+ */
+function needsFixingNotice(workflow: string, error: string): string {
+  return `Workflow "${workflow}" was not launched: it needs fixing.\n${error}`;
+}
+
 function textResult(text: string, isError = false): LaunchResult {
   return { content: [{ type: 'text', text }], ...(isError ? { isError: true } : {}) };
 }
@@ -212,7 +222,7 @@ export function createWorkflowServerRuntime(
       return `Workflow ${input.workflowPath} is outside this session's repository, so it cannot be launched here.`;
     }
     const detail = catalogDeps.summarize(workflowPath);
-    if (detail.error !== undefined) return detail.error;
+    if (detail.error !== undefined) return needsFixingNotice(inside, detail.error);
     const problems = validateWorkflowLaunch(detail, {
       inputs: input.inputs ?? {},
       ...(input.prompt === undefined ? {} : { prompt: input.prompt }),
@@ -601,7 +611,9 @@ export function createWorkflowServerRuntime(
             const entry = resolveWorkflowEntry(await catalogReader.read(execution.cwd), parsed.workflow);
             if (!entry || entry.error) {
               await execution.client.notify({
-                body: entry?.error ?? `Workflow not found: ${parsed.workflow}`,
+                body: entry?.error
+                  ? needsFixingNotice(entry.name, entry.error)
+                  : `Workflow not found: ${parsed.workflow}`,
                 level: 'error',
               });
               return;

@@ -794,6 +794,28 @@ describe('workflow headless facet', () => {
         await command.execute(name, test.execution);
         expect(test.execution.client.notify).toHaveBeenLastCalledWith(expect.objectContaining({ level: 'error' }));
       }
+      // A refusal names the workflow and says nothing ran, since the findings only name a job and a step.
+      expect(test.execution.client.notify).toHaveBeenCalledWith({
+        body: 'Workflow "broken" was not launched: it needs fixing.\nInvalid workflow',
+        level: 'error',
+      });
+      expect(
+        await launch.execute(
+          'launch',
+          { workflowPath: '/tmp/broken.workflow.yml' },
+          undefined,
+          undefined,
+          test.execution,
+        ),
+      ).toMatchObject({
+        content: [
+          {
+            type: 'text',
+            text: 'Error: Workflow "broken.workflow.yml" was not launched: it needs fixing.\nInvalid workflow',
+          },
+        ],
+        isError: true,
+      });
       expect(embeddedFeature.run).toHaveBeenCalledTimes(calls);
       embeddedFeature.run.mockResolvedValueOnce({ exitCode: 1, output: 'engine failed' });
       expect(
