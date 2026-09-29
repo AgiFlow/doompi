@@ -18,6 +18,7 @@ export {
   type DoomApiContext,
   type DoomApiHandler,
   type DoomHostMediaArbitration,
+  type DoomHostExecutionBudget,
   type DoomPeerAgentRegistry,
   type DoomOAuthRedirect,
   type DoomRepositorySyncView,

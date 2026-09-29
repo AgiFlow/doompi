@@ -15,7 +15,7 @@ import type { ILogFile } from '../../types/logFile';
 import type { IProcessControl } from '../../types/processControl';
 import type { ExitResult, ISpawner } from '../../types/spawner';
 import { LIFELINE_ENV } from '../lifeline/client';
-import { getResultMaxBytes } from '../runnerConfig';
+import { getResultMaxBytes, noninteractiveEnvironment } from '../runnerConfig';
 import type { IRunnerPaths } from '../runnerPaths/type';
 import {
   cleanupSupervisorFiles,
@@ -65,6 +65,7 @@ export class Launcher implements ILauncher {
     const env = {
       ...environment,
       ...NON_INTERACTIVE_ENV,
+      ...noninteractiveEnvironment(environment),
       ...NO_TERMINAL_INPUT_ENV,
       [PI_SESSION_ID_ENV]: request.sessionId,
       [LIFELINE_ENV]: this.lifeline?.path(),

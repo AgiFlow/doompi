@@ -12,6 +12,13 @@ export const DOOM_CORDIS_HOST_ABI_VERSION = 1 as const;
 export const DOOM_CORDIS_HOST_QUERY_CHANNEL = 'doom:cordis:host:v1:query';
 export const DOOM_CORDIS_RUNTIME_SERVICE = 'doom/runtime';
 export const DOOM_CORDIS_SESSION_SERVICE = 'doom/session';
+export const DOOM_CORDIS_SERVER_SERVICES = 'doom/server-session-services';
+
+/** Read-only access to services already owned by this session's server facets. */
+export interface DoomCordisServerServices {
+  readonly sessionId: string;
+  get<T>(name: string): T | undefined;
+}
 const HOST_PROTOCOL = 'doom.cordis.host';
 const DEFAULT_HOST_SOURCE = '@agimon-ai/doompi/cordis-host';
 

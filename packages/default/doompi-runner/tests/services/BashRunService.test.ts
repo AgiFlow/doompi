@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { DoomHostExecutionBudget } from '@agimon-ai/doompi-core/packageApi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BashRunService } from '../../src/services/bashRunService';
@@ -132,6 +133,7 @@ function harness(
   pid: number | null = 4242,
   backend: IRmuxBackend = rmuxBackend,
   rtkProcessor: IRtkProcessor = new FakeRtkProcessor(),
+  budget?: DoomHostExecutionBudget,
 ) {
   const spawner = new FakeSpawner(pid ?? undefined);
   const clock = new FakeClock();
@@ -141,7 +143,7 @@ function harness(
   const logFile = new FakeLogFile();
   const launcher = new Launcher(spawner, control, logFile, clock, new FakeRunnerPaths(launcherRoot));
   return {
-    service: new BashRunService(launcher, backend, namer, registry, clock, rtkProcessor),
+    service: new BashRunService(launcher, backend, namer, registry, clock, rtkProcessor, undefined, undefined, budget),
     spawner,
     clock,
     registry,
@@ -156,6 +158,67 @@ const request = { command: 'echo hi', cwd: '/repo', sessionId: 'session-a' };
 async function flushPromises(): Promise<void> {
   for (let index = 0; index < 10; index += 1) await Promise.resolve();
 }
+
+describe('host-wide resource admission', () => {
+  it('retains a slot after background promotion until the child exits', async () => {
+    const release = vi.fn();
+    const acquire = vi.fn(async () => release);
+    const { service, spawner } = harness(4242, rmuxBackend, new FakeRtkProcessor(), {
+      acquire,
+      getSnapshot: () => ({ running: 1, queued: 0, limit: 2 }),
+    });
+    const result = await service.run({ ...request, command: 'pnpm test', background: true });
+    expect(result.kind).toBe('promoted');
+    expect(acquire).toHaveBeenCalledOnce();
+    expect(release).not.toHaveBeenCalled();
+    spawner.last.exit({ code: 0, signal: null });
+    await flushPromises();
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('does not launch a queued command when admission is cancelled', async () => {
+    const acquire = vi.fn(
+      (signal?: AbortSignal) =>
+        new Promise<() => void>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+    );
+    const controller = new AbortController();
+    const { service, spawner } = harness(4242, rmuxBackend, new FakeRtkProcessor(), {
+      acquire,
+      getSnapshot: () => ({ running: 2, queued: 1, limit: 2 }),
+    });
+    const running = service.run({ ...request, command: 'pnpm test', signal: controller.signal });
+    await flushPromises();
+    controller.abort(new Error('queue cancelled'));
+    await expect(running).resolves.toMatchObject({ kind: 'failed', error: 'queue cancelled' });
+    expect(spawner.children).toHaveLength(0);
+  });
+
+  it('releases admission when no process is started', async () => {
+    const release = vi.fn();
+    const { service } = harness(null, rmuxBackend, new FakeRtkProcessor(), {
+      acquire: async () => release,
+      getSnapshot: () => ({ running: 1, queued: 0, limit: 2 }),
+    });
+    await expect(service.run({ ...request, command: 'pnpm test' })).resolves.toMatchObject({ kind: 'failed' });
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it.each([{ command: 'git status' }, { command: 'pnpm test', interactive: true }])(
+    'does not queue $command with interactive=$interactive',
+    async (options) => {
+      const acquire = vi.fn(async () => () => undefined);
+      const { service, spawner } = harness(4242, rmuxBackend, new FakeRtkProcessor(), {
+        acquire,
+        getSnapshot: () => ({ running: 0, queued: 0, limit: 2 }),
+      });
+      await service.run({ ...request, ...options, background: true });
+      expect(acquire).not.toHaveBeenCalled();
+      if (spawner.children.length) spawner.last.exit({ code: 0, signal: null });
+    },
+  );
+});
 
 describe('BashRunService', () => {
   it('uses a compact timestamped URL-safe runner ID', async () => {

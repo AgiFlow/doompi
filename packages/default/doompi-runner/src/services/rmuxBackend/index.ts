@@ -26,7 +26,7 @@ import type { RunHandle } from '../../types/launcher';
 import type { PtyRun } from '../../types/ptyHost';
 import type { IRmuxBackend, RmuxLaunchRequest } from '../../types/rmuxBackend';
 import type { ExitResult } from '../../types/spawner';
-import { getLogMaxBytes, getResultMaxBytes } from '../runnerConfig';
+import { getLogMaxBytes, getResultMaxBytes, noninteractiveEnvironment } from '../runnerConfig';
 import type { IRunnerPaths } from '../runnerPaths/type';
 import {
   cleanupSupervisorFiles,
@@ -432,7 +432,7 @@ function environment(
 ): Record<string, string> {
   const values: NodeJS.ProcessEnv = {
     ...env,
-    ...(interactive ? {} : NON_INTERACTIVE_ENV),
+    ...(interactive ? {} : { ...NON_INTERACTIVE_ENV, ...noninteractiveEnvironment(env) }),
     // Applied to interactive runs as well: a pane is a tty either way, and an
     // agent sending input to a prompt still has no way past a pager.
     ...NO_TERMINAL_INPUT_ENV,

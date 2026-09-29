@@ -3,7 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordisHost';
+import {
+  installDoomCordisHost,
+  DOOM_CORDIS_SERVER_SERVICES,
+  type DoomCordisHostController,
+} from '@agimon-ai/doompi-core/cordisHost';
 import {
   createDoomMcpProjectionService,
   DOOM_MCP_PROJECTION_SERVICE,
@@ -277,6 +281,31 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   delete process.env[SESSION_ENV_VAR];
   fs.rmSync(repoRoot, { recursive: true, force: true });
+});
+
+describe('server-owned MCP runtime', () => {
+  it('does not start a duplicate proxy when the same session already has a server owner', async () => {
+    const extension = registerExtension();
+    await extension.ready;
+    extension.hostRoot()!.provide(DOOM_CORDIS_SERVER_SERVICES, {
+      sessionId: SESSION_ID,
+      get: (name: string) => (name === 'doom/mcp-session-tools' ? { generation: 'server-owned' } : undefined),
+    });
+    await extension.startSession();
+    await Promise.resolve();
+    expect(createProxyContainer).not.toHaveBeenCalled();
+    expect(setStatus).not.toHaveBeenCalled();
+    await extension.shutdownSession();
+    expect(containerDispose).not.toHaveBeenCalled();
+  });
+
+  it('keeps standalone behavior when the host does not supply an MCP service', async () => {
+    const extension = registerExtension();
+    await extension.ready;
+    extension.hostRoot()!.provide(DOOM_CORDIS_SERVER_SERVICES, { sessionId: SESSION_ID, get: () => undefined });
+    await extension.startSession();
+    await vi.waitFor(() => expect(createProxyContainer).toHaveBeenCalledOnce());
+  });
 });
 
 describe('doom mcp extension', () => {

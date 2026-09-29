@@ -152,3 +152,15 @@ export function getErrorMaxVariantsJoined(): number {
 export function getErrorPatterns(): readonly string[] {
   return runnerSettingsState.value.errorPatterns ?? [];
 }
+
+/** Defaults for agent-owned, noninteractive child processes only. Explicit settings still win. */
+export function noninteractiveEnvironment(
+  environment: Readonly<Record<string, string | undefined>>,
+): Record<string, string> {
+  return {
+    NX_NATIVE_COMMAND_RUNNER: environment.NX_NATIVE_COMMAND_RUNNER ?? 'false',
+    NX_TUI: environment.NX_TUI ?? 'false',
+    NX_PARALLEL: environment.NX_PARALLEL ?? '2',
+    VITEST_MAX_WORKERS: environment.VITEST_MAX_WORKERS ?? '2',
+  };
+}

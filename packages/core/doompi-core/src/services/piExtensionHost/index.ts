@@ -40,7 +40,12 @@ import {
 } from '@earendil-works/pi-coding-agent';
 
 import type { DoomHeadlessClient, DoomHeadlessClientRequest, DoomHeadlessToolResult } from '../../exports/headless';
-import { connectDoomCordisHost, type DoomCordisHostConnection } from '../../pi/cordisHost';
+import {
+  connectDoomCordisHost,
+  DOOM_CORDIS_SERVER_SERVICES,
+  type DoomCordisHostConnection,
+  type DoomCordisServerServices,
+} from '../../pi/cordisHost';
 import { contextTokensOf, contextUsageOf, latestAssistantUsage } from '../../services/contextUsage';
 import {
   fromPiSessionEntry,
@@ -190,6 +195,8 @@ export interface PiExtensionHostOptions {
    * Backs Pi's extension dialogs, notifications and status text.
    */
   readonly client: () => DoomHeadlessClient | undefined;
+  /** Borrow services from this session only, never from another conversation. */
+  readonly serverServices?: DoomCordisServerServices;
   readonly onNotice?: (message: string) => void;
   /**
    * Called when a Pi extension tool restriction changes the active set.
@@ -1085,9 +1092,15 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       });
       // Pi opens session-scoped extension services before resource discovery. Doom tool
       // restrictions depend on the same ordering.
-      await runner.emit({ type: 'session_start', reason: 'startup' });
-      if (preload.events !== undefined)
+      if (preload.events !== undefined) {
         cordisConnection = await connectDoomCordisHost({ events: preload.events }, 'headless-pi-extension-host');
+        if (options.serverServices !== undefined) {
+          if (options.serverServices.sessionId !== runtime.sessionId)
+            throw new Error('Server services belong to a different session');
+          cordisConnection.root.provide(DOOM_CORDIS_SERVER_SERVICES, options.serverServices);
+        }
+      }
+      await runner.emit({ type: 'session_start', reason: 'startup' });
       skills = await loadPiSkills(runner, cwd, agentDir, options.onNotice);
     },
 

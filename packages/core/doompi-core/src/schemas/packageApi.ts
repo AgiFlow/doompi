@@ -172,6 +172,12 @@ export interface DoomRequestReceipts {
   ): Promise<DoomRequestReceipt>;
 }
 
+/** Host-wide admission for expensive local work. Release only after the owned process exits. */
+export interface DoomHostExecutionBudget {
+  acquire(signal?: AbortSignal): Promise<() => void>;
+  getSnapshot(): Readonly<{ running: number; queued: number; limit: number }>;
+}
+
 /** Synchronous host-owned exclusion across media APIs mounted at different scopes. */
 export interface DoomHostMediaArbitration {
   register(busy: () => boolean): () => void;
@@ -240,6 +246,8 @@ export interface DoomApiContext {
   requestReceipts?: DoomRequestReceipts;
   /** One host's exclusive media activity, shared across global and session scopes. */
   mediaArbitration?: DoomHostMediaArbitration;
+  /** One host-wide heavy-job budget, not a separate budget for every session. */
+  executionBudget?: DoomHostExecutionBudget;
   /** Paired agents belonging to this host only. */
   peerAgents?: DoomPeerAgentRegistry;
   /** Machine-owned Remote Control service, mounted only by the global core facet. */

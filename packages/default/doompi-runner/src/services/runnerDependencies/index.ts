@@ -1,3 +1,5 @@
+import type { DoomHostExecutionBudget } from '@agimon-ai/doompi-core/packageApi';
+
 import { BashRunService } from '../bashRunService';
 import { SystemClock } from '../clock';
 import { Launcher } from '../launcher';
@@ -44,6 +46,7 @@ export function createRunnerDependencies(
   overrides: Partial<RunnerDependencies> & {
     environment: Readonly<Record<string, string | undefined>>;
     cwd?: string;
+    executionBudget?: DoomHostExecutionBudget;
   },
 ): RunnerDependencies {
   const environment = { ...overrides.environment };
@@ -87,6 +90,7 @@ export function createRunnerDependencies(
         rtkProcessor(),
         cwd,
         environment,
+        overrides.executionBudget,
       ),
   );
 

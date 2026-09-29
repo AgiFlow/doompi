@@ -14,3 +14,5 @@ export {
   installDoomCordisHost,
   requireDoomCordisSession,
 } from '../pi/cordisHost';
+
+export { DOOM_CORDIS_SERVER_SERVICES, type DoomCordisServerServices } from '../pi/cordisHost';
