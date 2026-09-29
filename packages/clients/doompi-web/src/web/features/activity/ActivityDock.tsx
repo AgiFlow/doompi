@@ -3,9 +3,11 @@ import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef } from 'react';
 
 import { PluginSurface } from '../../components/PluginSurface';
+import { SessionMcpTools } from '../../components/SessionMcp';
 import { type ActivityGroup, useActivityGroups, useDockFaces } from '../../lib/composition';
 import { activityGroupSlot, HOST_SLOTS, slotFills } from '../../lib/pluginRegistry';
 import { retryWebPluginCompositions, webPluginCompositionStore, webPluginMountState } from '../../lib/pluginRuntime';
+import type { SessionMcpViewState } from '../../lib/useSessionMcp';
 import { sessionsStore } from '../../stores/sessionsStore';
 import { useActiveSession } from '../../stores/sessionStore';
 import { setDockTab, uiStore } from '../../stores/uiStore';
@@ -16,10 +18,9 @@ import { DockTabs } from './DockTabs';
 /**
  * The column for everything that is not the transcript.
  *
- * It has two faces. `activity` is asynchronous work that outlives the turn that
- * started it: agents, runners, and workflows deliberately live outside the
- * transcript, so they get a surface that does not scroll away. `context` is the
- * composition that work runs under, and what carrying it costs.
+ * `activity` is asynchronous work that outlives the turn that started it.
+ * `context` is the composition that work runs under, and what carrying it costs.
+ * `mcp` lists capabilities granted to this session's remote connections.
  *
  * On the activity face the host owns only the frame: which groups exist, their
  * key chips, and what they render come from the packages that declare them.
@@ -27,7 +28,15 @@ import { DockTabs } from './DockTabs';
  * plugin registers under that name render there, in slot order, and a group
  * nobody fills shows the one-line summary the session's footer publishes.
  */
-export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; onOpenContent: () => void }) {
+export function ActivityDock({
+  onClose,
+  onOpenContent,
+  mcp,
+}: {
+  onClose: () => void;
+  onOpenContent: () => void;
+  mcp?: SessionMcpViewState;
+}) {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
@@ -37,7 +46,11 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
     (face) => face.requiredMinorMode === undefined || slotProps.activeMinorModes?.includes(face.requiredMinorMode),
   );
   const selectedFace = dockFaces.find((face) => face.id === tab);
-  const resolvedTab = tab === 'context' || tab === 'activity' || selectedFace !== undefined ? tab : 'activity';
+  const mcpEnabled = mcp?.snapshot?.enabled === true;
+  const resolvedTab =
+    tab === 'context' || tab === 'activity' || (tab === 'mcp' && mcpEnabled) || selectedFace !== undefined
+      ? tab
+      : 'activity';
   const DockPanel = selectedFace?.panel;
   const automaticFace = dockFaces.find((face) => face.autoSelect === true);
   const automaticFaceKey = `${activeId ?? ''}:${automaticFace?.id ?? ''}`;
@@ -70,7 +83,7 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
     >
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-doom-border px-4">
         <div className="flex items-center gap-2">
-          <DockTabs contributed={dockFaces} />
+          <DockTabs contributed={dockFaces} mcpEnabled={mcpEnabled} />
           {/* The count belongs to the activity face; on the context face it
               would be a number about a list the reader is not looking at. */}
           {busy > 0 && resolvedTab === 'activity' ? (
@@ -84,7 +97,9 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
         </Button>
       </div>
 
-      {DockPanel !== undefined ? (
+      {resolvedTab === 'mcp' && mcp !== undefined ? (
+        <SessionMcpTools key={activeId} state={mcp} />
+      ) : DockPanel !== undefined ? (
         <DockPanel {...slotProps} />
       ) : resolvedTab === 'context' ? (
         <ContextPanel />

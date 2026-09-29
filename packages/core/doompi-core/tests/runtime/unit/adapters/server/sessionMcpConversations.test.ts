@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DoomHubSessionCreateRequest } from '../../../../../src/schemas/hubChannel';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from '../../../../../src/server/headlessHub';
 import { createSessionMcpRoutes, type SessionMcpRoutes } from '../../../../../src/server/sessionMcpRoutes';
+import { createSessionMcpActivityStore } from '../../../../../src/services/sessionMcpActivity';
 import { createSessionMcpAuthorizationService } from '../../../../../src/services/sessionMcpAuthorization';
 import {
   createSessionMcpConversationStore,
@@ -134,6 +135,7 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
     headlessHub: hub,
     publicOrigin: () => 'https://host.example',
     authorization,
+    activityStore: createSessionMcpActivityStore(path.join(root, 'state')),
     registrationStore: createSessionMcpRegistrationStore({ stateDir: path.join(root, 'state') }),
     conversationStore: store,
     isSessionPersisted: (id, cwd) => persisted.get(id) === cwd,
@@ -332,6 +334,59 @@ describe('conversation-bound Session MCP routing', () => {
     ).toBe(true);
     expect(f.store.list().every((record) => record.cwd?.startsWith(path.join(f.root, 'worktrees')))).toBe(true);
     expect(f.surfaces.get('parent')!.invokeTool).not.toHaveBeenCalled();
+  });
+
+  it('keeps MCP history and tool inventory on each child worktree session, not the parent', async () => {
+    const f = fixture('conversation', false, true);
+    const first = await f.call('a', 'load_context', {}, 11);
+    const second = await f.call('b', 'write', { path: 'only-b.txt', text: 'B' }, 12);
+    const firstId = String(first.result!.structuredContent!.sessionId);
+    const secondId = String(second.result!.structuredContent!.sessionId);
+    const firstSurface = f.surfaces.get(firstId)!;
+    const firstSnapshot = firstSurface.readSurface();
+    firstSurface.readSurface = () => ({
+      ...firstSnapshot,
+      tools: firstSnapshot.tools.map((tool) =>
+        tool.name === 'load_context' ? { ...tool, description: 'child A context' } : tool,
+      ),
+    });
+    const activity = async (sessionId: string) => {
+      const response = await f.routes.handleHost(
+        new Request(`https://host.example/api/workspaces/workspace/sessions/${sessionId}/mcp/activity`),
+      );
+      expect(response?.status).toBe(200);
+      return (await response!.json()) as {
+        enabled: boolean;
+        available: boolean;
+        total: number;
+        calls: Array<{ toolName: string }>;
+        tools: Array<{ name: string; description: string }>;
+      };
+    };
+
+    await expect(activity('parent')).resolves.toMatchObject({
+      enabled: false,
+      available: false,
+      total: 0,
+      calls: [],
+      tools: [],
+    });
+    const firstActivity = await activity(firstId);
+    const secondActivity = await activity(secondId);
+    expect(firstActivity).toMatchObject({
+      enabled: true,
+      available: true,
+      total: 1,
+      calls: [{ toolName: 'load_context' }],
+    });
+    expect(secondActivity).toMatchObject({
+      enabled: true,
+      available: true,
+      total: 1,
+      calls: [{ toolName: 'write' }],
+    });
+    expect(firstActivity.tools.find((tool) => tool.name === 'load_context')?.description).toBe('child A context');
+    expect(secondActivity.tools.find((tool) => tool.name === 'load_context')?.description).toBe('load_context');
   });
 
   it('publishes a failed automatic setup and retries the same reservation without creating a workspace', async () => {

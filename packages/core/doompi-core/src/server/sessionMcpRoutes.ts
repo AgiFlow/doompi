@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { DoomHubSessionReservations, DoomHubSessionScope } from '../schemas/hubChannel';
+import type { SessionMcpActivitySnapshot, SessionMcpAvailableTool } from '../schemas/sessionMcpActivity';
+import type { SessionMcpActivityStore } from '../services/sessionMcpActivity';
 import {
   createSessionMcpAuthorizationService,
   SessionMcpOAuthError,
@@ -27,6 +29,7 @@ const TOKEN_ROUTE = '/oauth/token';
 const SESSION_MCP_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp$/u;
 const SESSION_MCP_URL_TOKEN_PATTERN =
   /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/u;
+const SESSION_MCP_ACTIVITY_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/activity$/u;
 const SESSION_MCP_CONFIG_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/config$/u;
 const SESSION_MCP_CLIENTS_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/clients(?:\/([^/]+))?$/u;
 const SESSION_MCP_CONVERSATIONS_PATTERN =
@@ -58,6 +61,7 @@ export interface SessionMcpRoutesOptions {
   readonly authorization?: SessionMcpAuthorizationService;
   readonly registrationStore?: SessionMcpRegistrationStore;
   readonly conversationStore?: SessionMcpConversationStore;
+  readonly activityStore?: SessionMcpActivityStore;
   readonly isSessionPersisted?: (sessionId: string, cwd: string) => boolean;
   readonly onNotice?: (message: string) => void;
 }
@@ -487,6 +491,26 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
           baselines: incarnation?.baselines ?? new Map(),
           authorization,
           onNotice: options.onNotice,
+          onInvocation: (invocation) => {
+            if (invocation.sessionId === undefined || invocation.conversationDigest === undefined) return;
+            const conversation = options.conversationStore?.find(
+              invocation.clientId,
+              invocation.parentSessionId,
+              invocation.conversationDigest,
+            );
+            if (
+              conversation?.state !== 'bound' ||
+              conversation.id !== invocation.sessionId ||
+              conversation.workspaceId === undefined
+            )
+              return;
+            options.activityStore?.record(
+              conversation.workspaceId,
+              conversation.id,
+              authorization.readClient(invocation.clientId)?.name ?? 'remote agent',
+              invocation,
+            );
+          },
           ...(pathToken === undefined ? {} : { pathToken, operations: incarnation?.operations }),
           resolveConversation: async (grant, digest, reserve, signal) => {
             const store = requireStore();
@@ -732,12 +756,91 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       const configMatch = SESSION_MCP_CONFIG_PATTERN.exec(url.pathname);
       const match = SESSION_MCP_CLIENTS_PATTERN.exec(url.pathname);
       const conversationMatch = SESSION_MCP_CONVERSATIONS_PATTERN.exec(url.pathname);
-      if (configMatch === null && match === null && conversationMatch === null) return undefined;
-      const routeMatch = configMatch ?? match ?? conversationMatch!;
+      const activityMatch = SESSION_MCP_ACTIVITY_PATTERN.exec(url.pathname);
+      if (configMatch === null && match === null && conversationMatch === null && activityMatch === null)
+        return undefined;
+      const routeMatch = configMatch ?? match ?? conversationMatch ?? activityMatch!;
       const workspaceId = decodeURIComponent(routeMatch[1]);
       const sessionId = decodeURIComponent(routeMatch[2]);
       const clientId = match?.[3] === undefined ? undefined : decodeURIComponent(match[3]);
       const resolved = target(workspaceId, sessionId);
+      if (activityMatch !== null) {
+        if (request.method !== 'GET') return json(405, { error: 'Method not allowed.' });
+        const beforeText = url.searchParams.get('before');
+        const before = beforeText === null ? undefined : Number(beforeText);
+        if (
+          [...url.searchParams.keys()].some((key) => key !== 'before') ||
+          (before !== undefined && (!Number.isSafeInteger(before) || before <= 0))
+        )
+          return json(400, { error: 'Invalid history cursor.' });
+        if (options.headlessHub.computerUse?.ownsSession?.(sessionId))
+          return json(404, { error: 'Session not found.' });
+        if (!options.activityStore) return json(503, { error: 'MCP call history is unavailable in this host.' });
+        try {
+          const conversation = options.conversationStore
+            ?.list()
+            .find((entry) => entry.id === sessionId && entry.state === 'bound' && entry.workspaceId === workspaceId);
+          if (conversation === undefined)
+            return json(200, {
+              enabled: false,
+              available: false,
+              tools: [],
+              calls: [],
+              total: 0,
+            } satisfies SessionMcpActivitySnapshot);
+          const history = options.activityStore.read(workspaceId, sessionId, before);
+          const parent = target(conversation.parentWorkspaceId, conversation.parentSessionId);
+          const bindings = authorization.listClients().flatMap((client) => {
+            const binding = authorization.readAuthorizationBinding(client.clientId);
+            return binding !== undefined &&
+              client.clientId === conversation.clientId &&
+              binding.sessionId === conversation.parentSessionId &&
+              binding.sessionGeneration === parent?.generation
+              ? [{ client, binding }]
+              : [];
+          });
+          let available = false;
+          let tools: SessionMcpAvailableTool[] = [];
+          if (resolved !== undefined && bindings.length > 0) {
+            try {
+              const surface = resolved.session.host.mcpSurface.readSurface();
+              const candidates = [
+                ...surface.tools.map((tool) => ({
+                  name: tool.name,
+                  label: tool.label,
+                  description: tool.description,
+                  inputSchema: tool.parameters,
+                })),
+                ...SESSION_MCP_EXTRA_TOOLS.map((tool) => ({
+                  name: tool.name,
+                  label: tool.title ?? tool.name,
+                  description: tool.description ?? '',
+                  inputSchema: tool.inputSchema,
+                })),
+              ];
+              tools = candidates.flatMap((tool) => {
+                const connections = bindings
+                  .filter(({ binding }) => binding.scope === 'session' || binding.tools.includes(tool.name))
+                  .map(({ client }) => client.name);
+                return connections.length === 0 ? [] : [{ ...tool, connections }];
+              });
+              available = true;
+            } catch {
+              // Keep durable history visible while the child session's live capability surface is rebuilding.
+              available = false;
+            }
+          }
+          const snapshot: SessionMcpActivitySnapshot = {
+            ...history,
+            enabled: true,
+            available,
+            tools,
+          };
+          return json(200, snapshot);
+        } catch {
+          return json(503, { error: 'MCP call history could not be read. Check the host storage.' });
+        }
+      }
       if (resolved === undefined) return json(404, { error: 'Session not found.' });
       if (conversationMatch !== null) {
         const id = conversationMatch[3] === undefined ? undefined : decodeURIComponent(conversationMatch[3]);
@@ -943,6 +1046,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         abortOperations(incarnation.operations);
       }
       incarnations.clear();
+      options.activityStore?.close();
     },
   };
 }
@@ -959,6 +1063,7 @@ export function isPublicSessionMcpRoute(method: string, pathname: string): boole
 
 export function isSessionMcpHostRoute(pathname: string): boolean {
   return (
+    SESSION_MCP_ACTIVITY_PATTERN.test(pathname) ||
     SESSION_MCP_CONFIG_PATTERN.test(pathname) ||
     SESSION_MCP_CLIENTS_PATTERN.test(pathname) ||
     SESSION_MCP_CONVERSATIONS_PATTERN.test(pathname)

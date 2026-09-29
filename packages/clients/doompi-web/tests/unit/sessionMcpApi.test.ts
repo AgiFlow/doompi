@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createSessionMcpClient,
+  isSessionMcpActivity,
   listSessionMcpClients,
+  readSessionMcpActivity,
   readSessionMcpConfig,
   revokeSessionMcpClient,
   removeSessionMcpSetup,
@@ -200,5 +202,154 @@ describe('session MCP management API', () => {
       '/api/workspaces/w/sessions/parent/mcp/conversations/child',
       expect.objectContaining({ method: 'DELETE' }),
     );
+  });
+
+  it('reads child-scoped MCP activity with pagination and validates the durable payload', async () => {
+    const activity = {
+      enabled: true,
+      available: true,
+      total: 2,
+      nextBefore: 17,
+      tools: [
+        {
+          name: 'write',
+          label: 'Write',
+          description: 'Write a file.',
+          inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          connections: ['ChatGPT'],
+        },
+      ],
+      calls: [
+        {
+          sequence: 18,
+          id: 'call-1',
+          toolName: 'write',
+          clientName: 'ChatGPT',
+          startedAt: 100,
+          finishedAt: 125,
+          status: 'succeeded',
+          input: '{"path":"a.txt"}',
+          output: '{"ok":true}',
+        },
+        {
+          sequence: 17,
+          id: 'call-2',
+          toolName: 'read',
+          clientName: 'ChatGPT',
+          startedAt: 90,
+          status: 'running',
+          input: '{}',
+        },
+      ],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(respond(200, activity));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(readSessionMcpActivity('workspace/a', 'child b', 19)).resolves.toEqual({ activity });
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/workspace%2Fa/sessions/child%20b/mcp/activity?before=19', {
+      cache: 'no-store',
+    });
+    expect(isSessionMcpActivity(activity)).toBe(true);
+  });
+
+  it('rejects malformed MCP activity records instead of accepting partial history', async () => {
+    const base = {
+      enabled: true,
+      available: false,
+      total: 0,
+      tools: [],
+      calls: [],
+    };
+    const invalid = [
+      null,
+      { ...base, enabled: 'yes' },
+      { ...base, available: 'yes' },
+      { ...base, total: -1 },
+      { ...base, total: 0.5 },
+      { ...base, nextBefore: 0 },
+      { ...base, nextBefore: 1.5 },
+      { ...base, tools: 'bad' },
+      { ...base, calls: 'bad' },
+      {
+        ...base,
+        tools: [{ name: 'write', label: 'Write', description: 'x', inputSchema: null, connections: [] }],
+      },
+      {
+        ...base,
+        tools: [{ name: 'write', label: 'Write', description: 'x', inputSchema: {}, connections: [1] }],
+      },
+      {
+        ...base,
+        calls: [
+          { sequence: 0, id: 'x', toolName: 'write', clientName: 'c', startedAt: 1, status: 'running', input: '{}' },
+        ],
+      },
+      {
+        ...base,
+        calls: [
+          { sequence: 1, id: 1, toolName: 'write', clientName: 'c', startedAt: 1, status: 'running', input: '{}' },
+        ],
+      },
+      {
+        ...base,
+        calls: [
+          {
+            sequence: 1,
+            id: 'x',
+            toolName: 'write',
+            clientName: 'c',
+            startedAt: Number.NaN,
+            status: 'running',
+            input: '{}',
+          },
+        ],
+      },
+      {
+        ...base,
+        calls: [
+          {
+            sequence: 1,
+            id: 'x',
+            toolName: 'write',
+            clientName: 'c',
+            startedAt: 1,
+            finishedAt: 'soon',
+            status: 'running',
+            input: '{}',
+          },
+        ],
+      },
+      {
+        ...base,
+        calls: [
+          { sequence: 1, id: 'x', toolName: 'write', clientName: 'c', startedAt: 1, status: 'unknown', input: '{}' },
+        ],
+      },
+      {
+        ...base,
+        calls: [
+          { sequence: 1, id: 'x', toolName: 'write', clientName: 'c', startedAt: 1, status: 'running', input: 1 },
+        ],
+      },
+      {
+        ...base,
+        calls: [
+          {
+            sequence: 1,
+            id: 'x',
+            toolName: 'write',
+            clientName: 'c',
+            startedAt: 1,
+            status: 'running',
+            input: '{}',
+            output: 1,
+          },
+        ],
+      },
+    ];
+    for (const value of invalid) expect(isSessionMcpActivity(value)).toBe(false);
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respond(200, invalid.at(-1))));
+    await expect(readSessionMcpActivity('w', 'child')).resolves.toEqual({ error: 'The hub answered 200.' });
   });
 });

@@ -1,3 +1,5 @@
+import type { SessionMcpActivitySnapshot } from '@agimon-ai/doompi-core/sessionMcp';
+
 import type {
   CreatedSessionMcpClient,
   CreateSessionMcpClientInput,
@@ -181,5 +183,51 @@ export async function removeSessionMcpSetup(
       headers: JSON_HEADERS,
     },
     (body) => (body.ok === true ? { ok: true } : undefined),
+  );
+}
+
+export function isSessionMcpActivity(value: unknown): value is SessionMcpActivitySnapshot {
+  if (
+    !isRecord(value) ||
+    typeof value.enabled !== 'boolean' ||
+    typeof value.available !== 'boolean' ||
+    !Number.isSafeInteger(value.total) ||
+    Number(value.total) < 0 ||
+    (value.nextBefore !== undefined && (!Number.isSafeInteger(value.nextBefore) || Number(value.nextBefore) <= 0)) ||
+    !Array.isArray(value.tools) ||
+    !Array.isArray(value.calls)
+  )
+    return false;
+  return (
+    value.tools.every(
+      (tool: unknown) =>
+        isRecord(tool) && isTool(tool) && isRecord(tool.inputSchema) && isStringArray(tool.connections),
+    ) &&
+    value.calls.every(
+      (call: unknown) =>
+        isRecord(call) &&
+        Number.isSafeInteger(call.sequence) &&
+        Number(call.sequence) > 0 &&
+        typeof call.id === 'string' &&
+        typeof call.toolName === 'string' &&
+        typeof call.clientName === 'string' &&
+        typeof call.startedAt === 'number' &&
+        Number.isFinite(call.startedAt) &&
+        (call.finishedAt === undefined || (typeof call.finishedAt === 'number' && Number.isFinite(call.finishedAt))) &&
+        ['running', 'succeeded', 'failed', 'cancelled', 'interrupted'].includes(String(call.status)) &&
+        typeof call.input === 'string' &&
+        (call.output === undefined || typeof call.output === 'string'),
+    )
+  );
+}
+
+export function readSessionMcpActivity(
+  workspaceId: string,
+  sessionId: string,
+  before?: number,
+): Promise<SessionMcpResult<{ activity: SessionMcpActivitySnapshot }>> {
+  const query = before === undefined ? '' : `?before=${encodeURIComponent(String(before))}`;
+  return request(`${route(workspaceId, sessionId)}/activity${query}`, { cache: 'no-store' }, (body) =>
+    isSessionMcpActivity(body) ? { activity: body } : undefined,
   );
 }

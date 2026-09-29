@@ -10,6 +10,7 @@ import {
   type Tool,
 } from '@modelcontextprotocol/server';
 
+import type { SessionMcpInvocation } from '../schemas/sessionMcpActivity';
 import type { SessionMcpAccessGrant, SessionMcpAuthorizationService } from '../services/sessionMcpAuthorization';
 import { sessionMcpConversationDigest, SessionMcpConversationError } from '../services/sessionMcpConversations';
 import type { SessionToolDescriptor, SessionToolSurface } from '../types/server/sessionToolSurface';
@@ -126,6 +127,8 @@ export interface SessionMcpHttpHandlerOptions {
   ) => SessionMcpTarget | Promise<SessionMcpTarget>;
   /** Only bounded, non-reversible correlation values are reported here. */
   readonly onNotice?: (message: string) => void;
+  /** Host-only call history, separate from MCP notices and the agent transcript. */
+  readonly onInvocation?: (invocation: SessionMcpInvocation) => void;
   readonly serverName?: string;
   readonly serverVersion?: string;
 }
@@ -322,8 +325,41 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       const invocationId = randomUUID();
       let skillAccessOpen = true;
       let widgetTool: SessionToolDescriptor | undefined;
+      let invocation: SessionMcpInvocation | undefined;
+      const publishInvocation = (): void => {
+        if (invocation?.sessionId === undefined) return;
+        try {
+          options.onInvocation?.({ ...invocation });
+        } catch {
+          // Observability failures must not turn an already executed tool into a retryable failure.
+          options.onNotice?.('session MCP call history could not be saved');
+        }
+      };
+      const completeInvocation = (result: CallToolResult): CallToolResult => {
+        if (invocation !== undefined) {
+          invocation = {
+            ...invocation,
+            status: signal.aborted ? 'cancelled' : result.isError ? 'failed' : 'succeeded',
+            finishedAt: Date.now(),
+            output: result.structuredContent ?? result.content,
+          };
+          publishInvocation();
+        }
+        return result;
+      };
       try {
         const parent = await authorizeOperation();
+        invocation = {
+          id: invocationId,
+          parentSessionId: parent.grant.sessionId,
+          clientId: parent.grant.clientId,
+          conversationDigest: conversation,
+          toolName: message.params.name,
+          startedAt: Date.now(),
+          status: 'running',
+          input: message.params.arguments ?? {},
+        };
+        publishInvocation();
         const wrapper = grantedExtraTools(parent.grant).some((tool) => tool.name === message.params.name);
         const advertised = wrapper
           ? undefined
@@ -372,6 +408,8 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             'Refresh this MCP connection tool catalog before loading or using extra tools.',
           );
         const active = await resolveTarget(true);
+        invocation = { ...invocation, sessionId: active.target.sessionId ?? parent.grant.sessionId };
+        publishInvocation();
         const { snapshot, tools, skills } = grantedSurface(active.grant, active.target.toolSurface);
         const baseline = baselines.get(parent.grant.clientId);
         const extras = wrapper && baseline ? extraTools(baseline, tools) : [];
@@ -395,11 +433,11 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           )
             throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session tool surface has changed.');
           options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
-          return {
+          return completeInvocation({
             content: [{ type: 'text', text: JSON.stringify(capabilities) }],
             structuredContent: capabilities,
             isError: false,
-          };
+          });
         }
         if (message.params.name === 'load_extra_tools' && wrapper) {
           const discovery = {
@@ -423,11 +461,11 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           )
             throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session tool surface has changed.');
           options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
-          return {
+          return completeInvocation({
             content: [{ type: 'text', text: JSON.stringify(discovery) }],
             structuredContent: discovery,
             isError: false,
-          };
+          });
         }
         const name = wrapper ? wrapperArgs!.name! : message.params.name;
         const selected = tools.find((tool) => tool.name === name);
@@ -491,6 +529,12 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             return text;
           },
         };
+        invocation = {
+          ...invocation,
+          toolName: name,
+          input: wrapper ? (wrapperArgs!.arguments ?? {}) : (message.params.arguments ?? {}),
+        };
+        publishInvocation();
         const result = await active.target.toolSurface.invokeTool({
           revision: snapshot.revision,
           name,
@@ -510,12 +554,14 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         });
         await recheck();
         options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
-        return widgetResult(wrapper ? undefined : selected, {
-          content: result.content,
-          ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
-          ...(result._meta === undefined ? {} : { _meta: result._meta }),
-          isError: result.isError ?? false,
-        });
+        return completeInvocation(
+          widgetResult(wrapper ? undefined : selected, {
+            content: result.content,
+            ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
+            ...(result._meta === undefined ? {} : { _meta: result._meta }),
+            isError: result.isError ?? false,
+          }),
+        );
       } catch (error) {
         // The cause is logged because the client may drop the answer, for example on a timeout
         // during a first call that provisions a worktree, and then nothing else records why. Only a
@@ -531,6 +577,15 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
                   ? error.name
                   : 'unknown';
         options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=failed cause=${cause}`);
+        if (invocation !== undefined) {
+          invocation = {
+            ...invocation,
+            status: signal.aborted ? 'cancelled' : 'failed',
+            finishedAt: Date.now(),
+            output: { cause, message: error instanceof Error ? error.message : 'Tool call failed.' },
+          };
+          publishInvocation();
+        }
         if (!(error instanceof SessionMcpConversationError)) throw error;
         return widgetResult(widgetTool, {
           content: [{ type: 'text', text: error.message }],
