@@ -6,7 +6,7 @@ import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
 import { DOOM_MINOR_MODE_ENTRY_TYPE, readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import modeCatalogExtension from '@agimon-ai/doompi-minor-mode/extensions/pi';
 import { prepareMinorModeReloadHandoff } from '@agimon-ai/doompi-minor-mode/reloadHandoff';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionToolContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
 import * as contextCatalog from '../../src/builders/cli/contextCatalog';
@@ -29,7 +29,7 @@ class TestBus implements EventBusLike {
 
 async function setup() {
   const events = new TestBus();
-  const lifecycle = new Map<string, Array<(event: unknown, context: ExtensionContext) => unknown>>();
+  const lifecycle = new Map<string, Array<(event: unknown, context: ExtensionToolContext) => unknown>>();
   const registerTool = vi.fn();
   const registerCommand = vi.fn();
   const appendEntry = vi.fn();
@@ -38,7 +38,7 @@ async function setup() {
     registerTool,
     registerCommand,
     appendEntry,
-    on(name: string, handler: (event: unknown, context: ExtensionContext) => unknown) {
+    on(name: string, handler: (event: unknown, context: ExtensionToolContext) => unknown) {
       lifecycle.set(name, [...(lifecycle.get(name) ?? []), handler]);
     },
   } as unknown as ExtensionAPI;
@@ -54,7 +54,7 @@ async function setup() {
     mode: 'tui',
     ui: { notify: vi.fn() },
     sessionManager: { getSessionId: () => 'session-1' },
-  } as unknown as ExtensionContext;
+  } as unknown as ExtensionToolContext;
   const dispatch = async (name: string, event: unknown = {}) => {
     for (const handler of lifecycle.get(name) ?? []) await handler(event, context);
     await connection.root.fiber.await();

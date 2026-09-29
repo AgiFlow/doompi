@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 
-import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionToolContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createSubagentTool } from '../../src/extensions/workspaces/sessions/(backend)/tool/_lib/subagent.cli';
@@ -158,7 +158,7 @@ function host(existing: ToolDefinition[] = []): { pi: ExtensionAPI; tools: ToolD
   };
 }
 
-function context(model?: { provider: string; id: string }): ExtensionContext {
+function context(model?: { provider: string; id: string }): ExtensionToolContext {
   return {
     cwd: '/work',
     sessionManager: {
@@ -171,7 +171,7 @@ function context(model?: { provider: string; id: string }): ExtensionContext {
     },
     modelRegistry: { getAvailable: () => [], hasConfiguredAuth: () => false },
     ...(model ? { model } : {}),
-  } as unknown as ExtensionContext;
+  } as unknown as ExtensionToolContext;
 }
 
 let toolCallSequence = 0;
@@ -201,7 +201,7 @@ function harness() {
   const call = async (
     params: Record<string, unknown>,
     onUpdate?: Parameters<typeof tool.execute>[3],
-    ctx: ExtensionContext = context(),
+    ctx: ExtensionToolContext = context(),
   ) => tool.execute(`call-${++toolCallSequence}`, params, new AbortController().signal, onUpdate, ctx);
   return { planner, management, tracker, service, registered, call };
 }
@@ -351,7 +351,7 @@ describe('SubagentToolService actions', () => {
           },
         ],
       },
-    } as unknown as ExtensionContext;
+    } as unknown as ExtensionToolContext;
 
     try {
       await h.call({ action: 'run', requests: [{ agent: 'worker', task: 'inspect' }] }, undefined, ctx);

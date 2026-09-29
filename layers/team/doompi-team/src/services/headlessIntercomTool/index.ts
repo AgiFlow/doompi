@@ -1,4 +1,4 @@
-import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
+import { toDoomHeadlessToolResult, type DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
 
 import { TeamToolParamsSchema, type NativeTeamRuntime } from '../nativeTeamChannel';
 
@@ -13,7 +13,14 @@ export function createHeadlessIntercomTool(channel: NativeTeamRuntime): DoomHead
     ],
     executionMode: 'serial',
     async execute(toolCallId, parameters, signal, onUpdate) {
-      return channel.execute(toolCallId, parameters, signal, onUpdate);
+      return toDoomHeadlessToolResult(
+        await channel.execute(
+          toolCallId,
+          parameters,
+          signal,
+          onUpdate && ((partial) => onUpdate(toDoomHeadlessToolResult(partial))),
+        ),
+      );
     },
   };
 }

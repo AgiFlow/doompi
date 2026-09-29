@@ -10,7 +10,7 @@ import {
   createReadToolDefinition,
   createWriteToolDefinition,
   type ExtensionAPI,
-  type ExtensionContext,
+  type ExtensionToolContext,
   type Theme,
   type ToolDefinition,
   type WriteToolInput,
@@ -126,7 +126,7 @@ describe('createBuiltinTools', () => {
 
     const result = await read.execute('call-1', { path: 'sample.txt' }, undefined, undefined, {
       cwd,
-    } as ExtensionContext);
+    } as ExtensionToolContext);
 
     expect(result.content).toEqual([{ type: 'text', text: 'native read output' }]);
   });

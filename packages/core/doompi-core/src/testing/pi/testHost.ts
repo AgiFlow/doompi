@@ -1,4 +1,10 @@
-import type { ExtensionAPI, ExtensionContext, ToolDefinition, ToolInfo } from '@earendil-works/pi-coding-agent';
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  ExtensionToolContext,
+  ToolDefinition,
+  ToolInfo,
+} from '@earendil-works/pi-coding-agent';
 import type { TSchema } from 'typebox';
 
 import { connectDoomCordisHost, installDoomCordisHost, type DoomCordisHostConnection } from '../../pi/cordisHost';
@@ -194,7 +200,7 @@ export interface PiTestHost {
   /** Lifecycle handlers registered for one event, in registration order. */
   handlers(event: string): readonly InvokableHandler[];
   /** A context for this host; each call builds a fresh one, as Pi does per event. */
-  context(options?: PiTestContextOptions): ExtensionContext;
+  context(options?: PiTestContextOptions): ExtensionToolContext;
   /**
    * Runs every handler for one lifecycle event and returns what they answered.
    *
@@ -210,7 +216,7 @@ export interface PiTestHost {
       toolCallId?: string;
       signal?: AbortSignal;
       onUpdate?: ToolUpdateCallback;
-      context?: ExtensionContext;
+      context?: ExtensionToolContext;
     },
   ): Promise<unknown>;
   /** Runs a registered slash command the way Pi's palette does. */
@@ -343,6 +349,17 @@ export function createPiTestHost(options: PiTestHostOptions = {}): PiTestHost {
     setActiveTools(toolNames: string[]): void {
       activeToolNames = [...toolNames];
     },
+    getSettings() {
+      return {};
+    },
+    // No DoomPi extension registers MCP servers or virtual models through Pi yet.
+    registerMcpServer(): void {},
+    unregisterMcpServer(): void {},
+    getMcpServers() {
+      return [];
+    },
+    registerVirtualModel(): void {},
+    unregisterVirtualModel(): void {},
     getCommands(): never[] {
       return [];
     },
@@ -380,7 +397,7 @@ export function createPiTestHost(options: PiTestHostOptions = {}): PiTestHost {
     },
   };
 
-  function buildContext(contextOptions: PiTestContextOptions = {}): ExtensionContext {
+  function buildContext(contextOptions: PiTestContextOptions = {}): ExtensionToolContext {
     const sessionId = contextOptions.sessionId ?? options.sessionId ?? DEFAULT_SESSION_ID;
     const cwd = contextOptions.cwd ?? options.cwd ?? DEFAULT_CWD;
     const answers = { ...DISMISSED, ...options.answers, ...contextOptions.answers };
@@ -465,12 +482,22 @@ export function createPiTestHost(options: PiTestHostOptions = {}): PiTestHost {
       navigateTree: async () => ({ cancelled: true }),
       switchSession: async () => ({ cancelled: true }),
       reload: async () => undefined,
+      // Tool execute() receives the tool context. Nested calls answer as Pi does when unbound.
+      tools: [],
+      executeTool: async (name: string) => ({
+        toolCall: { type: 'toolCall', id: 'nested/0', name, arguments: {} },
+        result: {
+          content: [{ type: 'text', text: 'Nested tool calls are not available in this context' }],
+          details: {},
+        },
+        isError: true,
+      }),
     };
     // The one cast. `modelRegistry` is a class with a private field and so is
     // nominally typed, `ui.theme` is typed from a module Pi does not export,
     // and `model` is a populated provider record. No object literal can satisfy
     // those three, and no DoomPi extension reads them.
-    return context as unknown as ExtensionContext;
+    return context as unknown as ExtensionToolContext;
   }
 
   return {

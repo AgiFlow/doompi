@@ -57,6 +57,7 @@ type NativeEventOverloads = ExtensionAPI['on'] extends {
   (event: infer E38 extends string, handler: infer H38): void;
   (event: infer E39 extends string, handler: infer H39): void;
   (event: infer E40 extends string, handler: infer H40): void;
+  (event: infer E41 extends string, handler: infer H41): void;
 }
   ?
       | [E1, H1]
@@ -99,6 +100,7 @@ type NativeEventOverloads = ExtensionAPI['on'] extends {
       | [E38, H38]
       | [E39, H39]
       | [E40, H40]
+      | [E41, H41]
   : never;
 
 export type PiEventHandlers = {

@@ -2034,7 +2034,7 @@ describe('DPI installed experiment runtime', () => {
 
       const version = await runCommand(process.execPath, [executable, '--version'], fixture.root, environment);
       expect(version.code, version.stderr || version.stdout).toBe(0);
-      expect(version.stdout.trim()).toBe('0.87.1');
+      expect(version.stdout.trim()).toBe('0.99.1');
 
       const runtime = startRuntime(
         executable,
@@ -2417,7 +2417,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
       };
       expect(settings).toMatchObject({
         quietStartup: true,
-        extensions: ['@agimon-ai/doompi', '!extensions/**'],
+        extensions: ['@agimon-ai/doompi', '!extensions/**', '-builtin:mcp'],
         themes: ['themes/doom-pi-dark.json'],
       });
       expect(settings.extensions?.some((entry) => entry.includes('bootstrap.'))).toBe(false);

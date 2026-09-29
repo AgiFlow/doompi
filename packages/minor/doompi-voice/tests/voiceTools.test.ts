@@ -1,7 +1,7 @@
 import { definePiExtension, type PiToolCollection } from '@agimon-ai/doompi-core/piExtension';
 import { VoiceToolDescribeInputSchema } from '@agimon-ai/doompi-core/voiceTools';
 import { Context } from '@deepseek-ai/cordis';
-import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionToolContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AutonomousTurnIdentityFactory } from '../src/services/autonomousTurn';
@@ -11,10 +11,10 @@ import type { IClock } from '../src/types';
 
 type RegisteredTool = ToolDefinition;
 
-function context(sessionId: string): ExtensionContext {
+function context(sessionId: string): ExtensionToolContext {
   return {
     sessionManager: { getSessionId: () => sessionId },
-  } as unknown as ExtensionContext;
+  } as unknown as ExtensionToolContext;
 }
 
 /** The text Pi actually sends to the model, as opposed to the `details` the TUI reads. */
@@ -25,7 +25,7 @@ function describeText(result: { content?: unknown } | undefined): string {
     .join('\n');
 }
 
-function definition(name: string): VoiceToolDefinition<ExtensionContext> {
+function definition(name: string): VoiceToolDefinition<ExtensionToolContext> {
   return {
     descriptor: {
       source: '@test/voice',
@@ -48,7 +48,7 @@ describe('voice Pi façade tools', () => {
     const pi = {
       registerTool: (tool: RegisteredTool) => registered.set(tool.name, tool),
     };
-    const voiceTools = createDoomVoiceToolsService<ExtensionContext>('voice-facade-test');
+    const voiceTools = createDoomVoiceToolsService<ExtensionToolContext>('voice-facade-test');
     const registration = voiceTools.register(definition('transcribe'));
     const session = voiceTools.bindSession('facade-session', context('facade-session'));
     const facades = createVoiceToolFacades(() => session);
@@ -124,7 +124,7 @@ describe('voice Pi façade tools', () => {
         registered.set(tool.name, tool);
       },
     };
-    const voiceTools = createDoomVoiceToolsService<ExtensionContext>('voice-digest-test');
+    const voiceTools = createDoomVoiceToolsService<ExtensionToolContext>('voice-digest-test');
     const session = voiceTools.bindSession('digest-session', context('digest-session'));
     const facades = createVoiceToolFacades(() => session);
     await mountTools(pi, facades);
@@ -179,7 +179,7 @@ describe('voice Pi façade tools', () => {
     expect(unavailable?.details).toMatchObject({ error: { code: 'VOICE_TOOL_HOST_UNAVAILABLE' } });
     expect(describeText(unavailable)).toContain('<voice_tool_error code="VOICE_TOOL_HOST_UNAVAILABLE"');
 
-    const voiceTools = createDoomVoiceToolsService<ExtensionContext>('voice-stale-session-test');
+    const voiceTools = createDoomVoiceToolsService<ExtensionToolContext>('voice-stale-session-test');
     const session = voiceTools.bindSession('real-session', context('real-session'));
     const stale = await registered
       .get('use_voice_tools')
