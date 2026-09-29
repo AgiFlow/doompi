@@ -42,7 +42,6 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PlanningModeConfig, PlanningThinkingLevel } from '../src/exports/config';
-import type { FablePlanBroker, FablePlanPacket } from '../src/exports/fableFlow';
 import {
   configurePlanningSubagentInput,
   configurePlanningTaskInput,
@@ -67,7 +66,7 @@ let testPlansDirectory: string | undefined;
 const PLAN_TRIGGER_ATTRIBUTE = 'plan.trigger';
 const UNRELATED_TOOL_NAME = 'foreign_extension_tool';
 
-type PlanLeaderAction = 'plan.normal' | 'plan.debug' | 'plan.fable' | 'plan.exit';
+type PlanLeaderAction = 'plan.normal' | 'plan.debug' | 'plan.code-review' | 'plan.exit';
 
 interface FixtureModel {
   provider: string;
@@ -114,7 +113,6 @@ interface HarnessExtensionFixture {
   invokeLeaderAction(action: PlanLeaderAction): Promise<void>;
   invokeModeAction(action: string, argumentsValue?: Record<string, string>): Promise<unknown>;
   recordDebugEvidence(value: unknown): Promise<unknown>;
-  runFablePlan(value: FablePlanPacket, signal?: AbortSignal): Promise<unknown>;
   completePlan(decision?: 'exit' | 'continue'): Promise<unknown>;
   writePlan(content: string, signal?: AbortSignal): Promise<unknown>;
   writePlanWithoutDisplay(signal?: AbortSignal): Promise<unknown>;
@@ -128,8 +126,8 @@ interface HarnessExtensionFixture {
   widgets: ReturnType<typeof vi.fn>;
 }
 
-const PLAN_OWN_TOOL_NAMES = ['complete_plan', 'write_plan', 'record_debug_evidence', 'run_fable_plan'];
-const PLAN_MODE_HIDDEN_TOOL_NAMES = ['edit', 'write', 'record_debug_evidence', 'run_fable_plan'];
+const PLAN_OWN_TOOL_NAMES = ['complete_plan', 'write_plan', 'record_debug_evidence'];
+const PLAN_MODE_HIDDEN_TOOL_NAMES = ['edit', 'write', 'record_debug_evidence'];
 
 /** What the surface answers once plan mode is off: everything except plan's own tools. */
 function restoredTools(fixture: { allToolNames: () => string[] }): string[] {
@@ -487,9 +485,6 @@ function createExtensionFixture(
     recordDebugEvidence(value) {
       return registeredTools.get('record_debug_evidence')!.execute('debug-test', value, undefined, undefined, ctx);
     },
-    runFablePlan(value, signal) {
-      return registeredTools.get('run_fable_plan')!.execute('fable-test', value, signal, undefined, ctx);
-    },
     completePlan(decision) {
       return registeredTools
         .get('complete_plan')!
@@ -573,7 +568,7 @@ function expectedPlanPath(sessionDirectory: string, title: string, fixture: Harn
 describe('plan mode entry', () => {
   it('removes every auto-activated Plan tool from a fresh dormant session', async () => {
     const fixture = createExtensionFixture();
-    const planTools = ['record_debug_evidence', 'run_fable_plan', 'write_plan', 'complete_plan'];
+    const planTools = ['record_debug_evidence', 'write_plan', 'complete_plan'];
 
     expect(fixture.activeTools()).toEqual(expect.arrayContaining(planTools));
     await fixture.handler('session_start')({}, fixture.ctx);
@@ -611,9 +606,9 @@ describe('plan mode entry', () => {
       bindings: [
         { id: 'plan.normal', action: { name: 'plan.normal' } },
         { id: 'plan.debug', action: { name: 'plan.debug' } },
-        { id: 'plan.fable', action: { name: 'plan.fable' } },
+        { id: 'plan.code-review', action: { name: 'plan.code-review' } },
       ],
-      // `d` and `f` are flavors of the same mode, so they keep their own keys.
+      // `d` and `r` are flavors of the same mode, so they keep their own keys.
     });
 
     expect(fixture.leaderContributions[0]?.bindings.every((binding) => 'action' in binding)).toBe(true);
@@ -672,8 +667,9 @@ describe('plan mode entry', () => {
     expect(fixture.activeTools()).toContain('read');
     expect(fixture.activeTools()).toContain('record_debug_evidence');
 
-    await fixture.invokeLeaderAction('plan.fable');
-    expect(fixture.activeTools()).toContain('run_fable_plan');
+    await fixture.invokeLeaderAction('plan.code-review');
+    expect(fixture.activeTools()).not.toContain('run_fable_plan');
+    expect(fixture.activeTools()).toContain('write_plan');
 
     const snapshots = fixture.appendedEntries
       .filter(({ customType }) => customType === 'agent-harness-plan-mode')
@@ -805,103 +801,56 @@ describe('plan mode entry', () => {
     expect(prompt.systemPrompt).toContain('verifiedFacts: The failure is reproducible.');
   });
 
-  it('runs Fable only through the fixed profile while keeping output untrusted', async () => {
-    const start = vi.fn<FablePlanBroker['start']>(async (request) => ({
-      operationId: request.operationId,
-      status: 'completed',
-      stage: 'completed',
-      draft: '# Vendor draft',
-      durationMs: 2,
-    }));
-    const broker: FablePlanBroker = { start, cancel: vi.fn() };
-    const fixture = createExtensionFixture([], undefined, true, 'fable-plan', {}, { fableBroker: broker });
-    const packet: FablePlanPacket = {
-      goal: ['Replace slash planning'],
-      constraints: ['Keep repository access read-only'],
-      decisions: ['Use typed leader actions'],
-      verifiedFindings: [
-        { path: 'packages/minor/doompi-plan/src/planMode.ts', finding: 'The extension owns mode state.' },
-      ],
-      inferredFindings: [],
-      unresolvedQuestions: [],
-    };
+  it('replaces Fable with read-only Code Review without a broker or external profile', async () => {
+    const fixture = createExtensionFixture();
     await fixture.handler('session_start')({}, fixture.ctx);
+    await fixture.invokeLeaderAction('plan.code-review');
 
-    await expect(fixture.runFablePlan(packet)).resolves.toMatchObject({ details: { started: false } });
-    await fixture.invokeLeaderAction('plan.fable');
-    await expect(
-      fixture.handler('tool_call')({ toolName: 'run_fable_plan', input: packet }, fixture.ctx),
-    ).resolves.toBeUndefined();
-    const fableResult = await fixture.runFablePlan(packet);
-    expect(fableResult).toMatchObject({
-      content: [{ text: expect.stringContaining('Fable draft:\n# Vendor draft') }],
-      details: { started: true, status: 'completed' },
-    });
-    expect(fableResult).not.toEqual(
-      expect.objectContaining({
-        content: expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining('Fable review:') })]),
-      }),
-    );
-    expect(start).toHaveBeenCalledWith(
-      expect.objectContaining({
-        requester: '@agimon-ai/doompi-plan',
-        runtime: 'claude',
-        model: 'fable',
-        profile: 'claude/fable-plan-v1',
-      }),
-      expect.any(AbortSignal),
-    );
-    expect(fixture.latestSubagentPolicy()?.allowedExternalProfiles).toEqual(['claude/fable-plan-v1']);
-
+    expect(fixture.latestModeState()).toMatchObject({ activation: 'active', modelContextVariant: 'code-review' });
+    expect(fixture.activeTools()).toEqual(planNormalTools(fixture));
+    expect(fixture.allToolNames()).not.toContain('run_fable_plan');
+    expect(fixture.latestSubagentPolicy()?.allowedExternalProfiles).toEqual([]);
     const prompt = (await fixture.handler('before_agent_start')({ systemPrompt: 'base' }, fixture.ctx)) as {
       systemPrompt: string;
     };
-    expect(prompt.systemPrompt).toContain('[PLAN MODE ACTIVE: FABLE]');
-    expect(prompt.systemPrompt).toContain('repository inspection access');
-    expect(prompt.systemPrompt).toContain('untrusted text');
-    expect(prompt.systemPrompt).not.toContain('separate fresh review');
+    expect(prompt.systemPrompt).toContain('[PLAN MODE ACTIVE: CODE REVIEW]');
+    expect(prompt.systemPrompt).toContain('severity order with file and line references');
+    expect(prompt.systemPrompt).toContain('complete_plan for explicit approval');
+    expect(prompt.systemPrompt).not.toContain('Fable');
+    await expect(fixture.invokeModeAction('activate', { flavor: 'fable' })).rejects.toThrow('valid plan flavor');
   });
 
-  it('fails closed when Fable has no local broker and restores an interrupted stage', async () => {
-    const unavailable = createExtensionFixture();
-    await unavailable.handler('session_start')({}, unavailable.ctx);
-    await unavailable.invokeLeaderAction('plan.fable');
-    await expect(
-      unavailable.runFablePlan({
-        goal: ['Plan'],
-        constraints: [],
-        decisions: [],
-        verifiedFindings: [],
-        inferredFindings: [],
-        unresolvedQuestions: [],
-      }),
-    ).resolves.toMatchObject({ details: { started: false, errorCode: 'broker_unavailable' } });
-
+  it.each([
+    ['fable', 'normal', 'NORMAL'],
+    ['code-review', 'code-review', 'CODE REVIEW'],
+  ])('restores saved %s planning as %s without losing the original model settings', async (saved, flavor, marker) => {
     const restored = createExtensionFixture([
       {
         type: 'custom',
         customType: 'agent-harness-plan-mode',
         data: {
           version: 2,
-          activeFlavor: 'fable',
+          activeFlavor: saved,
           originalSnapshot: {
             tools: ['read', 'bash'],
             model: { provider: 'openai-codex', id: 'original' },
             thinking: 'low',
           },
-          interruptedFableStage: 'review',
+          ...(saved === 'fable' ? { interruptedFableStage: 'review' } : {}),
         },
       },
     ]);
     await restored.handler('session_start')({}, restored.ctx);
-    expect(restored.latestModeItem()).toMatchObject({
-      label: 'Plan',
-      detail: 'fable · interrupted - read only',
-    });
+    expect(restored.latestModeItem()).toMatchObject({ label: 'Plan', detail: `${flavor} - read only` });
+    expect(restored.activeTools()).toEqual(planNormalTools(restored));
     const prompt = (await restored.handler('before_agent_start')({ systemPrompt: 'base' }, restored.ctx)) as {
       systemPrompt: string;
     };
-    expect(prompt.systemPrompt).toContain('Current Fable stage: interrupted');
+    expect(prompt.systemPrompt).toContain(`[PLAN MODE ACTIVE: ${marker}]`);
+    expect(prompt.systemPrompt).not.toContain('Fable');
+    await restored.invokeLeaderAction('plan.exit');
+    expect(restored.currentModel()).toEqual({ provider: 'openai-codex', id: 'original' });
+    expect(restored.thinkingLevel()).toBe('low');
   });
 
   it('rejects malformed versioned and legacy persisted flavor state', () => {
@@ -990,7 +939,7 @@ describe('plan mode entry', () => {
       'record_debug_evidence',
     );
     expect(planToolRestriction('debug', diagnostics)([...available, 'playwright'], available)).toContain('playwright');
-    expect(planToolRestriction('fable', diagnostics)(available, available)).toContain('run_fable_plan');
+    expect(planToolRestriction('code-review', diagnostics)(available, available)).not.toContain('run_fable_plan');
     expect(planToolRestriction(undefined, diagnostics)([...available, 'playwright'], available)).toEqual([
       'read',
       'bash',
@@ -1260,7 +1209,7 @@ describe('plan mode entry', () => {
           { name: 'activate_plan', input: { flavor: 'normal' } },
           { name: 'activate_plan', input: { flavor: 'normal' } },
           { name: 'activate_plan', input: { flavor: 'debug' } },
-          { name: 'activate_plan', input: { flavor: 'fable' } },
+          { name: 'activate_plan', input: { flavor: 'code-review' } },
           { name: 'exit_plan', input: {} },
         ],
       },
@@ -1271,7 +1220,7 @@ describe('plan mode entry', () => {
       { active: true, flavor: 'normal', changed: true },
       { active: true, flavor: 'normal', changed: false },
       { active: true, flavor: 'debug', changed: true },
-      { active: true, flavor: 'fable', changed: true },
+      { active: true, flavor: 'code-review', changed: true },
       { active: false, flavor: null, changed: true },
     ]);
     expect(fixture.activeTools()).toEqual(restoredTools(fixture));
@@ -1343,7 +1292,7 @@ describe('plan mode entry', () => {
     expect(fixture.activeTools()).not.toEqual(expect.arrayContaining(facadeToolNames));
 
     facadeOwner.dispose();
-    await fixture.invokeLeaderAction('plan.fable');
+    await fixture.invokeLeaderAction('plan.code-review');
     expect(fixture.activeTools()).toEqual(expect.arrayContaining(facadeToolNames));
     await fixture.invokeLeaderAction('plan.exit');
     expect(fixture.activeTools()).toEqual(expect.arrayContaining(facadeToolNames));

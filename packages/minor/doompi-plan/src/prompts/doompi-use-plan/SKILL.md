@@ -1,6 +1,6 @@
 ---
 name: doompi-use-plan
-description: Use Doom Pi Plan to draft reviewable normal, debug, or Fable-assisted plans, persist them, and exit safely.
+description: Use Doom Pi Plan to draft reviewable normal, debug, or code review plans, persist them, and exit safely.
 ---
 
 # Use Doom Pi Plan
@@ -28,14 +28,17 @@ not itself exit server Plan mode. Do not simulate approval or bypass mode gates.
 During autonomous Voice, the headless UI-only `complete_plan` tool is unavailable.
 Supply Markdown to `write_plan`; it will not open a UI input dialog in that mode.
 Present the plan and wait for explicit user direction, never approve it yourself.
-`run_fable_plan` is unavailable in the headless host. Plan using repository
-inspection instead, without launching background subagents.
+Use repository inspection directly and do not launch background subagents through this remote workflow.
 
 ## Local DoomPi workflow
 
 The local TUI uses `SPC p e` for normal planning, `SPC p d` for debugging, and
-`SPC p f` for Fable where the host supports it. These are local shortcuts, not
+`SPC p r` for Code Review. These are local shortcuts, not
 remote tools. The local no-argument `write_plan` reads the visible plan from its
 own session. `complete_plan` requires the user's explicit exit-or-continue choice.
 
 Plan withholds `edit` and `write` while it is active, and adds its own tools without removing anything else. `bash` is not sandboxed: do not mutate the repository while planning, except to save the plan through `write_plan`. If exit restoration fails, report the failure and continue planning without starting implementation.
+
+## Code Review planning
+
+Select Code Review to inspect the requested diff, commit range, or files without editing them. Start with staged and unstaged changes when no target is specified. Report concrete findings in severity order with file and line references, distinguish verified behavior from source-based inferences, and propose the smallest fixes with validation steps. State when no actionable findings exist. Save the review and remediation plan with `write_plan`; implementation still requires explicit approval.

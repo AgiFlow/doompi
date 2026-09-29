@@ -46,7 +46,6 @@ import {
 import { PlanPointerService } from '../planPointer';
 
 const RECORD_DEBUG_EVIDENCE_TOOL = 'record_debug_evidence';
-const RUN_FABLE_PLAN_TOOL = 'run_fable_plan';
 const WRITE_PLAN_TOOL = 'write_plan';
 const COMPLETE_PLAN_TOOL = 'complete_plan';
 const PLAN_MODE_ID = 'plan';
@@ -54,15 +53,7 @@ const PLAN_MODEL_SNAPSHOT = 'plan-server-model-snapshot';
 const PLAN_FLAVOR_SNAPSHOT = 'plan-server-flavor';
 const PLAN_DEBUG_EVIDENCE = 'plan-debug-evidence';
 const PLAN_DOCUMENT = 'plan-document';
-/**
- * Fable needs a broker this host does not have, so `run_fable_plan` is a stub here. The stage is
- * reported honestly rather than as an idle run that is about to start.
- */
-const PLAN_SERVER_FABLE_STAGE = 'unavailable';
-/**
- * What this facet's tools accept: complete_plan declares no parameters, there is no narrated
- * review to answer, and run_fable_plan is a stub because no broker seam is configured.
- */
+/** This host supports UI review without narrated decisions. */
 export const PLAN_SERVER_CAPABILITIES: PlanHostCapabilities = {
   completePlanTakesDecision: false,
   narratesReview: false,
@@ -232,7 +223,8 @@ export function createPlanServerSession(
     const saved = await latestEntry(PLAN_FLAVOR_SNAPSHOT);
     if (saved !== undefined && saved !== null && typeof saved === 'object' && 'flavor' in saved) {
       const candidate = String((saved as { flavor: unknown }).flavor);
-      if (candidate === 'normal' || candidate === 'debug' || candidate === 'fable') flavor = candidate;
+      if (candidate === 'fable') flavor = 'normal';
+      else if (candidate === 'normal' || candidate === 'debug' || candidate === 'code-review') flavor = candidate;
     }
     const evidence = await latestEntry(PLAN_DEBUG_EVIDENCE);
     if (evidence === undefined || evidence === null) return;
@@ -248,7 +240,7 @@ export function createPlanServerSession(
       source: '@agimon-ai/doompi-plan',
       id: PLAN_MODE_ID,
       label: 'Plan',
-      description: 'Read-only planning with normal, debug, and Fable flavors.',
+      description: 'Read-only planning with normal, debug, and code review flavors.',
       order: 40,
       actions: [
         {
@@ -265,7 +257,7 @@ export function createPlanServerSession(
               choices: [
                 { value: 'normal', label: 'Normal' },
                 { value: 'debug', label: 'Debug' },
-                { value: 'fable', label: 'Fable' },
+                { value: 'code-review', label: 'Code Review' },
               ],
             },
           ],
@@ -284,7 +276,7 @@ export function createPlanServerSession(
       signal.throwIfAborted();
       if (actionId === 'activate') {
         const nextFlavor = argumentsValue.flavor;
-        if (nextFlavor !== 'normal' && nextFlavor !== 'debug' && nextFlavor !== 'fable')
+        if (nextFlavor !== 'normal' && nextFlavor !== 'debug' && nextFlavor !== 'code-review')
           throw new Error('A valid plan flavor is required.');
         await selectPlan(true, nextFlavor);
         return { message: `Plan mode is active with the ${nextFlavor} flavor.` };
@@ -343,29 +335,6 @@ export function createPlanServerSession(
           } catch (error) {
             return output(error instanceof Error ? error.message : String(error), true);
           }
-        },
-      },
-      {
-        when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
-        name: RUN_FABLE_PLAN_TOOL,
-        label: 'Run Fable Plan',
-        description:
-          'Unavailable in this headless host: no Fable planning broker is configured. Plan using repository inspection instead.',
-        parameters: {
-          type: 'object',
-          properties: {
-            goal: { type: 'array', items: { type: 'string' } },
-            constraints: { type: 'array', items: { type: 'string' } },
-          },
-          required: ['goal'],
-          additionalProperties: false,
-        },
-        executionMode: 'serial',
-        async execute() {
-          return output(
-            'Fable planning is unavailable in the headless host because no broker seam is configured.',
-            true,
-          );
         },
       },
       {
@@ -475,13 +444,7 @@ export function createPlanServerSession(
           const directory = plansDirectory();
           const sections = [
             buildPlanModeBasePrompt(directory, PLAN_SERVER_CAPABILITIES),
-            buildFlavorPlanningPrompt(
-              flavor,
-              directory,
-              debugEvidence,
-              PLAN_SERVER_FABLE_STAGE,
-              PLAN_SERVER_CAPABILITIES,
-            ),
+            buildFlavorPlanningPrompt(flavor, directory, debugEvidence),
           ];
           const saved = await latestEntry(PLAN_DOCUMENT);
           if (saved !== undefined && saved !== null && typeof saved === 'object' && 'path' in saved) {

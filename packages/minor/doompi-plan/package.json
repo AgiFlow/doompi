@@ -146,7 +146,6 @@
       "widgets": [
         "@agimon-ai/doompi-plan/complete_plan",
         "@agimon-ai/doompi-plan/record_debug_evidence",
-        "@agimon-ai/doompi-plan/run_fable_plan",
         "@agimon-ai/doompi-plan/write_plan"
       ]
     }
