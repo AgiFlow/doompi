@@ -17,6 +17,7 @@ overrides:
   protobufjs@8.0.0 - 8.7.1: ^8.7.2
   smol-toml@0.0.0 - 1.7.0: ^1.7.1
   sharp@0.34.5: 0.35.4
+  undici@7.0.0 - 7.29.0: ^7.29.1
 
 importers:
 
@@ -166,7 +167,7 @@ importers:
         version: link:../../../packages/minor/doompi-voice
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -227,7 +228,7 @@ importers:
         version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -273,7 +274,7 @@ importers:
         version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -307,7 +308,7 @@ importers:
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -356,10 +357,10 @@ importers:
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-agent-core':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -411,7 +412,7 @@ importers:
         version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -487,10 +488,10 @@ importers:
         version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-agent-core':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-ai':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
         version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
@@ -542,7 +543,7 @@ importers:
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -585,7 +586,7 @@ importers:
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -660,7 +661,7 @@ importers:
         version: link:../../core/doompi-web-security
       '@agimon-ai/log-sink-mcp':
         specifier: 0.29.35
-        version: 0.29.35(@earendil-works/pi-coding-agent@0.99.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
+        version: 0.29.35(@earendil-works/pi-coding-agent@0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -669,7 +670,7 @@ importers:
         version: 0.99.1
       '@earendil-works/pi-agent-core':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
         version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
@@ -678,10 +679,10 @@ importers:
         version: 0.99.1
       '@earendil-works/pi-server':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-session-backend-sqlite-node':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.8)
@@ -736,7 +737,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-cli
       '@earendil-works/pi-ai':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-client':
         specifier: 0.99.1
         version: 0.99.1
@@ -957,10 +958,10 @@ importers:
         version: 0.99.1
       '@earendil-works/pi-agent-core':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-ai':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
         version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
@@ -969,10 +970,10 @@ importers:
         version: 0.99.1
       '@earendil-works/pi-server':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-session-backend-sqlite-node':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.8)
@@ -1218,7 +1219,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -1258,7 +1259,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -1334,7 +1335,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -1401,7 +1402,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -1465,7 +1466,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -1517,7 +1518,7 @@ importers:
         version: link:../../foundations/doompi-ui
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -1602,7 +1603,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -1669,7 +1670,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -1730,7 +1731,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -1806,7 +1807,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -1886,7 +1887,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -1929,7 +1930,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -1972,7 +1973,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@modelcontextprotocol/ext-apps':
         specifier: 2.0.0
         version: 2.0.0(@modelcontextprotocol/client@2.1.0)(@modelcontextprotocol/core@2.1.0)(@modelcontextprotocol/server@2.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
@@ -2042,7 +2043,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -2097,7 +2098,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -2140,7 +2141,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -2177,7 +2178,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -2229,7 +2230,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -2269,7 +2270,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -2324,7 +2325,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -2407,7 +2408,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2483,7 +2484,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2559,7 +2560,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2614,7 +2615,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -2678,7 +2679,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@types/node':
         specifier: 26.6.2
         version: 26.6.2
@@ -2733,7 +2734,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -2800,7 +2801,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2879,7 +2880,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2955,7 +2956,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.99.1
-        version: 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+        version: 0.99.1(supports-color@7.2.0)(zod@4.6.5)
       '@earendil-works/pi-tui':
         specifier: 0.99.1
         version: 0.99.1
@@ -9910,7 +9911,7 @@ packages:
       '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
       '@smithy/hash-node': '>=4.3.0 <5'
       '@smithy/signature-v4': '>=5.4.0 <6'
-      undici: '>=5 <9'
+      undici: ^7.29.1
       ws: ^8.21.0
       zod: ^3.25 || ^4.0
     peerDependenciesMeta:
@@ -10988,8 +10989,8 @@ packages:
   undici-types@8.9.0:
     resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
 
-  undici@7.29.0:
-    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
+  undici@7.30.0:
+    resolution: {integrity: sha512-dkrQXeHSaoamnItlYbmzG0wFYrM0ZwDxCIg0A7aKjTyyhh9svRzCNFEzV+Vm05/yehjCzjDZ31KXfGEjYSztDQ==}
     engines: {node: '>=20.18.1'}
 
   undici@8.10.2:
@@ -11487,68 +11488,7 @@ snapshots:
     dependencies:
       zod: 4.6.5
 
-  '@agimon-ai/log-sink-mcp@0.29.35(@earendil-works/pi-coding-agent@0.99.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.4.3)':
-    dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.35(zod@4.4.3)
-      '@agimon-ai/foundation-process-registry': 0.29.35(zod@4.4.3)
-      '@agimon-ai/foundation-validator': 0.26.35(zod@4.4.3)
-      '@hono/node-server': 2.0.10(hono@4.13.8)
-      '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.4.3)
-      '@modelcontextprotocol/server': 2.1.0
-      '@opentelemetry/api': 1.9.1
-      '@opentelemetry/api-logs': 0.219.0
-      '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/exporter-trace-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/otlp-transformer': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/resources': 2.8.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/sdk-logs': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/sdk-trace-node': 2.8.0(@opentelemetry/api@1.9.1)
-      chalk: 5.6.2
-      commander: 14.0.3
-      drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
-      hono: 4.13.8
-      hono-rate-limiter: 0.5.3(hono@4.13.8)
-      inversify: 8.1.0(reflect-metadata@0.2.2)
-      reflect-metadata: 0.2.2
-      ruvector-onnx-embeddings-wasm: 0.1.2
-      sqlite-vec: 0.1.9
-      ulidx: 2.4.1
-      yaml: 2.8.3
-      zod: 4.4.3
-    optionalDependencies:
-      '@earendil-works/pi-coding-agent': 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
-    transitivePeerDependencies:
-      - '@aws-sdk/client-rds-data'
-      - '@cloudflare/workers-types'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@libsql/client-wasm'
-      - '@neondatabase/serverless'
-      - '@op-engineering/op-sqlite'
-      - '@planetscale/database'
-      - '@prisma/client'
-      - '@tidbcloud/serverless'
-      - '@types/better-sqlite3'
-      - '@types/pg'
-      - '@types/sql.js'
-      - '@upstash/redis'
-      - '@vercel/postgres'
-      - '@xata.io/client'
-      - better-sqlite3
-      - bun-types
-      - expo-sqlite
-      - gel
-      - knex
-      - kysely
-      - mysql2
-      - pg
-      - postgres
-      - prisma
-      - sql.js
-      - sqlite3
-      - unstorage
-
-  '@agimon-ai/log-sink-mcp@0.29.35(@earendil-works/pi-coding-agent@0.99.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)':
+  '@agimon-ai/log-sink-mcp@0.29.35(@earendil-works/pi-coding-agent@0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5))(zod@4.6.5)':
     dependencies:
       '@agimon-ai/foundation-port-registry': 0.29.35(zod@4.6.5)
       '@agimon-ai/foundation-process-registry': 0.29.35(zod@4.6.5)
@@ -11609,6 +11549,128 @@ snapshots:
       - sqlite3
       - unstorage
 
+  '@agimon-ai/log-sink-mcp@0.29.35(@earendil-works/pi-coding-agent@0.99.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.4.3)':
+    dependencies:
+      '@agimon-ai/foundation-port-registry': 0.29.35(zod@4.4.3)
+      '@agimon-ai/foundation-process-registry': 0.29.35(zod@4.4.3)
+      '@agimon-ai/foundation-validator': 0.26.35(zod@4.4.3)
+      '@hono/node-server': 2.0.10(hono@4.13.8)
+      '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.4.3)
+      '@modelcontextprotocol/server': 2.1.0
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/api-logs': 0.219.0
+      '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/exporter-trace-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-transformer': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.8.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-logs': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-node': 2.8.0(@opentelemetry/api@1.9.1)
+      chalk: 5.6.2
+      commander: 14.0.3
+      drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
+      hono: 4.13.8
+      hono-rate-limiter: 0.5.3(hono@4.13.8)
+      inversify: 8.1.0(reflect-metadata@0.2.2)
+      reflect-metadata: 0.2.2
+      ruvector-onnx-embeddings-wasm: 0.1.2
+      sqlite-vec: 0.1.9
+      ulidx: 2.4.1
+      yaml: 2.8.3
+      zod: 4.4.3
+    optionalDependencies:
+      '@earendil-works/pi-coding-agent': 0.99.1(supports-color@7.2.0)(zod@4.6.5)
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@cloudflare/workers-types'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@neondatabase/serverless'
+      - '@op-engineering/op-sqlite'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - postgres
+      - prisma
+      - sql.js
+      - sqlite3
+      - unstorage
+
+  '@agimon-ai/log-sink-mcp@0.29.35(@earendil-works/pi-coding-agent@0.99.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)':
+    dependencies:
+      '@agimon-ai/foundation-port-registry': 0.29.35(zod@4.6.5)
+      '@agimon-ai/foundation-process-registry': 0.29.35(zod@4.6.5)
+      '@agimon-ai/foundation-validator': 0.26.35(zod@4.6.5)
+      '@hono/node-server': 2.0.10(hono@4.13.8)
+      '@hono/zod-validator': 0.7.6(hono@4.13.8)(zod@4.6.5)
+      '@modelcontextprotocol/server': 2.1.0
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/api-logs': 0.219.0
+      '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/exporter-trace-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-transformer': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.8.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-logs': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-node': 2.8.0(@opentelemetry/api@1.9.1)
+      chalk: 5.6.2
+      commander: 14.0.3
+      drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
+      hono: 4.13.8
+      hono-rate-limiter: 0.5.3(hono@4.13.8)
+      inversify: 8.1.0(reflect-metadata@0.2.2)
+      reflect-metadata: 0.2.2
+      ruvector-onnx-embeddings-wasm: 0.1.2
+      sqlite-vec: 0.1.9
+      ulidx: 2.4.1
+      yaml: 2.8.3
+      zod: 4.6.5
+    optionalDependencies:
+      '@earendil-works/pi-coding-agent': 0.99.1(supports-color@7.2.0)(zod@4.6.5)
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@cloudflare/workers-types'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@neondatabase/serverless'
+      - '@op-engineering/op-sqlite'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - postgres
+      - prisma
+      - sql.js
+      - sqlite3
+      - unstorage
+
   '@agimon-ai/log-sink-mcp@0.30.3(@earendil-works/pi-coding-agent@0.99.1(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)':
     dependencies:
       '@agimon-ai/foundation-port-registry': 0.30.3(zod@4.6.5)
@@ -11638,7 +11700,7 @@ snapshots:
       yaml: 2.8.3
       zod: 4.6.5
     optionalDependencies:
-      '@earendil-works/pi-coding-agent': 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-coding-agent': 0.99.1(supports-color@7.2.0)(zod@4.6.5)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cloudflare/workers-types'
@@ -13125,6 +13187,28 @@ snapshots:
     dependencies:
       esbuild: 0.28.2
 
+  '@earendil-works/pi-agent-core@0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)':
+    dependencies:
+      '@earendil-works/chord': 0.99.1
+      '@earendil-works/pi-ai': 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-telemetry': 0.99.1
+      diff: 8.0.4
+      ignore: 7.0.8
+      typebox: 1.3.27
+      yaml: 2.9.0
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - kerberos
+      - supports-color
+      - undici
+      - utf-8-validate
+      - ws
+      - zod
+
   '@earendil-works/pi-agent-core@0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)':
     dependencies:
       '@earendil-works/chord': 0.99.1
@@ -13147,7 +13231,126 @@ snapshots:
       - ws
       - zod
 
+  '@earendil-works/pi-agent-core@0.99.1(supports-color@7.2.0)(undici@8.10.2)(zod@4.6.5)':
+    dependencies:
+      '@earendil-works/chord': 0.99.1
+      '@earendil-works/pi-ai': 0.99.1(supports-color@7.2.0)(undici@8.10.2)(zod@4.6.5)
+      '@earendil-works/pi-telemetry': 0.99.1
+      diff: 8.0.4
+      ignore: 7.0.8
+      typebox: 1.3.27
+      yaml: 2.9.0
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - kerberos
+      - supports-color
+      - undici
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@earendil-works/pi-agent-core@0.99.1(supports-color@7.2.0)(zod@4.6.5)':
+    dependencies:
+      '@earendil-works/chord': 0.99.1
+      '@earendil-works/pi-ai': 0.99.1(supports-color@7.2.0)(zod@4.6.5)
+      '@earendil-works/pi-telemetry': 0.99.1
+      diff: 8.0.4
+      ignore: 7.0.8
+      typebox: 1.3.27
+      yaml: 2.9.0
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - kerberos
+      - supports-color
+      - undici
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@earendil-works/pi-ai@0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)':
+    dependencies:
+      '@anthropic-ai/sdk': 0.124.0(zod@4.6.5)
+      '@aws-sdk/client-bedrock-runtime': 3.1127.0
+      '@earendil-works/pi-telemetry': 0.99.1
+      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)
+      '@smithy/node-http-handler': 4.12.1
+      http-proxy-agent: 9.1.0(supports-color@7.2.0)
+      https-proxy-agent: 9.1.0(supports-color@7.2.0)
+      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
+      partial-json: 0.1.7
+      typebox: 1.3.27
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - kerberos
+      - supports-color
+      - undici
+      - utf-8-validate
+      - ws
+      - zod
+
   '@earendil-works/pi-ai@0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)':
+    dependencies:
+      '@anthropic-ai/sdk': 0.124.0(zod@4.6.5)
+      '@aws-sdk/client-bedrock-runtime': 3.1127.0
+      '@earendil-works/pi-telemetry': 0.99.1
+      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)
+      '@smithy/node-http-handler': 4.12.1
+      http-proxy-agent: 9.1.0(supports-color@7.2.0)
+      https-proxy-agent: 9.1.0(supports-color@7.2.0)
+      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+      partial-json: 0.1.7
+      typebox: 1.3.27
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - kerberos
+      - supports-color
+      - undici
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@earendil-works/pi-ai@0.99.1(supports-color@7.2.0)(undici@8.10.2)(zod@4.6.5)':
+    dependencies:
+      '@anthropic-ai/sdk': 0.124.0(zod@4.6.5)
+      '@aws-sdk/client-bedrock-runtime': 3.1127.0
+      '@earendil-works/pi-telemetry': 0.99.1
+      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(supports-color@7.2.0)
+      '@smithy/node-http-handler': 4.12.1
+      http-proxy-agent: 9.1.0(supports-color@7.2.0)
+      https-proxy-agent: 9.1.0(supports-color@7.2.0)
+      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+      partial-json: 0.1.7
+      typebox: 1.3.27
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - kerberos
+      - supports-color
+      - undici
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@earendil-works/pi-ai@0.99.1(supports-color@7.2.0)(zod@4.6.5)':
     dependencies:
       '@anthropic-ai/sdk': 0.124.0(zod@4.6.5)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
@@ -13217,6 +13420,42 @@ snapshots:
       - ws
       - zod
 
+  '@earendil-works/pi-coding-agent@0.99.1(supports-color@7.2.0)(zod@4.6.5)':
+    dependencies:
+      '@earendil-works/chord': 0.99.1
+      '@earendil-works/pi-agent-core': 0.99.1(supports-color@7.2.0)(undici@8.10.2)(zod@4.6.5)
+      '@earendil-works/pi-ai': 0.99.1(supports-color@7.2.0)(undici@8.10.2)(zod@4.6.5)
+      '@earendil-works/pi-codemode': 0.99.1
+      '@earendil-works/pi-mcp': 0.99.1
+      '@earendil-works/pi-tui': 0.99.1
+      '@silvia-odwyer/photon-node': 0.3.4
+      chalk: 6.0.0
+      cross-spawn: 7.0.6
+      diff: 8.0.4
+      grok-mermaid: 0.2.3
+      highlight.js: 10.7.3
+      hosted-git-info: 9.0.3
+      ignore: 7.0.8
+      jiti: 2.7.0
+      minimatch: 10.2.6
+      proper-lockfile: 4.1.2
+      quickjs-wasi: 3.6.2
+      semver: 7.8.5
+      typebox: 1.3.27
+      undici: 8.10.2
+      yaml: 2.9.0
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - kerberos
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
   '@earendil-works/pi-mcp@0.99.1':
     dependencies:
       cross-spawn: 7.0.6
@@ -13226,10 +13465,10 @@ snapshots:
       '@earendil-works/chord': 0.99.1
       typebox: 1.3.27
 
-  '@earendil-works/pi-server@0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)':
+  '@earendil-works/pi-server@0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)':
     dependencies:
       '@earendil-works/chord': 0.99.1
-      '@earendil-works/pi-agent-core': 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-agent-core': 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
       '@earendil-works/pi-protocol': 0.99.1
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
@@ -13244,10 +13483,10 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-session-backend-sqlite-node@0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)':
+  '@earendil-works/pi-session-backend-sqlite-node@0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)':
     dependencies:
-      '@earendil-works/pi-agent-core': 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
-      '@earendil-works/pi-ai': 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-agent-core': 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-ai': 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5)
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
       - '@modelcontextprotocol/sdk'
@@ -13279,7 +13518,7 @@ snapshots:
       semver: 7.8.5
       sumchecker: 3.0.1(supports-color@7.2.0)
     optionalDependencies:
-      undici: 7.29.0
+      undici: 7.30.0
     transitivePeerDependencies:
       - supports-color
 
@@ -18882,6 +19121,14 @@ snapshots:
       powershell-utils: 0.2.1
       wsl-utils: 1.0.0
 
+  openai@7.19.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(undici@7.30.0)(ws@8.21.3)(zod@4.6.5):
+    optionalDependencies:
+      '@aws-sdk/credential-provider-node': 3.972.83
+      '@smithy/signature-v4': 5.7.3
+      undici: 7.30.0
+      ws: 8.21.3
+      zod: 4.6.5
+
   openai@7.19.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(undici@8.10.2)(ws@8.21.3)(zod@4.6.5):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.83
@@ -19086,7 +19333,7 @@ snapshots:
 
   pi-cache-optimizer@2.8.10(@earendil-works/pi-coding-agent@0.99.1(supports-color@7.2.0)(zod@4.6.5)):
     dependencies:
-      '@earendil-works/pi-coding-agent': 0.99.1(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@7.2.0)(zod@4.6.5))(@smithy/signature-v4@5.7.3)(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@earendil-works/pi-coding-agent': 0.99.1(supports-color@7.2.0)(zod@4.6.5)
 
   picocolors@1.1.1: {}
 
@@ -20217,7 +20464,7 @@ snapshots:
 
   undici-types@8.9.0: {}
 
-  undici@7.29.0:
+  undici@7.30.0:
     optional: true
 
   undici@8.10.2: {}
