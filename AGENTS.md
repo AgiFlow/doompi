@@ -37,3 +37,9 @@
 2. Run `pnpm lint:vibe --preflight-only` after changes.
 3. Run the affected Nx lint, typecheck, build, and test targets.
 4. Run packed-install system tests before any release change.
+
+## Scaffolding and log analysis
+
+Load the `scaffolding` skill before creating files. Run `pnpm exec scaffold-mcp boilerplate list` or `pnpm exec scaffold-mcp scaffold list <project-path>` before choosing a template. Do not connect a scaffolding MCP server.
+
+For logs, load the `doompi-telemetry` skill and run `pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs ...`. Keep the existing HTTP/OTEL collector; do not start a per-agent MCP server. These skill-backed CLIs take precedence over generic MCP-first guidance.

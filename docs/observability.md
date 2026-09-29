@@ -62,7 +62,7 @@ Operational records omit prompts, tool arguments, and tool result bodies.
 
 A third-party agent does not provide its model token budget through an ordinary MCP tool
 call. Those calls are retained as `pi.tool_call` and `pi.tool_result` records and can be
-queried through LogSink MCP `search_logs`. The sink's tool ranking counts token-attributed
+queried through `pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs search`. The sink's tool ranking counts token-attributed
 samples, not every raw execution. The UI labels that distinction and does not use those
 sample counts as a failure-rate denominator. Native turn usage is recorded once; failure
 markers do not repeat its token totals.
