@@ -1,3 +1,23 @@
+## 0.0.1-alpha.101 (2026-09-30)
+
+### 🩹 Fixes
+
+- **doompi-workflow:** clear stale session references on recovery ([#248](https://github.com/AgiFlow/doompi/pull/248))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.90
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.58
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.53
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.100
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.100 (2026-09-29)
 
 ### 🧱 Updated Dependencies

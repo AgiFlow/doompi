@@ -1,3 +1,20 @@
+## 0.0.1-alpha.20 (2026-09-30)
+
+### 🩹 Fixes
+
+- **doompi-web:** preserve session rail scroll across scope remounts ([#247](https://github.com/AgiFlow/doompi/pull/247))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.58
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.88
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.19 (2026-09-29)
 
 ### 🧱 Updated Dependencies

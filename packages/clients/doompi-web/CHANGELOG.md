@@ -1,3 +1,24 @@
+## 0.0.1-alpha.67 (2026-09-30)
+
+### 🩹 Fixes
+
+- **doompi-workflow:** clear stale session references on recovery ([#248](https://github.com/AgiFlow/doompi/pull/248))
+- **doompi-web:** preserve session rail scroll across scope remounts ([#247](https://github.com/AgiFlow/doompi/pull/247))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.104
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.99
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.20
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.58
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.53
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.87
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.66 (2026-09-29)
 
 ### 🧱 Updated Dependencies
