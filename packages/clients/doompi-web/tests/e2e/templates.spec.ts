@@ -60,6 +60,118 @@ async function workspaceScope(page: Page): Promise<void> {
     .click();
 }
 
+/** Observe inserted loading nodes too, so a brief mount cannot hide behind a later settled DOM. */
+async function recordNavigationLoading(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const history = { loading: 0 };
+    (window as unknown as { templateNavigationHistory: typeof history }).templateNavigationHistory = history;
+    new MutationObserver((records) => {
+      for (const record of records)
+        for (const node of record.addedNodes)
+          if (
+            node instanceof Element &&
+            (node.matches('[data-testid="template-loading"]') || node.querySelector('[data-testid="template-loading"]'))
+          )
+            history.loading += 1;
+    }).observe(document, { childList: true, subtree: true });
+  });
+}
+
+async function expectNoNavigationLoading(page: Page): Promise<void> {
+  await expect(page.getByTestId('template-loading')).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { templateNavigationHistory: { loading: number } }).templateNavigationHistory.loading,
+    ),
+  ).toBe(0);
+}
+
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 390, height: 844 },
+]) {
+  test.describe(`template navigation at ${viewport.width}px`, () => {
+    test.use({ sessionCount: 2, viewport });
+
+    test('reuses the workspace layout while the next session composition is pending', async ({ context, cockpit }) => {
+      const page = await context.newPage();
+      await page.goto(`${cockpit.url}/session/s1`);
+      await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
+      await page.getByTestId('composer-input').fill('draft for session one');
+      if (viewport.width < 768) await page.getByTestId('mobile-sessions-open').click();
+      const rail = await page.getByTestId('session-rail-panel').elementHandle();
+      expect(rail).not.toBeNull();
+      await recordNavigationLoading(page);
+      const gate = cockpit.holdSessionComposition('s2');
+      let requested = false;
+      void gate.requested.then(() => {
+        requested = true;
+      });
+      try {
+        await page.getByTestId('session-open-s2').click();
+        await expect.poll(() => requested).toBe(true);
+        await expect(page.getByTestId('session-card-s2')).toHaveAttribute('data-active', 'true');
+        await expect(page.getByTestId('composer-input')).toHaveValue('');
+        expect(
+          await rail!.evaluate(
+            (element) =>
+              element.isConnected && element === document.querySelector('[data-testid="session-rail-panel"]'),
+          ),
+        ).toBe(true);
+        await expectNoNavigationLoading(page);
+      } finally {
+        gate.release();
+      }
+      if (viewport.width < 768) await page.getByTestId('mobile-sessions-open').click();
+      await page.getByTestId('session-open-s1').click();
+      await expect(page.getByTestId('composer-input')).toHaveValue('draft for session one');
+      expect(await rail!.evaluate((element) => element.isConnected)).toBe(true);
+      await expectNoNavigationLoading(page);
+    });
+  });
+}
+
+test.describe('workspace template navigation', () => {
+  test.use({ sessionCount: 2, workspaceCount: 2 });
+
+  test('retains the shell until the destination workspace preference resolves', async ({ context, cockpit }) => {
+    const destination = cockpit.workspaces[1]!;
+    fs.mkdirSync(path.join(destination.root, '.doom'), { recursive: true });
+    fs.writeFileSync(path.join(destination.root, '.doom', 'config.yaml'), `web:\n  template: ${ELEGANT}\n`);
+    const page = await context.newPage();
+    let release!: () => void;
+    let requested = false;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(
+      (url) => url.pathname === `/api/workspaces/${destination.id}/settings` && url.searchParams.has('key'),
+      async (route) => {
+        requested = true;
+        await pending;
+        await route.continue();
+      },
+    );
+    await page.goto(`${cockpit.url}/session/s1`);
+    await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
+    const rail = await page.getByTestId('session-rail-panel').elementHandle();
+    await recordNavigationLoading(page);
+    try {
+      await page.getByTestId('session-open-s2').click();
+      await expect.poll(() => requested).toBe(true);
+      await expect(page.getByTestId('session-card-s2')).toHaveAttribute('data-active', 'true');
+      await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
+      expect(await rail!.evaluate((element) => element.isConnected)).toBe(true);
+      await expectNoNavigationLoading(page);
+      release();
+      await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ELEGANT);
+      await expectNoNavigationLoading(page);
+    } finally {
+      release();
+    }
+  });
+});
+
 test.describe('session rail scroll', () => {
   test.use({ sessionCount: 8, viewport: { width: 1280, height: 480 } });
 
@@ -163,6 +275,15 @@ test('discovers an independent package without a host import', async ({ page, co
   await page.getByTestId('settings-close').click();
   await expect(page.getByTestId('composer-input')).toHaveCount(1);
   await expect(page.getByTestId('independent-template')).toBeVisible();
+});
+
+test('adopts the workspace implementation when a template keeps the same identifier', async ({ page, cockpit }) => {
+  await page.goto(`${cockpit.url}/settings/appearance`);
+  await saveChoice(page, 'independent-reader');
+  await expect(page.getByTestId('independent-template')).toHaveAttribute('data-template-scope', 'global');
+  await page.getByTestId('independent-workspace-settings').click();
+  await expect(page.getByTestId('independent-template')).toHaveAttribute('data-template-scope', 'workspace');
+  await expect(page.locator('[data-template]')).toHaveAttribute('data-template', 'independent-reader');
 });
 
 test('recovers from a selected template render failure while retaining access to Settings', async ({

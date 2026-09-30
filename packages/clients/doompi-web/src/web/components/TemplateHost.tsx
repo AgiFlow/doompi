@@ -6,7 +6,7 @@ import { Component, type ReactNode, useState } from 'react';
 
 import { webTemplateCatalog } from '../lib/pluginRegistry';
 import { retryWebPluginCompositions, webPluginCompositionStore, webPluginMountState } from '../lib/pluginRuntime';
-import { resolveWebTemplate } from '../lib/templateCatalog';
+import { type InstalledWebTemplate, resolveWebTemplate } from '../lib/templateCatalog';
 import { configuredTemplate, refreshTemplateConfiguration, useTemplateConfiguration } from '../stores/templateStore';
 import { useWebPluginRegistry } from '../stores/useWebPluginRegistry';
 
@@ -26,14 +26,6 @@ class TemplateBoundary extends Component<{ children: ReactNode; onFailure(): voi
   }
 }
 
-function templateMountKey(mount: WebPluginMount): string {
-  return mount.scope === 'global'
-    ? 'global'
-    : mount.scope === 'workspace'
-      ? `workspace:${mount.workspaceId}`
-      : `session:${mount.sessionId}`;
-}
-
 /** Runtime and mandatory overlays are above this boundary, not owned by a template package. */
 export function TemplateHost({
   mount,
@@ -42,7 +34,6 @@ export function TemplateHost({
 }: WebTemplateProps & { mount?: WebPluginMount; scopeReady?: boolean }) {
   useWebPluginRegistry();
   const requestedMount: WebPluginMount = mount ?? { scope: 'global' };
-  const requestedMountKey = templateMountKey(requestedMount);
   const workspaceId =
     requestedMount.scope === 'workspace' || requestedMount.scope === 'session' ? requestedMount.workspaceId : undefined;
   const configuration = useTemplateConfiguration(workspaceId);
@@ -56,10 +47,9 @@ export function TemplateHost({
     .filter((entry) => failures.some((failure) => failure.id === entry.id && failure.layout === entry.layout))
     .map((entry) => entry.id);
   const { template, warning } = resolveWebTemplate(catalog.templates, configuredTemplate(configuration), failed);
-  const [selected, setSelected] = useState<{ mountKey: string; template?: WebTemplateContribution }>({
-    mountKey: requestedMountKey,
-  });
-  const selectedTemplate = scopeReady && selected.mountKey === requestedMountKey ? selected.template : undefined;
+  // Scope changes update the slots immediately, not the loaded presentation.
+  const [selected, setSelected] = useState<{ revision: number; template?: InstalledWebTemplate }>({ revision: 0 });
+  const selectedTemplate = selected.template;
   const selectedFailed =
     selectedTemplate !== undefined &&
     failures.some((failure) => failure.id === selectedTemplate.id && failure.layout === selectedTemplate.layout);
@@ -76,9 +66,13 @@ export function TemplateHost({
     !waiting &&
     ((template === undefined && selectedTemplate !== undefined) ||
       (template !== undefined &&
-        (selectedTemplate === undefined || selectedTemplate.id !== template.id || selectedFailed)))
+        (selectedTemplate === undefined ||
+          selectedTemplate.id !== template.id ||
+          selectedTemplate.pluginId !== template.pluginId ||
+          selectedTemplate.layout !== template.layout ||
+          selectedFailed)))
   )
-    setSelected({ mountKey: requestedMountKey, template });
+    setSelected({ revision: selected.revision + 1, template });
   const diagnostic = loadError ?? (waiting ? undefined : (warning ?? catalog.diagnostics[0]?.message));
   const Layout = selectedTemplate?.layout;
   return (
@@ -117,7 +111,7 @@ export function TemplateHost({
       <div className="min-h-0 min-w-0 flex-1">
         {Layout && selectedTemplate ? (
           <TemplateBoundary
-            key={`${requestedMountKey}:${selectedTemplate.id}`}
+            key={selected.revision}
             onFailure={() => setFailures((state) => [...state, selectedTemplate])}
           >
             <Layout {...props} />

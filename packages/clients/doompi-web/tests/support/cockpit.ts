@@ -24,6 +24,9 @@ const E2E_HEADLESS_TOKEN = 'e2e-headless-token';
 export interface CockpitFixture {
   /** Every headless session, in registration order. */
   sessions: HeadlessSession[];
+  workspaces: { id: string; root: string }[];
+  /** Holds the next verified manifest request for a session until explicitly released. */
+  holdSessionComposition(sessionId: string): { requested: Promise<void>; release(): void };
   /** The first session, which the cockpit auto-focuses. */
   session: HeadlessSession;
   /** Isolated workflow-mcp home used by filesystem-backed plugin fixtures. */
@@ -47,6 +50,7 @@ export interface CockpitFixture {
 
 interface CockpitOptions {
   sessionCount: number;
+  workspaceCount: number;
   /** Recorded sessions the fixture offers as dormant, as a restarted server would. */
   dormantSessionCount: number;
   assets: 'packaged' | 'synced';
@@ -80,6 +84,7 @@ function initializeGitWorkspace(root: string, workRoot: string): void {
 
 export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   sessionCount: [1, { option: true }],
+  workspaceCount: [1, { option: true }],
   dormantSessionCount: [0, { option: true }],
   assets: ['packaged', { option: true }],
   assetPackageRoot: [null, { option: true }],
@@ -129,7 +134,10 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       await page.close();
     }
   },
-  cockpit: async ({ context, sessionCount, dormantSessionCount, assets, assetPackageRoot, gitWorkspace }, use) => {
+  cockpit: async (
+    { context, sessionCount, workspaceCount, dormantSessionCount, assets, assetPackageRoot, gitWorkspace },
+    use,
+  ) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-e2e-'));
     const syncedDist = process.env[SYNCED_DIST_ENV];
     if (assets === 'synced' && (syncedDist === undefined || syncedDist === ''))
@@ -166,6 +174,11 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     if (registration?.webDirectory === null || registration?.webDirectory === undefined)
       throw new Error('global setup did not publish a web registration');
     const workspaceId = registration.identity.worktreeId;
+    const workspaces = Array.from({ length: workspaceCount }, (_, index) => ({
+      id: index === 0 ? workspaceId : `${workspaceId}-${index + 1}`,
+      root: index === 0 ? workRoot : path.join(root, `workspace-${index + 1}`),
+    }));
+    for (const workspace of workspaces) fs.mkdirSync(workspace.root, { recursive: true });
     const webCompositions = createWebCompositions(path.join(root, 'web-compositions'), (message) => {
       console.warn(`[cockpit fixture] ${message}`);
     });
@@ -277,31 +290,74 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       resolveRepository: (id) => hub.workspaces().find((workspace) => workspace.id === id)?.root,
       onNotice: (message) => console.error(`[global] ${message}`),
     });
-    await hub.mountFacets(workspaceBundle.facets, {
-      scope: 'workspace',
-      workspaceId,
-      workspaceRoot: workRoot,
-      cwd: workRoot,
-      homeDirectory: root,
-      environment,
-      sessionService: hub.sessionService,
-      directEvents: hub.directEvents,
-      repositories,
-      resolveRepository: (id) => (id === workspaceId ? workRoot : undefined),
-      onNotice: (message) => console.error(`[workspace] ${message}`),
-    });
+    for (const workspace of workspaces)
+      await hub.mountFacets(workspaceBundle.facets, {
+        scope: 'workspace',
+        workspaceId: workspace.id,
+        workspaceRoot: workspace.root,
+        cwd: workspace.root,
+        homeDirectory: root,
+        environment,
+        sessionService: hub.sessionService,
+        directEvents: hub.directEvents,
+        repositories,
+        resolveRepository: (id) => workspaces.find((workspace) => workspace.id === id)?.root,
+        onNotice: (message) => console.error(`[workspace] ${message}`),
+      });
     const channels = hub.channelTypes();
     const globalComposition = webCompositions.publish({ scope: 'global' }, registration, channels);
-    const workspaceComposition = webCompositions.publish({ scope: 'workspace', workspaceId }, registration, channels);
-    if (globalComposition === undefined || workspaceComposition === undefined)
+    const workspaceCompositions = workspaces.map((workspace) => ({
+      ...workspace,
+      webComposition: webCompositions.publish(
+        { scope: 'workspace', workspaceId: workspace.id },
+        registration,
+        channels,
+      ),
+    }));
+    if (
+      globalComposition === undefined ||
+      workspaceCompositions.some((workspace) => workspace.webComposition === undefined)
+    )
       throw new Error('global setup did not publish the E2E web compositions');
-    let pluginStyleCount = globalComposition.stylePaths.length + workspaceComposition.stylePaths.length;
+    let pluginStyleCount =
+      globalComposition.stylePaths.length +
+      workspaceCompositions.reduce((count, workspace) => count + (workspace.webComposition?.stylePaths.length ?? 0), 0);
+    const sessionManifestUrls = new Map<string, string>();
+    const manifestGates = new Map<string, { notify(): void; pending: Promise<void> }>();
+    const holdSessionComposition = (sessionId: string): { requested: Promise<void>; release(): void } => {
+      const manifestUrl = sessionManifestUrls.get(sessionId);
+      if (manifestUrl === undefined) throw new Error(`Unknown fixture session '${sessionId}'.`);
+      let notify!: () => void;
+      let release!: () => void;
+      const requested = new Promise<void>((resolve) => {
+        notify = resolve;
+      });
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      manifestGates.set(manifestUrl, { notify, pending });
+      return {
+        requested,
+        release: () => {
+          manifestGates.delete(manifestUrl);
+          release();
+        },
+      };
+    };
+    const requestAsset = async (request: Request): Promise<Response | undefined> => {
+      const gate = manifestGates.get(new URL(request.url).pathname);
+      if (gate) {
+        gate.notify();
+        await gate.pending;
+      }
+      return await webCompositions.request(request);
+    };
 
     let headless = await serveHeadlessServer({
       headlessHub: hub,
       port: 0,
       token: E2E_HEADLESS_TOKEN,
-      requestAsset: (request) => webCompositions.request(request),
+      requestAsset,
       dormantSessions: () => dormantRecords,
       readDormantTranscript: (record, request) => readDormantTranscript(record, request),
       reviveSession: (record) => reviveSession(record),
@@ -310,7 +366,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         global: globalComposition,
         publicKey: webCompositions.publicKey(),
         shell: webCompositions.shellTrust(),
-        workspaces: [{ id: workspaceId, root: workRoot, webComposition: workspaceComposition }],
+        workspaces: workspaceCompositions,
       }),
     });
     const headlessUrl = (): string => headless.url;
@@ -321,7 +377,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         headlessHub: hub,
         port,
         token: E2E_HEADLESS_TOKEN,
-        requestAsset: (request) => webCompositions.request(request),
+        requestAsset,
         dormantSessions: () => dormantRecords,
         readDormantTranscript: (record, request) => readDormantTranscript(record, request),
         reviveSession: (record) => reviveSession(record),
@@ -330,7 +386,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
           global: globalComposition,
           publicKey: webCompositions.publicKey(),
           shell: webCompositions.shellTrust(),
-          workspaces: [{ id: workspaceId, root: workRoot, webComposition: workspaceComposition }],
+          workspaces: workspaceCompositions,
         }),
       });
     };
@@ -341,10 +397,12 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       name: string,
       cwd: string,
       countPluginStyles: boolean,
+      workspace = workspaces[0]!,
     ): Promise<HeadlessSession> => {
       fs.mkdirSync(cwd, { recursive: true });
       const webComposition = webCompositions.publish({ scope: 'session', sessionId: id }, registration, channels);
       if (webComposition === undefined) throw new Error(`global setup did not publish the '${id}' web composition`);
+      sessionManifestUrls.set(id, webComposition.manifestUrl);
       if (countPluginStyles) pluginStyleCount += webComposition.stylePaths.length;
       const session = await startHeadlessSession({
         id,
@@ -352,7 +410,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         cwd,
         repoRoot: workspaceRoot,
         environment,
-        workspaceId,
+        workspaceId: workspace.id,
         webComposition,
         hub,
         headlessUrl,
@@ -366,8 +424,8 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         id,
         await serveSessionApis({
           sessionId: id,
-          workspaceId,
-          workspaceRoot,
+          workspaceId: workspace.id,
+          workspaceRoot: workspace.root,
           homeDirectory: root,
           cwd: session.cwd,
           environment,
@@ -405,8 +463,9 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       await registerFixtureSession(
         `s${index + 1}`,
         `session-${index + 1}`,
-        path.join(workRoot, `s${index + 1}`),
+        path.join(workspaces[index % workspaces.length]!.root, `s${index + 1}`),
         index === 0,
+        workspaces[index % workspaces.length],
       );
     }
     for (let index = 0; index < dormantSessionCount; index += 1) {
@@ -442,6 +501,8 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     try {
       await use({
         sessions,
+        workspaces,
+        holdSessionComposition,
         session: sessions[0]!,
         workflowHome,
         runnerStore,
