@@ -1,3 +1,30 @@
+## 0.0.1-alpha.101 (2026-09-30)
+
+### 🔥 Performance
+
+- share heavy job resource admission ([#242](https://github.com/AgiFlow/doompi/pull/242))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.90
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.58
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.53
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.100 (2026-09-29)
 
 ### 🧱 Updated Dependencies
