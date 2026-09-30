@@ -285,7 +285,7 @@ describe('voice media client browser recovery', () => {
 
     client.start();
     await eventually(() => expect(connect).toHaveBeenCalledTimes(1));
-    // Any 409 is a conflict, not only the one message the client used to match.
+    // Any connect 409 is a conflict, not only the one message the client used to match.
     expect(states).toContain('conflict');
     for (const [wait, attempts] of [
       [2_000, 2],
@@ -301,6 +301,96 @@ describe('voice media client browser recovery', () => {
       await eventually(() => expect(connect).toHaveBeenCalledTimes(attempts));
     }
     await client.stop();
+  });
+
+  it('ends only the capture when an upload gets a 409', async () => {
+    const transport = new FakeTransport();
+    const device = new FakeDevice();
+    const detector = new FakeDetector(() => Promise.resolve([]));
+    device.detectors.push(detector, detector);
+    transport.sendFailure = Object.assign(new Error('Voice capture is not active.'), { status: 409 });
+    const states: string[] = [];
+    const client = new VoiceMediaClient('client', 'connection', transport, device, (state) => states.push(state));
+    try {
+      client.start();
+      await eventually(() => expect(transport.longPolls).toHaveLength(1));
+      device.callbacks[0]!(new Uint8Array([1, 2]));
+      await eventually(() => expect(detector.reset).toHaveBeenCalledOnce());
+      expect(device.captures[0]?.stop).toHaveBeenCalledOnce();
+      expect(transport.disconnect).not.toHaveBeenCalled();
+      expect(device.close).not.toHaveBeenCalled();
+      expect(transport.captureStopped).not.toHaveBeenCalled();
+      expect(states).not.toContain('conflict');
+
+      transport.longPolls[0]!.resolve({
+        sequence: 2,
+        type: 'capture-start',
+        captureId: 'capture-2',
+        sampleRate: 16_000,
+        channels: 1,
+        bitsPerSample: 16,
+        configuration: { mode: 'autonomous', activityControl: 'client' },
+      });
+      await eventually(() => expect(device.callbacks).toHaveLength(2));
+      device.callbacks[0]!(new Uint8Array([9, 9]));
+      device.callbacks[1]!(new Uint8Array([3, 4]));
+      await eventually(() => expect(transport.audioSends).toHaveLength(2));
+      expect(transport.audioSends.map(({ connectionId, pcm }) => [connectionId, [...pcm]])).toEqual([
+        ['connection:1', [1, 2]],
+        ['connection:1', [3, 4]],
+      ]);
+      expect(transport.connectionIds).toEqual(['connection:1']);
+    } finally {
+      await client.stop();
+    }
+  });
+
+  it('keeps the connection when a capture-abort overtakes a queued upload', async () => {
+    const transport = new FakeTransport();
+    const device = new FakeDevice();
+    const inference = deferred<readonly SpeechPresenceWindow[]>();
+    const detector = new FakeDetector(() => inference.promise);
+    device.detectors.push(detector);
+    transport.sendFailure = Object.assign(new Error('Voice capture is not active.'), { status: 409 });
+    const states: string[] = [];
+    const client = new VoiceMediaClient('client', 'connection', transport, device, (state) => states.push(state));
+    try {
+      client.start();
+      await eventually(() => expect(transport.longPolls).toHaveLength(1));
+      device.callbacks[0]!(new Uint8Array([1, 2]));
+      await eventually(() => expect(detector.inputs).toHaveLength(1));
+      transport.longPolls[0]!.resolve({ sequence: 2, type: 'capture-abort', captureId: 'capture-1' });
+      await eventually(() => expect(device.captures[0]?.stop).toHaveBeenCalled());
+      inference.resolve([]);
+      await eventually(() => expect(transport.longPolls).toHaveLength(2));
+      expect(transport.audioSends).toHaveLength(1);
+      expect(transport.disconnect).not.toHaveBeenCalled();
+      expect(device.close).not.toHaveBeenCalled();
+      expect(transport.captureStopped).not.toHaveBeenCalled();
+      expect(states).not.toContain('conflict');
+    } finally {
+      inference.resolve([]);
+      await client.stop();
+    }
+  });
+
+  it('reconnects without claiming a conflict when a 409 arrives after connecting', async () => {
+    vi.useFakeTimers();
+    const transport = new FakeTransport();
+    transport.startsEveryConnection = false;
+    const states: string[] = [];
+    const client = new VoiceMediaClient('client', 'connection', transport, new FakeDevice(), (state) =>
+      states.push(state),
+    );
+    try {
+      client.start();
+      await eventually(() => expect(transport.longPolls).toHaveLength(1));
+      transport.longPolls[0]!.reject(Object.assign(new Error('stale'), { status: 409 }));
+      await reconnect(transport);
+      expect(states).not.toContain('conflict');
+    } finally {
+      await client.stop();
+    }
   });
 
   it('registers baseline media and consumes capture while optional preparation is pending', async () => {

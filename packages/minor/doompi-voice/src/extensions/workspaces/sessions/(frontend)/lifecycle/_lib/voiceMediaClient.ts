@@ -175,7 +175,8 @@ export class VoiceMediaClient {
         }
       } catch (error) {
         if (signal.aborted) return;
-        if (isConflict(error)) this.onConnectionState('conflict');
+        // Only a refused connect establishes that another client holds the lease.
+        if (isConflict(error) && this.activeConnectionId !== connectionId) this.onConnectionState('conflict');
         attemptController.abort();
         this.closeRealtime();
         await this.releaseMedia();
@@ -418,7 +419,7 @@ export class VoiceMediaClient {
           } catch (error) {
             if (generation !== this.captureGeneration || this.captureId !== captureId) return;
             const failure = error instanceof Error ? error : new Error(String(error));
-            this.audioUploadError = failure;
+            if (!isConflict(failure)) this.audioUploadError = failure;
             await this.failActiveCapture(captureId, connectionId, generation, failure);
           }
         });
@@ -454,6 +455,12 @@ export class VoiceMediaClient {
     if (generation !== this.captureGeneration || this.captureId !== captureId) return;
     this.captureId = undefined;
     this.captureGeneration += 1;
+    // The host may abort a capture before its queued uploads arrive. Keep the unlocked
+    // microphone ready for the next capture; polling detects an actually lost lease.
+    if (isConflict(error)) {
+      await this.speechDetector?.reset().catch(() => undefined);
+      return;
+    }
     void this.transport
       .captureStopped(this.clientId, connectionId, captureId, `${error.name}: ${error.message}`)
       .catch(() => undefined);
