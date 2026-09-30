@@ -1,7 +1,7 @@
 import type { WebTemplateRail } from '@agimon-ai/doompi-core/web';
 import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PluginSurface } from '../../components/PluginSurface';
 import {
@@ -111,6 +111,14 @@ function useSessionAvatars(order: readonly string[], byId: Readonly<Record<strin
  */
 export function useSessionRail({ onDismiss }: { onDismiss?: () => void }): WebTemplateRail {
   const navigate = useNavigate();
+  const scrollTop = useRef(0);
+  const scrollRef = useCallback((element: HTMLElement | null) => {
+    if (element === null) return;
+    element.scrollTop = scrollTop.current;
+    return () => {
+      scrollTop.current = element.scrollTop;
+    };
+  }, []);
   const order = useStore(sessionsStore, (state) => state.order);
   const byId = useStore(sessionsStore, (state) => state.byId);
   const activeId = useStore(sessionsStore, (state) => state.activeId);
@@ -189,6 +197,7 @@ export function useSessionRail({ onDismiss }: { onDismiss?: () => void }): WebTe
 
   return {
     workspaces,
+    scrollRef,
     remote: {
       status: remote?.status ?? 'off',
       deviceCount: remote?.devices.length ?? 0,

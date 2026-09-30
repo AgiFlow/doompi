@@ -60,6 +60,24 @@ async function workspaceScope(page: Page): Promise<void> {
     .click();
 }
 
+test.describe('session rail scroll', () => {
+  test.use({ sessionCount: 8, viewport: { width: 1280, height: 480 } });
+
+  test('keeps the rail position when selecting another session', async ({ page, cockpit }) => {
+    await page.goto(`${cockpit.url}/session/s1`);
+    await cockpit.session.waitForAttach();
+    const rail = page.getByTestId('session-rail-panel');
+    const target = page.getByTestId('session-open-s8');
+    await target.scrollIntoViewIfNeeded();
+    const scrollTop = await rail.evaluate((element) => element.scrollTop);
+    expect(scrollTop).toBeGreaterThan(0);
+
+    await target.click();
+    await expect(page.getByTestId('session-card-s8')).toHaveAttribute('data-active', 'true');
+    expect(await rail.evaluate((element) => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+  });
+});
+
 test('changes packages without losing a draft or attachment, and persists the default', async ({
   page,
   cockpit,
