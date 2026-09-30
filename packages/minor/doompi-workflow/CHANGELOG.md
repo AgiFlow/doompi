@@ -1,3 +1,23 @@
+## 0.0.1-alpha.102 (2026-09-30)
+
+### 🚀 Features
+
+- **doompi-workflow:** add server workflow recovery meta tool ([#255](https://github.com/AgiFlow/doompi/pull/255))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.23
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.101
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.91
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.101
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.59
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.101
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.101 (2026-09-30)
 
 ### 🩹 Fixes

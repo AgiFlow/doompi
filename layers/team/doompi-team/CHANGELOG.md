@@ -1,3 +1,17 @@
+## 0.0.1-alpha.101 (2026-09-30)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.23
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.101
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.25
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.91
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.101
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.59
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.54
+
 ## 0.0.1-alpha.100 (2026-09-30)
 
 ### 🧱 Updated Dependencies
