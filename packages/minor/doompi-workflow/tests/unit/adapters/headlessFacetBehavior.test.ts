@@ -27,6 +27,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { facet as workflowServerFacet } from '../../../generated/server';
 import { workflowLaunchLine } from '../../../src/extensions/workspaces/sessions/(frontend)/_lib/launchLine';
+import { createServerLauncher } from '../../../src/services/serverLaunch';
+import type { ServerLaunchDependencies } from '../../../src/services/serverLaunch/type';
 
 const embeddedFeature = vi.hoisted(() => {
   const listeners = new Map<string, Set<() => void>>();
@@ -65,7 +67,12 @@ const embeddedFeature = vi.hoisted(() => {
   const runLoggers: { error: (message: string) => void }[] = [];
   // A run a test leaves going ends when the session asks it to stop, as the engine's would.
   const pendingRuns: (() => void)[] = [];
+  const recover = vi.fn(async (): Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }> => ({
+    content: [{ type: 'text', text: 'recovered' }],
+  }));
   const registry = {
+    listRuns: vi.fn(async () => [] as Array<{ runKey: string; workspace: string; stage: string; displayName: string }>),
+    runDirectoryFor: vi.fn(() => '/tmp/missing-recovery-evidence'),
     readRunByKey: vi.fn(async (workspace: string, _stage: string, runKey: string) => ({
       runKey,
       workspace,
@@ -77,6 +84,7 @@ const embeddedFeature = vi.hoisted(() => {
   };
   let recordFilter: ((record: Record<string, unknown>) => boolean) | undefined;
   const feature = {
+    createRecoverTool: vi.fn((_options?: { ownerSessionId: () => string }) => ({ execute: recover })),
     createListStatusesTool: vi.fn((options: { recordFilter: (record: Record<string, unknown>) => boolean }) => {
       recordFilter = options.recordFilter;
       return statuses;
@@ -112,6 +120,7 @@ const embeddedFeature = vi.hoisted(() => {
     },
   };
   return {
+    recover,
     control,
     statuses,
     feature,
@@ -171,7 +180,10 @@ vi.mock('../../../src/services/workflowCatalogDeps', () => ({
 vi.mock('../../../src/services/workflowWatcher', () => ({
   readWorkflowRuns: () => workflowWatcher.records,
 }));
-vi.mock('zod', () => ({ z: { toJSONSchema: vi.fn(() => ({ type: 'object' })) } }));
+vi.mock('zod', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('zod')>();
+  return { ...actual, z: { ...actual.z, toJSONSchema: vi.fn(() => ({ type: 'object' })) } };
+});
 const telemetry = vi.hoisted(() => ({
   recordEvent: vi.fn(async () => undefined),
   recordWarning: vi.fn(async () => undefined),
@@ -317,6 +329,94 @@ function operation(execution: DoomHeadlessExecutionContext) {
 }
 
 describe('workflow headless facet', () => {
+  it('selects only unambiguous failed runs and validates the flat recovery schema', async () => {
+    const test = await fixture();
+    const tool = test.tools.find(({ name }) => name === 'workflow_tools')!;
+    try {
+      for (const records of [
+        [],
+        [{ runKey: 'broken', workspace: '/tmp', stage: 'running', displayName: 'Broken' }],
+        [
+          { runKey: 'broken', workspace: '/one', stage: 'error', displayName: 'Broken' },
+          { runKey: 'broken', workspace: '/two', stage: 'error', displayName: 'Broken' },
+        ],
+      ]) {
+        embeddedFeature.registry.listRuns.mockResolvedValueOnce(records);
+        expect(
+          await tool.execute('recover', { action: 'recover', runKey: 'broken' }, undefined, undefined, test.execution),
+        ).toMatchObject({ isError: true });
+      }
+      expect(
+        await tool.execute(
+          'recover',
+          { action: 'recover', runKey: 'broken', job: 'invented' },
+          undefined,
+          undefined,
+          test.execution,
+        ),
+      ).toMatchObject({ isError: true });
+    } finally {
+      await test.close();
+    }
+  });
+
+  it('reads durable evidence and keeps the no-files fallback outside run.json', async () => {
+    const test = await fixture();
+    const tool = test.tools.find(({ name }) => name === 'workflow_tools')!;
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'recovery-evidence-'));
+    const record = { runKey: 'broken', workspace: '/tmp', stage: 'error', displayName: 'Broken' };
+    try {
+      embeddedFeature.registry.runDirectoryFor.mockReturnValue(directory);
+      embeddedFeature.registry.listRuns.mockResolvedValue([record]);
+      const empty = await tool.execute(
+        'evidence',
+        { action: 'recovery-evidence', runKey: 'broken' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      const text = JSON.stringify(empty);
+      expect(text).toContain('No durable evidence files found.');
+      const evidenceText = empty.content.find((item) => item.type === 'text');
+      if (evidenceText?.type !== 'text') throw new Error('Missing evidence text');
+      expect(JSON.parse(evidenceText.text.split('--- run.json ---\n')[1]!)).toEqual(record);
+      fs.writeFileSync(path.join(directory, 'changelog.md'), 'repair evidence');
+      const result = await tool.execute(
+        'evidence',
+        { action: 'recovery-evidence', runKey: 'broken' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(JSON.stringify(result)).toContain('--- changelog.md ---');
+      expect(JSON.stringify(result)).not.toContain('--- context.md ---');
+      embeddedFeature.recover.mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'already claimed' }],
+        isError: true,
+      });
+      expect(
+        await tool.execute('recover', { action: 'recover', runKey: 'broken' }, undefined, undefined, test.execution),
+      ).toMatchObject({ isError: true });
+      expect(
+        await tool.execute(
+          'dry',
+          { action: 'recover', runKey: 'broken', dryRun: true },
+          undefined,
+          undefined,
+          test.execution,
+        ),
+      ).not.toMatchObject({ isError: true });
+      const options = embeddedFeature.feature.createRecoverTool.mock.calls.at(-1)?.[0] as unknown as {
+        ownerSessionId(): string;
+      };
+      expect(options.ownerSessionId()).toBe('workflow-headless-test');
+    } finally {
+      embeddedFeature.registry.listRuns.mockResolvedValue([]);
+      fs.rmSync(directory, { recursive: true, force: true });
+      await test.close();
+    }
+  });
+
   it('resolves discovery against each invocation cwd, including a worktree sharing its workspace', async () => {
     const test = await fixture();
     try {
@@ -354,7 +454,12 @@ describe('workflow headless facet', () => {
     try {
       await test.modes[0]!.handleAction('activate', {}, operation(test.execution));
       expect(test.registerToolRestriction).not.toHaveBeenCalled();
-      expect(test.tools.map(({ name }) => name).sort()).toEqual(['launch_workflow', 'list_workflows', 'workflow_run']);
+      expect(test.tools.map(({ name }) => name).sort()).toEqual([
+        'launch_workflow',
+        'list_workflows',
+        'workflow_run',
+        'workflow_tools',
+      ]);
       for (const tool of test.tools) expect(tool.when?.state).toEqual({ 'minor-mode': 'workflow' });
       await test.modes[0]!.handleAction('deactivate', {}, operation(test.execution));
       expect(test.registerToolRestriction).not.toHaveBeenCalled();
@@ -725,7 +830,7 @@ describe('workflow headless facet', () => {
       expect(await request.json()).toEqual({ workflowPath: '/tmp/build.workflow.yml', runner: 'pi-codex' });
       // A dispatcher never works a run itself, as a CLI dispatcher child cannot.
       expect(test.registerToolRestriction).toHaveBeenCalledWith(
-        expect.objectContaining({ excludedTools: ['workflow_run'] }),
+        expect.objectContaining({ excludedTools: ['workflow_run', 'workflow_tools'] }),
       );
 
       requestApi.mockResolvedValueOnce(Response.json({ error: 'Session not found.' }, { status: 404 }));
@@ -954,3 +1059,87 @@ async function mountFacet(
     await root.fiber.dispose();
   };
 }
+
+describe('server recovery lifecycle', () => {
+  it('acknowledges its hosting session, reports late failure, and stops registration after closing and the ack deadline', async () => {
+    let registered = false;
+    let finish!: (result: { content: { type: 'text'; text: string }[]; isError?: boolean }) => void;
+    const execution = new Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }>((resolve) => {
+      finish = resolve;
+    });
+    const registry = {
+      readRunByKey: vi.fn(async () =>
+        registered
+          ? {
+              workspace: '/tmp',
+              runKey: 'broken',
+              runId: 'replay-id',
+              displayName: 'Broken',
+              env: { PI_SESSION_ID: 'hosting' },
+            }
+          : undefined,
+      ),
+      requestStop: vi.fn(async () => undefined),
+    };
+    const execute = vi.fn(() => execution);
+    const createRecoverTool = vi.fn((_options: { ownerSessionId: () => string }) => ({ execute }));
+    const notify = vi.fn();
+    const launcher = createServerLauncher({
+      feature: { registry },
+      createRecoverTool,
+      sessionId: 'hosting',
+      environment: { PI_SESSION_ID: 'root' },
+      notify,
+      launchAckPollMs: 1,
+      launchAckTimeoutMs: 2,
+      stopTimeoutMs: 1,
+    } as unknown as ServerLaunchDependencies);
+    const result = await launcher.recover({ workspace: '/tmp', runKey: 'broken' }, {});
+    expect(JSON.stringify(result)).toContain('not running yet');
+    expect(createRecoverTool.mock.calls[0]![0].ownerSessionId()).toBe('hosting');
+    expect(execute).toHaveBeenCalledWith({ workspace: '/tmp', runKey: 'broken' });
+    await launcher.dispose();
+    registered = true;
+    await vi.waitFor(() =>
+      expect(registry.requestStop).toHaveBeenCalledWith('/tmp', 'broken', expect.any(String), 'replay-id'),
+    );
+    finish({ content: [{ type: 'text', text: 'late failure' }], isError: true });
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith(expect.stringContaining('late failure'), 'warning'));
+    expect(await launcher.recover({ workspace: '/tmp', runKey: 'broken' }, {})).toMatchObject({ isError: true });
+  });
+
+  it('acknowledges registration and does not stop a foreign recovery owner', async () => {
+    let finish!: (result: { content: { type: 'text'; text: string }[] }) => void;
+    const execution = new Promise<{ content: { type: 'text'; text: string }[] }>((resolve) => {
+      finish = resolve;
+    });
+    let owner = 'hosting';
+    const registry = {
+      readRunByKey: vi.fn(async () => ({
+        workspace: '/tmp',
+        runKey: 'broken',
+        runId: 'replay-id',
+        displayName: 'Broken',
+        env: { PI_SESSION_ID: owner },
+      })),
+      requestStop: vi.fn(async () => undefined),
+    };
+    const launcher = createServerLauncher({
+      feature: { registry },
+      createRecoverTool: () => ({ execute: () => execution }),
+      sessionId: 'hosting',
+      environment: {},
+      notify: vi.fn(),
+      launchAckPollMs: 1,
+      launchAckTimeoutMs: 2,
+      stopTimeoutMs: 1,
+    } as unknown as ServerLaunchDependencies);
+    expect(JSON.stringify(await launcher.recover({ workspace: '/tmp', runKey: 'broken' }, {}))).toContain(
+      'Run key: broken',
+    );
+    owner = 'foreign';
+    await launcher.dispose();
+    expect(registry.requestStop).not.toHaveBeenCalled();
+    finish({ content: [{ type: 'text', text: 'done' }] });
+  });
+});

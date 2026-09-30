@@ -65,3 +65,12 @@ export const workflowCatalogPageSchema = z
       .describe('Workflow definitions on this page.'),
   })
   .passthrough();
+
+export const workflowToolsInputSchema = z
+  .object({
+    action: z.enum(['recovery-evidence', 'recover']),
+    ...RUN_SELECTOR_FIELDS,
+    dryRun: z.boolean().optional().describe('recover only: print the replay without running it.'),
+    runner: z.string().optional().describe('recover only: override the recorded runner.'),
+  })
+  .strict();

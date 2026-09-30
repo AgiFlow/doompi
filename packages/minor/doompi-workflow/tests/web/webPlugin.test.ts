@@ -99,6 +99,7 @@ describe('the workflows plugin surfaces', () => {
       tools.map((tool) => [tool, message] as const),
     );
     expect(claimed?.length).toBeGreaterThan(0);
+    expect(claimed?.map(([tool]) => tool)).toContain('workflow_tools');
 
     for (const [toolName, message] of claimed ?? []) {
       // result is null until the tool produces output, partial while it runs,

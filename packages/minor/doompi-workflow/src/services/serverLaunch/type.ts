@@ -1,4 +1,4 @@
-import type { EmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
+import type { EmbeddedWorkflowFeature, RecoverWorkflowToolOptions } from '@agimon-ai/workflow-mcp';
 import type { CallToolResult } from '@modelcontextprotocol/server';
 
 import type { StepTelemetry } from '../stepExecutor/type';
@@ -9,6 +9,9 @@ export type ServerNoticeLevel = 'info' | 'warning' | 'error';
 export interface ServerLaunchDependencies {
   readonly feature: Pick<EmbeddedWorkflowFeature, 'createRunService' | 'registry'>;
   /** The session launching, which owns its runs. */
+  readonly createRecoverTool: (
+    options: RecoverWorkflowToolOptions,
+  ) => Pick<ReturnType<EmbeddedWorkflowFeature['createRecoverTool']>, 'execute'>;
   readonly sessionId: string;
   readonly environment: Readonly<Record<string, string | undefined>>;
   readonly telemetry?: StepTelemetry;
@@ -28,6 +31,10 @@ export interface ServerLauncher {
   /** Runs a workflow in this process, answering once it registers. Throws what the launch refuses. */
   launch(input: WorkflowLaunchInput): Promise<CallToolResult>;
   /** Runs this launcher started that have not ended. */
+  recover(
+    target: { runKey: string; workspace: string },
+    options: { dryRun?: boolean; runner?: string },
+  ): Promise<CallToolResult>;
   activeRunCount(): number;
   /** Asks every run still going to stop, and waits a bounded time for them. */
   dispose(): Promise<void>;

@@ -13,6 +13,7 @@ export const LEADER_DETAIL = 'multi-step agent runs';
 
 export const LIST_WORKFLOWS_TOOL_NAME = 'list_workflows';
 export const LAUNCH_WORKFLOW_TOOL_NAME = 'launch_workflow';
+export const WORKFLOW_TOOLS_TOOL_NAME = 'workflow_tools';
 export const WORKFLOW_RUN_TOOL_NAME = 'workflow_run';
 export const WORKFLOW_PI_TOOL_NAMES = [
   LIST_WORKFLOWS_TOOL_NAME,

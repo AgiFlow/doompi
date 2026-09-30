@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { isAbsolute, relative, resolve } from 'node:path';
 
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/childProcess';
@@ -14,6 +16,8 @@ import { createEmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
+import { WORKFLOW_TOOLS_TOOL_NAME } from '../../constants/workflow';
+import { workflowToolsInputSchema } from '../../schemas/workflowPi';
 import { registerRunProvider, type RunProviderHandle } from '../../services/backgroundWork';
 import { createServerLauncher } from '../../services/serverLaunch';
 import { createNativeStepPaneLauncher, createStepExecutor } from '../../services/stepExecutor';
@@ -182,7 +186,7 @@ export function createWorkflowServerRuntime(
   };
   // Steps run in this process: customRun as child sessions of this one, commands in their own panes.
   const sessionService = serverHost.context.sessionService;
-  const feature = createEmbeddedWorkflowFeature(
+  const featureOptions =
     sessionService === undefined
       ? {}
       : {
@@ -194,11 +198,14 @@ export function createWorkflowServerRuntime(
             createId: () => `workflow-${randomUUID()}`,
             telemetry,
           }),
-        },
-  );
+        };
+  const feature = createEmbeddedWorkflowFeature(featureOptions);
   type LaunchParameters = Parameters<typeof feature.runTool.execute>[0];
   const launcher = createServerLauncher({
     feature,
+    // Each replay owns its recovery service while sharing the registry and host step executor.
+    createRecoverTool: (options) =>
+      createEmbeddedWorkflowFeature({ ...featureOptions, registry: feature.registry }).createRecoverTool(options),
     sessionId: host.context.sessionId,
     environment: host.context.environment,
     telemetry,
@@ -595,6 +602,61 @@ export function createWorkflowServerRuntime(
           return callResult(request);
         },
       },
+      {
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
+        name: WORKFLOW_TOOLS_TOOL_NAME,
+        label: 'Workflow Tools',
+        description:
+          "Workflow actions beyond workflow_run: recovery-evidence reads a failed run's durable evidence, including one an earlier session launched; recover resumes it from its active repair in this session.",
+        promptGuidelines: [
+          'Load workflow-recovery and read recovery-evidence before recover; recover is not a fresh launch.',
+          'A recover answer means the replay started, not that it succeeded; verify with workflow_run status.',
+          'Already claimed means another recovery won: do not retry or launch fresh. Never edit issue.md or repair.json.',
+        ],
+        parameters: z.toJSONSchema(workflowToolsInputSchema),
+        executionMode: 'serial',
+        async execute(_toolCallId, parameters, signal) {
+          try {
+            signal?.throwIfAborted();
+            const input = workflowToolsInputSchema.parse(parameters);
+            const matches = (await feature.registry.listRuns(input.workspace)).filter(
+              (record) => record.runKey === input.runKey && record.stage === 'error',
+            );
+            if (matches.length > 1)
+              throw new Error('Run key exists in more than one workspace; retry with its workspace.');
+            const record = matches[0];
+            if (!record)
+              throw new Error(
+                'No failed workflow run matches this key; do not recover a running or completed workflow.',
+              );
+            if (input.action === 'recover')
+              return launchResultOf(
+                await launcher.recover(
+                  { runKey: record.runKey, workspace: record.workspace },
+                  { dryRun: input.dryRun, runner: input.runner },
+                ),
+              );
+            void telemetry.recordEvent('doom_workflow.recovery_evidence_requested', { outcome: 'requested' });
+            // ponytail: mirrors the TUI evidence tail; extract if a third caller appears.
+            const sections: string[] = [];
+            for (const name of ['changelog.md', 'context.md', 'progress.ndjson']) {
+              try {
+                const bytes = await readFile(join(feature.registry.runDirectoryFor(record), name));
+                sections.push(`--- ${name} ---\n${bytes.subarray(-64 * 1024).toString('utf8')}`);
+              } catch (error) {
+                if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+              }
+            }
+            const text = `Workflow: ${record.displayName} (${record.runKey})\n${sections.length ? '' : 'No durable evidence files found.\n'}--- run.json ---\n${JSON.stringify(record, null, 2)}${sections.length ? '\n' + sections.join('\n') : ''}`;
+            return { content: [{ type: 'text', text }] };
+          } catch (error) {
+            return {
+              content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+              isError: true,
+            };
+          }
+        },
+      },
     ],
     commands: [
       {
@@ -648,7 +710,7 @@ export function createWorkflowServerRuntime(
       },
     ],
     // A dispatcher launches for its root and never works a run itself, as a CLI dispatcher child.
-    ...(dispatcher ? { toolRestrictions: [{ excludedTools: [RUN_TOOL] }] } : {}),
+    ...(dispatcher ? { toolRestrictions: [{ excludedTools: [RUN_TOOL, WORKFLOW_TOOLS_TOOL_NAME] }] } : {}),
     async onDispose() {
       disposeControl();
       if (runsTimer !== undefined) clearTimeout(runsTimer);

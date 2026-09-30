@@ -255,9 +255,13 @@ describe('workflow tool result lines', () => {
       'it broke',
     ]);
     expect(
-      texts(workflowResultLines('workflow_run', { action: 'recovery-evidence', runKey: 'r1' }, text('nothing'), done)),
+      texts(workflowResultLines('workflow_tools', { action: 'recovery-evidence', runKey: 'r1' }, evidence, expanded)),
+    ).toEqual(texts(recovery));
+    expect(
+      texts(
+        workflowResultLines('workflow_tools', { action: 'recovery-evidence', runKey: 'r1' }, text('nothing'), done),
+      ),
     ).toEqual(['✓ recovery evidence · r1', 'no durable evidence files recorded']);
-
     const tail = workflowResultLines(
       'workflow_run',
       { action: 'tail', runKey: 'r1' },
@@ -266,8 +270,11 @@ describe('workflow tool result lines', () => {
     );
     expect(texts(tail)).toEqual(['✓ launcher output checked · r1', 'Workflow: Release', 'Stage: running']);
     expect(
-      texts(workflowResultLines('workflow_run', { action: 'recover', dryRun: true }, text('ok'), expanded)),
+      texts(workflowResultLines('workflow_tools', { action: 'recover', dryRun: true }, text('ok'), expanded)),
     ).toEqual(['◐ recovery dry run finished · workflow', 'ok']);
+    expect(
+      texts(workflowResultLines('workflow_tools', { action: 'recover', runKey: 'r1' }, text('Started'), done)),
+    ).toEqual(['◐ recovery accepted · r1']);
     expect(texts(workflowResultLines('workflow_run', { action: 'follow' }, text(''), done))).toEqual([
       '✓ following output · workflow',
     ]);
