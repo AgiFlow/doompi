@@ -78,6 +78,7 @@ function fakeRuntime(options: DirectHarnessRuntimeOptions): DirectHarnessRuntime
     abort: vi.fn(async () => undefined),
     interrupt: vi.fn(async () => undefined),
     compact: vi.fn(async () => undefined),
+    admitResume: vi.fn(async () => ({ resumed: false, settled: Promise.resolve() })),
     resume: vi.fn(async () => false),
     dispose: vi.fn(async () => undefined),
   };

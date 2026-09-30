@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { Context } from '@deepseek-ai/cordis';
+import type { Api, Model } from '@earendil-works/pi-ai';
+import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +19,7 @@ import {
   sessionMcpConversationDigest,
 } from '../../../../../src/services/sessionMcpConversations';
 import { createSessionMcpRegistrationStore } from '../../../../../src/services/sessionMcpRegistrationStore';
+import { createHeadlessSessionHost } from '../../../../../src/systems/main/adapters/headlessSessionHost';
 import type {
   SessionToolDescriptor,
   SessionToolInvocation,
@@ -28,14 +32,23 @@ const routePath = '/api/workspaces/workspace/sessions/parent/mcp';
 const audience = `https://host.example${routePath}`;
 const verifier = 'v'.repeat(43);
 const handlers: SessionMcpRoutes[] = [];
-afterEach(() => {
+const cleanup: Array<() => Promise<void>> = [];
+afterEach(async () => {
+  for (const dispose of cleanup.splice(0)) await dispose();
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   for (const routes of handlers.splice(0)) routes.close();
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
 const UI_URI = 'ui://doompi/session/v1/index.html';
 
-function fixture(_routing: unknown = 'conversation', withUi = false, automatic = false) {
+function fixture(
+  _routing: unknown = 'conversation',
+  withUi = false,
+  automatic = false,
+  createSurface?: (id: string, cwd: string) => Promise<SessionToolSurface>,
+) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doom-mcp-routing-')));
   roots.push(root);
   const parentCwd = path.join(root, 'parent');
@@ -46,7 +59,13 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
   const sessions = new Map<string, HeadlessHubSession>();
   const persisted = new Map<string, string>();
   const surfaces = new Map<string, SessionToolSurface>();
-  const addSession = (id: string, cwd: string, parentSessionId?: string, inheritedWorkspace = false): void => {
+  const addSession = (
+    id: string,
+    cwd: string,
+    parentSessionId?: string,
+    inheritedWorkspace = false,
+    realSurface?: SessionToolSurface,
+  ): void => {
     const surface: SessionToolSurface = {
       readSurface: () => ({
         revision: 1,
@@ -77,7 +96,7 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
       readSkill: (_revision, uri) => (uri === 'doompi://child-guide' ? '# child guidance' : `guide for ${id}`),
       readUiResource: vi.fn(() => '<!doctype html><title>Static session view</title>'),
     };
-    surfaces.set(id, surface);
+    surfaces.set(id, realSurface ?? surface);
     const session = {
       id,
       cwd,
@@ -85,7 +104,7 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
       workspaceId: id === 'parent' || inheritedWorkspace ? 'workspace' : `workspace-${id}`,
       createdAt: new Date().toISOString(),
       parentSessionId,
-      host: { mcpSurface: surface },
+      host: { mcpSurface: realSurface ?? surface },
     } as unknown as HeadlessHubSession;
     sessions.set(id, session);
     persisted.set(id, cwd);
@@ -97,7 +116,8 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
     const reserved = routes.reservations.read(request.reservationId!, request.parentSessionId!);
     await new Promise<void>((resolve) => setImmediate(resolve));
     const inherited = request.sessionProvenance === 'worktree';
-    addSession(reserved.sessionId, request.cwd, request.parentSessionId, inherited);
+    const surface = await createSurface?.(reserved.sessionId, request.cwd);
+    addSession(reserved.sessionId, request.cwd, request.parentSessionId, inherited, surface);
     return {
       sessionId: reserved.sessionId,
       cwd: request.cwd,
@@ -259,6 +279,172 @@ function fixture(_routing: unknown = 'conversation', withUi = false, automatic =
 }
 
 describe('conversation-bound Session MCP routing', () => {
+  it('admits real child runtimes and keeps another conversation responsive while a tool is held', async () => {
+    const model: Model<Api> = {
+      id: 'test-model',
+      name: 'Test model',
+      provider: 'test-provider',
+      api: 'test-api',
+      baseUrl: 'http://localhost',
+      reasoning: false,
+      input: ['text'],
+      contextWindow: 65536,
+      maxTokens: 128,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    };
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-route-model-'));
+    roots.push(agentDir);
+    fs.writeFileSync(
+      path.join(agentDir, 'settings.json'),
+      JSON.stringify({
+        defaultProvider: model.provider,
+        defaultModel: model.id,
+      }),
+    );
+    vi.stubEnv('PI_CODING_AGENT_DIR', agentDir);
+    vi.spyOn(ModelRuntime, 'create').mockResolvedValue({
+      getModel: (provider: string, id: string) => (provider === model.provider && id === model.id ? model : undefined),
+      getModels: () => [model],
+      getAvailable: async () => [model],
+      hasConfiguredAuth: (provider: string) => provider === model.provider,
+      complete: vi.fn(),
+    } as unknown as ModelRuntime);
+    let release!: () => void;
+    let entered!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let releaseRecovery!: () => void;
+    let enteredRecovery!: () => void;
+    const recoveryHeld = new Promise<void>((resolve) => {
+      releaseRecovery = resolve;
+    });
+    const recoveryStarted = new Promise<void>((resolve) => {
+      enteredRecovery = resolve;
+    });
+    let firstChild = true;
+    const f = fixture('conversation', false, true, async (id, cwd) => {
+      const context = new Context();
+      const host = await createHeadlessSessionHost({
+        cwd,
+        repoRoot: cwd,
+        sessionId: id,
+        sessionName: id,
+        agentArgs: [],
+        environment: {},
+        candidates: [],
+        piExtensions: false,
+        selection: { majorMode: 'test', activeLayers: [], domains: [], state: {} },
+        mcpPlugins: [
+          {
+            declaration: {
+              packageName: 'test',
+              entry: './mcp.mjs',
+              module: './mcp.mjs',
+              sha256: '0'.repeat(64),
+              owners: [{ majorMode: 'test', layer: 'default' }],
+            },
+            plugin: {
+              name: 'test',
+              session: {
+                tools: [
+                  {
+                    name: 'write',
+                    description: 'write',
+                    parameters: Type.Object({ path: Type.Optional(Type.String()), text: Type.Optional(Type.String()) }),
+                    execute: async (_callId, arguments_) => {
+                      const args = arguments_ as { path?: string; text?: string };
+                      if (args.text === 'hold') {
+                        entered();
+                        await held;
+                      }
+                      fs.writeFileSync(path.join(cwd, String(args.path)), String(args.text));
+                      return { content: [{ type: 'text' as const, text: id }], structuredContent: { sessionId: id } };
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      });
+      cleanup.push(async () => {
+        await host.dispose();
+        await context.fiber.dispose();
+      });
+      host.prepareFacets(context);
+      if (firstChild) {
+        firstChild = false;
+        let armed = false;
+        let blocked = false;
+        const dispatchHook = host.host!.dispatchHook.bind(host.host!);
+        vi.spyOn(host.host!, 'dispatchHook').mockImplementation(async (...args) => {
+          const result = await dispatchHook(...args);
+          if (args[0] === 'session_start') armed = true;
+          return result;
+        });
+        const mutate = host.runtime.session.mutate.bind(host.runtime.session);
+        vi.spyOn(host.runtime.session, 'mutate').mockImplementation(async (...args) => {
+          if (armed && !blocked) {
+            blocked = true;
+            enteredRecovery();
+            await recoveryHeld;
+          }
+          return mutate(...args);
+        });
+      }
+      await host.activateFacets({ root: context, installedPackages: [], dispose: async () => {} });
+      return host.mcpSurface;
+    });
+    let firstCallSettled = false;
+    const firstCall = f.call('a', 'write', { path: 'ready.txt', text: 'A' }, 10).then((result) => {
+      firstCallSettled = true;
+      return result;
+    });
+    try {
+      await recoveryStarted;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(firstCallSettled).toBe(false);
+      expect(f.sessions.size).toBe(1);
+      expect(f.store.list()[0].state).toBe('pending');
+    } finally {
+      releaseRecovery();
+      await firstCall;
+    }
+    const a = await firstCall;
+    const b = await f.call('b', 'write', { path: 'ready.txt', text: 'B' }, 11);
+    expect(a).toMatchObject({ result: { content: [expect.objectContaining({ type: 'text' })] } });
+    expect(b).toMatchObject({ result: { content: [expect.objectContaining({ type: 'text' })] } });
+    expect(f.store.list()).toHaveLength(2);
+    expect(f.store.list().every((record) => record.state === 'bound')).toBe(true);
+    const pending = f.call('a', 'write', { path: 'held.txt', text: 'hold' }, 12);
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    try {
+      await started;
+      expect(await f.call('b', 'write', { path: 'only-b.txt', text: 'B' }, 13)).toMatchObject({
+        result: { content: [expect.objectContaining({ type: 'text' })] },
+      });
+      expect((await f.rpc('tools/list', undefined, 14)).result?.tools).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'write' })]),
+      );
+      expect(settled).toBe(false);
+      const [childA, childB] = f.store.list();
+      expect(fs.existsSync(path.join(childA.cwd!, 'only-b.txt'))).toBe(false);
+      expect(fs.readFileSync(path.join(childB.cwd!, 'only-b.txt'), 'utf8')).toBe('B');
+      expect(fs.existsSync(path.join(f.parentCwd, 'only-b.txt'))).toBe(false);
+    } finally {
+      release();
+      await pending;
+    }
+    expect(f.provisionReservedWorktree).toHaveBeenCalledTimes(2);
+  });
+
   it('prefetches static UI without allocating a child or exposing session guidance', async () => {
     const f = fixture('conversation', true);
     expect((await f.rpc('resources/list')).result?.resources).toEqual([

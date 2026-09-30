@@ -231,6 +231,8 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
    */
   interrupt(): Promise<void>;
   compact(customInstructions?: string): Promise<void>;
+  /** Admits a persisted continuation without waiting for its provider/tool work. */
+  admitResume(): Promise<{ resumed: boolean; settled: Promise<void> }>;
   /** Continues a persisted in-flight operation; false when the lane had none. */
   resume(): Promise<boolean>;
   dispose(): Promise<void>;
