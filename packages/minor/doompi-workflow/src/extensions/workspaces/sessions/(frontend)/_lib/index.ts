@@ -45,7 +45,9 @@ export default {
   // widget's bare presence signal.
   activitySections: [{ id: 'workflows', component: WorkflowsActivitySection }],
   // The workflow tools' timeline cards, the web half of src/tui/workflow/workflowToolRender.ts.
-  toolRenderers: [{ tools: ['list_workflows', 'launch_workflow', 'workflow_run'], message: WorkflowToolMessage }],
+  toolRenderers: [
+    { tools: ['list_workflows', 'launch_workflow', 'workflow_run', 'workflow_tools'], message: WorkflowToolMessage },
+  ],
   // The TUI's SPC w r, w l and w e; recovery (w c) is a TUI-only overlay, so
   // it has no cockpit key yet.
   leaderBindings: [

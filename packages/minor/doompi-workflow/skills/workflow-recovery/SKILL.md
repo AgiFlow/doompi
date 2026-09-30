@@ -1,6 +1,6 @@
 ---
 name: workflow-recovery
-description: Recover a failed or interrupted workflow-mcp run so it resumes from its active repair rather than starting over. Use before calling workflow_run with action recover, whenever a run shows stage error or interrupted, or when deciding between recovering a run, launching a fresh one, and deferring it. Covers the evidence to gather first, the three permitted outcomes, the judgement cases, and the files that must never be edited.
+description: Recover a failed or interrupted workflow-mcp run so it resumes from its active repair rather than starting over. Use before a recover action (workflow_run in Pi CLI, workflow_tools in server/web sessions), whenever a run shows stage error or interrupted, or when deciding between recovery, a fresh launch, and deferral. Covers evidence, permitted outcomes, judgement cases, and files that must never be edited.
 ---
 
 # Recovering a workflow run
@@ -16,19 +16,20 @@ may recover a terminal failed run launched by an earlier session; the replay is
 then stamped to the recovering session. This does not permit cross-session
 control of running or completed work.
 
-Read this before calling `workflow_run` with action `recover`.
+Read this before action `recover`: use `workflow_run` in Pi CLI sessions and
+`workflow_tools` in server/web sessions. Both take the same `runKey` and separate `workspace`.
 
 ## 1. Gather evidence first
 
 Never act on the stage alone. Before touching a failed run, collect:
 
 - **Every log source**, not just the first one that looks relevant.
-- **Process state** — is anything still alive from the original run?
+- **Process state**: is anything still alive from the original run?
 - **The exact staged `run.json`** for the run.
 - **Only the repair referenced by `activeRepairId`.** Other repairs in the
   directory belong to earlier cycles and are not yours to act on.
 
-Use `workflow_run` with action `recovery-evidence` for the terminal `run.json`
+Use action `recovery-evidence` on the same tool for the terminal `run.json`
 and durable `changelog.md`, `context.md`, and progress evidence. This dedicated
 action is terminal-only and read-only, including for failures from an earlier
 session; it never scrapes that session's live launcher. Generic `status` and
@@ -48,18 +49,18 @@ Recovery and a fresh launch each consume one launch from the pass budget.
 
 ## 3. Judgement cases
 
-- `interrupted` with a valid failed job — the strong recovery case.
-- `failed` with a valid failed job — recoverable when the failure was transient
+- `interrupted` with a valid failed job: the strong recovery case.
+- `failed` with a valid failed job: recoverable when the failure was transient
   and the recorded target remains valid.
-- **Empty failed job** — cannot be recovered. Launch fresh if the work is ready,
+- **Empty failed job**: cannot be recovered. Launch fresh if the work is ready,
   otherwise defer.
-- **Terminal repair-triage run** — must never be recovered. Launch fresh once the
+- **Terminal repair-triage run**: must never be recovered. Launch fresh once the
   work is ready again.
-- **Stale branch** — prefer a fresh launch once the branch has diverged enough
+- **Stale branch**: prefer a fresh launch once the branch has diverged enough
   that resuming would rebase onto unrecognisable history.
-- **No job id** — the run was launched by hand and is outside dispatch. Report
+- **No job id**: the run was launched by hand and is outside dispatch. Report
   it; do not recover it.
-- **Blocked** — never recover or launch a run whose job sits in a blocked column.
+- **Blocked**: never recover or launch a run whose job sits in a blocked column.
   A human resolves the blocker first.
 
 ## 4. Hard constraints
@@ -76,8 +77,9 @@ Recovery and a fresh launch each consume one launch from the pass budget.
 
 ## 5. Verify before reporting
 
-Recover through the launcher recorded for the run. Then confirm **real process
-and registry progress**. A `workflow_run` action `recover` call that returns is
-not a recovery that succeeded. After ownership has transferred and the replacement run is visible to this
-session, check `workflow_run` with action `status` before reporting an outcome.
+In Pi CLI sessions, recover through the launcher recorded for the run. In server/web
+sessions, the replay runs inside the recovering session; closing it requests a stop.
+Then confirm **real process and registry progress**. A `recover` call that returns is
+not a recovery that succeeded. After ownership transfers and the replacement run is
+visible to this session, check `workflow_run` with action `status` before reporting an outcome.
 Say what you recovered, what you skipped and why, and anything still blocked.

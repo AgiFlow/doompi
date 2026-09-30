@@ -64,9 +64,10 @@ Core tools are:
 - `list_workflows`: discover workflows.
 - `launch_workflow`: register and start an asynchronous run.
 - `workflow_run`: inspect or control a run through supported actions.
+- `workflow_tools` (server/web sessions): read failed-run recovery evidence or resume the existing run.
 
-Launch returns after the run is registered, not after all jobs complete. Use status and follow
-controls for progress, and wait for a terminal notification.
+Launch returns after the run is registered, not after all jobs complete. Use status for progress
+and wait for a terminal notification. The TUI also supports follow controls.
 
 In the TUI, `SPC w l` lists the repository's workflows and launches the one under the cursor with
 `r`, `SPC w r` inspects this session's runs, `SPC w c` opens recovery, and `SPC w e`

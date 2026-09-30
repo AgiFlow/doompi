@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -7,11 +8,13 @@ import type { CallToolResult } from '@modelcontextprotocol/server';
 import { WORKFLOW_LAUNCH_ID_ENV } from '../../constants/workflow';
 import type { StepTelemetry } from '../stepExecutor/type';
 import {
+  awaitRunAck,
+  foldOutcome,
   createWorkflowLaunchExecutor,
   type WorkflowLaunchContext,
   type WorkflowLaunchInput,
 } from '../workflowExecution';
-import { withoutAnsi as plain } from '../workflowRuns';
+import { PI_SESSION_ENV, withoutAnsi as plain } from '../workflowRuns';
 import type { ServerLaunchDependencies, ServerLauncher } from './type';
 
 /** Beside the run's own files, so the run's artifacts list and its deletion both include it. */
@@ -108,6 +111,8 @@ function createRunLog(telemetry: StepTelemetry | undefined): RunLog {
 
 /** A run this launcher started and has not seen end. */
 interface ActiveRun {
+  stopRequested?: boolean;
+  target?: { workspace: string; runKey: string };
   registration?: WorkflowRunRegistration;
   settled: Promise<void>;
 }
@@ -126,6 +131,32 @@ interface ActiveRun {
 export function createServerLauncher(dependencies: ServerLaunchDependencies): ServerLauncher {
   const { feature, telemetry } = dependencies;
   const active = new Map<string, ActiveRun>();
+  let closing = false;
+  const stopRun = async (run: ActiveRun): Promise<void> => {
+    if (run.stopRequested) return;
+    try {
+      const record =
+        run.registration ??
+        (run.target
+          ? await feature.registry.readRunByKey(run.target.workspace, RUNNING_STAGE, run.target.runKey)
+          : undefined);
+      if (
+        !record ||
+        !record.runId ||
+        (run.target && 'env' in record && record.env?.[PI_SESSION_ENV] !== dependencies.sessionId)
+      )
+        return;
+      await feature.registry.requestStop(record.workspace, record.runKey, SESSION_CLOSED_REASON, record.runId);
+      run.stopRequested = true;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        (('code' in error && error.code === 'ENOENT') || error.message.startsWith('Workflow run not found: '))
+      )
+        return;
+      await telemetry?.recordWarning(RUN_STOP_FAILED_EVENT, error);
+    }
+  };
 
   const runInProcess = async (input: WorkflowLaunchInput): Promise<CallToolResult> => {
     const launchId = input.env?.[WORKFLOW_LAUNCH_ID_ENV];
@@ -143,6 +174,7 @@ export function createServerLauncher(dependencies: ServerLaunchDependencies): Se
           skipLaunch: true,
           onRegistered: (registration) => {
             run.registration = registration;
+            if (closing) void stopRun(run);
             log.attach(path.join(registration.runDir, RUN_LOG_FILENAME));
             void telemetry?.recordEvent(RUN_STARTED_EVENT, { outcome: 'started' });
             dependencies.onRunsChanged?.();
@@ -204,26 +236,63 @@ export function createServerLauncher(dependencies: ServerLaunchDependencies): Se
 
   return {
     launch: (input) => executor.execute(input, context),
+    async recover(target, options) {
+      if (closing) return textResult('The workflow session is closing.', true);
+      const tool = dependencies.createRecoverTool({ ownerSessionId: () => dependencies.sessionId });
+      // ponytail: recovery has no logger option in workflow-mcp; output reaches the result or late notice.
+      if (options.dryRun) return tool.execute({ ...target, ...options });
+      const key = `recover:${randomUUID()}`;
+      const run: ActiveRun = { target, settled: Promise.resolve() };
+      active.set(key, run);
+      const execution = Promise.resolve()
+        .then(() => tool.execute({ ...target, ...options }))
+        .finally(() => {
+          active.delete(key);
+          dependencies.onRunsChanged?.();
+        });
+      run.settled = execution.then(
+        () => undefined,
+        () => undefined,
+      );
+      const find = async () => {
+        const record = await feature.registry.readRunByKey(target.workspace, RUNNING_STAGE, target.runKey);
+        return record?.env?.[PI_SESSION_ENV] === dependencies.sessionId ? record : undefined;
+      };
+      // Continue watching registration through shutdown, even after the acknowledgement deadline.
+      void (async () => {
+        while (active.has(key)) {
+          if (closing) await stopRun(run);
+          await Promise.race([run.settled, delay(dependencies.launchAckPollMs ?? 500)]);
+        }
+      })();
+      const settled = foldOutcome(execution);
+      const ack = await awaitRunAck(settled, find, dependencies.launchAckPollMs, dependencies.launchAckTimeoutMs);
+      if (ack.kind === 'settled') {
+        if (ack.outcome.kind === 'error')
+          throw ack.outcome.error instanceof Error ? ack.outcome.error : new Error(String(ack.outcome.error));
+        return ack.outcome.result;
+      }
+      if (ack.kind === 'record') {
+        dependencies.onRunsChanged?.();
+      }
+      void settled.then((outcome) => {
+        if (outcome.kind === 'error' || outcome.result.isError) {
+          const detail = outcome.kind === 'error' ? String(outcome.error) : JSON.stringify(outcome.result.content);
+          void dependencies.notify(`Workflow recovery failed after acknowledgement.\n${detail}`, 'warning');
+        }
+      });
+      return textResult(
+        ack.kind === 'record'
+          ? `Recovery started for ${ack.record.displayName} in workspace ${target.workspace}. Run key: ${target.runKey}. Started is not succeeded; check workflow_run status before reporting.`
+          : 'Recovery requested, not running yet; nothing was cancelled; do not recover it again.',
+      );
+    },
     activeRunCount: () => active.size,
     async dispose() {
+      closing = true;
       const runs = [...active.values()];
       if (runs.length === 0) return;
-      // The same stop the web panel and the workflow tool request; the engine reads it between steps.
-      await Promise.all(
-        runs.map(async ({ registration }) => {
-          if (registration === undefined) return;
-          try {
-            await feature.registry.requestStop(
-              registration.workspace,
-              registration.runKey,
-              SESSION_CLOSED_REASON,
-              registration.runId,
-            );
-          } catch (error) {
-            await telemetry?.recordWarning(RUN_STOP_FAILED_EVENT, error);
-          }
-        }),
-      );
+      await Promise.all(runs.map(stopRun));
       await Promise.race([
         Promise.all(runs.map((run) => run.settled)),
         delay(dependencies.stopTimeoutMs ?? STOP_TIMEOUT_MS),

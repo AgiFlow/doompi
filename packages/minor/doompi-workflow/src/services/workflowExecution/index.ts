@@ -226,14 +226,27 @@ async function awaitLaunchAck<Ctx extends WorkflowLaunchContext>(
   const findLaunchedRun = dependencies.findLaunchedRun;
   if (!findLaunchedRun) return { kind: 'settled', outcome: await settled };
 
-  const pollMs = dependencies.launchAckPollMs ?? LAUNCH_ACK_POLL_MS;
-  const deadline = Date.now() + (dependencies.launchAckTimeoutMs ?? LAUNCH_ACK_TIMEOUT_MS);
+  return awaitRunAck(
+    settled,
+    () => findLaunchedRun(query),
+    dependencies.launchAckPollMs,
+    dependencies.launchAckTimeoutMs,
+  );
+}
+
+export async function awaitRunAck(
+  settled: Promise<LaunchOutcome>,
+  find: () => Promise<WorkflowRunRecord | undefined>,
+  pollMs = LAUNCH_ACK_POLL_MS,
+  timeoutMs = LAUNCH_ACK_TIMEOUT_MS,
+): Promise<LaunchAck> {
+  const deadline = Date.now() + timeoutMs;
   for (;;) {
     const outcome = await Promise.race([settled, sleep(pollMs)]);
     if (outcome) return { kind: 'settled', outcome };
     // A registry read that throws must not fail the launch: the run may be
     // perfectly healthy, and the settled promise is still the fallback.
-    const record = await findLaunchedRun(query).catch(() => undefined);
+    const record = await find().catch(() => undefined);
     if (record) return { kind: 'record', record };
     if (Date.now() >= deadline) return { kind: 'handoff' };
   }
@@ -341,10 +354,7 @@ export function createWorkflowLaunchExecutor<Ctx extends WorkflowLaunchContext =
       // Folded into a value before anything races it. A promise this function
       // may stop awaiting must never be able to reject unobserved, which in
       // Node ends the whole process, Pi's TUI included.
-      const settled: Promise<LaunchOutcome> = launch.then(
-        (value): LaunchOutcome => ({ kind: 'value', result: value }),
-        (error: unknown): LaunchOutcome => ({ kind: 'error', error }),
-      );
+      const settled = foldOutcome(launch);
 
       const ack = await awaitLaunchAck(settled, dependencies, {
         launchId,
@@ -375,4 +385,11 @@ export function createWorkflowLaunchExecutor<Ctx extends WorkflowLaunchContext =
       };
     },
   };
+}
+
+export function foldOutcome(promise: Promise<CallToolResult>): Promise<LaunchOutcome> {
+  return promise.then(
+    (result): LaunchOutcome => ({ kind: 'value', result }),
+    (error: unknown): LaunchOutcome => ({ kind: 'error', error }),
+  );
 }

@@ -11,7 +11,7 @@ Use the tools in this order:
 
 1. `list_workflows` discovers available workflow definitions.
 2. `launch_workflow` registers and starts a run. A successful launch response does not mean the jobs have finished. For a workflow whose agent steps name commands, pass `command` (such as `doompi` or `claude`) and `choice` (a declared model choice); both default to what the workflow lists first and to `default`.
-3. `workflow_run` inspects status, follows progress, or applies a supported control action.
+3. `workflow_run` inspects status, follows progress, or applies a supported control action. In server/web sessions it supports status, pause, resume, and stop; `workflow_tools` carries `recovery-evidence` and `recover`.
 4. Wait for a terminal notification and verify the final job and step states before reporting success.
 
 In the TUI, `SPC w l` lists the repository's workflows and launches the one under the cursor with `r`, `SPC w r` inspects this session's runs, and `SPC w c` opens recovery. The root session can launch. Child sessions can inspect the catalog but do not receive an unrestricted workflow factory.

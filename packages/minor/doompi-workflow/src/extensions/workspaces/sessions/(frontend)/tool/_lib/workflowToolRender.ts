@@ -8,7 +8,7 @@ import type { MessageLine, MessageLineTone } from '@agimon-ai/doompi-web-compone
  * the TUI by hand; the two share no code because web/ may not import src/tui.
  */
 
-export type WorkflowToolName = 'launch_workflow' | 'list_workflows' | 'workflow_run';
+export type WorkflowToolName = 'launch_workflow' | 'list_workflows' | 'workflow_run' | 'workflow_tools';
 
 /** The toned lines the shared MessageLines draws; the vocabulary is the components package's. */
 export type LineTone = MessageLineTone;
@@ -60,7 +60,12 @@ const COLLAPSED_CATALOG_ROWS = 6;
 const COLLAPSED_DETAIL_LINES = 8;
 const PARTIAL_DETAIL_LINES = 4;
 
-export const WORKFLOW_TOOL_NAMES: readonly WorkflowToolName[] = ['list_workflows', 'launch_workflow', 'workflow_run'];
+export const WORKFLOW_TOOL_NAMES: readonly WorkflowToolName[] = [
+  'list_workflows',
+  'launch_workflow',
+  'workflow_run',
+  'workflow_tools',
+];
 
 function asRecord(value: unknown): JsonRecord | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
