@@ -1397,13 +1397,13 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     assertLive();
     await host.dispatchHook('session_start', {});
     await publishComposition();
-    // A journal reopened while its lane still holds an in-flight operation is a
-    // turn that was cut off, not a finished one. Driving it here is what the
-    // runtime's resume exists for, and it runs detached because that turn can
-    // outlive session startup by minutes.
-    void runtime
-      .resume()
-      .catch((error: unknown) => options.onNotice?.(`Session resume failed: ${harnessErrorMessage(error)}`));
+    // Startup waits for continuation admission, not the resumed provider/tool work.
+    // An idle lane has released its ownership before activation can succeed.
+    const resumed = await runtime.admitResume();
+    void resumed.settled.catch((error: unknown) =>
+      options.onNotice?.(`Session resume failed: ${harnessErrorMessage(error)}`),
+    );
+    assertLive();
   };
 
   const dispose = (): Promise<void> => {

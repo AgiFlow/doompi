@@ -231,6 +231,161 @@ describe('direct AgentHarness runtime', () => {
     }
   });
 
+  it.each([false, true])(
+    'retains automatic input during external ownership and wakes once on release (error: %s)',
+    async (fails) => {
+      const repository = new MemorySessionRepo();
+      const session = await repository.create({ id: `external-automatic-${fails}` }, BACKGROUND_CONTEXT);
+      let release!: () => void;
+      let entered!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const started = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const streamSimple = vi.fn<Models['streamSimple']>(() => {
+        const stream = createAssistantMessageEventStream();
+        const message: AssistantMessage = {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'done' }],
+          api: model.api,
+          provider: model.provider,
+          model: model.id,
+          timestamp: 1,
+          stopReason: 'stop',
+          usage: {
+            input: 1,
+            output: 1,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 2,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+        };
+        stream.push({ type: 'start', partial: message });
+        stream.push({ type: 'done', reason: 'stop', message });
+        return stream;
+      });
+      const runtime = await createDirectHarnessRuntime({
+        cwd: '/tmp',
+        session,
+        model,
+        models: { ...models, streamSimple } as unknown as Models,
+      });
+      const frames: Record<string, unknown>[] = [];
+      runtime.onPresentationFrame((frame) => frames.push(frame));
+      const external = runtime.runExternalOperation(async () => {
+        entered();
+        await pending;
+        if (fails) throw new Error('external failed');
+      });
+      const outcome = external.catch((error: unknown) => error);
+      try {
+        await started;
+        const { id } = await runtime.enqueueAutomatic('retained automatic');
+        // All memory-repository admission work drains before the next event-loop turn.
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect((await runtime.readLifecycle()).queue).toContainEqual(
+          expect.objectContaining({ id, disposition: 'pending' }),
+        );
+        expect(streamSimple).not.toHaveBeenCalled();
+        release();
+        expect(await outcome).toEqual(fails ? new Error('external failed') : undefined);
+        await vi.waitFor(async () => {
+          expect(streamSimple).toHaveBeenCalledOnce();
+          expect(await runtime.readLifecycle()).toMatchObject({ operation: null, queue: [] });
+        });
+        expect(JSON.stringify(streamSimple.mock.calls[0]?.[1].messages)).toContain('retained automatic');
+        expect(frames).not.toContainEqual(expect.objectContaining({ code: 'queue_drain' }));
+      } finally {
+        release();
+        await outcome;
+        await runtime.dispose();
+        await repository.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
+
+  it.each([false, true])('resumes a persisted run with ownership until settlement (wrapper: %s)', async (wrapper) => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: `positive-resume-${wrapper}` }, BACKGROUND_CONTEXT);
+    let release!: () => void;
+    let entered!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const streamSimple = vi.fn<Models['streamSimple']>(() => {
+      const stream = createAssistantMessageEventStream();
+      const message: AssistantMessage = {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'resumed' }],
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        timestamp: 1,
+        stopReason: 'stop',
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      };
+      stream.push({ type: 'start', partial: message });
+      entered();
+      void pending.then(() => stream.push({ type: 'done', reason: 'stop', message }));
+      return stream;
+    });
+    const runtime = await createDirectHarnessRuntime({
+      cwd: '/tmp',
+      session,
+      model,
+      models: { ...models, streamSimple } as unknown as Models,
+    });
+    const drive = vi.spyOn(runtime.lane, 'drive');
+    let settled = false;
+    try {
+      const accepted = await runtime.lane.accept(
+        { kind: 'prompt', prompt: 'persisted before drive' },
+        BACKGROUND_CONTEXT,
+      );
+      expect(accepted.ok).toBe(true);
+      let completion: Promise<void | boolean>;
+      if (wrapper) completion = runtime.resume();
+      else {
+        const admission = await runtime.admitResume();
+        expect(admission.resumed).toBe(true);
+        completion = admission.settled;
+      }
+      void completion.then(() => {
+        settled = true;
+      });
+      await started;
+      expect(settled).toBe(false);
+      expect(drive).toHaveBeenCalledWith(
+        expect.objectContaining({ pollDeferred: true, waitForRetry: true }),
+        expect.anything(),
+      );
+      await expect(runtime.runExternalOperation(async () => 'blocked')).rejects.toThrow('busy with an agent operation');
+      release();
+      await expect(completion).resolves.toBe(wrapper ? true : undefined);
+      await expect(runtime.runExternalOperation(async () => 'released')).resolves.toBe('released');
+      expect(streamSimple).toHaveBeenCalledOnce();
+      expect(await runtime.readLifecycle()).toMatchObject({ operation: null, queue: [] });
+      await expect(runtime.resume()).resolves.toBe(false);
+    } finally {
+      release();
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   it('reports an idle lane as having nothing to resume instead of failing', async () => {
     const repository = new MemorySessionRepo();
     const session = await repository.create({ id: 'resume-idle-test' }, BACKGROUND_CONTEXT);

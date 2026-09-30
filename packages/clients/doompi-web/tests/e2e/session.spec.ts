@@ -213,6 +213,10 @@ test('follows the newest reply, and stops following once the reader scrolls back
     type: 'message_update',
     assistantMessageEvent: { type: 'text_delta', delta: 'arrived while reading\n' },
   });
+  await expect(timeline).toContainText('arrived while reading');
+  // The jump was already visible after scrolling back. Wait for the new row's
+  // virtual measurement before checking that output grew without moving us.
+  await expect.poll(() => timeline.evaluate((element) => element.scrollHeight)).toBeGreaterThan(readingPosition.height);
   await expect(page.getByTestId('timeline-jump')).toBeVisible();
   const heldPosition = await timeline.evaluate((element) => ({ top: element.scrollTop, height: element.scrollHeight }));
   expect(heldPosition.top).toBe(readingPosition.top);

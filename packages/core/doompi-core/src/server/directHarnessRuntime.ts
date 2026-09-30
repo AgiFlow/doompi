@@ -1143,6 +1143,12 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       return await operation();
     } finally {
       externalOperationActive = false;
+      if (drainRequested && !disposed) {
+        drainRequested = false;
+        void drainAutomatic().catch((error: unknown) =>
+          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
+        );
+      }
     }
   };
 
@@ -1164,11 +1170,11 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   };
   let drainingAutomatic = false;
   let drainRequested = false;
-  const drive = async (operationId: string): Promise<void> => {
+  const drive = async (operationId: string, pollDeferred = false): Promise<void> => {
     settlingOperationId = operationId;
     let failure: unknown;
     try {
-      const result = await writable(() => lane.drive({ operationId, waitForRetry: true }, context));
+      const result = await writable(() => lane.drive({ operationId, pollDeferred, waitForRetry: true }, context));
       if (!result.ok) resultError(result);
       if (result.value.kind === 'waiting' && result.value.reason === 'retry') {
         throw new Error(`Direct harness returned an unexpected retry wait for ${operationId}`);
@@ -1210,8 +1216,11 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       return;
     }
     drainingAutomatic = true;
+    let releaseAutomatic: (() => void) | undefined;
     try {
       while (!disposed) {
+        releaseAutomatic?.();
+        releaseAutomatic = undefined;
         const execution = await lane.inspectExecution(context);
         if (execution.current !== null) return;
         const operationId = randomUUID();
@@ -1224,6 +1233,12 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
               candidate.delivery !== 'steer',
           );
           if (!item) return { result: undefined };
+          // Reserve ownership only for runnable work, before persisting its handoff.
+          if (externalOperationActive) {
+            drainRequested = true;
+            return { result: undefined };
+          }
+          releaseAutomatic = acquireAgentOperation();
           return {
             record: {
               ...record,
@@ -1299,8 +1314,9 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         }
       }
     } finally {
+      releaseAutomatic?.();
       drainingAutomatic = false;
-      if (drainRequested && !disposed) {
+      if (drainRequested && !externalOperationActive && !disposed) {
         drainRequested = false;
         void drainAutomatic().catch((error: unknown) =>
           emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
@@ -1950,23 +1966,37 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     await reconcileNativeQueue();
     await publishLifecycle();
   };
-  const resume = (): Promise<boolean> =>
-    runAgentOperation(async () => {
+  const admitResume = async (): Promise<{ resumed: boolean; settled: Promise<void> }> => {
+    const release = acquireAgentOperation();
+    try {
       await recover();
-      if ((await readRecord()).paused) return false;
-      const result = await writable(() => lane.resume(context));
-      // A lane with no persisted operation has nothing to continue. That is the
-      // ordinary state of a session reopened while idle, not a failure, so it is
-      // reported rather than thrown: only the caller knows whether it expected one.
-      if (!result.ok && result.error._tag === 'NothingToResume') {
+      const submission = await serializeAdmission(async () => {
+        guardWritable();
+        if ((await readRecord()).paused) return { resumed: false, settled: Promise.resolve() };
+        const execution = await lane.inspectExecution(context);
+        if (execution.current === null) return { resumed: false, settled: Promise.resolve() };
+        // Native resume inspects the persisted operation and then drives it to settlement.
+        // Keep that continuation policy, but expose admission separately to startup.
+        return { resumed: true, settled: drive(execution.current.id, true) };
+      });
+      if (submission.resumed) void submission.settled.then(release, release);
+      else {
+        release();
         void drainAutomatic().catch((error: unknown) =>
           emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
         );
-        return false;
       }
-      if (!result.ok) resultError(result);
-      return true;
-    });
+      return submission;
+    } catch (error) {
+      release();
+      throw error;
+    }
+  };
+  const resume = async (): Promise<boolean> => {
+    const submission = await admitResume();
+    await submission.settled;
+    return submission.resumed;
+  };
   const readState = async (): Promise<Record<string, unknown>> => {
     const [lifecycle, retained, persisted, stats, thinking] = await Promise.all([
       readLifecycle(),
@@ -2169,6 +2199,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     abort,
     interrupt,
     compact,
+    admitResume,
     resume,
     dispose,
   };

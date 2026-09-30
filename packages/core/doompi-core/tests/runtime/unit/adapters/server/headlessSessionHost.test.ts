@@ -398,7 +398,6 @@ describe('headless session facet surface', () => {
           });
         })
         .await();
-      vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
       await current.host.activateFacets({
         root: current.context,
         installedPackages: [candidate.packageName],
@@ -496,7 +495,6 @@ describe('headless session facet surface', () => {
           host.registerTool({ name, description: name, parameters: Type.Object({}), execute });
       })
       .await();
-    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
     await current.host.activateFacets({
       root: current.context,
       installedPackages: [candidate.packageName],
@@ -569,6 +567,7 @@ describe('MCP execution boundary', () => {
   async function remoteFixture(
     owner = { majorMode: 'test', layer: 'default' },
     ui: { uri?: string; toolUri?: string; duplicate?: boolean } = {},
+    activate = true,
   ) {
     const execute = vi.fn<DoomHeadlessTool['execute']>(async (..._args) => ({
       content: [{ type: 'text' as const, text: 'done' }],
@@ -610,18 +609,75 @@ describe('MCP execution boundary', () => {
         },
       },
     ]);
-    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
-    await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
-    const snapshot = current.host.mcpSurface.readSurface();
+    if (activate) {
+      await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
+    }
+    let snapshot = activate ? current.host.mcpSurface.readSurface() : undefined;
     return {
       ...current,
       execute,
       read,
       readUi,
-      snapshot,
-      invocation: { revision: snapshot.revision, name: 'remote', arguments: {} },
+      get snapshot() {
+        return (snapshot ??= current.host.mcpSurface.readSurface());
+      },
+      get invocation() {
+        snapshot ??= current.host.mcpSurface.readSurface();
+        return { revision: snapshot.revision, name: 'remote', arguments: {} };
+      },
     };
   }
+
+  it('awaits real startup recovery admission before the first idle MCP invocation', async () => {
+    const current = await remoteFixture(undefined, {}, false);
+    let release!: () => void;
+    let entered!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const reached = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let armed = false;
+    let blocked = false;
+    let activated = false;
+    const host = current.host.host!;
+    const dispatchHook = host.dispatchHook.bind(host);
+    vi.spyOn(host, 'dispatchHook').mockImplementation(async (...args) => {
+      const result = await dispatchHook(...args);
+      if (args[0] === 'session_start') armed = true;
+      return result;
+    });
+    const mutate = current.runtime.session.mutate.bind(current.runtime.session);
+    vi.spyOn(current.runtime.session, 'mutate').mockImplementation(async (...args) => {
+      if (armed && !blocked) {
+        blocked = true;
+        entered();
+        await barrier;
+      }
+      return mutate(...args);
+    });
+    const activation = current.host
+      .activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} })
+      .then(() => {
+        activated = true;
+      });
+    try {
+      await reached;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(activated).toBe(false);
+      release();
+      await activation;
+      const surface = current.host.mcpSurface.readSurface();
+      await expect(
+        current.host.mcpSurface.invokeTool({ revision: surface.revision, name: 'remote', arguments: {} }),
+      ).resolves.toMatchObject({ content: [{ type: 'text', text: 'done' }] });
+      expect(current.execute).toHaveBeenCalledOnce();
+    } finally {
+      release();
+      await activation;
+    }
+  });
 
   it.each(['success', 'returned-error', 'thrown-error'] as const)(
     'dispatches one telemetry lifecycle for a remote %s without inventing model usage',
@@ -677,7 +733,6 @@ describe('MCP execution boundary', () => {
     const current = await fixture([], { inheritedSelection: () => ({ majorMode: 'test', domains: [] }) });
     const beforeModelRequest = createRuntime.mock.calls.at(-1)?.[0].beforeModelRequest;
     expect(beforeModelRequest).toBeDefined();
-    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
     await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
     const revision = current.host.host!.status.requestedRevision;
     await beforeModelRequest!({ phase: 'turn' } as never, undefined as never);
@@ -691,7 +746,6 @@ describe('MCP execution boundary', () => {
     const current = await fixture();
     const beforeModelRequest = createRuntime.mock.calls.at(-1)?.[0].beforeModelRequest;
     expect(beforeModelRequest).toBeDefined();
-    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
     await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
     const revision = current.host.host!.status.requestedRevision;
     await beforeModelRequest!({ phase: 'turn' } as never, undefined as never);
@@ -702,7 +756,6 @@ describe('MCP execution boundary', () => {
 
   it('keeps the remote surface empty without explicit declarations', async () => {
     const current = await fixture();
-    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
     await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
 
     const snapshot = current.host.mcpSurface.readSurface();
@@ -745,7 +798,6 @@ describe('MCP execution boundary', () => {
       ],
       { candidates: [candidate], modes: [] },
     );
-    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
     await current.host.activateFacets({
       root: current.context,
       installedPackages: [candidate.packageName],
@@ -810,7 +862,6 @@ describe('MCP execution boundary', () => {
         plugin: { name: 'test', session: (value) => ((context = value), {}) },
       },
     ]);
-    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
     await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
 
     expect(context!.loadContext()).toMatchObject({
