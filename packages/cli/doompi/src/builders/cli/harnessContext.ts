@@ -185,7 +185,7 @@ export async function buildHarnessContext(
 
   try {
     const defaultThemePath = await writeDefaultTheme(resources.temporaryDirectory);
-    const environment = { ...process.env };
+    const environment = { ...(options.environment ?? process.env) };
     // The file-backed projection published through Cordis is authoritative.
     // Never let a legacy parent-process projection leak into this Doom session.
     delete environment[DOOM_MCP_SESSION_ENV_VAR];

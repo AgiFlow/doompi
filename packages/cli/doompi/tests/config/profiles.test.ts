@@ -291,4 +291,39 @@ majorMode:
       else process.env.NX_DAEMON = inheritedNxDaemon;
     }
   });
+  it('builds from the supplied environment without mutating it or inheriting process-only values', async () => {
+    fs.mkdirSync(path.join(root, '.doom'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, '.doom', 'domains.yaml'),
+      'domains:\n  development:\n    plugins: []\naliases: {}\n',
+    );
+    fs.writeFileSync(path.join(root, '.doom', 'modes.yaml'), 'layers: {}\nmajorMode:\n  copilot: []\n');
+    const input = Object.freeze({
+      LOG_SINK_INSTANCE: 'global',
+      WORKFLOW_TEST_FLAG: 'host',
+      [DOOM_MCP_SESSION_ENV_VAR]: 'stale-parent-projection',
+      DOOMPI_PERSONA_FILE: '/tmp/stale-persona.md',
+    });
+    const inherited = process.env.DOOMPI_TEST_PROCESS_ONLY;
+    process.env.DOOMPI_TEST_PROCESS_ONLY = 'leak';
+
+    try {
+      const context = await buildHarnessContext(baseOptions({ mcp: false, agents: false, environment: input }));
+      try {
+        expect(context.environment.LOG_SINK_INSTANCE).toBe('global');
+        expect(context.environment.WORKFLOW_TEST_FLAG).toBe('host');
+        expect(context.environment.DOOMPI_TEST_PROCESS_ONLY).toBeUndefined();
+        expect(context.environment[DOOM_MCP_SESSION_ENV_VAR]).toBeUndefined();
+        expect(context.environment.DOOMPI_PERSONA_FILE).toBeUndefined();
+        expect(context.environment.NX_DAEMON).toBe('false');
+        expect(input[DOOM_MCP_SESSION_ENV_VAR]).toBe('stale-parent-projection');
+        expect(input).not.toHaveProperty('DOOMPI_STATE');
+      } finally {
+        await context.cleanup();
+      }
+    } finally {
+      if (inherited === undefined) delete process.env.DOOMPI_TEST_PROCESS_ONLY;
+      else process.env.DOOMPI_TEST_PROCESS_ONLY = inherited;
+    }
+  });
 });

@@ -68,5 +68,11 @@ export function resolveHarnessOptions(input: ResolveHarnessOptionsInput): Harnes
     loadDomains(configRoot, homeDirectory).defaultDomains,
     loadProfileCatalog(configRoot, homeDirectory).defaultProfile,
   );
-  return { repoRoot, ...(input.configRoot === undefined ? {} : { configRoot }), ...parsed.options, homeDirectory };
+  return {
+    repoRoot,
+    ...(input.configRoot === undefined ? {} : { configRoot }),
+    ...parsed.options,
+    homeDirectory,
+    ...(input.environment === undefined ? {} : { environment: input.environment }),
+  };
 }

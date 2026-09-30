@@ -96,4 +96,13 @@ describe('resolveHarnessOptions', () => {
       resolveHarnessOptions({ args: ['--cwd', cwd], environment: { DOOMPI_PROFILE: 'caveman' }, cwd }).profile,
     ).toBe('caveman');
   });
+  it('preserves an explicit execution environment without adding selection defaults', () => {
+    const cwd = temporaryDirectory();
+    const environment = Object.freeze({ LOG_SINK_INSTANCE: 'global' });
+
+    const options = resolveHarnessOptions({ args: ['--cwd', cwd], environment, cwd });
+
+    expect(options.environment).toBe(environment);
+    expect(resolveHarnessOptions({ args: ['--cwd', cwd], cwd }).environment).toBeUndefined();
+  });
 });
