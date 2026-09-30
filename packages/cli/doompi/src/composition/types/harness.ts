@@ -12,6 +12,8 @@ export interface HarnessOptions {
   /** Injected home root for home-scoped generated artifacts. */
   homeDirectory?: string;
   cwd: string;
+  /** Execution environment supplied by the caller; defaults to process.env. */
+  environment?: NodeJS.ProcessEnv;
   /** One persona and its environment defaults from `.doom/profiles.yaml`. */
   profile?: string;
   /** Domain names that select plugins, skills, agents, and MCP scope. */
