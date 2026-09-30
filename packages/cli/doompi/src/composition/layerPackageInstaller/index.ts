@@ -50,6 +50,7 @@ export const SAFE_TRANSITIVE_OVERRIDES = {
   'js-yaml@5.0.0 - 5.2.1': '^5.2.2',
   'liquidjs@10.0.0 - 10.27.1': '^10.27.2',
   'protobufjs@8.0.0 - 8.7.1': '^8.7.2',
+  'undici@7.0.0 - 7.29.0': '^7.29.1',
 } as const satisfies Readonly<Record<string, string>>;
 
 const SAFE_TRANSITIVE_PACKAGE_NAMES = new Set(Object.keys(SAFE_TRANSITIVE_OVERRIDES).map(overridePackageName));

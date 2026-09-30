@@ -164,6 +164,7 @@ describe('ensureLayerPackages', () => {
       'js-yaml@5.0.0 - 5.2.1': '^5.2.2',
       'liquidjs@10.0.0 - 10.27.1': '^10.27.2',
       'protobufjs@8.0.0 - 8.7.1': '^8.7.2',
+      'undici@7.0.0 - 7.29.0': '^7.29.1',
     });
   });
   it('writes the complete secure package graph and installs it with one package-manager call', async () => {
