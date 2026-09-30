@@ -392,7 +392,7 @@ function InlineStepOutput(props: InlineStepOutputProps) {
     step: step?.name,
   });
   if (sessionRef === undefined || renderSessionTranscript === undefined) return <InlineTerminalOutput {...props} />;
-  const live = step?.status === 'running';
+  const live = run.stage === 'running' && step?.status === 'running';
   return (
     <div data-testid="workflow-inline-conversation" className="flex min-h-0 flex-1 flex-col bg-doom-deep">
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-doom-border-soft px-3">

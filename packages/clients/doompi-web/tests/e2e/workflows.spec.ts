@@ -59,6 +59,120 @@ test('shows a running workflow with its jobs, steps, and breadcrumb', async ({ p
   await expect(page.getByTestId('jobs-pane')).toBeVisible();
 });
 
+test('an external recovered running step clears its old conversation and guidance on indexed restart', async ({
+  page,
+  cockpit,
+}) => {
+  const at = new Date().toISOString();
+  const fixture = { workspace: 'default', stage: 'running' as const, runKey: 'recovered-run' };
+  const ref = { kind: 'session', id: 'external-old-session' };
+  const progress = [
+    { type: 'job', status: 'running', job: 'build', index: 0, total: 1, at },
+    { type: 'step', status: 'running', job: 'build', step: 'implement', index: 0, at },
+    { type: 'step', status: 'running', job: 'build', step: 'implement', ref, at },
+  ];
+  writeWorkflowRun(cockpit.workflowHome, { ...fixture, record: OWNED, progress });
+  const runningRun = {
+    ...fixture,
+    displayName: 'Recovered Run',
+    workflowName: fixture.runKey,
+    workflowPath: `/workspace/automations/${fixture.runKey}.workflow.yml`,
+    startedAt: at,
+    jobs: [{ name: 'build', phase: 'job', status: 'running', steps: [{ name: 'implement', status: 'running', ref }] }],
+  };
+
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  cockpit.publishSessionEvent('workflow_runs', 's1', { runs: [runningRun] });
+  await page.getByTestId('activity-open-workflows').click();
+  await expect(page.getByTestId('workflow-inline-conversation')).toBeVisible();
+  await page.getByTestId('step-steer-input').fill('guidance for the old attempt');
+  await page.getByTestId('workflow-open-conversation').click();
+  await expect(page.getByTestId('step-conversation-panel')).toBeVisible();
+  await page.getByTestId('step-steer-input').fill('old conversation draft');
+
+  // The interrupted attempt never settled. An indexed start still replaces it.
+  const restartedAt = new Date(Date.parse(at) + 1000).toISOString();
+  writeWorkflowRun(cockpit.workflowHome, {
+    ...fixture,
+    record: OWNED,
+    progress: [
+      ...progress,
+      { type: 'step', status: 'running', job: 'build', step: 'implement', index: 0, at: restartedAt },
+    ],
+  });
+  // Live channels carry the folded view, not raw progress events. The parser's
+  // indexed-restart contract is covered by workflow unit tests.
+  cockpit.publishSessionEvent('workflow_runs', 's1', {
+    runs: [
+      {
+        ...runningRun,
+        jobs: [
+          {
+            name: 'build',
+            phase: 'job',
+            status: 'running',
+            steps: [{ name: 'implement', status: 'running', startedAt: restartedAt }],
+          },
+        ],
+      },
+    ],
+  });
+  await expect(page.getByTestId('step-terminal-panel')).toBeVisible();
+  await expect(page.getByTestId('step-conversation-panel')).toHaveCount(0);
+  await expect(page.getByTestId('step-steer-composer')).toHaveCount(0);
+
+  await page.getByTestId('activity-open-workflows').click();
+  await expect(page.getByTestId('step-row-implement')).toHaveAttribute('data-step-status', 'running');
+  await expect(page.getByTestId('workflow-inline-output')).toBeVisible();
+  await expect(page.getByTestId('workflow-inline-conversation')).toHaveCount(0);
+  await expect(page.getByTestId('step-steer-composer')).toHaveCount(0);
+});
+
+test('a terminal workflow with a stale running step retains conversation without offering guidance', async ({
+  page,
+  cockpit,
+}) => {
+  const at = new Date().toISOString();
+  const fixture = { workspace: 'default', stage: 'error' as const, runKey: 'interrupted-run' };
+  const ref = { kind: 'session', id: 'external-settled-session' };
+  writeWorkflowRun(cockpit.workflowHome, {
+    ...fixture,
+    record: { ...OWNED, outcome: 'failed', finishedAt: at },
+    progress: [
+      { type: 'job', status: 'running', job: 'build', index: 0, total: 1, at },
+      { type: 'step', status: 'running', job: 'build', step: 'implement', ref, at },
+    ],
+  });
+
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  cockpit.publishSessionEvent('workflow_runs', 's1', {
+    runs: [
+      {
+        ...fixture,
+        displayName: 'Interrupted Run',
+        workflowName: fixture.runKey,
+        workflowPath: `/workspace/automations/${fixture.runKey}.workflow.yml`,
+        startedAt: at,
+        finishedAt: at,
+        outcome: 'failed',
+        jobs: [
+          { name: 'build', phase: 'job', status: 'running', steps: [{ name: 'implement', status: 'running', ref }] },
+        ],
+      },
+    ],
+  });
+  await page.getByTestId('activity-open-workflows').click();
+  await expect(page.getByTestId('step-row-implement')).toHaveAttribute('data-step-status', 'running');
+  await expect(page.getByTestId('workflow-inline-conversation')).toBeVisible();
+  await expect(page.getByTestId('step-steer-composer')).toHaveCount(0);
+  await page.getByTestId('workflow-open-conversation').click();
+  await expect(page.getByTestId('step-conversation-panel')).toBeVisible();
+  await expect(page.getByTestId('step-terminal-stage')).toHaveText('error');
+  await expect(page.getByTestId('step-steer-composer')).toHaveCount(0);
+});
+
 test('renders Markdown artifacts and explains when an artifact is empty', async ({ page, cockpit }) => {
   const fixture = { workspace: 'default', stage: 'completed' as const, runKey: 'publication' };
   writeWorkflowRun(cockpit.workflowHome, {

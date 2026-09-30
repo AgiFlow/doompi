@@ -31,6 +31,7 @@ interface StepProgressEvent {
   readonly status: string;
   readonly job: string;
   readonly step?: string;
+  readonly index?: number;
   readonly ref?: StepRef;
 }
 
@@ -55,7 +56,8 @@ export function stepRefsFrom(events: readonly StepProgressEvent[]): RunStepRefs 
     const key = `${event.job}\u0000${event.step}`;
     const previous = steps.get(key);
     const running = event.status === 'running';
-    const restarted = running && previous?.running !== true;
+    // Indexed starts also replace attempts interrupted while still running.
+    const restarted = running && (event.index !== undefined || previous?.running !== true);
     if (restarted) steps.delete(key);
     const ref = event.ref ?? (restarted ? undefined : previous?.ref);
     steps.set(key, { running, ...(ref === undefined ? {} : { ref }) });
