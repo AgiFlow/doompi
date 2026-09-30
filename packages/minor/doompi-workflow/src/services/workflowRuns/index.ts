@@ -264,6 +264,11 @@ export function foldWorkflowProgress(events: readonly WorkflowProgressEvent[]): 
       jobs.push(job);
     }
     if (event.type === 'job') {
+      if (event.status === 'running' && (event.index !== undefined || job.status !== 'running')) {
+        delete job.reason;
+        delete job.endedAt;
+        delete job.startedAt;
+      }
       job.status = event.status;
       if (event.reason !== undefined) job.reason = event.reason;
       if (event.index !== undefined) job.index = event.index;
@@ -277,7 +282,8 @@ export function foldWorkflowProgress(events: readonly WorkflowProgressEvent[]): 
     if (step === undefined) {
       step = { name: event.step, status: event.status };
       job.steps.push(step);
-    } else if (event.status === 'running' && step.status !== 'running') {
+    } else if (event.status === 'running' && (event.index !== undefined || step.status !== 'running')) {
+      // An indexed start is a new attempt even if interruption left it running.
       // Started again, as a fix loop does: nothing of the previous attempt, its
       // session or pane included, belongs to this one. Guidance for the old
       // session would wake an agent working beside the new attempt.

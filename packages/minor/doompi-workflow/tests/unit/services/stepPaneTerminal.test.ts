@@ -8,6 +8,7 @@ import type {
   StepPaneTerminalDependencies,
   StepRef,
 } from '../../../src/services/stepPaneTerminal/type';
+import { parseWorkflowProgress } from '../../../src/services/workflowRuns';
 import type { TerminalPort } from '../../../src/services/workflowTerminal';
 
 const PANE: StepRef = { kind: 'pane', id: 'doom-runner-workflow-1', label: 'Install' };
@@ -79,6 +80,30 @@ describe('stepRefsFrom', () => {
     expect(stepRefsFrom([...events, event('running', 'Diagnose', retry)])).toMatchObject({
       current: retry,
       running: [retry],
+    });
+  });
+
+  it('replaces an interrupted indexed attempt without losing history or parallel refs', () => {
+    const replacement = { kind: 'session', id: 'replacement' };
+    const events = [
+      event('running', 'Diagnose', SESSION),
+      event('running', 'Install', PANE),
+      { ...event('running', 'Diagnose'), index: 0 },
+    ];
+    expect(stepRefsFrom(events)).toEqual({ current: PANE, running: [PANE], lastPane: PANE, known: [SESSION, PANE] });
+    const raw = [
+      ...events,
+      event('running', 'Diagnose', replacement),
+      { ...event('running', 'Diagnose'), ref: { kind: 'session' } },
+      { ...event('running', 'Diagnose'), index: 'invalid' },
+    ]
+      .map((entry) => JSON.stringify(entry))
+      .join('\n');
+    expect(stepRefsFrom(parseWorkflowProgress(raw))).toEqual({
+      current: replacement,
+      running: [PANE, replacement],
+      lastPane: PANE,
+      known: [SESSION, PANE, replacement],
     });
   });
 

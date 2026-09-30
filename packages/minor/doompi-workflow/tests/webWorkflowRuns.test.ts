@@ -108,6 +108,43 @@ describe('workflowRuns', () => {
     expect(job?.steps).toEqual([{ name: 'Diagnose', status: 'running', startedAt: '2026-09-27T10:06:00.000Z' }]);
   });
 
+  it.each(['running', 'failed'] as const)('resets indexed recovery attempts after %s', (status) => {
+    const ref = { kind: 'session', id: 'old-session' };
+    const start: WorkflowProgressEvent = {
+      type: 'step',
+      status: 'running',
+      job: 'fix',
+      step: 'Fix',
+      index: 0,
+      at: 'start',
+    };
+    const events: WorkflowProgressEvent[] = [
+      { type: 'job', status: 'running', job: 'fix', index: 0, at: 'start' },
+      start,
+      { ...start, index: undefined, ref, at: 'session' },
+      { ...start, index: undefined, status, reason: 'old reason', at: 'interrupted' },
+      { type: 'job', status, job: 'fix', reason: 'old reason', at: 'interrupted' },
+      { type: 'job', status: 'running', job: 'fix', index: 0, at: 'restart' },
+      { ...start, at: 'restart' },
+    ];
+    const fold = () =>
+      foldWorkflowProgress(parseWorkflowProgress(events.map((event) => JSON.stringify(event)).join('\n')));
+    expect(fold()).toEqual([
+      {
+        name: 'fix',
+        phase: 'job',
+        status: 'running',
+        index: 0,
+        startedAt: 'restart',
+        steps: [{ name: 'Fix', status: 'running', startedAt: 'restart' }],
+      },
+    ]);
+    const replacement = { kind: 'session', id: 'replacement' };
+    events.push({ ...start, index: undefined, ref: replacement, at: 'replacement' });
+    events.push({ ...start, index: undefined, at: 'update' });
+    expect(fold()[0]?.steps).toEqual([{ name: 'Fix', status: 'running', startedAt: 'restart', ref: replacement }]);
+  });
+
   it('folds the progress log into the job tree, pinned to observed real-world lines', () => {
     // Verbatim shape of a dev-fix.workflow.yml run's progress.ndjson, plus a
     // failing job to cover the terminal states.

@@ -278,6 +278,45 @@ describe('workflow hub api: steer', () => {
     expect(steer).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects the interrupted session until indexed recovery records its replacement', async () => {
+    const steer = vi.fn(async () => undefined);
+    const runDir = runDirectory({ 'progress.ndjson': progressWithRef({ kind: 'session', id: 'old' }) });
+    const app = steerApi(record(), runDir, steer);
+    const request = (step?: string) =>
+      app.request(`${BASE}/steer`, {
+        method: 'POST',
+        body: JSON.stringify({ message: 'continue', ...(step === undefined ? {} : { step }) }),
+      });
+    const append = (fields: object) =>
+      fs.appendFileSync(
+        path.join(runDir, 'progress.ndjson'),
+        `\n${JSON.stringify({
+          type: 'step',
+          status: 'running',
+          job: 'report',
+          step: 'Report',
+          at: '2026-01-01T00:01:00.000Z',
+          ...fields,
+        })}`,
+      );
+    // Prime the refs cache before appending the preserved log's recovery start.
+    expect((await request('old')).status).toBe(200);
+    steer.mockClear();
+    append({ index: 0, total: 1 });
+    expect((await request('old')).status).toBe(409);
+    expect((await request()).status).toBe(409);
+    expect(steer).not.toHaveBeenCalled();
+    append({ ref: { kind: 'session', id: 'replacement' } });
+    append({ ref: { kind: 'session' } });
+    expect((await request('old')).status).toBe(409);
+    expect((await request('replacement')).status).toBe(200);
+    expect((await request()).status).toBe(200);
+    expect(steer.mock.calls).toEqual([
+      ['replacement', 'continue'],
+      ['replacement', 'continue'],
+    ]);
+  });
+
   it('refuses a step that runs in a terminal pane', async () => {
     const steer = vi.fn(async () => undefined);
     const app = steerApi(
