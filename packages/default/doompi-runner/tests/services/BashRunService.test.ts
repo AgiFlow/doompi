@@ -176,6 +176,72 @@ describe('host-wide resource admission', () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
+  it('records the launched PID before returning a promoted heavy runner', async () => {
+    const release = Object.assign(vi.fn(), { attachProcess: vi.fn(async () => undefined) });
+    const { service, registry, spawner } = harness(4242, rmuxBackend, new FakeRtkProcessor(), {
+      acquire: async () => release,
+      getSnapshot: () => ({ running: 1, queued: 0, limit: 1 }),
+    });
+    await expect(service.run({ ...request, command: 'pnpm test', background: true })).resolves.toMatchObject({
+      kind: 'promoted',
+    });
+    expect(registry.registered).toHaveLength(1);
+    expect(release.attachProcess).toHaveBeenCalledWith(4242);
+    spawner.last.exit({ code: 0, signal: null });
+    await flushPromises();
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { stopped: false, abort: false },
+    { stopped: true, abort: false },
+    { stopped: false, abort: true },
+  ])('keeps attachment failure tracked (stopped=$stopped, abort=$abort)', async ({ stopped, abort }) => {
+    let finish: (result: ExitResult) => void = () => undefined;
+    const completion = new Promise<ExitResult>((resolve) => {
+      finish = resolve;
+    });
+    const stop = vi.fn(async () => {
+      if (stopped) finish({ code: null, signal: 'SIGTERM' });
+      return stopped;
+    });
+    const handle: RunHandle = {
+      id: 'attached-runner',
+      name: 'derived-name',
+      pid: 4242,
+      logPath: '/logs/attached-runner.log',
+      backend: 'rmux',
+      output: () => '',
+      completion: () => completion,
+      detach: () => undefined,
+      stop,
+    };
+    const backend: IRmuxBackend = { ...rmuxBackend, launch: async ({ id }) => ({ ...handle, id }) };
+    const controller = new AbortController();
+    const release = Object.assign(vi.fn(), {
+      attachProcess: vi.fn(async () => {
+        if (abort) controller.abort();
+        throw new Error('attach failed');
+      }),
+    });
+    const { service, registry } = harness(4242, backend, new FakeRtkProcessor(), {
+      acquire: async () => release,
+      getSnapshot: () => ({ running: 1, queued: 0, limit: 1 }),
+    });
+    const result = await service.run({ ...request, command: 'pnpm test', background: true, signal: controller.signal });
+    expect(stop).toHaveBeenCalledOnce();
+    expect(registry.registered).toHaveLength(1);
+    expect(result.kind).toBe(stopped ? 'failed' : 'promoted');
+    if (!stopped) {
+      expect(registry.completed).toEqual([]);
+      expect(release).not.toHaveBeenCalled();
+      finish({ code: 0, signal: null });
+    }
+    await flushPromises();
+    expect(registry.completed).toHaveLength(1);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
   it.each([false, true])('does not launch a cancelled queued command (interactive=%s)', async (interactive) => {
     const acquire = vi.fn(
       (signal?: AbortSignal) =>

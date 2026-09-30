@@ -28,7 +28,7 @@ import type {
   DoomHubSessionScope,
 } from '@agimon-ai/doompi-core/hubChannel';
 import { loadMcpBundle, type LoadedMcpBundle } from '@agimon-ai/doompi-core/mcpFacet';
-import { sharedExecutionBudget } from '@agimon-ai/doompi-core/packageApi';
+import { createServerExecutionBudget } from '@agimon-ai/doompi-core/packageApi';
 import type { DoomHostMediaArbitration, DoomPeerAgentRegistry } from '@agimon-ai/doompi-core/packageApi';
 import { serveSessionApis, type PackageApiServer } from '@agimon-ai/doompi-core/packageApiServer';
 import { piAgentDirectory } from '@agimon-ai/doompi-core/piSettings';
@@ -88,7 +88,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   // Keep this selection local to this server and its admitted sessions. The
   // process environment may also serve unrelated hosts and must not be changed.
   const baseEnvironment: NodeJS.ProcessEnv = { ...incomingEnvironment, LOG_SINK_INSTANCE: 'global' };
-  const executionBudget = sharedExecutionBudget(baseEnvironment);
+  const executionBudget = createServerExecutionBudget(baseEnvironment);
   await ensureGlobalLogSink({ cwd: baseCwd, env: baseEnvironment, notice }).catch((error: unknown) =>
     notice(`Global log sink unavailable: ${error instanceof Error ? error.message : String(error)}`),
   );

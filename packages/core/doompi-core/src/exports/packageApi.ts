@@ -30,4 +30,4 @@ export {
   type DoomRequestReceipts,
   type DoomApiScope,
 } from '../schemas/packageApi';
-export { createExecutionBudget, sharedExecutionBudget } from '../services/executionBudget';
+export { createExecutionBudget, createServerExecutionBudget, sharedExecutionBudget } from '../services/executionBudget';

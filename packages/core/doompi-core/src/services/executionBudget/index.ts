@@ -121,7 +121,12 @@ export function createExecutionBudget(
   };
 
   const schedule = (): void => {
-    if (timer || (!queue.length && !released.size)) return;
+    if (timer) {
+      if (queue.length) timer.ref();
+      else timer.unref();
+      return;
+    }
+    if (!queue.length && !released.size) return;
     timer = setTimeout(() => {
       timer = undefined;
       drain();
@@ -217,13 +222,27 @@ export function createExecutionBudget(
 
 /** Reused across standalone sessions in a process; server-owned sessions pass their budget explicitly. */
 const processBudgets = new Map<string, ReturnType<typeof createExecutionBudget>>();
+function budgetConfig(environment: Readonly<Record<string, string | undefined>>): { file: string; limit: number } {
+  return {
+    file:
+      environment.DOOM_RUNNER_BUDGET_DB ??
+      path.join(environment.HOME ?? os.homedir(), '.pi', 'agent', 'execution-budget.db'),
+    limit: Number(environment.DOOM_RUNNER_MAX_HEAVY_JOBS ?? 2),
+  };
+}
+
+/** An independently owned handle sharing the same host-wide SQLite admission. */
+export function createServerExecutionBudget(
+  environment: Readonly<Record<string, string | undefined>>,
+): ReturnType<typeof createExecutionBudget> {
+  const { file, limit } = budgetConfig(environment);
+  return createExecutionBudget(limit, file);
+}
+
 export function sharedExecutionBudget(
   environment: Readonly<Record<string, string | undefined>>,
 ): ReturnType<typeof createExecutionBudget> {
-  const file =
-    environment.DOOM_RUNNER_BUDGET_DB ??
-    path.join(environment.HOME ?? os.homedir(), '.pi', 'agent', 'execution-budget.db');
-  const limit = Number(environment.DOOM_RUNNER_MAX_HEAVY_JOBS ?? 2);
+  const { file, limit } = budgetConfig(environment);
   const key = `${file}:${limit}`;
   let budget = processBudgets.get(key);
   if (!budget) {
