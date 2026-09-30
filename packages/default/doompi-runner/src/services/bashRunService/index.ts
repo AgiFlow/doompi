@@ -90,20 +90,8 @@ export class BashRunService implements IBashRunService {
       return { kind: FAILED, id, name, error: 'The command did not start, so it cannot be supervised' };
     }
     // A background promotion is not process completion. Keep the slot until actual exit.
-    if (releaseSlot) {
-      void handle.completion().then(releaseSlot, releaseSlot);
-      try {
-        await releaseSlot.attachProcess?.(handle.pid);
-      } catch (error) {
-        await handle.stop();
-        return { kind: FAILED, id, name, error: error instanceof Error ? error.message : String(error) };
-      }
-    }
-    if (request.signal?.aborted) {
-      await handle.stop();
-      return { kind: FAILED, id, name, error: 'Operation aborted' };
-    }
-
+    if (releaseSlot) void handle.completion().then(releaseSlot, releaseSlot);
+    // Register first so a process that survives PID attachment failure remains discoverable.
     try {
       await this.registry.register({
         id,
@@ -120,6 +108,23 @@ export class BashRunService implements IBashRunService {
     } catch (error) {
       await handle.stop();
       return { kind: FAILED, id, name, error: error instanceof Error ? error.message : String(error) };
+    }
+
+    if (releaseSlot) {
+      try {
+        await releaseSlot.attachProcess?.(handle.pid);
+      } catch (error) {
+        if (!(await handle.stop())) {
+          return this.promote(handle, 'requested', undefined);
+        }
+        await this.registry.complete(id, { reason: 'stopped', code: null, signal: 'SIGTERM' });
+        return { kind: FAILED, id, name, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    if (request.signal?.aborted) {
+      if (!(await handle.stop())) return this.promote(handle, 'requested', undefined);
+      await this.registry.complete(id, { reason: 'stopped', code: null, signal: 'SIGTERM' });
+      return { kind: FAILED, id, name, error: 'Operation aborted' };
     }
 
     // An interactive run has nothing to wait for: it is going to prompt, so

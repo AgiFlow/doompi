@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createExecutionBudget } from '../src/services/executionBudget';
+import { createExecutionBudget, createServerExecutionBudget } from '../src/services/executionBudget';
 
 let directory: string;
 const budgets: Array<ReturnType<typeof createExecutionBudget>> = [];
@@ -106,6 +106,48 @@ describe('shared execution admission', () => {
     db.close();
     (await pending)();
     expect(instance.getSnapshot().running).toBe(0);
+  });
+
+  it('keeps a queued retry alive after a busy release', async () => {
+    const source = new URL('../src/services/executionBudget/index.ts', import.meta.url).href;
+    const databasePath = path.join(directory, 'retry.db');
+    const script = `import {createExecutionBudget} from ${JSON.stringify(source)};
+import {DatabaseSync} from 'node:sqlite';
+const budget=createExecutionBudget(1,${JSON.stringify(databasePath)});
+const release=await budget.acquire();
+const lock=new DatabaseSync(${JSON.stringify(databasePath)});
+lock.exec('BEGIN IMMEDIATE');
+release();
+const pending=budget.acquire();
+lock.exec('COMMIT'); lock.close();
+(await pending)(); budget.close();`;
+    const child = spawn(process.execPath, ['--experimental-strip-types', '--input-type=module', '-e', script], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
+    const exitCode = await new Promise<number | null>((resolve, reject) => {
+      child.on('error', reject);
+      child.on('exit', resolve);
+    });
+    expect(exitCode, stderr).toBe(0);
+  });
+
+  it('keeps another independent consumer operational after a server budget closes', async () => {
+    const environment = { DOOM_RUNNER_BUDGET_DB: path.join(directory, 'server.db'), DOOM_RUNNER_MAX_HEAVY_JOBS: '1' };
+    const first = createServerExecutionBudget(environment);
+    const second = createServerExecutionBudget(environment);
+    budgets.push(first, second);
+    expect(first).not.toBe(second);
+    const release = await first.acquire();
+    const pending = second.acquire();
+    first.close();
+    release();
+    const next = await pending;
+    next();
+    expect(second.getSnapshot()).toEqual({ running: 0, queued: 0, limit: 1 });
   });
 
   it('does not reclaim a dead owner while its attached child is alive', async () => {
