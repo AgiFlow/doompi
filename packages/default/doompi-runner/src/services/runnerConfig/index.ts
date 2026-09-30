@@ -160,7 +160,9 @@ export function noninteractiveEnvironment(
   return {
     NX_NATIVE_COMMAND_RUNNER: environment.NX_NATIVE_COMMAND_RUNNER ?? 'false',
     NX_TUI: environment.NX_TUI ?? 'false',
-    NX_PARALLEL: environment.NX_PARALLEL ?? '2',
+    NX_PARALLEL: environment.NX_PARALLEL ?? '1',
+    DOOM_RUNNER_MAX_WORKERS: environment.DOOM_RUNNER_MAX_WORKERS ?? '2',
+    PLAYWRIGHT_WORKERS: environment.PLAYWRIGHT_WORKERS ?? '1',
     VITEST_MAX_WORKERS: environment.VITEST_MAX_WORKERS ?? '2',
   };
 }

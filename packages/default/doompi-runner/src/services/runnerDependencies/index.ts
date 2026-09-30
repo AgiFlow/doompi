@@ -1,4 +1,4 @@
-import type { DoomHostExecutionBudget } from '@agimon-ai/doompi-core/packageApi';
+import { sharedExecutionBudget, type DoomHostExecutionBudget } from '@agimon-ai/doompi-core/packageApi';
 
 import { BashRunService } from '../bashRunService';
 import { SystemClock } from '../clock';
@@ -90,7 +90,7 @@ export function createRunnerDependencies(
         rtkProcessor(),
         cwd,
         environment,
-        overrides.executionBudget,
+        overrides.executionBudget ?? sharedExecutionBudget(environment),
       ),
   );
 

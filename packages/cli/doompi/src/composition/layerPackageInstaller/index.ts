@@ -44,12 +44,14 @@ function overridePackageName(selector: string): string {
 export const SAFE_TRANSITIVE_OVERRIDES = {
   '@hono/node-server@2.0.0 - 2.0.9': '^2.0.10',
   '@opentelemetry/core@2.0.0 - 2.7.999': '2.8.0',
-  'brace-expansion@5.0.0 - 5.0.8': '^5.0.9',
+  'brace-expansion@1.0.0 - 1.1.20': '^1.1.21',
+  'brace-expansion@5.0.0 - 5.0.11': '^5.0.12',
   'hono@4.0.0 - 4.13.7': '4.13.8',
   'js-yaml@4.0.0 - 4.3.1': '^4.3.2',
   'js-yaml@5.0.0 - 5.2.1': '^5.2.2',
   'liquidjs@10.0.0 - 10.27.1': '^10.27.2',
   'protobufjs@8.0.0 - 8.7.1': '^8.7.2',
+  'undici@7.0.0 - 7.29.0': '^7.29.1',
 } as const satisfies Readonly<Record<string, string>>;
 
 const SAFE_TRANSITIVE_PACKAGE_NAMES = new Set(Object.keys(SAFE_TRANSITIVE_OVERRIDES).map(overridePackageName));

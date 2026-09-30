@@ -1,6 +1,7 @@
 import { defineConfig } from 'tsdown';
 
 const runtimeEntries = {
+  executionBudget: 'src/services/executionBudget/index.ts',
   '*': ['src/exports/**/*.ts', '!src/exports/apiContracts.ts'],
   runtimeCordisHost: 'src/pi/cordisHost.ts',
   toolInventory: 'src/services/toolInventory/index.ts',

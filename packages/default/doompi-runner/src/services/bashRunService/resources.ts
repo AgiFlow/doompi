@@ -1,20 +1,83 @@
-/** Classify known expensive commands without rewriting the user's shell command. */
+/** Split shell words without mistaking quoted examples for executed commands. */
+function commandInvocations(command: string): string[][] {
+  const invocations: string[][] = [];
+  let words: string[] = [];
+  let word = '';
+  let quote = '';
+  let escaped = false;
+  const flushWord = (): void => {
+    if (word) words.push(word);
+    word = '';
+  };
+  for (const character of command) {
+    if (escaped) {
+      word += character;
+      escaped = false;
+    } else if (character === '\\' && quote !== "'") {
+      escaped = true;
+    } else if (quote) {
+      if (character === quote) quote = '';
+      else word += character;
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (';&|\n'.includes(character)) {
+      flushWord();
+      if (words.length) invocations.push(words);
+      words = [];
+    } else if (/\s/.test(character)) {
+      flushWord();
+    } else {
+      word += character;
+    }
+  }
+  flushWord();
+  if (words.length) invocations.push(words);
+  return invocations;
+}
+
+function executableName(word: string): string {
+  return word.replace(/\\/g, '/').split('/').pop() ?? word;
+}
+
+/** Admission policy, not a shell security boundary. Opaque scripts still need explicit ownership. */
 export function isHeavyCommand(command: string): boolean {
-  // ponytail: common build/test entry points only. Add explicit resource labels before scheduling opaque shell scripts.
-  return command.split(/\s*(?:&&|\|\||[;|\n])\s*/).some((segment) => {
-    let invocation = segment.trim().replace(/^(?:[A-Za-z_][A-Za-z_0-9]*=(?:"[^"]*"|'[^']*'|\S+)\s+)*/, '');
-    invocation = invocation.replace(/^(?:env|command|exec|time)\s+/, '');
-    const packageManager =
-      /^(?:pnpm|npm|npx|yarn|bun)\s+(?:(?:--filter|--dir|-C)\s+\S+\s+|(?:-w|--workspace-root)\s+)*(?:(?:exec|run)\s+)?/.exec(
-        invocation,
-      );
-    if (packageManager) invocation = invocation.slice(packageManager[0].length);
-    if (/(?:^|\s)--(?:help|version)(?:\s|$)/.test(invocation)) return false;
-    if (packageManager && /^(?:build|test|lint|typecheck|check)(?::[\w-]+)?(?:\s|$)/.test(invocation)) return true;
-    if (/^(?:\S*\/)?(?:vitest|jest|tsc|tsdown|webpack|rollup|esbuild)(?:\s|$)/.test(invocation)) return true;
+  const heavyTarget =
+    /(?:^|[\s:,=])(?:build(?:-[\w-]+)?|test(?:-[\w-]+)?|lint|fixcode|typecheck|check|bundle)(?:[\s:,=]|$)/;
+  const expensiveBinary =
+    /^(?:vitest|jest|tsc|tsgo|tsdown|webpack|rollup|esbuild|oxlint|oxfmt|pytest|maestro|xcodebuild|gradle|gradlew)$/;
+  return commandInvocations(command).some((words) => {
+    while (words.length) {
+      const first = words[0]!;
+      if (/^[A-Za-z_][A-Za-z_0-9]*=/.test(first) || /^(?:env|command|exec|time)$/.test(executableName(first))) {
+        words.shift();
+      } else break;
+    }
+    let executable = executableName(words.shift() ?? '');
+    if (words.includes('--help') || words.includes('--version')) return false;
+    if (/^(?:pnpm|npm|npx|yarn|bun)$/.test(executable)) {
+      while (words[0]?.startsWith('-')) {
+        const option = words.shift()!;
+        if (/^(?:--filter|--dir|-C|--cwd|--prefix)$/.test(option)) words.shift();
+      }
+      if (words[0] === 'exec' || words[0] === 'run') words.shift();
+      const invocation = words.shift() ?? '';
+      if (/^(?:build|test|lint|fixcode|typecheck|check)(?::[\w-]+)?$/.test(invocation)) return true;
+      executable = executableName(invocation);
+    }
+    if (expensiveBinary.test(executable)) return true;
+    if (executable === 'nx') {
+      if (/^(?:show|graph|daemon|reset|report|list)$/.test(words[0] ?? '')) return false;
+      return heavyTarget.test(words.join(' '));
+    }
+    if (/^(?:playwright|vite|cargo|go)$/.test(executable)) return heavyTarget.test(words.join(' '));
+    if (/^(?:python|python3)$/.test(executable)) return words[0] === '-m' && words[1] === 'pytest';
+    if (/^(?:node|bun|tsx)$/.test(executable)) {
+      executable = executableName(words.find((word) => !word.startsWith('-')) ?? '');
+    }
+    const script = executable.replace(/\.(?:[cm]?[jt]s)$/, '');
     return (
-      /^nx\s+(?!(?:show|graph|daemon|reset)\b)/.test(invocation) &&
-      /(?:^|[\s:,])(?:build|test(?:-[\w-]+)?|lint|typecheck)(?:[\s:,=]|$)/.test(invocation)
+      script !== executable &&
+      (expensiveBinary.test(script) || /^(?:build|test|lint|fixcode|typecheck|dev)(?:[-:]|$)/.test(script))
     );
   });
 }

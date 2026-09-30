@@ -711,6 +711,7 @@
       "./cordisHost": "tir",
       "./delegation": "tir",
       "./doomPackage": "tir",
+      "./executionBudget": "tir",
       "./extensionFile": "tir",
       "./footer": "tir",
       "./headless": "tir",
@@ -890,6 +891,11 @@
         "types": "./dist/doomPackage.d.mts",
         "import": "./dist/doomPackage.mjs",
         "require": "./dist/doomPackage.cjs"
+      },
+      "./executionBudget": {
+        "types": "./dist/executionBudget.d.mts",
+        "import": "./dist/executionBudget.mjs",
+        "require": "./dist/executionBudget.cjs"
       },
       "./extensionFile": {
         "types": "./dist/extensionFile.d.mts",

@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -94,12 +95,12 @@ function stubRuntime(entries: Entry[], options?: { parentSessionId?: string; fai
   };
 }
 
-afterEach(() => {
+afterEach(async () => {
   while (temporaryRoots.length > 0) {
     const root = temporaryRoots.pop();
     // The settings and model runtimes can still be flushing files into the root as it is
     // removed; retrying covers the ENOTEMPTY that race produces on slower CI disks.
-    if (root !== undefined) rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    if (root !== undefined) await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
 

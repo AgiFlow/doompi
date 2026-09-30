@@ -19,6 +19,7 @@ export {
   type DoomApiHandler,
   type DoomHostMediaArbitration,
   type DoomHostExecutionBudget,
+  type DoomHostExecutionPermit,
   type DoomPeerAgentRegistry,
   type DoomOAuthRedirect,
   type DoomRepositorySyncView,
@@ -29,3 +30,4 @@ export {
   type DoomRequestReceipts,
   type DoomApiScope,
 } from '../schemas/packageApi';
+export { createExecutionBudget, sharedExecutionBudget } from '../services/executionBudget';

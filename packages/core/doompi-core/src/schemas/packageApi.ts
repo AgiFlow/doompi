@@ -172,9 +172,15 @@ export interface DoomRequestReceipts {
   ): Promise<DoomRequestReceipt>;
 }
 
+/** Permit returned for expensive local work. Calling it releases the slot. */
+export interface DoomHostExecutionPermit {
+  (): void;
+  attachProcess?(pid: number): Promise<void>;
+}
+
 /** Host-wide admission for expensive local work. Release only after the owned process exits. */
 export interface DoomHostExecutionBudget {
-  acquire(signal?: AbortSignal): Promise<() => void>;
+  acquire(signal?: AbortSignal): Promise<DoomHostExecutionPermit>;
   getSnapshot(): Readonly<{ running: number; queued: number; limit: number }>;
 }
 

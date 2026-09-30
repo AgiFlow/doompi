@@ -28,6 +28,7 @@ import type {
   DoomHubSessionScope,
 } from '@agimon-ai/doompi-core/hubChannel';
 import { loadMcpBundle, type LoadedMcpBundle } from '@agimon-ai/doompi-core/mcpFacet';
+import { sharedExecutionBudget } from '@agimon-ai/doompi-core/packageApi';
 import type { DoomHostMediaArbitration, DoomPeerAgentRegistry } from '@agimon-ai/doompi-core/packageApi';
 import { serveSessionApis, type PackageApiServer } from '@agimon-ai/doompi-core/packageApiServer';
 import { piAgentDirectory } from '@agimon-ai/doompi-core/piSettings';
@@ -58,8 +59,8 @@ import { readRegisteredBootstrapStatus } from '../cli/bootstrapLocator';
 import { buildHarnessContext } from '../cli/harnessContext';
 import { createComputerUseBinding } from './computerUseBinding';
 import { createDefaultWorkspaceFolder } from './defaultWorkspace';
-import { createExecutionBudget } from './executionBudget';
 import { ensureGlobalLogSink } from './logSink';
+import { monitorRuntimeResources } from './runtimeResources';
 import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { type PinnedSelectionAxis, resolveSessionIdentity, sessionSelectionArgs } from './sessionArguments';
 import { resolveSessionArtifact, resolveWorktreeRestart } from './sessionArtifact';
@@ -87,7 +88,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   // Keep this selection local to this server and its admitted sessions. The
   // process environment may also serve unrelated hosts and must not be changed.
   const baseEnvironment: NodeJS.ProcessEnv = { ...incomingEnvironment, LOG_SINK_INSTANCE: 'global' };
-  const executionBudget = createExecutionBudget(Number(baseEnvironment.DOOM_RUNNER_MAX_HEAVY_JOBS ?? 2));
+  const executionBudget = sharedExecutionBudget(baseEnvironment);
   await ensureGlobalLogSink({ cwd: baseCwd, env: baseEnvironment, notice }).catch((error: unknown) =>
     notice(`Global log sink unavailable: ${error instanceof Error ? error.message : String(error)}`),
   );
@@ -327,6 +328,19 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   let remoteRuntime: RemoteRuntime | undefined;
   let attachToken: string | undefined;
   let webCompositions: ReturnType<typeof createWebCompositions> | undefined;
+  const stopResourceMonitor = monitorRuntimeResources({
+    record: (attributes) => telemetry.recordEvent('doompi_server.resources', attributes),
+    counts: () => {
+      const budget = executionBudget.getSnapshot();
+      return {
+        sessions: sessionManager.sessions().length,
+        running_jobs: budget.running,
+        queued_jobs: budget.queued,
+        job_limit: budget.limit,
+      };
+    },
+    warn: notice,
+  });
 
   try {
     await telemetry.runInSpan('doompi_server.startup', {}, async () => {
@@ -358,12 +372,14 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             const majorMode = config.defaultMajorMode;
             return { root, majorMode, activeLayers: resolveLayers(config, majorMode) };
           })();
-        return loadServerBundle(scope, {
-          ...source,
-          ...selected,
-          retainCandidates: scope === 'session',
-          onNotice: notice,
-        });
+        return telemetry.runInSpan('doompi_server.composition_load', { scope }, () =>
+          loadServerBundle(scope, {
+            ...source,
+            ...selected,
+            retainCandidates: scope === 'session',
+            onNotice: notice,
+          }),
+        );
       };
       const loadSessionMcp = async (
         root: string,
@@ -373,16 +389,19 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         const registration = pinnedRegistration ?? readSyncRegistration(root, homeDirectory);
         if (registration?.mcpBundle === undefined)
           throw new Error(`Run the scoped DoomPi sync for '${root}' before opening its MCP runtime.`);
-        return loadMcpBundle({
-          directory: path.dirname(registration.mcpBundle.path),
-          generation: registration.generation,
-          fingerprint: registration.mcpBundle.fingerprint,
-          descriptorSha256: registration.mcpBundle.sha256,
-          majorMode: selection.majorMode,
-          activeLayers: selection.activeLayers,
-          retainCandidates: true,
-          onNotice: notice,
-        });
+        const bundle = registration.mcpBundle;
+        return telemetry.runInSpan('doompi_server.mcp_bundle_load', {}, () =>
+          loadMcpBundle({
+            directory: path.dirname(bundle.path),
+            generation: registration.generation,
+            fingerprint: bundle.fingerprint,
+            descriptorSha256: bundle.sha256,
+            majorMode: selection.majorMode,
+            activeLayers: selection.activeLayers,
+            retainCandidates: true,
+            onNotice: notice,
+          }),
+        );
       };
       const sharedApiContext = {
         homeDirectory,
@@ -1142,6 +1161,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     }
   } finally {
     shuttingDown = true;
+    stopResourceMonitor();
     executionBudget.close();
     stopPersistSessionNames();
     clearInterval(eventLoopMonitor);
