@@ -15,6 +15,7 @@ export function AdvancedLayout({
   onDesktopActivityOpenChange,
   onMobileActivityOpenChange,
 }: WebTemplateProps) {
+  const { scrollRef } = rail;
   const activityDockClass = mobileActivityOpen
     ? desktopActivityOpen
       ? 'fixed inset-y-0 right-0 z-40 flex lg:static lg:z-auto'
@@ -26,6 +27,7 @@ export function AdvancedLayout({
   return (
     <div className="relative flex h-full min-w-0 overflow-hidden">
       <aside
+        ref={scrollRef}
         data-testid="session-rail-panel"
         className={`fixed inset-y-0 left-0 z-40 flex w-[min(300px,calc(100vw-48px))] shrink-0 flex-col overflow-y-auto border-r border-doom-border bg-doom-rail transition-transform md:visible md:static md:z-auto md:w-[300px] md:translate-x-0 ${navigationOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'}`}
       >

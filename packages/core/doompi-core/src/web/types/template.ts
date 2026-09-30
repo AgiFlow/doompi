@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType, ReactNode, RefCallback } from 'react';
 
 /** Host content is independent of the selected presentation package. */
 export interface WebTemplateSlots {
@@ -118,6 +118,8 @@ export interface WebTemplateRail {
    * never inside a drawer that can unmount while closed.
    */
   addWorkspace?: { suggestedPaths: readonly string[] };
+  /** Attach to the navigation scroller to preserve its position across scope remounts. */
+  scrollRef?: RefCallback<HTMLElement>;
   actions: WebTemplateRailActions;
 }
 
