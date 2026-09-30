@@ -120,13 +120,7 @@ export function CockpitPage() {
     <div data-testid="cockpit" className="h-full min-w-0 overflow-hidden">
       <TemplateHost
         scopeReady={templateScopeReady}
-        mount={
-          workspaceId === undefined
-            ? { scope: 'global' }
-            : sessionId === undefined
-              ? { scope: 'workspace', workspaceId }
-              : { scope: 'session', workspaceId, sessionId }
-        }
+        mount={workspaceId === undefined ? { scope: 'global' } : { scope: 'workspace', workspaceId }}
         view={mcpView || tab ? 'panel' : noSessions ? 'welcome' : 'conversation'}
         navigationOpen={railOpen}
         desktopActivityOpen={dockOpen}

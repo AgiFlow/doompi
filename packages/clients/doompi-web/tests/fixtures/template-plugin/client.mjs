@@ -1,15 +1,27 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { createElement } from 'react';
 
-function IndependentLayout({ slots }) {
+function IndependentLayout({ slots, rail, scope = 'global' }) {
   return createElement(
     'div',
-    { 'data-testid': 'independent-template' },
+    { 'data-testid': 'independent-template', 'data-template-scope': scope },
     slots.notices,
     slots.header({ navigationToggle: 'always', activityToggle: 'always' }),
     createElement('main', null, slots.content, slots.composer, slots.controls),
     slots.activity,
+    createElement(
+      'button',
+      {
+        'data-testid': 'independent-workspace-settings',
+        onClick: () => rail.actions.openWorkspaceSettings(rail.workspaces[0].id),
+      },
+      'Workspace settings',
+    ),
   );
+}
+
+function WorkspaceIndependentLayout(props) {
+  return createElement(IndependentLayout, { ...props, scope: 'workspace' });
 }
 
 function BrokenLayout() {
@@ -36,6 +48,10 @@ const templates = [
 export const webPlugin = defineWebPlugin({
   id: 'independent-template',
   global: { templates },
-  workspace: { templates },
+  workspace: {
+    templates: templates.map((template) =>
+      template.id === 'independent-reader' ? { ...template, layout: WorkspaceIndependentLayout } : template,
+    ),
+  },
   session: { templates },
 });
