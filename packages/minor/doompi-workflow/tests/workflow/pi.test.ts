@@ -34,7 +34,13 @@ import {
   type WorkflowRunRecord,
 } from '@agimon-ai/workflow-mcp';
 import { Context } from '@deepseek-ai/cordis';
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+  ExtensionContext,
+  ExtensionToolContext,
+  Theme,
+} from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -792,7 +798,7 @@ describe('workflow-mcp Pi extension', () => {
       }).find(({ name }) => name === 'list_workflows');
       if (!tool) throw new Error('Missing list_workflows tool');
       const list = async (cwd: string, params: Record<string, unknown> = {}) => {
-        const result = await tool.execute('list', params, undefined, undefined, { cwd } as ExtensionContext);
+        const result = await tool.execute('list', params, undefined, undefined, { cwd } as ExtensionToolContext);
         return JSON.parse(result.content.find((item) => item.type === 'text')?.text ?? '{}');
       };
       expect(

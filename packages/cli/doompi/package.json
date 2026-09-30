@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi",
-  "version": "0.0.1-alpha.102",
+  "version": "0.0.1-alpha.103",
   "description": "Opinionated, composable Pi distribution for scoped agent tools, skills, MCP servers, and developer workflows.",
   "keywords": [
     "ai",
@@ -303,12 +303,12 @@
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@agimon-ai/log-sink-mcp": "0.29.35",
     "@deepseek-ai/cordis": "4.0.2",
-    "@earendil-works/chord": "0.87.1",
-    "@earendil-works/pi-agent-core": "0.87.1",
-    "@earendil-works/pi-coding-agent": "0.87.1",
-    "@earendil-works/pi-protocol": "0.87.1",
-    "@earendil-works/pi-server": "0.87.1",
-    "@earendil-works/pi-session-backend-sqlite-node": "0.87.1",
+    "@earendil-works/chord": "0.99.1",
+    "@earendil-works/pi-agent-core": "0.99.1",
+    "@earendil-works/pi-coding-agent": "0.99.1",
+    "@earendil-works/pi-protocol": "0.99.1",
+    "@earendil-works/pi-server": "0.99.1",
+    "@earendil-works/pi-session-backend-sqlite-node": "0.99.1",
     "@hono/node-server": "2.1.1",
     "@simplewebauthn/server": "^14.0.2",
     "@tailwindcss/vite": "4.3.3",
@@ -328,9 +328,9 @@
   "devDependencies": {
     "@agimon-ai/doompi-runner": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-cli": "workspace:*",
-    "@earendil-works/pi-ai": "0.87.1",
-    "@earendil-works/pi-client": "0.87.1",
-    "@earendil-works/pi-tui": "0.87.1",
+    "@earendil-works/pi-ai": "0.99.1",
+    "@earendil-works/pi-client": "0.99.1",
+    "@earendil-works/pi-tui": "0.99.1",
     "@modelcontextprotocol/ext-apps": "2.0.0",
     "@modelcontextprotocol/server": "2.1.0",
     "@playwright/test": "1.63.0",
@@ -343,7 +343,7 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-tui": "0.87.1"
+    "@earendil-works/pi-tui": "0.99.1"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-tui": {

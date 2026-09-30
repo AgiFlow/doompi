@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-computer-use",
-  "version": "0.0.1-alpha.42",
+  "version": "0.0.1-alpha.43",
   "description": "Session scoped semantic computer control through the DoomPi Desktop capability.",
   "keywords": [
     "ai",
@@ -85,7 +85,7 @@
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-coding-agent": "0.99.1",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
     "@types/node": "26.6.2",
@@ -98,7 +98,7 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.87.1"
+    "@earendil-works/pi-coding-agent": "0.99.1"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

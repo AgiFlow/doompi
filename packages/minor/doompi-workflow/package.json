@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-workflow",
-  "version": "0.0.1-alpha.99",
+  "version": "0.0.1-alpha.100",
   "description": "GitHub Actions-style workflow graphs, artifacts, recovery, and asynchronous runs for DoomPi.",
   "keywords": [
     "ai",
@@ -87,8 +87,8 @@
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.87.1",
-    "@earendil-works/pi-tui": "0.87.1",
+    "@earendil-works/pi-coding-agent": "0.99.1",
+    "@earendil-works/pi-tui": "0.99.1",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
     "@types/node": "26.6.2",
@@ -102,8 +102,8 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.87.1",
-    "@earendil-works/pi-tui": "0.87.1"
+    "@earendil-works/pi-coding-agent": "0.99.1",
+    "@earendil-works/pi-tui": "0.99.1"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

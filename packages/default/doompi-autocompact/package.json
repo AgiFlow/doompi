@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-autocompact",
-  "version": "0.0.1-alpha.97",
+  "version": "0.0.1-alpha.98",
   "description": "Iterative context compaction and checkpoint summaries for Pi and DoomPi agent sessions.",
   "keywords": [
     "ai",
@@ -78,14 +78,14 @@
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-coding-agent": "0.99.1",
     "@types/node": "26.6.2",
     "@vitest/coverage-v8": "5.0.1",
     "typescript": "7.0.2",
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.87.1"
+    "@earendil-works/pi-coding-agent": "0.99.1"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

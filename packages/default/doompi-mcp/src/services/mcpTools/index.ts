@@ -84,7 +84,8 @@ function structuredRecord(result: CallToolResult): Record<string, unknown> | und
 export function toAgentToolResult(tool: CatalogTool, result: CallToolResult): AgentToolResult<McpToolDetails> {
   const normalized = toHeadlessToolResult(tool, result);
   if (normalized.isError) throw new Error(resultText(normalized));
-  return normalized;
+  // MCP structured content arrived as JSON, which is what Pi 0.99 types it as.
+  return normalized as AgentToolResult<McpToolDetails>;
 }
 
 /** Remote MCP preserves error flags and public structured results instead of Pi's thrown-error convention. */

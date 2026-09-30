@@ -46,7 +46,7 @@ function boundValue(target: object, property: PropertyKey): unknown {
   return typeof value === 'function' ? value.bind(target) : value;
 }
 
-function withParentSession(ctx: ExtensionContext, parentSessionId: string): ExtensionContext {
+function withParentSession<TContext extends ExtensionContext>(ctx: TContext, parentSessionId: string): TContext {
   const sessionManager = new Proxy(ctx.sessionManager, {
     get(target, property) {
       if (property === 'getSessionId') return () => parentSessionId;

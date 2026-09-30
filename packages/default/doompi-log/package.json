@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-log",
-  "version": "0.0.1-alpha.98",
+  "version": "0.0.1-alpha.99",
   "description": "Pi session metrics, findings, sink status, and a Log Metrics overlay for agent observability.",
   "keywords": [
     "agent-observability",
@@ -101,8 +101,8 @@
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.87.1",
-    "@earendil-works/pi-tui": "0.87.1",
+    "@earendil-works/pi-coding-agent": "0.99.1",
+    "@earendil-works/pi-tui": "0.99.1",
     "@modelcontextprotocol/client": "2.1.0",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
@@ -116,8 +116,8 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.87.1",
-    "@earendil-works/pi-tui": "0.87.1"
+    "@earendil-works/pi-coding-agent": "0.99.1",
+    "@earendil-works/pi-tui": "0.99.1"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

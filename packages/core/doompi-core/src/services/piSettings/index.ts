@@ -29,6 +29,12 @@ const HOME_ALIAS_PREFIX = '~/';
 export const DOOM_EXTENSION = DOOM_PACKAGE_NAME;
 /** Suppresses Pi's ambient extension-directory scan while leaving explicit sources intact. */
 export const AMBIENT_EXTENSION_FILTER = '!extensions/**';
+/**
+ * Pi built-in extensions kept off under DoomPi. doompi-mcp owns `/mcp` and MCP servers. Codemode and
+ * tool search are opt-in in plain Pi, but DoomPi activates every registered tool, so leaving them
+ * loaded would declare both to the model in every session.
+ */
+export const DISABLED_PI_BUILTINS: readonly string[] = ['-builtin:mcp', '-builtin:codemode', '-builtin:tool-search'];
 export interface PiSettingsUpdate {
   /** Absolute path to the synchronized user theme file. */
   themePath: string;
@@ -69,7 +75,11 @@ function settingsRelativePath(agentDirectory: string, target: string): string {
 
 function isManagedExtension(value: string): boolean {
   const normalized = value.replaceAll('\\', '/');
-  return normalized === DOOM_EXTENSION || normalized === AMBIENT_EXTENSION_FILTER;
+  return (
+    normalized === DOOM_EXTENSION ||
+    normalized === AMBIENT_EXTENSION_FILTER ||
+    DISABLED_PI_BUILTINS.includes(normalized)
+  );
 }
 
 function isLegacyDoomTheme(value: string, themeName: string): boolean {
@@ -86,6 +96,7 @@ export function mergePiSettings(current: JsonObject, agentDirectory: string, upd
   const extensions = [
     DOOM_EXTENSION,
     AMBIENT_EXTENSION_FILTER,
+    ...DISABLED_PI_BUILTINS,
     ...stringList(current[EXTENSIONS_KEY]).filter((value) => !isManagedExtension(value)),
   ];
   const themes = [

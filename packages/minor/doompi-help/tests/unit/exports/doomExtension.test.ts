@@ -6,7 +6,7 @@ import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-
 import { readDoomHelpService } from '@agimon-ai/doompi-core/help';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-minor-mode';
 import { createMinorModeCatalogHost } from '@agimon-ai/doompi-minor-mode/catalog';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionToolContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { extension as helpExtension } from '../../../generated/pi';
@@ -63,7 +63,7 @@ async function fixture() {
     cwd: cacheRoot,
     hasUI: false,
     sessionManager: { getSessionId: () => 'help-session', getBranch: () => [] },
-  } as unknown as ExtensionContext;
+  } as unknown as ExtensionToolContext & ExtensionCommandContext;
   const dispatch = async (event: string) => {
     // Session handlers can replace registrations during dispatch.
     const listeners = Array.from(handlers.get(event) ?? []);

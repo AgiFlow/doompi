@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-sandbox",
-  "version": "0.0.1-alpha.97",
+  "version": "0.0.1-alpha.98",
   "description": "Container sandbox for DoomPi launches: the agent, extensions, and tools run inside Docker or Podman while the terminal stays on the host",
   "keywords": [
     "ai",
@@ -88,7 +88,7 @@
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
-    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-coding-agent": "0.99.1",
     "@types/node": "26.6.2",
     "@vitest/coverage-v8": "5.0.1",
     "tsdown": "0.23.0",
@@ -96,7 +96,7 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.87.1"
+    "@earendil-works/pi-coding-agent": "0.99.1"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

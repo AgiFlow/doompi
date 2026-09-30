@@ -1274,6 +1274,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         cwd: options.cwd,
         agentDir,
         models: modelRuntime,
+        settings,
         runtime,
         preload: piPreload,
         getModel: () => currentModel,

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { piCliPath } from '@agimon-ai/doompi-core/moduleResolution';
-import { piAgentDirectory } from '@agimon-ai/doompi-core/runtimePiSettings';
+import { DISABLED_PI_BUILTINS, piAgentDirectory } from '@agimon-ai/doompi-core/runtimePiSettings';
 import { readSyncRegistration } from '@agimon-ai/doompi-core/syncRegistration';
 import type { SettingsManager, SettingsManagerCreateOptions } from '@earendil-works/pi-coding-agent';
 
@@ -21,7 +21,7 @@ export interface DpiManagedSettings {
 }
 
 export const DPI_MANAGED_SETTINGS: DpiManagedSettings = {
-  extensions: ['@agimon-ai/doompi', '!extensions/**'],
+  extensions: ['@agimon-ai/doompi', '!extensions/**', ...DISABLED_PI_BUILTINS],
   themes: ['themes/doom-pi-dark.json'],
   theme: 'doom-pi-dark',
   quietStartup: true,
@@ -129,9 +129,12 @@ export function resolveDpiManagedSettings(
     const homeDirectory = environment.HOME?.trim() || os.homedir();
     const registration = readSyncRegistration(root, homeDirectory);
     if (!registration) return DPI_MANAGED_SETTINGS;
-    return { ...DPI_MANAGED_SETTINGS, extensions: [registration.package.root, '!extensions/**'] };
+    return {
+      ...DPI_MANAGED_SETTINGS,
+      extensions: [registration.package.root, '!extensions/**', ...DISABLED_PI_BUILTINS],
+    };
   } catch {
-    return { ...DPI_MANAGED_SETTINGS, extensions: ['!extensions/**'] };
+    return { ...DPI_MANAGED_SETTINGS, extensions: ['!extensions/**', ...DISABLED_PI_BUILTINS] };
   }
 }
 

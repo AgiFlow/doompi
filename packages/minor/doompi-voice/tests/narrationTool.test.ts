@@ -3,7 +3,7 @@ import {
   VOICE_MODE_TOOL_NAMES,
   VOICE_NARRATE_TOOL_NAME,
 } from '@agimon-ai/doompi-core/voiceTools';
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionToolContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -18,13 +18,13 @@ const NARRATION_OUTCOMES: readonly NarrationToolOutcome[] = ['completed', 'inter
 function context(
   sessionId: string,
   hasUI = true,
-  mode: ExtensionContext['mode'] = hasUI ? 'tui' : 'print',
-): ExtensionContext {
+  mode: ExtensionToolContext['mode'] = hasUI ? 'tui' : 'print',
+): ExtensionToolContext {
   return {
     hasUI,
     mode,
     sessionManager: { getSessionId: () => sessionId },
-  } as unknown as ExtensionContext;
+  } as unknown as ExtensionToolContext;
 }
 
 function deferred<T>() {
@@ -35,9 +35,9 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function fixture(mode: ExtensionContext['mode'] = 'tui') {
+function fixture(mode: ExtensionToolContext['mode'] = 'tui') {
   const boundContext = context('session-1', true, mode);
-  const voiceTools = createDoomVoiceToolsService<ExtensionContext>(`narration-test:${crypto.randomUUID()}`);
+  const voiceTools = createDoomVoiceToolsService<ExtensionToolContext>(`narration-test:${crypto.randomUUID()}`);
   const session = voiceTools.bindSession('session-1', boundContext);
   session.setActive(true);
   const narrateAgent = vi.fn(
