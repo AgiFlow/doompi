@@ -83,7 +83,7 @@
   },
   "dependencies": {
     "@agimon-ai/doompi-core": "workspace:*",
-    "@deepseek-ai/cordis": "4.0.2"
+    "@deepseek-ai/cordis": "4.0.4"
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",

@@ -242,10 +242,10 @@
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@agimon-ai/foundation-process-registry": "0.29.35",
-    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/cordis": "4.0.4",
     "@rmux/sdk": "0.6.5",
     "@xterm/headless": "6.0.0",
-    "hono": "4.13.8",
+    "hono": "4.13.10",
     "typebox": "1.3.34"
   },
   "devDependencies": {
