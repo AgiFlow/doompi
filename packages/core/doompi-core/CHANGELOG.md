@@ -1,3 +1,22 @@
+## 0.0.1-alpha.102 (2026-10-01)
+
+### 🚀 Features
+
+- **doompi-git:** add per-workspace remote auth, session diff review and manual sync ([#259](https://github.com/AgiFlow/doompi/pull/259))
+
+### 🩹 Fixes
+
+- **doompi-core:** prevent remote MCP startup contention ([#252](https://github.com/AgiFlow/doompi/pull/252))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.92
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.55
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.101 (2026-09-30)
 
 ### 🩹 Fixes

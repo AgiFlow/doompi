@@ -1,3 +1,18 @@
+## 0.0.1-alpha.60 (2026-10-01)
+
+### 🚀 Features
+
+- **doompi-git:** add per-workspace remote auth, session diff review and manual sync ([#259](https://github.com/AgiFlow/doompi/pull/259))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.102
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.89
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.59 (2026-09-30)
 
 ### 🧱 Updated Dependencies

@@ -1,3 +1,24 @@
+## 0.0.1-alpha.69 (2026-10-01)
+
+### 🩹 Fixes
+
+- **doompi-web:** reuse templates across session navigation ([#254](https://github.com/AgiFlow/doompi/pull/254))
+- **doompi-core:** prevent remote MCP startup contention ([#252](https://github.com/AgiFlow/doompi/pull/252))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.106
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.101
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.102
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.55
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.89
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.68 (2026-09-30)
 
 ### 🩹 Fixes
