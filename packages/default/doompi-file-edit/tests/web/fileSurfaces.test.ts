@@ -4,9 +4,7 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { CommentDraft } from '../../src/extensions/workspaces/sessions/(frontend)/_components/CommentDraft';
 import { DeleteFileDialog } from '../../src/extensions/workspaces/sessions/(frontend)/_components/DeleteFileDialog';
-import { DiffView } from '../../src/extensions/workspaces/sessions/(frontend)/_components/DiffView';
 import { FilePanel } from '../../src/extensions/workspaces/sessions/(frontend)/_components/FilePanel';
 import {
   addComment,
@@ -63,61 +61,6 @@ function detailOf(overrides: Partial<FileEditsDetailView> = {}): FileEditsDetail
 
 beforeEach(() => {
   files.reset();
-});
-
-describe('DiffView', () => {
-  it('draws every row with its number and marker', () => {
-    const rendered = renderPlugin(DiffView, { hunks: HUNKS, testId: 'd' });
-    expect(rendered.error).toBeUndefined();
-    expect(rendered.includes('unchanged')).toBe(true);
-    expect(rendered.includes('gone')).toBe(true);
-    expect(rendered.includes('added')).toBe(true);
-    expect(rendered.html).toContain('data-diff-line="40"');
-  });
-
-  it('marks the gap between two hunks rather than joining them', () => {
-    const rendered = renderPlugin(DiffView, { hunks: HUNKS, testId: 'd' });
-    expect(rendered.includes('⋯')).toBe(true);
-  });
-
-  it('says so when a change moved no lines', () => {
-    const rendered = renderPlugin(DiffView, { hunks: [], testId: 'd' });
-    expect(rendered.includes('no lines changed')).toBe(true);
-  });
-});
-
-describe('CommentDraft', () => {
-  it('shows the quoted selection and the range it covers', () => {
-    const rendered = renderPlugin(CommentDraft, {
-      snippet: 'const retries = 3;',
-      startLine: 12,
-      endLine: 14,
-      onSubmit: () => undefined,
-      onCancel: () => undefined,
-    });
-    expect(rendered.error).toBeUndefined();
-    expect(rendered.includes('lines 12 to 14')).toBe(true);
-    expect(rendered.includes('const retries = 3;')).toBe(true);
-  });
-
-  it('names a single line in the singular', () => {
-    const rendered = renderPlugin(CommentDraft, {
-      snippet: 'x',
-      startLine: 12,
-      onSubmit: () => undefined,
-      onCancel: () => undefined,
-    });
-    expect(rendered.includes('line 12')).toBe(true);
-  });
-
-  it('admits when a selection has no line anchor at all', () => {
-    const rendered = renderPlugin(CommentDraft, {
-      snippet: 'rendered text',
-      onSubmit: () => undefined,
-      onCancel: () => undefined,
-    });
-    expect(rendered.includes('no line anchor')).toBe(true);
-  });
 });
 
 describe('DeleteFileDialog', () => {
@@ -192,7 +135,7 @@ describe('FilePanel body', () => {
     // it are behind a click and out of reach of static markup. What this can
     // still hold is that a panel carrying a whole history mounts, says what the
     // session did to the file, and offers the way through to it. The rows
-    // themselves are DiffView's, covered above.
+    // themselves are the shared DiffView's, covered in doompi-web-components.
     storeDetail(
       SESSION,
       detailOf({
@@ -234,6 +177,24 @@ describe('FilePanel body', () => {
     expect(rendered.includes('1 comment')).toBe(true);
     expect(rendered.includes('app.ts:12')).toBe(true);
     expect(rendered.html).toContain('files-send-review');
+    expect(rendered.html).not.toContain('files-review-error');
+  });
+
+  it('names a comment on a removed line by the old file', () => {
+    storeDetail(SESSION, detailOf());
+    addComment(SESSION, {
+      id: 'c1',
+      path: '/repo/app.ts',
+      relPath: 'app.ts',
+      side: 'old',
+      startLine: 2,
+      endLine: 2,
+      snippet: 'gone',
+      body: 'why remove this?',
+    });
+    const fixture = slotPropsFixture({ sessionId: SESSION });
+    const rendered = renderPlugin(FilePanel, { ...fixture.props, filePath: '/repo/app.ts', relPath: 'app.ts' });
+    expect(rendered.includes('app.ts (removed line 2)')).toBe(true);
   });
 
   it('survives a session it was handed nothing for', () => {

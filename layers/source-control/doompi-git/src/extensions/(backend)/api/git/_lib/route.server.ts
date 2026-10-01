@@ -1,12 +1,26 @@
+import os from 'node:os';
+
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 
-import { GIT_API_BASE_PATH, GIT_BRANCHES_PATH, GIT_SESSIONS_PATH } from '../../../../constants/git';
-import { DoomGitExpectedError } from '../../../../services/errors';
-import { createWorktreeGit } from '../../../../services/gitCli';
-import { newSessionRequest } from '../../../../services/newSessionRequest';
-import { GIT_WORKTREE_LIFECYCLE_EVENT } from '../../../../services/worktreeEvents';
-import { createWorktreeOperations } from '../../../../services/worktreeOperations';
-import type { GitBranchesResponse, GitSessionCreated } from '../../../../types/gitSessions';
+import {
+  GIT_API_BASE_PATH,
+  GIT_AUTH_PATH,
+  GIT_BRANCHES_PATH,
+  GIT_REVIEW_FILE_PATH,
+  GIT_REVIEW_PATH,
+  GIT_SESSIONS_PATH,
+} from '../../../../../constants/git';
+import { createBranchDiff } from '../../../../../services/branchDiff';
+import { DoomGitExpectedError } from '../../../../../services/errors';
+import { createGitAuthStore } from '../../../../../services/gitAuth';
+import { createWorktreeGit } from '../../../../../services/gitCli';
+import { newSessionRequest } from '../../../../../services/newSessionRequest';
+import { registryFile } from '../../../../../services/paths';
+import { GIT_WORKTREE_LIFECYCLE_EVENT } from '../../../../../services/worktreeEvents';
+import { createWorktreeOperations } from '../../../../../services/worktreeOperations';
+import { createWorktreeRegistry } from '../../../../../services/worktreeRegistry';
+import type { GitReviewSummary } from '../../../../../types/gitReview';
+import type { GitBranchesResponse, GitSessionCreated } from '../../../../../types/gitSessions';
 
 /**
  * The worktree surface the cockpit panel calls.
@@ -92,14 +106,76 @@ export const api: DoomApi = {
       return root;
     };
 
+    const homeDir = context.homeDirectory ?? os.homedir();
+    const gitAuth = createGitAuthStore(homeDir);
+    const branchDiff = createBranchDiff();
+
+    /**
+     * A workspace's remote auth. Workspace mounts only, so the step-up gate on
+     * `PUT /api/workspaces/<id>/plugins/git/auth` is the one way to write it.
+     * The view never carries the token.
+     */
+    const auth = async (request: Request, url: URL): Promise<Response | undefined> => {
+      if (url.pathname !== GIT_AUTH_PATH) return undefined;
+      if (context.scope !== 'workspace')
+        return Response.json({ error: 'This route belongs to a workspace.' }, { status: 404 });
+      if (request.method !== 'GET' && request.method !== 'PUT')
+        return Response.json({ error: 'Use GET or PUT.' }, { status: 405 });
+      const root = rootOf(url);
+      if (root instanceof Response) return root;
+      if (request.method === 'GET') return Response.json(gitAuth.view(root));
+      try {
+        return Response.json(gitAuth.save(root, await request.json().catch(() => undefined)));
+      } catch (error) {
+        // The settings page shows this next to the field, so it gets the plain
+        // sentence and its recovery, not the tool-facing `[code]` form.
+        if (error instanceof DoomGitExpectedError && error.code === 'invalid_request') {
+          const text = error.message.replace(/^\[[a-z_]+\] /u, '').replace('\nRecovery: ', ' ');
+          return Response.json({ error: text, code: error.code }, { status: 400 });
+        }
+        throw error;
+      }
+    };
+
+    /**
+     * The session's change against its base. Session mounts only, rooted at the
+     * session's own checkout; a file is served only when it is in the change set
+     * computed for the same request.
+     */
+    const review = async (request: Request, url: URL): Promise<Response | undefined> => {
+      if (url.pathname !== GIT_REVIEW_PATH && url.pathname !== GIT_REVIEW_FILE_PATH) return undefined;
+      const cwd = context.scope === 'session' ? context.cwd : undefined;
+      if (cwd === undefined) return Response.json({ error: 'This route belongs to a session.' }, { status: 404 });
+      if (request.method !== 'GET') return Response.json({ error: 'Use GET.' }, { status: 405 });
+      let recordedBaseRef: string | undefined;
+      try {
+        recordedBaseRef = createWorktreeRegistry(registryFile(cwd, homeDir))
+          .list()
+          .find((record) => record.sessionId === context.sessionId)?.baseRef;
+      } catch {
+        recordedBaseRef = undefined;
+      }
+      const result = await branchDiff.review(cwd, recordedBaseRef === undefined ? {} : { recordedBaseRef });
+      if (url.pathname === GIT_REVIEW_PATH) {
+        const outside: GitReviewSummary = { repository: false, files: [] };
+        return Response.json(result?.summary ?? outside);
+      }
+      const filePath = url.searchParams.get('path') ?? '';
+      if (result === undefined || !result.summary.files.some((file) => file.path === filePath)) {
+        return Response.json({ error: 'That file is not part of this review.' }, { status: 404 });
+      }
+      return Response.json(await branchDiff.fileDiff(result, filePath));
+    };
+
     return {
       async fetch(request) {
         const url = new URL(request.url);
         try {
-          const answered = await newSession(request, url);
+          const answered =
+            (await newSession(request, url)) ?? (await auth(request, url)) ?? (await review(request, url));
           if (answered !== undefined) return answered;
         } catch (error) {
-          context.onNotice(`new-session request failed: ${(error as Error).name}`);
+          context.onNotice(`git request failed: ${(error as Error).name}`);
           return failed(error);
         }
         const root = rootOf(url);

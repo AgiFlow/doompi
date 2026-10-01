@@ -1,9 +1,9 @@
-import { Button, CloseIcon, Input } from '@agimon-ai/doompi-web-components';
+import { Button, CloseIcon, groupByDirectory, groupRowLabel, Input } from '@agimon-ai/doompi-web-components';
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import type { FilesItemView } from '../../../../../../types/webFiles';
-import { filterFileItems, groupFileItems, groupRowLabel, TOOL_LABEL } from '../../_lib/fileView';
+import { filterFileItems, TOOL_LABEL } from '../../_lib/fileView';
 
 function FileMetadata({ item, label, recent = false }: { item: FilesItemView; label?: string; recent?: boolean }) {
   return (
@@ -112,8 +112,9 @@ export function FilesBrowser({
   const shown = filterFileItems(items, query);
   // Grouping only earns its headers with the whole list in view. While a query
   // is active the reader is pinpointing one path, so the flat list answers that
-  // better than a shape wrapped around two matches.
-  const grouped = query.trim() === '' ? groupFileItems(shown) : undefined;
+  // better than a shape wrapped around two matches. Groups are ordered by path,
+  // not recency, so a header's files sit together under it.
+  const grouped = query.trim() === '' ? groupByDirectory(shown, (item) => item.relPath) : undefined;
   // The order rows actually appear in, which is what the cursor counts through.
   const ordered = grouped === undefined ? shown : grouped.flatMap((group) => group.items);
   const positions = new Map(ordered.map((item, index) => [item.path, index]));

@@ -19,6 +19,8 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  type DiffHunk,
+  DiffView,
   Dot,
   DropdownMenu,
   DropdownMenuTrigger,
@@ -49,6 +51,7 @@ import {
   RadioGroup,
   RadioGroupCard,
   RadioGroupItem,
+  ReviewCommentDraft,
   ScrollArea,
   SectionLabel,
   Select,
@@ -508,5 +511,80 @@ describe('primitives', () => {
         </TooltipProvider>,
       ),
     ).toContain('tip');
+  });
+});
+
+describe('review', () => {
+  const hunks: DiffHunk[] = [
+    {
+      start: 1,
+      rows: [
+        { marker: ' ', line: 1, content: 'unchanged' },
+        { marker: '-', line: 2, content: 'gone' },
+        { marker: '+', line: 2, content: 'added' },
+      ],
+    },
+    { start: 40, rows: [{ marker: '+', line: 40, content: 'later' }] },
+  ];
+  const noop = (): void => undefined;
+
+  it('draws every diff row with its number and marker, and the gap between hunks', () => {
+    const out = html(<DiffView hunks={hunks} testId="d" className="extra" />);
+    expect(out).toContain('data-testid="d"');
+    expect(out).toContain('extra');
+    expect(out).toContain('unchanged');
+    expect(out).toContain('gone');
+    expect(out).toContain('data-diff-line="40"');
+    expect(out).toContain('data-diff-marker="-"');
+    expect(out).toContain('⋯');
+    // Without a selection handler the gutter is plain text, not a control.
+    expect(out).not.toContain('data-diff-gutter');
+  });
+
+  it('makes each line number a button once a selection handler is set, naming removed lines', () => {
+    const out = html(<DiffView hunks={hunks} testId="d" onSelect={noop} />);
+    expect(out).toContain('data-diff-gutter="40"');
+    expect(out).toContain('aria-label="comment on removed line 2"');
+    expect(out).toContain('aria-label="comment on line 1"');
+  });
+
+  it('draws content after a row when asked', () => {
+    const out = html(
+      <DiffView hunks={hunks} testId="d" renderAfterRow={(row) => (row.line === 40 ? <i>note-40</i> : null)} />,
+    );
+    expect(out).toContain('<i>note-40</i>');
+  });
+
+  it('says so when a change moved no lines', () => {
+    expect(html(<DiffView hunks={[]} testId="d" />)).toContain('no lines changed');
+  });
+
+  it('shows the quoted selection and the range it covers', () => {
+    const out = html(
+      <ReviewCommentDraft snippet="const retries = 3;" startLine={12} endLine={14} onSubmit={noop} onCancel={noop} />,
+    );
+    expect(out).toContain('lines 12 to 14');
+    expect(out).toContain('const retries = 3;');
+    expect(out).toContain('data-testid="review-comment-draft"');
+    expect(out).toContain('data-testid="review-comment-body"');
+  });
+
+  it('names a removed line and takes a caller test id prefix', () => {
+    const out = html(
+      <ReviewCommentDraft
+        snippet="gone"
+        side="old"
+        startLine={2}
+        onSubmit={noop}
+        onCancel={noop}
+        testIdPrefix="files-comment"
+      />,
+    );
+    expect(out).toContain('removed line 2');
+    for (const id of ['draft', 'body', 'add', 'cancel']) expect(out).toContain(`data-testid="files-comment-${id}"`);
+  });
+
+  it('admits when a selection has no line anchor at all', () => {
+    expect(html(<ReviewCommentDraft snippet="rendered" onSubmit={noop} onCancel={noop} />)).toContain('no line anchor');
   });
 });

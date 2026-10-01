@@ -1,8 +1,8 @@
 import { defineSessionStore } from '@agimon-ai/doompi-core/web';
+import type { ReviewComment } from '@agimon-ai/doompi-web-components';
 
 import type { FileEditsDetailView } from '../../../../../types/fileEditsApi';
 import { filesChannelType, type FilesItemView } from '../../../../../types/webFiles';
-import type { FileComment } from './fileView';
 
 /**
  * One session's record: the hub's last report plus whatever this page does with
@@ -21,7 +21,7 @@ export interface FilesSession {
   /** What a failed fetch or a refused save reported, keyed by absolute path. */
   errors: Readonly<Record<string, string>>;
   /** Review notes waiting to be sent, in the order they were written. */
-  comments: readonly FileComment[];
+  comments: readonly ReviewComment[];
 }
 
 const empty: FilesSession = { items: [], detail: {}, loading: [], errors: {}, comments: [] };
@@ -86,7 +86,7 @@ export function storeError(sessionId: string, filePath: string, message: string)
   }));
 }
 
-export function addComment(sessionId: string, comment: FileComment): void {
+export function addComment(sessionId: string, comment: ReviewComment): void {
   files.update(sessionId, (current) => ({ ...current, comments: [...current.comments, comment] }));
 }
 

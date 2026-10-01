@@ -21,7 +21,12 @@
   "include": [
     "src/types/worktreeRegistry.ts",
     "src/types/webWorktrees.ts",
+    "src/types/gitReview.ts",
+    "src/types/gitAuth.ts",
+    "src/types/gitSessions.ts",
+    "src/types/apiRoutes.ts",
     "src/extensions/**/(frontend)/**/*",
-    "generated/web.ts"
+    "generated/web.ts",
+    "generated/client.ts"
   ]
 }

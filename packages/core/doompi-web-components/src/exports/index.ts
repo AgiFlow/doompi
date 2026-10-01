@@ -19,6 +19,7 @@ export {
   DialogTitle,
   DialogTrigger,
 } from '../components/Dialog';
+export { DiffView, type DiffViewProps } from '../components/DiffView';
 export { Dot, type DotProps, type DotTone, dotVariants } from '../components/Dot';
 export { Drawer, type DrawerProps } from '../components/Drawer';
 export {
@@ -131,6 +132,7 @@ export {
 } from '../components/Popover';
 export { Progress } from '../components/Progress';
 export { RadioGroup, RadioGroupCard, RadioGroupItem } from '../components/RadioGroup';
+export { ReviewCommentDraft, type ReviewCommentDraftProps } from '../components/ReviewCommentDraft';
 export { ScrollArea, ScrollBar } from '../components/ScrollArea';
 export { SectionLabel } from '../components/SectionLabel';
 export {
@@ -226,6 +228,15 @@ export {
   takeTrailingNotice,
 } from '../lib/hashlineView';
 export { mediaKindOf } from '../lib/media';
+export { groupByDirectory, groupRowLabel, type PathGroup } from '../lib/pathGroups';
+export {
+  buildReviewPrompt,
+  defaultReviewHeading,
+  diffGutterWidth,
+  diffRangeOf,
+  reviewCommentAnchor,
+  trimSnippet,
+} from '../lib/review';
 export {
   detectGrammar,
   type GrammarQuery,
@@ -248,6 +259,7 @@ export {
   MEDIA_KINDS,
   type MediaKind,
 } from '../types/editor';
+export type { DiffHunk, DiffMarker, DiffRow, DiffSelection, DiffSide, ReviewComment } from '../types/diff';
 export {
   ACCENT_TONES,
   type AccentTone,

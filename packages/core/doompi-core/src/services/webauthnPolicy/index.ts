@@ -57,6 +57,8 @@ const GATED_ROUTES: readonly { method: string; pattern: RegExp; action: StepUpAc
   },
   // The git new-session dialog starts a worktree session, which runs code in a directory.
   { method: 'POST', pattern: /^\/api\/workspaces\/[^/]+\/plugins\/git\/sessions$/u, action: 'session.create' },
+  // A workspace's git remote credentials redirect what the cockpit pushes and where its token goes.
+  { method: 'PUT', pattern: /^\/api\/workspaces\/[^/]+\/plugins\/git\/auth$/u, action: 'settings.write' },
   { method: 'POST', pattern: /^\/api\/plugins\/doompi\/logins(?:\/[^/]+\/answer)?$/u, action: 'provider.login' },
   { method: 'DELETE', pattern: /^\/api\/plugins\/doompi\/providers\/[^/]+$/u, action: 'provider.logout' },
   {

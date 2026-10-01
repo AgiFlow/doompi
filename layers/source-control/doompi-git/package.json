@@ -77,6 +77,7 @@
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-session": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
+    "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
@@ -127,6 +128,7 @@
   "doompiWeb": {
     "pluginId": "git",
     "channels": [
+      "git_changes",
       "git_worktrees"
     ],
     "client": "./dist/extensions/web.mjs",

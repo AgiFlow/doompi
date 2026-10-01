@@ -4,6 +4,8 @@ import {
   Breadcrumb,
   Button,
   CodeEditor,
+  type DiffSide,
+  DiffView,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -11,6 +13,8 @@ import {
   type EditorSelectionRange,
   KebabIcon,
   Markdown,
+  ReviewCommentDraft,
+  reviewCommentAnchor,
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
@@ -26,10 +30,8 @@ import {
   storeDetail,
   storeError,
 } from '../_lib/filesStore';
-import { buildReviewPrompt, commentAnchor, fileTabId, previewModeOf, TOOL_LABEL } from '../_lib/fileView';
-import { CommentDraft } from './CommentDraft';
+import { fileTabId, previewModeOf, sendReviewFrame, TOOL_LABEL } from '../_lib/fileView';
 import { DeleteFileDialog } from './DeleteFileDialog';
-import { DiffView } from './DiffView';
 import { SessionMediaPreview as MediaPreview } from './SessionMediaPreview';
 
 /**
@@ -62,6 +64,8 @@ interface FilePanelProps extends WebPluginSlotProps {
 
 interface Draft {
   snippet: string;
+  /** Set by a diff selection; absent means the new side, as in the editor and preview. */
+  side?: DiffSide;
   startLine?: number;
   endLine?: number;
 }
@@ -90,6 +94,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
   const [saving, setSaving] = useState(false);
   const [saveNote, setSaveNote] = useState<string | undefined>(undefined);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [reviewError, setReviewError] = useState<string | undefined>(undefined);
   // The editor reports a range on every cursor move, and the comment box takes
   // focus when it opens. Holding the latest range here and raising the box on
   // mouse or key release keeps a drag from stealing focus halfway through it,
@@ -140,9 +145,10 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
     addComment(sessionId, {
       // The anchor plus the note's position is unique within a file, and a
       // comment never outlives the session that holds it.
-      id: `${filePath}:${draft.startLine ?? 0}:${comments.length}:${body.length}`,
+      id: `${filePath}:${draft.side ?? 'new'}:${draft.startLine ?? 0}:${comments.length}:${body.length}`,
       path: filePath,
       relPath,
+      ...(draft.side === undefined ? {} : { side: draft.side }),
       ...(draft.startLine === undefined ? {} : { startLine: draft.startLine }),
       ...(draft.endLine === undefined ? {} : { endLine: draft.endLine }),
       snippet: draft.snippet,
@@ -153,8 +159,11 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
 
   const sendReview = (): void => {
     if (sessionId === null || comments.length === 0) return;
-    sendSessionFrame(sessionId, { type: 'prompt', message: buildReviewPrompt(comments) });
-    clearComments(sessionId, filePath);
+    // The comments go only once the frame has left; a disconnected session
+    // keeps them so the reader can send again rather than retype them.
+    const failure = sendReviewFrame((frame) => sendSessionFrame(sessionId, frame), comments);
+    setReviewError(failure);
+    if (failure === undefined) clearComments(sessionId, filePath);
   };
 
   const confirmDelete = async (): Promise<void> => {
@@ -464,8 +473,10 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
       </div>
 
       {draft === undefined ? null : (
-        <CommentDraft
+        <ReviewCommentDraft
+          testIdPrefix="files-comment"
           snippet={draft.snippet}
+          {...(draft.side === undefined ? {} : { side: draft.side })}
           {...(draft.startLine === undefined ? {} : { startLine: draft.startLine })}
           {...(draft.endLine === undefined ? {} : { endLine: draft.endLine })}
           onSubmit={submitDraft}
@@ -489,9 +500,14 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
               send review
             </Button>
           </div>
+          {reviewError === undefined ? null : (
+            <p role="alert" data-testid="files-review-error" className="pb-1 text-2xs text-doom-red">
+              review not sent: {reviewError}
+            </p>
+          )}
           {comments.map((comment) => (
             <div key={comment.id} data-testid="files-review-comment" className="flex items-start gap-2 py-0.5">
-              <span className="shrink-0 text-2xs text-doom-faint">{commentAnchor(comment)}</span>
+              <span className="shrink-0 text-2xs text-doom-faint">{reviewCommentAnchor(comment)}</span>
               <span className="min-w-0 flex-1 truncate text-xs text-doom-text">{comment.body}</span>
               <Button
                 variant="ghost"

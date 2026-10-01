@@ -18,6 +18,11 @@ describe('stepUpActionFor', () => {
     expect(stepUpActionFor('POST', '/api/workspaces/w/plugins/git/sessions/extra')).toBeUndefined();
   });
 
+  it("gates writing a workspace's git remote credentials, but not reading them", () => {
+    expect(stepUpActionFor('PUT', '/api/workspaces/w/plugins/git/auth')).toBe('settings.write');
+    expect(stepUpActionFor('GET', '/api/workspaces/w/plugins/git/auth')).toBeUndefined();
+    expect(stepUpActionFor('PUT', '/api/workspaces/w/plugins/git/auth/extra')).toBeUndefined();
+  });
   it('leaves reading and stopping a session ungated', () => {
     expect(stepUpActionFor('GET', '/api/workspaces/w/sessions')).toBeUndefined();
     expect(stepUpActionFor('DELETE', '/api/workspaces/w/sessions/one')).toBeUndefined();

@@ -1,5 +1,7 @@
 import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 import {
+  type DoomHeadlessExecutionContext,
+  type DoomHeadlessHook,
   type DoomHeadlessResource,
   type DoomHeadlessTool,
   type DoomHeadlessToolResult,
@@ -15,7 +17,11 @@ import {
   RUN_WORKTREE_TOOL_NAME,
   validateParams,
 } from '../../../../../services/runWorktree';
-import { createWorktreeMessageInbox } from '../../../../../services/worktreeEvents';
+import {
+  createWorktreeMessageInbox,
+  GIT_SESSION_CHANGED_EVENT,
+  WORKTREE_MESSAGE_VERSION,
+} from '../../../../../services/worktreeEvents';
 import { createWorktreeOperations } from '../../../../../services/worktreeOperations';
 
 function progressResult(action: RunWorktreeToolParams['action'], label: string): DoomHeadlessToolResult {
@@ -67,7 +73,16 @@ export function createGitSession({ context, host: serverHost }: DoomServerPlugin
       });
     },
   };
-  return { value: { resources, tool }, onDispose: () => messageInbox.close() };
+  // A tool call or a settled turn may have changed the checkout. The hub's
+  // '# diff' channel coalesces these, so a burst of tool calls costs one recount.
+  const changed = (_event: unknown, execution: DoomHeadlessExecutionContext): void => {
+    directEvents.publish(GIT_SESSION_CHANGED_EVENT, execution.sessionId, { version: WORKTREE_MESSAGE_VERSION });
+  };
+  const hooks: DoomHeadlessHook[] = [
+    { event: 'tool_execution_end', handle: changed },
+    { event: 'agent_settled', handle: changed },
+  ];
+  return { value: { resources, tool, hooks }, onDispose: () => messageInbox.close() };
 }
 
 const root = defineRoot(createGitSession);

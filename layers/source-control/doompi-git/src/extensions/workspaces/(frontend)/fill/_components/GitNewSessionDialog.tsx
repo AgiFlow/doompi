@@ -1,4 +1,4 @@
-import { workspaceApiPath, type WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   Button,
   Dialog,
@@ -17,7 +17,7 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
 
-import { GIT_API_BASE_PATH, GIT_BRANCHES_PATH, GIT_SESSIONS_PATH } from '../../../../../constants/git';
+import { api } from '../../../../../../generated/client';
 import type { GitBranchesResponse, GitSessionCreated } from '../../../../../types/gitSessions';
 import {
   baseOptions,
@@ -58,7 +58,7 @@ export function GitNewSessionDialog({ newSession }: WebPluginSlotProps) {
   useEffect(() => {
     if (workspaceId === undefined || request === undefined) return;
     let stale = false;
-    const url = `${workspaceApiPath(workspaceId)}/plugins/${GIT_API_BASE_PATH}${GIT_BRANCHES_PATH}`;
+    const url = api.workspace(workspaceId).branches.url();
     void request(url)
       .then(async (response) => {
         const body: unknown = await response.json().catch(() => undefined);
@@ -99,10 +99,11 @@ export function GitNewSessionDialog({ newSession }: WebPluginSlotProps) {
       failure = await newSession.createPlain(state.name);
     } else {
       try {
-        const response = await newSession.requestWithStepUp(
-          `${workspaceApiPath(newSession.workspaceId)}/plugins/${GIT_API_BASE_PATH}${GIT_SESSIONS_PATH}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
-        );
+        const response = await newSession.requestWithStepUp(api.workspace(newSession.workspaceId).createSession.url(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
         const answer: unknown = await response.json().catch(() => undefined);
         failure = response.ok
           ? await newSession.openCreated((answer as GitSessionCreated).sessionId)
