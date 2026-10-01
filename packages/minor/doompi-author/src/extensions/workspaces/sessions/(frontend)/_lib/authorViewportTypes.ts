@@ -236,8 +236,6 @@ export interface AuthorRequestRecord {
 export interface AuthorFocusedDocument {
   path: string;
   generation: number;
-  revision: number;
-  sourceSha256?: string;
   focusedAt: number;
 }
 

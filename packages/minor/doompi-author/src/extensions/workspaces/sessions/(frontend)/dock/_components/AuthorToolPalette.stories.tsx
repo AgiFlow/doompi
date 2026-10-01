@@ -18,17 +18,17 @@ export const Playground = {
     <div className="flex flex-col gap-6 bg-doom-bg p-6">
       <div className="flex w-80 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">markdown · select</span>
-        <AuthorToolPalette sessionId="s1" kind="markdown" activeTool="select" />
+        <AuthorToolPalette path="notes.md" sessionId="s1" kind="markdown" activeTool="select" />
       </div>
 
       <div className="flex w-80 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">markdown · marking a region</span>
-        <AuthorToolPalette sessionId="s1" kind="markdown" activeTool="mark" />
+        <AuthorToolPalette path="notes.md" sessionId="s1" kind="markdown" activeTool="mark" />
       </div>
 
       <div className="flex w-80 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">image · draw feedback and pan</span>
-        <AuthorToolPalette sessionId="s1" kind="image" activeTool="draw" />
+        <AuthorToolPalette path="notes.md" sessionId="s1" kind="image" activeTool="draw" />
       </div>
     </div>
   ),

@@ -72,7 +72,7 @@ export function recordAuthorComposerSubmission(submission: ComposerSubmission): 
       sourceSha256: packet.document.sourceSha256,
     });
     for (const region of packet.regions) {
-      removeAuthorRegion(submission.sessionId, region.id, region.version ?? 1, packet.document.path);
+      removeAuthorRegion(submission.sessionId, packet.document.path, region.id, region.version ?? 1);
     }
   }
 }

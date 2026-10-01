@@ -19,6 +19,8 @@ import {
   reviseAuthorDocument,
   reviseAuthorFragment,
   setAuthorCrop,
+  setAuthorToolMode,
+  authorToolMode,
   updateAuthorRegionComment,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 
@@ -88,7 +90,7 @@ describe('Author workspace store', () => {
   });
   it('keeps ordered native-anchor regions isolated by session and derives order after removal', () => {
     putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', content: 'hello', sourceSha256: 'a' });
-    focusAuthorDocument('s1', 'notes.md', 0, 'a');
+    focusAuthorDocument('s1', 'notes.md');
     const region = (id: string, comment: string) => ({
       id,
       documentPath: 'notes.md',
@@ -102,16 +104,16 @@ describe('Author workspace store', () => {
     addAuthorRegion('s1', region('r1', 'first'));
     addAuthorRegion('s1', region('r2', 'second'));
 
-    expect(authorSessionWorkspace('s1').regions.map(({ id }) => id)).toEqual(['r1', 'r2']);
-    expect(authorSessionWorkspace('s2').regions).toEqual([]);
-    removeAuthorRegion('s1', 'r1');
-    expect(authorSessionWorkspace('s1').regions.map(({ id }) => id)).toEqual(['r2']);
+    expect(authorDocumentAnnotations('s1', 'notes.md').annotations.map(({ id }) => id)).toEqual(['r1', 'r2']);
+    expect(authorDocumentAnnotations('s2', 'notes.md').annotations).toEqual([]);
+    removeAuthorRegion('s1', 'notes.md', 'r1');
+    expect(authorDocumentAnnotations('s1', 'notes.md').annotations.map(({ id }) => id)).toEqual(['r2']);
   });
 
   it('keeps versioned mixed annotations per document across focus release and tab switches', () => {
     putAuthorDocument('s1', { path: 'one.png', kind: 'image', sourceSha256: 'one' });
     putAuthorDocument('s1', { path: 'two.png', kind: 'image', sourceSha256: 'two' });
-    const firstGeneration = focusAuthorDocument('s1', 'one.png', 0, 'one');
+    const firstGeneration = focusAuthorDocument('s1', 'one.png');
     addAuthorRegion('s1', {
       id: 'point',
       documentPath: 'one.png',
@@ -123,22 +125,63 @@ describe('Author workspace store', () => {
       viewport: { width: 100, height: 100 },
       createdAt: 1,
     });
-    updateAuthorRegionComment('s1', 'point', 'Move this lower');
-    expect(authorSessionWorkspace('s1').annotations[0]).toMatchObject({ id: 'point', version: 2, mode: 'point' });
+    updateAuthorRegionComment('s1', 'one.png', 'point', 'Move this lower');
+    expect(authorDocumentAnnotations('s1', 'one.png').annotations[0]).toMatchObject({
+      id: 'point',
+      version: 2,
+      mode: 'point',
+    });
 
-    focusAuthorDocument('s1', 'two.png', 0, 'two');
-    expect(authorSessionWorkspace('s1').annotations).toEqual([]);
+    focusAuthorDocument('s1', 'two.png');
+    expect(authorDocumentAnnotations('s1', 'two.png').annotations).toEqual([]);
     expect(authorDocumentAnnotations('s1', 'one.png')?.annotations).toHaveLength(1);
-    focusAuthorDocument('s1', 'one.png', 0, 'one');
-    expect(authorSessionWorkspace('s1').regions[0]).toMatchObject({ id: 'point', version: 2 });
+    focusAuthorDocument('s1', 'one.png');
+    expect(authorDocumentAnnotations('s1', 'one.png').annotations[0]).toMatchObject({ id: 'point', version: 2 });
 
     releaseAuthorDocumentFocus('s1', firstGeneration);
     expect(authorDocumentAnnotations('s1', 'one.png')?.annotations).toHaveLength(1);
   });
 
+  it('routes hidden-document mutations and tools by path without reviving stale anchors', () => {
+    putAuthorDocument('s1', { path: 'a.png', kind: 'image', sourceSha256: 'a' });
+    putAuthorDocument('s1', { path: 'b.png', kind: 'image', sourceSha256: 'b' });
+    focusAuthorDocument('s1', 'b.png');
+    setAuthorToolMode('s1', './a.png', 'draw');
+    addAuthorRegion('s1', {
+      id: 'a',
+      documentPath: 'a.png',
+      revision: 0,
+      sourceSha256: 'a',
+      comment: 'Fix A',
+      anchor: { kind: 'image-point', point: { x: 0.1, y: 0.2 }, naturalWidth: 100, naturalHeight: 100 },
+      viewport: { width: 100, height: 100 },
+      createdAt: 1,
+    });
+    expect(authorDocumentAnnotations('s1', 'a.png').annotations).toHaveLength(1);
+    expect(authorDocumentAnnotations('s1', 'b.png').annotations).toEqual([]);
+    expect(authorToolMode('s1', 'a.png')).toBe('draw');
+    expect(authorToolMode('s1', 'b.png')).toBe('select');
+    putAuthorRequest('s1', {
+      id: 'hidden',
+      documentPath: 'a.png',
+      requestText: 'Fix A',
+      regions: authorDocumentAnnotations('s1', 'a.png').annotations,
+      status: 'CHANGING',
+      createdAt: 1,
+      updatedAt: 1,
+      revision: 0,
+      sourceSha256: 'a',
+    });
+    putAuthorDocument('s1', { path: 'a.png', kind: 'image', sourceSha256: 'new' });
+    expect(authorSessionWorkspace('s1').requests[0]?.status).toBe('FAILED');
+    updateAuthorRegionComment('s1', 'a.png', 'a', 'Do not restore');
+    expect(authorDocumentAnnotations('s1', 'a.png').annotations).toEqual([]);
+    expect(authorDocumentAnnotations('s1', 'a.png').revision).toBe(1);
+  });
+
   it('invalidates unsent anchors after a local document revision', () => {
     putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', content: 'hello', sourceSha256: 'a' });
-    focusAuthorDocument('s1', 'notes.md', 0, 'a');
+    focusAuthorDocument('s1', 'notes.md');
     addAuthorRegion('s1', {
       id: 'r1',
       documentPath: 'notes.md',
@@ -152,11 +195,8 @@ describe('Author workspace store', () => {
 
     reviseAuthorDocument('s1', 'notes.md', 'goodbye');
 
-    expect(authorSessionWorkspace('s1')).toMatchObject({
-      candidate: undefined,
-      regions: [],
-      focusedDocument: { revision: 1 },
-    });
+    expect(authorDocumentAnnotations('s1', 'notes.md')).toMatchObject({ candidate: undefined, annotations: [] });
+    expect(authorDocument('s1', 'notes.md')?.version).toBe(1);
   });
   it('keeps submitted preview requests immutable while invalidating stale draft regions after a rebuild', () => {
     const preview = {
@@ -171,7 +211,7 @@ describe('Author workspace store', () => {
     };
     const path = 'author-preview/style-system/button-primary';
     putAuthorDocument('s1', { path, kind: 'story-preview', sourceSha256: 'a', storyPreview: preview });
-    focusAuthorDocument('s1', path, 0, 'a');
+    focusAuthorDocument('s1', path);
     const region = {
       id: 'r1',
       documentPath: path,
@@ -206,14 +246,14 @@ describe('Author workspace store', () => {
       storyPreview: { ...preview, buildRevision: 'build-2' },
     });
 
-    expect(authorSessionWorkspace('s1').regions).toEqual([]);
+    expect(authorDocumentAnnotations('s1', path).annotations).toEqual([]);
     expect(authorSessionWorkspace('s1').requests[0]).toMatchObject({ id: 'active-preview', status: 'CHANGING' });
     expect(authorSessionWorkspace('s1').requests[0]!.regions).toEqual([region]);
   });
 
   it('invalidates drafts and active work on an external source change without rewriting completed history', () => {
     putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', content: 'before', sourceSha256: 'a' });
-    focusAuthorDocument('s1', 'notes.md', 0, 'a');
+    focusAuthorDocument('s1', 'notes.md');
     const region = {
       id: 'r1',
       documentPath: 'notes.md',
@@ -251,11 +291,11 @@ describe('Author workspace store', () => {
 
     putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', content: 'external', sourceSha256: 'b' });
 
-    expect(authorSessionWorkspace('s1').regions).toEqual([]);
+    expect(authorDocumentAnnotations('s1', 'notes.md').annotations).toEqual([]);
     expect(authorSessionWorkspace('s1').requests.map(({ id, status }) => [id, status])).toEqual([
       ['active', 'FAILED'],
       ['done', 'COMPLETE'],
     ]);
-    expect(authorSessionWorkspace('s1').focusedDocument).toMatchObject({ sourceSha256: 'b', revision: 1 });
+    expect(authorDocument('s1', 'notes.md')).toMatchObject({ sourceSha256: 'b', version: 1 });
   });
 });

@@ -3,7 +3,7 @@ import { useStore } from '@tanstack/react-store';
 
 import { autonomousVoiceGridVisible } from '../../_components/AuthorGridOverlay';
 import { authorGrid } from '../../_lib/authorGrid';
-import { authorWorkspace } from '../../_lib/authorWorkspaceStore';
+import { authorWorkspace, authorDocumentAnnotations, normalizeAuthorPath } from '../../_lib/authorWorkspaceStore';
 import { AuthorFeedbackControls } from './AuthorFeedbackControls';
 import { AuthorRequestLog } from './AuthorRequestLog';
 import { AuthorToolPalette } from './AuthorToolPalette';
@@ -32,7 +32,15 @@ export function AuthorPanel({
   const requests = (workspace?.requests ?? []).filter(
     (request) => focusedPath === undefined || request.documentPath === focusedPath,
   );
-  const activity = sessionId === null ? null : (renderSessionActivity?.() ?? null);
+  const drafts = useStore(authorWorkspace.store, (state) =>
+    authorDocumentAnnotations(sessionId, focusedPath ?? '', state),
+  );
+  const activity =
+    sessionId !== null &&
+    focusedPath !== undefined &&
+    requests.some((request) => request.status === 'REQUESTED' || request.status === 'CHANGING')
+      ? (renderSessionActivity?.() ?? null)
+      : null;
   if (!activeMinorModes?.includes('author')) return null;
   return (
     <section data-testid="author-panel" className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -51,7 +59,12 @@ export function AuthorPanel({
                   Annotations reference video frames. They do not save changes to the source video.
                 </p>
               ) : null}
-              <AuthorToolPalette sessionId={sessionId} kind={focused.kind} activeTool={workspace.activeTool} />
+              <AuthorToolPalette
+                sessionId={sessionId}
+                path={focused.path}
+                kind={focused.kind}
+                activeTool={workspace.toolsByDocument[normalizeAuthorPath(focused.path)] ?? 'select'}
+              />
               {autonomousVoiceGridVisible(statuses) && grid !== undefined ? (
                 <div
                   data-testid="author-grid-snapshot"
@@ -66,7 +79,7 @@ export function AuthorPanel({
                   key={focused.path}
                   sessionId={sessionId}
                   document={focused}
-                  workspace={workspace}
+                  drafts={drafts}
                   submitCapture={submitCapture}
                 />
               </div>

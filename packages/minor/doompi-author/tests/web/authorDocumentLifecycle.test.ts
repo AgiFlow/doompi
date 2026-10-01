@@ -11,12 +11,15 @@ import { AuthorMediaView } from '../../src/extensions/workspaces/sessions/(front
 import { AuthorStructuredView } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorStructuredView';
 import { AuthorTextView } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorTextView';
 import { focusAuthorViewport } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorBrowserBridge';
+import { canvasPaths } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCanvasState';
 import {
   loadAuthorDocument,
   saveAuthorDocument,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorFiles';
 import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 import { AuthorFeedbackControls } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorFeedbackControls';
+import { AuthorPanel } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorPanel';
+import { AuthorRequestLog } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorRequestLog';
 const hooks = vi.hoisted(() => ({
   values: [] as unknown[],
   setters: [] as ReturnType<typeof vi.fn>[],
@@ -57,6 +60,8 @@ vi.mock('../../generated/client', () => ({
 }));
 type Props = {
   children?: ReactNode;
+  requests?: readonly unknown[];
+  drafts?: workspace.AuthorDocumentAnnotationCollection;
   'data-testid'?: string;
   onClick?: () => void;
   preview?: boolean;
@@ -113,7 +118,7 @@ describe('Author document lifecycle', () => {
     render();
     effects();
     await settle();
-    expect(workspace.authorSessionWorkspace('s').focusedDocument).toMatchObject({ path: 'doc', sourceSha256: 'sha' });
+    expect(workspace.authorSessionWorkspace('s').focusedDocument).toMatchObject({ path: 'doc' });
     expect(focusAuthorViewport).toHaveBeenCalledWith('s', expect.any(Array), 'doc');
     hooks.cleanups.splice(0).forEach((cleanup) => cleanup());
     expect(workspace.authorSessionWorkspace('s').focusedDocument).toBeUndefined();
@@ -178,10 +183,55 @@ describe('Author document lifecycle', () => {
     ).toBe(true);
     expect(controls.find((node) => node.props['data-testid'] === 'author-save')?.props.disabled).toBe(true);
   });
+  it('claims focus before load and excludes another document completion from the dock', () => {
+    workspace.putAuthorDocument('s', { path: 'a.png', kind: 'image' });
+    workspace.focusAuthorDocument('s', 'a.png');
+    workspace.putAuthorRequest('s', {
+      id: 'a-done',
+      documentPath: 'a.png',
+      requestText: 'Fix A',
+      status: 'COMPLETE',
+      regions: [
+        {
+          id: 'r',
+          documentPath: 'a.png',
+          revision: 0,
+          comment: 'Fix A',
+          anchor: { kind: 'image-point', point: { x: 0.1, y: 0.2 }, naturalWidth: 10, naturalHeight: 10 },
+          viewport: { width: 10, height: 10 },
+          createdAt: 1,
+        },
+      ],
+      createdAt: 1,
+      updatedAt: 1,
+      revision: 0,
+    });
+    render('s', {}, 'b.png');
+    effects();
+    expect(workspace.authorDocument('s', 'b.png')).toBeUndefined();
+    expect(workspace.authorSessionWorkspace('s').focusedDocument?.path).toBe('b.png');
+    const dock = nodes(
+      AuthorPanel({
+        sessionId: 's',
+        activeMinorModes: ['author'],
+        renderSlot: () => null,
+      } as unknown as WebPluginSlotProps),
+    );
+    expect(dock.find((node) => node.type === AuthorRequestLog)?.props.requests).toEqual([]);
+  });
+  it('resets the canonical document tool when a provisional tab closes', () => {
+    const tab = authorFileTab('provisional.png');
+    canvasPaths.setState(() => ({ 's\nprovisional.png': 'canonical.png' }));
+    workspace.setAuthorToolMode('s', 'canonical.png', 'draw');
+    tab.onClose?.('s');
+    expect(workspace.authorToolMode('s', 'canonical.png')).toBe('select');
+    canvasPaths.setState(() => ({}));
+  });
   it("never shows another document's annotations while focus hands over", () => {
     for (const path of ['a.png', 'b.png'])
       workspace.putAuthorDocument('s', { path, kind: 'image', sourceSha256: 'sha' });
-    workspace.focusAuthorDocument('s', 'a.png', 0, 'sha');
+    workspace.focusAuthorDocument('s', 'a.png');
+    workspace.setAuthorToolMode('s', 'a.png', 'draw');
     workspace.addAuthorRegion('s', {
       id: 'draft-a',
       documentPath: 'a.png',
@@ -201,12 +251,14 @@ describe('Author document lifecycle', () => {
     const b = render('s', {}, 'b.png');
     expect(b.find((node) => node.type === AuthorMediaView)?.props).toMatchObject({
       displayedRegions: [],
+      activeTool: 'select',
       pendingCandidate: false,
     });
-    expect(b.some((node) => node.type === AuthorFeedbackControls)).toBe(false);
+    expect(b.find((node) => node.type === AuthorFeedbackControls)?.props.drafts).toMatchObject({ annotations: [] });
     const a = render('s', {}, 'a.png');
     expect(a.find((node) => node.type === AuthorMediaView)?.props).toMatchObject({
       displayedRegions: [{ ordinal: 1, region: { id: 'draft-a' } }],
+      activeTool: 'draw',
     });
     expect(a.some((node) => node.type === AuthorFeedbackControls)).toBe(true);
   });
@@ -219,10 +271,10 @@ describe('Author document lifecycle', () => {
     hooks.values = [false];
     controls = render();
     expect(controls.find((node) => node.type === AuthorTextView)?.props.preview).toBe(false);
-    workspace.setAuthorToolMode('s', 'mark');
+    workspace.setAuthorToolMode('s', 'doc', 'mark');
     controls = render();
     expect(controls.find((node) => node.type === AuthorTextView)?.props.preview).toBe(false);
-    workspace.setAuthorToolMode('s', 'select');
+    workspace.setAuthorToolMode('s', 'doc', 'select');
     controls = render('s', { 'doom-voice': 'voice auto: listening' });
     expect(controls.find((node) => node.type === AuthorTextView)?.props.preview).toBe(false);
   });

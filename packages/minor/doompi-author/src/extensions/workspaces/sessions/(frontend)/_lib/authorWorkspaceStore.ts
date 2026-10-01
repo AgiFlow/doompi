@@ -44,15 +44,9 @@ export interface AuthorDocumentAnnotationCollection {
 export interface AuthorSessionWorkspace {
   generation: number;
   focusedDocument?: AuthorFocusedDocument;
-  activeTool: AuthorToolMode;
   annotationsByDocument: Readonly<Record<string, AuthorDocumentAnnotationCollection>>;
-  /** Mixed annotations for the focused document. */
-  annotations: readonly AuthorAnnotationDraft[];
-  candidate?: AuthorRegionCandidate;
-  candidateText: string;
+  toolsByDocument: Readonly<Record<string, AuthorToolMode>>;
   videoSeekRequest?: { path: string; generation: number; timeSeconds: number; sequence: number };
-  /** Compatibility alias for annotations while region-only consumers migrate. */
-  regions: readonly AuthorRegionDraft[];
   requests: readonly AuthorRequestRecord[];
 }
 
@@ -63,11 +57,8 @@ export interface AuthorWorkspaceState {
 
 const EMPTY_SESSION: AuthorSessionWorkspace = {
   generation: 0,
-  activeTool: 'select',
   annotationsByDocument: {},
-  annotations: [],
-  candidateText: '',
-  regions: [],
+  toolsByDocument: {},
   requests: [],
 };
 
@@ -97,13 +88,30 @@ export function authorSessionWorkspace(sessionId: string | null): AuthorSessionW
   return authorWorkspace.store.state.sessions[sessionId] ?? EMPTY_SESSION;
 }
 
+const EMPTY_COLLECTION: AuthorDocumentAnnotationCollection = Object.freeze({
+  revision: 0,
+  stale: false,
+  candidate: undefined,
+  candidateText: '',
+  annotations: Object.freeze([]),
+  updatedAt: 0,
+});
+
 export function authorDocumentAnnotations(
   sessionId: string | null,
   path: string,
-): AuthorDocumentAnnotationCollection | undefined {
-  return sessionId === null
-    ? undefined
-    : authorWorkspace.store.state.sessions[sessionId]?.annotationsByDocument[normalizeAuthorPath(path)];
+  state: AuthorWorkspaceState = authorWorkspace.store.state,
+): AuthorDocumentAnnotationCollection {
+  if (sessionId === null) return EMPTY_COLLECTION;
+  const document = state.documents[authorDocumentKey(sessionId, path)];
+  const collection = state.sessions[sessionId]?.annotationsByDocument[normalizeAuthorPath(path)];
+  return document !== undefined &&
+    collection !== undefined &&
+    !collection.stale &&
+    collection.revision === document.version &&
+    collection.sourceSha256 === document.sourceSha256
+    ? collection
+    : EMPTY_COLLECTION;
 }
 
 export interface AuthorAnnotationHydrationRecord {
@@ -128,22 +136,11 @@ export function hydrateAuthorAnnotationCollections(records: readonly AuthorAnnot
           (document.version !== record.collection.revision ||
             document.sourceSha256 !== record.collection.sourceSha256));
       const collection = restoreCollectionEvidence({ ...record.collection, stale });
-      const focused = session.focusedDocument;
-      const visible = focused?.path === path && !stale;
-      const annotations = visible ? collection.annotations : session.annotations;
       sessions = {
         ...sessions,
         [record.sessionId]: {
           ...session,
           annotationsByDocument: { ...session.annotationsByDocument, [path]: collection },
-          ...(visible
-            ? {
-                annotations,
-                regions: annotations,
-                candidate: collection.candidate,
-                candidateText: collection.candidateText,
-              }
-            : {}),
         },
       };
     }
@@ -176,40 +173,28 @@ export function putAuthorDocument(sessionId: string, input: AuthorDocumentInput)
     };
     const session = state.sessions[sessionId];
     let sessions = state.sessions;
-    if (sourceChanged && session?.focusedDocument?.path === path) {
+    if (sourceChanged && session !== undefined) {
+      const collection = session.annotationsByDocument[path];
+      if (collection?.candidate?.thumbnailUrl !== undefined) staleThumbnails.push(collection.candidate.thumbnailUrl);
       staleThumbnails.push(
-        ...(session.candidate?.thumbnailUrl === undefined ? [] : [session.candidate.thumbnailUrl]),
-        ...session.annotations.flatMap((annotation) =>
+        ...(collection?.annotations ?? []).flatMap((annotation) =>
           annotation.thumbnailUrl === undefined ? [] : [annotation.thumbnailUrl],
         ),
       );
       const now = Date.now();
-      const generation = session.generation + 1;
-      const staleCollection = staleAuthorCollection(session.annotationsByDocument[path], now);
+      const staleCollection = staleAuthorCollection(collection, now);
       sessions = {
         ...sessions,
         [sessionId]: {
           ...session,
-          generation,
-          focusedDocument: {
-            path,
-            generation,
-            revision: baselineVersion,
-            sourceSha256: input.sourceSha256,
-            focusedAt: now,
-          },
           annotationsByDocument: {
             ...session.annotationsByDocument,
             ...(staleCollection && { [path]: staleCollection }),
           },
-          annotations: [],
-          regions: [],
-          candidate: undefined,
-          candidateText: '',
           requests: session.requests.map((request) =>
             input.kind !== 'story-preview' &&
             request.documentPath === path &&
-            (request.status === 'REQUESTED' || request.status === 'CHANGING' || request.status === 'CHANGED')
+            ['REQUESTED', 'CHANGING', 'CHANGED'].includes(request.status)
               ? {
                   ...request,
                   status: 'FAILED',
@@ -221,24 +206,6 @@ export function putAuthorDocument(sessionId: string, input: AuthorDocumentInput)
           ),
         },
       };
-    } else if (sourceChanged && session?.annotationsByDocument[path] !== undefined) {
-      const collection = session.annotationsByDocument[path];
-      if (collection.candidate?.thumbnailUrl !== undefined) staleThumbnails.push(collection.candidate.thumbnailUrl);
-      staleThumbnails.push(
-        ...collection.annotations.flatMap((annotation) =>
-          annotation.thumbnailUrl === undefined ? [] : [annotation.thumbnailUrl],
-        ),
-      );
-      sessions = {
-        ...sessions,
-        [sessionId]: {
-          ...session,
-          annotationsByDocument: {
-            ...session.annotationsByDocument,
-            [path]: staleAuthorCollection(collection, Date.now())!,
-          },
-        },
-      };
     }
     return { documents: { ...state.documents, [key]: result }, sessions };
   });
@@ -247,87 +214,41 @@ export function putAuthorDocument(sessionId: string, input: AuthorDocumentInput)
 }
 
 /** Claims focus and returns a generation token that makes cleanup race-safe. */
-export function focusAuthorDocument(sessionId: string, path: string, revision: number, sourceSha256?: string): number {
-  const normalized = normalizeAuthorPath(path);
+export function focusAuthorDocument(sessionId: string, path: string): number {
   let generation = 0;
-  authorWorkspace.update((state) => {
-    const session = state.sessions[sessionId] ?? EMPTY_SESSION;
+  updateSession(sessionId, (session) => {
     generation = session.generation + 1;
-    const stored = session.annotationsByDocument[normalized];
-    const current =
-      stored !== undefined && stored.revision === revision && stored.sourceSha256 === sourceSha256 && !stored.stale
-        ? stored
-        : undefined;
-    const annotations = current?.annotations ?? [];
     return {
-      ...state,
-      sessions: {
-        ...state.sessions,
-        [sessionId]: {
-          ...session,
-          generation,
-          focusedDocument: {
-            path: normalized,
-            generation,
-            revision,
-            sourceSha256,
-            focusedAt: Date.now(),
-          },
-          annotations,
-          regions: annotations,
-          candidate: current?.candidate,
-          candidateText: current?.candidateText ?? '',
-        },
-      },
+      ...session,
+      generation,
+      focusedDocument: { path: normalizeAuthorPath(path), generation, focusedAt: Date.now() },
     };
   });
   return generation;
 }
 
-export function syncAuthorDocumentFocus(
-  sessionId: string,
-  generation: number,
-  revision: number,
-  sourceSha256?: string,
-): void {
-  updateSession(sessionId, (session) => {
-    const focused = session.focusedDocument;
-    if (focused === undefined || focused.generation !== generation) return session;
-    if (focused.revision === revision && focused.sourceSha256 === sourceSha256) return session;
-    return { ...session, focusedDocument: { ...focused, revision, sourceSha256 } };
-  });
-}
-
 export function releaseAuthorDocumentFocus(sessionId: string, generation: number): void {
-  updateSession(sessionId, (session) => {
-    if (session.focusedDocument?.generation !== generation) return session;
-    return {
-      ...session,
-      focusedDocument: undefined,
-      candidate: undefined,
-      candidateText: '',
-      annotations: [],
-      regions: [],
-    };
-  });
+  updateSession(sessionId, (session) =>
+    session.focusedDocument?.generation === generation ? { ...session, focusedDocument: undefined } : session,
+  );
 }
 
-export function seekAuthorVideo(sessionId: string, timeSeconds: number): boolean {
-  const workspace = authorSessionWorkspace(sessionId);
-  const focused = workspace.focusedDocument;
+export function seekAuthorVideo(sessionId: string, path: string, timeSeconds: number): boolean {
+  const normalized = normalizeAuthorPath(path);
+  const focused = authorSessionWorkspace(sessionId).focusedDocument;
   if (
-    !focused ||
-    workspace.candidate ||
+    focused?.path !== normalized ||
+    authorDocumentAnnotations(sessionId, normalized).candidate ||
     !Number.isFinite(timeSeconds) ||
     timeSeconds < 0 ||
-    authorDocument(sessionId, focused.path)?.kind !== 'video'
+    authorDocument(sessionId, normalized)?.kind !== 'video'
   )
     return false;
+  setAuthorToolMode(sessionId, normalized, 'select');
   updateSession(sessionId, (session) => ({
     ...session,
-    activeTool: 'select',
     videoSeekRequest: {
-      path: focused.path,
+      path: normalized,
       generation: focused.generation,
       timeSeconds,
       sequence: (session.videoSeekRequest?.sequence ?? 0) + 1,
@@ -336,128 +257,91 @@ export function seekAuthorVideo(sessionId: string, timeSeconds: number): boolean
   return true;
 }
 
-export function setAuthorToolMode(sessionId: string, activeTool: AuthorToolMode): void {
-  updateSession(sessionId, (session) => (session.activeTool === activeTool ? session : { ...session, activeTool }));
+export function authorToolMode(sessionId: string | null, path: string): AuthorToolMode {
+  return authorSessionWorkspace(sessionId).toolsByDocument[normalizeAuthorPath(path)] ?? 'select';
 }
 
-export function setAuthorRegionCandidate(sessionId: string, candidate: AuthorRegionCandidate | undefined): void {
-  let staleThumbnail: string | undefined;
-  updateSession(sessionId, (session) => {
-    const focused = session.focusedDocument;
-    if (candidate !== undefined) {
-      if (focused === undefined || focused.path !== normalizeAuthorPath(candidate.documentPath)) {
-        throw new Error('The Author selection does not belong to the focused document.');
-      }
-      if (focused.revision !== candidate.revision || focused.sourceSha256 !== candidate.sourceSha256) {
-        throw new Error('The Author selection is stale for the focused document.');
-      }
-    }
-    if (focused === undefined) return session;
-    staleThumbnail = session.candidate?.thumbnailUrl;
-    const copied = candidate === undefined ? undefined : copyCandidate(candidate);
-    return withFocusedCollection({ ...session, candidate: copied }, focused.path, { candidate: copied });
-  });
-  if (staleThumbnail !== undefined && staleThumbnail !== candidate?.thumbnailUrl) revokeThumbnail(staleThumbnail);
+export function setAuthorToolMode(sessionId: string, path: string, tool: AuthorToolMode): void {
+  const normalized = normalizeAuthorPath(path);
+  updateSession(sessionId, (session) => ({
+    ...session,
+    toolsByDocument: { ...session.toolsByDocument, [normalized]: tool },
+  }));
 }
 
-export const setAuthorAnnotationCandidate = setAuthorRegionCandidate;
+function validateCandidate(sessionId: string, path: string, candidate: AuthorRegionCandidate): void {
+  const document = authorDocument(sessionId, path);
+  if (document === undefined || normalizeAuthorPath(candidate.documentPath) !== normalizeAuthorPath(path))
+    throw new Error('The Author selection does not belong to the document.');
+  if (document.version !== candidate.revision || document.sourceSha256 !== candidate.sourceSha256)
+    throw new Error('The Author selection is stale for the document.');
+}
 
-export function setAuthorCandidateText(sessionId: string, candidateText: string): void {
+export function setAuthorRegionCandidate(
+  sessionId: string,
+  path: string,
+  candidate: AuthorRegionCandidate | undefined,
+): void {
+  if (candidate !== undefined) validateCandidate(sessionId, path, candidate);
+  const thumbnail = authorDocumentAnnotations(sessionId, path).candidate?.thumbnailUrl;
+  updateCollection(sessionId, path, (collection) => ({
+    ...collection,
+    candidate: candidate && copyCandidate(candidate),
+  }));
+  if (thumbnail !== undefined && thumbnail !== candidate?.thumbnailUrl) revokeThumbnail(thumbnail);
+}
+
+export function setAuthorCandidateText(sessionId: string, path: string, candidateText: string): void {
   if (new TextEncoder().encode(candidateText).byteLength > 2 * 1024)
     throw new Error('Author candidate text must not exceed 2 KiB.');
-  updateSession(sessionId, (session) => {
-    const path = session.focusedDocument?.path;
-    return path === undefined ? session : withFocusedCollection({ ...session, candidateText }, path, { candidateText });
-  });
+  updateCollection(sessionId, path, (collection) => ({ ...collection, candidateText }));
 }
 
-export function commitAuthorRegion(sessionId: string, comment: string): string {
+export function commitAuthorRegion(sessionId: string, path: string, comment: string): string {
+  const candidate = authorDocumentAnnotations(sessionId, path).candidate;
+  if (candidate === undefined) throw new Error('Select a document annotation before adding a comment.');
   const id = crypto.randomUUID();
-  const session = authorSessionWorkspace(sessionId);
-  if (session.candidate === undefined) throw new Error('Select a document annotation before adding a comment.');
-  addAuthorRegion(sessionId, { ...session.candidate, id, comment, version: 1 });
-  updateSession(sessionId, (current) => {
-    const path = current.focusedDocument?.path;
-    return path === undefined
-      ? current
-      : withFocusedCollection({ ...current, candidate: undefined, candidateText: '' }, path, {
-          candidate: undefined,
-          candidateText: '',
-        });
-  });
+  addAuthorRegion(sessionId, { ...candidate, id, comment, version: 1 });
+  updateCollection(sessionId, path, (collection) => ({ ...collection, candidate: undefined, candidateText: '' }));
   return id;
 }
 
-export const commitAuthorAnnotation = commitAuthorRegion;
-
 export function addAuthorRegion(sessionId: string, region: AuthorRegionDraft): void {
   if (region.comment.trim() === '') throw new Error('Every Author annotation requires a comment.');
-  updateSession(sessionId, (session) => {
-    const focused = session.focusedDocument;
-    if (focused === undefined || focused.path !== normalizeAuthorPath(region.documentPath)) {
-      throw new Error('The Author annotation does not belong to the focused document.');
-    }
-    if (focused.revision !== region.revision || focused.sourceSha256 !== region.sourceSha256) {
-      throw new Error('The Author annotation is stale for the focused document.');
-    }
-    if (session.annotations.length >= AUTHOR_REGION_LIMIT)
+  validateCandidate(sessionId, region.documentPath, region);
+  updateCollection(sessionId, region.documentPath, (collection) => {
+    if (collection.annotations.length >= AUTHOR_REGION_LIMIT)
       throw new Error(`Author requests support at most ${AUTHOR_REGION_LIMIT} annotations.`);
-    if (session.annotations.some((candidate) => candidate.id === region.id))
+    if (collection.annotations.some((candidate) => candidate.id === region.id))
       throw new Error(`Author annotation '${region.id}' already exists.`);
-    const annotations = [...session.annotations, copyRegion({ ...region, version: region.version ?? 1 })];
-    return withFocusedCollection({ ...session, annotations, regions: annotations }, focused.path, { annotations });
+    return {
+      ...collection,
+      annotations: [...collection.annotations, copyRegion({ ...region, version: region.version ?? 1 })],
+    };
   });
 }
 
-export const addAuthorAnnotationDraft = addAuthorRegion;
-
-export function removeAuthorRegion(
-  sessionId: string,
-  regionId: string,
-  expectedVersion?: number,
-  documentPath?: string,
-): void {
+export function removeAuthorRegion(sessionId: string, path: string, regionId: string, expectedVersion?: number): void {
   let thumbnail: string | undefined;
-  updateSession(sessionId, (session) => {
-    const path = documentPath === undefined ? session.focusedDocument?.path : normalizeAuthorPath(documentPath);
-    if (path === undefined) return session;
-    const focused = session.focusedDocument?.path === path;
-    const collection = session.annotationsByDocument[path];
-    const current = focused ? session.annotations : collection?.annotations;
-    if (current === undefined) return session;
-    const annotation = current.find((candidate) => candidate.id === regionId);
-    if (annotation === undefined || (expectedVersion !== undefined && (annotation.version ?? 1) !== expectedVersion)) {
-      return session;
-    }
+  updateCollection(sessionId, path, (collection) => {
+    const annotation = collection.annotations.find((candidate) => candidate.id === regionId);
+    if (annotation === undefined || (expectedVersion !== undefined && (annotation.version ?? 1) !== expectedVersion))
+      return collection;
     thumbnail = annotation.thumbnailUrl;
-    const annotations = current.filter((candidate) => candidate.id !== regionId);
-    if (focused) return withFocusedCollection({ ...session, annotations, regions: annotations }, path, { annotations });
-    return {
-      ...session,
-      annotationsByDocument: {
-        ...session.annotationsByDocument,
-        [path]: { ...collection, annotations, updatedAt: Date.now() },
-      },
-    };
+    return { ...collection, annotations: collection.annotations.filter((candidate) => candidate.id !== regionId) };
   });
   if (thumbnail !== undefined) revokeThumbnail(thumbnail);
 }
 
-export const removeAuthorAnnotation = removeAuthorRegion;
-
-export function updateAuthorRegionComment(sessionId: string, regionId: string, comment: string): void {
+export function updateAuthorRegionComment(sessionId: string, path: string, regionId: string, comment: string): void {
   if (comment.trim() === '') throw new Error('Every Author annotation requires a comment.');
-  updateSession(sessionId, (session) => {
-    const path = session.focusedDocument?.path;
-    if (path === undefined) return session;
-    const annotations = session.annotations.map((annotation) =>
+  updateCollection(sessionId, path, (collection) => ({
+    ...collection,
+    annotations: collection.annotations.map((annotation) =>
       annotation.id === regionId ? { ...annotation, comment, version: (annotation.version ?? 1) + 1 } : annotation,
-    );
-    return withFocusedCollection({ ...session, annotations, regions: annotations }, path, { annotations });
-  });
+    ),
+  }));
 }
-
-export const updateAuthorAnnotationComment = updateAuthorRegionComment;
 
 export function putAuthorRequest(sessionId: string, record: AuthorRequestRecord): void {
   if (record.requestText.trim() === '') throw new Error('An Author request requires verbatim request text.');
@@ -614,9 +498,7 @@ function updateDocument(
     if (document === undefined) return state;
     const next = update(document);
     const session = state.sessions[sessionId];
-    const focused = session?.focusedDocument;
     const identityChanged = document.version !== next.version || document.sourceSha256 !== next.sourceSha256;
-    const focusedChanged = identityChanged && focused?.path === document.path;
     const collection = identityChanged ? session?.annotationsByDocument[document.path] : undefined;
     if (collection !== undefined) {
       if (collection.candidate?.thumbnailUrl !== undefined) staleThumbnails.push(collection.candidate.thumbnailUrl);
@@ -637,15 +519,6 @@ function updateDocument(
                 ...session.annotationsByDocument,
                 ...(staleCollection && { [document.path]: staleCollection }),
               },
-              ...(focusedChanged
-                ? {
-                    focusedDocument: { ...focused, revision: next.version, sourceSha256: next.sourceSha256 },
-                    candidate: undefined,
-                    candidateText: '',
-                    annotations: [],
-                    regions: [],
-                  }
-                : {}),
             },
           }
         : state.sessions;
@@ -696,26 +569,30 @@ function staleAuthorCollection(
   };
 }
 
-function withFocusedCollection(
-  session: AuthorSessionWorkspace,
+function updateCollection(
+  sessionId: string,
   path: string,
-  update: Partial<Pick<AuthorDocumentAnnotationCollection, 'annotations' | 'candidate' | 'candidateText'>>,
-): AuthorSessionWorkspace {
-  const focused = session.focusedDocument;
-  if (focused === undefined || focused.path !== path) return session;
-  const previous = session.annotationsByDocument[path];
-  const collection: AuthorDocumentAnnotationCollection = {
-    ...previous,
-    revision: focused.revision,
-    sourceSha256: focused.sourceSha256,
-    stale: false,
-    candidate: session.candidate,
-    candidateText: session.candidateText,
-    annotations: session.annotations,
-    updatedAt: Date.now(),
-    ...update,
-  };
-  return { ...session, annotationsByDocument: { ...session.annotationsByDocument, [path]: collection } };
+  update: (collection: AuthorDocumentAnnotationCollection) => AuthorDocumentAnnotationCollection,
+): void {
+  const normalized = normalizeAuthorPath(path);
+  const document = authorDocument(sessionId, normalized);
+  if (document === undefined) return;
+  updateSession(sessionId, (session) => {
+    const current = authorDocumentAnnotations(sessionId, normalized);
+    const base =
+      current === EMPTY_COLLECTION
+        ? { ...EMPTY_COLLECTION, revision: document.version, sourceSha256: document.sourceSha256 }
+        : current;
+    const next = update(base);
+    if (next === base) return session;
+    return {
+      ...session,
+      annotationsByDocument: {
+        ...session.annotationsByDocument,
+        [normalized]: { ...next, stale: false, updatedAt: Date.now() },
+      },
+    };
+  });
 }
 
 function boundedHistoryText(value: string | undefined): string | undefined {

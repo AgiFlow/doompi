@@ -1,7 +1,7 @@
 import { Button } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
 
-import type { AuthorSessionWorkspace } from '../../_lib/authorWorkspaceStore';
+import type { AuthorDocumentAnnotationCollection } from '../../_lib/authorWorkspaceStore';
 import {
   commitAuthorRegion,
   removeAuthorRegion,
@@ -10,36 +10,43 @@ import {
   setAuthorRegionCandidate,
 } from '../../_lib/authorWorkspaceStore';
 
-export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string; workspace: AuthorSessionWorkspace }) {
+export function AuthorRegionDrafts({
+  sessionId,
+  path,
+  drafts,
+}: {
+  sessionId: string;
+  path: string;
+  drafts: AuthorDocumentAnnotationCollection;
+}) {
   const [error, setError] = useState<string>();
   const add = () => {
     try {
-      commitAuthorRegion(sessionId, workspace.candidateText);
+      commitAuthorRegion(sessionId, path, drafts.candidateText);
       setError(undefined);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   };
-  if (!workspace.candidate && workspace.annotations.length === 0) return null;
-  const candidateKind = workspace.candidate?.mode === 'point' ? 'point' : 'region';
+  if (!drafts.candidate && drafts.annotations.length === 0) return null;
+  const candidateKind = drafts.candidate?.mode === 'point' ? 'point' : 'region';
   return (
     <section className="space-y-2" data-testid="author-region-drafts">
-      {workspace.candidate ? (
+      {drafts.candidate ? (
         <>
           <h3 className="text-base font-semibold text-doom-text">Current {candidateKind}</h3>
           <p className="text-base text-doom-dim sm:text-sm">
             Add feedback to keep this {candidateKind} as an unsent annotation.
           </p>
-          {workspace.candidate.anchor.kind === 'video-time-rect' ||
-          workspace.candidate.anchor.kind === 'video-time-point' ? (
+          {drafts.candidate.anchor.kind === 'video-time-rect' || drafts.candidate.anchor.kind === 'video-time-point' ? (
             <p className="text-base text-doom-dim sm:text-sm">
-              Frame at {workspace.candidate.anchor.timeSeconds.toFixed(3)}s
+              Frame at {drafts.candidate.anchor.timeSeconds.toFixed(3)}s
             </p>
           ) : null}
           <textarea
             aria-label="Annotation comment"
-            value={workspace.candidateText}
-            onChange={(event) => setAuthorCandidateText(sessionId, event.target.value)}
+            value={drafts.candidateText}
+            onChange={(event) => setAuthorCandidateText(sessionId, path, event.target.value)}
             placeholder="What should change here?"
             rows={3}
             className="min-h-11 w-full resize-y rounded border border-doom-border bg-doom-deep p-2 text-lg leading-normal text-doom-text focus:border-doom-red focus:outline-none sm:text-sm"
@@ -48,7 +55,7 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
             className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
             variant="outline"
             onClick={add}
-            disabled={!workspace.candidate || !workspace.candidateText.trim() || workspace.annotations.length >= 16}
+            disabled={!drafts.candidate || !drafts.candidateText.trim() || drafts.annotations.length >= 16}
           >
             add annotation
           </Button>
@@ -56,8 +63,8 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
             variant="ghost"
             className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
             onClick={() => {
-              setAuthorRegionCandidate(sessionId, undefined);
-              setAuthorCandidateText(sessionId, '');
+              setAuthorRegionCandidate(sessionId, path, undefined);
+              setAuthorCandidateText(sessionId, path, '');
               setError(undefined);
             }}
           >
@@ -66,11 +73,11 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
         </>
       ) : null}
       {error ? <output className="block text-base text-doom-red">{error}</output> : null}
-      {workspace.annotations.length > 0 ? (
-        <h3 className="text-base font-semibold text-doom-text">Unsent annotations ({workspace.annotations.length})</h3>
+      {drafts.annotations.length > 0 ? (
+        <h3 className="text-base font-semibold text-doom-text">Unsent annotations ({drafts.annotations.length})</h3>
       ) : null}
       <ol className="space-y-2">
-        {workspace.annotations.map((region, index) => (
+        {drafts.annotations.map((region, index) => (
           <li
             key={region.id}
             className="rounded border border-doom-border bg-doom-panel p-2 text-base leading-normal text-doom-text sm:text-sm"
@@ -82,10 +89,10 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
               <Button
                 variant="outline"
                 className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
-                disabled={workspace.candidate !== undefined}
+                disabled={drafts.candidate !== undefined}
                 onClick={() => {
                   if (region.anchor.kind === 'video-time-rect' || region.anchor.kind === 'video-time-point') {
-                    seekAuthorVideo(sessionId, region.anchor.timeSeconds);
+                    seekAuthorVideo(sessionId, path, region.anchor.timeSeconds);
                   }
                 }}
               >
@@ -96,7 +103,7 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
               className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
               variant="ghost"
               aria-label={`Remove annotation ${index + 1}`}
-              onClick={() => removeAuthorRegion(sessionId, region.id)}
+              onClick={() => removeAuthorRegion(sessionId, path, region.id)}
             >
               remove
             </Button>

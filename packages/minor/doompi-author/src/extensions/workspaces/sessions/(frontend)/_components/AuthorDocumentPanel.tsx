@@ -1,7 +1,7 @@
 import type { FileLinkSource, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Button } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { api } from '../../../../../../generated/client';
 import {
@@ -11,6 +11,7 @@ import {
 } from '../../../../../types/authorPreview';
 import { dropAuthorViewportSession, focusAuthorViewport, openAuthorCanvas } from '../_lib/authorBrowserBridge';
 import { canvasAliases, canvasFailures, canvasPaths } from '../_lib/authorCanvasState';
+import { authorDocumentContextContent } from '../_lib/authorCapture';
 import { loadAuthorDocument, saveAuthorDocument } from '../_lib/authorFiles';
 import { authorProfilesForDocument } from '../_lib/authorProfiles';
 import type { AuthorDisplayedRegion } from '../_lib/authorViewportTypes';
@@ -27,8 +28,8 @@ import {
   setAuthorRegionCandidate,
   setAuthorStoryPreview,
   setAuthorToolMode,
-  syncAuthorDocumentFocus,
-  type AuthorSessionWorkspace,
+  authorDocumentAnnotations,
+  type AuthorDocumentAnnotationCollection,
 } from '../_lib/authorWorkspaceStore';
 import { AuthorFeedbackControls } from '../dock/_components/AuthorFeedbackControls';
 import { AuthorGridOverlay, autonomousVoiceGridVisible } from './AuthorGridOverlay';
@@ -51,9 +52,9 @@ function tabId(path: string): string {
 
 /** Unsent annotations only. Sent ones live in the request log, not on the canvas. */
 export function displayedAuthorRegions(
-  workspace: Pick<AuthorSessionWorkspace, 'regions'> | undefined,
+  workspace: Pick<AuthorDocumentAnnotationCollection, 'annotations'> | undefined,
 ): readonly AuthorDisplayedRegion[] {
-  return (workspace?.regions ?? []).map((region, index) => ({ ordinal: index + 1, region }));
+  return (workspace?.annotations ?? []).map((region, index) => ({ ordinal: index + 1, region }));
 }
 export function AuthorDocumentPanel(props: AuthorDocumentPanelProps) {
   if (!props.activeMinorModes?.includes('author')) {
@@ -85,11 +86,11 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
   const document = useStore(authorWorkspace.store, (state) =>
     sessionId === null ? undefined : state.documents[authorDocumentKey(sessionId, path)],
   );
-  const focusGeneration = useRef<number | undefined>(undefined);
   const workspace = useStore(authorWorkspace.store, (state) =>
     sessionId === null ? undefined : state.sessions[sessionId],
   );
-  const activeTool = workspace?.activeTool ?? 'select';
+  const drafts = useStore(authorWorkspace.store, (state) => authorDocumentAnnotations(sessionId, path, state));
+  const activeTool = workspace?.toolsByDocument[normalizeAuthorPath(path)] ?? 'select';
   const [markdownPreview, setMarkdownPreview] = useState(true);
   const [status, setStatus] = useState<string | undefined>();
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -114,16 +115,10 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
         );
   const PreviewPanel = previewAction?.data.embeddedPanel;
   useEffect(() => {
-    if (document === undefined || sessionId === null) return;
-    const generation = focusAuthorDocument(sessionId, path, document.version, document.sourceSha256);
-    focusGeneration.current = generation;
+    if (sessionId === null) return;
+    const generation = focusAuthorDocument(sessionId, path);
     return () => releaseAuthorDocumentFocus(sessionId, generation);
-  }, [kind, document?.sourceSha256, path, sessionId]);
-  useEffect(() => {
-    const generation = focusGeneration.current;
-    if (document === undefined || sessionId === null || generation === undefined) return;
-    syncAuthorDocumentFocus(sessionId, generation, document.version, document.sourceSha256);
-  }, [document?.sourceSha256, document?.version, sessionId]);
+  }, [path, sessionId]);
   useEffect(() => {
     if (kind === undefined || sessionId === null || alias === undefined) return;
     const profiles = authorProfilesForDocument(sessionId, path, kind);
@@ -157,9 +152,7 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
     }
   };
   const gridVisible = autonomousVoiceGridVisible(statuses);
-  // The focus fields belong to the last file that claimed focus; until this panel's focus effect runs, that can be another file.
-  const focusedWorkspace = workspace?.focusedDocument?.path === document.path ? workspace : undefined;
-  const displayedRegions = displayedAuthorRegions(focusedWorkspace);
+  const displayedRegions = displayedAuthorRegions(drafts);
   const displayedPreviewAnnotations: readonly AuthorPreviewDisplayedAnnotation[] =
     displayedRegions.flatMap<AuthorPreviewDisplayedAnnotation>(({ ordinal, region }) => {
       if (region.anchor.kind === 'story-preview-rect') {
@@ -198,7 +191,7 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
         document={document}
         activeTool={activeTool}
         displayedRegions={displayedRegions}
-        pendingCandidate={focusedWorkspace?.candidate !== undefined}
+        pendingCandidate={drafts.candidate !== undefined}
         seekRequest={workspace?.videoSeekRequest}
       />
     );
@@ -260,7 +253,7 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
               className="min-h-11 min-w-11 shrink-0"
               aria-label={`${mode} tool`}
               aria-pressed={activeTool === mode}
-              onClick={() => setAuthorToolMode(sessionId, mode)}
+              onClick={() => setAuthorToolMode(sessionId, document.path, mode)}
             >
               {mode}
             </Button>
@@ -274,10 +267,10 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
             source={previewSource}
             activeTool={activeTool === 'crop' ? 'select' : activeTool}
             displayedAnnotations={displayedPreviewAnnotations}
-            pendingCandidate={focusedWorkspace?.candidate !== undefined}
+            pendingCandidate={drafts.candidate !== undefined}
             onAnnotationCandidate={(candidate) => {
               setAuthorStoryPreview(sessionId, document.path, candidate.preview);
-              setAuthorRegionCandidate(sessionId, {
+              setAuthorRegionCandidate(sessionId, document.path, {
                 documentPath: document.path,
                 revision: document.version,
                 sourceSha256: document.sourceSha256,
@@ -301,12 +294,12 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
           <AuthorGridOverlay sessionId={sessionId} document={document} visible={gridVisible} />
         )}
       </div>
-      {focusedWorkspace !== undefined && ['image', 'pdf', 'video', 'story-preview'].includes(document.kind) ? (
+      {['image', 'pdf', 'video', 'story-preview'].includes(document.kind) ? (
         <div className="max-h-56 shrink-0 overflow-y-auto border-t border-doom-border p-2 sm:hidden">
           <AuthorFeedbackControls
             sessionId={sessionId}
             document={document}
-            workspace={focusedWorkspace}
+            drafts={drafts}
             submitCapture={props.submitCapture}
           />
         </div>
@@ -335,7 +328,11 @@ export function authorFileTab(path: string, preferredAlias?: string): TransientT
         source: 'author',
         id: documentPath,
         label: alias === undefined ? name : `${alias} · ${name}`,
-        content: `Author document: ${documentPath}${alias === undefined ? '' : ` (canvas ${alias})`}`,
+        content: authorDocumentContextContent(
+          documentPath,
+          alias,
+          authorDocumentAnnotations(sessionId, documentPath).annotations,
+        ),
       };
     },
     onOpen(sessionId) {
@@ -403,6 +400,7 @@ export function authorFileTab(path: string, preferredAlias?: string): TransientT
     },
     onClose(sessionId) {
       const key = authorDocumentKey(sessionId, normalized);
+      setAuthorToolMode(sessionId, canvasPaths.state[key] ?? normalized, 'select');
       pendingCanvases.get(key)?.abort();
       pendingCanvases.delete(key);
       const alias = canvasAliases.state[key] ?? preferredAlias;

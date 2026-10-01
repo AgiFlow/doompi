@@ -13,6 +13,7 @@ import { appendAuthorStrokePoint, authorStrokeBounds, normalizedAuthorRectangle 
 import type { AuthorDisplayedRegion, AuthorNativeAnchor, AuthorToolMode } from '../_lib/authorViewportTypes';
 import {
   authorSessionWorkspace,
+  authorDocumentAnnotations,
   setAuthorRegionCandidate,
   setAuthorToolMode,
   type AuthorSessionWorkspace,
@@ -147,11 +148,11 @@ export function AuthorMediaView({
     };
   }, [source.mediaUrl]);
   const seek = (seconds: number) => {
-    if (authorSessionWorkspace(sessionId).candidate || !Number.isFinite(seconds)) return;
+    if (authorDocumentAnnotations(sessionId, source.path).candidate || !Number.isFinite(seconds)) return;
     const player = video.current;
     if (!player) return;
     player.pause();
-    setAuthorToolMode(sessionId, 'select');
+    setAuthorToolMode(sessionId, source.path, 'select');
     setSelection(undefined);
     if (player.getState().currentTime === seconds) return;
     setFrameReady(false);
@@ -293,7 +294,7 @@ export function AuthorMediaView({
       if (!blob) throw new Error('Unable to capture selected media.');
       if (authorSessionWorkspace(sessionId).focusedDocument?.generation !== focused.generation) return;
       thumbnailUrl = URL.createObjectURL(blob);
-      setAuthorRegionCandidate(sessionId, {
+      setAuthorRegionCandidate(sessionId, source.path, {
         documentPath: source.path,
         revision: source.version,
         sourceSha256: source.sourceSha256,
@@ -672,14 +673,14 @@ export function AuthorMediaView({
           marking={activeTool === 'mark'}
           onSeek={seek}
           onToggle={() => {
-            setAuthorToolMode(sessionId, 'select');
+            setAuthorToolMode(sessionId, source.path, 'select');
             setSelection(undefined);
             if (playback.playing) video.current?.pause();
             else void video.current?.play().catch((reason: unknown) => setError(String(reason)));
           }}
           onAnnotate={() => {
             video.current?.pause();
-            setAuthorToolMode(sessionId, 'mark');
+            setAuthorToolMode(sessionId, source.path, 'mark');
           }}
         />
       ) : null}

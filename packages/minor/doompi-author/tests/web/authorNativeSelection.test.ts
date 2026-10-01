@@ -61,7 +61,7 @@ function nodes(node: ReactNode): ReactElement<Props>[] {
 const bounds = { left: 0, top: 0, right: 800, bottom: 400, width: 800, height: 400 };
 function setup(kind: 'text' | 'image' | 'pdf' | 'video' | 'opaque' = 'text') {
   const document = workspace.putAuthorDocument('s', { path: 'doc', kind, sourceSha256: 'sha' });
-  workspace.focusAuthorDocument('s', 'doc', 0, 'sha');
+  workspace.focusAuthorDocument('s', 'doc');
   const geometry = updateAuthorGridGeometry('s', {
     documentPath: 'doc',
     revision: 0,
@@ -123,7 +123,7 @@ describe('Author text selection integration', () => {
     const editor = controls.find((node) => node.props['data-testid'] === 'author-editor')!;
     expect(editor.props.value).toBe('');
     editor.props.onSelect!(range);
-    expect(workspace.authorSessionWorkspace('s').candidate).toMatchObject({
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toMatchObject({
       quote: 'abc',
       viewport: { width: 800, height: 400 },
     });
@@ -153,14 +153,14 @@ describe('Author text selection integration', () => {
         (node) => node.props.onSelect,
       )!;
       editor.props.onSelect!({ ...range, to: 0 });
-      expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
+      expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toBeUndefined();
       if (!host) {
         editor.props.onSelect!(range);
-        expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
+        expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toBeUndefined();
       }
       workspace.dropAuthorSession('s');
       editor.props.onSelect!(range);
-      expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
+      expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toBeUndefined();
     }
   });
 });
@@ -285,7 +285,7 @@ describe('Author media selection integration', () => {
     const fixture = mediaFixture('image', { activeTool: 'comment', displayedRegions: [pointRegion] });
     await fixture.drag(fixture.image, { x: 200, y: 300 });
 
-    expect(workspace.authorSessionWorkspace('s').candidate).toMatchObject({
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toMatchObject({
       mode: 'point',
       anchor: { kind: 'image-point', point: { x: 0.25, y: 0.75 } },
       thumbnailUrl: 'blob:selection',
@@ -303,7 +303,7 @@ describe('Author media selection integration', () => {
       },
     });
     await fixture.drag();
-    expect(workspace.authorSessionWorkspace('s').candidate).toMatchObject({
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toMatchObject({
       anchor: { kind: 'image-rect', rect: { x: 0, y: 0, width: 0.5, height: 0.5 } },
       thumbnailUrl: 'blob:selection',
     });
@@ -316,7 +316,7 @@ describe('Author media selection integration', () => {
     root.props.onPointerUp!(pointer(image, 240, 160));
     await Promise.resolve();
     await Promise.resolve();
-    expect(workspace.authorSessionWorkspace('s').candidate).toMatchObject({
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toMatchObject({
       mode: 'region',
       stroke: [
         { x: 0.1, y: 0.2 },
@@ -333,7 +333,7 @@ describe('Author media selection integration', () => {
     expect(hooks.setters[0]).toHaveBeenCalledWith(2);
     root.props.onPointerUp!({ ...pointer(image, 200, 0), pointerId: 2 });
     root.props.onPointerUp!(pointer(image, 0, 0));
-    expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toBeUndefined();
   });
   it('does not resolve image coordinates before load or outside the rendered image', () => {
     for (const image of [
@@ -357,7 +357,7 @@ describe('Author media selection integration', () => {
     root.props.onPointerDownCapture!(pointer(image, 0, 0));
     root.props.onPointerCancel!(pointer(image, 0, 0));
     root.props.onPointerUp!(pointer(image, 400, 200));
-    expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toBeUndefined();
     hooks.refs = [null, image, null, null, undefined];
     const select = AuthorMediaView({
       sessionId: 's',
@@ -381,7 +381,7 @@ describe('Author media selection integration', () => {
         expect.stringMatching(/not ready|unavailable|Unable to capture/),
       );
     }
-    expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toBeUndefined();
   });
   it('captures native video timestamps and PDF page numbers', async () => {
     const video = mediaFixture('video', {
@@ -393,7 +393,7 @@ describe('Author media selection integration', () => {
       },
     });
     await video.drag(new VideoElement());
-    expect(workspace.authorSessionWorkspace('s').candidate?.anchor).toMatchObject({
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate?.anchor).toMatchObject({
       kind: 'video-time-rect',
       timeSeconds: 12,
       intrinsicWidth: 1920,
@@ -402,7 +402,10 @@ describe('Author media selection integration', () => {
       pdf: { getState: () => ({ sourceWidth: 600, page: 2 }), capturePage: async () => new Blob(['page']) },
     });
     await pdf.drag(new CanvasElement());
-    expect(workspace.authorSessionWorkspace('s').candidate?.anchor).toMatchObject({ kind: 'pdf-page-rect', page: 2 });
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate?.anchor).toMatchObject({
+      kind: 'pdf-page-rect',
+      page: 2,
+    });
     expect(() => resolveAuthorGridNativeAnchor('s', pdf.cell)).toThrow();
   });
   it('rejects unavailable native PDF/video controllers', async () => {
@@ -416,17 +419,17 @@ describe('Author media selection integration', () => {
   });
   it('discards captures when focus moves before or during asynchronous capture', async () => {
     let fixture = mediaFixture();
-    workspace.focusAuthorDocument('s', 'other', 0);
+    workspace.focusAuthorDocument('s', 'other');
     await fixture.drag();
-    expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toBeUndefined();
     fixture = mediaFixture();
     workspace.dropAuthorSession('s');
     await fixture.drag();
-    expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toBeUndefined();
     fixture = mediaFixture();
     fixture.root.props.onPointerDownCapture!(fixture.pointer(fixture.image, 0, 0));
     fixture.root.props.onPointerUp!(fixture.pointer(fixture.image, 400, 200));
-    workspace.focusAuthorDocument('s', 'other', 0);
+    workspace.focusAuthorDocument('s', 'other');
     await Promise.resolve();
     await Promise.resolve();
     expect(URL.createObjectURL).not.toHaveBeenCalled();

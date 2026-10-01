@@ -10,7 +10,9 @@ import {
   displayedAuthorRegions,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
 import { canvasAliases } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCanvasState';
+import { authorDocumentContextContent } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCapture';
 import type { AuthorRequestRecord } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
+import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 import { AuthorRequestLog } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorRequestLog';
 import { DescribeAuthorToolsToolCard } from '../../src/extensions/workspaces/sessions/(frontend)/tool/_components/DescribeAuthorToolsToolCard';
 import {
@@ -107,6 +109,42 @@ describe('the Author web plugin', () => {
       });
     } finally {
       canvasAliases.setState(() => ({}));
+    }
+  });
+  it('includes only the named documents unsent drafts and bounds the complete UTF-8 context', () => {
+    try {
+      for (const path of ['a.png', 'b.png']) workspace.putAuthorDocument('context', { path, kind: 'image' });
+      for (let index = 0; index < 16; index++)
+        workspace.addAuthorRegion('context', {
+          id: String(index),
+          documentPath: 'a.png',
+          revision: 0,
+          comment: index === 0 ? 'Fix A' : '漢'.repeat(10000),
+          anchor: {
+            kind: 'image-rect',
+            rect: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+            naturalWidth: 100,
+            naturalHeight: 100,
+          },
+          viewport: { width: 100, height: 100 },
+          createdAt: 1,
+        });
+      const content = authorFileTab('a.png').composerContext?.('context')?.content ?? '';
+      expect(content).toContain('(1) Fix A [image x 10%');
+      expect(content).toContain('Unsent annotations (not yet submitted):');
+      expect(content.startsWith('Author document: a.png')).toBe(true);
+      expect(new TextEncoder().encode(content).byteLength).toBeLessThanOrEqual(64 * 1024);
+      expect(authorFileTab('b.png').composerContext?.('context')?.content).not.toContain('Fix A');
+      const oversized = authorDocumentContextContent(
+        'a.png',
+        '漢'.repeat(100000),
+        workspace.authorDocumentAnnotations('context', 'a.png').annotations,
+      );
+      expect(oversized.startsWith('Author document: a.png')).toBe(true);
+      expect(new TextEncoder().encode(oversized).byteLength).toBeLessThanOrEqual(64 * 1024);
+      expect(workspace.authorDocumentAnnotations('context', 'a.png').annotations).toHaveLength(16);
+    } finally {
+      workspace.dropAuthorSession('context');
     }
   });
   it.each([
@@ -223,12 +261,12 @@ describe('the Author web plugin', () => {
     };
 
     expect(
-      displayedAuthorRegions({ regions: [first, second] }).map(({ ordinal, region }) => [ordinal, region.id]),
+      displayedAuthorRegions({ annotations: [first, second] }).map(({ ordinal, region }) => [ordinal, region.id]),
     ).toEqual([
       [1, 'first'],
       [2, 'second'],
     ]);
-    expect(displayedAuthorRegions({ regions: [] })).toEqual([]);
+    expect(displayedAuthorRegions({ annotations: [] })).toEqual([]);
     expect(displayedAuthorRegions(undefined)).toEqual([]);
   });
   it('presents the latest Author lifecycle with clean instruction and retained earlier history', () => {

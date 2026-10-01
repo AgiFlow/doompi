@@ -148,6 +148,23 @@ function rectLocation(rect: AuthorCrop): string {
   return `x ${percent(rect.x)}, y ${percent(rect.y)}, w ${percent(rect.width)}, h ${percent(rect.height)}`;
 }
 
+/** Context stays below the host limit even when paths and anchor locations are unusually long. */
+export function authorDocumentContextContent(
+  path: string,
+  alias: string | undefined,
+  annotations: readonly AuthorRegionDraft[],
+): string {
+  const heading = `Author document: ${path}${alias === undefined ? '' : ` (canvas ${alias})`}`;
+  // ponytail: Comments are previews, not submitted annotations. Keep each preview short.
+  const drafts = annotations.map(
+    (region, index) => `(${index + 1}) ${region.comment.slice(0, 1000)} [${anchorLocation(region.anchor)}]`,
+  );
+  return utf8Prefix(
+    [heading, ...(drafts.length === 0 ? [] : ['Unsent annotations (not yet submitted):', ...drafts])].join('\n'),
+    AUTHOR_PACKET_MAX_BYTES,
+  );
+}
+
 function anchorLocation(anchor: AuthorNativeAnchor): string {
   switch (anchor.kind) {
     case 'text-range':

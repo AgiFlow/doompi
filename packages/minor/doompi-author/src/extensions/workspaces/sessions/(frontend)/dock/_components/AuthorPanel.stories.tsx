@@ -21,7 +21,7 @@ const SPEC: AuthorDocumentInput = {
 
 function seed(sessionId: string, input: AuthorDocumentInput, comments: readonly string[] = []): void {
   const stored = putAuthorDocument(sessionId, input);
-  focusAuthorDocument(sessionId, stored.path, stored.version, stored.sourceSha256);
+  focusAuthorDocument(sessionId, stored.path);
   comments.forEach((comment, index) => {
     addAuthorRegion(sessionId, {
       id: `${sessionId}-r${index + 1}`,

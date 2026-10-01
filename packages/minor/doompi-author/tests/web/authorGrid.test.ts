@@ -12,6 +12,7 @@ import {
 import { authorProfilesForDocument } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorProfiles';
 import {
   authorDocument,
+  authorDocumentAnnotations,
   authorSessionWorkspace,
   authorWorkspace,
   focusAuthorDocument,
@@ -72,7 +73,7 @@ describe('Author Voice coordinate grid', () => {
       quote: 'a',
     }));
     putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', content: 'alpha\nbeta', sourceSha256: 'sha' });
-    focusAuthorDocument('s1', 'notes.md', 0, 'sha');
+    focusAuthorDocument('s1', 'notes.md');
     const geometry = updateAuthorGridGeometry('s1', {
       documentPath: 'notes.md',
       revision: 0,
@@ -91,7 +92,7 @@ describe('Author Voice coordinate grid', () => {
       { cell: 'A1', geometryToken: geometry.geometryToken, instruction: 'capitalize this' },
       new AbortController().signal,
     )) as { regionId: string };
-    expect(authorSessionWorkspace('s1').regions[0]).toMatchObject({
+    expect(authorDocumentAnnotations('s1', 'notes.md').annotations[0]).toMatchObject({
       id: resolved.regionId,
       comment: 'capitalize this',
       voiceGrid: { cell: 'A1', geometryToken: geometry.geometryToken },
@@ -104,7 +105,7 @@ describe('Author Voice coordinate grid', () => {
       ),
     ).resolves.toMatchObject({ changed: true, after: 'A', revision: 1 });
     expect(authorDocument('s1', 'notes.md')?.content).toBe('Alpha\nbeta');
-    expect(authorSessionWorkspace('s1').regions).toEqual([]);
+    expect(authorDocumentAnnotations('s1', 'notes.md').annotations).toEqual([]);
     expect(authorSessionWorkspace('s1').requests[0]).toMatchObject({
       id: `voice:${resolved.regionId}`,
       status: 'CHANGED',
@@ -122,7 +123,7 @@ describe('Author Voice coordinate grid', () => {
       quote: 'a',
     }));
     putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', content: 'alpha', sourceSha256: 'sha' });
-    focusAuthorDocument('s1', 'notes.md', 0, 'sha');
+    focusAuthorDocument('s1', 'notes.md');
     const geometry = updateAuthorGridGeometry('s1', {
       documentPath: 'notes.md',
       revision: 0,
@@ -165,7 +166,7 @@ describe('Author Voice coordinate grid', () => {
   });
   it('rejects stale mutations and capture-only media', async () => {
     putAuthorDocument('s1', { path: 'clip.mp4', kind: 'video', mediaUrl: '/clip.mp4', sourceSha256: 'sha' });
-    focusAuthorDocument('s1', 'clip.mp4', 0, 'sha');
+    focusAuthorDocument('s1', 'clip.mp4');
     const geometry = updateAuthorGridGeometry('s1', {
       documentPath: 'clip.mp4',
       revision: 0,

@@ -29,7 +29,7 @@ const request: AuthorRequestRecord = {
 };
 beforeEach(() => {
   workspace.putAuthorDocument(session, { path: 'a.md', kind: 'markdown', content: 'a', sourceSha256: 'sha' });
-  workspace.focusAuthorDocument(session, 'a.md', 0, 'sha');
+  workspace.focusAuthorDocument(session, 'a.md');
 });
 afterEach(() => {
   workspace.dropAuthorSession(session);
@@ -40,96 +40,95 @@ describe('Author workspace boundary and retention contracts', () => {
   it('validates empty paths, stale candidates, comments, duplicate regions and ownership', () => {
     expect(() => workspace.putAuthorDocument(session, { path: './.', kind: 'text' })).toThrow('empty');
     expect(workspace.authorDocument(null, 'a.md')).toBeUndefined();
-    expect(workspace.authorSessionWorkspace(null).regions).toEqual([]);
-    expect(() => workspace.commitAuthorRegion(session, 'Edit')).toThrow('Select');
+    expect(workspace.authorDocumentAnnotations(null, 'a.md').annotations).toEqual([]);
+    expect(() => workspace.commitAuthorRegion(session, 'a.md', 'Edit')).toThrow('Select');
     for (const invalid of [
       { ...region, documentPath: 'other' },
       { ...region, revision: 1 },
       { ...region, sourceSha256: 'other' },
     ]) {
-      expect(() => workspace.setAuthorRegionCandidate(session, invalid)).toThrow();
+      expect(() => workspace.setAuthorRegionCandidate(session, 'a.md', invalid)).toThrow();
       expect(() => workspace.addAuthorRegion(session, invalid)).toThrow();
     }
-    expect(() => workspace.setAuthorRegionCandidate('unfocused', region)).toThrow('focused');
-    expect(() => workspace.addAuthorRegion('unfocused', region)).toThrow('focused');
+    expect(() => workspace.setAuthorRegionCandidate('unfocused', 'a.md', region)).toThrow('document');
+    expect(() => workspace.addAuthorRegion('unfocused', region)).toThrow('document');
     expect(() => workspace.addAuthorRegion(session, { ...region, comment: ' ' })).toThrow('comment');
     workspace.addAuthorRegion(session, region);
     expect(() => workspace.addAuthorRegion(session, region)).toThrow('already exists');
-    expect(() => workspace.updateAuthorRegionComment(session, 'r', '')).toThrow('comment');
+    expect(() => workspace.updateAuthorRegionComment(session, 'a.md', 'r', '')).toThrow('comment');
     workspace.addAuthorRegion(session, { ...region, id: 'other' });
-    workspace.updateAuthorRegionComment(session, 'r', 'Updated');
-    expect(workspace.authorSessionWorkspace(session).regions.map((r) => r.comment)).toEqual(['Updated', 'Edit']);
-    workspace.removeAuthorRegion(session, 'missing');
-    expect(workspace.authorSessionWorkspace(session).regions).toHaveLength(2);
+    workspace.updateAuthorRegionComment(session, 'a.md', 'r', 'Updated');
+    expect(workspace.authorDocumentAnnotations(session, 'a.md').annotations.map((r) => r.comment)).toEqual([
+      'Updated',
+      'Edit',
+    ]);
+    workspace.removeAuthorRegion(session, 'a.md', 'missing');
+    expect(workspace.authorDocumentAnnotations(session, 'a.md').annotations).toHaveLength(2);
   });
   it('copies candidate anchors, commits once, and releases only obsolete blob thumbnails', () => {
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     const candidate = { ...region, viewport: { ...region.viewport }, thumbnailUrl: 'blob:first' };
-    workspace.setAuthorRegionCandidate(session, candidate);
+    workspace.setAuthorRegionCandidate(session, 'a.md', candidate);
     candidate.viewport.width = 30;
-    expect(workspace.authorSessionWorkspace(session).candidate?.viewport.width).toBe(10);
-    workspace.setAuthorRegionCandidate(session, { ...region, thumbnailUrl: 'blob:first' });
+    expect(workspace.authorDocumentAnnotations(session, 'a.md').candidate?.viewport.width).toBe(10);
+    workspace.setAuthorRegionCandidate(session, 'a.md', { ...region, thumbnailUrl: 'blob:first' });
     expect(revoke).not.toHaveBeenCalled();
-    workspace.setAuthorRegionCandidate(session, { ...region, thumbnailUrl: 'blob:second' });
+    workspace.setAuthorRegionCandidate(session, 'a.md', { ...region, thumbnailUrl: 'blob:second' });
     expect(revoke).toHaveBeenCalledWith('blob:first');
-    const id = workspace.commitAuthorRegion(session, 'Committed');
-    expect(workspace.authorSessionWorkspace(session).candidate).toBeUndefined();
-    expect(workspace.authorSessionWorkspace(session).regions[0]).toMatchObject({ id, comment: 'Committed' });
-    workspace.removeAuthorRegion(session, id);
+    const id = workspace.commitAuthorRegion(session, 'a.md', 'Committed');
+    expect(workspace.authorDocumentAnnotations(session, 'a.md').candidate).toBeUndefined();
+    expect(workspace.authorDocumentAnnotations(session, 'a.md').annotations[0]).toMatchObject({
+      id,
+      comment: 'Committed',
+    });
+    workspace.removeAuthorRegion(session, 'a.md', id);
     expect(revoke).toHaveBeenCalledWith('blob:second');
-    workspace.setAuthorRegionCandidate(session, { ...region, thumbnailUrl: 'https://image' });
-    workspace.setAuthorRegionCandidate(session, undefined);
+    workspace.setAuthorRegionCandidate(session, 'a.md', { ...region, thumbnailUrl: 'https://image' });
+    workspace.setAuthorRegionCandidate(session, 'a.md', undefined);
     expect(revoke).toHaveBeenCalledTimes(2);
   });
   it('preserves thumbnails on refocus and cleans them on revision changes even if revocation fails', () => {
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {
       throw new Error('already revoked');
     });
-    workspace.setAuthorRegionCandidate(session, { ...region, thumbnailUrl: 'blob:candidate' });
+    workspace.setAuthorRegionCandidate(session, 'a.md', { ...region, thumbnailUrl: 'blob:candidate' });
     workspace.addAuthorRegion(session, { ...region, thumbnailUrl: 'blob:region' });
-    workspace.focusAuthorDocument(session, 'other.md', 0);
+    workspace.focusAuthorDocument(session, 'other.md');
     expect(revoke).not.toHaveBeenCalled();
     expect(workspace.authorDocumentAnnotations(session, 'a.md')?.annotations).toHaveLength(1);
-    const generation = workspace.focusAuthorDocument(session, 'a.md', 0, 'sha');
-    workspace.syncAuthorDocumentFocus(session, generation + 1, 1, 'new');
-    expect(workspace.authorSessionWorkspace(session).focusedDocument?.revision).toBe(0);
-    workspace.syncAuthorDocumentFocus(session, generation, 0, 'sha');
-    workspace.syncAuthorDocumentFocus(session, generation, 1, 'new');
-    expect(workspace.authorSessionWorkspace(session).focusedDocument).toMatchObject({
-      revision: 1,
-      sourceSha256: 'new',
-    });
+    const generation = workspace.focusAuthorDocument(session, 'a.md');
+    workspace.releaseAuthorDocumentFocus(session, generation + 1);
+    expect(workspace.authorSessionWorkspace(session).focusedDocument?.generation).toBe(generation);
     workspace.releaseAuthorDocumentFocus(session, generation);
-    workspace.syncAuthorDocumentFocus(session, generation, 2);
     expect(workspace.authorSessionWorkspace(session).focusedDocument).toBeUndefined();
-    workspace.focusAuthorDocument(session, 'a.md', 0, 'sha');
-    workspace.setAuthorRegionCandidate(session, { ...region, thumbnailUrl: 'blob:candidate' });
+    workspace.focusAuthorDocument(session, 'a.md');
+    workspace.setAuthorRegionCandidate(session, 'a.md', { ...region, thumbnailUrl: 'blob:candidate' });
     workspace.addAuthorRegion(session, { ...region, id: 'r2', thumbnailUrl: 'blob:region-2' });
     workspace.reviseAuthorDocument(session, 'a.md', 'b');
-    expect(workspace.authorSessionWorkspace(session).regions).toEqual([]);
+    expect(workspace.authorDocumentAnnotations(session, 'a.md').annotations).toEqual([]);
     expect(revoke).toHaveBeenCalledTimes(3);
   });
   it('invalidates a hidden document without clearing the currently visible canvas', () => {
     workspace.addAuthorRegion(session, region);
     workspace.putAuthorDocument(session, { path: 'b.md', kind: 'markdown', content: 'b', sourceSha256: 'second' });
-    workspace.focusAuthorDocument(session, 'b.md', 0, 'second');
+    workspace.focusAuthorDocument(session, 'b.md');
     expect(workspace.authorDocumentAnnotations(session, 'a.md')?.stale).toBe(false);
     workspace.reviseAuthorDocument(session, 'a.md', 'changed');
-    expect(workspace.authorDocumentAnnotations(session, 'a.md')?.stale).toBe(true);
-    expect(workspace.authorDocumentAnnotations(session, 'a.md')?.annotations).toHaveLength(1);
+    expect(workspace.authorSessionWorkspace(session).annotationsByDocument['a.md']?.stale).toBe(true);
+    expect(workspace.authorDocumentAnnotations(session, 'a.md').annotations).toEqual([]);
     expect(workspace.authorSessionWorkspace(session).focusedDocument?.path).toBe('b.md');
-    expect(workspace.authorSessionWorkspace(session).regions).toEqual([]);
+    expect(workspace.authorDocumentAnnotations(session, 'a.md').annotations).toEqual([]);
   });
   it('deep-copies stroke feedback through candidate and request snapshots', () => {
     const stroke = [
       { x: 0.1, y: 0.2 },
       { x: 0.3, y: 0.4 },
     ];
-    workspace.setAuthorRegionCandidate(session, { ...region, stroke });
+    workspace.setAuthorRegionCandidate(session, 'a.md', { ...region, stroke });
     stroke[0]!.x = 0.9;
-    expect(workspace.authorSessionWorkspace(session).candidate?.stroke?.[0]?.x).toBe(0.1);
-    workspace.commitAuthorRegion(session, 'Mark here');
-    const stored = workspace.authorSessionWorkspace(session).regions[0]!;
+    expect(workspace.authorDocumentAnnotations(session, 'a.md').candidate?.stroke?.[0]?.x).toBe(0.1);
+    workspace.commitAuthorRegion(session, 'a.md', 'Mark here');
+    const stored = workspace.authorDocumentAnnotations(session, 'a.md').annotations[0]!;
     workspace.putAuthorRequest(session, { ...request, regions: [stored] });
     expect(workspace.authorSessionWorkspace(session).requests[0]?.regions[0]?.stroke).toEqual([
       { x: 0.1, y: 0.2 },
@@ -158,9 +157,9 @@ describe('Author workspace boundary and retention contracts', () => {
     workspace.setAuthorCrop(session, 'a.csv', { x: 0, y: 0, width: 1, height: 1 });
     workspace.setAuthorCrop(session, 'a.csv', undefined);
     expect(workspace.authorDocument(session, 'a.csv')?.crop).toBeUndefined();
-    workspace.setAuthorToolMode(session, 'select');
-    workspace.setAuthorToolMode(session, 'crop');
-    expect(workspace.authorSessionWorkspace(session).activeTool).toBe('crop');
+    workspace.setAuthorToolMode(session, 'a.md', 'select');
+    workspace.setAuthorToolMode(session, 'a.md', 'crop');
+    expect(workspace.authorToolMode(session, 'a.md')).toBe('crop');
   });
   it('rejects invalid requests and protects active requests when history is full', () => {
     for (const invalid of [

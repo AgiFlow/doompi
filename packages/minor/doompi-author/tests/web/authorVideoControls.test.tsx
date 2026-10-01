@@ -98,19 +98,19 @@ describe('video annotation controls', () => {
 });
 describe('saved video annotation navigation', () => {
   it('binds seek requests to the focused video and rejects pending selections', () => {
-    expect(seekAuthorVideo('s', 1)).toBe(false);
+    expect(seekAuthorVideo('s', 'clip.mp4', 1)).toBe(false);
     putAuthorDocument('s', { path: 'clip.mp4', kind: 'video' });
-    const generation = focusAuthorDocument('s', 'clip.mp4', 0);
-    expect(seekAuthorVideo('s', 1.25)).toBe(true);
+    const generation = focusAuthorDocument('s', 'clip.mp4');
+    expect(seekAuthorVideo('s', 'clip.mp4', 1.25)).toBe(true);
     expect(authorSessionWorkspace('s').videoSeekRequest).toEqual({
       path: 'clip.mp4',
       generation,
       timeSeconds: 1.25,
       sequence: 1,
     });
-    expect(seekAuthorVideo('s', -1)).toBe(false);
-    expect(seekAuthorVideo('s', NaN)).toBe(false);
-    setAuthorRegionCandidate('s', {
+    expect(seekAuthorVideo('s', 'clip.mp4', -1)).toBe(false);
+    expect(seekAuthorVideo('s', 'clip.mp4', NaN)).toBe(false);
+    setAuthorRegionCandidate('s', 'clip.mp4', {
       documentPath: 'clip.mp4',
       revision: 0,
       anchor: {
@@ -123,6 +123,6 @@ describe('saved video annotation navigation', () => {
       viewport: { width: 100, height: 100 },
       createdAt: 1,
     });
-    expect(seekAuthorVideo('s', 2)).toBe(false);
+    expect(seekAuthorVideo('s', 'clip.mp4', 2)).toBe(false);
   });
 });
