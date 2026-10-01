@@ -58,7 +58,10 @@ import {
 import { type RunProviderHandle, registerRunProvider } from '../services/backgroundWork';
 import {
   finishedRunSummary,
+  isLaunchedRun,
+  isOwnedDelegatedRun,
   isSessionRun,
+  launchedRunHint,
   launchNotice,
   runsForSession,
   toolResultText,
@@ -1197,15 +1200,19 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
       if (!refreshIsCurrent()) return;
       const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId(), options.environment);
       const rootProcess = isRootProcess(ctx, sessionId);
-      const sessionRecords = records.filter((record) => isSessionRun(record, sessionId));
-      const running = sessionRecords.filter((record) => record.stage === RUNNING_STATUS && !record.stale);
-      const failed = sessionRecords.filter((record) => record.stage === ERROR_STAGE);
+      const ownRecords = records.filter((record) => isSessionRun(record, sessionId));
+      // Runs this session handed to its own workflow sessions: it is told when they end, but does not own them.
+      const sessionRecords = records.filter(
+        (record) => isSessionRun(record, sessionId) || isLaunchedRun(record, sessionId),
+      );
+      const running = ownRecords.filter((record) => record.stage === RUNNING_STATUS && !record.stale);
+      const failed = ownRecords.filter((record) => record.stage === ERROR_STAGE);
       // Never let a snapshot taken before a pushed terminal event resurrect
       // the row that event just removed. The next refresh can reconcile from
       // a fresh snapshot if any lifecycle event landed during this read.
       if (activeRevisionAtRead === activeRunRevision) replaceActiveRecords(running);
       void activeTelemetry.recordEvent('doom_workflow.monitor_counts', {
-        'workflow.run_count': sessionRecords.length,
+        'workflow.run_count': ownRecords.length,
         'workflow.running_count': running.length,
         'workflow.failed_count': failed.length,
         mode: workflowMode ? 'on' : 'off',
@@ -1230,7 +1237,7 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
         const startedDuringSession =
           previous === undefined &&
           (sessionStartedAt === 0 || !Number.isFinite(startedAt) || startedAt >= sessionStartedAt);
-        if (lifecycleNarrationReady) {
+        if (lifecycleNarrationReady && isSessionRun(record, sessionId)) {
           const narratedPrevious =
             previous === RUNNING_STATUS || previous === COMPLETED_STATUS || previous === ERROR_STAGE
               ? previous
@@ -1247,6 +1254,12 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
       // turn. Otherwise another producer can observe an empty snapshot and
       // continue the agent before the workflow result has been queued.
       const retainedWork = new Map(mine.map((record) => [runIdentity(record), record]));
+      // A run handed to a workflow session keeps this session alive too, so it is here to hear the run end.
+      for (const record of sessionRecords) {
+        if (isLaunchedRun(record, sessionId) && record.stage === RUNNING_STATUS && !record.stale) {
+          retainedWork.set(runIdentity(record), record);
+        }
+      }
       for (const [identity, record] of pendingTerminalRuns) retainedWork.set(identity, record);
       if (!refreshIsCurrent()) return;
       runProvider?.update(
@@ -1288,7 +1301,10 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
           const terminalRecords = [...pendingTerminalRuns.values()];
           const summaries = await Promise.all(
             terminalRecords.map(async (record) => {
-              if (record.stage === COMPLETED_STATUS) return finishedRunSummary(record, []);
+              if (record.stage === COMPLETED_STATUS) {
+                const summary = finishedRunSummary(record, []);
+                return isLaunchedRun(record, sessionId) ? `${summary}\n${launchedRunHint(record)}` : summary;
+              }
               // A failure needs the job tree to say which job died. The
               // transitions pushed while the run was going are already in
               // hand; only a run that finished before this session began
@@ -1297,29 +1313,39 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
               const events =
                 runEvents.get(identity) ??
                 progressEventsForRun(record, await readWorkflowProgress(registry.runDirectoryFor(record)));
-              return finishedRunSummary(record, summarizeWorkflowProgress(events));
+              const summary = finishedRunSummary(record, summarizeWorkflowProgress(events));
+              return isLaunchedRun(record, sessionId) ? `${summary}\n${launchedRunHint(record)}` : summary;
             }),
           );
           if (!refreshIsCurrent()) return;
-          pi.sendMessage(
-            {
-              customType: WORKFLOW_FINISHED_MESSAGE,
-              content: summaries.join('\n\n'),
-              display: true,
-              details: {
-                runIds: terminalRecords.map((record) => record.runId ?? runIdentity(record)),
-                runs: terminalRecords.map((record): WorkflowFinishedRun => ({
+          const message = (indexes: number[]) => ({
+            customType: WORKFLOW_FINISHED_MESSAGE,
+            content: indexes.map((index) => summaries[index]).join('\n\n'),
+            display: true,
+            details: {
+              runIds: indexes.map((index) => terminalRecords[index]!.runId ?? runIdentity(terminalRecords[index]!)),
+              runs: indexes.map((index): WorkflowFinishedRun => {
+                const record = terminalRecords[index]!;
+                return {
                   runKey: record.runKey,
                   workspace: record.workspace,
                   stage: record.stage,
                   ...(record.workflowId ? { workflowId: record.workflowId } : {}),
                   ...(record.failedJob ? { failedJob: record.failedJob } : {}),
                   ...(record.errorMessage ? { error: record.errorMessage } : {}),
-                })),
-              },
+                };
+              }),
             },
-            { triggerTurn: true, deliverAs: 'steer' },
+          });
+          // A workflow session's own run is posted, not steered: its agent waits for the reader to ask.
+          const quiet = terminalRecords.flatMap((record, index) =>
+            isOwnedDelegatedRun(record, sessionId) ? [index] : [],
           );
+          const loud = terminalRecords.flatMap((record, index) =>
+            isOwnedDelegatedRun(record, sessionId) ? [] : [index],
+          );
+          if (quiet.length > 0) pi.sendMessage(message(quiet), { triggerTurn: false });
+          if (loud.length > 0) pi.sendMessage(message(loud), { triggerTurn: true, deliverAs: 'steer' });
           if (!refreshIsCurrent()) return;
           for (const record of terminalRecords) {
             const identity = runIdentity(record);

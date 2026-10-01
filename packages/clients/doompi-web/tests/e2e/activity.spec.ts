@@ -393,7 +393,7 @@ test('the log search filters to matching lines and pauses following', async ({ p
   await expect(page.getByTestId('runner-log-follow')).toContainText('paused');
 });
 
-test('the workflows group lists the session runs and opens one in the workflows tab', async ({ page, cockpit }) => {
+test('the workflows group lists the session runs and points the workflow dock at one', async ({ page, cockpit }) => {
   const at = new Date().toISOString();
   writeWorkflowRun(cockpit.workflowHome, {
     workspace: 'default',
@@ -409,6 +409,9 @@ test('the workflows group lists the session runs and opens one in the workflows 
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
   cockpit.session.emit(widget('workflow-mcp-progress'));
+  // A session that owns a run selects its workflow face once; the Activity face is a click away.
+  await expect(page.getByTestId('dock-tab-workflow')).toHaveAttribute('data-active', 'true');
+  await page.getByTestId('dock-tab-activity').click();
 
   const row = page.getByTestId('activity-workflow-release-hardening');
   await expect(row).toBeVisible();
@@ -420,8 +423,9 @@ test('the workflows group lists the session runs and opens one in the workflows 
   await expect(page.getByTestId('background-work-notice')).toBeVisible();
 
   await row.click();
-  await expect(page).toHaveURL(/\/session\/s1\/workflows-runs$/);
-  await expect(page.getByTestId('workflow-picker')).toContainText('Release Hardening');
+  await expect(page).toHaveURL(/\/session\/s1$/);
+  await page.getByTestId('dock-tab-workflow').click();
+  await expect(page.getByTestId('workflow-dock-run')).toContainText('Release Hardening');
 });
 
 test('the dock can be hidden and brought back', async ({ page, cockpit }) => {

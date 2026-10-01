@@ -3,7 +3,6 @@ import { Button, ChevronDownIcon, ChevronRightIcon, Dot, type DotTone } from '@a
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 
-import { workflowsTab } from '../../_components/WorkflowsPanel';
 import { openCatalog } from '../../_lib/catalogStore';
 import {
   type WorkflowActivityGroupName,
@@ -46,7 +45,7 @@ const GROUP_LABEL: Readonly<Record<WorkflowActivityGroupName, string>> = {
  * they are the only ones that need an answer, and the rest stay out of the way
  * until somebody asks. Idle offers the catalog instead of saying nothing.
  */
-export function WorkflowsActivitySection({ sessionId, openTransientTab }: WebPluginSlotProps) {
+export function WorkflowsActivitySection({ sessionId, openSession }: WebPluginSlotProps) {
   const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
   const [now, setNow] = useState(() => Date.now());
   const [folded, setFolded] = useState<Partial<Record<WorkflowActivityGroupName, boolean>>>({});
@@ -56,7 +55,7 @@ export function WorkflowsActivitySection({ sessionId, openTransientTab }: WebPlu
     return () => clearInterval(timer);
   }, []);
 
-  const groups = workflowActivityGroups(workflowActivityRows(runs, now));
+  const groups = workflowActivityGroups(workflowActivityRows(runs, now, sessionId));
   if (groups.length === 0) {
     return (
       <div className="flex items-center gap-2 px-1">
@@ -71,7 +70,6 @@ export function WorkflowsActivitySection({ sessionId, openTransientTab }: WebPlu
           onClick={() => {
             if (sessionId === null) return;
             openCatalog(sessionId);
-            openTransientTab(workflowsTab());
           }}
         >
           launch a workflow
@@ -80,34 +78,42 @@ export function WorkflowsActivitySection({ sessionId, openTransientTab }: WebPlu
     );
   }
 
-  const RunRow = ({ row }: { row: WorkflowActivityRow }) => (
-    <Button
-      variant="ghost"
-      size="card"
-      data-testid={`activity-workflow-${row.runKey}`}
-      data-run-tone={row.tone}
-      title="open this run in the workflows tab"
-      onClick={() => {
-        if (sessionId === null) return;
-        focusRun(sessionId, row.identity);
-        openTransientTab(workflowsTab());
-      }}
-      className="min-w-0 gap-0.5 rounded-md px-1 py-1 hover:bg-doom-panel"
-    >
-      <span className="flex min-w-0 items-center gap-1.5">
-        <Dot tone={TONE_DOT[row.tone]} pulse={row.tone === 'running'} />
-        <span
-          className={`min-w-0 flex-1 truncate text-xs font-bold ${
-            row.tone === 'running' || row.tone === 'paused' ? 'text-doom-hi' : 'text-doom-dim'
-          }`}
-        >
-          {row.name}
+  const RunRow = ({ row }: { row: WorkflowActivityRow }) => {
+    // A run handed to its own workflow session opens that session; one this
+    // session runs itself opens here.
+    const delegated = row.ownerSessionId !== undefined && openSession !== undefined;
+    return (
+      <Button
+        variant="ghost"
+        size="card"
+        data-testid={`activity-workflow-${row.runKey}`}
+        data-run-tone={row.tone}
+        data-delegated={delegated}
+        title={delegated ? 'open its workflow session' : 'show this run in the workflow dock'}
+        onClick={() => {
+          if (row.ownerSessionId !== undefined && openSession !== undefined) {
+            openSession(row.ownerSessionId);
+            return;
+          }
+          if (sessionId !== null) focusRun(sessionId, row.identity);
+        }}
+        className="min-w-0 gap-0.5 rounded-md px-1 py-1 hover:bg-doom-panel"
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Dot tone={TONE_DOT[row.tone]} pulse={row.tone === 'running'} />
+          <span
+            className={`min-w-0 flex-1 truncate text-xs font-bold ${
+              row.tone === 'running' || row.tone === 'paused' ? 'text-doom-hi' : 'text-doom-dim'
+            }`}
+          >
+            {row.name}
+          </span>
+          <span className="shrink-0 text-2xs text-doom-faint">{row.elapsed}</span>
         </span>
-        <span className="shrink-0 text-2xs text-doom-faint">{row.elapsed}</span>
-      </span>
-      <span className={`truncate pl-3 text-2xs ${TONE_DETAIL[row.tone]}`}>{row.detail}</span>
-    </Button>
-  );
+        <span className={`truncate pl-3 text-2xs ${TONE_DETAIL[row.tone]}`}>{row.detail}</span>
+      </Button>
+    );
+  };
 
   return (
     <div data-testid="activity-workflow-runs" className="flex flex-col gap-0.5">

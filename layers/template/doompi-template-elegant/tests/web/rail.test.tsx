@@ -61,6 +61,10 @@ describe('Elegant rail', () => {
     expect(child).toContain('feature/rail');
     expect(child).toContain('RE');
     expect(markup).toContain('data-testid="pending-session-setup"');
+    const workflow = card(markup, 'rail-workflow');
+    expect(workflow).toContain('data-nested="true"');
+    expect(workflow).toContain('aria-label="workflow session"');
+    expect(card(markup, 'rail-workflow-failed')).toContain('data-testid="session-awaiting-input"');
     expect(markup).toContain('data-testid="settings-open"');
     expect(markup).toContain('data-testid="add-workspace-open"');
   });

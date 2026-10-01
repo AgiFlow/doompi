@@ -90,7 +90,7 @@ test.describe('with the packaged shell and synchronized session plugins', () => 
 test.describe('with the synced bundle, whose plugins declare leader keys', () => {
   test.use({ assets: 'synced' });
 
-  test('keys walk the plugin tree: SPC w r opens the workflows tab', async ({ page, cockpit }) => {
+  test('keys walk the plugin tree: SPC w l opens the workflow catalog over the session', async ({ page, cockpit }) => {
     await page.goto(cockpit.url);
     await cockpit.session.waitForCommand('get_commands');
     cockpit.session.emit(COMMANDS);
@@ -107,16 +107,17 @@ test.describe('with the synced bundle, whose plugins declare leader keys', () =>
     await expect(page.getByTestId('palette-path')).toContainText('workflows');
     await expect(page.getByTestId('palette-item-0')).toHaveAttribute('data-key', 'e');
     await expect(page.getByTestId('palette-item-1')).toHaveAttribute('data-key', 'l');
-    await expect(page.getByTestId('palette-item-2')).toHaveAttribute('data-key', 'r');
+    await expect(page.locator('[data-testid^="palette-item-"][data-key="r"]')).toHaveCount(0);
 
     // Backspace climbs, then the same key descends again.
     await page.keyboard.press('Backspace');
     await expect(page.getByTestId('palette')).toHaveAttribute('data-path', '');
     await page.keyboard.press('w');
-    await page.keyboard.press('r');
+    await page.keyboard.press('l');
 
     await expect(page.getByTestId('palette')).toBeHidden();
-    await expect(page).toHaveURL(/\/workflows-runs$/);
+    await expect(page.getByTestId('workflow-catalog-drawer')).toBeVisible();
+    await expect(page).toHaveURL(/\/session\/s1$/);
   });
 
   test('a command leaf runs as a slash prompt: SPC w e toggles workflow mode', async ({ page, cockpit }) => {

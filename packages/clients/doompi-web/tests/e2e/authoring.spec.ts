@@ -1,18 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { expect, test } from '../support/cockpit';
+import { type CockpitFixture, expect, test } from '../support/cockpit';
 
 test.use({ assets: 'synced' });
 
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg==';
 
-test('opens and reopens a named Author canvas with phone-sized feedback controls', async ({ page, cockpit }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+function openReviewCanvas(cockpit: CockpitFixture): void {
   fs.writeFileSync(path.join(cockpit.session.cwd, 'review.png'), Buffer.from(PNG, 'base64'));
-  await page.goto(cockpit.url);
-  await cockpit.session.waitForAttach();
-
   cockpit.session.emit({
     type: 'entry_appended',
     entry: {
@@ -50,6 +46,13 @@ test('opens and reopens a named Author canvas with phone-sized feedback controls
     },
     isError: false,
   });
+}
+
+test('opens and reopens a named Author canvas with phone-sized feedback controls', async ({ page, cockpit }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  openReviewCanvas(cockpit);
 
   // The completion opens its temporary tab automatically; the browser still uses the real Author document API.
   const canvas = page.getByTestId('author-document');
@@ -65,4 +68,24 @@ test('opens and reopens a named Author canvas with phone-sized feedback controls
   await expect(canvas).toBeVisible();
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(horizontalOverflow).toBe(false);
+});
+
+test('names the open Author document only in messages typed under its tab', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  openReviewCanvas(cockpit);
+  await expect(page.getByTestId('author-document')).toBeVisible();
+
+  await page.getByTestId('composer-input').fill('Make the logo larger');
+  await page.getByTestId('composer-send').click();
+  const prompt = await cockpit.session.waitForCommand('prompt');
+  expect(prompt.message).toBe(
+    'Make the logo larger\n\nReferenced context "review · review.png":\n\nAuthor document: review.png (canvas review)',
+  );
+
+  await page.getByTestId('tab-conversation').click();
+  await page.getByTestId('composer-input').fill('Thanks');
+  await page.getByTestId('composer-send').click();
+  // The second send may be a prompt or a steer, depending on whether the fake run is still active.
+  await expect.poll(() => cockpit.session.received.some((frame) => frame.message === 'Thanks')).toBe(true);
 });

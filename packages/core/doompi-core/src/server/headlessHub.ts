@@ -16,6 +16,7 @@ import type {
   DoomSessionCommunicationEndpoint,
   DoomHubSessionReservations,
   DoomPendingSessionSetup,
+  DoomSessionActivity,
 } from '../exports/hubChannel';
 import type { DoomWebComposition } from '../exports/packageApi';
 import type { DoomApiContext, DoomApiMount } from '../exports/packageApi';
@@ -44,6 +45,8 @@ const AUTHORIZATION_HEADER = 'authorization';
 const CHANNEL_PRIORITY = { global: 0, workspace: 1, session: 2 } as const;
 const ICON_VERSION_LENGTH = 12;
 const ICON_DATA_URL = /^data:([a-z/+.-]+);base64,([A-Za-z0-9+/=]+)$/u;
+/** A rail line, not a log: a longer label is cut to this. */
+const MAX_ACTIVITY_LABEL = 80;
 
 /** The profile a session runs under, as shown on its rail card. The icon itself is served separately. */
 export interface HeadlessSessionProfile {
@@ -80,6 +83,8 @@ export interface HeadlessHubSession {
   /** Selected profile; absent when the session runs without one. */
   readonly profile?: HeadlessSessionProfile;
   readonly pendingSetups?: readonly DoomPendingSessionSetup[];
+  /** The line the session's extension last published about work it runs; absent when none. */
+  readonly activity?: DoomSessionActivity;
   /** Environment admitted for this session, when supplied by the host. */
   readonly environment?: Readonly<Record<string, string | undefined>>;
   readonly host: HeadlessSessionHost;
@@ -150,6 +155,8 @@ export interface HeadlessHub {
   notifySessionRemoved(sessionId: string): void;
   /** Publishes setup-only children through the parent's normal session updates. */
   setPendingSessionSetups?(sessionId: string, pending: readonly DoomPendingSessionSetup[]): void;
+  /** Replaces the session's activity line; undefined clears it. Unknown sessions are ignored. */
+  setSessionActivity?(sessionId: string, activity: DoomSessionActivity | undefined): void;
   /** Dispatches an authenticated package API request inside the owning process. */
   requestSessionApi(scope: DoomHubSessionScope, request: DoomHubSessionApiRequest): Promise<Response>;
   /** Mounts the selected hub facets once, before the headless server accepts clients. */
@@ -218,8 +225,17 @@ function scopeOf(session: HeadlessHubSession): DoomHubSessionScope {
 export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   const sessions = new Map<string, HeadlessHubSession>();
   const pendingSetups = new Map<string, readonly DoomPendingSessionSetup[]>();
-  const present = (session: HeadlessHubSession): HeadlessHubSession =>
-    pendingSetups.has(session.id) ? { ...session, pendingSetups: pendingSetups.get(session.id) } : session;
+  const activities = new Map<string, DoomSessionActivity>();
+  const present = (session: HeadlessHubSession): HeadlessHubSession => {
+    const pending = pendingSetups.get(session.id);
+    const activity = activities.get(session.id);
+    if (pending === undefined && activity === undefined) return session;
+    return {
+      ...session,
+      ...(pending === undefined ? {} : { pendingSetups: pending }),
+      ...(activity === undefined ? {} : { activity }),
+    };
+  };
   const pluginRegistry = createDoomPluginRegistry();
   const channels = new Map<string, StartedChannel>();
   const listeners = new Set<(event: HeadlessHubEvent) => void>();
@@ -629,6 +645,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     // Let scoped sources dispatch their final stop while the live-session boundary still admits it.
     for (const { source } of selectedChannels(current)) source.sessionRemoved?.(sessionId);
     sessions.delete(sessionId);
+    activities.delete(sessionId);
     sessionCleanups.delete(sessionId);
     presentationCleanups.get(sessionId)?.();
     presentationCleanups.delete(sessionId);
@@ -922,6 +939,22 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       pendingSetups.set(sessionId, Object.freeze([...pending]));
       const session = sessions.get(sessionId);
       if (session) emit({ kind: 'upsert', session: present(session) });
+    },
+    setSessionActivity(sessionId, activity) {
+      const session = sessions.get(sessionId);
+      if (session === undefined) return;
+      const next: DoomSessionActivity | undefined =
+        activity === undefined
+          ? undefined
+          : Object.freeze({
+              label: activity.label.slice(0, MAX_ACTIVITY_LABEL),
+              ...(activity.attention === true ? { attention: true } : {}),
+              ...(activity.since === undefined ? {} : { since: activity.since }),
+            });
+      if (JSON.stringify(activities.get(sessionId)) === JSON.stringify(next)) return;
+      if (next === undefined) activities.delete(sessionId);
+      else activities.set(sessionId, next);
+      emit({ kind: 'upsert', session: present(session) });
     },
     runtime: (sessionId) => sessions.get(sessionId)?.host.runtime,
     sessionAvatar(sessionId) {

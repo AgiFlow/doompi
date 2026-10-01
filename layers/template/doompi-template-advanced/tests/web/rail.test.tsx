@@ -75,6 +75,13 @@ describe('Advanced rail', () => {
     expect(child).not.toContain('feature/rail*');
     expect(child).toContain('RE');
     expect(markup).toContain('data-testid="pending-session-setup"');
+
+    const workflow = card(markup, 'rail-workflow');
+    expect(workflow).toContain('data-nested="true"');
+    expect(workflow).toContain('aria-label="workflow session"');
+    expect(workflow).not.toContain('aria-label="workflow-session"');
+    expect(workflow).toContain('workflow · build › edit token.ts · 4m');
+    expect(card(markup, 'rail-workflow-failed')).toContain('data-testid="session-awaiting-input"');
   });
 
   it('shows remote access state, the settings control, and an empty-rail add button', () => {

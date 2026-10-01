@@ -1,3 +1,4 @@
+import type { TransientTab, WebPluginContextItem } from '@agimon-ai/doompi-core/web';
 import {
   Button,
   CloseIcon,
@@ -33,6 +34,7 @@ import {
   MAX_COMPOSER_TEXT_BYTES,
   MAX_COMPOSER_TOTAL_IMAGE_BYTES,
   MAX_COMPOSER_TOTAL_TEXT_BYTES,
+  tabComposerContext,
   updateComposerState,
   useComposerState,
 } from '../../stores/composerStore';
@@ -117,7 +119,7 @@ function readDataUrl(file: File): Promise<string> {
   });
 }
 
-function attachmentPrompt(draft: string, attachments: ComposerAttachment[]): string {
+function attachmentPrompt(draft: string, attachments: ComposerAttachment[], tabContext?: WebPluginContextItem): string {
   const parts: string[] = [];
   const trimmed = draft.trim();
   if (trimmed) parts.push(trimmed);
@@ -133,6 +135,7 @@ function attachmentPrompt(draft: string, attachments: ComposerAttachment[]): str
   if (parts.length === 0 && attachments.some((attachment) => attachment.kind === 'image')) {
     parts.push('Please review the attached image.');
   }
+  if (tabContext !== undefined) parts.push(`Referenced context "${tabContext.label}":\n\n${tabContext.content}`);
   return parts.join('\n\n');
 }
 
@@ -173,7 +176,7 @@ function triggerTokenAt(draft: string, caret: number): { kind: CompletionKind; s
   return null;
 }
 
-export function Composer() {
+export function Composer({ composerContext }: { composerContext?: TransientTab['composerContext'] } = {}) {
   const sessionId = useStore(sessionsStore, (state) => state.activeId);
   const meta = useActiveSessionMeta();
   const streaming = useActiveSession((state) => state.streaming);
@@ -448,13 +451,14 @@ export function Composer() {
 
   const submitAccepted = async (delivery: 'submit' | 'queue'): Promise<void> => {
     if ((!draft.trim() && attachments.length === 0) || !attached || sessionId === null || pendingSubmission) return;
-    const message = attachmentPrompt(draft, attachments);
+    const tabContext = tabComposerContext(composerContext, sessionId, draft);
+    const message = attachmentPrompt(draft, attachments, tabContext);
     const images = attachments
       .filter((attachment): attachment is ComposerImageAttachment => attachment.kind === 'image')
       .map(({ data, mimeType }) => ({ type: 'image' as const, data, mimeType }));
     const submittedDraft = draft;
     const submittedAttachments = attachments;
-    const contextItems = submittedContextItems();
+    const contextItems = tabContext === undefined ? submittedContextItems() : [...submittedContextItems(), tabContext];
     setPendingSubmission(true);
     try {
       const accepted =

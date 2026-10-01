@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 
+import { WORKFLOW_LAUNCHER_SESSION_ENV } from '../../constants/workflow';
 import type {
   WorkflowJobPhase,
   WorkflowJobView,
@@ -115,6 +116,8 @@ export interface ParsedWorkflowRun {
   view: WorkflowRunView;
   /** env.PI_SESSION_ID from the record, when the launcher stamped one. */
   piSessionId?: string;
+  /** env[WORKFLOW_LAUNCHER_SESSION_ENV]: the session that handed this run to its own workflow session. */
+  launcherSessionId?: string;
 }
 
 /**
@@ -172,7 +175,14 @@ export function parseWorkflowRunRecord(raw: string): ParsedWorkflowRun | undefin
     jobs: [],
   };
   const piSessionId = env === undefined ? undefined : asOptionalString(env[PI_SESSION_ENV]);
-  return { view, ...(piSessionId === undefined ? {} : { piSessionId }) };
+  const launcherSessionId = env === undefined ? undefined : asOptionalString(env[WORKFLOW_LAUNCHER_SESSION_ENV]);
+  if (piSessionId !== undefined) view.ownerSessionId = piSessionId;
+  if (launcherSessionId !== undefined) view.launcherSessionId = launcherSessionId;
+  return {
+    view,
+    ...(piSessionId === undefined ? {} : { piSessionId }),
+    ...(launcherSessionId === undefined ? {} : { launcherSessionId }),
+  };
 }
 
 interface WorkflowProgressEvent {
@@ -353,6 +363,13 @@ export function completeWorkflowRunView(view: WorkflowRunView, jobs: WorkflowJob
  */
 export function runBelongsToSession(run: ParsedWorkflowRun, sessionId: string): boolean {
   return run.piSessionId !== undefined && run.piSessionId === sessionId;
+}
+
+/** Whether the session handed this run to a workflow session of its own: it lists the run but does not own it. */
+export function runLaunchedBySession(run: ParsedWorkflowRun, sessionId: string): boolean {
+  return (
+    run.launcherSessionId !== undefined && run.launcherSessionId === sessionId && !runBelongsToSession(run, sessionId)
+  );
 }
 
 function parseTime(value: string | undefined): number {

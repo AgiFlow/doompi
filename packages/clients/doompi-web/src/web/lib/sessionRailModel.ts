@@ -93,6 +93,7 @@ function sessionView(id: string, ordinal: number, input: SessionRailModelInput):
           everPrompted: summary.everPrompted,
           lastSettledAt: summary.lastSettledAt,
           dormant: summary.dormant,
+          ...(summary.activity === undefined ? {} : { activity: summary.activity }),
         },
         input.now,
       );
@@ -110,7 +111,13 @@ function sessionView(id: string, ordinal: number, input: SessionRailModelInput):
     status,
     // The same priority the status copy uses: a refusal outranks the question,
     // and a restarting card is describing the restart, not the run it ended.
-    awaitingInput: summary.awaitingInput && attach !== 'refused' && !restarting,
+    // Background work that needs the reader, such as a failed workflow, is
+    // marked the same way while the agent itself is idle.
+    awaitingInput:
+      (summary.awaitingInput ||
+        (summary.activity?.attention === true && summary.phase === 'idle' && summary.dormant !== true)) &&
+      attach !== 'refused' &&
+      !restarting,
     restarting,
     ...(restart?.error === undefined ? {} : { error: restart.error }),
     ...(summary.git === undefined ? {} : { git: { branch: summary.git.branch, dirty: summary.git.dirty } }),

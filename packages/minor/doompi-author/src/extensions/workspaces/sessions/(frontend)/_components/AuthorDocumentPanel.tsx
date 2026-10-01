@@ -49,19 +49,11 @@ function tabId(path: string): string {
   return `author-file-${(hash >>> 0).toString(36)}`;
 }
 
+/** Unsent annotations only. Sent ones live in the request log, not on the canvas. */
 export function displayedAuthorRegions(
-  workspace: Pick<AuthorSessionWorkspace, 'regions' | 'requests'> | undefined,
+  workspace: Pick<AuthorSessionWorkspace, 'regions'> | undefined,
 ): readonly AuthorDisplayedRegion[] {
-  const draftRegions = workspace?.regions ?? [];
-  if (draftRegions.length > 0) return draftRegions.map((region, index) => ({ ordinal: index + 1, region }));
-  const activeRequest = workspace?.requests
-    .slice()
-    .reverse()
-    .find((request) => request.status === 'REQUESTED' || request.status === 'CHANGING');
-  return (activeRequest?.pendingRegions ?? []).map((region) => ({
-    ordinal: Math.max(1, (activeRequest?.regions.findIndex((original) => original.id === region.id) ?? 0) + 1),
-    region,
-  }));
+  return (workspace?.regions ?? []).map((region, index) => ({ ordinal: index + 1, region }));
 }
 export function AuthorDocumentPanel(props: AuthorDocumentPanelProps) {
   if (!props.activeMinorModes?.includes('author')) {
@@ -165,7 +157,9 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
     }
   };
   const gridVisible = autonomousVoiceGridVisible(statuses);
-  const displayedRegions = displayedAuthorRegions(workspace);
+  // The focus fields belong to the last file that claimed focus; until this panel's focus effect runs, that can be another file.
+  const focusedWorkspace = workspace?.focusedDocument?.path === document.path ? workspace : undefined;
+  const displayedRegions = displayedAuthorRegions(focusedWorkspace);
   const displayedPreviewAnnotations: readonly AuthorPreviewDisplayedAnnotation[] =
     displayedRegions.flatMap<AuthorPreviewDisplayedAnnotation>(({ ordinal, region }) => {
       if (region.anchor.kind === 'story-preview-rect') {
@@ -204,7 +198,7 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
         document={document}
         activeTool={activeTool}
         displayedRegions={displayedRegions}
-        pendingCandidate={workspace?.candidate !== undefined}
+        pendingCandidate={focusedWorkspace?.candidate !== undefined}
         seekRequest={workspace?.videoSeekRequest}
       />
     );
@@ -280,7 +274,7 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
             source={previewSource}
             activeTool={activeTool === 'crop' ? 'select' : activeTool}
             displayedAnnotations={displayedPreviewAnnotations}
-            pendingCandidate={workspace?.candidate !== undefined}
+            pendingCandidate={focusedWorkspace?.candidate !== undefined}
             onAnnotationCandidate={(candidate) => {
               setAuthorStoryPreview(sessionId, document.path, candidate.preview);
               setAuthorRegionCandidate(sessionId, {
@@ -307,12 +301,12 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
           <AuthorGridOverlay sessionId={sessionId} document={document} visible={gridVisible} />
         )}
       </div>
-      {workspace !== undefined && ['image', 'pdf', 'video', 'story-preview'].includes(document.kind) ? (
+      {focusedWorkspace !== undefined && ['image', 'pdf', 'video', 'story-preview'].includes(document.kind) ? (
         <div className="max-h-56 shrink-0 overflow-y-auto border-t border-doom-border p-2 sm:hidden">
           <AuthorFeedbackControls
             sessionId={sessionId}
             document={document}
-            workspace={workspace}
+            workspace={focusedWorkspace}
             submitCapture={props.submitCapture}
           />
         </div>
@@ -330,6 +324,20 @@ export function authorFileTab(path: string, preferredAlias?: string): TransientT
         ? (normalized.split('/').at(-1) ?? normalized)
         : `${preferredAlias} · ${normalized.split('/').at(-1) ?? normalized}`,
     retainComposer: true,
+    composerContext(sessionId) {
+      const key = authorDocumentKey(sessionId, normalized);
+      const documentPath = canvasPaths.state[key] ?? normalized;
+      // Server-confirmed alias only: the alias asked for at open can name the wrong canvas when the file was already open.
+      const alias = canvasAliases.state[key];
+      const name = documentPath.split('/').at(-1) ?? documentPath;
+      return {
+        kind: 'author-document',
+        source: 'author',
+        id: documentPath,
+        label: alias === undefined ? name : `${alias} · ${name}`,
+        content: `Author document: ${documentPath}${alias === undefined ? '' : ` (canvas ${alias})`}`,
+      };
+    },
     onOpen(sessionId) {
       const key = authorDocumentKey(sessionId, normalized);
       const controller = new AbortController();

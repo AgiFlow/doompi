@@ -16,6 +16,7 @@ import {
   saveAuthorDocument,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorFiles';
 import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
+import { AuthorFeedbackControls } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorFeedbackControls';
 const hooks = vi.hoisted(() => ({
   values: [] as unknown[],
   setters: [] as ReturnType<typeof vi.fn>[],
@@ -176,6 +177,38 @@ describe('Author document lifecycle', () => {
       ),
     ).toBe(true);
     expect(controls.find((node) => node.props['data-testid'] === 'author-save')?.props.disabled).toBe(true);
+  });
+  it("never shows another document's annotations while focus hands over", () => {
+    for (const path of ['a.png', 'b.png'])
+      workspace.putAuthorDocument('s', { path, kind: 'image', sourceSha256: 'sha' });
+    workspace.focusAuthorDocument('s', 'a.png', 0, 'sha');
+    workspace.addAuthorRegion('s', {
+      id: 'draft-a',
+      documentPath: 'a.png',
+      revision: 0,
+      sourceSha256: 'sha',
+      comment: 'Fix A',
+      mode: 'region',
+      anchor: {
+        kind: 'image-rect',
+        rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 },
+        naturalWidth: 10,
+        naturalHeight: 10,
+      },
+      viewport: { width: 100, height: 100 },
+      createdAt: 1,
+    });
+    const b = render('s', {}, 'b.png');
+    expect(b.find((node) => node.type === AuthorMediaView)?.props).toMatchObject({
+      displayedRegions: [],
+      pendingCandidate: false,
+    });
+    expect(b.some((node) => node.type === AuthorFeedbackControls)).toBe(false);
+    const a = render('s', {}, 'a.png');
+    expect(a.find((node) => node.type === AuthorMediaView)?.props).toMatchObject({
+      displayedRegions: [{ ordinal: 1, region: { id: 'draft-a' } }],
+    });
+    expect(a.some((node) => node.type === AuthorFeedbackControls)).toBe(true);
   });
   it('makes markdown editable during marking or autonomous voice and toggles preview explicitly', () => {
     workspace.putAuthorDocument('s', { path: 'doc', title: 'Title', kind: 'markdown', content: 'abc' });

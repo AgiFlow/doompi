@@ -19,6 +19,8 @@ import type { WorkflowProgressJob, WorkflowRunRecord } from '@agimon-ai/workflow
 import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import type { CallToolResult } from '@modelcontextprotocol/server';
 
+import { WORKFLOW_LAUNCHER_SESSION_ENV } from '../../constants/workflow';
+
 /**
  * Environment variable stamped onto every run launched from a Pi session.
  *
@@ -51,6 +53,30 @@ export function resolveMaxConcurrent(env: NodeJS.ProcessEnv = process.env): numb
  */
 export function isSessionRun(record: WorkflowRunRecord, sessionId: string | undefined): boolean {
   return sessionId !== undefined && record.env?.[PI_SESSION_ENV] === sessionId;
+}
+
+/** True when this session handed the run to a workflow session of its own: it is told, but does not own it. */
+export function isLaunchedRun(record: WorkflowRunRecord, sessionId: string | undefined): boolean {
+  return (
+    sessionId !== undefined &&
+    record.env?.[WORKFLOW_LAUNCHER_SESSION_ENV] === sessionId &&
+    !isSessionRun(record, sessionId)
+  );
+}
+
+/** The line a launcher's finish notice adds: where the run lived, and where to take it up. */
+export function launchedRunHint(record: WorkflowRunRecord): string {
+  const owner = record.env?.[PI_SESSION_ENV];
+  return `It ran in workflow session ${owner ?? 'unknown'}; troubleshoot and recover it there.`;
+}
+
+/**
+ * True when this session owns a run another session handed to it: it is the
+ * run's workflow session, so a finished run is posted without starting a turn.
+ */
+export function isOwnedDelegatedRun(record: WorkflowRunRecord, sessionId: string | undefined): boolean {
+  const launcher = record.env?.[WORKFLOW_LAUNCHER_SESSION_ENV];
+  return isSessionRun(record, sessionId) && typeof launcher === 'string' && launcher !== '' && launcher !== sessionId;
 }
 
 /** Runs launched by one Pi session that are still running. */

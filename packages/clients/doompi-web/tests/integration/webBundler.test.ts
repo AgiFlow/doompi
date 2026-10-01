@@ -157,7 +157,7 @@ describe('the sync-time cockpit bundler', () => {
       planRoot,
     ]);
     // Both moved panels really are compiled in: their empty-state copy appears.
-    expect(bundledJsHas(result.assetsDir, 'no workflow runs yet')).toBe(true);
+    expect(bundledJsHas(result.assetsDir, 'this session has no workflow run')).toBe(true);
     // Tailwind scanned the plugin sources too: the subagents grid uses an
     // auto-fill column template the host shell never does.
     expect(bundledCssHas(result.assetsDir, 'auto-fill')).toBe(true);

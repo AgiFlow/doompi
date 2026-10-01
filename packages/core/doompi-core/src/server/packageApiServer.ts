@@ -37,6 +37,8 @@ export interface PackageApiServerOptions {
   readonly executionBudget?: DoomApiContext['executionBudget'];
   readonly peerAgents?: DoomApiContext['peerAgents'];
   readonly requestApi?: DoomApiContext['requestApi'];
+  /** Publishes this session's activity line through the hub; bound to this session only. */
+  readonly publishActivity?: DoomApiContext['publishActivity'];
   internalToken?: string;
   hubToken?: string;
   /** Shared exact-scope dispatch table, so session facets can mount plugin methods. */
@@ -169,6 +171,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     ...(options.executionBudget === undefined ? {} : { executionBudget: options.executionBudget }),
     ...(options.peerAgents === undefined ? {} : { peerAgents: options.peerAgents }),
     ...(options.requestApi === undefined ? {} : { requestApi: options.requestApi }),
+    ...(options.publishActivity === undefined ? {} : { publishActivity: options.publishActivity }),
     ...(options.internalToken === undefined ? {} : { internalToken: options.internalToken }),
     ...(options.hubToken === undefined ? {} : { hubToken: options.hubToken }),
     ...(exposedSessionService === undefined ? {} : { sessionService: exposedSessionService }),

@@ -200,6 +200,28 @@ describe('rail session cards', () => {
     expect(restarting).toMatchObject({ status: 'restarting…', awaitingInput: false, restarting: true });
     expect(session('live', { restarts: { live: { restarting: false, error: 'no hub' } } }).error).toBe('no hub');
   });
+
+  it('shows a published activity line, and marks it like a question while the agent is idle', () => {
+    applySessionsSnapshot({
+      type: 'sessions_snapshot',
+      sessions: [
+        summary('working', '2026-08-24T00:00:10.000Z', { activity: { label: 'workflow · build' } }),
+        summary('failed', '2026-08-24T00:00:20.000Z', {
+          activity: { label: 'workflow failed · test', attention: true },
+        }),
+        summary('busy', '2026-08-24T00:00:30.000Z', {
+          phase: 'turn',
+          activity: { label: 'workflow failed · test', attention: true },
+        }),
+      ],
+    });
+
+    expect(session('working')).toMatchObject({ status: 'workflow · build', awaitingInput: false });
+    expect(session('failed')).toMatchObject({ status: 'workflow failed · test', awaitingInput: true });
+    // The agent's own turn outranks the line, and is not blocked on the reader.
+    expect(session('busy').awaitingInput).toBe(false);
+    expect(session('busy').status).toContain('running');
+  });
 });
 
 describe('pending setups', () => {

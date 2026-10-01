@@ -386,6 +386,22 @@ export function ArtifactsPane({
     };
   }, [run.workspace, run.runKey, run.stage, sessionId]);
 
+  return <ArtifactList listing={listing} error={error} onOpen={onOpen} />;
+}
+
+/**
+ * The run directory's listing, as read: declared entries first, in the order the
+ * workflow wrote them, then whatever else the folder holds.
+ */
+export function ArtifactList({
+  listing,
+  error,
+  onOpen,
+}: {
+  listing: WorkflowArtifactsResponse | undefined;
+  error: string | undefined;
+  onOpen: (path: string) => void;
+}) {
   const declared = listing?.artifacts.filter((entry) => entry.declared) ?? [];
   const found = listing?.artifacts.filter((entry) => !entry.declared) ?? [];
 
@@ -403,7 +419,10 @@ export function ArtifactsPane({
       >
         <span className="flex min-w-0 items-center gap-2">
           <span className={`w-3 shrink-0 text-xs ${glyph.className}`}>{glyph.glyph}</span>
-          <span className={`truncate text-sm ${entry.state === 'pending' ? 'text-doom-dim' : 'text-doom-hi'}`}>
+          <span
+            title={entry.path}
+            className={`min-w-0 truncate text-xs ${entry.state === 'pending' ? 'text-doom-dim' : 'text-doom-hi'}`}
+          >
             {entry.path}
           </span>
           {entry.producedBy.length === 0 ? null : (
@@ -415,7 +434,7 @@ export function ArtifactsPane({
           <span className="shrink-0 text-2xs text-doom-faint">
             {entry.state === 'pending'
               ? 'not written yet'
-              : `${formatSize(entry.size)} · ${formatWhen(entry.modifiedAt)}`}
+              : [formatSize(entry.size), formatWhen(entry.modifiedAt)].filter(Boolean).join(' · ')}
           </span>
         </span>
         {entry.description === '' ? null : (

@@ -57,6 +57,8 @@ export const SessionSummarySchema = Type.Object({
   profile: Optional(Type.Object({ name: Text, displayName: Optional(Text), iconVersion: Optional(Text) })),
   parentSessionId: Optional(Text),
   sessionProvenance: Optional(Text),
+  /** The line the session's extension published about background work it runs. */
+  activity: Optional(Type.Object({ label: Text, attention: Optional(Flag), since: Optional(Text) })),
   pendingSetups: Optional(
     Type.Array(
       Type.Object({

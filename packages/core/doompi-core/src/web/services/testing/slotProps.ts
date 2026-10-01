@@ -30,6 +30,7 @@ export interface RecordedSlotAction {
     | 'attachComposerCapture'
     | 'attachComposerContext'
     | 'openTab'
+    | 'openSession'
     | 'openTransientTab'
     | 'closeTransientTab'
     | 'sendSessionFrame';
@@ -81,6 +82,9 @@ export function slotPropsFixture(options: SlotPropsOptions = {}): SlotPropsFixtu
     contextInventory: options.contextInventory ?? [],
     openTab: (tabId) => {
       actions.push({ action: 'openTab', target: tabId });
+    },
+    openSession: (sessionId) => {
+      actions.push({ action: 'openSession', target: sessionId });
     },
     openTransientTab: (tab: TransientTab) => {
       actions.push({ action: 'openTransientTab', target: tab.id });

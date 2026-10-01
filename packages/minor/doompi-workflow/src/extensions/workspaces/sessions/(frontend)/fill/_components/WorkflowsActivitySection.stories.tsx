@@ -25,6 +25,9 @@ const run = (
   // Relative, so the elapsed time each row prints stays a plausible few minutes.
   startedAt: new Date(Date.now() - 7 * MINUTE_MS).toISOString(),
   jobs: [],
+  // Each run was launched into its own workflow session, so a row opens that session.
+  ownerSessionId: `${overrides.runKey}-session`,
+  launcherSessionId: SESSION_ID,
   ...overrides,
 });
 
@@ -78,7 +81,7 @@ export const Playground = {
     <div className="flex flex-col gap-6 bg-doom-bg p-6">
       <div className="flex flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">
-          running and failed open, successful folded · at the dock's width
+          launched runs · each row opens its workflow session · at the dock's width
         </span>
         <div className="w-72 rounded-md border border-doom-border bg-doom-panel p-2">
           <WorkflowsActivitySection {...props(SESSION_ID)} />

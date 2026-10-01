@@ -678,6 +678,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           environment: sessionOptions.environment,
           directEvents: hub.directEvents,
           requestApi: (mount, basePath, request) => hub.requestApi(mount, basePath, request),
+          publishActivity: (activity) => hub.setSessionActivity?.(sessionOptions.sessionId, activity),
           ...(computerUse === undefined
             ? {}
             : {

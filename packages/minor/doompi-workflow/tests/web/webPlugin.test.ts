@@ -7,6 +7,7 @@ import {
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { webPlugin as scopedWebPlugin } from '../../generated/web';
+import { catalog } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/catalogStore';
 import { workflows } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/workflowsStore';
 const webPlugin = {
   id: scopedWebPlugin.id,
@@ -29,37 +30,59 @@ const run = {
   stage: 'running',
   startedAt: new Date(0).toISOString(),
   workspace: 'repo',
+  ownerSessionId: 's1',
+  jobs: [
+    {
+      name: 'draft',
+      phase: 'job',
+      status: 'running',
+      steps: [{ name: 'outline', status: 'running', ref: { kind: 'session', id: 'step-1' } }],
+    },
+  ],
 };
 
-afterEach(() => workflows.reset());
+const dockFace = () => webPlugin.dockFaces?.find((face) => face.id === 'workflow');
+const activitySection = () => webPlugin.fills?.find((fill) => fill.slot === 'activity.workflows');
+const overlay = () => webPlugin.fills?.find((fill) => fill.slot === 'overlay');
+
+afterEach(() => {
+  workflows.reset();
+  catalog.reset();
+});
 
 describe('the workflows plugin surfaces', () => {
-  it('renders the transient runs panel for a focused session with no runs', () => {
-    const tab = webPlugin.activityGroups?.[0]?.transientTab?.();
-    const { props } = slotPropsFixture({ sessionId: 's1' });
-
-    const rendered = renderPlugin(tab!.panel, props);
-
-    // The empty session is the first thing anyone sees, and the state a panel
-    // is most likely to index into something absent.
-    expect(rendered.error).toBeUndefined();
-    expect(tab?.id).toBe('workflows-runs');
+  it('declares no tab: the runs live in their workflow sessions and the dock', () => {
+    expect(webPlugin.tabs ?? []).toEqual([]);
+    expect(webPlugin.activityGroups?.[0]?.transientTab).toBeUndefined();
   });
 
-  it('renders the transient runs panel with runs the hub reported', () => {
+  it('shows the workflow dock face only in a session that owns a run', () => {
+    const face = dockFace();
     const channel = webPlugin.channels?.find((candidate) => candidate.channel === 'workflow_runs');
-    expect(driveChannel(channel!, 's1', { runs: [run] })).toEqual({ accepted: true });
+    expect(face?.autoSelect).toBe(true);
+    expect(face?.visibility?.isVisible('s1')).toBe(false);
 
-    const tab = webPlugin.activityGroups?.[0]?.transientTab?.();
-    const rendered = renderPlugin(tab!.panel, slotPropsFixture({ sessionId: 's1' }).props);
+    driveChannel(channel!, 's1', { runs: [run, { ...run, runKey: 'handed-1', ownerSessionId: 's9' }] });
+    expect(face?.visibility?.isVisible('s1')).toBe(true);
+    // A run handed to another session's workflow session does not make the face appear here.
+    driveChannel(channel!, 's2', { runs: [{ ...run, ownerSessionId: 's9', launcherSessionId: 's2' }] });
+    expect(face?.visibility?.isVisible('s2')).toBe(false);
+  });
+
+  it('renders the dock face with the run, its active step and its jobs', () => {
+    const channel = webPlugin.channels?.find((candidate) => candidate.channel === 'workflow_runs');
+    driveChannel(channel!, 's1', { runs: [run] });
+    const rendered = renderPlugin(dockFace()!.panel, slotPropsFixture({ sessionId: 's1' }).props);
 
     expect(rendered.error).toBeUndefined();
     expect(rendered.includes('blog-writing')).toBe(true);
+    expect(rendered.includes('ACTIVE NOW')).toBe(true);
+    expect(rendered.includes('outline')).toBe(true);
   });
 
   it('keeps the idle activity section available as a workflow launcher', () => {
     const group = webPlugin.activityGroups?.[0];
-    const section = webPlugin.fills?.[0];
+    const section = activitySection();
     const rendered = renderPlugin(section!.component!, slotPropsFixture({ sessionId: 's1' }).props);
 
     expect(group?.activeSource?.isActive('s1')).toBe(false);
@@ -70,15 +93,20 @@ describe('the workflows plugin surfaces', () => {
   });
 
   it('renders the activity section with a run reported by the hub', () => {
-    const section = webPlugin.fills?.[0];
     const channel = webPlugin.channels?.find((candidate) => candidate.channel === 'workflow_runs');
-    driveChannel(channel!, 's1', { runs: [run] });
+    driveChannel(channel!, 's1', { runs: [{ ...run, ownerSessionId: 'wf-1', launcherSessionId: 's1' }] });
 
-    const rendered = renderPlugin(section!.component!, slotPropsFixture({ sessionId: 's1' }).props);
+    const rendered = renderPlugin(activitySection()!.component!, slotPropsFixture({ sessionId: 's1' }).props);
 
     expect(rendered.error).toBeUndefined();
     expect(rendered.includes('blog-writing')).toBe(true);
+    expect(rendered.html).toContain('data-delegated="true"');
     expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive('s1')).toBe(true);
+  });
+
+  it('mounts the launcher overlay closed', () => {
+    const rendered = renderPlugin(overlay()!.component!, slotPropsFixture({ sessionId: 's1' }).props);
+    expect(rendered.error).toBeUndefined();
   });
 
   it('renders every surface with nothing focused', () => {
@@ -86,8 +114,8 @@ describe('the workflows plugin surfaces', () => {
     // last session closes, and every component is mounted in both states.
     const { props } = slotPropsFixture({ sessionId: null });
 
-    const transientTabs = webPlugin.activityGroups?.flatMap((group) => group.transientTab?.() ?? []) ?? [];
-    for (const surface of [...(webPlugin.tabs ?? []), ...transientTabs, ...(webPlugin.fills ?? [])]) {
+    const faces = webPlugin.dockFaces ?? [];
+    for (const surface of [...(webPlugin.tabs ?? []), ...faces, ...(webPlugin.fills ?? [])]) {
       const component = 'panel' in surface ? surface.panel : surface.component;
       const id = 'id' in surface ? surface.id : 'unknown';
       expect(renderPlugin(component!, props).error, id).toBeUndefined();
@@ -136,9 +164,10 @@ describe('the workflows plugin surfaces', () => {
       if ('run' in binding) binding.run(context);
     }
 
-    expect(runnable.length).toBeGreaterThan(0);
-    expect(fixture.actions.map(({ action, target }) => `${action}:${String(target)}`)).toEqual(
-      runnable.map(() => 'openTransientTab:workflows-runs'),
-    );
+    expect(runnable.map((binding) => binding.id)).toEqual(['doom-workflow.catalog']);
+    // SPC w l opens the catalog over the session; no binding opens a tab.
+    expect(fixture.actions).toEqual([]);
+    expect(catalog.select(catalog.store.state, 's1').open).toBe(true);
+    expect(webPlugin.leaderBindings?.map((binding) => binding.path.at(-1)?.key)).toEqual(['l', 'e']);
   });
 });

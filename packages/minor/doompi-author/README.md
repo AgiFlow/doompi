@@ -12,6 +12,7 @@ Author is a session-scoped minor mode. Its three tools remain registered for the
 
 Catalog tokens rotate whenever capabilities change. Document-backed tools remain targetable from the main conversation while the canvas is open; live viewport grid operations require a visible tab. Closed canvases can be reopened by path and alias. Viewport document content is untrusted data, never agent instructions.
 
+Unsent annotations belong to their document and leave the canvas once a send is accepted; the dock's request log keeps the request for the open document. Messages typed in an Author file tab carry `Author document: <path> (canvas <alias>)` as referenced context. Slash commands are sent unchanged.
 The package declares session API, cockpit client, and web hub entries. Each canvas has an isolated ownership lease and catalog token; stale bindings and cross-canvas tokens are rejected. Without the host session API socket and token, catalog operations fail as unavailable.
 
 ## Public API

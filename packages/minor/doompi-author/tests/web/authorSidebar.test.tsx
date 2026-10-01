@@ -8,6 +8,7 @@ import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/
 import { AuthorFeedbackControls } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorFeedbackControls';
 import { AuthorPanel } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorPanel';
 import { AuthorRegionDrafts } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorRegionDrafts';
+import { AuthorRequestLog } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorRequestLog';
 import { AuthorToolPalette } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorToolPalette';
 
 vi.mock('react', async (original) => ({
@@ -114,6 +115,34 @@ describe('Author annotation sidebar', () => {
     expect(createTab).not.toHaveBeenCalled();
   });
 
+  it("shows only the open document's requests, and every request when no document is open", () => {
+    const props = setup();
+    const region = workspace.authorSessionWorkspace('s').annotations[0]!;
+    for (const [id, documentPath] of [
+      ['clip-request', 'clip.mp4'],
+      ['other-request', 'other.png'],
+    ] as const) {
+      workspace.putAuthorRequest('s', {
+        id,
+        documentPath,
+        requestText: 'change',
+        regions: [{ ...region, documentPath }],
+        status: 'REQUESTED',
+        createdAt: 1,
+        updatedAt: 1,
+        revision: 0,
+      });
+    }
+    const logged = () =>
+      (
+        nodes(AuthorPanel(props)).find((node) => node.type === AuthorRequestLog)!.props as unknown as {
+          requests: { id: string }[];
+        }
+      ).requests.map(({ id }) => id);
+    expect(logged()).toEqual(['clip-request']);
+    workspace.releaseAuthorDocumentFocus('s', workspace.authorSessionWorkspace('s').focusedDocument!.generation);
+    expect(logged()).toEqual(['clip-request', 'other-request']);
+  });
   it('submits annotations asynchronously without navigation or changing the composer', async () => {
     const props = setup();
     const controls = nodes(AuthorPanel(props));

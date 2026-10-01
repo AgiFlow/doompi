@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { displayedAuthorRegions } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
 import {
   authorCaptureContext,
   createAuthorCapturePacket,
@@ -69,6 +70,9 @@ describe('Author request lifecycle', () => {
       status: 'REQUESTED',
       regions: [{ id: 'r1', comment: 'rewrite' }],
     });
+    // Sent annotations leave the canvas once accepted; the request keeps them for the agent's tools.
+    expect(displayedAuthorRegions(authorSessionWorkspace('s1'))).toEqual([]);
+    expect(authorSessionWorkspace('s1').requests[0]?.pendingRegions).toMatchObject([{ id: 'r1' }]);
 
     const mutate = authorProfilesForDocument('s1', 'notes.md', 'markdown')
       .flatMap((profile) => profile.tools)

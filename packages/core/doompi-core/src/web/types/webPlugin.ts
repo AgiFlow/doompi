@@ -62,6 +62,11 @@ export interface TransientTab {
   panel: ComponentType<WebPluginSlotProps>;
   /** Keeps the host composer below this panel. Defaults to false. */
   retainComposer?: boolean;
+  /**
+   * Context the host adds to each message sent from the retained composer while this tab is open.
+   * Read at send time. Slash commands are sent unchanged; an undefined, invalid or throwing result adds nothing.
+   */
+  composerContext?: (sessionId: string) => WebPluginContextItem | undefined;
   /** Called once when this tab is first added to its owning session. */
   onOpen?: (sessionId: string) => void;
   /** Called once when the tab is closed or its owning session/page is discarded. */
@@ -230,6 +235,11 @@ export interface WebPluginSlotProps {
   holdSessionChannels?: (sessionId: string, receive?: (frame: Record<string, unknown>) => void) => () => void;
   /** Host navigation for the target session; null returns to the conversation tab. */
   openTab: (tabId: string | null) => void;
+  /**
+   * Host navigation to another session the page lists, such as a child session
+   * this plugin started. Absent in hosts without session navigation.
+   */
+  openSession?: (sessionId: string) => void;
   /** Opens the tab for the focused session, or focuses it when one with the same id is already open. */
   openTransientTab: (tab: TransientTab) => void;
   closeTransientTab: (tabId: string) => void;

@@ -9,6 +9,7 @@ import {
   authorFileTab,
   displayedAuthorRegions,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
+import { canvasAliases } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCanvasState';
 import type { AuthorRequestRecord } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
 import { AuthorRequestLog } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorRequestLog';
 import { DescribeAuthorToolsToolCard } from '../../src/extensions/workspaces/sessions/(frontend)/tool/_components/DescribeAuthorToolsToolCard';
@@ -88,6 +89,25 @@ describe('the Author web plugin', () => {
       label: 'report.md',
       retainComposer: true,
     });
+  });
+  it('names the open document and its canonical canvas as composer context', () => {
+    const tab = authorFileTab('docs/report.md');
+    expect(tab.composerContext?.('s')).toEqual({
+      kind: 'author-document',
+      source: 'author',
+      id: 'docs/report.md',
+      label: 'report.md',
+      content: 'Author document: docs/report.md',
+    });
+    canvasAliases.setState(() => ({ 's\ndocs/report.md': 'review' }));
+    try {
+      expect(tab.composerContext?.('s')).toMatchObject({
+        label: 'review · report.md',
+        content: 'Author document: docs/report.md (canvas review)',
+      });
+    } finally {
+      canvasAliases.setState(() => ({}));
+    }
   });
   it.each([
     ['describe_author_tools', DescribeAuthorToolsToolCard],
@@ -183,7 +203,7 @@ describe('the Author web plugin', () => {
     ).toBeUndefined();
   });
 
-  it('keeps stable visible numbers for draft and pending document regions', () => {
+  it('numbers only unsent document regions', () => {
     const first = {
       id: 'first',
       documentPath: 'docs/report.md',
@@ -203,32 +223,13 @@ describe('the Author web plugin', () => {
     };
 
     expect(
-      displayedAuthorRegions({ regions: [first, second], requests: [] }).map(({ ordinal, region }) => [
-        ordinal,
-        region.id,
-      ]),
+      displayedAuthorRegions({ regions: [first, second] }).map(({ ordinal, region }) => [ordinal, region.id]),
     ).toEqual([
       [1, 'first'],
       [2, 'second'],
     ]);
-    expect(
-      displayedAuthorRegions({
-        regions: [],
-        requests: [
-          {
-            id: 'request',
-            documentPath: 'docs/report.md',
-            requestText: 'change both',
-            regions: [first, second],
-            pendingRegions: [second],
-            status: 'CHANGING',
-            createdAt: 1,
-            updatedAt: 2,
-            revision: 1,
-          },
-        ],
-      }).map(({ ordinal, region }) => [ordinal, region.id]),
-    ).toEqual([[2, 'second']]);
+    expect(displayedAuthorRegions({ regions: [] })).toEqual([]);
+    expect(displayedAuthorRegions(undefined)).toEqual([]);
   });
   it('presents the latest Author lifecycle with clean instruction and retained earlier history', () => {
     const region = {

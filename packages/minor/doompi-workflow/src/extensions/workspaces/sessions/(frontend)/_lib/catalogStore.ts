@@ -1,4 +1,4 @@
-import { defineSessionStore, type ContextActionRunContext, type TransientTab } from '@agimon-ai/doompi-core/web';
+import { defineSessionStore, type ContextActionRunContext } from '@agimon-ai/doompi-core/web';
 
 import {
   WORKFLOW_CATALOG_TYPE,
@@ -45,10 +45,9 @@ export function openCatalog(sessionId: string, prompt = ''): void {
 }
 
 /** Opens the Workflow picker with context supplied by another installed plugin. */
-export function openWorkflowCatalogForContext(context: ContextActionRunContext, tab: () => TransientTab): void {
+export function openWorkflowCatalogForContext(context: ContextActionRunContext): void {
   if (context.sessionId === null) return;
   openCatalog(context.sessionId, context.item.content);
-  context.openTransientTab(tab());
 }
 
 export function closeCatalog(sessionId: string): void {

@@ -41,6 +41,19 @@ describe('sessionStatusLine', () => {
     expect(sessionStatusLine(input({ everPrompted: false }), NOW)).toBe('fresh session · nothing sent yet');
   });
 
+  it('shows background work in place of the idle copy, with its elapsed time', () => {
+    expect(
+      sessionStatusLine(
+        input({ everPrompted: false, activity: { label: 'workflow · build', since: '2026-08-24T10:08:00.000Z' } }),
+        NOW,
+      ),
+    ).toBe('workflow · build · 4m');
+    expect(sessionStatusLine(input({ activity: { label: 'workflow succeeded' } }), NOW)).toBe('workflow succeeded');
+    expect(sessionStatusLine(input({ awaitingInput: true, activity: { label: 'workflow · build' } }), NOW)).toBe(
+      'waiting for your input',
+    );
+  });
+
   it('treats an unprompted but settled session as finished, not fresh', () => {
     expect(sessionStatusLine(input({ everPrompted: false, lastSettledAt: '2026-08-24T10:05:00.000Z' }), NOW)).toBe(
       'done · waiting for you',

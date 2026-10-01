@@ -13,6 +13,7 @@ import type {
   DoomDirectEventBus,
   DoomHubSessionService,
   DoomSessionCommunicationEndpoint,
+  DoomSessionActivity,
   DoomSessionContext,
 } from './hubChannel';
 import type { DoomMcpProjection } from './mcpProjection';
@@ -242,6 +243,11 @@ export interface DoomApiContext {
   sessionCommunication?: DoomSessionCommunicationEndpoint;
   /** Same-process events shared by session APIs and hub channels. */
   directEvents?: DoomDirectEventBus;
+  /**
+   * Publishes this session's activity line to every page's rail; undefined clears it.
+   * Session mounts only. The last publisher wins.
+   */
+  publishActivity?(activity: DoomSessionActivity | undefined): void;
   /** Trusted in-process dispatch to an explicitly selected mounted API. No browser authentication is performed here. */
   requestApi?(mount: DoomApiMount, basePath: string, request: Request): Promise<Response>;
   /** Present only on a session mounted by an authenticated Desktop host. */

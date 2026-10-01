@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   appendComposerDraft,
@@ -9,6 +9,7 @@ import {
   composerStore,
   dropComposerState,
   resetComposerStore,
+  tabComposerContext,
   updateComposerState,
 } from '../../src/web/stores/composerStore';
 
@@ -339,5 +340,47 @@ describe('composer state', () => {
     dropComposerState('missing');
     dropComposerState('s1');
     expect(composerStore.state).toEqual({});
+  });
+});
+
+describe('tabComposerContext', () => {
+  const item = {
+    kind: 'author-document',
+    source: 'author',
+    id: 'docs/report.md',
+    label: ' review\n· report.md ',
+    content: ' Author document: docs/report.md (canvas review) ',
+  };
+
+  it('reads the open tab context for the receiving session and sanitizes it', () => {
+    const read = vi.fn(() => item);
+    expect(tabComposerContext(read, 's1', 'fix the heading')).toEqual({
+      ...item,
+      label: 'review · report.md',
+      content: 'Author document: docs/report.md (canvas review)',
+    });
+    expect(read).toHaveBeenCalledWith('s1');
+  });
+
+  it.each(['/compact keep decisions', '  /mode plan', '/skill:x y'])('sends slash command %j unchanged', (draft) => {
+    const read = vi.fn(() => item);
+    expect(tabComposerContext(read, 's1', draft)).toBeUndefined();
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('adds nothing for a missing, empty, invalid, oversized or throwing read', () => {
+    expect(tabComposerContext(undefined, 's1', 'hi')).toBeUndefined();
+    expect(tabComposerContext(() => undefined, 's1', 'hi')).toBeUndefined();
+    expect(tabComposerContext(() => ({ ...item, content: '  ' }), 's1', 'hi')).toBeUndefined();
+    expect(tabComposerContext(() => ({ ...item, content: 'x'.repeat(100 * 1024 + 1) }), 's1', 'hi')).toBeUndefined();
+    expect(
+      tabComposerContext(
+        () => {
+          throw new Error('plugin bug');
+        },
+        's1',
+        'hi',
+      ),
+    ).toBeUndefined();
   });
 });

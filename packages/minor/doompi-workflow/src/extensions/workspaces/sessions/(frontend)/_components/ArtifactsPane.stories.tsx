@@ -6,7 +6,7 @@
  * The pane reads its listing from the workflow API inside an effect. The
  * headless renderer has no backend, so the request fails and the pane shows
  * the states it reaches without one. The rows themselves are covered by
- * WorkflowsPanel, which reads the same registry from a seeded store.
+ * WorkflowDockPanel, whose stories render the same rows from a fixed listing.
  */
 import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 

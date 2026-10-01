@@ -152,6 +152,11 @@ export interface SessionSummary {
     errorCode?: 'SESSION_WORKTREE_PROVISION_FAILED' | 'SESSION_UNAVAILABLE';
   }>;
   /**
+   * One line an extension published about background work it runs for this
+   * session, such as a workflow; the rail shows it in place of the idle copy.
+   */
+  activity?: { label: string; attention?: boolean; since?: string };
+  /**
    * The hub recorded this session but has not reopened it since its last
    * restart. Its journal is on disk; nothing is running behind the card until
    * the page asks for it.

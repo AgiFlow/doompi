@@ -9,7 +9,8 @@ import type {
  * The rail a template receives, built for a test or story.
  *
  * Two workspaces with sessions that exercise the card's branches (a branch
- * with a dirty star, a profile avatar, a nested child, a pending setup), plus
+ * with a dirty star, a profile avatar, a nested child, workflow sessions in
+ * each state, a pending setup), plus
  * actions that record what the template asked for. Override any part.
  */
 
@@ -84,6 +85,31 @@ export function defaultRailWorkspaces(): WebTemplateRailWorkspace[] {
               recovery: 'Resolve the Git setup, then retry the authenticated conversation.',
             },
           ],
+        }),
+        railSession({
+          id: 'rail-workflow',
+          name: 'release-hardening',
+          ordinal: 3,
+          nested: true,
+          provenance: 'workflow-session',
+          status: 'workflow · build › edit token.ts · 4m',
+        }),
+        railSession({
+          id: 'rail-workflow-failed',
+          name: 'nightly',
+          ordinal: 4,
+          nested: true,
+          provenance: 'workflow-session',
+          status: 'workflow failed · test',
+          awaitingInput: true,
+        }),
+        railSession({
+          id: 'rail-workflow-done',
+          name: 'hotfix',
+          ordinal: 5,
+          nested: true,
+          provenance: 'workflow-session',
+          status: 'stopped · open to wake',
         }),
       ],
     },

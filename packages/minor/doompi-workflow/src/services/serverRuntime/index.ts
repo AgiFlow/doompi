@@ -9,6 +9,7 @@ import {
   type DoomHeadlessContent,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
+import { createDoomNotificationEntryData, DOOM_NOTIFICATION_ENTRY_TYPE } from '@agimon-ai/doompi-core/notification';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
@@ -16,9 +17,15 @@ import { createEmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
-import { WORKFLOW_TOOLS_TOOL_NAME } from '../../constants/workflow';
+import {
+  WORKFLOW_LAUNCHER_SESSION_ENV,
+  WORKFLOW_SESSION_PROVENANCE,
+  WORKFLOW_SESSION_RELEASE_TYPE,
+  WORKFLOW_TOOLS_TOOL_NAME,
+} from '../../constants/workflow';
 import { workflowToolsInputSchema } from '../../schemas/workflowPi';
 import { registerRunProvider, type RunProviderHandle } from '../../services/backgroundWork';
+import { resolveMaxConcurrent } from '../../services/piToolBridge';
 import { createServerLauncher } from '../../services/serverLaunch';
 import { createNativeStepPaneLauncher, createStepExecutor } from '../../services/stepExecutor';
 import { createWorkflowCatalogReader, presentWorkflowCatalog } from '../../services/webWorkflowCatalog';
@@ -32,7 +39,18 @@ import {
   validateWorkflowLaunch,
 } from '../../services/workflowLaunchCommand';
 import { readWorkflowSkill as skill } from '../../services/workflowResource';
-import { presentWorkflowRuns, runBelongsToSession } from '../../services/workflowRuns';
+import {
+  type ParsedWorkflowRun,
+  presentWorkflowRuns,
+  runBelongsToSession,
+  runLaunchedBySession,
+} from '../../services/workflowRuns';
+import {
+  createWorkflowSessionLifecycle,
+  isWorkflowSession,
+  workflowSessionBrief,
+  workflowSessionName,
+} from '../../services/workflowSession';
 import { readWorkflowRuns } from '../../services/workflowWatcher';
 import routes from '../../types/apiRoutes';
 import { WORKFLOW_CATALOG_TYPE, WORKFLOW_RUNS_TYPE } from '../../types/webWorkflows';
@@ -133,6 +151,34 @@ export function createWorkflowServerRuntime(
     enableLogs: true,
     enableTraces: true,
   });
+  /** True when this session was created to own one workflow run for the session that launched it. */
+  const workflowSession = isWorkflowSession(host.context);
+  const communication = serverHost.context.sessionCommunication;
+  const lifecycle = workflowSession
+    ? createWorkflowSessionLifecycle({
+        parentSessionId: host.context.sessionContext?.parentSessionId,
+        publishActivity: (activity) => serverHost.context.publishActivity?.(activity),
+        postNotice: async (notice) => {
+          // The same entry the notification provider appends in a web session: a notice, never a turn.
+          const data = createDoomNotificationEntryData({ title: notice.title, body: notice.body, level: notice.level });
+          if (data !== undefined) await host.context.session.appendCustomEntry(DOOM_NOTIFICATION_ENTRY_TYPE, data);
+        },
+        isIdle: async () => {
+          const activity = await host.context.session.activity();
+          return activity.isIdle && !activity.hasPendingMessages;
+        },
+        ...(communication === undefined
+          ? {}
+          : {
+              requestRelease: (parent: string, runKeys: readonly string[]) =>
+                communication.publish(parent, WORKFLOW_SESSION_RELEASE_TYPE, { runKeys }),
+              onPeerReady: (listener: (peer: string) => void) => communication.onPeerReady(listener),
+            }),
+      })
+    : undefined;
+  const reportLifecycleFailure = (error: unknown): void => {
+    void telemetry.recordWarning('doom_workflow.session_lifecycle_failed', error);
+  };
   /** This session's runs, published to its panel and counted as its background work. */
   const publishRuns = (executionContext: typeof host.context): boolean => {
     const records = readWorkflowRuns({ environment: executionContext.environment }).filter((run) =>
@@ -147,6 +193,7 @@ export function createWorkflowServerRuntime(
       Date.now(),
     );
     directEvents.publish(WORKFLOW_RUNS_TYPE, executionContext.sessionId, { runs });
+    lifecycle?.observe(runs).catch(reportLifecycleFailure);
     return activeItems.length > 0;
   };
   /** The workflows this session can launch. Runs moving on do not change them, so their events skip this. */
@@ -299,13 +346,97 @@ export function createWorkflowServerRuntime(
     const owner = resolveRootSessionId(parent, host.context.environment);
     return owner === host.context.sessionId ? undefined : owner;
   };
+  /** Sessions this one is creating to hand launches to; they count toward its capacity before their runs register. */
+  let creatingWorkflowSessions = 0;
+  /** A host that can create a session and reach its API, for a session that is not itself a workflow session. */
+  const canHandOff = (): boolean =>
+    !workflowSession && sessionService !== undefined && serverHost.context.requestApi !== undefined;
+  /**
+   * Create a workflow session under this one and hand it the launch, so the
+   * run, its step sessions and its owner agent live there, nested under this
+   * session in the rail. The launch is checked here first: a refused launch
+   * creates nothing.
+   */
+  const launchInWorkflowSession = async (
+    parameters: LaunchParameters,
+    where: LaunchLocation = host.context,
+  ): Promise<LaunchResult> => {
+    let input: WorkflowLaunchInput;
+    try {
+      input = feature.runTool.getInputSchema().parse(parameters);
+    } catch (error) {
+      return textResult(`Error: ${errorMessage(error)}`, true);
+    }
+    const refusal = refuseLaunch(input, where);
+    if (refusal !== undefined) return textResult(`Error: ${refusal}`, true);
+    const self = host.context.sessionId;
+    const running = readWorkflowRuns({ environment: host.context.environment }).filter(
+      (run) =>
+        run.view.stage === 'running' &&
+        run.view.stale !== true &&
+        (runBelongsToSession(run, self) || runLaunchedBySession(run, self)),
+    ).length;
+    const ceiling = resolveMaxConcurrent(host.context.environment);
+    if (running + creatingWorkflowSessions >= ceiling) {
+      return textResult(
+        `Error: This session is at capacity: ${String(running + creatingWorkflowSessions)}/${String(ceiling)} workflows running.`,
+        true,
+      );
+    }
+    const workflowPath = resolve(where.cwd, input.workflowPath);
+    creatingWorkflowSessions += 1;
+    let child: string | undefined;
+    try {
+      const entry = (await catalogReader.read(where.cwd)).find((candidate) => candidate.path === workflowPath);
+      const name = workflowSessionName(workflowPath, entry?.name);
+      // No environment: nothing of this session's is copied, and no root-session marker moves ownership back here.
+      const scope = await sessionService!.create({
+        cwd: where.cwd,
+        name,
+        parentSessionId: self,
+        sessionProvenance: WORKFLOW_SESSION_PROVENANCE,
+        selection: { minorModes: [WORKFLOW_MODE_ID] },
+      });
+      child = scope.sessionId;
+      const result = await launchIn(child, {
+        ...parameters,
+        workflowPath,
+        env: { ...input.env, [WORKFLOW_LAUNCHER_SESSION_ENV]: self },
+      } as LaunchParameters);
+      if (result.isError === true) {
+        await sessionService!.close(child).catch(reportLifecycleFailure);
+        return result;
+      }
+      const text = result.content.map((item) => item.text).join('\n');
+      return textResult(
+        `${text}\nRuns in workflow session "${name}" (${child}), nested under this session. You will be told here when it finishes; troubleshoot and recover it there.`,
+      );
+    } catch (error) {
+      if (child !== undefined) await sessionService!.close(child).catch(reportLifecycleFailure);
+      return textResult(`Error: ${errorMessage(error)}`, true);
+    } finally {
+      creatingWorkflowSessions -= 1;
+    }
+  };
   const launch = async (parameters: LaunchParameters, where?: LaunchLocation): Promise<LaunchResult> => {
     const owner = launchOwner();
-    return owner === undefined ? launchHere(parameters, where) : launchIn(owner, parameters);
+    if (owner !== undefined) return launchIn(owner, parameters);
+    return canHandOff() ? launchInWorkflowSession(parameters, where) : launchHere(parameters, where);
   };
-  /** A launch another session handed this one: this session runs and owns it. */
+  /**
+   * A launch another session handed this one. A hand-off from a launcher
+   * carries its stamp and runs here; any other, such as a dispatcher's, goes
+   * through the same routing as a launch made here.
+   */
   const launchFromApi = async (parameters: Record<string, unknown>): Promise<WorkflowLaunchResponse> => {
-    const result = await launchHere(parameters as LaunchParameters);
+    const env = parameters.env;
+    const handedOff =
+      typeof env === 'object' &&
+      env !== null &&
+      typeof (env as Record<string, unknown>)[WORKFLOW_LAUNCHER_SESSION_ENV] === 'string';
+    const result = handedOff
+      ? await launchHere(parameters as LaunchParameters)
+      : await launch(parameters as LaunchParameters);
     // No tool call ends here to refresh the panel, so publish the new run now.
     publishRunsSoon(host.context);
     return {
@@ -313,6 +444,29 @@ export function createWorkflowServerRuntime(
       ...(result.isError === true ? { isError: true } : {}),
     };
   };
+  /**
+   * A workflow session asks to be released after an untouched success. Only
+   * the hub-attached source is trusted, and the registry, not the message,
+   * decides: every run it owns succeeded and one was launched from here.
+   */
+  const releaseWorkflowSession = async (source: string): Promise<void> => {
+    if (sessionService?.release === undefined) return;
+    const owned = readWorkflowRuns({ environment: host.context.environment }).filter((run) =>
+      runBelongsToSession(run, source),
+    );
+    const succeeded = (run: ParsedWorkflowRun): boolean =>
+      run.view.stage === 'completed' &&
+      (run.view.outcome === undefined || run.view.outcome === 'success' || run.view.outcome === 'skipped');
+    if (owned.length === 0 || !owned.every(succeeded)) return;
+    if (!owned.some((run) => runLaunchedBySession(run, host.context.sessionId))) return;
+    await sessionService.release(source);
+    void telemetry.recordEvent('doom_workflow.session_released', { outcome: 'released' });
+  };
+  const stopReleaseRequests = communication?.subscribe(WORKFLOW_SESSION_RELEASE_TYPE, (source) => {
+    releaseWorkflowSession(source).catch(reportLifecycleFailure);
+  });
+  // A session hears its children only once it has said it is ready to.
+  const stopPeerReady = communication?.onPeerReady(() => undefined);
   let control: ReturnType<typeof feature.createRunControl> | undefined;
   let controlDisposers: (() => void)[] = [];
   const disposeControl = (): void => {
@@ -406,6 +560,20 @@ export function createWorkflowServerRuntime(
         event: 'session_shutdown',
         handle: disposeControl,
       },
+      // Routed by position (hook/*.server.ts): new hooks go at the end.
+      {
+        event: 'session_start',
+        handle: async () => {
+          // A woken workflow session comes back without the modes it was created with.
+          if (workflowSession && !modeSelected()) await selectMode(true);
+        },
+      },
+      {
+        event: 'agent_start',
+        handle: () => {
+          lifecycle?.agentStarted();
+        },
+      },
     ],
     resources: [
       {
@@ -425,6 +593,23 @@ export function createWorkflowServerRuntime(
         name: 'workflow-recovery',
         kind: 'skill',
         read: () => skill('workflow-recovery'),
+      },
+      {
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
+        name: 'workflow-session',
+        kind: 'context',
+        // Live state: rebuilt from the registry on every turn, so it survives a wake and never goes stale.
+        read: (executionContext) =>
+          workflowSession
+            ? workflowSessionBrief(
+                presentWorkflowRuns(
+                  readWorkflowRuns({ environment: executionContext.environment })
+                    .filter((run) => runBelongsToSession(run, executionContext.sessionId))
+                    .map((run) => run.view),
+                  Date.now(),
+                ),
+              )
+            : '',
       },
     ],
     activities: [
@@ -573,7 +758,7 @@ export function createWorkflowServerRuntime(
           };
           const runs = readWorkflowRuns({ environment: host.context.environment }).filter(
             (run) =>
-              runBelongsToSession(run, host.context.sessionId) &&
+              (runBelongsToSession(run, host.context.sessionId) || runLaunchedBySession(run, host.context.sessionId)) &&
               run.view.runKey === input.runKey &&
               (input.workspace === undefined || run.view.workspace === input.workspace),
           );
@@ -589,6 +774,11 @@ export function createWorkflowServerRuntime(
             };
           const run = runs[0]!.view;
           if (input.action === 'status') return callResult(run);
+          if (!runBelongsToSession(runs[0]!, host.context.sessionId)) {
+            return callResult({
+              error: `This run belongs to workflow session ${run.ownerSessionId ?? 'unknown'}; pause, resume or stop it there.`,
+            });
+          }
           if (!control) return callResult({ error: 'Workflow activity is not active.' });
           if (typeof input.expectedRunId !== 'string' || input.expectedRunId.length === 0) {
             return callResult({ error: 'expectedRunId is required for workflow control.' });
@@ -629,6 +819,15 @@ export function createWorkflowServerRuntime(
               throw new Error(
                 'No failed workflow run matches this key; do not recover a running or completed workflow.',
               );
+            const owner = record.env?.PI_SESSION_ID;
+            if (
+              input.action === 'recover' &&
+              owner !== undefined &&
+              owner !== host.context.sessionId &&
+              sessionService?.isLive(owner) === true
+            ) {
+              throw new Error(`Run ${record.runKey} belongs to live workflow session ${owner}; recover it there.`);
+            }
             if (input.action === 'recover')
               return launchResultOf(
                 await launcher.recover(
@@ -713,6 +912,9 @@ export function createWorkflowServerRuntime(
     ...(dispatcher ? { toolRestrictions: [{ excludedTools: [RUN_TOOL, WORKFLOW_TOOLS_TOOL_NAME] }] } : {}),
     async onDispose() {
       disposeControl();
+      lifecycle?.dispose();
+      stopReleaseRequests?.();
+      stopPeerReady?.();
       if (runsTimer !== undefined) clearTimeout(runsTimer);
       // Runs this session is running stop with it, rather than going on under a parent that is gone.
       await launcher.dispose();

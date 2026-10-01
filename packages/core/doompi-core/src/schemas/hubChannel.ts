@@ -140,6 +140,18 @@ export interface DoomPendingSessionSetup {
   readonly errorCode?: 'SESSION_WORKTREE_PROVISION_FAILED' | 'SESSION_UNAVAILABLE';
 }
 
+/**
+ * One short line a session's extension publishes about work it runs for that
+ * session, such as a background job. The host shows it on the session's rail
+ * card but never interprets it.
+ */
+export interface DoomSessionActivity {
+  readonly label: string;
+  /** The work needs the reader: the rail marks the card the way it marks a pending question. */
+  readonly attention?: boolean;
+  /** ISO 8601 start of the work; the rail appends the elapsed time. */
+  readonly since?: string;
+}
 /** A host-owned setup can be fulfilled by any execution-directory provider. */
 export interface DoomHubSessionReservations {
   read(id: string, parentSessionId: string): { sessionId: string; cwd?: string };
