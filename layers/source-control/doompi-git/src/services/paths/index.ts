@@ -26,6 +26,15 @@ export function worktreesRoot(homeDir: string = os.homedir()): string {
   return path.join(doomGitRoot(homeDir), 'worktrees');
 }
 
+/**
+ * Remote auth for every workspace, one entry per workspace root.
+ *
+ * Outside every repository, so a token can never be committed, and readable
+ * only by the owner. It holds secrets, which no other file here does.
+ */
+export function credentialsFile(homeDir: string = os.homedir()): string {
+  return path.join(doomGitRoot(homeDir), 'credentials.json');
+}
 /** One registry file per repository, keyed by the shared git directory. */
 export function registryFile(repositoryRoot: string, homeDir: string = os.homedir()): string {
   const id = repositoryId(repositoryRoot);

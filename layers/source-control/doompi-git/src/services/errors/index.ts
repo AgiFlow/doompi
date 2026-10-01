@@ -24,7 +24,22 @@ export type DoomGitErrorCode =
   | 'task_delivery_failed'
   | 'message_delivery_failed'
   | 'message_too_large'
-  | 'git_failed';
+  | 'git_failed'
+  // Remote auth and sync. Each carries its own recovery line; git's stderr is
+  // only ever matched, never shown, because it can carry a token in a URL.
+  | 'auth_failed'
+  | 'host_key_unknown'
+  | 'host_key_changed'
+  | 'remote_unreachable'
+  | 'repository_not_found'
+  | 'push_needs_force'
+  | 'push_lease_rejected'
+  | 'no_upstream'
+  | 'no_remote'
+  | 'no_base'
+  | 'detached_head'
+  | 'rebase_in_progress'
+  | 'git_timeout';
 
 export class DoomGitExpectedError extends Error {
   constructor(

@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { DoomApiContext } from '@agimon-ai/doompi-core/packageApi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { api } from '../../../src/extensions/(backend)/api/_lib/route.server';
+import { api } from '../../../src/extensions/(backend)/api/git/_lib/route.server';
 
 let root: string;
 

@@ -2,6 +2,11 @@ import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
 
 export const GIT_WORKTREE_LIFECYCLE_EVENT = 'git_worktree_lifecycle';
 export const GIT_WORKTREE_MESSAGE_EVENT = 'git_worktree_message';
+/**
+ * A session's checkout may have changed: a tool call ended, or the agent
+ * settled. Carries nothing but its version; the '# diff' channel recomputes.
+ */
+export const GIT_SESSION_CHANGED_EVENT = 'git_session_changed';
 export const WORKTREE_MESSAGE_VERSION = 1 as const;
 export const MAX_WORKTREE_MESSAGE_BYTES = 64 * 1024;
 export const MAX_WORKTREE_INBOX_MESSAGES = 100;
@@ -85,5 +90,11 @@ export function isWorktreeLifecycleEvent(value: unknown): value is WorktreeLifec
     record.version === WORKTREE_MESSAGE_VERSION &&
     typeof record.repositoryRoot === 'string' &&
     record.repositoryRoot !== ''
+  );
+}
+
+export function isSessionChangedEvent(value: unknown): boolean {
+  return (
+    typeof value === 'object' && value !== null && (value as { version?: unknown }).version === WORKTREE_MESSAGE_VERSION
   );
 }

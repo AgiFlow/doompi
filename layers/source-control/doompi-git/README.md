@@ -39,7 +39,27 @@ Worktree sessions opened here start at the top level of the session rail, with n
 
 ## Package behavior
 
-> Before publishing, replace this paragraph with one concrete, copy-pasteable example of the package-specific input, output, configuration, or workflow that is not already demonstrated by the generated command.
+### Review this session's changes
+
+The `# diff` group in the activity dock (`g d`) shows one lane, `+added -removed`: this session's checkout against its base, the way a pull request counts it. That is every commit since the branch left its base, plus staged, unstaged and untracked work. The base is the worktree's recorded base when the session owns one, then the remote's default branch (`origin/HEAD`, `origin/main`, `origin/master`), then the branch's upstream; with none of those only uncommitted work counts. The count refreshes after every tool call and settled turn; nothing polls.
+
+The lane opens the review tab: changed files grouped by folder on the left, every diff stacked on the right. Select lines, or click a line number, to write a comment under that line; a comment on a removed line points at the old file. Comments queue on the tab, and **send review** hands them to the agent as one message, queued behind a running turn rather than dropped.
+
+### Pull, push and rebase
+
+The review tab's header runs them by hand, one at a time per session:
+
+- **pull** fetches, then rebases local commits onto the upstream.
+- **rebase** fetches the base's remote, then rebases onto the base.
+- **push** sets the upstream on a first push. A push the remote rejects after a rebase asks first, then forces with `--force-with-lease --force-if-includes`, which git refuses if the remote holds commits this branch never fetched and integrated.
+
+Pull and rebase refuse uncommitted changes. A rebase that stops on conflicts stays paused and lists the files, with **ask agent to resolve** and **abort rebase**.
+
+### Remote auth, per workspace
+
+Settings, then repository, then **git remote**, sets how one workspace's sessions reach the remote when you pull, push or rebase from the cockpit: this machine's own git (the default), an SSH key path (blank uses your ssh config and ssh-agent), or an HTTPS username and token for one host. Worktree sessions use their workspace's setup.
+
+The setup lives outside every repository in `~/.pi/.doom/git/credentials.json` (folder `0700`, file `0600`). The token is write-only: the page shows only that one is saved. It goes into the environment of one `git fetch` or `git push` at a time, only for the host it was entered for, with git's credential helper list emptied first so the macOS keychain never stores it. The agent's own git commands never see these credentials. Saving from a remote device needs passkey step-up. An unknown SSH host is refused: trust it once with `ssh -T git@<host>` in a terminal.
 
 ## Help
 

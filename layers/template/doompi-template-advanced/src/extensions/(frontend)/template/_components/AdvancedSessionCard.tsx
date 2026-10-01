@@ -6,7 +6,6 @@ import {
   AvatarImage,
   BranchIcon,
   Button,
-  buttonVariants,
   cn,
   Dialog,
   DialogBody,
@@ -124,27 +123,12 @@ export function AdvancedSessionCard({
           <AvatarFallback className="text-2xs text-doom-magenta">{session.profile.initials}</AvatarFallback>
         </Avatar>
       ) : null}
-      {mode === 'rename' ? (
-        <Input
-          data-testid={`session-name-input-${session.id}`}
-          value={draft}
-          autoFocus
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') commitRename();
-            if (event.key === 'Escape') enterMode('view');
-          }}
-          onBlur={() => enterMode('view')}
-          className="border-doom-blue/60 px-1.5 py-0.5 text-base font-bold"
-        />
-      ) : (
-        <span
-          className={`min-w-0 flex-1 truncate text-base font-bold ${active ? 'text-doom-on-selected' : 'text-doom-hi'}`}
-        >
-          {session.name || 'untitled'}
-        </span>
-      )}
-      {mode !== 'rename' && session.ordinal <= 9 ? (
+      <span
+        className={`min-w-0 flex-1 truncate text-base font-bold ${active ? 'text-doom-on-selected' : 'text-doom-hi'}`}
+      >
+        {session.name || 'untitled'}
+      </span>
+      {session.ordinal <= 9 ? (
         <span
           title={`press ${String(session.ordinal)} to focus`}
           className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-2xs font-bold transition-opacity group-focus-within:opacity-0 group-hover:opacity-0 ${
@@ -166,23 +150,16 @@ export function AdvancedSessionCard({
         data-active={active}
         data-nested={session.nested}
       >
-        {mode === 'rename' ? (
-          <div className={cn(buttonVariants({ variant: 'ghost', size: 'card' }), cardClass, 'cursor-default')}>
-            {heading}
-            {details}
-          </div>
-        ) : (
-          <Button
-            variant="ghost"
-            size="card"
-            data-testid={`session-open-${session.id}`}
-            onClick={() => actions.openSession(session.id)}
-            className={cardClass}
-          >
-            {heading}
-            {details}
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="card"
+          data-testid={`session-open-${session.id}`}
+          onClick={() => actions.openSession(session.id)}
+          className={cardClass}
+        >
+          {heading}
+          {details}
+        </Button>
         {mode === 'view' || menuOpen ? (
           <div
             className={`absolute top-2 right-2 transition-opacity ${
@@ -225,7 +202,7 @@ export function AdvancedSessionCard({
                     enterMode('rename');
                   }}
                 >
-                  edit
+                  rename
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   data-testid={`session-resume-${session.id}`}
@@ -251,6 +228,50 @@ export function AdvancedSessionCard({
             </DropdownMenu>
           </div>
         ) : null}
+        <Dialog open={mode === 'rename'} onOpenChange={(next) => !next && enterMode('view')}>
+          <DialogContent width="sm" data-testid={`session-rename-dialog-${session.id}`} aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>rename session</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <form
+                className="flex flex-col gap-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  commitRename();
+                }}
+              >
+                <Input
+                  data-testid={`session-name-input-${session.id}`}
+                  aria-label="session name"
+                  value={draft}
+                  autoFocus
+                  onChange={(event) => setDraft(event.target.value)}
+                />
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="md"
+                    data-testid={`session-rename-cancel-${session.id}`}
+                    onClick={() => enterMode('view')}
+                  >
+                    cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="md"
+                    data-testid={`session-rename-confirm-${session.id}`}
+                    disabled={draft.trim() === ''}
+                  >
+                    rename
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogBody>
+          </DialogContent>
+        </Dialog>
         <Dialog open={mode === 'confirm'} onOpenChange={(next) => !next && enterMode('view')}>
           <DialogContent width="sm" data-testid={`session-stop-dialog-${session.id}`} aria-describedby={undefined}>
             <DialogHeader>

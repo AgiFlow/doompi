@@ -14,10 +14,14 @@ import type { WorktreeGit } from '../../types/worktreeRegistry';
  * Windows. A single timeout would either fail honest work or hang on a wedged
  * one.
  */
-const READ_TIMEOUT_MS = 30_000;
+export const READ_TIMEOUT_MS = 30_000;
 const ADD_TIMEOUT_MS = 300_000;
 const REMOVE_TIMEOUT_MS = 300_000;
 const PRUNE_TIMEOUT_MS = 15_000;
+/** fetch and push: bounded by the network, so long enough for a slow link, short enough to notice a dead one. */
+export const NETWORK_TIMEOUT_MS = 120_000;
+/** A rebase replays commits locally; a large branch on a slow disk takes minutes, never hours. */
+export const REBASE_TIMEOUT_MS = 300_000;
 const MAX_OUTPUT_BYTES = 1_000_000;
 /** Enough for any branch picker; a repository with more refs lists its most recent ones. */
 const MAX_LISTED_REFS = 2_000;
@@ -25,31 +29,62 @@ const LOCAL_PREFIX = 'refs/heads/';
 const REMOTE_PREFIX = 'refs/remotes/';
 const HEAD_SUFFIX = '/HEAD';
 
-interface GitResult {
+export interface GitResult {
   code: number;
   stdout: string;
   stderr: string;
+  /** The timeout killed git. */
+  timedOut: boolean;
+  /** Output passed maxBuffer and git was killed; stdout is truncated. */
+  overflow: boolean;
+}
+
+export interface RunGitOptions {
+  timeout: number;
+  /** The whole environment for this one child. Defaults to the hub's own. */
+  env?: NodeJS.ProcessEnv;
+  maxBuffer?: number;
 }
 
 /**
  * Runs git and reports the outcome without ever throwing on a non-zero exit.
  *
- * LC_ALL is pinned because two callers below decide what to do by matching
- * git's own wording, and a translated message would silently turn a recognised
+ * LC_ALL is pinned because callers decide what to do by matching git's own
+ * wording, and a translated message would silently turn a recognised
  * condition into an unrecognised failure.
+ *
+ * `env` replaces the environment for this child only. That is how remote auth
+ * reaches fetch and push without ever touching the hub's own process.env,
+ * which every session started afterwards would inherit.
  */
-function git(cwd: string, args: readonly string[], timeout: number): Promise<GitResult> {
+export function runGit(cwd: string, args: readonly string[], options: RunGitOptions): Promise<GitResult> {
   return new Promise((resolve) => {
     execFile(
       'git',
       [...args],
-      { cwd, timeout, maxBuffer: MAX_OUTPUT_BYTES, env: { ...process.env, LC_ALL: 'C' } },
+      {
+        cwd,
+        timeout: options.timeout,
+        maxBuffer: options.maxBuffer ?? MAX_OUTPUT_BYTES,
+        env: { ...(options.env ?? process.env), LC_ALL: 'C' },
+      },
       (error, stdout, stderr) => {
-        const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0;
-        resolve({ code, stdout: String(stdout), stderr: String(stderr) });
+        const failure = error as (NodeJS.ErrnoException & { killed?: boolean; signal?: string | null }) | null;
+        const code = failure && typeof failure.code === 'number' ? failure.code : failure ? 1 : 0;
+        resolve({
+          code,
+          stdout: String(stdout),
+          stderr: String(stderr),
+          timedOut: failure?.killed === true && failure.code !== 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
+          overflow: failure?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
+        });
       },
     );
   });
+}
+
+function git(cwd: string, args: readonly string[], timeout: number): Promise<GitResult> {
+  return runGit(cwd, args, { timeout });
 }
 
 /**
