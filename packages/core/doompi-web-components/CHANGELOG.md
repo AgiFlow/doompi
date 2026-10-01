@@ -1,3 +1,17 @@
+## 0.0.1-alpha.62 (2026-10-01)
+
+### 🩹 Fixes
+
+- **doompi-web:** render session images through sealed transport ([#264](https://github.com/AgiFlow/doompi/pull/264))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.104
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.61 (2026-10-01)
 
 ### 🧱 Updated Dependencies
