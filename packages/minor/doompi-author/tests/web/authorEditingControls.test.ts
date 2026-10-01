@@ -57,7 +57,7 @@ const region: AuthorRegionDraft = {
 };
 beforeEach(() => {
   workspace.putAuthorDocument('s', { path: 'doc', kind: 'markdown', content: 'abc\ndef', sourceSha256: 'sha' });
-  workspace.focusAuthorDocument('s', 'doc', 0, 'sha');
+  workspace.focusAuthorDocument('s', 'doc');
 });
 afterEach(() => {
   hooks.cleanups.splice(0).forEach((cleanup) => cleanup());
@@ -75,19 +75,19 @@ describe('Author editing controls', () => {
     ['Link', '[abc](https://)\ndef'],
     ['List', '- abc\ndef'],
   ])('applies %s only to the selected text and invalidates selection', (label, expected) => {
-    workspace.setAuthorRegionCandidate('s', region);
-    const buttons = nodes(AuthorToolPalette({ sessionId: 's', kind: 'markdown', activeTool: 'select' }));
+    workspace.setAuthorRegionCandidate('s', 'doc', region);
+    const buttons = nodes(AuthorToolPalette({ sessionId: 's', path: 'doc', kind: 'markdown', activeTool: 'select' }));
     buttons.find((node) => node.props['aria-label'] === label)!.props.onClick!(event);
     expect(workspace.authorDocument('s', 'doc')?.content).toBe(expected);
-    expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
+    expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toBeUndefined();
   });
   it('reports missing and non-text selections without editing', () => {
     for (const candidate of [
       undefined,
       { ...region, anchor: { kind: 'cell' as const, fragmentId: 'f', location: 'A1' } },
     ]) {
-      workspace.setAuthorRegionCandidate('s', candidate);
-      nodes(AuthorToolPalette({ sessionId: 's', kind: 'markdown', activeTool: 'select' })).find(
+      workspace.setAuthorRegionCandidate('s', 'doc', candidate);
+      nodes(AuthorToolPalette({ sessionId: 's', path: 'doc', kind: 'markdown', activeTool: 'select' })).find(
         (node) => node.props['aria-label'] === 'Bold',
       )!.props.onClick!(event);
       expect(hooks.setters.at(-1)).toHaveBeenCalledWith('Select text in the document first.');
@@ -96,32 +96,42 @@ describe('Author editing controls', () => {
   });
   it('toggles region mode and exposes only supported tools for media', () => {
     for (const activeTool of ['select', 'mark'] as const) {
-      const controls = nodes(AuthorToolPalette({ sessionId: 's', kind: 'image', activeTool }));
+      const controls = nodes(AuthorToolPalette({ sessionId: 's', path: 'doc', kind: 'image', activeTool }));
       expect(controls.some((node) => node.props['aria-label'] === 'Bold')).toBe(false);
       controls.find((node) => node.props['aria-label'] === 'mark region')!.props.onClick!(event);
-      expect(workspace.authorSessionWorkspace('s').activeTool).toBe(activeTool === 'mark' ? 'select' : 'mark');
+      expect(workspace.authorToolMode('s', 'doc')).toBe(activeTool === 'mark' ? 'select' : 'mark');
       controls.find((node) => node.props['aria-label'] === 'Comment')!.props.onClick!(event);
-      expect(workspace.authorSessionWorkspace('s').activeTool).toBe('comment');
+      expect(workspace.authorToolMode('s', 'doc')).toBe('comment');
     }
   });
   it('controls the candidate comment from workspace state, commits it, and removes its region', () => {
-    workspace.setAuthorRegionCandidate('s', region);
-    let controls = nodes(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') }));
+    workspace.setAuthorRegionCandidate('s', 'doc', region);
+    let controls = nodes(
+      AuthorRegionDrafts({ sessionId: 's', path: 'doc', drafts: workspace.authorDocumentAnnotations('s', 'doc') }),
+    );
     const textarea = controls.find((node) => node.type === 'textarea')!;
     expect(textarea.props.value).toBe('');
     textarea.props.onChange!({ target: { value: 'Typed' } });
-    controls = nodes(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') }));
+    controls = nodes(
+      AuthorRegionDrafts({ sessionId: 's', path: 'doc', drafts: workspace.authorDocumentAnnotations('s', 'doc') }),
+    );
     expect(controls.find((node) => node.type === 'textarea')!.props.value).toBe('Typed');
     controls.find((node) => node.props.children === 'add annotation')!.props.onClick!(event);
-    expect(workspace.authorSessionWorkspace('s').regions[0]?.comment).toBe('Typed');
-    controls = nodes(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') }));
+    expect(workspace.authorDocumentAnnotations('s', 'doc').annotations[0]?.comment).toBe('Typed');
+    controls = nodes(
+      AuthorRegionDrafts({ sessionId: 's', path: 'doc', drafts: workspace.authorDocumentAnnotations('s', 'doc') }),
+    );
     controls.find((node) => node.props['aria-label'] === 'Remove annotation 1')!.props.onClick!(event);
-    expect(workspace.authorSessionWorkspace('s').regions).toEqual([]);
-    expect(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') })).toBeNull();
+    expect(workspace.authorDocumentAnnotations('s', 'doc').annotations).toEqual([]);
+    expect(
+      AuthorRegionDrafts({ sessionId: 's', path: 'doc', drafts: workspace.authorDocumentAnnotations('s', 'doc') }),
+    ).toBeNull();
   });
   it('disables blank region comments and reports a failed commit', () => {
-    workspace.setAuthorRegionCandidate('s', region);
-    const controls = nodes(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') }));
+    workspace.setAuthorRegionCandidate('s', 'doc', region);
+    const controls = nodes(
+      AuthorRegionDrafts({ sessionId: 's', path: 'doc', drafts: workspace.authorDocumentAnnotations('s', 'doc') }),
+    );
     const add = controls.find((node) => node.props.children === 'add annotation')!;
     expect(add.props.disabled).toBe(true);
     add.props.onClick!(event);
@@ -165,7 +175,7 @@ describe('Author editing controls', () => {
         anchor: { fragmentId: 'f', kind: kind === 'csv' || kind === 'xlsx' ? 'cell' : 'slide-element' },
       });
       controls.find((node) => node.props.onClick)!.props.onClick!(event);
-      expect(workspace.authorSessionWorkspace('s').candidate?.anchor).toEqual(resolved.anchor);
+      expect(workspace.authorDocumentAnnotations('s', 'doc').candidate?.anchor).toEqual(resolved.anchor);
       controls.find((node) => node.type === 'textarea')!.props.onChange!({ target: { value: 'new' } });
       expect(workspace.authorDocument('s', 'doc')?.fragments?.[0]?.text).toBe('new');
     },
@@ -197,7 +207,7 @@ describe('Author editing controls', () => {
       ).toThrow();
       if (target === 'unknown-slide') {
         controls.filter((node) => node.props.onClick)[1]!.props.onClick!(event);
-        expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
+        expect(workspace.authorDocumentAnnotations('s', 'doc').candidate).toBeUndefined();
       }
     }
     const empty = workspace.putAuthorDocument('s', { path: 'doc', kind: 'slides' });

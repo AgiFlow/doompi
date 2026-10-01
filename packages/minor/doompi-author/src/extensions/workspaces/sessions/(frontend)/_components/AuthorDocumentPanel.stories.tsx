@@ -35,7 +35,7 @@ const PICTURE: AuthorDocumentInput = {
 };
 
 putAuthorDocument('doc-image', PICTURE);
-focusAuthorDocument('doc-image', PICTURE.path, 0, PICTURE.sourceSha256);
+focusAuthorDocument('doc-image', PICTURE.path);
 putAuthorDocument('doc-preview', SPEC);
 putAuthorDocument('doc-dirty', NOTES);
 reviseAuthorDocument('doc-dirty', NOTES.path, 'retry budget: 5\nbackoff: 2s\n');

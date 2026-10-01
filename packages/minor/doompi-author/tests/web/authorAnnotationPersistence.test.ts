@@ -9,12 +9,18 @@ import {
   type AuthorAnnotationRepository,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorAnnotationPersistence';
 import {
+  authorCaptureContext,
+  createAuthorCapturePacket,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCapture';
+import {
   addAuthorRegion,
   authorDocumentAnnotations,
   authorWorkspace,
   focusAuthorDocument,
   putAuthorDocument,
+  reviseAuthorDocument,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
+import { recordAuthorComposerSubmission } from '../../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/authorRequestLifecycle';
 
 const annotation = {
   id: 'a1',
@@ -170,7 +176,7 @@ describe('Author annotation persistence', () => {
     const stop = startAuthorAnnotationPersistence(repository);
 
     putAuthorDocument('s', { path: 'notes.md', kind: 'markdown', content: 'text', sourceSha256: 'sha' });
-    focusAuthorDocument('s', 'notes.md', 0, 'sha');
+    focusAuthorDocument('s', 'notes.md');
     addAuthorRegion('s', { ...annotation, id: 'newer', createdAt: 2 });
     expect(repository.replace).not.toHaveBeenCalled();
 
@@ -195,8 +201,58 @@ describe('Author annotation persistence', () => {
     const stop = startAuthorAnnotationPersistence(repository);
     await tick();
 
-    expect(authorDocumentAnnotations('s', 'notes.md')).toMatchObject({ stale: true, sourceSha256: 'sha' });
+    expect(authorWorkspace.store.state.sessions['s']?.annotationsByDocument['notes.md']).toMatchObject({
+      stale: true,
+      sourceSha256: 'sha',
+    });
+    expect(authorDocumentAnnotations('s', 'notes.md').annotations).toEqual([]);
     await stop();
+  });
+
+  it('retains stale unsent annotations in memory and persistence after a delayed capture submission', async () => {
+    const document = putAuthorDocument('s', {
+      path: 'notes.md',
+      kind: 'markdown',
+      content: 'text',
+      sourceSha256: 'sha',
+    });
+    addAuthorRegion('s', annotation);
+    const context = authorCaptureContext(createAuthorCapturePacket('delayed', 2, document, [annotation]));
+    addAuthorRegion('s', { ...annotation, id: 'unsent', comment: 'Extra unsent feedback' });
+    reviseAuthorDocument('s', document.path, 'changed');
+    const retained = authorWorkspace.store.state.sessions['s']!.annotationsByDocument[document.path];
+    const repository: AuthorAnnotationRepository = {
+      load: async () => [],
+      replace: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    };
+    const stop = startAuthorAnnotationPersistence(repository);
+    await tick();
+
+    recordAuthorComposerSubmission({
+      sessionId: 's',
+      message: 'Use captured feedback',
+      delivery: 'submit',
+      submittedAt: 3,
+      contextItems: [context],
+    });
+    await tick();
+    await stop();
+
+    expect(authorWorkspace.store.state.sessions['s']!.annotationsByDocument[document.path]).toBe(retained);
+    expect(retained).toMatchObject({ stale: true, annotations: [{ id: 'a1' }, { id: 'unsent' }] });
+    expect(authorDocumentAnnotations('s', document.path).annotations).toEqual([]);
+    expect(repository.replace).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        collection: expect.objectContaining({
+          stale: true,
+          annotations: [
+            expect.objectContaining({ id: 'a1' }),
+            expect.objectContaining({ id: 'unsent', evidence: annotation.evidence }),
+          ],
+        }),
+      }),
+    ]);
   });
 
   it('drains queued IndexedDB writes before closing the database', async () => {

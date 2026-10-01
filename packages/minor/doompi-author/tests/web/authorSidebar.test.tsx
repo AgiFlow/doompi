@@ -46,8 +46,8 @@ function nodes(node: ReactNode): ReactElement<Props>[] {
 }
 function setup() {
   workspace.putAuthorDocument('s', { path: 'clip.mp4', kind: 'video', sourceSha256: 'sha' });
-  workspace.focusAuthorDocument('s', 'clip.mp4', 0, 'sha');
-  workspace.setAuthorRegionCandidate('s', {
+  workspace.focusAuthorDocument('s', 'clip.mp4');
+  workspace.setAuthorRegionCandidate('s', 'clip.mp4', {
     documentPath: 'clip.mp4',
     revision: 0,
     sourceSha256: 'sha',
@@ -55,7 +55,7 @@ function setup() {
     viewport: { width: 800, height: 600 },
     createdAt: 1,
   });
-  workspace.commitAuthorRegion('s', 'Brighten this frame');
+  workspace.commitAuthorRegion('s', 'clip.mp4', 'Brighten this frame');
   return {
     sessionId: 's',
     activeMinorModes: ['author'],
@@ -75,7 +75,7 @@ describe('Author annotation sidebar', () => {
   it('offers an embedded preview toggle for focused story source', () => {
     const props = setup();
     workspace.putAuthorDocument('s', { path: 'Button.stories.tsx', kind: 'story-preview', sourceSha256: 'sha' });
-    workspace.focusAuthorDocument('s', 'Button.stories.tsx', 0, 'sha');
+    workspace.focusAuthorDocument('s', 'Button.stories.tsx');
     workspace.reviseAuthorDocument('s', 'Button.stories.tsx', 'unsaved story source');
     const supportsSource = vi.fn(() => true);
     const createTab = vi.fn();
@@ -117,7 +117,7 @@ describe('Author annotation sidebar', () => {
 
   it("shows only the open document's requests, and every request when no document is open", () => {
     const props = setup();
-    const region = workspace.authorSessionWorkspace('s').annotations[0]!;
+    const region = workspace.authorDocumentAnnotations('s', 'clip.mp4').annotations[0]!;
     for (const [id, documentPath] of [
       ['clip-request', 'clip.mp4'],
       ['other-request', 'other.png'],
@@ -166,30 +166,50 @@ describe('Author annotation sidebar', () => {
 
   it('blocks submission until the current candidate is added or discarded', () => {
     const props = setup();
-    workspace.setAuthorRegionCandidate('s', workspace.authorSessionWorkspace('s').regions[0]);
+    workspace.setAuthorRegionCandidate(
+      's',
+      'clip.mp4',
+      workspace.authorDocumentAnnotations('s', 'clip.mp4').annotations[0],
+    );
     const review = nodes(AuthorPanel(props)).find((node) => node.props['data-testid'] === 'author-attach-capture')!;
     expect(review.props.disabled).toBe(true);
     void review.props.onClick!();
     expect(multiRegionCaptureProvider).not.toHaveBeenCalled();
-    const drafts = nodes(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') }));
+    const drafts = nodes(
+      AuthorRegionDrafts({
+        sessionId: 's',
+        path: 'clip.mp4',
+        drafts: workspace.authorDocumentAnnotations('s', 'clip.mp4'),
+      }),
+    );
     void drafts.find((node) => node.props.children === 'Discard annotation')!.props.onClick!();
-    expect(workspace.authorSessionWorkspace('s').candidate).toBeUndefined();
-    expect(workspace.authorSessionWorkspace('s').regions).toHaveLength(1);
+    expect(workspace.authorDocumentAnnotations('s', 'clip.mp4').candidate).toBeUndefined();
+    expect(workspace.authorDocumentAnnotations('s', 'clip.mp4').annotations).toHaveLength(1);
   });
 
   it('offers timestamp navigation and disables it while a selection is pending', () => {
     setup();
     const seek = vi.spyOn(workspace, 'seekAuthorVideo');
     const drafts = () =>
-      nodes(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') }));
+      nodes(
+        AuthorRegionDrafts({
+          sessionId: 's',
+          path: 'clip.mp4',
+          drafts: workspace.authorDocumentAnnotations('s', 'clip.mp4'),
+        }),
+      );
     const timestamp = drafts().find(
       (node) => Array.isArray(node.props.children) && node.props.children[0] === 'Go to ',
     )!;
     expect(timestamp.props.children).toEqual(['Go to ', '1.234', 's']);
     expect(timestamp.props.disabled).toBe(false);
     void timestamp.props.onClick!();
-    expect(seek).toHaveBeenCalledWith('s', 1.234);
-    workspace.setAuthorRegionCandidate('s', workspace.authorSessionWorkspace('s').regions[0]);
+    expect(seek).toHaveBeenCalledWith('s', 'clip.mp4', 1.234);
+    workspace.setAuthorRegionCandidate(
+      's',
+      'clip.mp4',
+      workspace.authorDocumentAnnotations('s', 'clip.mp4').annotations[0],
+    );
     expect(
       drafts().find((node) => Array.isArray(node.props.children) && node.props.children[0] === 'Go to ')!.props
         .disabled,
@@ -200,8 +220,14 @@ describe('Author annotation sidebar', () => {
   it('uses readable 44px targets for palette and draft actions', () => {
     setup();
     const controls = [
-      ...nodes(AuthorToolPalette({ sessionId: 's', kind: 'video', activeTool: 'mark' })),
-      ...nodes(AuthorRegionDrafts({ sessionId: 's', workspace: workspace.authorSessionWorkspace('s') })),
+      ...nodes(AuthorToolPalette({ sessionId: 's', path: 'clip.mp4', kind: 'video', activeTool: 'mark' })),
+      ...nodes(
+        AuthorRegionDrafts({
+          sessionId: 's',
+          path: 'clip.mp4',
+          drafts: workspace.authorDocumentAnnotations('s', 'clip.mp4'),
+        }),
+      ),
     ].filter((node) => node.props.onClick);
     expect(controls.length).toBeGreaterThan(0);
     for (const control of controls) {
@@ -215,7 +241,7 @@ describe('Author annotation sidebar', () => {
     vi.mocked(props.submitCapture!).mockRejectedValueOnce(new Error('Disconnected'));
     const submit = nodes(AuthorPanel(props)).find((node) => node.props['data-testid'] === 'author-attach-capture')!;
     await submit.props.onClick!();
-    expect(workspace.authorSessionWorkspace('s').regions).toHaveLength(1);
+    expect(workspace.authorDocumentAnnotations('s', 'clip.mp4').annotations).toHaveLength(1);
     expect(props.openTab).not.toHaveBeenCalled();
   });
 
@@ -227,16 +253,43 @@ describe('Author annotation sidebar', () => {
     expect(multiRegionCaptureProvider).not.toHaveBeenCalled();
   });
 
-  it('pins host session activity below the scrolling annotations', () => {
-    const props = {
-      ...setup(),
-      renderSessionActivity: () => createElement('div', { 'data-testid': 'host-session-activity' }, 'working'),
-    };
-    const rendered = nodes(AuthorPanel(props));
-    const footer = rendered.find((node) => node.props['data-testid'] === 'author-session-activity');
-
-    expect(footer?.props.className).toContain('shrink-0');
-    expect(footer?.props.className).toContain('border-t');
-    expect(rendered.some((node) => node.props['data-testid'] === 'host-session-activity')).toBe(true);
+  it('shows host activity only for focused REQUESTED or CHANGING work', () => {
+    const renderSessionActivity = vi.fn(() =>
+      createElement('div', { 'data-testid': 'host-session-activity' }, 'working'),
+    );
+    const props = { ...setup(), renderSessionActivity };
+    const region = workspace.authorDocumentAnnotations('s', 'clip.mp4').annotations[0]!;
+    workspace.putAuthorRequest('s', {
+      id: 'other',
+      documentPath: 'other.png',
+      requestText: 'change',
+      regions: [region],
+      status: 'CHANGING',
+      createdAt: 1,
+      updatedAt: 1,
+      revision: 0,
+    });
+    const footer = () =>
+      nodes(AuthorPanel(props)).find((node) => node.props['data-testid'] === 'author-session-activity');
+    expect(footer()).toBeUndefined();
+    expect(renderSessionActivity).not.toHaveBeenCalled();
+    workspace.putAuthorRequest('s', {
+      id: 'focused',
+      documentPath: 'clip.mp4',
+      requestText: 'change',
+      regions: [region],
+      status: 'COMPLETE',
+      createdAt: 1,
+      updatedAt: 1,
+      revision: 0,
+    });
+    expect(footer()).toBeUndefined();
+    for (const status of ['REQUESTED', 'CHANGING'] as const) {
+      workspace.updateAuthorRequest('s', 'focused', (record) => ({ ...record, status }));
+      expect(footer()?.props.className).toContain('shrink-0');
+      expect(footer()?.props.className).toContain('border-t');
+    }
+    workspace.releaseAuthorDocumentFocus('s', workspace.authorSessionWorkspace('s').focusedDocument!.generation);
+    expect(footer()).toBeUndefined();
   });
 });

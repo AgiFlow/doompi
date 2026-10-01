@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { AuthorDocumentKind, AuthorToolMode } from '../../_lib/authorViewportTypes';
 import {
   authorDocument,
-  authorSessionWorkspace,
+  authorDocumentAnnotations,
   reviseAuthorDocument,
   setAuthorRegionCandidate,
   setAuthorToolMode,
@@ -12,17 +12,18 @@ import {
 
 export function AuthorToolPalette({
   sessionId,
+  path,
   kind,
   activeTool,
 }: {
   sessionId: string;
+  path: string;
   kind: AuthorDocumentKind;
   activeTool: AuthorToolMode;
 }) {
   const [error, setError] = useState<string>();
   const format = (style: 'Bold' | 'Heading' | 'Link' | 'List') => {
-    const session = authorSessionWorkspace(sessionId);
-    const selected = session.candidate;
+    const selected = authorDocumentAnnotations(sessionId, path).candidate;
     const document = selected && authorDocument(sessionId, selected.documentPath);
     if (
       !selected ||
@@ -51,7 +52,7 @@ export function AuthorToolPalette({
       document.path,
       content.slice(0, startOffset) + replacement + content.slice(endOffset),
     );
-    setAuthorRegionCandidate(sessionId, undefined);
+    setAuthorRegionCandidate(sessionId, path, undefined);
     setError(undefined);
   };
   const tools = [
@@ -60,13 +61,13 @@ export function AuthorToolPalette({
           {
             label: 'Pan',
             glyph: '✋',
-            action: () => setAuthorToolMode(sessionId, activeTool === 'pan' ? 'select' : 'pan'),
+            action: () => setAuthorToolMode(sessionId, path, activeTool === 'pan' ? 'select' : 'pan'),
             active: activeTool === 'pan',
           },
           {
             label: 'Draw',
             glyph: '✎',
-            action: () => setAuthorToolMode(sessionId, activeTool === 'draw' ? 'select' : 'draw'),
+            action: () => setAuthorToolMode(sessionId, path, activeTool === 'draw' ? 'select' : 'draw'),
             active: activeTool === 'draw',
           },
         ]
@@ -74,7 +75,7 @@ export function AuthorToolPalette({
     {
       label: 'Region',
       glyph: '⌗',
-      action: () => setAuthorToolMode(sessionId, activeTool === 'mark' ? 'select' : 'mark'),
+      action: () => setAuthorToolMode(sessionId, path, activeTool === 'mark' ? 'select' : 'mark'),
       active: activeTool === 'mark',
     },
     ...(kind === 'markdown'
@@ -88,7 +89,7 @@ export function AuthorToolPalette({
     {
       label: 'Comment',
       glyph: '●',
-      action: () => setAuthorToolMode(sessionId, activeTool === 'comment' ? 'select' : 'comment'),
+      action: () => setAuthorToolMode(sessionId, path, activeTool === 'comment' ? 'select' : 'comment'),
       active: activeTool === 'comment',
     },
   ];

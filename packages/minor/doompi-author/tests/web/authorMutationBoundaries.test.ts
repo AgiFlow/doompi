@@ -29,7 +29,7 @@ const region: AuthorRegionDraft = {
 };
 function setup(input: Partial<AuthorDocumentInput> = {}, anchor: AuthorNativeAnchor = region.anchor) {
   workspace.putAuthorDocument('s', { path: 'doc', kind: 'text', content: 'abc', sourceSha256: 'sha', ...input });
-  workspace.focusAuthorDocument('s', 'doc', 0, 'sha');
+  workspace.focusAuthorDocument('s', 'doc');
   workspace.addAuthorRegion('s', { ...region, anchor });
   workspace.putAuthorRequest('s', {
     id: 'q',
@@ -152,7 +152,7 @@ describe('fenced Author native mutations', () => {
         ],
       })),
     }));
-    workspace.removeAuthorRegion('s', 'r');
+    workspace.removeAuthorRegion('s', 'doc', 'r');
     await expect(tool.execute(args, signal)).rejects.toThrow('UNSUPPORTED_REGION');
     expect(workspace.authorDocument('s', 'doc')?.crop).toBeUndefined();
     expect(workspace.authorDocument('s', 'doc')?.version).toBe(0);
@@ -171,7 +171,7 @@ describe('fenced Author native mutations', () => {
   });
   it('allows a draft-only mutation and treats missing replacement as deletion', async () => {
     workspace.putAuthorDocument('s', { path: 'doc', kind: 'text', content: 'abc', sourceSha256: 'sha' });
-    workspace.focusAuthorDocument('s', 'doc', 0, 'sha');
+    workspace.focusAuthorDocument('s', 'doc');
     workspace.addAuthorRegion('s', region);
     const tool = authorGridTools('s', 'doc', 'text').find((tool) => tool.name === 'author_apply_region')!;
     expect(await tool.execute({ ...args, replacement: undefined }, signal)).toMatchObject({
@@ -185,7 +185,7 @@ describe('fenced Author native mutations', () => {
     'does not offer mutation or resolve capture-only %s coordinates',
     async (kind) => {
       workspace.putAuthorDocument('s', { path: 'doc', kind, sourceSha256: 'sha' });
-      workspace.focusAuthorDocument('s', 'doc', 0, 'sha');
+      workspace.focusAuthorDocument('s', 'doc');
       const geometry = updateAuthorGridGeometry('s', {
         documentPath: 'doc',
         revision: 0,

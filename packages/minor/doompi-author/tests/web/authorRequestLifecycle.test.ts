@@ -36,7 +36,7 @@ describe('Author request lifecycle', () => {
       content: 'hello',
       sourceSha256: 'sha',
     });
-    focusAuthorDocument('s1', document.path, document.version, document.sourceSha256);
+    focusAuthorDocument('s1', document.path);
     const region: AuthorRegionDraft = {
       id: 'r1',
       documentPath: document.path,
@@ -62,7 +62,7 @@ describe('Author request lifecycle', () => {
     recordAuthorComposerSubmission(submission);
     recordAuthorComposerSubmission({ ...submission, contextItems: [{ ...context, source: 'other' }] });
 
-    expect(authorSessionWorkspace('s1').regions).toEqual([]);
+    expect(authorDocumentAnnotations('s1', 'notes.md').annotations).toEqual([]);
     expect(authorSessionWorkspace('s1').requests).toHaveLength(1);
     expect(authorSessionWorkspace('s1').requests[0]).toMatchObject({
       captureId: 'capture-1',
@@ -71,7 +71,7 @@ describe('Author request lifecycle', () => {
       regions: [{ id: 'r1', comment: 'rewrite' }],
     });
     // Sent annotations leave the canvas once accepted; the request keeps them for the agent's tools.
-    expect(displayedAuthorRegions(authorSessionWorkspace('s1'))).toEqual([]);
+    expect(displayedAuthorRegions(authorDocumentAnnotations('s1', document.path))).toEqual([]);
     expect(authorSessionWorkspace('s1').requests[0]?.pendingRegions).toMatchObject([{ id: 'r1' }]);
 
     const mutate = authorProfilesForDocument('s1', 'notes.md', 'markdown')
@@ -89,7 +89,7 @@ describe('Author request lifecycle', () => {
 
   it('consumes matching captured versions from their document while another document is focused', () => {
     const document = putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', sourceSha256: 'sha' });
-    focusAuthorDocument('s1', document.path, document.version, document.sourceSha256);
+    focusAuthorDocument('s1', document.path);
     const region: AuthorRegionDraft = {
       id: 'r1',
       version: 1,
@@ -107,9 +107,9 @@ describe('Author request lifecycle', () => {
     const context = authorCaptureContext(
       createAuthorCapturePacket('capture-versioned', 2, document, [region, matching]),
     );
-    updateAuthorRegionComment('s1', region.id, 'newer');
+    updateAuthorRegionComment('s1', 'notes.md', region.id, 'newer');
     const other = putAuthorDocument('s1', { path: 'other.md', kind: 'markdown', sourceSha256: 'other' });
-    focusAuthorDocument('s1', other.path, other.version, other.sourceSha256);
+    focusAuthorDocument('s1', other.path);
 
     recordAuthorComposerSubmission({
       sessionId: 's1',
@@ -131,7 +131,7 @@ describe('Author request lifecycle', () => {
 
   it('reconstructs drawn feedback from an immutable capture without changing the source', () => {
     const document = putAuthorDocument('s1', { path: 'image.png', kind: 'image', sourceSha256: 'sha' });
-    focusAuthorDocument('s1', document.path, document.version, document.sourceSha256);
+    focusAuthorDocument('s1', document.path);
     const region: AuthorRegionDraft = {
       id: 'drawn',
       documentPath: document.path,
@@ -162,7 +162,7 @@ describe('Author request lifecycle', () => {
       contextItems: [context],
     });
     expect(authorSessionWorkspace('s1').requests[0]?.regions[0]?.stroke).toEqual(region.stroke);
-    expect(authorSessionWorkspace('s1').regions).toEqual([]);
+    expect(authorDocumentAnnotations('s1', document.path).annotations).toEqual([]);
     expect(authorDocument('s1', 'image.png')?.version).toBe(0);
     expect(context.content).toContain('canvas image');
   });
@@ -174,7 +174,7 @@ describe('Author request lifecycle', () => {
       content: 'hello world',
       sourceSha256: 'sha',
     });
-    focusAuthorDocument('s1', document.path, document.version, document.sourceSha256);
+    focusAuthorDocument('s1', document.path);
     const regions: AuthorRegionDraft[] = [
       {
         id: 'first',
@@ -236,7 +236,7 @@ describe('Author request lifecycle', () => {
   });
   it('completes a changed request only after its matching version saves', () => {
     putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', content: 'hello', sourceSha256: 'old' });
-    focusAuthorDocument('s1', 'notes.md', 0, 'old');
+    focusAuthorDocument('s1', 'notes.md');
     const region: AuthorRegionDraft = {
       id: 'r1',
       documentPath: 'notes.md',

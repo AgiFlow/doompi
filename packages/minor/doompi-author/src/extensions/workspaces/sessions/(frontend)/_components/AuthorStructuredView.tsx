@@ -90,7 +90,7 @@ export function AuthorStructuredView({
                     const bounds = event.currentTarget.getBoundingClientRect();
                     const slide = Number(fragment.location.match(/(?:slide\s*|slides\/slide)(\d+)/)?.[1]);
                     if (!cells && !Number.isSafeInteger(slide)) return;
-                    setAuthorRegionCandidate(sessionId, {
+                    setAuthorRegionCandidate(sessionId, document.path, {
                       documentPath: document.path,
                       revision: document.version,
                       sourceSha256: document.sourceSha256,

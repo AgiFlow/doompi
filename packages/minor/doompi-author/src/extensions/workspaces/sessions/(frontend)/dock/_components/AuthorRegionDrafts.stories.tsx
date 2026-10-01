@@ -4,7 +4,7 @@
  * candidate or a draft, so every variant carries one of the two.
  */
 import type { AuthorRegionDraft } from '../../_lib/authorViewportTypes';
-import type { AuthorSessionWorkspace } from '../../_lib/authorWorkspaceStore';
+import type { AuthorDocumentAnnotationCollection } from '../../_lib/authorWorkspaceStore';
 import { AuthorRegionDrafts } from './AuthorRegionDrafts';
 
 const draft = (id: string, comment: string): AuthorRegionDraft => ({
@@ -32,14 +32,12 @@ const videoDraft: AuthorRegionDraft = {
   createdAt: 1_717_000_000_000,
 };
 
-const workspace = (overrides: Partial<AuthorSessionWorkspace>): AuthorSessionWorkspace => ({
-  generation: 1,
-  activeTool: 'mark',
-  annotationsByDocument: {},
+const workspace = (overrides: Partial<AuthorDocumentAnnotationCollection>): AuthorDocumentAnnotationCollection => ({
+  revision: 0,
+  stale: false,
+  updatedAt: 0,
   annotations: [],
   candidateText: '',
-  regions: [],
-  requests: [],
   ...overrides,
 });
 
@@ -58,7 +56,8 @@ export const Playground = {
         <span className="text-2xs text-doom-dim uppercase tracking-widest">text selection pending a comment</span>
         <AuthorRegionDrafts
           sessionId="s1"
-          workspace={workspace({
+          path="notes.md"
+          drafts={workspace({
             candidate: {
               documentPath: 'docs/spec.md',
               revision: 3,
@@ -75,7 +74,8 @@ export const Playground = {
         <span className="text-2xs text-doom-dim uppercase tracking-widest">video frame selection</span>
         <AuthorRegionDrafts
           sessionId="s1"
-          workspace={workspace({
+          path="notes.md"
+          drafts={workspace({
             candidate: {
               documentPath: 'clips/intro.mp4',
               revision: 1,
@@ -91,8 +91,9 @@ export const Playground = {
         <span className="text-2xs text-doom-dim uppercase tracking-widest">unsent drafts only</span>
         <AuthorRegionDrafts
           sessionId="s1"
-          workspace={workspace({
-            regions: [draft('r1', 'Say how long the backoff waits.'), videoDraft],
+          path="notes.md"
+          drafts={workspace({
+            annotations: [draft('r1', 'Say how long the backoff waits.'), videoDraft],
           })}
         />
       </div>

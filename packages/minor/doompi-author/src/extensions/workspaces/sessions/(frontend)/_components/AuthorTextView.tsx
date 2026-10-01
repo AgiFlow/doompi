@@ -75,7 +75,7 @@ export function AuthorTextView({
             const current = authorDocument(sessionId, document.path);
             const bounds = host.current?.getBoundingClientRect();
             if (!current || !bounds || range.from === range.to) return;
-            setAuthorRegionCandidate(sessionId, {
+            setAuthorRegionCandidate(sessionId, document.path, {
               documentPath: current.path,
               revision: current.version,
               sourceSha256: current.sourceSha256,
