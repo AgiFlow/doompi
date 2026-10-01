@@ -1,3 +1,19 @@
+## 0.0.1-alpha.39 (2026-10-01)
+
+### 🚀 Features
+
+- **doompi-workflow:** run workflows in nested workflow sessions with a workflow dock face ([#261](https://github.com/AgiFlow/doompi/pull/261))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.103
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.61
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.38 (2026-10-01)
 
 ### 🚀 Features
