@@ -226,8 +226,9 @@ function mutationTool(sessionId: string, path: string, kind: AuthorDocumentKind)
       const regionId = requiredString(value, 'regionId');
       const request = authorSessionWorkspace(sessionId).requests.find(
         (candidate) =>
-          (candidate.pendingRegions ?? candidate.regions).some((item) => item.id === regionId) &&
-          candidate.status === 'REQUESTED',
+          candidate.documentPath === path &&
+          candidate.status === 'REQUESTED' &&
+          (candidate.pendingRegions ?? candidate.regions).some((item) => item.id === regionId),
       );
       if (request !== undefined) {
         updateAuthorRequest(sessionId, request.id, (current) => ({

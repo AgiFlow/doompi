@@ -1,4 +1,4 @@
-import type { ComposerCapture, WebPluginContextItem } from '@agimon-ai/doompi-core/web';
+import type { ComposerCapture, TransientTab, WebPluginContextItem } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
 
@@ -102,6 +102,26 @@ function contextFields(item: WebPluginContextItem): { name: string; content: str
     valid:
       item.kind.trim() !== '' && item.source.trim() !== '' && item.id.trim() !== '' && name !== '' && content !== '',
   };
+}
+
+/** The open tab's context for one message. Slash commands, invalid items and failing reads send without it. */
+export function tabComposerContext(
+  read: TransientTab['composerContext'],
+  sessionId: string,
+  draft: string,
+): WebPluginContextItem | undefined {
+  // A slash command is an action: appended text would become its arguments (builtinCommandFrame).
+  if (read === undefined || draft.trim().startsWith('/')) return undefined;
+  let item: WebPluginContextItem | undefined;
+  try {
+    item = read(sessionId);
+  } catch {
+    return undefined; // Documented fallback: a plugin bug must not block the user's message.
+  }
+  if (item === undefined) return undefined;
+  const { name, content, valid } = contextFields(item);
+  if (!valid || new TextEncoder().encode(content).byteLength > MAX_COMPOSER_TEXT_BYTES) return undefined;
+  return { ...item, label: name, content };
 }
 
 function isCaptureShape(capture: ComposerCapture): boolean {

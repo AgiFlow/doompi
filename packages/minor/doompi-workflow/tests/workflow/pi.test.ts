@@ -2329,6 +2329,43 @@ describe('workflow-mcp Pi extension', () => {
     expect(harness.sendMessage.mock.calls.some(([message]) => message.customType === 'workflow-step')).toBe(false);
   });
 
+  it('posts a handed-off run to its workflow session without starting a turn', async () => {
+    const handed = runRecord({
+      runKey: 'handed-run',
+      stage: 'running',
+      env: { PI_SESSION_ID: SESSION_ID, DOOMPI_WORKFLOW_LAUNCHER_SESSION_ID: 'launcher' },
+    });
+    const harness = await createHarness([handed], { monitorIntervalMs: 10 });
+    await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
+    listRuns(harness, [{ ...handed, stage: 'completed' }]);
+
+    await vi.waitFor(() => {
+      const finished = harness.sendMessage.mock.calls.find(
+        ([message]) => message.customType === MESSAGE_TYPE_RUN_FINISHED,
+      );
+      expect(finished?.[1]).toEqual({ triggerTurn: false });
+    });
+  });
+
+  it('tells the launcher when a run it handed to a workflow session ends, with where to take it up', async () => {
+    const handed = runRecord({
+      runKey: 'delegated-run',
+      stage: 'running',
+      env: { PI_SESSION_ID: 'workflow-child', DOOMPI_WORKFLOW_LAUNCHER_SESSION_ID: SESSION_ID },
+    });
+    const harness = await createHarness([handed], { monitorIntervalMs: 10 });
+    await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
+    listRuns(harness, [{ ...handed, stage: 'completed' }]);
+
+    await vi.waitFor(() => {
+      const finished = harness.sendMessage.mock.calls.find(
+        ([message]) => message.customType === MESSAGE_TYPE_RUN_FINISHED,
+      );
+      expect(finished?.[1]).toEqual({ triggerTurn: true, deliverAs: 'steer' });
+      expect(finished?.[0].content).toContain('It ran in workflow session workflow-child');
+    });
+  });
+
   it('announces a run that starts and finishes between monitor polls', async () => {
     const harness = await createHarness([], { monitorIntervalMs: 10 });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);

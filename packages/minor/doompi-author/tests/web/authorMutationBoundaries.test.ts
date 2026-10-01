@@ -91,6 +91,16 @@ describe('fenced Author native mutations', () => {
     workspace.updateAuthorRequest('s', 'q', (q) => ({ ...q, regions: [{ ...region, documentPath: 'other' }] }));
     await expect(tool.execute({ ...args, expectedRevision: 1 }, signal)).rejects.toThrow('STALE_REGION');
   });
+  it("leaves another document's request alone when a region id is used on the wrong document", async () => {
+    setup();
+    workspace.putAuthorDocument('s', { path: 'other', kind: 'text', content: 'xyz', sourceSha256: 'sha2' });
+    const other = authorGridTools('s', 'other', 'text').find((tool) => tool.name === 'author_apply_region')!;
+    await expect(other.execute({ ...args, expectedSourceSha256: 'sha2' }, signal)).rejects.toThrow('STALE_REGION');
+    const request = workspace.authorSessionWorkspace('s').requests[0];
+    expect(request?.status).toBe('REQUESTED');
+    expect(request?.error).toBeUndefined();
+    expect(workspace.authorDocument('s', 'doc')?.content).toBe('abc');
+  });
   it.each(['cell', 'slide-element'] as const)('edits a native %s and records before and after', async (kind) => {
     const anchor: AuthorNativeAnchor =
       kind === 'cell'

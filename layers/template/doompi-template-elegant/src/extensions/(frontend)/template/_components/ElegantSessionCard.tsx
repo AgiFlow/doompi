@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   ForkIcon,
+  ActivityIcon,
   Input,
   KebabIcon,
 } from '@agimon-ai/doompi-web-components';
@@ -75,7 +76,12 @@ export function ElegantSessionCard({
       </Avatar>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-1.5">
-          {session.nested && session.provenance ? (
+          {session.nested && session.provenance === 'workflow-session' ? (
+            <ActivityIcon
+              aria-label="workflow session"
+              className={`h-[11px] w-[11px] shrink-0 ${active ? 'text-doom-on-selected' : 'text-doom-faint'}`}
+            />
+          ) : session.nested && session.provenance ? (
             <ForkIcon
               aria-label={
                 session.provenance === 'worktree' ? 'automatic per-conversation worktree' : session.provenance

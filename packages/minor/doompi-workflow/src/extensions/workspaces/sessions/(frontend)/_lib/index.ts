@@ -1,6 +1,5 @@
 import type { WebPluginDefinition } from '@agimon-ai/doompi-core/web';
 
-import { workflowsTab } from '../_components/WorkflowsPanel';
 import { WorkflowsActivitySection } from '../fill/_components/WorkflowsActivitySection';
 import { WorkflowToolMessage } from '../tool/_components/WorkflowToolMessage';
 import { openCatalog, openWorkflowCatalogForContext, workflowCatalogChannel } from './catalogStore';
@@ -17,8 +16,8 @@ const workflowActivitySource = {
 };
 
 export default {
-  // No declared tab: the runs surface is a panel the reader opens from the
-  // dock's workflows group, and closes when they are done with it.
+  // No tab: a run lives in its own workflow session, whose dock shows it, and
+  // the catalog opens over whatever the session shows.
   channels: [workflowRunsChannel, workflowCatalogChannel],
   contextActions: [
     {
@@ -27,7 +26,7 @@ export default {
       detail: 'Choose a workflow, review its inputs, then launch it.',
       kinds: ['work-item'],
       order: 20,
-      run: (context) => openWorkflowCatalogForContext(context, workflowsTab),
+      run: (context) => openWorkflowCatalogForContext(context),
     },
   ],
   minorModes: [{ name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress', order: 50 }],
@@ -37,7 +36,6 @@ export default {
       keys: 'w r',
       widgetKeys: ['workflow-mcp-progress', 'workflow-mcp-follow'],
       activeSource: workflowActivitySource,
-      transientTab: workflowsTab,
       order: 30,
     },
   ],
@@ -48,20 +46,14 @@ export default {
   toolRenderers: [
     { tools: ['list_workflows', 'launch_workflow', 'workflow_run', 'workflow_tools'], message: WorkflowToolMessage },
   ],
-  // The TUI's SPC w r, w l and w e; recovery (w c) is a TUI-only overlay, so
-  // it has no cockpit key yet.
+  // The TUI's SPC w l and w e. SPC w r opened the old runs tab, which a run's
+  // workflow session and its dock face replace; recovery (w c) is TUI-only.
   leaderBindings: [
-    {
-      id: 'doom-workflow.manage',
-      path: [WORKFLOWS_GROUP, { key: 'r', label: 'runs', detail: 'runs in this session' }],
-      run: (context) => context.openTransientTab(workflowsTab()),
-    },
     {
       id: 'doom-workflow.catalog',
       path: [WORKFLOWS_GROUP, { key: 'l', label: 'launch', detail: 'pick a workflow and launch it' }],
       run: (context) => {
         if (context.sessionId !== null) openCatalog(context.sessionId);
-        context.openTransientTab(workflowsTab());
       },
     },
     {

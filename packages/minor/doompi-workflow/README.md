@@ -97,10 +97,31 @@ adopts the eligible failure, validates the evidence, and transfers ownership to 
 Live controls remain scoped to the owning session. Recovery does not launch a second copy beside a
 still-running job and does not guarantee that parent-session work survives shutdown.
 
-The package publishes `workflow-recovery` for active Workflow mode. While parent Help mode is
-active, it also contributes `doompi-author-workflow` for writing workflow definitions and
-`doompi-use-workflow` for launching, monitoring, and recovering runs. Deactivating Help hides both
-descriptors; cached files may remain.
+The package publishes `workflow-recovery`, `doompi-author-workflow` for writing workflow
+definitions, and `doompi-use-workflow` for launching, monitoring, and recovering runs while Workflow
+mode is active. Deactivating Workflow mode hides them; cached files may remain.
+
+## Workflow sessions
+
+In a server (web cockpit) session, a launch does not run in the session that asked for it. The
+session creates a child **workflow session** (provenance `workflow-session`), nested under it in the
+rail, and hands it the launch. The workflow session owns the run (`PI_SESSION_ID`), runs its step
+sessions, and has Workflow mode on, so its agent can troubleshoot and recover the run. The run's
+environment also carries `DOOMPI_WORKFLOW_LAUNCHER_SESSION_ID`, naming the launching session, which
+lists the run in its Activity group, is told when it ends, and may read its status.
+
+- The workflow session's rail row shows the run (`workflow · build › test · 4m`, or a failure or
+  pause marked like a pending question) through the host's per-session activity line.
+- A failure or finish is posted into the workflow session's conversation as a notice, without
+  starting an agent turn. The owner agent also gets a live brief of its runs on every turn.
+- After a success, a workflow session nobody interacted with asks its launcher to release it, and it
+  becomes `stopped · open to wake`. A session whose run failed or paused, or whose agent you
+  prompted, stays live until you remove it. Removing or restarting a live workflow session stops its
+  run.
+- Recovery is refused from any session other than the owner while the owner is live.
+
+Launches from inside a workflow session, and launches in hosts without a session service (the TUI
+and CLI), run in place as before.
 
 Each Pi extension instance uses the runner's shared Doom lifecycle. Reload or shutdown stops retained
 callbacks, interrupts bounded inline work, removes UI and service registrations, and releases
@@ -126,10 +147,12 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## Web cockpit plugin
 
 The `.web` routed files under `src/extensions/workspaces/sessions/(frontend)` are this package's
-DoomPi web cockpit plugin: the workflows panel the dock's workflows group opens in a temporary tab,
-its store, and its `workflow_runs` session channel, compiled into the cockpit bundle by
-`doompi-web`'s build. Each surface keeps its components in a colocated `_components` folder and its
-stores and helpers in `_lib`.
+DoomPi web cockpit plugin: the `workflow` dock face beside Activity and Context (the owned run's
+jobs, active steps and artifacts, each opening its own tab), the workflow catalog and launch
+dialog in the overlay slot, the Activity group's run rows (a handed-off run opens its workflow
+session), their stores, and the `workflow_runs` session channel, compiled into the cockpit bundle
+by `doompi-web`'s build. Each surface keeps its components in a colocated `_components` folder and
+its stores and helpers in `_lib`.
 The hub-side data source ships behind the `./web-hub` subpath and reads the workflow registry
 (run.json plus progress.ndjson) exactly as the engine writes it. Both halves are declared by the
 `doompiWeb` block in package.json.

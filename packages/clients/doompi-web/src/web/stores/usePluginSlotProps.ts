@@ -1,4 +1,5 @@
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useCallback, useMemo } from 'react';
 
@@ -58,6 +59,16 @@ export function usePluginSlotProps(
     },
     [onOpen, openTab, sessionId],
   );
+  const navigate = useNavigate();
+  // Another session the page lists, such as a child a plugin started; an unknown id is left alone.
+  const openSession = useCallback(
+    (target: string) => {
+      if (sessionsStore.state.byId[target] === undefined) return;
+      onOpen?.();
+      void navigate({ to: '/session/$sessionId', params: { sessionId: target } });
+    },
+    [navigate, onOpen],
+  );
   const closePluginTransientTab = useCallback(
     (tabId: string) => {
       if (sessionId !== null) closeTransientTab(sessionId, tabId);
@@ -102,6 +113,7 @@ export function usePluginSlotProps(
     props.activeMinorModes = activeMinorModes;
     if (sessionContext !== undefined) props.sessionContext = sessionContext;
     props.holdSessionChannels = holdSessionChannels;
+    props.openSession = openSession;
     return props;
   }, [
     activeMinorModes,
@@ -113,6 +125,7 @@ export function usePluginSlotProps(
     contextInventory,
     openPluginTab,
     openPluginTransientTab,
+    openSession,
     registryRevision,
     sessionId,
     sessionContext,

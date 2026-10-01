@@ -3,7 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hubChannel';
-import { afterEach, describe, expect, it } from 'vitest';
+import { createHeadlessHub } from '@agimon-ai/doompi-core/server';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { presentWorkflowRuns, runBelongsToSession } from '../src/services/workflowRuns';
 import { createWorkflowsChannel } from '../src/services/workflowsHubChannel';
@@ -142,5 +143,93 @@ describe('the workflows hub channel', () => {
       const expected = entry.sessionId === 'first' ? 'first-run' : 'second-run';
       expect(runsOf(entry.payload).map((run) => run.runKey)).toEqual([expected]);
     }
+  });
+
+  it('lists the runs a session handed to its workflow sessions, live and after they are released', () => {
+    const home = freshHome();
+    const parent = { sessionId: 'parent', cwd: '/workspace' };
+    const child = { sessionId: 'child', cwd: '/workspace' };
+    const host = fakeHost([parent, child]);
+    writeWorkflowRun(home, {
+      workspace: 'default',
+      stage: 'running',
+      runKey: 'handed-run',
+      record: { env: { PI_SESSION_ID: 'child', DOOMPI_WORKFLOW_LAUNCHER_SESSION_ID: 'parent' } },
+    });
+    writeWorkflowRun(home, {
+      workspace: 'default',
+      stage: 'completed',
+      runKey: 'released-run',
+      record: { env: { PI_SESSION_ID: 'gone', DOOMPI_WORKFLOW_LAUNCHER_SESSION_ID: 'parent' }, outcome: 'success' },
+    });
+
+    const source = createWorkflowsChannel({ read: () => readWorkflowRuns({ homeDir: home }) }).start(host);
+    cleanups.push(() => source.close());
+    source.sessionAdded?.(parent);
+    source.sessionAdded?.(child);
+
+    // The registry seeds both, the released workflow session's run included.
+    expect(
+      runsOf(source.payloadFor(parent))
+        .map((run) => String(run.runKey))
+        .sort((left, right) => left.localeCompare(right)),
+    ).toEqual(['handed-run', 'released-run']);
+    expect(runsOf(source.payloadFor(child)).map((run) => run.runKey)).toEqual(['handed-run']);
+    expect(runsOf(source.payloadFor(parent)).find((run) => run.runKey === 'handed-run')).toMatchObject({
+      ownerSessionId: 'child',
+      launcherSessionId: 'parent',
+    });
+
+    // The owner's live update reaches its launcher without the launcher publishing anything.
+    const update = runsOf(source.payloadFor(child)).map((run) => ({ ...run, position: { job: 'build' } }));
+    host.emit('child', { runs: update });
+    expect(runsOf(source.payloadFor(parent)).find((run) => run.runKey === 'handed-run')).toMatchObject({
+      position: { job: 'build' },
+    });
+
+    // The launcher's own update keeps the handed runs beside its own.
+    host.emit('parent', { runs: [] });
+    expect(
+      runsOf(source.payloadFor(parent))
+        .map((run) => String(run.runKey))
+        .sort((left, right) => left.localeCompare(right)),
+    ).toEqual(['handed-run', 'released-run']);
+
+    // A removed workflow session's rows stay with its launcher.
+    source.sessionRemoved?.('child');
+    expect(runsOf(source.payloadFor(parent)).map((run) => run.runKey)).toContain('handed-run');
+  });
+
+  it('routes a workflow session update to its launcher through a real hub', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const host = {
+      runtime: { exited: new Promise<number>(() => undefined) },
+      prepareFacets: async () => undefined,
+      activateFacets: async () => undefined,
+      canDispatch: () => true,
+      onPresentationFrame: () => () => undefined,
+      respondToExtensionUi: () => false,
+      dispose: vi.fn(async () => undefined),
+    } as never;
+    hub.registerChannel(createWorkflowsChannel({ read: () => [] }));
+    hub.registerChannel(createWorkflowsChannel({ read: () => [] }), { scope: 'workspace', workspaceId: 'ws' });
+    hub.register({ id: 'parent', name: 'parent', cwd: '/w', createdAt: 'now', workspaceId: 'ws', host } as never);
+    hub.register({ id: 'child', name: 'child', cwd: '/w', createdAt: 'now', workspaceId: 'ws', host } as never);
+    const run = {
+      runKey: 'handed',
+      workspace: 'default',
+      displayName: 'Handed',
+      workflowPath: '/w/handed.workflow.yml',
+      stage: 'running',
+      startedAt: new Date().toISOString(),
+      ownerSessionId: 'child',
+      launcherSessionId: 'parent',
+      jobs: [],
+    };
+    hub.directEvents.publish('workflow_runs', 'child', { runs: [run] });
+    expect(hub.channelFrames('parent')).toEqual([
+      { type: 'workflow_runs', sessionId: 'parent', payload: { runs: [run] } },
+    ]);
+    await hub.close();
   });
 });

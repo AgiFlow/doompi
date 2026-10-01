@@ -62,6 +62,8 @@ export function CockpitPage() {
           .map((group) => group.transientTab?.())
           .find((candidate) => candidate?.id === storedTransientTab.id) ?? storedTransientTab);
   const tab = (tabId === undefined ? undefined : webTabs().find((entry) => entry.id === tabId)) ?? transientTab;
+  // Only a runtime tab carries composer context; a declared tab with the same id wins and carries none.
+  const composerContext = tab === transientTab ? transientTab?.composerContext : undefined;
 
   // Both side panels are temporary drawers on mobile. Route changes can also
   // come from plugin navigation, so they dismiss the drawers even when no
@@ -166,7 +168,7 @@ export function CockpitPage() {
           // MCP history is a read-only surface, not an alternative prompt composer.
           composer: mcpView ? null : tab ? (
             tab.retainComposer === true ? (
-              <Composer />
+              <Composer composerContext={composerContext} />
             ) : null
           ) : noSessions ? null : (
             <Composer />

@@ -28,6 +28,10 @@ export function AuthorPanel({
   );
   const grid = useStore(authorGrid.store, (state) => (sessionId === null ? undefined : state.sessions[sessionId]));
   const focused = documents.find((document) => document.path === workspace?.focusedDocument?.path);
+  const focusedPath = workspace?.focusedDocument?.path;
+  const requests = (workspace?.requests ?? []).filter(
+    (request) => focusedPath === undefined || request.documentPath === focusedPath,
+  );
   const activity = sessionId === null ? null : (renderSessionActivity?.() ?? null);
   if (!activeMinorModes?.includes('author')) return null;
   return (
@@ -68,7 +72,7 @@ export function AuthorPanel({
               </div>
             </>
           ) : null}
-          <AuthorRequestLog requests={workspace?.requests ?? []} />
+          <AuthorRequestLog requests={requests} />
         </div>
       </div>
       {activity === null ? null : (

@@ -432,6 +432,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
           directEvents: hub.directEvents,
           hubToken: E2E_HEADLESS_TOKEN,
           sessionService: hub.sessionService,
+          publishActivity: (activity) => hub.setSessionActivity?.(id, activity),
           pluginRegistry: hub.pluginRegistry,
           apis: [],
           facets: sessionBundle.facets,

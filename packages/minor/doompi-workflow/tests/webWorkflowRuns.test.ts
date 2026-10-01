@@ -8,6 +8,7 @@ import {
   parseWorkflowRunRecord,
   presentWorkflowRuns,
   resolveWorkflowHome,
+  runLaunchedBySession,
   runBelongsToSession,
   workflowPosition,
 } from '../src/services/workflowRuns';
@@ -243,6 +244,15 @@ describe('workflowRuns', () => {
     if (!unowned) return;
     expect(unowned.piSessionId).toBeUndefined();
     expect(runBelongsToSession(unowned, 'owner')).toBe(false);
+
+    // A run handed to a workflow session names both: its owner runs it, its launcher lists it.
+    const handed = parseWorkflowRunRecord(
+      record({ PI_SESSION_ID: 'child', DOOMPI_WORKFLOW_LAUNCHER_SESSION_ID: 'parent' }),
+    );
+    expect(handed?.view).toMatchObject({ ownerSessionId: 'child', launcherSessionId: 'parent' });
+    expect(handed && runBelongsToSession(handed, 'child')).toBe(true);
+    expect(handed && runLaunchedBySession(handed, 'parent')).toBe(true);
+    expect(handed && runLaunchedBySession(handed, 'child')).toBe(false);
   });
 
   it('presents running first, keeps errors a day, and keeps finished runs for the session', () => {

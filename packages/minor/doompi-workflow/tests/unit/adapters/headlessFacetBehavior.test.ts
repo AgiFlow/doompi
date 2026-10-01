@@ -71,7 +71,16 @@ const embeddedFeature = vi.hoisted(() => {
     content: [{ type: 'text', text: 'recovered' }],
   }));
   const registry = {
-    listRuns: vi.fn(async () => [] as Array<{ runKey: string; workspace: string; stage: string; displayName: string }>),
+    listRuns: vi.fn(
+      async () =>
+        [] as Array<{
+          runKey: string;
+          workspace: string;
+          stage: string;
+          displayName: string;
+          env?: Record<string, string>;
+        }>,
+    ),
     runDirectoryFor: vi.fn(() => '/tmp/missing-recovery-evidence'),
     readRunByKey: vi.fn(async (workspace: string, _stage: string, runKey: string) => ({
       runKey,
@@ -198,7 +207,14 @@ vi.mock('../../../src/services/stepExecutor', () => ({
 }));
 
 async function fixture(
-  options: { environment?: Record<string, string>; requestApi?: DoomApiContext['requestApi'] } = {},
+  options: {
+    environment?: Record<string, string>;
+    requestApi?: DoomApiContext['requestApi'];
+    sessionService?: DoomApiContext['sessionService'];
+    sessionCommunication?: DoomApiContext['sessionCommunication'];
+    publishActivity?: DoomApiContext['publishActivity'];
+    sessionContext?: DoomApiContext['sessionContext'];
+  } = {},
 ) {
   workflowWatcher.records = [
     { piSessionId: 'workflow-headless-test', view: { runKey: 'run-1', workspace: '/tmp' } },
@@ -212,6 +228,7 @@ async function fixture(
     repoRoot: '/tmp',
     sessionId: 'workflow-headless-test',
     environment: options.environment ?? {},
+    ...(options.sessionContext === undefined ? {} : { sessionContext: options.sessionContext }),
     get selection() {
       return { majorMode: 'copilot', activeLayers: [], domains: [], state: { 'minor-mode': minorModes } };
     },
@@ -287,6 +304,9 @@ async function fixture(
     context: {
       directEvents: { publish: vi.fn() },
       ...(options.requestApi === undefined ? {} : { requestApi: options.requestApi }),
+      ...(options.sessionService === undefined ? {} : { sessionService: options.sessionService }),
+      ...(options.sessionCommunication === undefined ? {} : { sessionCommunication: options.sessionCommunication }),
+      ...(options.publishActivity === undefined ? {} : { publishActivity: options.publishActivity }),
     },
   } as unknown as DoomServerHostService;
   const context = new Context();
@@ -501,8 +521,14 @@ describe('workflow headless facet', () => {
       'Unknown workflow mode action: unknown',
     );
 
-    for (const resource of test.resources.filter(({ name }) => name !== 'workflow-recovery'))
+    for (const resource of test.resources
+      .filter(({ kind }) => kind === 'skill')
+      .filter(({ name }) => name !== 'workflow-recovery'))
       expect(await resource.read(test.execution)).toContain('workflow');
+    // The owner brief is live state that only a workflow session reads; an ordinary session adds nothing.
+    const brief = test.resources.find(({ name }) => name === 'workflow-session');
+    expect(brief?.kind).toBe('context');
+    expect(await brief?.read(test.execution)).toBe('');
     const recovery = test.resources.find(({ name }) => name === 'workflow-recovery');
     if (!recovery) throw new Error('Workflow recovery resource was not registered');
     expect(await recovery.read(test.execution)).toContain('recovery');
@@ -1141,5 +1167,246 @@ describe('server recovery lifecycle', () => {
     await launcher.dispose();
     expect(registry.requestStop).not.toHaveBeenCalled();
     finish({ content: [{ type: 'text', text: 'done' }] });
+  });
+});
+
+describe('workflow sessions', () => {
+  const owned = (sessionId: string, stage: string, extra: Record<string, unknown> = {}) => ({
+    piSessionId: sessionId,
+    launcherSessionId: 'workflow-headless-test',
+    view: {
+      runKey: `${sessionId}-run`,
+      workspace: '/tmp',
+      stage,
+      displayName: 'build',
+      startedAt: new Date().toISOString(),
+      jobs: [],
+      ownerSessionId: sessionId,
+      launcherSessionId: 'workflow-headless-test',
+      ...extra,
+    },
+  });
+
+  function sessionService() {
+    return {
+      create: vi.fn(async () => ({ sessionId: 'workflow-child', cwd: '/tmp' })),
+      close: vi.fn(async () => undefined),
+      isLive: vi.fn(() => true),
+      release: vi.fn(async () => undefined),
+    };
+  }
+
+  function communication() {
+    const listeners = new Map<string, (source: string, payload: unknown) => void>();
+    return {
+      listeners,
+      endpoint: {
+        sessionId: 'workflow-headless-test',
+        publish: vi.fn(() => true),
+        subscribe: vi.fn((type: string, listener: (source: string, payload: unknown) => void) => {
+          listeners.set(type, listener);
+          return () => listeners.delete(type);
+        }),
+        onPeerReady: vi.fn(() => () => undefined),
+        close: vi.fn(),
+      },
+    };
+  }
+
+  it('creates a workflow session under this one and hands it the launch with the launcher stamp', async () => {
+    const service = sessionService();
+    const requestApi = vi.fn(async () => Response.json({ text: 'Run key: build-1' }));
+    const test = await fixture({ sessionService: service as never, requestApi });
+    try {
+      await test.modes[0]!.handleAction('activate', {}, operation(test.execution));
+      const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
+      const result = await launch.execute(
+        'launch',
+        { workflowPath: '/tmp/build.workflow.yml' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+
+      expect(service.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'build',
+          parentSessionId: 'workflow-headless-test',
+          sessionProvenance: 'workflow-session',
+          selection: { minorModes: ['workflow'] },
+        }),
+      );
+      expect((service.create.mock.calls as unknown as [Record<string, unknown>][])[0]![0]).not.toHaveProperty(
+        'environment',
+      );
+      const [mount, , request] = requestApi.mock.calls[0]! as unknown as [unknown, string, Request];
+      expect(mount).toEqual({ scope: 'session', sessionId: 'workflow-child' });
+      expect(await request.json()).toMatchObject({
+        workflowPath: '/tmp/build.workflow.yml',
+        env: { DOOMPI_WORKFLOW_LAUNCHER_SESSION_ID: 'workflow-headless-test' },
+      });
+      expect(embeddedFeature.run).not.toHaveBeenCalled();
+      expect(JSON.stringify(result)).toContain('Runs in workflow session \\"build\\" (workflow-child)');
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('creates nothing for a refused launch and closes a workflow session whose hand-off failed', async () => {
+    const service = sessionService();
+    const requestApi = vi.fn(async () => Response.json({ error: 'Session not found.' }, { status: 404 }));
+    const test = await fixture({ sessionService: service as never, requestApi });
+    try {
+      await test.modes[0]!.handleAction('activate', {}, operation(test.execution));
+      const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
+      const outside = await launch.execute(
+        'launch',
+        { workflowPath: '/elsewhere/build.workflow.yml' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(outside).toMatchObject({ isError: true });
+      expect(service.create).not.toHaveBeenCalled();
+
+      const failed = await launch.execute(
+        'launch',
+        { workflowPath: '/tmp/build.workflow.yml' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(failed).toMatchObject({ isError: true });
+      expect(service.close).toHaveBeenCalledWith('workflow-child');
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('refuses a launch past the ceiling before it creates a session', async () => {
+    const service = sessionService();
+    const test = await fixture({
+      sessionService: service as never,
+      requestApi: vi.fn(),
+      environment: { WORKFLOW_MCP_MAX_CONCURRENT: '1' },
+    });
+    try {
+      workflowWatcher.records = [owned('other-child', 'running')];
+      await test.modes[0]!.handleAction('activate', {}, operation(test.execution));
+      const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
+      const result = await launch.execute(
+        'launch',
+        { workflowPath: '/tmp/build.workflow.yml' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(JSON.stringify(result)).toContain('at capacity: 1/1');
+      expect(service.create).not.toHaveBeenCalled();
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('runs a launch in place inside a workflow session and re-selects workflow mode when it wakes', async () => {
+    const service = sessionService();
+    const test = await fixture({
+      sessionService: service as never,
+      requestApi: vi.fn(),
+      sessionContext: {
+        sessionId: 'workflow-headless-test',
+        workspaceId: 'w',
+        workspaceRoot: '/tmp',
+        checkoutRoot: '/tmp',
+        cwd: '/tmp',
+        parentSessionId: 'parent',
+        provenance: 'workflow-session',
+      },
+    });
+    try {
+      const start = test.hooks.find(({ event }) => event === 'session_start')!;
+      await (start.handle as (event: unknown, context: unknown) => Promise<void>)({}, test.execution);
+      expect(test.execution.selection.state?.['minor-mode']).toContain('workflow');
+
+      const launch = test.tools.find(({ name }) => name === 'launch_workflow')!;
+      await launch.execute('launch', { workflowPath: '/tmp/build.workflow.yml' }, undefined, undefined, test.execution);
+      expect(service.create).not.toHaveBeenCalled();
+      expect(embeddedFeature.run).toHaveBeenCalled();
+
+      workflowWatcher.records = [owned('workflow-headless-test', 'error', { failedJob: 'test' })];
+      const brief = test.resources.find(({ name }) => name === 'workflow-session')!;
+      expect(await brief.read(test.execution)).toContain('owner agent of this workflow session');
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('releases a workflow session only when every run it owns succeeded and one was launched here', async () => {
+    const service = sessionService();
+    const channel = communication();
+    const test = await fixture({ sessionService: service as never, sessionCommunication: channel.endpoint });
+    try {
+      expect(channel.endpoint.onPeerReady).toHaveBeenCalled();
+      const release = channel.listeners.get('doompi-workflow.session-release')!;
+
+      workflowWatcher.records = [owned('workflow-child', 'error')];
+      release('workflow-child', {});
+      await vi.waitFor(() => expect(telemetry.recordEvent).toBeDefined());
+      expect(service.release).not.toHaveBeenCalled();
+
+      workflowWatcher.records = [owned('workflow-child', 'completed', { outcome: 'success' })];
+      release('workflow-child', {});
+      await vi.waitFor(() => expect(service.release).toHaveBeenCalledWith('workflow-child'));
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('lets the launcher read a handed-off run but not control or recover it while its owner is live', async () => {
+    const service = sessionService();
+    const test = await fixture({ sessionService: service as never });
+    try {
+      await test.modes[0]!.handleAction('activate', {}, operation(test.execution));
+      workflowWatcher.records = [owned('workflow-child', 'running')];
+      const run = test.tools.find(({ name }) => name === 'workflow_run')!;
+      const status = await run.execute(
+        'status',
+        { action: 'status', runKey: 'workflow-child-run' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(JSON.stringify(status)).toContain('workflow-child-run');
+      const stop = await run.execute(
+        'stop',
+        { action: 'stop', runKey: 'workflow-child-run', expectedRunId: 'id' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(JSON.stringify(stop)).toContain('belongs to workflow session workflow-child');
+
+      embeddedFeature.registry.listRuns.mockResolvedValueOnce([
+        {
+          runKey: 'broken',
+          workspace: '/tmp',
+          stage: 'error',
+          displayName: 'Broken',
+          env: { PI_SESSION_ID: 'workflow-child' },
+        },
+      ]);
+      const tools = test.tools.find(({ name }) => name === 'workflow_tools')!;
+      const recovered = await tools.execute(
+        'recover',
+        { action: 'recover', runKey: 'broken' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(JSON.stringify(recovered)).toContain('belongs to live workflow session workflow-child');
+      expect(embeddedFeature.recover).not.toHaveBeenCalled();
+    } finally {
+      await test.close?.();
+    }
   });
 });

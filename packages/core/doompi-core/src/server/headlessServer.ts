@@ -137,6 +137,7 @@ function sessionView(session: HeadlessHubSession): Record<string, unknown> {
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
     ...(session.pendingSetups === undefined ? {} : { pendingSetups: session.pendingSetups }),
+    ...(session.activity === undefined ? {} : { activity: { ...session.activity } }),
   };
 }
 

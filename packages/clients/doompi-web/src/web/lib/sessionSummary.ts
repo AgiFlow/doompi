@@ -14,6 +14,8 @@ export interface StatusLineInput {
   lastSettledAt?: string;
   /** Recorded by the hub but not running; opening it is what starts it. */
   dormant?: boolean;
+  /** A line an extension published about background work it runs for the session. */
+  activity?: { label: string; since?: string };
 }
 
 const MINUTE_MS = 60_000;
@@ -43,6 +45,13 @@ export function sessionStatusLine(input: StatusLineInput, now: number): string {
   if (input.phase !== 'idle') {
     const since = Date.parse(input.phaseSince);
     return `running · ${formatRunDuration(Number.isFinite(since) ? Math.max(0, now - since) : 0)}`;
+  }
+  // Background work outranks the idle copy: an agent waiting on a workflow is not "done".
+  if (input.activity !== undefined) {
+    const since = input.activity.since === undefined ? Number.NaN : Date.parse(input.activity.since);
+    return Number.isFinite(since)
+      ? `${input.activity.label} · ${formatRunDuration(Math.max(0, now - since))}`
+      : input.activity.label;
   }
   if (!input.everPrompted && input.lastSettledAt === undefined) return 'fresh session · nothing sent yet';
   return 'done · waiting for you';

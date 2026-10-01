@@ -99,6 +99,10 @@ export interface WorkflowRunView {
   stale?: boolean;
   staleReason?: string;
   worktreeBranch?: string;
+  /** The session that owns the run (its PI_SESSION_ID); absent on records that carry none. */
+  ownerSessionId?: string;
+  /** The session that launched the run into its own workflow session, when it was handed off. */
+  launcherSessionId?: string;
   position?: WorkflowPosition;
   jobs: WorkflowJobView[];
 }

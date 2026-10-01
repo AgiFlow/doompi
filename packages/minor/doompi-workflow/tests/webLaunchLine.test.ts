@@ -149,13 +149,13 @@ describe('catalog store', () => {
       sendSessionFrame: () => undefined,
     };
 
-    openWorkflowCatalogForContext(context, () => ({ id: 'workflows-runs', label: 'workflows', panel: () => null }));
+    openWorkflowCatalogForContext(context);
 
     expect(catalog.select(catalog.store.state, 's1')).toMatchObject({ open: true, prompt: 'Implement task AGI-1.' });
-    expect(opened).toEqual(['workflows-runs']);
-    openWorkflowCatalogForContext({ ...context, sessionId: null }, () => {
-      throw new Error('a detached action must not build a tab');
-    });
+    // The catalog opens over the session through the overlay; no tab is opened.
+    expect(opened).toEqual([]);
+    openWorkflowCatalogForContext({ ...context, sessionId: null });
+    expect(catalog.select(catalog.store.state, null).open).toBe(false);
   });
 
   it('filters on name, tag and job', () => {

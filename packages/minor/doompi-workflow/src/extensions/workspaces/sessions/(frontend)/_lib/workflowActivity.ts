@@ -13,6 +13,8 @@ export interface WorkflowActivityRow {
   elapsed: string;
   /** Where the run is right now, or how it ended. */
   detail: string;
+  /** The workflow session that owns the run, when it is not the session listing it. */
+  ownerSessionId?: string;
 }
 
 const PAUSED_STATES: ReadonlySet<NonNullable<WorkflowRunView['executionState']>> = new Set([
@@ -22,6 +24,11 @@ const PAUSED_STATES: ReadonlySet<NonNullable<WorkflowRunView['executionState']>>
 
 export function workflowRunIdentity(run: Pick<WorkflowRunView, 'workspace' | 'runKey'>): string {
   return `${run.workspace}/${run.runKey}`;
+}
+
+/** Whether the session runs this workflow itself; a record from an older hub names no owner and means the viewer. */
+export function ownsRun(run: Pick<WorkflowRunView, 'ownerSessionId'>, sessionId: string | null): boolean {
+  return sessionId !== null && (run.ownerSessionId ?? sessionId) === sessionId;
 }
 
 function toneOf(run: WorkflowRunView): WorkflowActivityTone {
@@ -52,7 +59,11 @@ function elapsedOf(run: WorkflowRunView, now: number): string {
 }
 
 /** The hub's presented order is kept: it already puts live runs first. */
-export function workflowActivityRows(runs: readonly WorkflowRunView[], now: number): WorkflowActivityRow[] {
+export function workflowActivityRows(
+  runs: readonly WorkflowRunView[],
+  now: number,
+  sessionId: string | null = null,
+): WorkflowActivityRow[] {
   return runs.map((run) => {
     const tone = toneOf(run);
     return {
@@ -62,6 +73,9 @@ export function workflowActivityRows(runs: readonly WorkflowRunView[], now: numb
       tone,
       elapsed: elapsedOf(run, now),
       detail: detailOf(run, tone),
+      ...(run.ownerSessionId === undefined || run.ownerSessionId === sessionId
+        ? {}
+        : { ownerSessionId: run.ownerSessionId }),
     };
   });
 }

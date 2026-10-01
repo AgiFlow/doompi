@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   ForkIcon,
+  ActivityIcon,
   Input,
   KebabIcon,
 } from '@agimon-ai/doompi-web-components';
@@ -106,7 +107,12 @@ export function AdvancedSessionCard({
 
   const heading = (
     <div className="flex items-center gap-2">
-      {session.nested && session.provenance ? (
+      {session.nested && session.provenance === 'workflow-session' ? (
+        <ActivityIcon
+          aria-label="workflow session"
+          className={`h-[11px] w-[11px] shrink-0 ${active ? 'text-doom-on-selected' : 'text-doom-faint'}`}
+        />
+      ) : session.nested && session.provenance ? (
         <ForkIcon
           aria-label={session.provenance === 'worktree' ? 'automatic per-conversation worktree' : session.provenance}
           className={`h-[11px] w-[11px] shrink-0 ${active ? 'text-doom-on-selected' : 'text-doom-faint'}`}

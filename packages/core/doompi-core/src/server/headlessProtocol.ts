@@ -74,6 +74,15 @@ function sessionView(session: HeadlessHubSession): Record<string, JsonValue> {
             ...(setup.errorCode === undefined ? {} : { errorCode: setup.errorCode }),
           })),
         }),
+    ...(session.activity === undefined
+      ? {}
+      : {
+          activity: {
+            label: session.activity.label,
+            ...(session.activity.attention === true ? { attention: true } : {}),
+            ...(session.activity.since === undefined ? {} : { since: session.activity.since }),
+          },
+        }),
   };
 }
 

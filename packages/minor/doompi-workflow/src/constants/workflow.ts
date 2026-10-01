@@ -28,3 +28,19 @@ export const WORKFLOW_PI_TOOL_NAMES = [
  * the workflow and the time, keeps two launches of one workflow apart.
  */
 export const WORKFLOW_LAUNCH_ID_ENV = 'DOOMPI_WORKFLOW_LAUNCH_ID';
+
+/**
+ * Provenance of the child session a launch creates to own and run one workflow.
+ * Not 'workflow', which marks a step's session and keeps it out of the rail.
+ */
+export const WORKFLOW_SESSION_PROVENANCE = 'workflow-session';
+
+/**
+ * Run env key naming the session that launched a run into its own workflow
+ * session. PI_SESSION_ID names the owner; this names the launcher, which lists
+ * the run, is told when it ends, and releases the workflow session after success.
+ */
+export const WORKFLOW_LAUNCHER_SESSION_ENV = 'DOOMPI_WORKFLOW_LAUNCHER_SESSION_ID';
+
+/** Message a workflow session sends its launcher to be released once its run succeeded. */
+export const WORKFLOW_SESSION_RELEASE_TYPE = 'doompi-workflow.session-release';

@@ -113,6 +113,24 @@ describe('createHeadlessHub', () => {
     await hub.close();
   });
 
+  it('publishes a session activity line in live upserts, skips unchanged ones, and clears it', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const updates: unknown[] = [];
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: host().host });
+    hub.onEvent((event) => {
+      if (event.kind === 'upsert') updates.push(event.session.activity);
+    });
+    const activity = { label: 'workflow · build', since: '2026-01-01T00:00:00.000Z' };
+    hub.setSessionActivity?.('one', activity);
+    hub.setSessionActivity?.('one', { ...activity });
+    hub.setSessionActivity?.('one', { label: 'x'.repeat(200), attention: true });
+    hub.setSessionActivity?.('one', undefined);
+    hub.setSessionActivity?.('missing', activity);
+    expect(updates).toEqual([activity, { label: 'x'.repeat(80), attention: true }, undefined]);
+    expect(hub.session('one')?.activity).toBeUndefined();
+    await hub.close();
+  });
+
   it('delivers reentrant setup updates to subscribers in order', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
     const updates: unknown[] = [];
