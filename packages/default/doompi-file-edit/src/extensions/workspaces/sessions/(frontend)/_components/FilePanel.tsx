@@ -17,7 +17,7 @@ import {
   reviewCommentAnchor,
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { FileEditsVersionView } from '../../../../../types/fileEditsApi';
 import { deleteFile, fetchFileDetail, saveFileContent, sessionFileUrl } from '../_lib/filesApi';
@@ -32,7 +32,7 @@ import {
 } from '../_lib/filesStore';
 import { fileTabId, previewModeOf, sendReviewFrame, TOOL_LABEL } from '../_lib/fileView';
 import { DeleteFileDialog } from './DeleteFileDialog';
-import { SessionMediaPreview as MediaPreview } from './SessionMediaPreview';
+import { loadMarkdownImage, SessionMediaPreview as MediaPreview } from './SessionMediaPreview';
 
 /**
  * One file's tab: what this session did to it, and what the reader wants done
@@ -127,6 +127,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
   // An image, a video or a PDF is shown rather than read as text, and it is
   // shown from the hub's own bytes route rather than from the detail payload,
   // which carries text only.
+  const loadImage = useCallback((path: string) => loadMarkdownImage(sessionId, relPath, path), [sessionId, relPath]);
   const mediaSrc = sessionId === null ? '' : sessionFileUrl(sessionId, relPath);
 
   const openDraft = (selection: Draft): void => {
@@ -434,7 +435,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
             {previewMode === 'media' || previewMode === 'unavailable' ? (
               <MediaPreview src={mediaSrc} path={relPath} data-testid="files-preview-media" />
             ) : previewMode === 'markdown' ? (
-              <Markdown text={content} />
+              <Markdown text={content} loadImage={loadImage} />
             ) : previewMode === 'html' ? (
               <iframe
                 data-testid="files-preview-html"

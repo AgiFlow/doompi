@@ -1,5 +1,7 @@
 import { Markdown } from '@agimon-ai/doompi-web-components';
-import { memo, type ComponentProps } from 'react';
+import { memo, useCallback, type ComponentProps } from 'react';
+
+import { loadSessionAsset } from '../../lib/sessionAsset';
 
 /**
  * A message's markdown, with the files this session changed as links.
@@ -12,11 +14,20 @@ import { memo, type ComponentProps } from 'react';
 export type MessageFileLinkHandler = NonNullable<ComponentProps<typeof Markdown>['onFileLink']>;
 
 export const MessageMarkdown = memo(function MessageMarkdown({
+  sessionId,
   onFileLink,
   text,
 }: {
+  sessionId: string | null;
   onFileLink: MessageFileLinkHandler;
   text: string;
 }) {
-  return <Markdown text={text} onFileLink={onFileLink} />;
+  const loadImage = useCallback(
+    (path: string) => {
+      if (sessionId === null) return Promise.reject(new Error('The session is unavailable.'));
+      return loadSessionAsset(sessionId, path);
+    },
+    [sessionId],
+  );
+  return <Markdown text={text} onFileLink={onFileLink} loadImage={loadImage} />;
 });

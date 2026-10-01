@@ -338,3 +338,62 @@ test('a reload does not double a restored transcript', async ({ page, cockpit })
   await expect(page.getByTestId('entry-user')).toHaveCount(1);
   await expect(page.getByTestId('entry-user')).toHaveText(/only once/);
 });
+
+test('loads cwd markdown images as blobs without refetching while streaming', async ({ page, cockpit }) => {
+  const cwd = cockpit.session.cwd;
+  const imagePath = path.join(cwd, 'markdown-image.png');
+  fs.writeFileSync(
+    imagePath,
+    Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+      'base64',
+    ),
+  );
+  fs.mkdirSync(path.join(cwd, 'docs', 'images'), { recursive: true });
+  fs.writeFileSync(
+    path.join(cwd, 'docs', 'images', 'shot.svg'),
+    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="green"/></svg>',
+  );
+  fs.writeFileSync(path.join(cwd, 'docs', 'review.md'), '![nested](images/shot.svg)');
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  let requests = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.endsWith('/file')) requests++;
+  });
+  cockpit.session.emit({ type: 'agent_start' });
+  cockpit.session.emit({
+    type: 'message_update',
+    assistantMessageEvent: {
+      type: 'text_delta',
+      delta: `![relative](markdown-image.png)
+
+![absolute](${imagePath})
+
+![outside](/outside-cwd-image.png)
+
+`,
+    },
+  });
+  for (const alt of ['relative', 'absolute']) {
+    const image = page.getByRole('img', { name: alt, exact: true });
+    await expect(image).toHaveAttribute('src', /^blob:/);
+    await expect.poll(() => image.evaluate((node) => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  }
+  await expect(page.getByRole('alert')).toContainText('outside (unavailable)');
+  const count = requests;
+  cockpit.session.emit({
+    type: 'message_update',
+    assistantMessageEvent: { type: 'text_delta', delta: 'Still streaming.' },
+  });
+  await expect(page.getByTestId('entry-assistant')).toContainText('Still streaming.');
+  expect(requests).toBe(count);
+  cockpit.session.emit({
+    type: 'message_update',
+    assistantMessageEvent: { type: 'text_delta', delta: '\n\n[review](docs/review.md)' },
+  });
+  await page.getByTestId('markdown-file-link').filter({ hasText: 'review' }).click();
+  const nested = page.getByTestId('files-preview').getByRole('img', { name: 'nested', exact: true });
+  await expect(nested).toHaveAttribute('src', /^blob:/);
+  await expect.poll(() => nested.evaluate((node) => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+});

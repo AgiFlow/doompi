@@ -6,6 +6,29 @@
   "tags": ["stage:active"],
   "sourceTemplate": "doom-web",
   "targets": {
+    "test": {
+      "dependsOn": [
+        "build",
+        "^build",
+        {
+          "projects": [
+            "@agimon-ai/doompi-workflow",
+            "@agimon-ai/doompi-plan",
+            "@agimon-ai/doompi-team",
+            "@agimon-ai/doompi-voice"
+          ],
+          "target": "build"
+        }
+      ],
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/packages/minor/doompi-workflow/**/*",
+        "{workspaceRoot}/packages/minor/doompi-plan/**/*",
+        "{workspaceRoot}/layers/team/doompi-team/**/*",
+        "{workspaceRoot}/packages/minor/doompi-voice/**/*"
+      ]
+    },
     "build": {
       "executor": "nx:run-commands",
       "inputs": ["production", "^production", "{projectRoot}/package.json"],

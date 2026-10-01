@@ -4,7 +4,10 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { SessionMediaPreview } from '../../src/extensions/workspaces/sessions/(frontend)/_components/SessionMediaPreview';
+import {
+  loadMarkdownImage,
+  SessionMediaPreview,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_components/SessionMediaPreview';
 
 const hooks = vi.hoisted(() => ({
   set: vi.fn(),
@@ -35,6 +38,7 @@ describe('remote file media preview', () => {
       expect(hooks.set).toHaveBeenCalledWith({
         source: '/api/workspaces/test-workspace/sessions/s/file?path=clip',
         url: 'blob:media',
+        contentType: type,
       }),
     );
     expect(sealedTransport.fetch).toHaveBeenCalledWith(
@@ -72,4 +76,20 @@ describe('remote file media preview', () => {
     expect(create).not.toHaveBeenCalled();
     expect(hooks.set).not.toHaveBeenCalled();
   });
+});
+
+it('loads markdown images relative to the document and preserves absolute paths', async () => {
+  vi.mocked(sealedTransport.fetch).mockImplementation(async () => new Response('image'));
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:image');
+  const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+  for (const [image, expected] of [
+    ['../pic.png', 'docs/../pic.png'],
+    ['/cwd/pic.png', '/cwd/pic.png'],
+  ]) {
+    const asset = await loadMarkdownImage('s', 'docs/readme.md', image!);
+    const url = new URL(vi.mocked(sealedTransport.fetch).mock.calls.at(-1)![0] as string, 'http://localhost');
+    expect(url.searchParams.get('path')).toBe(expected);
+    asset.dispose();
+  }
+  expect(revoke).toHaveBeenCalledTimes(2);
 });

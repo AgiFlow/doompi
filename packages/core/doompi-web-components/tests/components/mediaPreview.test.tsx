@@ -10,12 +10,24 @@ const SRC = '/api/workspaces/test-workspace/sessions/s1/file?path=docs%2Freport.
 
 describe('MediaPreview', () => {
   it('renders an image inside a link to the full-size bytes', () => {
-    const markup = renderToStaticMarkup(<MediaPreview src={SRC} path="docs/shot.png" />);
+    const markup = renderToStaticMarkup(<MediaPreview src={SRC} path="docs/shot.png" contentType="image/png" />);
     expect(markup).toContain('<img');
     expect(markup).toContain('alt="docs/shot.png"');
     expect(markup).toContain(`href="${SRC}"`);
   });
 
+  it.each([
+    ['docs/shot.svg', 'image/svg+xml'],
+    ['docs/symlink.png', 'image/svg+xml'],
+    ['docs/unknown.png', undefined],
+  ])('keeps %s inline when its bytes are not verified raster media', (path, contentType) => {
+    const markup = renderToStaticMarkup(
+      <MediaPreview src="blob:session-file" path={path} contentType={contentType} data-testid="safe-image" />,
+    );
+    expect(markup).toContain('<img');
+    expect(markup).toContain('data-testid="safe-image"');
+    expect(markup).not.toContain('<a ');
+  });
   it('renders a video with controls rather than autoplaying it', () => {
     const markup = renderToStaticMarkup(<MediaPreview src={SRC} path="clip.mp4" />);
     expect(markup).toContain('<video');

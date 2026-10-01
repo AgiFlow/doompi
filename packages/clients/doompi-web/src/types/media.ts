@@ -31,7 +31,7 @@ export const MEDIA_TYPES: Readonly<Record<string, MediaType>> = {
 /** The hub refuses to serve a mentioned file past this size. */
 export const MAX_SESSION_FILE_BYTES = 25 * 1024 * 1024;
 
-/** The route the timeline fetches a mentioned file from; path is the cwd-relative file. */
+/** Session file bytes; paths may be cwd-relative or absolute inside the working directory. */
 export const SESSION_FILE_ROUTE = '/api/workspaces/:workspaceId/sessions/:sessionId/file';
 export const SESSION_FILE_SHA256_HEADER = 'X-File-SHA256';
 export const SESSION_FILE_EXPECTED_SHA256_HEADER = 'X-Expected-SHA256';

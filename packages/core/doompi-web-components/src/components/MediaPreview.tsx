@@ -58,6 +58,8 @@ export interface MediaPreviewProps {
   path: string;
   /** Overrides the kind inferred from the path, for a server that knows better. */
   kind?: MediaKind;
+  /** The fetched MIME type, required before opening image bytes as a document. */
+  contentType?: string;
   className?: string;
   videoControls?: boolean;
   'data-testid'?: string;
@@ -211,6 +213,7 @@ export function MediaPreview({
   src,
   path,
   kind,
+  contentType,
   className,
   controllerRef,
   pdfControllerRef,
@@ -222,10 +225,17 @@ export function MediaPreview({
   const name = path.split('/').at(-1) ?? path;
 
   if (resolved === 'image') {
-    return (
+    // A symlink's target determines the MIME type, so the path cannot establish SVG safety.
+    const raster = /^image\/(?:avif|bmp|gif|jpeg|png|webp)$/i.test(contentType ?? '');
+    const image = <img src={src} alt={path} className={cn(FRAME, 'max-h-[36rem]', className)} />;
+    return raster ? (
       <a href={src} target="_blank" rel="noreferrer" data-testid={testId} data-kind={resolved}>
-        <img src={src} alt={path} className={cn(FRAME, 'max-h-[36rem]', className)} />
+        {image}
       </a>
+    ) : (
+      <span data-testid={testId} data-kind={resolved}>
+        {image}
+      </span>
     );
   }
   if (resolved === 'video') {

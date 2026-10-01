@@ -156,8 +156,12 @@ describe('the sync-time cockpit bundler', () => {
       entryless,
       planRoot,
     ]);
-    // Both moved panels really are compiled in: their empty-state copy appears.
+    // The compatibility SPA and the separately served session composition must
+    // both retain the workflow dock, not just discover its manifest/plugin id.
     expect(bundledJsHas(result.assetsDir, 'this session has no workflow run')).toBe(true);
+    expect(compositionScript).toContain('this session has no workflow run');
+    expect(compositionScript).toContain('workflow-dock-empty');
+    expect(compositionScript).toContain('dockFaces');
     // Tailwind scanned the plugin sources too: the subagents grid uses an
     // auto-fill column template the host shell never does.
     expect(bundledCssHas(result.assetsDir, 'auto-fill')).toBe(true);
