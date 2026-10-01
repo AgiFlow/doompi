@@ -315,7 +315,7 @@ const Entry = memo(function Entry({
             ref={quoteSource}
             className="flex flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-base text-doom-hi"
           >
-            <MessageMarkdown onFileLink={onFileLink} text={entry.text} />
+            <MessageMarkdown sessionId={sessionId} onFileLink={onFileLink} text={entry.text} />
             {entry.images && entry.images.length > 0 ? (
               <div data-testid="user-attachments" className="flex flex-wrap gap-2">
                 {entry.images
@@ -370,11 +370,11 @@ const Entry = memo(function Entry({
                 // uses strong emphasis for status updates.
                 className="text-sm font-normal text-doom-dim [&_p]:whitespace-pre-wrap [&_strong]:font-normal [&_strong]:text-doom-dim"
               >
-                <MessageMarkdown onFileLink={onFileLink} text={entry.thinking} />
+                <MessageMarkdown sessionId={sessionId} onFileLink={onFileLink} text={entry.thinking} />
               </div>
             ) : null}
             <div ref={quoteSource} className="text-base text-doom-text">
-              <MessageMarkdown onFileLink={onFileLink} text={entry.text} />
+              <MessageMarkdown sessionId={sessionId} onFileLink={onFileLink} text={entry.text} />
               {entry.streaming ? <StreamCursor /> : null}
             </div>
           </div>

@@ -207,14 +207,14 @@ function parseTranscriptRequest(url: URL): TranscriptPageRequest {
   return request;
 }
 
-async function sessionFile(session: HeadlessHubSession, relativePath: string | null): Promise<Response> {
-  if (!relativePath || relativePath.includes('\0') || path.isAbsolute(relativePath))
+async function sessionFile(session: HeadlessHubSession, requestedPath: string | null): Promise<Response> {
+  if (!requestedPath || requestedPath.includes('\0'))
     return Response.json({ error: 'Invalid session file path.' }, { status: 400 });
   let root: string;
   let filePath: string;
   try {
     root = await fs.promises.realpath(session.cwd);
-    filePath = await fs.promises.realpath(path.resolve(root, relativePath));
+    filePath = await fs.promises.realpath(path.resolve(root, requestedPath));
   } catch {
     return Response.json({ error: 'Session file not found.' }, { status: 404 });
   }

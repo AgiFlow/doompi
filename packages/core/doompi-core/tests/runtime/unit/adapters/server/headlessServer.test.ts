@@ -682,6 +682,12 @@ describe('serveHeadlessServer', () => {
 
     expect((await file('README.md')).status).toBe(200);
     expect(await (await file('README.md')).text()).toBe('# Local README');
+    expect(await (await file(path.join(cwd, 'README.md'))).text()).toBe('# Local README');
+    expect((await file(path.join(fs.realpathSync(cwd), 'README.md'))).status).toBe(200);
+    expect((await file(path.join(root, 'secret.md'))).status).toBe(403);
+    expect((await file(path.join(cwd, 'linked.md'))).status).toBe(403);
+    expect((await file('')).status).toBe(400);
+    expect((await file('README.md\0')).status).toBe(400);
     expect((await file('../secret.md')).status).toBe(403);
     expect((await file('linked.md')).status).toBe(403);
     expect((await file('missing.md')).status).toBe(404);

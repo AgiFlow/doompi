@@ -1,9 +1,9 @@
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Breadcrumb, Button, CodeEditor, Markdown } from '@agimon-ai/doompi-web-components';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { FileEditsPreviewView } from '../../../../../../types/fileEditsApi';
-import { SessionMediaPreview as MediaPreview } from '../../_components/SessionMediaPreview';
+import { loadMarkdownImage, SessionMediaPreview as MediaPreview } from '../../_components/SessionMediaPreview';
 import { fetchFilePreview, sessionFileUrl } from '../../_lib/filesApi';
 import { fileTabId, previewModeOf } from '../../_lib/fileView';
 
@@ -26,6 +26,7 @@ interface FilePreviewPanelProps extends WebPluginSlotProps {
 
 /** What one fetch settled on, tagged with the file it was about. */
 interface Loaded {
+  sessionId: string;
   path: string;
   preview?: FileEditsPreviewView;
   error?: string;
@@ -41,14 +42,18 @@ export function FilePreviewPanel({ filePath, sessionId, closeTransientTab }: Fil
     let cancelled = false;
     void fetchFilePreview(sessionId, filePath).then((result) => {
       if (cancelled) return;
-      setLoaded(result.ok ? { path: filePath, preview: result.preview } : { path: filePath, error: result.error });
+      setLoaded(
+        result.ok
+          ? { sessionId, path: filePath, preview: result.preview }
+          : { sessionId, path: filePath, error: result.error },
+      );
     });
     return () => {
       cancelled = true;
     };
   }, [sessionId, filePath]);
 
-  const current = loaded?.path === filePath ? loaded : undefined;
+  const current = loaded?.path === filePath && loaded.sessionId === sessionId ? loaded : undefined;
   const preview = current?.preview;
   const error = current?.error;
   // Before the answer arrives the path is all there is to name the file by,
@@ -57,6 +62,7 @@ export function FilePreviewPanel({ filePath, sessionId, closeTransientTab }: Fil
   const working = preview?.working;
   const content = working?.content ?? '';
   const previewMode = previewModeOf(relPath, working?.unavailable === true);
+  const loadImage = useCallback((path: string) => loadMarkdownImage(sessionId, relPath, path), [sessionId, relPath]);
   const mediaSrc = sessionId === null ? '' : sessionFileUrl(sessionId, relPath);
 
   return (
@@ -101,7 +107,7 @@ export function FilePreviewPanel({ filePath, sessionId, closeTransientTab }: Fil
             {previewMode === 'media' || previewMode === 'unavailable' ? (
               <MediaPreview src={mediaSrc} path={relPath} data-testid="files-preview-media" />
             ) : previewMode === 'markdown' ? (
-              <Markdown text={content} />
+              <Markdown text={content} loadImage={loadImage} />
             ) : previewMode === 'html' ? (
               <iframe
                 data-testid="files-preview-html"

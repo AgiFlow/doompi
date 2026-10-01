@@ -1,4 +1,12 @@
-import { createContext, type ComponentProps, isValidElement, type ReactNode, useContext } from 'react';
+import {
+  createContext,
+  type ComponentProps,
+  isValidElement,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -25,6 +33,64 @@ export type FileLinkHandler = (text: string, explicit?: boolean) => (() => void)
  * of a streaming reply.
  */
 const FileLinkContext = createContext<FileLinkHandler | undefined>(undefined);
+
+type ImageLoader = (path: string) => Promise<{ url: string; dispose(): void }>;
+const ImageContext = createContext<ImageLoader | undefined>(undefined);
+
+function Image({ src, alt }: ComponentProps<'img'>) {
+  const loader = useContext(ImageContext);
+  let path: string | undefined;
+  if (typeof src === 'string' && src !== '' && !/^(?:[a-z][a-z\d+.-]*:|\/\/|#|\?)/i.test(src)) {
+    try {
+      path = decodeURIComponent(src.split(/[?#]/, 1)[0]!);
+    } catch {
+      // An invalid encoded filename is shown as unavailable, never fetched.
+      path = '';
+    }
+  }
+  const [loaded, setLoaded] = useState<{ path: string; loader: ImageLoader; url?: string; failed?: boolean }>();
+  useEffect(() => {
+    if (loader === undefined || path === undefined) return;
+    let active = true;
+    let asset: Awaited<ReturnType<ImageLoader>> | undefined;
+    void Promise.resolve()
+      .then(() => {
+        if (active) setLoaded(undefined);
+        if (path === '') throw new Error('Invalid image path.');
+        return loader(path);
+      })
+      .then((result) => {
+        if (!active) {
+          result.dispose();
+          return;
+        }
+        asset = result;
+        setLoaded({ path, loader, url: result.url });
+      })
+      .catch(() => {
+        if (active) setLoaded({ path, loader, failed: true });
+      });
+    return () => {
+      active = false;
+      asset?.dispose();
+    };
+  }, [path, loader]);
+  const current = loaded?.path === path && loaded?.loader === loader ? loaded : undefined;
+  if (loader !== undefined && path !== undefined && (current?.url === undefined || current.failed))
+    return (
+      <span role={current?.failed ? 'alert' : 'status'} title={path}>
+        {alt || path || 'Image'} ({current?.failed ? 'unavailable' : 'loading...'})
+      </span>
+    );
+  return (
+    <img
+      src={loader !== undefined && path !== undefined ? current?.url : src}
+      alt={alt ?? ''}
+      onError={loader !== undefined && path !== undefined ? () => setLoaded({ path, loader, failed: true }) : undefined}
+      className="max-h-[480px] max-w-full rounded border border-doom-border"
+    />
+  );
+}
 
 function Code({ className, children, ...rest }: ComponentProps<'code'>) {
   const onFileLink = useContext(FileLinkContext);
@@ -139,20 +205,28 @@ const COMPONENTS: Components = {
     <th className="border border-doom-border bg-doom-deep px-2 py-1 text-left font-bold text-doom-hi">{children}</th>
   ),
   td: ({ children }) => <td className="border border-doom-border px-2 py-1 align-top">{children}</td>,
-  img: ({ src, alt }) => (
-    <img src={src} alt={alt ?? ''} className="max-h-[480px] max-w-full rounded border border-doom-border" />
-  ),
+  img: Image,
 };
 
 /** GitHub-flavored Markdown using the cockpit's safe, shared presentation. */
-export function Markdown({ text, onFileLink }: { text: string; onFileLink?: FileLinkHandler }) {
+export function Markdown({
+  text,
+  onFileLink,
+  loadImage,
+}: {
+  text: string;
+  onFileLink?: FileLinkHandler;
+  loadImage?: ImageLoader;
+}) {
   return (
     <FileLinkContext.Provider value={onFileLink}>
-      <div className="flex min-w-0 flex-col gap-2">
-        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={COMPONENTS}>
-          {text}
-        </ReactMarkdown>
-      </div>
+      <ImageContext.Provider value={loadImage}>
+        <div className="flex min-w-0 flex-col gap-2">
+          <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={COMPONENTS}>
+            {text}
+          </ReactMarkdown>
+        </div>
+      </ImageContext.Provider>
     </FileLinkContext.Provider>
   );
 }
