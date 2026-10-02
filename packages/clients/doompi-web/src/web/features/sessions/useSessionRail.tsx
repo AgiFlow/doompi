@@ -1,9 +1,10 @@
 import type { WebTemplateRail } from '@agimon-ai/doompi-core/web';
 import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { PluginSurface } from '../../components/PluginSurface';
+import { activityGroups, subscribeActivitySources } from '../../lib/composition';
 import {
   admitWorkspace,
   listDirectory,
@@ -132,6 +133,34 @@ export function useSessionRail({ onDismiss }: { onDismiss?: () => void }): WebTe
   const [now, setNow] = useState(() => Date.now());
   const [restarts, setRestarts] = useState<Readonly<Record<string, RailRestartState>>>({});
   const avatarUrls = useSessionAvatars(order, byId);
+  const backgroundWorkKey = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) => {
+        const releases = [
+          subscribeActivitySources(listener),
+          ...order.map((id) => {
+            const subscription = sessionStoreFor(id).subscribe(listener);
+            return () => subscription.unsubscribe();
+          }),
+        ];
+        return () => releases.forEach((release) => release());
+      },
+      [order],
+    ),
+    () =>
+      JSON.stringify(
+        order.filter((id) => {
+          const { statuses, widgets } = sessionStoreFor(id).state;
+          return activityGroups(statuses, widgets, id).some(
+            (group) => group.active && group.marksBackgroundWork !== false,
+          );
+        }),
+      ),
+  );
+  const backgroundWorkSessions = useMemo<ReadonlySet<string>>(
+    () => new Set(JSON.parse(backgroundWorkKey) as string[]),
+    [backgroundWorkKey],
+  );
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), STATUS_REFRESH_MS);
@@ -188,8 +217,9 @@ export function useSessionRail({ onDismiss }: { onDismiss?: () => void }): WebTe
         now,
         restarts,
         avatarUrls,
+        backgroundWorkSessions,
       }),
-    [order, byId, activeId, workspaceOrder, workspacesById, now, restarts, avatarUrls],
+    [order, byId, activeId, workspaceOrder, workspacesById, now, restarts, avatarUrls, backgroundWorkSessions],
   );
 
   const addingWorkspace =

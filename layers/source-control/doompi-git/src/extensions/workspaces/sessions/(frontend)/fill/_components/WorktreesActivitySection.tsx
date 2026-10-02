@@ -3,6 +3,7 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
  * The '# git' group's body in the activity dock.
  *
  * DESIGN PATTERNS:
+ * - The focused checkout's branch and diff stay visible, even with no child worktrees.
  * - One line per worktree, the same rule the runners rail follows: enough to
  *   notice it, not enough to work with it. The group's own name opens the tab
  *   that has room.
@@ -19,11 +20,23 @@ import { useStore } from '@tanstack/react-store';
 import type { WorktreeView } from '../../../../../../types/webWorktrees';
 import { worktreesTab } from '../../_components/WorktreesPanel';
 import { worktreeActivity } from '../../_lib/worktreesActivityStore';
+import { DiffActivitySection } from './DiffActivitySection';
 
-export function WorktreesActivitySection({ sessionId, openTransientTab }: WebPluginSlotProps) {
+export function WorktreesActivitySection(props: WebPluginSlotProps) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <DiffActivitySection {...props} />
+      <WorktreesSummary {...props} />
+    </div>
+  );
+}
+
+function WorktreesSummary({ sessionId, openTransientTab }: WebPluginSlotProps) {
   const session = useStore(worktreeActivity.store, (state) => worktreeActivity.select(state, sessionId));
+  // A top-level worktree can include itself in the channel's list. Its branch is already above.
+  const worktrees = session.worktrees.filter((worktree) => worktree.sessionId !== sessionId);
 
-  if (session.worktrees.length === 0 && session.pending === undefined) {
+  if (worktrees.length === 0 && session.pending === undefined) {
     return (
       <div className="flex items-center gap-2 px-1">
         <p data-testid="activity-summary-git" className="px-1 text-xs text-doom-faint">
@@ -52,7 +65,7 @@ export function WorktreesActivitySection({ sessionId, openTransientTab }: WebPlu
           <span className="min-w-0 truncate text-xs text-doom-dim">{session.pending}</span>
         </span>
       )}
-      {session.worktrees.map((worktree: WorktreeView) => (
+      {worktrees.map((worktree: WorktreeView) => (
         <Button
           key={worktree.id}
           variant="ghost"

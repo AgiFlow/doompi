@@ -1,14 +1,13 @@
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 /**
- * The '# diff' group's body: this session's code change against its base.
+ * The '# git' group's branch row: this session's code change against its base.
  *
  * DESIGN PATTERNS:
- * - One lane, `+A -R`. Files, base, upstream and a paused rebase live in the
- *   review tab's header, which this lane and the group's name both open.
+ * - One lane, branch and `+A -R`. Files, base, upstream and a paused rebase live
+ *   in the review tab's header, which this lane opens.
  * - Stays clickable at zero, because the review tab is also where pull, push
  *   and rebase live.
- * - Separate from '# git': worktrees are repository management, this is the
- *   session's own change.
+ * - Reads the focused session's checkout, whether it is a worktree or not.
  *
  * AVOID:
  * - Doing work here. This section reports and opens the tab.
@@ -23,13 +22,7 @@ export function DiffActivitySection({ sessionId, openTransientTab }: WebPluginSl
   const session = useStore(gitChanges.store, (state) => gitChanges.select(state, sessionId));
   const changes = session.changes;
 
-  if (sessionId === null || changes === undefined) {
-    return (
-      <p data-testid="activity-summary-diff" className="px-2 text-xs text-doom-faint">
-        idle
-      </p>
-    );
-  }
+  if (sessionId === null || changes === undefined) return null;
 
   const zero = changes.added === 0 && changes.removed === 0;
   const against = changes.base === undefined ? 'uncommitted' : `vs ${changes.base}`;
@@ -39,11 +32,12 @@ export function DiffActivitySection({ sessionId, openTransientTab }: WebPluginSl
         variant="ghost"
         size="xs"
         data-testid="activity-diff-changes"
-        aria-label={`review changes: ${String(changes.added)} added, ${String(changes.removed)} removed ${against}`}
+        aria-label={`review ${changes.branch ?? 'detached HEAD'} changes: ${String(changes.added)} added, ${String(changes.removed)} removed ${against}`}
         title={`${String(changes.files)} ${changes.files === 1 ? 'file' : 'files'} ${against}`}
-        className={`gap-1.5 px-1 text-xs font-bold ${zero ? 'text-doom-faint' : ''}`}
+        className={`min-w-0 flex-1 shrink gap-1.5 px-1 text-xs font-bold ${zero ? 'text-doom-faint' : ''}`}
         onClick={() => openTransientTab(reviewTab())}
       >
+        <span className="min-w-0 flex-1 truncate text-left text-doom-hi">{changes.branch ?? 'detached HEAD'}</span>
         <span className={zero ? '' : 'text-doom-green'}>+{changes.added}</span>
         <span className={zero ? '' : 'text-doom-red'}>-{changes.removed}</span>
       </Button>

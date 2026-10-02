@@ -34,6 +34,7 @@ export interface SessionRailModelInput {
   restarts: Readonly<Record<string, RailRestartState>>;
   /** Loaded profile avatars by session id. */
   avatarUrls: Readonly<Record<string, string>>;
+  backgroundWorkSessions?: ReadonlySet<string>;
 }
 
 export function workspaceName(workspace: Pick<WorkspaceSummary, 'root' | 'name'>): string {
@@ -87,6 +88,7 @@ function sessionView(id: string, ordinal: number, input: SessionRailModelInput):
     : sessionStatusLine(
         {
           attach,
+          backgroundWorkActive: input.backgroundWorkSessions?.has(id) === true,
           phase: summary.phase,
           phaseSince: summary.phaseSince,
           awaitingInput: summary.awaitingInput,

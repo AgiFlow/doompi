@@ -134,6 +134,24 @@ test('a run started while watching appears live', async ({ page, cockpit }) => {
 
   await expect(page.getByTestId('run-card-run-live')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('run-card-run-live')).toHaveAttribute('data-run-state', 'queued');
+  cockpit.session.emit({ type: 'agent_start' });
+  cockpit.session.emit({ type: 'agent_settled' });
+  const railStatus = page.getByTestId('session-card-s1').getByTestId('session-status');
+  await expect(railStatus).toHaveText('running');
+
+  writeRunStatus('s1', {
+    version: 1,
+    runId: 'run-live',
+    agent: 'doc-writer',
+    state: 'completed',
+    startedAt: Date.now() - 1000,
+    endedAt: Date.now(),
+    lastUpdate: Date.now(),
+    task: 'Draft the notes.',
+    cwd: '/workspace/doompi',
+  });
+  await expect(page.getByTestId('run-card-run-live')).toHaveAttribute('data-run-state', 'done');
+  await expect(railStatus).toHaveText('done · waiting for you');
 });
 
 const LONG_TASK =

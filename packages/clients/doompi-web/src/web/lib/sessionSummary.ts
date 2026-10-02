@@ -10,6 +10,7 @@ export interface StatusLineInput {
   phaseSince: string;
   awaitingInput: boolean;
   everPrompted: boolean;
+  backgroundWorkActive?: boolean;
   /** Set once any run finished; a settled session is not "fresh" even unprompted. */
   lastSettledAt?: string;
   /** Recorded by the hub but not running; opening it is what starts it. */
@@ -46,6 +47,7 @@ export function sessionStatusLine(input: StatusLineInput, now: number): string {
     const since = Date.parse(input.phaseSince);
     return `running · ${formatRunDuration(Number.isFinite(since) ? Math.max(0, now - since) : 0)}`;
   }
+  if (input.backgroundWorkActive === true) return 'running';
   // Background work outranks the idle copy: an agent waiting on a workflow is not "done".
   if (input.activity !== undefined) {
     const since = input.activity.since === undefined ? Number.NaN : Date.parse(input.activity.since);

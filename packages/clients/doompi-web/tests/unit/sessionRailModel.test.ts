@@ -254,3 +254,34 @@ describe('pending setups', () => {
     });
   });
 });
+
+describe('background session status', () => {
+  it('keeps idle sessions running while background work is active and returns to done when it settles', () => {
+    applySessionsSnapshot({
+      type: 'sessions_snapshot',
+      sessions: [
+        summary('agents', '2026-08-24T00:00:00.000Z', { everPrompted: true }),
+        summary('runners', '2026-08-24T00:00:00.000Z', { everPrompted: true }),
+      ],
+    });
+    for (const id of ['agents', 'runners']) {
+      expect(session(id, { backgroundWorkSessions: new Set([id]) }).status).toBe('running');
+      expect(session(id, { backgroundWorkSessions: new Set() }).status).toBe('done · waiting for you');
+    }
+  });
+
+  it('preserves refusal, dormant and input priorities over background work', () => {
+    applySessionsSnapshot({
+      type: 'sessions_snapshot',
+      sessions: [
+        summary('input', '2026-08-24T00:00:00.000Z', { awaitingInput: true }),
+        summary('dormant', '2026-08-24T00:00:00.000Z', { dormant: true }),
+        summary('refused', '2026-08-24T00:00:00.000Z', { attach: 'refused' }),
+      ],
+    });
+    const overrides = { backgroundWorkSessions: new Set(['input', 'dormant', 'refused']) };
+    expect(session('input', overrides).status).toBe('waiting for your input');
+    expect(session('dormant', overrides).status).toBe('stopped · open to wake');
+    expect(session('refused', overrides).status).toBe('another cockpit holds this session');
+  });
+});
