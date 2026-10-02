@@ -19,6 +19,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createDirectHarnessRuntime, promptForAssistantText } from '../../../../../src/server/directHarnessRuntime';
 import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../../src/services/historyOwnership';
+import type { HarnessEvent } from '../../../../../src/types/server/directHarnessRuntime';
 import type { DirectHarnessRuntimeOptions } from '../../../../../src/types/server/directHarnessRuntime';
 
 const model: Model<Api> = {
@@ -86,6 +87,63 @@ async function setup(
   return { runtime, streamSimple, storage, models };
 }
 describe('durable direct runtime', () => {
+  it('forwards committed model entries and usage before turn end with ancestry', async () => {
+    const { runtime } = await setup(
+      {
+        tools: [
+          { name: 'fixture', description: 'test', parameters: Type.Object({}), execute: async () => ({ content: [] }) },
+        ],
+      },
+      [
+        response([{ type: 'toolCall', id: 'call', name: 'fixture', arguments: {} }], 'toolUse'),
+        response([{ type: 'text', text: 'first' }]),
+        response([{ type: 'text', text: 'second' }]),
+      ],
+    );
+    const events: HarnessEvent[] = [];
+    runtime.onEvent((event) => {
+      events.push(event);
+    });
+    try {
+      await runtime.prompt('question');
+      await runtime.prompt('another question');
+      const entries = (await runtime.readEntries()).entries;
+      const added = events.filter((event) => event.type === 'entry_added');
+      for (const entry of entries.filter((entry) => entry.type === 'message')) {
+        const matching = added.filter((event) => event.entry.id === entry.id);
+        expect(matching).toHaveLength(1);
+        expect(matching[0]?.entry).toEqual(entry);
+      }
+      expect(events.filter((event) => event.type === 'usage')).toHaveLength(3);
+      const turns = events.filter((event) => event.type === 'turn_end');
+      expect(turns).toHaveLength(3);
+      expect(turns[0]?.toolResults).toHaveLength(1);
+      for (const turn of turns) {
+        const preceding = events.slice(0, events.indexOf(turn)).filter((event) => event.type === 'entry_added');
+        expect(
+          preceding.findLast((event) => event.entry.type === 'message' && event.entry.message.role === 'assistant')
+            ?.entry,
+        ).toMatchObject({ message: turn.message });
+        for (const result of turn.toolResults) {
+          expect(
+            preceding.findLast((event) => event.entry.type === 'message' && event.entry.message.role === 'toolResult')
+              ?.entry,
+          ).toMatchObject({ message: result });
+        }
+      }
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('retains writer closure failure across idempotent disposal', async () => {
+    const { runtime } = await setup();
+    const failure = new Error('writer closure failed');
+    vi.spyOn(runtime.harness, 'close').mockRejectedValue(failure);
+    // An unconfirmed writer closure must remain a failed, idempotent disposal.
+    await expect(runtime.dispose()).rejects.toMatchObject({ errors: [failure] });
+    await expect(runtime.exited).resolves.toBe(1);
+    await expect(runtime.dispose()).rejects.toMatchObject({ errors: [failure] });
+  });
   it('submits through durable Harness and projects string protocol IDs', async () => {
     const { runtime, streamSimple } = await setup();
     try {
@@ -144,11 +202,19 @@ describe('durable direct runtime', () => {
     }
   });
 
-  it('passive writes do not wake the model', async () => {
+  it('passive writes publish assistant usage without waking the model', async () => {
     const { runtime, streamSimple } = await setup();
+    const events: HarnessEvent[] = [];
+    runtime.onEvent((event) => {
+      events.push(event);
+    });
     try {
       await runtime.appendCustomEntry('fixture', { a: 1 });
       await runtime.appendMessage({ role: 'user', content: 'passive', timestamp: Date.now() });
+      await runtime.appendMessage(await response([{ type: 'text', text: 'passive assistant' }]).result());
+      expect(events.filter((event) => event.type === 'usage')).toEqual([
+        { type: 'usage', row: { id: expect.any(String), usage } },
+      ]);
       expect(streamSimple).not.toHaveBeenCalled();
       expect((await runtime.readEntries()).entries.some((e) => e.type === 'custom' && e.customType === 'fixture')).toBe(
         true,

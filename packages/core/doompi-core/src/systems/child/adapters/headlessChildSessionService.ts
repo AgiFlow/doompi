@@ -294,6 +294,7 @@ async function forkChildJournal(
   const source = await openReadOnlyDurableStorage(sourcePath);
   const read = createSession(source);
   let destination: Awaited<ReturnType<typeof openSqliteSessionStorage>> | undefined;
+  const failures: unknown[] = [];
   try {
     const navigation = await read.snapshot(DurableNavigationDoc, BACKGROUND_CONTEXT);
     const selected = navigation?.activeConversationId;
@@ -356,15 +357,26 @@ async function forkChildJournal(
       }
       (await tx.doc(DurableNavigationDoc)).activeConversationId = conversation.id;
     }, BACKGROUND_CONTEXT);
-    return destination.sessionFile;
-  } finally {
+  } catch (error) {
+    failures.push(error);
+  }
+  try {
     await read.close(BACKGROUND_CONTEXT);
-    if (destination) {
+  } catch (error) {
+    failures.push(error);
+  }
+  if (destination) {
+    try {
       await destination.session.close(BACKGROUND_CONTEXT);
-      await destination.repository.close(BACKGROUND_CONTEXT);
       await destination.historyLease.release();
+    } catch (error) {
+      failures.push(error);
     }
   }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, 'Child fork cleanup failed');
+  if (!destination) throw new Error('Child fork failed');
+  return destination.sessionFile;
 }
 
 export function createHeadlessChildSessionService(
@@ -431,17 +443,31 @@ export function createHeadlessChildSessionService(
         const file = sessionFile(runtime);
         return childRuntime(runtime, request.intercom, file ? registerNativeChild(file, runtime) : undefined);
       } catch (error) {
-        let failure: unknown = error;
+        const failures: unknown[] = [error];
+        let closed = false;
         try {
-          await runtime?.dispose();
+          if (runtime) {
+            await runtime.dispose();
+            closed = true;
+          }
         } catch (cleanupError) {
-          failure = new AggregateError([error, cleanupError], 'Headless child startup cleanup failed');
-        } finally {
-          request.intercom?.dispose?.();
-          if (sessionPath !== undefined && request.source.kind === 'v4-fork')
-            for (const suffix of ['', '-wal', '-shm']) fs.rmSync(sessionPath + suffix, { force: true });
+          failures.push(cleanupError);
         }
-        throw failure;
+        try {
+          request.intercom?.dispose?.();
+        } catch (cleanupError) {
+          failures.push(cleanupError);
+        }
+        // A rejected factory may have failed its own writer cleanup, so retain that fork.
+        if (closed && sessionPath !== undefined && request.source.kind === 'v4-fork') {
+          try {
+            for (const suffix of ['', '-wal', '-shm']) fs.rmSync(sessionPath + suffix, { force: true });
+          } catch (cleanupError) {
+            failures.push(cleanupError);
+          }
+        }
+        if (failures.length > 1) throw new AggregateError(failures, 'Headless child startup cleanup failed');
+        throw error;
       }
     },
     { now: options.now ?? Date.now },

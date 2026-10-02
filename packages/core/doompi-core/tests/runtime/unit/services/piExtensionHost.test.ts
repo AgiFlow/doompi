@@ -3,6 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { createAssistantMessageEventStream, type Models, type Model, type Api } from '@earendil-works/pi-ai';
 import type { Extension, LoadExtensionsResult, RegisteredTool, SessionEntry } from '@earendil-works/pi-coding-agent';
 import {
   createExtensionRuntime,
@@ -13,8 +14,11 @@ import {
   SessionManager,
   SettingsManager,
 } from '@earendil-works/pi-coding-agent';
+import { MemoryStorage } from '@earendil-works/pi-durable';
+import { Type } from 'typebox';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createDirectHarnessRuntime } from '../../../../src/server/directHarnessRuntime';
 import {
   createBridgedSessionManager,
   createPiExtensionHost,
@@ -761,7 +765,125 @@ describe('Pi lifecycle events in the headless host', () => {
     );
     expect(notices).not.toHaveBeenCalled();
     expect(stub.readEntries).toHaveBeenCalledTimes(1);
+
+    // An old branch assistant and tool result must never satisfy a later turn.
+    await stub.emit({ type: 'turn_start', lane: 'main', runId: 'run-1', turnId: 'turn-2' });
+    await stub.emit({
+      type: 'turn_end',
+      lane: 'main',
+      runId: 'run-1',
+      turnId: 'turn-2',
+      message: assistant,
+      toolResults: [],
+    });
+    expect(turnEnd).toHaveBeenCalledTimes(1);
+    await stub.emit({ type: 'turn_start', lane: 'main', runId: 'run-1', turnId: 'turn-3' });
+    await stub.emit({
+      type: 'entry_added',
+      lane: 'main',
+      entry: messageEntry('assistant-2', { ...assistant }, 'tool-1'),
+    });
+    await stub.emit({
+      type: 'turn_end',
+      lane: 'main',
+      runId: 'run-1',
+      turnId: 'turn-3',
+      message: assistant,
+      toolResults: [toolResult],
+    });
+    expect(turnEnd).toHaveBeenCalledTimes(1);
+    expect(notices).toHaveBeenCalledTimes(2);
+    for (const stopReason of ['stop', 'error', 'aborted'] as const) {
+      await stub.emit({ type: 'turn_start', lane: 'main', runId: 'run-1', turnId: stopReason });
+      const message = { ...assistant, stopReason };
+      await stub.emit({ type: 'entry_added', lane: 'main', entry: messageEntry(stopReason, { ...message }) });
+      await stub.emit({ type: 'turn_end', lane: 'main', runId: 'run-1', turnId: stopReason, message, toolResults: [] });
+      expect(turnEnd).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          messageEntryId: stopReason,
+          outcome: stopReason === 'stop' ? 'completed' : stopReason,
+        }),
+        expect.anything(),
+      );
+    }
+    turnEnd.mockClear();
     await host.shutdown();
+
+    const model: Model<Api> = {
+      id: 'claude',
+      name: 'Fixture',
+      api: 'anthropic-messages',
+      provider: 'anthropic',
+      baseUrl: 'http://localhost',
+      reasoning: false,
+      input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 65536,
+      maxTokens: 256,
+    };
+    const answers = [
+      {
+        ...assistant,
+        stopReason: 'toolUse' as const,
+        content: [{ type: 'toolCall' as const, id: 'live-call', name: 'fixture', arguments: {} }],
+      },
+      { ...assistant, stopReason: 'stop' as const, content: [{ type: 'text' as const, text: 'first' }] },
+      { ...assistant, stopReason: 'stop' as const, content: [{ type: 'text' as const, text: 'second' }] },
+    ];
+    const models = {
+      getModels: () => [model],
+      getAvailable: async () => [model],
+      getModel: () => model,
+      streamSimple: () => {
+        const stream = createAssistantMessageEventStream();
+        const answer = answers.shift()!;
+        stream.push({ type: 'start', partial: answer });
+        stream.push({ type: 'done', reason: answer.stopReason, message: answer });
+        stream.end();
+        return stream;
+      },
+      complete: vi.fn(),
+    } as unknown as Models;
+    const runtime = await createDirectHarnessRuntime({
+      cwd: temporaryRoot(),
+      durableStorage: new MemoryStorage(),
+      models,
+      model,
+      compaction: { enabled: false },
+      tools: [
+        { name: 'fixture', description: 'test', parameters: Type.Object({}), execute: async () => ({ content: [] }) },
+      ],
+    });
+    const liveHost = createPiExtensionHost({
+      cwd: '/tmp',
+      agentDir: '/tmp/.pi',
+      models: models as unknown as ConstructorParameters<typeof ModelRegistry>[0],
+      settings: SettingsManager.inMemory(),
+      runtime,
+      preload,
+      getModel: () => model,
+      getThinkingLevel: () => 'off',
+      client: () => undefined,
+    });
+    try {
+      await liveHost.load();
+      await runtime.prompt('question');
+      await runtime.prompt('another question');
+      const entries = (await runtime.readEntries()).entries;
+      const assistants = entries.filter((entry) => entry.type === 'message' && entry.message.role === 'assistant');
+      const result = entries.find((entry) => entry.type === 'message' && entry.message.role === 'toolResult');
+      expect(turnEnd).toHaveBeenCalledTimes(3);
+      for (const [index, entry] of assistants.entries()) {
+        expect(turnEnd.mock.calls[index]?.[0]).toMatchObject({
+          messageEntryId: entry.id,
+          toolResultEntryIds: index === 0 ? [result?.id] : [],
+          outcome: 'completed',
+        });
+      }
+    } finally {
+      await liveHost.shutdown();
+      await runtime.dispose();
+    }
   });
 
   it('dispatches navigation, session metadata and compaction lifecycle events', async () => {
