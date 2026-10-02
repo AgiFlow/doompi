@@ -22,7 +22,7 @@ import {
   type DoomChildSessionTerminalPiForkSource,
   type DoomChildSessionRequest,
 } from '../../../exports/childSession';
-import type { DoomChildSessionTool } from '../../../exports/childSession';
+import type { DoomChildSessionMcpTool } from '../../../exports/childSession';
 import {
   createDirectHarnessRuntime,
   promptForAssistantText,
@@ -38,6 +38,7 @@ import { openSqliteSessionStorage } from '../../../services/sqliteSessionStorage
 import type { DirectHarnessModel } from '../../../types/server/directHarnessRuntime';
 import {
   composeDirectHarnessRequestOptions,
+  bindChildMcpCatalog,
   createHeadlessChildSessionService,
   parseChildModelReference,
   resolveChildProviders,
@@ -58,7 +59,8 @@ export interface TerminalPiChildSessionServiceOptions {
   readonly defaultModel?: () => DirectHarnessModel | undefined;
   /** Snapshot the parent preference once per creation, never live-sync child toggles. */
   readonly parentFastMode?: () => boolean | Promise<boolean>;
-  readonly mcpTool?: () => DoomChildSessionTool | undefined;
+  readonly mcpTool?: () => DoomChildSessionMcpTool | undefined;
+  readonly subscribeMcpTool?: (listener: () => void) => () => void;
   readonly historyOwnership?: HistoryOwnership;
   readonly now?: () => number;
   readonly runtimeFactory?: (options: DirectHarnessRuntimeOptions) => Promise<DirectHarnessRuntime>;
@@ -95,10 +97,13 @@ function childRuntime(
     abort: () => runtime.abort(),
     dispose: async () => {
       try {
-        await runtime.dispose();
-      } finally {
         release?.();
-        intercom?.dispose?.();
+      } finally {
+        try {
+          await runtime.dispose();
+        } finally {
+          intercom?.dispose?.();
+        }
       }
     },
   };
@@ -125,7 +130,8 @@ async function installIntercom(
       context: { abortSignal: AbortSignal | undefined },
     ) => tool.execute(operationId, params, context.abortSignal ?? new AbortController().signal, onUpdate as never),
   } as unknown as DirectHarnessTool;
-  await runtime.replaceTools([...tools, adapted]);
+  tools.push(adapted);
+  await runtime.replaceTools(tools);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -302,6 +308,7 @@ export function createTerminalPiChildSessionService(
     ...(options.defaultModel === undefined ? {} : { defaultModel: options.defaultModel }),
     ...(options.parentFastMode === undefined ? {} : { parentFastMode: options.parentFastMode }),
     ...(options.mcpTool === undefined ? {} : { mcpTool: options.mcpTool }),
+    ...(options.subscribeMcpTool === undefined ? {} : { subscribeMcpTool: options.subscribeMcpTool }),
     historyOwnership: ownership,
     ...(options.now === undefined ? {} : { now: options.now }),
     runtimeFactory,
@@ -340,12 +347,16 @@ export function createTerminalPiChildSessionService(
         if (requestedModel && model) await runtime.setModel(model);
         if (thinking !== undefined) await runtime.setThinkingLevel(thinking as never);
         await installIntercom(runtime, request.intercom, (runtimeOptions.tools ?? []) as DirectHarnessTool[]);
+        const releaseMcp = bindChildMcpCatalog(runtime, request, options, runtimeOptions.tools ?? []);
         const file = runtime.sessionFile;
-        return childRuntime(
-          runtime,
-          request.intercom,
-          typeof file === 'string' ? registerNativeChild(file, runtime) : undefined,
-        );
+        const releaseNative = typeof file === 'string' ? registerNativeChild(file, runtime) : undefined;
+        return childRuntime(runtime, request.intercom, () => {
+          try {
+            releaseMcp();
+          } finally {
+            releaseNative?.();
+          }
+        });
       } catch (error) {
         let failure: unknown = error;
         try {

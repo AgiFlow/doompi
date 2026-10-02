@@ -23,6 +23,7 @@ import {
   type DoomChildSessionService,
   type DoomChildSessionServiceProvider,
   type DoomChildSessionTool,
+  type DoomChildSessionMcpTool,
 } from '../../../exports/childSession';
 import {
   createDirectHarnessRuntime,
@@ -58,7 +59,8 @@ export interface HeadlessChildSessionServiceOptions {
   /** Snapshot the parent preference once per creation, never live-sync child toggles. */
   readonly parentFastMode?: () => boolean | Promise<boolean>;
   /** Resolve the current session's MCP dispatcher at spawn and invocation time. */
-  readonly mcpTool?: () => DoomChildSessionTool | undefined;
+  readonly mcpTool?: () => DoomChildSessionMcpTool | undefined;
+  readonly subscribeMcpTool?: (listener: () => void) => () => void;
   readonly historyOwnership?: HistoryOwnership;
   readonly now?: () => number;
   readonly runtimeFactory?: (options: DirectHarnessRuntimeOptions) => Promise<DirectHarnessRuntime>;
@@ -129,10 +131,13 @@ function childRuntime(
     abort: () => runtime.abort(),
     dispose: async () => {
       try {
-        await runtime.dispose();
-      } finally {
         release?.();
-        intercom?.dispose?.();
+      } finally {
+        try {
+          await runtime.dispose();
+        } finally {
+          intercom?.dispose?.();
+        }
       }
     },
   };
@@ -161,7 +166,8 @@ async function installIntercom(
       return { content: result.content as never, details: result.details, isError: result.isError };
     },
   };
-  await runtime.replaceTools([...tools, adapted]);
+  tools.push(adapted);
+  await runtime.replaceTools(tools);
 }
 
 function hasConfiguredValues(value: readonly string[] | undefined): boolean {
@@ -229,12 +235,12 @@ type DoomChildSessionToolResultContent = Awaited<ReturnType<DoomChildSessionTool
 /** Validate and project native fields before a source fork can publish a child journal. */
 export function composeDirectHarnessRequestOptions(
   request: DoomChildSessionRequest,
-  resolveMcpTool?: () => DoomChildSessionTool | undefined,
+  resolveMcpTool?: () => DoomChildSessionMcpTool | undefined,
+  validateRequired = true,
 ): Pick<DirectHarnessRuntimeOptions, 'systemPrompt' | 'tools' | 'activeToolNames'> {
   const unsupported = [
     ...(hasConfiguredValues(request.extensions) ? ['extensions'] : []),
     ...(hasConfiguredValues(request.subagentOnlyExtensions) ? ['subagentOnlyExtensions'] : []),
-    ...(hasConfiguredValues(request.mcpDirectTools) ? ['mcpDirectTools'] : []),
     ...(hasConfiguredValues(request.capabilityCeiling?.allowedExternalProfiles) ? ['allowedExternalProfiles'] : []),
   ];
   if (unsupported.length > 0) {
@@ -245,42 +251,144 @@ export function composeDirectHarnessRequestOptions(
 
   const requested = [...new Set(request.tools ?? Object.keys(NATIVE_TOOL_FACTORIES))];
   const excluded = new Set(request.excludeTools ?? []);
-  const allowed = request.capabilityCeiling?.allowedTools;
+  const ceiling = request.capabilityCeiling;
+  const allowed = ceiling?.allowedTools;
   const isMcp = (name: string) => name === 'mcp' || name === 'mcp_use';
-  const mcpDenied = request.capabilityCeiling?.allowMcpTools === false || [...excluded].some(isMcp);
-  const names = requested.filter(
-    (name) => !excluded.has(name) && (allowed === undefined || allowed.includes(name)) && !(isMcp(name) && mcpDenied),
+  const mcpDenied =
+    (ceiling !== undefined && ceiling.allowMcpTools !== true) ||
+    (allowed !== undefined && allowed.every((name) => Object.hasOwn(NATIVE_TOOL_FACTORIES, name))) ||
+    [...excluded].some(isMcp);
+  const wantsMcp =
+    !mcpDenied &&
+    (requested.some(isMcp) ||
+      hasConfiguredValues(request.mcpDirectTools) ||
+      requested.some((name) => !Object.hasOwn(NATIVE_TOOL_FACTORIES, name)));
+  const provider = wantsMcp ? resolveMcpTool?.() : undefined;
+  const catalog = provider?.catalog;
+  const snapshot = catalog?.snapshot() ?? [];
+  const expand = (values: readonly string[]) =>
+    new Set(values.flatMap((name) => (isMcp(name) ? snapshot.map((tool) => tool.name) : [name])));
+  const grants = allowed === undefined ? undefined : expand(allowed);
+  const denied = expand([...excluded]);
+  const selected = expand(requested);
+  if (request.mcpDirectTools?.length) {
+    const selectors = new Set(catalog?.resolveSelectors(request.mcpDirectTools) ?? []);
+    for (const tool of snapshot) {
+      if (!selectors.has(tool.name)) selected.delete(tool.name);
+      else if (request.tools === undefined) selected.add(tool.name);
+    }
+  }
+  const nativeNames = requested.filter(
+    (name) =>
+      Object.hasOwn(NATIVE_TOOL_FACTORIES, name) && !denied.has(name) && (grants === undefined || grants.has(name)),
   );
-  const unknown = names.filter((name) => !Object.hasOwn(NATIVE_TOOL_FACTORIES, name) && !isMcp(name));
-  if (unknown.length > 0)
-    throw new Error(`Native child session requested unknown direct harness tools: ${unknown.join(', ')}`);
-  const required = request.capabilityCeiling?.requiredTools ?? [];
-  const missing = required.filter((name) => !names.includes(name));
-  if (missing.length > 0)
-    throw new Error(`Native child session capability ceiling requires unavailable tools: ${missing.join(', ')}`);
-  const mcpTool = names.some(isMcp) ? resolveMcpTool?.() : undefined;
-  if (names.some(isMcp) && !mcpTool)
-    throw new Error('Native child session MCP tools are unavailable. Enable MCP in the parent session.');
-  const tools = names.map((name) => {
-    if (!isMcp(name))
-      return adaptNativeTool(
-        NATIVE_TOOL_FACTORIES[name as keyof typeof NATIVE_TOOL_FACTORIES](request.cwd) as NativeCodingTool,
+  const direct = mcpDenied
+    ? []
+    : snapshot.filter(
+        (tool) => selected.has(tool.name) && !denied.has(tool.name) && (grants === undefined || grants.has(tool.name)),
       );
-    return adaptNativeTool({
-      ...mcpTool!,
-      name,
-      execute(toolCallId, parameters, signal, onUpdate) {
-        signal?.throwIfAborted();
-        if (resolveMcpTool?.() !== mcpTool)
-          throw new Error('The parent session MCP dispatcher is no longer available.');
-        return mcpTool!.execute(toolCallId, parameters, signal, onUpdate);
-      },
-    } satisfies DoomChildSessionTool);
-  });
+  const unknown = requested.filter(
+    (name) =>
+      !Object.hasOwn(NATIVE_TOOL_FACTORIES, name) &&
+      !isMcp(name) &&
+      !snapshot.some((tool) => tool.name === name) &&
+      !denied.has(name) &&
+      (grants === undefined || grants.has(name)),
+  );
+  if (unknown.length > 0 && validateRequired)
+    throw new Error(`Native child session requested unknown direct harness tools: ${unknown.join(', ')}`);
+  const names = [...nativeNames, ...direct.map((tool) => tool.name)];
+  const required = ceiling?.requiredTools ?? [];
+  const missing = required.filter((name) => (isMcp(name) ? direct.length === 0 : !names.includes(name)));
+  if (validateRequired && missing.length > 0)
+    throw new Error(`Native child session capability ceiling requires unavailable tools: ${missing.join(', ')}`);
+  if (validateRequired && wantsMcp && !catalog)
+    throw new Error('Native child session MCP tools are unavailable. Enable MCP in the parent session.');
+  const tools = [
+    ...nativeNames.map((name) =>
+      adaptNativeTool(
+        NATIVE_TOOL_FACTORIES[name as keyof typeof NATIVE_TOOL_FACTORIES](request.cwd) as NativeCodingTool,
+      ),
+    ),
+    ...direct.map((tool) =>
+      adaptNativeTool({
+        ...tool,
+        execute(toolCallId, parameters, signal, onUpdate) {
+          signal?.throwIfAborted();
+          if (resolveMcpTool?.() !== provider || !catalog?.snapshot().includes(tool))
+            throw new Error('The parent session MCP tool is no longer available.');
+          return tool.execute(toolCallId, parameters, signal, onUpdate);
+        },
+      } satisfies DoomChildSessionTool),
+    ),
+  ];
   return {
     tools,
     activeToolNames: names,
     ...(request.systemPrompt === undefined ? {} : { systemPrompt: request.systemPrompt }),
+  };
+}
+
+/** Refresh borrowed declarations without replacing native tools or rebinding intercom. */
+export function bindChildMcpCatalog(
+  runtime: DirectHarnessRuntime,
+  request: DoomChildSessionRequest,
+  options: Pick<HeadlessChildSessionServiceOptions, 'mcpTool' | 'subscribeMcpTool'>,
+  initialTools: readonly DirectHarnessTool[],
+): () => void {
+  if (request.capabilityCeiling !== undefined && request.capabilityCeiling.allowMcpTools !== true)
+    return () => undefined;
+  if (request.capabilityCeiling?.allowedTools?.every((name) => Object.hasOwn(NATIVE_TOOL_FACTORIES, name)))
+    return () => undefined;
+  if (request.excludeTools?.some((name) => name === 'mcp' || name === 'mcp_use')) return () => undefined;
+  if (
+    !request.tools?.some(
+      (name) => name === 'mcp' || name === 'mcp_use' || !Object.hasOwn(NATIVE_TOOL_FACTORIES, name),
+    ) &&
+    !request.mcpDirectTools?.length
+  )
+    return () => undefined;
+  const retained = initialTools.filter(
+    (tool, index) =>
+      Object.hasOwn(NATIVE_TOOL_FACTORIES, tool.name) ||
+      (request.intercom !== undefined && index === initialTools.length - 1),
+  );
+  let disposed = false;
+  let provider: DoomChildSessionMcpTool | undefined;
+  let unsubscribeCatalog: (() => void) | undefined;
+  let previous: readonly DoomChildSessionTool[] = [];
+  let pending = Promise.resolve();
+  let failure: unknown;
+  const refresh = () => {
+    if (disposed) return;
+    const current = options.mcpTool?.();
+    const changed = current !== provider;
+    if (changed) {
+      unsubscribeCatalog?.();
+      provider = current;
+      unsubscribeCatalog = provider?.catalog?.subscribe(refresh);
+    }
+    const snapshot = provider?.catalog?.snapshot() ?? [];
+    if (!changed && snapshot.length === previous.length && snapshot.every((tool, index) => tool === previous[index]))
+      return;
+    previous = snapshot;
+    const composition = composeDirectHarnessRequestOptions(request, options.mcpTool, false);
+    const direct = (composition.tools ?? []).filter((tool) => !Object.hasOwn(NATIVE_TOOL_FACTORIES, tool.name));
+    pending = pending
+      .then(async () => {
+        if (!disposed) await runtime.replaceTools([...retained, ...direct]);
+      })
+      .catch((error: unknown) => {
+        failure = error;
+      });
+  };
+  const unsubscribeProvider = options.subscribeMcpTool?.(refresh);
+  refresh();
+  return () => {
+    disposed = true;
+    unsubscribeProvider?.();
+    unsubscribeCatalog?.();
+    if (failure !== undefined) throw new Error('Child MCP catalog refresh failed.', { cause: failure });
   };
 }
 
@@ -428,8 +536,16 @@ export function createHeadlessChildSessionService(
         if (requestedModel && model) await runtime.setModel(model);
         if (thinking !== undefined) await runtime.setThinkingLevel(thinking as never);
         await installIntercom(runtime, request.intercom, (runtimeOptions.tools ?? []) as DirectHarnessTool[]);
+        const releaseMcp = bindChildMcpCatalog(runtime, request, options, runtimeOptions.tools ?? []);
         const file = sessionFile(runtime);
-        return childRuntime(runtime, request.intercom, file ? registerNativeChild(file, runtime) : undefined);
+        const releaseNative = file ? registerNativeChild(file, runtime) : undefined;
+        return childRuntime(runtime, request.intercom, () => {
+          try {
+            releaseMcp();
+          } finally {
+            releaseNative?.();
+          }
+        });
       } catch (error) {
         let failure: unknown = error;
         try {

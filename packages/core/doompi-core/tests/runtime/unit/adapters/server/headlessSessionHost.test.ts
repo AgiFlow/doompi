@@ -20,6 +20,7 @@ import {
   type DoomHeadlessTool,
 } from '../../../../../src/exports/headless';
 import type { DoomMcpPluginContext } from '../../../../../src/exports/mcpFacet';
+import { DOOM_MCP_STATUS_SERVICE } from '../../../../../src/exports/mcpStatus';
 import { DOOM_NOTIFICATION_ENTRY_TYPE } from '../../../../../src/exports/notification';
 import type { DoomServerBundleEntry } from '../../../../../src/exports/serverFacet';
 import * as directHarnessRuntime from '../../../../../src/server/directHarnessRuntime';
@@ -320,6 +321,124 @@ describe('request-private auxiliary model tools', () => {
 });
 
 describe('headless session facet surface', () => {
+  it('emits both configured MCP declarations with complete schemas in the actual main model request', async () => {
+    const parameters = Type.Object(
+      {
+        query: Type.String({ minLength: 1, description: 'Search expression' }),
+        filters: Type.Optional(Type.Object({ tags: Type.Array(Type.String()), limit: Type.Integer({ minimum: 1 }) })),
+      },
+      { additionalProperties: false },
+    );
+    const declarations = ['personal', 'work'].map((server) => ({
+      name: `${server}_search`,
+      description: `Search ${server} account`,
+      parameters,
+    }));
+    const streamSimple = vi.fn<ModelRuntime['streamSimple']>(() => {
+      const stream = createAssistantMessageEventStream();
+      const message: AssistantMessage = {
+        role: 'assistant',
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        timestamp: Date.now(),
+        stopReason: 'stop',
+        content: [{ type: 'text', text: 'Done' }],
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      };
+      stream.push({ type: 'start', partial: message });
+      stream.push({ type: 'done', reason: 'stop', message });
+      stream.end();
+      return stream;
+    });
+    const candidate: DoomServerBundleEntry = {
+      packageName: '@test/direct-mcp',
+      entry: './server.ts',
+      module: './server.mjs',
+      scopes: ['session'],
+      required: true,
+      owners: [{ majorMode: 'test', layer: 'default' }],
+    };
+    const current = await fixture([], { candidates: [candidate], streamSimple });
+    await current.context
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin((context: Context) => {
+        for (const tool of declarations)
+          requireDoomHeadlessHost(context).registerTool({ ...tool, execute: async () => ({ content: [] }) });
+      })
+      .await();
+    await current.host.activateFacets({
+      root: current.context,
+      installedPackages: [candidate.packageName],
+      dispose: async () => {},
+    });
+    await current.session.prompt('Inspect available search tools.');
+    expect(streamSimple).toHaveBeenCalledOnce();
+    // Pi 1.0 carries declarations as transcript tool deltas, not context.tools.
+    const emitted = streamSimple.mock.calls[0]![1].messages.flatMap((message) =>
+      'toolsAdded' in message ? (message.toolsAdded ?? []) : [],
+    );
+    expect(emitted.map(({ name }) => name)).toEqual(['personal_search', 'work_search']);
+    expect(emitted.map(({ name, description, parameters }) => ({ name, description, parameters }))).toEqual(
+      declarations,
+    );
+  });
+
+  it('attributes registered MCP names by exact status mapping, without changing package eligibility', async () => {
+    const candidate: DoomServerBundleEntry = {
+      packageName: '@test/mcp-owner',
+      entry: './server.ts',
+      module: './server.mjs',
+      scopes: ['session'],
+      required: true,
+      owners: [{ majorMode: 'test', layer: 'default' }],
+    };
+    const current = await fixture([], { candidates: [candidate] });
+    current.context.provide(DOOM_MCP_STATUS_SERVICE, {
+      generation: 'test',
+      getSnapshot: () => ({
+        servers: [
+          { name: 'configured-account', state: 'connected', tools: ['opaque_registered_name'], resourceCount: 0 },
+        ],
+      }),
+    });
+    await current.context
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin((context: Context) => {
+        const host = requireDoomHeadlessHost(context);
+        for (const name of ['opaque_registered_name', 'configured_account_not_mcp'])
+          host.registerTool({
+            name,
+            description: 'Complete description',
+            parameters: Type.Object({ query: Type.String() }),
+            execute: async () => ({ content: [] }),
+          });
+      })
+      .await();
+    await current.host.activateFacets({
+      root: current.context,
+      installedPackages: [candidate.packageName],
+      dispose: async () => {},
+    });
+    const inventory = current.host.host!.getContextInventory();
+    expect(inventory.sources.find((source) => source.kind === 'mcp')).toMatchObject({
+      key: 'mcp:configured-account',
+      packageName: candidate.packageName,
+      tools: [{ name: 'opaque_registered_name', active: true }],
+    });
+    expect(inventory.sources.find((source) => source.kind === 'extension')?.tools.map((tool) => tool.name)).toEqual([
+      'configured_account_not_mcp',
+    ]);
+    expect(inventory.attribution['configured-account']).toEqual(inventory.attribution[candidate.packageName]);
+  });
+
   it.each([false, true])(
     'composes additive modes and selective exclusions across both tool surfaces (voice=%s)',
     async (voice) => {

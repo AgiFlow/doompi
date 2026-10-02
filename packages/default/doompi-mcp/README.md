@@ -12,7 +12,7 @@ absent rather than merely hidden from the model.
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 1.0.0 and Pi TUI 0.85.0
+- Pi 1.0.0 and Pi TUI 1.0.0
 
 ## Install
 
@@ -72,6 +72,28 @@ session Cordis root. Each Pi reload disposes the old injected runtime before the
 Downstream clients run in-process through `@agimon-ai/mcp-proxy`; this adapter does not start its
 Hono server.
 
+## Direct tools and configured identity
+
+Main sessions and native child agents receive permitted named MCP tools with their descriptions
+and complete input schemas. Names use the configured entry prefix, not the downstream-reported
+server name: `personal/search` is exposed as `personal_search` and `work/search` as `work_search`.
+Non-alphanumeric prefix characters become underscores, preserving existing names and collision
+diagnostics.
+
+Two configured entries may point to the same URL with different accounts. Each uses its own
+configured-name connection and credential slot. Requests retain the exact configured name and
+original downstream tool name; tool prefixes are not parsed to route calls.
+
+Children borrow the parent runtime. Requested `mcp` or `mcp_use` groups expand into permitted
+direct tools; `mcpDirectTools` selectors (`*`, a configured server, or `server/tool`) narrow that
+set. Capability ceilings must explicitly allow MCP and still constrain the selected tools.
+Children cannot manage the parent's connections. Remote `mcp_use` remains a compatibility route,
+not the default native model declaration.
+
+Full schemas cost context tokens. Select domains and child subsets rather than hiding tool
+availability or repeating catalogs in prompt prose. Codemode and tool search remain disabled;
+the Pi 1.0.0 source review did not measure savings or justify enabling them.
+
 ## Commands
 
 ```text
@@ -81,14 +103,14 @@ Hono server.
 /mcp reload
 ```
 
-In a TUI, the bare `/mcp` command opens the interactive overlay. In the web cockpit, the focused
-session's Context panel lists only servers currently waiting for authorization. Its `authorize`
-action sends one `/mcp auth <server>` prompt frame to that session. The authorization URL then appears
-as a clickable notice in the transcript. Headless hosts never open a desktop browser automatically.
+In a TUI, the bare `/mcp` command opens the interactive overlay. The web Context panel lists
+configured servers and their named tools, including authorization and management actions. Open a
+tool to inspect its description, full input schema, warnings and estimated schema tokens.
+Authorization sends one `/mcp auth <server>` prompt frame; headless hosts never open a desktop
+browser automatically.
 
-The live browser status is intentionally compact: `doom-mcp-session-auth` contains JSON rows shaped
-as `[{"name":"server","state":"needs-auth"}]` and is cleared when no server needs authorization.
-It never includes authorization URLs, errors, credentials, or credential-store data. Repository
+The compact `doom-mcp-session-auth` status carries configured names, states, safe authorization
+URLs and tool identities/estimates. It excludes credentials and credential-store data. Repository
 catalog and authorization APIs remain separate from this live-session view.
 
 ## Credentials and trust

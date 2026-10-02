@@ -3,7 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { createAssistantMessageEventStream, type Api, type AssistantMessage, type Model } from '@earendil-works/pi-ai';
+import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { AgentDoc } from '@earendil-works/pi-durable';
+import { Type } from 'typebox';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DoomChildSessionRequest } from '../../../../../src/exports/childSession';
@@ -12,6 +15,8 @@ import { DurableNavigationDoc } from '../../../../../src/services/durableNavigat
 import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
 import { openSqliteSessionStorage } from '../../../../../src/services/sqliteSessionStorage';
 import {
+  composeDirectHarnessRequestOptions,
+  bindChildMcpCatalog,
   createHeadlessChildSessionService,
   createHeadlessChildSessionServiceProvider,
   type HeadlessChildSessionServiceOptions,
@@ -118,6 +123,102 @@ async function createSource(root: string): Promise<string> {
 }
 
 describe('headless child session provider', () => {
+  it('emits only the selected work MCP declaration in an actual native child model request', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-child-model-tools-'));
+    const model: Model<Api> = {
+      id: 'test-model',
+      name: 'Test',
+      provider: 'test-provider',
+      api: 'test-api',
+      baseUrl: 'http://localhost',
+      reasoning: false,
+      input: ['text'],
+      contextWindow: 65536,
+      maxTokens: 128,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    };
+    const parameters = Type.Object(
+      {
+        query: Type.String({ minLength: 1 }),
+        filters: Type.Optional(Type.Object({ tags: Type.Array(Type.String()) })),
+      },
+      { additionalProperties: false },
+    );
+    const tools = ['personal', 'work'].map((server) => ({
+      name: `${server}_search`,
+      description: `Search ${server} account`,
+      parameters,
+      execute: async () => ({ content: [] }),
+    }));
+    const streamSimple = vi.fn<ModelRuntime['streamSimple']>(() => {
+      const stream = createAssistantMessageEventStream();
+      const message: AssistantMessage = {
+        role: 'assistant',
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        timestamp: Date.now(),
+        stopReason: 'stop',
+        content: [{ type: 'text', text: 'Done' }],
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      };
+      stream.push({ type: 'start', partial: message });
+      stream.push({ type: 'done', reason: 'stop', message });
+      stream.end();
+      return stream;
+    });
+    const models = {
+      getModel: () => model,
+      getModels: () => [model],
+      getAvailable: async () => [model],
+      hasConfiguredAuth: () => true,
+      streamSimple,
+    } as unknown as ModelRuntime;
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent',
+      cwd: root,
+      sessionsRoot: root,
+      models,
+      defaultModel: () => ({ provider: model.provider, id: model.id }),
+      mcpTool: () => ({
+        name: 'mcp',
+        description: 'Private dispatcher',
+        parameters: {},
+        execute: async () => ({ content: [] }),
+        catalog: { snapshot: () => tools, resolveSelectors: () => ['work_search'], subscribe: () => () => undefined },
+      }),
+    });
+    try {
+      const child = await service.start({
+        ...request({ kind: 'fresh' }, root),
+        tools: ['mcp_use'],
+        mcpDirectTools: ['work/search'],
+        capabilityCeiling: { allowedTools: ['mcp'], allowMcpTools: true },
+      });
+      await vi.waitFor(() => expect(child.state()).toBe('completed'));
+      expect(streamSimple).toHaveBeenCalledOnce();
+      // Pi 1.0 carries declarations as transcript tool deltas, not context.tools.
+      const emitted = streamSimple.mock.calls[0]![1].messages.flatMap((message) =>
+        'toolsAdded' in message ? (message.toolsAdded ?? []) : [],
+      );
+      expect(emitted.map(({ name }) => name)).toEqual(['work_search']);
+      expect(emitted.map(({ name, description, parameters }) => ({ name, description, parameters }))).toEqual([
+        { name: 'work_search', description: 'Search work account', parameters },
+      ]);
+      await child.dispose();
+    } finally {
+      await service.close();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   beforeEach(() => vi.restoreAllMocks());
 
   it.each([true, false])('snapshots parent Fast %s for fresh, restored, and forked children', async (enabled) => {
@@ -416,7 +517,6 @@ describe('headless child session provider', () => {
     const configurations: Array<Partial<DoomChildSessionRequest>> = [
       { extensions: ['extension.ts'] },
       { subagentOnlyExtensions: ['child.ts'] },
-      { mcpDirectTools: ['server/tool'] },
       { capabilityCeiling: { allowedExternalProfiles: ['work'] } },
     ];
     for (const [index, configuration] of configurations.entries()) {
@@ -437,40 +537,55 @@ describe('headless child session provider', () => {
     ).rejects.toThrow('requires unavailable tools: bash');
     expect(factory).not.toHaveBeenCalled();
   });
-  it.each(['mcp', 'mcp_use'])('runs the requested %s dispatcher through the parent MCP runtime', async (name) => {
-    const factory = runtimeFactory(fakeRuntime('mcp-child'));
-    const content = [{ type: 'image' as const, data: 'aW1hZ2U=', mimeType: 'image/png' }];
-    const execute = vi.fn(async () => ({ content, details: { server: 'docs' } }));
-    const dispatcher = { name: 'mcp', description: 'MCP dispatch', parameters: {}, execute };
-    const mcpTool = vi.fn(() => dispatcher);
-    const service = createHeadlessChildSessionService({
-      parentSessionId: 'parent',
-      cwd: '/tmp',
-      runtimeFactory: factory,
-      mcpTool,
-    });
-    const handle = await service.start({ ...request({ kind: 'fresh' }), tools: ['read', name] });
-    expect(factory.mock.calls[0]?.[0].activeToolNames).toEqual(['read', name]);
-    const tool = factory.mock.calls[0]?.[0].tools?.find((tool) => tool.name === name);
-    const signal = new AbortController().signal;
-    const parameters = { server: 'docs', tool: 'search', arguments: { query: 'templates' } };
-    const result = await tool!.execute(
-      'mcp-call',
-      parameters,
-      vi.fn(),
-      undefined,
-      {} as never,
-      { abortSignal: signal } as never,
-    );
-    expect(execute).toHaveBeenCalledWith('mcp-call', parameters, signal, expect.any(Function));
-    expect(result).toEqual({ content, details: { server: 'docs' } });
-    expect(mcpTool).toHaveBeenCalledTimes(2);
-    await handle.dispose();
-  });
+  it.each(['mcp', 'mcp_use'])(
+    'runs the requested %s direct declarations through the parent MCP runtime',
+    async (name) => {
+      const factory = runtimeFactory(fakeRuntime('mcp-child'));
+      const content = [{ type: 'image' as const, data: 'aW1hZ2U=', mimeType: 'image/png' }];
+      const execute = vi.fn(async () => ({ content, details: { server: 'docs' } }));
+      const direct = { name: 'docs_search', description: 'Search docs', parameters: { type: 'object' }, execute };
+      const dispatcher = {
+        name: 'mcp',
+        description: 'Private dispatch',
+        parameters: {},
+        execute,
+        catalog: {
+          snapshot: () => [direct],
+          resolveSelectors: () => ['docs_search'],
+          subscribe: () => () => undefined,
+        },
+      };
+      const mcpTool = vi.fn(() => dispatcher);
+      const service = createHeadlessChildSessionService({
+        parentSessionId: 'parent',
+        cwd: '/tmp',
+        runtimeFactory: factory,
+        mcpTool,
+      });
+      const handle = await service.start({ ...request({ kind: 'fresh' }), tools: ['read', name] });
+      expect(factory.mock.calls[0]?.[0].activeToolNames).toEqual(['read', 'docs_search']);
+      const tool = factory.mock.calls[0]?.[0].tools?.find((tool) => tool.name === 'docs_search');
+      const signal = new AbortController().signal;
+      const parameters = { server: 'docs', tool: 'search', arguments: { query: 'templates' } };
+      const result = await tool!.execute(
+        'mcp-call',
+        parameters,
+        vi.fn(),
+        undefined,
+        {} as never,
+        { abortSignal: signal } as never,
+      );
+      expect(execute).toHaveBeenCalledWith('mcp-call', parameters, signal, expect.any(Function));
+      expect(result).toEqual({ content, details: { server: 'docs' } });
+      expect(mcpTool).toHaveBeenCalled();
+      await handle.dispose();
+    },
+  );
 
   it.each([
     { capabilityCeiling: { allowMcpTools: false } },
     { capabilityCeiling: { allowedTools: ['read'] } },
+    { capabilityCeiling: { allowedTools: ['read'], allowMcpTools: true } },
     { excludeTools: ['mcp'] },
     { excludeTools: ['mcp_use'] },
   ])('does not resolve MCP when a child policy denies it: %j', async (policy) => {
@@ -516,7 +631,14 @@ describe('headless child session provider', () => {
       content: [{ type: 'text' as const, text: 'permission denied' }],
       isError: true,
     }));
-    const dispatcher = { name: 'mcp', description: 'MCP dispatch', parameters: {}, execute };
+    const direct = { name: 'docs_search', description: 'Search docs', parameters: { type: 'object' }, execute };
+    const dispatcher = {
+      name: 'mcp',
+      description: 'Private dispatch',
+      parameters: {},
+      execute,
+      catalog: { snapshot: () => [direct], resolveSelectors: () => ['docs_search'], subscribe: () => () => undefined },
+    };
     let active: typeof dispatcher | undefined = dispatcher;
     const service = createHeadlessChildSessionService({
       parentSessionId: 'parent',
@@ -534,6 +656,123 @@ describe('headless child session provider', () => {
     await expect(call()).rejects.toThrow('no longer available');
     expect(execute).toHaveBeenCalledOnce();
     await handle.dispose();
+  });
+
+  it('intersects direct selectors, exact grants, aliases, exclusions and explicit MCP permission', () => {
+    const tools = ['personal_search', 'work_search'].map((name) => ({
+      name,
+      description: name,
+      parameters: { type: 'object', properties: { query: { type: 'string' } } },
+      execute: async () => ({ content: [] }),
+    }));
+    const provider = {
+      name: 'mcp',
+      description: '',
+      parameters: {},
+      execute: async () => ({ content: [] }),
+      catalog: {
+        snapshot: () => tools,
+        resolveSelectors: (selectors: readonly string[]) =>
+          selectors.includes('*')
+            ? tools.map((tool) => tool.name)
+            : selectors.includes('work/search') || selectors.includes('work')
+              ? ['work_search']
+              : [],
+        subscribe: () => () => undefined,
+      },
+    };
+    const base = { ...request({ kind: 'fresh' }), tools: ['read', 'mcp_use'], mcpDirectTools: ['work/search'] };
+    const names = (policy: Partial<DoomChildSessionRequest>) =>
+      composeDirectHarnessRequestOptions({ ...base, ...policy }, () => provider).activeToolNames;
+    expect(names({})).toEqual(['read', 'work_search']);
+    expect(names({ capabilityCeiling: { allowedTools: ['read', 'mcp'], allowMcpTools: true } })).toEqual([
+      'read',
+      'work_search',
+    ]);
+    expect(names({ capabilityCeiling: { allowedTools: ['read', 'personal_search'], allowMcpTools: true } })).toEqual([
+      'read',
+    ]);
+    expect(names({ capabilityCeiling: { allowedTools: ['read', 'mcp'] } })).toEqual(['read']);
+    expect(names({ capabilityCeiling: { allowedTools: ['read', 'mcp'], allowMcpTools: false } })).toEqual(['read']);
+    expect(names({ excludeTools: ['work_search'] })).toEqual(['read']);
+    expect(names({ excludeTools: ['mcp'] })).toEqual(['read']);
+    expect(names({ mcpDirectTools: ['missing/tool'] })).toEqual(['read']);
+    expect(names({ tools: ['personal_search'] })).toEqual([]);
+    expect(names({ tools: ['personal_search'], mcpDirectTools: ['*'] })).toEqual(['personal_search']);
+    expect(names({ tools: ['read'] })).toEqual(['read']);
+    expect(names({ tools: undefined })).toContain('work_search');
+    expect(names({ tools: undefined })).not.toContain('personal_search');
+    expect(() =>
+      names({ capabilityCeiling: { allowedTools: ['read'], allowMcpTools: true, requiredTools: ['work_search'] } }),
+    ).toThrow('requires unavailable tools: work_search');
+  });
+
+  it('refreshes late catalogs, preserves native tools and bound intercom, and retires same-name providers', async () => {
+    const runtime = fakeRuntime('live');
+    const replace = vi.fn(async (_tools: Parameters<DirectHarnessRuntime['replaceTools']>[0]) => undefined);
+    runtime.replaceTools = replace;
+    const direct = {
+      name: 'work_search',
+      description: 'Search',
+      parameters: { type: 'object' },
+      execute: vi.fn(async () => ({ content: [] })),
+    };
+    let snapshot: (typeof direct)[] = [];
+    let changed: (() => void) | undefined;
+    let providerChanged: (() => void) | undefined;
+    const unsubscribed = vi.fn();
+    const provider = {
+      name: 'mcp',
+      description: '',
+      parameters: {},
+      execute: async () => ({ content: [] }),
+      catalog: {
+        snapshot: () => snapshot,
+        resolveSelectors: () => ['work_search'],
+        subscribe: (listener: () => void) => {
+          changed = listener;
+          return unsubscribed;
+        },
+      },
+    };
+    let active: typeof provider | undefined = provider;
+    const ownedRequest = { ...request({ kind: 'fresh' }), tools: ['read', 'mcp'], intercom: { bindRuntime: vi.fn() } };
+    const initial = composeDirectHarnessRequestOptions(ownedRequest, () => active).tools!;
+    const intercom = { name: 'bound_team_bus', description: '', parameters: {}, execute: vi.fn() };
+    const release = bindChildMcpCatalog(
+      runtime,
+      ownedRequest,
+      {
+        mcpTool: () => active,
+        subscribeMcpTool: (listener) => {
+          providerChanged = listener;
+          return unsubscribed;
+        },
+      },
+      [...initial, intercom] as never,
+    );
+    snapshot = [direct];
+    changed!();
+    await vi.waitFor(() => expect(replace).toHaveBeenCalled());
+    const surface = replace.mock.calls.at(-1)![0] as unknown as NonNullable<DirectHarnessRuntimeOptions['tools']>;
+    expect(surface.map((tool) => tool.name)).toEqual(['read', 'bound_team_bus', 'work_search']);
+    expect(surface[0]).toBe(initial[0]);
+    expect(surface[1]).toBe(intercom);
+    const call = () => surface[2]!.execute('call', {}, vi.fn(), undefined, {} as never, {} as never);
+    await call();
+    const count = replace.mock.calls.length;
+    changed!();
+    await Promise.resolve();
+    expect(replace).toHaveBeenCalledTimes(count);
+    active = { ...provider };
+    providerChanged!();
+    await expect(call()).rejects.toThrow('no longer available');
+    active = undefined;
+    providerChanged!();
+    await vi.waitFor(() => expect(replace.mock.calls.at(-1)![0]).toHaveLength(2));
+    release();
+    expect(unsubscribed).toHaveBeenCalledTimes(3);
+    expect(ownedRequest.intercom.bindRuntime).not.toHaveBeenCalled();
   });
 
   it('projects native tools, skills, prompt mode, exclusions, and capability ceilings', async () => {

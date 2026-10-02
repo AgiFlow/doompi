@@ -190,11 +190,18 @@ describe('terminal Pi child session provider', () => {
     }
   });
 
-  it.each(['fresh', 'terminal-pi-fork'] as const)('passes the parent MCP dispatcher to a %s child', async (kind) => {
+  it.each(['fresh', 'terminal-pi-fork'] as const)('passes the parent MCP catalog to a %s child', async (kind) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-mcp-'));
     tempRoots.push(root);
     const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'MCP result' }] }));
-    const dispatcher = { name: 'mcp', description: 'MCP dispatch', parameters: {}, execute };
+    const direct = { name: 'docs_search', description: 'Search docs', parameters: { type: 'object' }, execute };
+    const dispatcher = {
+      name: 'mcp',
+      description: 'Private dispatch',
+      parameters: {},
+      execute,
+      catalog: { snapshot: () => [direct], resolveSelectors: () => ['docs_search'], subscribe: () => () => undefined },
+    };
     const factory = vi.fn(async (options: DirectHarnessRuntimeOptions) => fakeRuntime(options));
     const service = createTerminalPiChildSessionService({
       cwd: root,
@@ -213,8 +220,8 @@ describe('terminal Pi child session provider', () => {
             snapshotJsonl: v3Snapshot(),
           };
     const handle = await service.start({ ...request(source, root), tools: ['read', 'mcp'] });
-    expect(factory.mock.calls[0]![0].activeToolNames).toEqual(['read', 'mcp']);
-    const tool = factory.mock.calls[0]![0].tools!.find((candidate) => candidate.name === 'mcp')!;
+    expect(factory.mock.calls[0]![0].activeToolNames).toEqual(['read', 'docs_search']);
+    const tool = factory.mock.calls[0]![0].tools!.find((candidate) => candidate.name === 'docs_search')!;
     await expect(
       tool.execute('call', { server: 'docs', tool: 'search' }, vi.fn(), undefined, {} as never, {} as never),
     ).resolves.toMatchObject({ content: [{ text: 'MCP result' }] });

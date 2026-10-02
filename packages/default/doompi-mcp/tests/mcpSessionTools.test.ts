@@ -18,14 +18,16 @@ describe('MCP session tools service', () => {
     const result = { content: [{ type: 'text', text: 'found' }], structuredContent: { count: 1 } };
     let changed: (() => void) | undefined;
     const stop = vi.fn();
-    const service = {
-      snapshot: () => [tool],
-      invoke: vi.fn().mockResolvedValue(result),
+    const session = {
+      toolGeneration: 1,
+      activeToolDefinitions: () => [tool],
+      bindToolInvocation: () => vi.fn().mockResolvedValue(result),
       onChange: (listener: () => void) => {
         changed = listener;
         return stop;
       },
     };
+    const service = createMcpSessionToolsService(session as never, 'fixture');
     const refresh = vi.fn();
     const controller = new AbortController();
     const context = {
@@ -45,7 +47,60 @@ describe('MCP session tools service', () => {
     changed!();
     expect(refresh).toHaveBeenCalledTimes(2);
     controller.abort();
+    expect(stop).not.toHaveBeenCalled();
+    service.dispose();
     expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it('retains unchanged definitions and rejects retired wrappers after metadata, withdrawal, and generation changes', async () => {
+    let tools: CatalogTool[] = [
+      {
+        piName: 'work_search',
+        serverName: 'work',
+        toolName: 'search',
+        description: 'Search work',
+        inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
+      },
+    ];
+    let changed!: () => void;
+    const invoke = vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'work' }] });
+    const stop = vi.fn();
+    const session = {
+      toolGeneration: 1,
+      activeToolDefinitions: () => tools,
+      bindToolInvocation: () => invoke,
+      resolveToolSelectors: () =>
+        tools.map((tool) => ({ name: tool.piName, selector: `${tool.serverName}/${tool.toolName}` })),
+      onChange: (listener: () => void) => {
+        changed = listener;
+        return stop;
+      },
+    };
+    const service = createMcpSessionToolsService(session as never, 'fixture');
+    const first = service.project()[0]!;
+    changed();
+    expect(service.project()[0]).toBe(first);
+    tools = [{ ...tools[0]!, description: 'Updated work search' }];
+    changed();
+    const second = service.project()[0]!;
+    expect(second).not.toBe(first);
+    await expect(first.execute('retired', {})).rejects.toThrow('no longer available');
+    tools = [];
+    changed();
+    await expect(second.execute('withdrawn', {})).rejects.toThrow('no longer available');
+    tools = [{ piName: 'work_search', serverName: 'work', toolName: 'search', inputSchema: {} }];
+    changed();
+    const third = service.project()[0]!;
+    session.toolGeneration++;
+    changed();
+    await expect(third.execute('old-generation', {})).rejects.toThrow('no longer available');
+    expect(service.resolveSelectors(['work/search'])).toEqual(['work_search']);
+    const fourth = service.project()[0]!;
+    service.dispose();
+    await expect(fourth.execute('disposed', {})).rejects.toThrow('no longer available');
+    expect(service.project()).toEqual([]);
+    expect(stop).toHaveBeenCalledOnce();
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('forwards snapshots and calls to the existing session runtime', async () => {
@@ -53,7 +108,7 @@ describe('MCP session tools service', () => {
     const session = {
       activeToolDefinitions: vi.fn(() => [tool]),
       onChange: vi.fn(() => () => undefined),
-      invokeTool: vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }),
+      bindToolInvocation: vi.fn(() => vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] })),
     };
     const service = createMcpSessionToolsService(session as never, 'session:mcp-tools');
 
@@ -61,7 +116,37 @@ describe('MCP session tools service', () => {
     await expect(service.invoke(tool.piName, { quality: 'full' })).resolves.toEqual({
       content: [{ type: 'text', text: 'ok' }],
     });
-    expect(session.invokeTool).toHaveBeenCalledWith(tool.piName, { quality: 'full' }, undefined);
+    expect(session.bindToolInvocation).toHaveBeenCalledWith(tool);
+    expect(session.bindToolInvocation.mock.results[0]!.value).toHaveBeenCalledWith({ quality: 'full' }, undefined);
+  });
+  it('rejects invalid downstream arguments before direct or compatibility transport', async () => {
+    const invoke = vi.fn().mockResolvedValue({ content: [] });
+    const session = {
+      activeToolDefinitions: () => [
+        {
+          piName: 'work_search',
+          serverName: 'work',
+          toolName: 'search',
+          inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        },
+      ],
+      onChange: () => () => undefined,
+      bindToolInvocation: () => invoke,
+    };
+    const service = createMcpSessionToolsService(session as never, 'validation');
+    const direct = service.project()[0]!;
+    await expect(direct.execute('invalid', { query: 42 })).rejects.toThrow('Invalid arguments');
+    await expect(service.invoke('work_search', {})).rejects.toThrow('Invalid arguments');
+    const compatibility = createMcpChildTool((parameters, signal) =>
+      service.invoke('work_search', parameters.arguments ?? {}, signal),
+    );
+    await expect(compatibility.execute('invalid', { server: 'work', tool: 'search' })).rejects.toThrow(
+      'Invalid arguments',
+    );
+    expect(invoke).not.toHaveBeenCalled();
+    await service.invoke('work_search', { query: 'valid' });
+    expect(invoke).toHaveBeenCalledExactlyOnceWith({ query: 'valid' }, undefined);
+    service.dispose();
   });
 });
 

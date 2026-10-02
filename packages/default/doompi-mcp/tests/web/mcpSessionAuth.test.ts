@@ -232,19 +232,23 @@ describe('MCP session authorization Context section', () => {
     expect(rendered.includes('no tools or skills reported')).toBe(true);
   });
 
-  it('lists the tools a server offers through mcp_use when none sit in the context', () => {
+  it('shows registered names and hypothetical schema cost when tools are not emitted', () => {
     const status = formatMcpSessionAuthStatus([
       {
         name: 'boomlink-mcp',
         state: 'connected',
         tools: [
-          { toolName: 'send_link', active: true, tokens: 212 },
+          { toolName: 'send_link', piName: 'boomlink_mcp_send_link', active: true, tokens: 212 },
           { toolName: 'withheld', active: false },
         ],
       },
     ]);
     expect(parseMcpSessionAuthStatus(status)).toEqual([
-      { name: 'boomlink-mcp', state: 'connected', tools: [{ name: 'send_link', tokens: 212 }] },
+      {
+        name: 'boomlink-mcp',
+        state: 'connected',
+        tools: [{ name: 'send_link', piName: 'boomlink_mcp_send_link', tokens: 212 }],
+      },
     ]);
     const rendered = renderPlugin(
       McpSessionAuthSection,
@@ -252,10 +256,57 @@ describe('MCP session authorization Context section', () => {
     );
     expect(rendered.error).toBeUndefined();
     expect(rendered.html).toContain('data-testid="context-mcp-reachable-boomlink-mcp-send_link"');
-    expect(rendered.includes('1 tool via mcp_use, not in context')).toBe(true);
+    expect(rendered.includes('1 available tool, not in context')).toBe(true);
+    expect(rendered.includes('boomlink_mcp_send_link')).toBe(true);
     expect(rendered.includes('(~212)')).toBe(true);
     expect(rendered.includes('withheld')).toBe(false);
     expect(rendered.includes('no tools or skills reported')).toBe(false);
+  });
+
+  it('shows two configured accounts and enables schema details through exact registered mappings', () => {
+    const status = formatMcpSessionAuthStatus(
+      ['personal', 'work'].map((name) => ({
+        name,
+        state: 'connected',
+        tools: [{ toolName: 'search', piName: `${name}_search`, active: true, tokens: 180 }],
+      })),
+    );
+    const rendered = renderPlugin(
+      McpSessionAuthSection,
+      slotPropsFixture({
+        statuses: { [MCP_SESSION_AUTH_STATUS_KEY]: status! },
+        contextInventory: ['personal', 'work'].map((owner) => ({
+          name: `${owner}_search`,
+          itemKind: 'tool',
+          source: 'mcp',
+          owner,
+          tokens: 180,
+          active: true,
+        })),
+      }).props,
+    );
+    expect(rendered.error).toBeUndefined();
+    for (const name of ['personal', 'work']) {
+      expect(rendered.html).toContain(`aria-label="Manage ${name}"`);
+      expect(rendered.html).toContain(`aria-label="Open schema for ${name}_search"`);
+      expect(rendered.html).toMatch(
+        new RegExp(`<button(?![^>]*\\sdisabled(?:=|\\s|>))[^>]*data-testid="context-mcp-tool-${name}_search"`),
+      );
+    }
+    expect(rendered.html.match(/>~180<\/span>/gu)).toHaveLength(2);
+    expect(rendered.html).not.toContain('not in context');
+    expect(rendered.html).not.toContain('via mcp_use');
+    const send = vi.fn();
+    requestMcpSessionAuthorization(send, 'session-1', 'work');
+    expect(send).toHaveBeenCalledWith('session-1', { type: 'prompt', message: '/mcp auth work' });
+  });
+
+  it.each(['', 'work\nsearch', 'a'.repeat(257), 42])('rejects malformed registered tool identity %j', (piName) => {
+    expect(
+      parseMcpSessionAuthStatus(
+        JSON.stringify([{ name: 'work', state: 'connected', tools: [{ name: 'search', piName }] }]),
+      ),
+    ).toBeUndefined();
   });
 
   it('rejects a status whose tool list is not a list of names', () => {

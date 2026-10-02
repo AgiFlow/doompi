@@ -91,6 +91,29 @@ describe('KeyringTokenStore', () => {
     expect(keyring.accounts).toEqual(['api']);
   });
 
+  it.each(['keyring', 'fallback'] as const)('isolates same-endpoint accounts in the %s', async (backend) => {
+    if (backend === 'fallback') keyring.fail('write');
+    const personal: AuthEntry = { ...entry, tokens: { access_token: 'synthetic-personal', token_type: 'Bearer' } };
+    const work: AuthEntry = { ...entry, tokens: { access_token: 'synthetic-work', token_type: 'Bearer' } };
+    await Promise.all([store.write('personal', personal), store.write('work', work)]);
+    expect(await Promise.all([store.read('personal'), store.read('work')])).toEqual([personal, work]);
+
+    const updated: AuthEntry = {
+      ...personal,
+      tokens: { access_token: 'synthetic-personal-updated', token_type: 'Bearer' },
+    };
+    await store.write('personal', updated);
+    expect(await store.read('personal')).toEqual(updated);
+    expect(await store.read('work')).toEqual(work);
+    await store.clear('personal');
+    expect(await store.read('personal')).toBeUndefined();
+    expect(await store.read('work')).toEqual(work);
+    await store.write('personal', personal);
+    await store.clear('work');
+    expect(await store.read('personal')).toEqual(personal);
+    expect(await store.read('work')).toBeUndefined();
+  });
+
   it('reports a server that was never authorized as unauthenticated', async () => {
     expect(await store.read('never-seen')).toBeUndefined();
   });

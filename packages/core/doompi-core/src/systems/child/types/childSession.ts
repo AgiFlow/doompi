@@ -117,6 +117,18 @@ export interface DoomChildSessionTool {
   ): Promise<DoomChildSessionToolResult>;
 }
 
+/** Borrowed active parent declarations. Children never own the catalog's connections. */
+export interface DoomChildSessionMcpCatalog {
+  snapshot(): readonly DoomChildSessionTool[];
+  resolveSelectors(selectors: readonly string[]): readonly string[];
+  subscribe(listener: () => void): () => void;
+}
+
+/** The private dispatcher remains available to compatibility consumers. */
+export interface DoomChildSessionMcpTool extends DoomChildSessionTool {
+  readonly catalog?: DoomChildSessionMcpCatalog;
+}
+
 /** Direct in-process Team intercom supplied by an owning extension. */
 export interface DoomChildSessionIntercom {
   bindRuntime(runtime: DoomChildSessionRuntime): DoomChildSessionTool;
@@ -171,7 +183,7 @@ export interface DoomChildSessionServiceProvider {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     'doom/child-session': DoomChildSessionService;
-    'doom/child-session-mcp-tool': DoomChildSessionTool;
+    'doom/child-session-mcp-tool': DoomChildSessionMcpTool;
   }
 }
 

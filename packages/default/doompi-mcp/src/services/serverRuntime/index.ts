@@ -19,7 +19,7 @@ import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../t
 import { formatStatus } from '../mcpCommand';
 import { McpSession } from '../mcpSession';
 import { createMcpSessionApi } from '../mcpSessionApi';
-import { createMcpChildTool } from '../mcpSessionTools';
+import { createMcpChildTool, createMcpSessionToolsService } from '../mcpSessionTools';
 import { type CountTokens, mcpToolTokens } from '../mcpToolCost';
 import { mcpSessionConfigFromProjection } from '../projection';
 import { readSessionConfig } from '../sessionConfig';
@@ -63,9 +63,15 @@ export function createMcpServerRuntime(
   const authorizing = new Map<string, symbol>();
   // Authorization URLs reach clients through the MCP status snapshot, not the transcript.
   const session = new McpSession({ environment: { ...environment } });
+  const assertAvailable = () => {
+    if (!active) throw new Error('The MCP runtime has not started yet.');
+    if (staleSelection) throw new Error('The MCP projection is stale for the current selection.');
+  };
+  const sessionTools = createMcpSessionToolsService(session, crypto.randomUUID(), assertAvailable);
 
   const refresh = (execution: DoomHeadlessExecutionContext, selection: DoomHeadlessSelection) => {
     staleSelection = true;
+    sessionTools.refresh();
     authorizing.clear();
     transition = transition
       .catch(() => {})
@@ -135,6 +141,7 @@ export function createMcpServerRuntime(
           throw error;
         }
       })
+      .then(() => sessionTools.refresh())
       .catch(async (error: unknown) => {
         if (active !== execution || selection !== currentSelection) return;
         await execution.client.notify({
@@ -229,6 +236,7 @@ export function createMcpServerRuntime(
         active = undefined;
         currentSelection = undefined;
         staleSelection = true;
+        sessionTools.refresh();
         authorizing.clear();
         await transition;
         const retiredCleanup = cleanup;
@@ -248,16 +256,19 @@ export function createMcpServerRuntime(
   };
 
   const invoke: Parameters<typeof createMcpChildTool>[0] = async (parameters, signal) => {
-    if (!active) throw new Error('The MCP runtime has not started yet.');
-    if (staleSelection) throw new Error('The MCP projection is stale for the current selection.');
-    const selected = session
-      .activeToolDefinitions()
+    assertAvailable();
+    const selected = sessionTools
+      .snapshot()
       .find((candidate) => candidate.serverName === parameters.server && candidate.toolName === parameters.tool);
     if (!selected)
       throw new Error(`MCP tool ${parameters.server}/${parameters.tool} is not available in this session.`);
-    return session.invokeTool(selected.piName, parameters.arguments ?? {}, signal);
+    return sessionTools.invoke(selected.piName, parameters.arguments ?? {}, signal);
   };
-  const childTool = createMcpChildTool(invoke);
+  const childTool = createMcpChildTool(invoke, {
+    snapshot: () => sessionTools.project(),
+    resolveSelectors: (selectors) => sessionTools.resolveSelectors(selectors),
+    subscribe: (listener) => sessionTools.onChange(listener),
+  });
 
   // web-plugin-tool-renderers: ignore mcp_use, headless-only generic MCP dispatch
   const tool: DoomHeadlessTool<typeof McpHeadlessToolParameters> = {
@@ -343,6 +354,7 @@ export function createMcpServerRuntime(
   };
   return {
     session,
+    sessionTools,
     api: [api],
     activities: [activity],
     commands: [command],

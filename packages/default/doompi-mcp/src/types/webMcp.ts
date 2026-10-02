@@ -4,7 +4,7 @@
  * (which renders it). Wire JSON only: images ride Pi's own content blocks,
  * so they are not repeated here.
  */
-
+import type { ContextToolWarning } from '@agimon-ai/doompi-core/contextApi';
 export type McpResultBlock =
   | { type: 'audio'; data: string; mimeType: string }
   | { type: 'resource_link'; uri: string; name: string; title?: string; description?: string; mimeType?: string }
@@ -45,16 +45,15 @@ export interface McpSessionAuthStatusItem {
   readonly name: string;
   readonly state: McpSessionAuthState;
   readonly authorizationUrl?: string;
-  /**
-   * The server's tools the agent can call through `mcp_use`. They are reached through that one
-   * tool rather than added to the model's context, so they cost nothing until called; `tokens`
-   * is what the tool's schema would cost if it were added directly.
-   */
+  /** Available tools and their estimated direct-schema cost, not a second context inventory. */
   readonly tools?: readonly McpSessionReachableTool[];
 }
 
 export interface McpSessionReachableTool {
+  /** Original downstream name, used with the configured server for detail lookup. */
   readonly name: string;
+  /** Actual registered name. Optional for older live-session status producers. */
+  readonly piName?: string;
   readonly tokens?: number;
 }
 
@@ -62,9 +61,11 @@ export interface McpSessionReachableTool {
 export interface McpSessionToolDetail {
   readonly server: string;
   readonly tool: string;
+  readonly piName: string;
   readonly description?: string;
   readonly inputSchema: Record<string, unknown>;
   readonly tokens: number;
+  readonly warnings?: readonly ContextToolWarning[];
 }
 
 /** Session route for one reachable tool's description and schema. */
@@ -76,7 +77,12 @@ interface McpSessionServerStatusSource {
   readonly name: string;
   readonly state: string;
   readonly authorizationUrl?: unknown;
-  readonly tools?: readonly { readonly toolName: string; readonly active: boolean; readonly tokens?: number }[];
+  readonly tools?: readonly {
+    readonly toolName: string;
+    readonly piName?: string;
+    readonly active: boolean;
+    readonly tokens?: number;
+  }[];
 }
 
 /** Keeps servers visible before discovery and after failures, without diagnostics or credentials. */
@@ -89,6 +95,7 @@ export function formatMcpSessionAuthStatus<T extends McpSessionServerStatusSourc
       .filter((tool) => tool.active && isToolName(tool.toolName))
       .map((tool): McpSessionReachableTool => ({
         name: tool.toolName,
+        ...(isToolName(tool.piName) ? { piName: tool.piName } : {}),
         ...(isTokenCount(tool.tokens) ? { tokens: tool.tokens } : {}),
       }))
       .slice(0, MAX_SERVER_TOOLS);
@@ -158,8 +165,9 @@ function isReachableTool(value: unknown): value is McpSessionReachableTool {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   return (
-    Object.keys(record).every((key) => key === 'name' || key === 'tokens') &&
+    Object.keys(record).every((key) => key === 'name' || key === 'piName' || key === 'tokens') &&
     isToolName(record.name) &&
+    (!('piName' in record) || isToolName(record.piName)) &&
     (!('tokens' in record) || isTokenCount(record.tokens))
   );
 }

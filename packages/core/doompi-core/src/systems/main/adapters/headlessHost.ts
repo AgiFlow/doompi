@@ -20,6 +20,7 @@ import {
   type DoomHeadlessToolRestriction,
 } from '../../../exports/headless';
 import { createDoomKernel } from '../../../exports/kernel';
+import { readDoomMcpStatus } from '../../../exports/mcpStatus';
 import type { DoomServerBundleEntry } from '../../../exports/serverFacet';
 import type { PackageAttribution } from '../../../services/contextProjection';
 import type {
@@ -321,6 +322,11 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     );
     const conditionAttribution = (when?: DoomHeadlessCondition): ContextConditionalAttribution | undefined =>
       when?.attribution ?? (when?.domain === undefined ? undefined : { kind: 'domain', mode: when.domain });
+    const mcpOwners = new Map<string, string>();
+    for (const server of readDoomMcpStatus(this.ctx)?.getSnapshot().servers ?? []) {
+      for (const name of server.tools) mcpOwners.set(name, server.name);
+    }
+    const mcpPackages = new Map<string, string>();
     const toolsBySource = new Map<string, ContextToolInventory[]>();
     for (const contribution of this.kernel.contributions<Owned<DoomHeadlessTool>>('tools')) {
       if (!currentSources.has(contribution.source)) continue;
@@ -339,16 +345,19 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
         active: this.tools.get(tool.name) === contribution.value,
         ...(contextAttribution === undefined ? {} : { contextAttribution }),
       };
-      const tools = toolsBySource.get(contribution.source);
+      const server = mcpOwners.get(tool.name);
+      const source = server === undefined ? contribution.source : `mcp:${server}`;
+      if (server !== undefined) mcpPackages.set(server, contribution.source);
+      const tools = toolsBySource.get(source);
       if (tools) tools.push(entry);
-      else toolsBySource.set(contribution.source, [entry]);
+      else toolsBySource.set(source, [entry]);
     }
 
     const sources: ContextToolSource[] = [...toolsBySource].map(([source, tools]) => ({
       key: source,
-      label: `${source} · extension`,
-      kind: 'extension',
-      packageName: source,
+      label: mcpPackages.has(source.slice(4)) ? `${source.slice(4)} · mcp` : `${source} · extension`,
+      kind: mcpPackages.has(source.slice(4)) ? 'mcp' : 'extension',
+      packageName: mcpPackages.get(source.slice(4)) ?? source,
       tools,
     }));
     const framingTokens = countTokens === undefined ? 0 : countTokens(formatSkillsForSystemPrompt([]));
@@ -382,6 +391,9 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       if (owner && attribution[candidate.packageName] === undefined) {
         attribution[candidate.packageName] = { kind: 'major', mode: selection.majorMode, layer: owner.layer };
       }
+    }
+    for (const [server, source] of mcpPackages) {
+      if (attribution[source]) attribution[server] = attribution[source];
     }
     return { sources, skills, attribution };
   }

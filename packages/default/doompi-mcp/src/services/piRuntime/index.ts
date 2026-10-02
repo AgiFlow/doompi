@@ -144,20 +144,29 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
             generation: `${hostSession.generation}:mcp-tool-resolver`,
             resolve: (selectors: readonly string[]) => session.resolveToolSelectors(selectors),
           });
-          const sessionTools = createMcpSessionToolsService(session, `${hostSession.generation}:mcp-tools`);
-          const childTool = createMcpChildTool(async (parameters, signal) => {
+          const sessionTools = createMcpSessionToolsService(session, `${hostSession.generation}:mcp-tools`, () => {
             if (!sessionActive || disposed) throw new Error('The parent MCP session is no longer available.');
-            const tool = sessionTools
-              .snapshot()
-              .find(
-                (candidate) => candidate.serverName === parameters.server && candidate.toolName === parameters.tool,
-              );
-            if (!tool)
-              throw new Error(
-                `MCP tool ${parameters.server}/${parameters.tool} is not available in the current session configuration.`,
-              );
-            return sessionTools.invoke(tool.piName, parameters.arguments ?? {}, signal);
           });
+          const childTool = createMcpChildTool(
+            async (parameters, signal) => {
+              if (!sessionActive || disposed) throw new Error('The parent MCP session is no longer available.');
+              const tool = sessionTools
+                .snapshot()
+                .find(
+                  (candidate) => candidate.serverName === parameters.server && candidate.toolName === parameters.tool,
+                );
+              if (!tool)
+                throw new Error(
+                  `MCP tool ${parameters.server}/${parameters.tool} is not available in the current session configuration.`,
+                );
+              return sessionTools.invoke(tool.piName, parameters.arguments ?? {}, signal);
+            },
+            {
+              snapshot: () => sessionTools.project(),
+              resolveSelectors: (selectors) => sessionTools.resolveSelectors(selectors),
+              subscribe: (listener) => sessionTools.onChange(listener),
+            },
+          );
           sessionContext.plugin((providerContext) => {
             providerContext.provide(DOOM_MCP_STATUS_SERVICE, status);
             providerContext.provide(DOOM_MCP_TOOL_RESOLVER_SERVICE, toolResolver);
@@ -167,6 +176,7 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
           for (const diagnostic of session.getDiagnostics()) context.ui?.notify(diagnostic, WARNING);
           return async () => {
             sessionActive = false;
+            sessionTools.dispose();
             stopPublishing();
             context.ui?.setStatus(MCP_STATUS_KEY, undefined);
             if (context.mode !== 'tui') {
