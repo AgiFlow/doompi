@@ -215,9 +215,8 @@ test('reports the estimate as an estimate', async ({ page, cockpit }) => {
   cockpit.session.emit(status('doom-major-mode', SELECTION));
   await page.getByTestId('dock-tab-context').click();
 
-  // Nothing is priced until the runtime publishes an inventory, and an em dash
-  // is the honest reading of that rather than a confident zero.
-  await expect(page.getByTestId('context-total')).toHaveText('—');
+  // An unpriced inventory shows a placeholder, not a confident zero.
+  await expect(page.getByTestId('context-total')).toHaveText('-');
   await expect(page.getByTestId('context-panel')).toContainText('not a billed total');
 });
 
