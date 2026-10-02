@@ -18,6 +18,7 @@ export function createMcpToolCollection(
             tool,
             (candidate) => session.isToolAvailable(candidate),
             renderers(tool),
+            (candidate, parameters, signal) => session.callTool(candidate, parameters, signal),
           );
           declarations.set(tool, declaration);
         }

@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { createDoomToolSurface, type DoomToolSurfaceService } from '@agimon-ai/doompi-core/toolSurface';
-import type { McpServerStateChange } from '@agimon-ai/mcp-proxy';
+import type { McpOutputSchemaWarning, McpServerStateChange } from '@agimon-ai/mcp-proxy';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -250,6 +250,58 @@ describe('McpSession', () => {
     expect(createProxyContainer.mock.calls[0]?.[0]?.configSources).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ path: expect.stringContaining('shared-') })]),
     );
+  });
+
+  it('keeps output warnings non-blocking, bounded, deduplicated and scoped to the live session', async () => {
+    const { pi, activeTools } = fakePi();
+    const active = await session(pi);
+    active.install();
+    await active.start();
+    const validation = createProxyContainer.mock.calls[0]?.[0].outputSchemaValidation as {
+      mode: string;
+      onWarning: (warning: McpOutputSchemaWarning) => void;
+    };
+    expect(validation.mode).toBe('warn');
+    const warning: McpOutputSchemaWarning = {
+      serverName: 'pencil',
+      toolName: 'get_screenshot',
+      method: 'tools/list',
+      path: 'outputSchema.type',
+      message: 'Expected an object output schema.',
+    };
+    validation.onWarning(warning);
+    validation.onWarning(warning);
+    emitState({ serverName: 'pencil', state: 'connected' });
+    await vi.waitFor(() => expect(activeTools()).toContain('pencil_get_screenshot'));
+    expect(active.getToolWarnings()).toEqual({
+      mcp_use: [{ source: 'pencil/get_screenshot (tools/list)', path: warning.path, message: warning.message }],
+      pencil_get_screenshot: [
+        { source: 'pencil/get_screenshot (tools/list)', path: warning.path, message: warning.message },
+      ],
+    });
+    const output = { content: [{ type: 'text', text: 'actual output' }] };
+    callTool.mockImplementationOnce(async () => {
+      validation.onWarning({ ...warning, method: 'tools/call', path: 'structuredContent' });
+      return output;
+    });
+    await expect(active.invokeTool('pencil_get_screenshot', {})).resolves.toMatchObject(output);
+    expect(callTool).toHaveBeenCalledTimes(1);
+    expect(active.getToolWarnings().mcp_use).toHaveLength(2);
+    callTool.mockResolvedValue(output);
+    await active.invokeTool('pencil_get_screenshot', {});
+    expect(active.getToolWarnings().mcp_use).toHaveLength(1);
+    for (let i = 0; i < 100; i++) validation.onWarning({ ...warning, path: `outputSchema.properties.field${i}` });
+    expect(active.getToolWarnings().mcp_use).toHaveLength(64);
+    expect(active.getSnapshot().servers[0]?.error).toBeUndefined();
+    expect(active.getDiagnostics()).toEqual([]);
+    await active.disconnect('pencil');
+    validation.onWarning(warning);
+    expect(active.getToolWarnings()).toEqual({});
+    await active.start();
+    validation.onWarning(warning);
+    expect(active.getToolWarnings()).toEqual({});
+    await active.dispose();
+    expect(active.getToolWarnings()).toEqual({});
   });
 
   it('replaces the container when the exact session cwd changes under the same MCP projection', async () => {

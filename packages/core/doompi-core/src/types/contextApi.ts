@@ -76,3 +76,10 @@ export interface ContextDetailFile {
   readonly revision: number;
   readonly items: readonly ContextItemDetail[];
 }
+
+/** A warning origin supplied by the runtime owning a registered tool. */
+export interface ContextToolWarning {
+  source: string;
+  path: string;
+  message: string;
+}

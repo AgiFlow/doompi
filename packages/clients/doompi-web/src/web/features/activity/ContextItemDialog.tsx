@@ -1,4 +1,4 @@
-import type { ContextItemDetail, ContextItemKind } from '@agimon-ai/doompi-core/contextApi';
+import type { ContextItemDetail, ContextItemKind, ContextToolWarning } from '@agimon-ai/doompi-core/contextApi';
 import {
   Dialog,
   DialogBody,
@@ -39,10 +39,11 @@ interface Target {
 export interface ContextItemDialogProps {
   sessionId: string | null;
   target: Target | null;
+  warnings?: readonly ContextToolWarning[];
   onClose: () => void;
 }
 
-export function ContextItemDialog({ sessionId, target, onClose }: ContextItemDialogProps) {
+export function ContextItemDialog({ sessionId, target, warnings, onClose }: ContextItemDialogProps) {
   const [detail, setDetail] = useState<ContextItemDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const itemKind = target?.itemKind ?? null;
@@ -93,6 +94,19 @@ export function ContextItemDialog({ sessionId, target, onClose }: ContextItemDia
           </span>
         </DialogHeader>
         <DialogBody>
+          {target.itemKind === 'tool' && warnings && warnings.length > 0 ? (
+            <Section title="warnings">
+              <ul data-testid="context-item-warnings" aria-live="polite" className="flex flex-col gap-3">
+                {warnings.map((warning, index) => (
+                  <li key={index} className="flex flex-col gap-1 text-sm break-words">
+                    <span className="text-doom-yellow">{warning.source}</span>
+                    <span className="text-xs text-doom-dim">{warning.path}</span>
+                    <p className="text-doom-text">{warning.message}</p>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          ) : null}
           {error !== null ? (
             <p data-testid="context-item-error" className="text-sm text-doom-dim">
               {error}
