@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { globalDoomConfigDirectory, loadDoomConfig } from '@agimon-ai/doompi-config';
+import { globalDoomConfigDirectory, initializeGlobalDoomConfig, loadDoomConfig } from '@agimon-ai/doompi-config';
 import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItem, shell } from 'electron';
 
 import { freePort, portIsFree, startHub } from '../adapters/hubProcess';
@@ -90,6 +90,7 @@ function registerBridgeHandlers(): void {
 }
 
 async function start(): Promise<void> {
+  initializeGlobalDoomConfig(os.homedir());
   const preloadPath = path.join(__dirname, 'preload.cjs');
   const window = createMainWindow({ preloadPath, startupIconPath: startupIconPath() });
   const computerUseHost =
@@ -99,13 +100,15 @@ async function start(): Promise<void> {
           hostGeneration: randomUUID(),
           now: Date.now,
           newId: randomUUID,
-          enabled: () => loadDoomConfig(os.homedir(), os.homedir()).computerUse?.enabled === true,
-          confirmLocalActivation: async ({ applicationName, windowTitle, durationSeconds }) => {
+          enabled: () =>
+            loadDoomConfig(os.homedir(), os.homedir(), { DOOMPI_DISTRIBUTION: 'desktop' }).computerUse?.enabled ===
+            true,
+          confirmLocalActivation: async ({ applicationName, windowTitle, durationSeconds, sessionId, deviceId }) => {
             const result = await dialog.showMessageBox(window, {
               type: 'warning',
               title: 'Confirm computer control',
               message: `Allow DoomPi to control ${applicationName}?`,
-              detail: `Window: ${windowTitle}\nDuration: ${String(durationSeconds)} seconds\n\nOnly the current agent session receives control.`,
+              detail: `Requester: ${deviceId === undefined ? 'This Mac' : `Paired device ${deviceId}`}\nSession: ${sessionId ?? 'current'}\nWindow: ${windowTitle}\nDuration: ${String(durationSeconds)} seconds\n\nOnly this session and its approved device receive control.`,
               buttons: ['Allow', 'Cancel'],
               defaultId: 1,
               cancelId: 1,
@@ -161,6 +164,7 @@ async function start(): Promise<void> {
       {
         entry: launchHubEntry(),
         headlessEntry: launchHeadlessEntry(),
+        desktopDistribution: app.isPackaged && process.platform === 'darwin',
         host: LOOPBACK_HOST,
         port: await resolvePort(DEFAULT_PORT),
         headlessPort: await resolvePort(DEFAULT_HEADLESS_PORT),

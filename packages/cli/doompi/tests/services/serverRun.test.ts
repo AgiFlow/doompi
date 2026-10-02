@@ -27,6 +27,29 @@ describe('runServer', () => {
     vi.restoreAllMocks();
   });
 
+  it('uses the staged DPI sync command for an embedded Desktop distribution', async () => {
+    vi.stubEnv('DOOMPI_SYNC_COMMAND', '/runtime/dpi.mjs');
+    vi.stubEnv('DOOMPI_DISTRIBUTION', 'desktop');
+    vi.mocked(readSyncDrift).mockReturnValue({ fresh: false, reasons: ['never-synced'] });
+    vi.mocked(runServerRuntime).mockResolvedValue(0);
+    try {
+      await expect(runServer(['--auth-token-file', '/tmp/doompi-test-token'])).resolves.toBe(0);
+      expect(execFile).toHaveBeenCalledWith(
+        process.execPath,
+        [...process.execArgv, '/runtime/dpi.mjs', 'sync', '--global'],
+        expect.objectContaining({ env: expect.objectContaining({ DOOMPI_DISTRIBUTION: 'desktop' }) }),
+        expect.any(Function),
+      );
+      expect(readSyncDrift).toHaveBeenCalledWith(
+        expect.objectContaining({
+          environment: expect.objectContaining({ DOOMPI_DISTRIBUTION: 'desktop' }),
+        }),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('runs stale sync work outside the headless server process', async () => {
     vi.mocked(readSyncDrift).mockReturnValue({ fresh: false, reasons: ['never-synced'] });
     vi.mocked(runServerRuntime).mockResolvedValue(0);

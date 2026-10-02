@@ -39,6 +39,13 @@ describe('locating the staged runtime', () => {
 });
 
 describe('the runtime handed to child processes', () => {
+  it('sets distribution defaults only when the packaged launcher selects them', () => {
+    const parent = { DOOMPI_DISTRIBUTION: 'desktop' };
+    const entry = '/runtime/doompi-web/dist/bin/serve.mjs';
+    expect(hubEnvironment(parent, entry).DOOMPI_DISTRIBUTION).toBeUndefined();
+    expect(hubEnvironment(parent, entry, true).DOOMPI_DISTRIBUTION).toBe('desktop');
+  });
+
   it('turns this binary into Node for every descendant', () => {
     expect(hubEnvironment({ PATH: '/usr/bin' }, '/runtime/doompi-web/dist/bin/serve.mjs').ELECTRON_RUN_AS_NODE).toBe(
       '1',
@@ -60,9 +67,9 @@ describe('the runtime handed to child processes', () => {
     expect(environment.DOOMPI_SERVER_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'serve.mjs'));
     expect(environment.DOOMPI_AGENT_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'dpi.mjs'));
     expect(environment.DOOMPI_SYNC_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'dpi.mjs'));
-    expect(environment.DOOMPI_PACKAGE_ROOT).toBe(path.join('/runtime', 'doompi', 'dist', 'src'));
+    expect(environment.DOOMPI_PACKAGE_ROOT).toBe(path.join('/runtime', 'node_modules', '@agimon-ai', 'doompi'));
     expect(environment.DOOMPI_BOOTSTRAP_ENTRY).toBe(
-      path.join('/runtime', 'doompi', 'dist', 'src', 'extensions', 'entries', 'doom.mjs'),
+      path.join('/runtime', 'node_modules', '@agimon-ai', 'doompi', 'dist', 'extensions', 'composedPi.mjs'),
     );
     expect(environment.DOOMPI_PACKAGE_CATALOG).toBe(path.join('/runtime', 'catalog', 'index.json'));
     expect(environment.DOOMPI_NPM_CLI).toBe(path.join('/runtime', 'vendor', 'npm', 'bin', 'npm-cli.js'));
@@ -109,7 +116,16 @@ describe('canonical child arguments', () => {
         headlessPort: DEFAULT_HEADLESS_PORT,
         tokenFile: '/tmp/t',
       }),
-    ).toEqual(['/server/serve.mjs', '--auth-token-file', '/tmp/t', '--name', 'DoomPi Desktop', '--web', '7434']);
+    ).toEqual([
+      '/server/serve.mjs',
+      '--auth-token-file',
+      '/tmp/t',
+      '--no-session',
+      '--name',
+      'DoomPi Desktop',
+      '--web',
+      '7434',
+    ]);
   });
 
   it('starts the presentation proxy against the headless endpoint', () => {

@@ -46,6 +46,99 @@ const createComputerUseApi = (
   });
 
 describe('computer-use request broker', () => {
+  it('accepts targetless activation only from an admitted remote caller and publishes the Mac-selected target after approval', async () => {
+    const broker = createComputerUseApi({ internalToken: 'internal', hubToken: 'hub' });
+    expect(
+      (await broker.fetch(request(COMPUTER_USE_ROUTES.activate, 'POST', local, { durationMs: 60_000 }))).status,
+    ).toBe(400);
+    const remote = {
+      ...local,
+      [DOOM_API_CALLER_LOCALITY_HEADER]: 'remote',
+      [DOOM_API_CALLER_DEVICE_ID_HEADER]: 'paired-device',
+      [DOOM_API_CALLER_STEP_UP_HEADER]: 'not-required',
+    };
+    expect(
+      (await broker.fetch(request(COMPUTER_USE_ROUTES.activate, 'POST', remote, { durationMs: 60_000 }))).status,
+    ).toBe(202);
+    expect(broker.state().target).toBeUndefined();
+    const activation = (await (await broker.fetch(request(COMPUTER_USE_ROUTES.hubActivation, 'GET', hub))).json()) as {
+      target?: unknown;
+    };
+    expect(activation.target).toBeUndefined();
+    const target = {
+      windowId: 'chosen-on-mac',
+      bundleId: 'app.fixture',
+      applicationName: 'Fixture',
+      windowTitle: 'Chosen window',
+      processId: 123,
+    };
+    expect(
+      (
+        await broker.fetch(
+          request(COMPUTER_USE_ROUTES.hubStop, 'POST', hub, {
+            host: { grantId: 'native-grant', expiresAt: Date.now() + 60_000, target },
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(broker.state()).toMatchObject({ phase: 'active', target });
+    broker.close();
+  });
+
+  it('allows only the matching pending requester to inspect and cancel activation', async () => {
+    const broker = createComputerUseApi({
+      desktop: {
+        available: true,
+        authorize: () => false,
+        authorizeActivation: () => true,
+        authorizePending: (headers) => headers.get('requester') === 'own',
+        authorizeRecording: () => false,
+        claim() {},
+        subscribe: () => () => undefined,
+      },
+    });
+    await broker.fetch(
+      request(COMPUTER_USE_ROUTES.activate, 'POST', local, {
+        target: { windowId: 'w1', bundleId: 'app.fixture' },
+        durationMs: 60_000,
+      }),
+    );
+    const own = { requester: 'own' };
+    expect((await broker.fetch(request(COMPUTER_USE_ROUTES.activate, 'GET', {}))).status).toBe(404);
+    expect((await broker.fetch(request(COMPUTER_USE_ROUTES.activate, 'GET', own))).status).toBe(200);
+    expect((await broker.fetch(new Request('http://host/activate', { method: 'DELETE' }))).status).toBe(404);
+    expect((await broker.fetch(new Request('http://host/activate', { method: 'DELETE', headers: own }))).status).toBe(
+      202,
+    );
+    expect(broker.state().phase).toBe('stopping');
+    expect((await broker.fetch(new Request('http://host/activate', { method: 'DELETE', headers: own }))).status).toBe(
+      409,
+    );
+    broker.close();
+  });
+
+  it('reads recordings with separate approved authority while actions are disabled and rejects revocation', async () => {
+    let allowed = true;
+    const fetchRecording = vi.fn(async () => new Response('movie', { status: 206 }));
+    const broker = createComputerUseApi({
+      desktop: {
+        available: true,
+        enabled: false,
+        authorize: () => false,
+        authorizeRecording: () => allowed,
+        fetchRecording,
+        claim() {},
+        subscribe: () => () => undefined,
+      },
+    });
+    const url = 'http://host/artifact?artifactId=opaque&offset=0';
+    expect((await broker.fetch(new Request(url))).status).toBe(206);
+    expect((await broker.fetch(request(COMPUTER_USE_ROUTES.activate, 'GET', {}))).status).toBe(200);
+    allowed = false;
+    expect((await broker.fetch(new Request(url))).status).toBe(404);
+    expect(fetchRecording).toHaveBeenCalledTimes(1);
+    broker.close();
+  });
   it('publishes lifecycle state changes through the direct event bus', async () => {
     const publish = vi.fn();
     const broker = createComputerUseApi({

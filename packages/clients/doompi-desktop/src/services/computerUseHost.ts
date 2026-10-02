@@ -14,12 +14,15 @@ export interface LocalActivationConfirmation {
   readonly applicationName: string;
   readonly windowTitle: string;
   readonly durationSeconds: number;
+  readonly sessionId?: string;
+  readonly deviceId?: string;
 }
 
 type ValidatedActivation = {
   readonly requestId: string;
   readonly callerLocality: 'local' | 'remote';
-  readonly confirmation: LocalActivationConfirmation;
+  readonly deviceId?: string;
+  readonly confirmation?: LocalActivationConfirmation;
 };
 
 type ActiveGrant = {
@@ -124,31 +127,44 @@ function activationRequest(payload: unknown, now: number): ValidatedActivation {
     throw new Error('The activation confirmation is stale or invalid.');
 
   const target = record(activation.target);
-  if (target === undefined) throw new Error('A verified application window target is required.');
-  exactKeys(target, ['bundleId', 'applicationName', 'processId', 'windowId', 'windowTitle'], 'target');
-  boundedString(target.bundleId, 'bundleId', 512);
-  boundedString(target.applicationName, 'applicationName', 256);
-  boundedString(target.windowId, 'windowId', 256);
-  boundedString(target.windowTitle, 'windowTitle', 1024);
-  if (!Number.isInteger(target.processId) || (target.processId as number) < 1)
-    throw new Error('A positive target processId is required.');
+  if (target !== undefined) {
+    exactKeys(target, ['bundleId', 'applicationName', 'processId', 'windowId', 'windowTitle'], 'target');
+    boundedString(target.bundleId, 'bundleId', 512);
+    boundedString(target.applicationName, 'applicationName', 256);
+    boundedString(target.windowId, 'windowId', 256);
+    boundedString(target.windowTitle, 'windowTitle', 1024);
+    if (!Number.isInteger(target.processId) || (target.processId as number) < 1)
+      throw new Error('A positive target processId is required.');
+  }
 
   const caller = record(activation.caller);
   if (caller === undefined) throw new Error('Trusted activation caller metadata is required.');
   if (caller.locality === 'local') {
     exactKeys(caller, ['locality', 'stepUp'], 'caller');
     if (caller.stepUp !== 'not-required') throw new Error('Local caller metadata is invalid.');
+  } else if (caller.locality === 'remote') {
+    exactKeys(caller, ['locality', 'deviceId', 'stepUp'], 'caller');
+    boundedString(caller.deviceId, 'deviceId', 128);
+    if (caller.stepUp !== 'verified' && caller.stepUp !== 'not-required')
+      throw new Error('Remote activation authorization is unavailable.');
   } else {
-    throw new Error('Computer use requires the owning Desktop instance, not a remote client.');
+    throw new Error('A trusted activation caller is required.');
   }
+  if (target === undefined && (activation.target !== undefined || caller.locality !== 'remote'))
+    throw new Error('A verified application window target is required.');
   return {
     requestId,
     callerLocality: caller.locality as 'local' | 'remote',
-    confirmation: {
-      applicationName: target.applicationName as string,
-      windowTitle: target.windowTitle as string,
-      durationSeconds: durationOf(activation),
-    },
+    ...(caller.locality === 'remote' ? { deviceId: caller.deviceId as string } : {}),
+    ...(target === undefined
+      ? {}
+      : {
+          confirmation: {
+            applicationName: target.applicationName as string,
+            windowTitle: target.windowTitle as string,
+            durationSeconds: durationOf(activation),
+          },
+        }),
   };
 }
 
@@ -215,7 +231,7 @@ export class ComputerUseHost {
     const active = this.#active;
     this.#active = undefined;
     if (active !== undefined) for (const listener of this.#availabilityListeners) listener();
-    if (active !== undefined) await this.#backend.stop({ ...active, reason });
+    if (active !== undefined) await this.#rememberFinalization(active, reason);
     return active !== undefined;
   }
 
@@ -227,11 +243,16 @@ export class ComputerUseHost {
     this.#clearExpiryTimer();
     const active = this.#active;
     this.#active = undefined;
-    if (active !== undefined) await this.#backend.stop({ ...active, reason });
+    if (active !== undefined) await this.#rememberFinalization(active, reason);
   }
 
   async #handle(request: ComputerUseDesktopRequest, signal?: AbortSignal): Promise<ComputerUseDesktopResponse> {
     try {
+      if (request.operation === 'stop') {
+        const grantId = grantIdOf(request.payload);
+        if (grantId !== undefined && this.#finalizations.has(this.#finalizationKey(request.sessionId, grantId)))
+          return await this.#stop(request);
+      }
       if (this.#revoked) return this.#failure(request, 'desktop_unavailable', 'The Desktop capability is unavailable.');
       if (signal?.aborted === true) return this.#failure(request, 'request_cancelled', 'The request was cancelled.');
       await this.#expireIfNeeded();
@@ -240,7 +261,7 @@ export class ComputerUseHost {
         if (active !== undefined) {
           this.#clearExpiryTimer();
           this.#active = undefined;
-          await this.#backend.stop({ ...active, reason: 'global_setting_disabled' });
+          await this.#rememberFinalization(active, 'global_setting_disabled');
         }
         if (request.operation === 'status') {
           return this.#success(request, { available: false, busy: false, ownedBySession: false });
@@ -279,19 +300,44 @@ export class ComputerUseHost {
     }
     const now = this.#now();
     const revocationGeneration = this.#revocationGeneration;
-    const activation = activationRequest(request.payload, now);
+    let payload = request.payload;
+    let activation = activationRequest(payload, now);
     if (this.#usedConfirmations.has(activation.requestId))
       return this.#failure(request, 'stale_request', 'The activation confirmation was already used.');
     this.#rememberConfirmation(activation.requestId);
-    if (activation.callerLocality === 'local') {
-      if (this.#confirmLocalActivation === undefined)
-        return this.#failure(request, 'desktop_unavailable', 'Native Desktop confirmation is unavailable.');
-      if (!(await this.#confirmLocalActivation(activation.confirmation)))
-        return this.#failure(request, 'confirmation_denied', 'Native Desktop confirmation was denied.');
+    if (activation.confirmation === undefined) {
+      if (this.#backend.selectTarget === undefined)
+        return this.#failure(request, 'desktop_unavailable', 'Native Mac window selection is unavailable.');
+      const target = await this.#backend.selectTarget(signal);
+      if (
+        Boolean(signal?.aborted) ||
+        this.#revoked ||
+        !this.#enabled() ||
+        revocationGeneration !== this.#revocationGeneration
+      )
+        return this.#failure(request, 'request_cancelled', 'The activation was cancelled during window selection.');
+      if (target === undefined)
+        return this.#failure(request, 'confirmation_denied', 'Native Mac window selection was cancelled.');
+      payload = Object.freeze({ ...record(payload), target: Object.freeze({ ...record(target) }) });
+      activation = activationRequest(payload, this.#now());
     }
+    if (activation.confirmation === undefined)
+      return this.#failure(request, 'invalid_request', 'A verified application window target is required.');
+    if (this.#confirmLocalActivation === undefined)
+      return this.#failure(request, 'desktop_unavailable', 'Native Desktop confirmation is unavailable.');
+    if (
+      !(await this.#confirmLocalActivation({
+        ...activation.confirmation,
+        sessionId: request.sessionId,
+        ...(activation.deviceId === undefined ? {} : { deviceId: activation.deviceId }),
+      }))
+    )
+      return this.#failure(request, 'confirmation_denied', 'Native Desktop confirmation was denied.');
+    if (signal?.aborted === true || this.#revoked || revocationGeneration !== this.#revocationGeneration)
+      return this.#failure(request, 'request_cancelled', 'The activation was cancelled during confirmation.');
     if (!this.#enabled())
       return this.#failure(request, 'desktop_unavailable', 'Computer use was disabled during confirmation.');
-    activationRequest(request.payload, this.#now());
+    activationRequest(payload, this.#now());
     const durationSeconds = activation.confirmation.durationSeconds;
     const grant: ActiveGrant = {
       sessionId: request.sessionId,
@@ -300,9 +346,9 @@ export class ComputerUseHost {
       expiresAt: this.#now() + durationSeconds * 1000,
       nextSequence: 1,
     };
-    const result = await this.#backend.activate({ ...grant, payload: request.payload, signal });
+    const result = await this.#backend.activate({ ...grant, payload, signal });
     if (
-      signal?.aborted === true ||
+      Boolean(signal?.aborted) ||
       this.#revoked ||
       !this.#enabled() ||
       revocationGeneration !== this.#revocationGeneration
@@ -312,7 +358,12 @@ export class ComputerUseHost {
     }
     this.#active = grant;
     this.#scheduleExpiry(grant);
-    return this.#success(request, { ...grant, hostGeneration: this.#hostGeneration, result });
+    return this.#success(request, {
+      ...grant,
+      hostGeneration: this.#hostGeneration,
+      target: record(payload)?.target,
+      result,
+    });
   }
 
   #rememberConfirmation(requestId: string): void {
@@ -367,20 +418,12 @@ export class ComputerUseHost {
       requestedGrantId === undefined ? undefined : this.#finalizationKey(request.sessionId, requestedGrantId);
     const finalization = finalizationKey === undefined ? undefined : this.#finalizations.get(finalizationKey);
     if (finalization !== undefined && finalizationKey !== undefined) {
-      try {
-        return this.#success(request, await finalization);
-      } finally {
-        this.#finalizations.delete(finalizationKey);
-      }
+      return this.#success(request, await finalization);
     }
     const active = this.#authorized(request);
     this.#clearExpiryTimer();
     this.#active = undefined;
-    const result = await this.#backend.stop({
-      sessionId: active.sessionId,
-      grantId: active.grantId,
-      reason: 'requested',
-    });
+    const result = await this.#rememberFinalization(active, 'requested');
     return this.#success(request, result);
   }
 

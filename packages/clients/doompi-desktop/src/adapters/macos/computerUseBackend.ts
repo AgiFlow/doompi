@@ -111,6 +111,7 @@ function runHelper(
   payload: unknown,
   signal?: AbortSignal,
   processes?: Set<ChildProcessWithoutNullStreams>,
+  timeoutMs = HELPER_TIMEOUT_MS,
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, [operation], { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -126,7 +127,7 @@ function runHelper(
       processes?.delete(child);
       callback();
     };
-    const timeout = setTimeout(() => child.kill('SIGKILL'), HELPER_TIMEOUT_MS);
+    const timeout = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
     const abort = () => child.kill('SIGTERM');
     signal?.addEventListener('abort', abort, { once: true });
     child.stdout.setEncoding('utf8');
@@ -180,8 +181,27 @@ export function createMacOsComputerUseBackend(options: MacOsComputerUseBackendOp
     async targets() {
       return await runHelper(executable, 'targets', {});
     },
+    async selectTarget(signal) {
+      const result = await runHelper(executable, 'select_target', {}, signal, undefined, 120_000);
+      return result === null ? undefined : result;
+    },
     async activate(input) {
       if (active !== undefined) throw new Error('The macOS computer-use helper is already active.');
+      if (!/^[a-zA-Z0-9-]{1,128}$/u.test(input.grantId)) throw new Error('Invalid recording grant.');
+      const stagingRoot = path.join(os.tmpdir(), 'doompi-computer-use');
+      fs.mkdirSync(stagingRoot, { recursive: true, mode: 0o700 });
+      const stagingStat = fs.lstatSync(stagingRoot);
+      if (!stagingStat.isDirectory() || stagingStat.isSymbolicLink() || (stagingStat.mode & 0o077) !== 0)
+        throw new Error('Recording staging is not private.');
+      for (const entry of fs.readdirSync(stagingRoot, { withFileTypes: true })) {
+        if (!entry.isDirectory() || !/^[a-zA-Z0-9-]{1,128}$/u.test(entry.name)) continue;
+        const candidate = path.join(stagingRoot, entry.name);
+        const stat = fs.lstatSync(candidate);
+        if (!stat.isSymbolicLink() && Date.now() - stat.mtimeMs > 24 * 60 * 60 * 1000)
+          fs.rmSync(candidate, { recursive: true, force: true });
+      }
+      const stagingDirectory = path.join(stagingRoot, input.grantId);
+      fs.mkdirSync(stagingDirectory, { mode: 0o700 });
       const authorizationPath = path.join(os.tmpdir(), `doompi-computer-use-${randomUUID()}.grant`);
       fs.writeFileSync(authorizationPath, input.grantId, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
       const child = spawn(executable, ['record'], { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -263,6 +283,7 @@ export function createMacOsComputerUseBackend(options: MacOsComputerUseBackendOp
         if (active === recording) active = undefined;
         fs.rmSync(authorizationPath, { force: true });
         child.kill('SIGTERM');
+        fs.rmSync(stagingDirectory, { recursive: true, force: true });
         throw error;
       }
     },
@@ -311,14 +332,21 @@ export function createMacOsComputerUseBackend(options: MacOsComputerUseBackendOp
             timeout.unref?.();
           }),
         ]);
+      } catch {
+        fs.rmSync(path.join(os.tmpdir(), 'doompi-computer-use', input.grantId), { recursive: true, force: true });
+        throw new Error('The native recording could not be finalized.');
       } finally {
         if (timeout !== undefined) clearTimeout(timeout);
       }
       try {
         const lines = recording.output.trim().split('\n');
-        return stopResult(decodeResponse(lines.at(-1) ?? ''));
-      } catch (error) {
-        throw new Error(recording.errors || (error instanceof Error ? error.message : String(error)));
+        const result = stopResult(decodeResponse(lines.at(-1) ?? ''));
+        if (result.artifact?.path !== path.join(os.tmpdir(), 'doompi-computer-use', input.grantId, 'recording.mp4'))
+          throw new Error('Invalid recording location.');
+        return result;
+      } catch {
+        fs.rmSync(path.join(os.tmpdir(), 'doompi-computer-use', input.grantId), { recursive: true, force: true });
+        throw new Error('The native recording could not be finalized.');
       }
     },
   };

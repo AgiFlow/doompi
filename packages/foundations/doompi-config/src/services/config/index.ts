@@ -61,10 +61,20 @@ export function repositoryDoomConfigPath(repoRoot: string): string {
   return path.join(repoRoot, DOOM_DIR, CONFIG_FILE);
 }
 
-export function loadDoomConfig(repoRoot: string, homeDirectory = os.homedir()): DoomConfig {
-  return mergeDoomConfigs(
-    readConfig(globalDoomConfigPath(homeDirectory)),
-    readConfig(repositoryDoomConfigPath(repoRoot)),
+/** Process-local distribution defaults never grant native authority or modify user files. */
+function distributionDefaults(config: DoomConfig, environment: NodeJS.ProcessEnv): DoomConfig {
+  if (environment.DOOMPI_DISTRIBUTION !== 'desktop') return config;
+  return { ...config, computerUse: { ...config.computerUse, enabled: config.computerUse?.enabled ?? true } };
+}
+
+export function loadDoomConfig(
+  repoRoot: string,
+  homeDirectory = os.homedir(),
+  environment: NodeJS.ProcessEnv = process.env,
+): DoomConfig {
+  return distributionDefaults(
+    mergeDoomConfigs(readConfig(globalDoomConfigPath(homeDirectory)), readConfig(repositoryDoomConfigPath(repoRoot))),
+    environment,
   );
 }
 
@@ -76,7 +86,11 @@ export function loadDoomConfig(repoRoot: string, homeDirectory = os.homedir()): 
  * better reported than silently ignored; a build that refuses to start over
  * the same key is not.
  */
-export function loadDoomConfigLenient(repoRoot: string, homeDirectory = os.homedir()): LenientParseResult {
+export function loadDoomConfigLenient(
+  repoRoot: string,
+  homeDirectory = os.homedir(),
+  environment: NodeJS.ProcessEnv = process.env,
+): LenientParseResult {
   const read = (filePath: string): LenientParseResult =>
     fs.existsSync(filePath)
       ? parseDoomConfig(fs.readFileSync(filePath, 'utf8'), filePath, { lenient: true })
@@ -86,13 +100,20 @@ export function loadDoomConfigLenient(repoRoot: string, homeDirectory = os.homed
   const diagnostics: ConfigDiagnostic[] = [...globalConfig.diagnostics, ...repositoryConfig.diagnostics];
   // mergeDoomConfigs stays strict on purpose: its errors are cross-file scope
   // violations on known keys, which is a different fault from an unknown key.
-  return { config: mergeDoomConfigs(globalConfig.config, repositoryConfig.config), diagnostics };
+  return {
+    config: distributionDefaults(mergeDoomConfigs(globalConfig.config, repositoryConfig.config), environment),
+    diagnostics,
+  };
 }
 
-export async function loadDoomConfigAsync(repoRoot: string, homeDirectory = os.homedir()): Promise<DoomConfig> {
+export async function loadDoomConfigAsync(
+  repoRoot: string,
+  homeDirectory = os.homedir(),
+  environment: NodeJS.ProcessEnv = process.env,
+): Promise<DoomConfig> {
   const globalConfig = await readConfigAsync(globalDoomConfigPath(homeDirectory));
   const repositoryConfig = await readConfigAsync(repositoryDoomConfigPath(repoRoot));
-  return mergeDoomConfigs(globalConfig, repositoryConfig);
+  return distributionDefaults(mergeDoomConfigs(globalConfig, repositoryConfig), environment);
 }
 
 /**
@@ -135,7 +156,11 @@ function readLayer(filePath: string): DoomConfigLayer {
  * global one says. Reporting a file as the source of a value the merge discards
  * is the exact confusion this exists to remove.
  */
-export function loadDoomConfigLayers(repoRoot: string | undefined, homeDirectory = os.homedir()): DoomConfigLayers {
+export function loadDoomConfigLayers(
+  repoRoot: string | undefined,
+  homeDirectory = os.homedir(),
+  environment: NodeJS.ProcessEnv = process.env,
+): DoomConfigLayers {
   const globalLayer = readLayer(globalDoomConfigPath(homeDirectory));
   const repositoryLayer =
     repoRoot === undefined
@@ -145,8 +170,11 @@ export function loadDoomConfigLayers(repoRoot: string | undefined, homeDirectory
   // the effective config on its own.
   const effective =
     repoRoot === undefined
-      ? mergeDoomConfigs(readConfig(globalDoomConfigPath(homeDirectory)), { projectTrust: 'ask' })
-      : loadDoomConfig(repoRoot, homeDirectory);
+      ? distributionDefaults(
+          mergeDoomConfigs(readConfig(globalDoomConfigPath(homeDirectory)), { projectTrust: 'ask' }),
+          environment,
+        )
+      : loadDoomConfig(repoRoot, homeDirectory, environment);
   const sets = (layer: DoomConfigLayer, keyPath: readonly string[]): boolean => {
     const dotted = keyPath.join('.');
     return layer.keys.some((key) => key === dotted || key.startsWith(`${dotted}.`));

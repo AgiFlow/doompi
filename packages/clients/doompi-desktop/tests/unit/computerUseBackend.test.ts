@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -15,7 +15,7 @@ import { createMacOsComputerUseBackend } from '../../src/adapters/macos/computer
 
 const directories: string[] = [];
 
-async function helper(): Promise<string> {
+async function helper(invalidRecording = false): Promise<string> {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'doompi-helper-test-'));
   directories.push(directory);
   const executable = path.join(directory, 'helper');
@@ -23,6 +23,7 @@ async function helper(): Promise<string> {
     executable,
     `#!${process.execPath}
 const operation = process.argv[2];
+const recordingPath = ${JSON.stringify(invalidRecording ? '/foreign/recording.mp4' : path.join(os.tmpdir(), 'doompi-computer-use', 'grant', 'recording.mp4'))};
 let input = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', chunk => input += chunk);
@@ -31,13 +32,13 @@ process.stdin.on('end', () => {
   if (operation === 'record') {
     setInterval(() => {}, 1000);
     process.on('SIGINT', () => {
-      console.log(JSON.stringify({ ok: true, result: { stopped: true, artifact: { kind: 'screen_recording', path: '/tmp/fixture.mp4', contentType: 'video/mp4', audioScope: 'target_application' } } }));
+      console.log(JSON.stringify({ ok: true, result: { stopped: true, artifact: { kind: 'screen_recording', path: recordingPath, contentType: 'video/mp4', audioScope: 'target_application' } } }));
       process.exit(0);
     });
     console.log(JSON.stringify({ ok: true, result: { recording: true, audioScope: 'target_application' } }));
     if (payload.payload?.autoStop === true) {
       setTimeout(() => {
-        console.log(JSON.stringify({ ok: true, result: { stopped: true, artifact: { kind: 'screen_recording', path: '/tmp/fixture.mp4', contentType: 'video/mp4', audioScope: 'target_application' } } }));
+        console.log(JSON.stringify({ ok: true, result: { stopped: true, artifact: { kind: 'screen_recording', path: recordingPath, contentType: 'video/mp4', audioScope: 'target_application' } } }));
         process.exit(0);
       }, 5);
     }
@@ -64,6 +65,7 @@ process.stdin.on('end', () => {
 }
 
 afterEach(async () => {
+  await rm(path.join(os.tmpdir(), 'doompi-computer-use', 'grant'), { recursive: true, force: true });
   await Promise.all(directories.splice(0).map(async (directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -93,6 +95,17 @@ describe('macOS computer-use backend', () => {
     });
   });
 
+  it('removes failed native recording staging without disclosing its invalid path', async () => {
+    const backend = createMacOsComputerUseBackend({ helperPath: await helper(true) });
+    await backend.activate({ sessionId: 'session', grantId: 'grant', runId: 'run', expiresAt: 10, payload: {} });
+    await expect(backend.stop({ sessionId: 'session', grantId: 'grant', reason: 'requested' })).rejects.toThrow(
+      'The native recording could not be finalized.',
+    );
+    await expect(stat(path.join(os.tmpdir(), 'doompi-computer-use', 'grant'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
   it('keeps the recording grant bound and returns a typed target-audio artifact', async () => {
     const backend = createMacOsComputerUseBackend({ helperPath: await helper() });
     await expect(
@@ -105,7 +118,7 @@ describe('macOS computer-use backend', () => {
       stopped: true,
       artifact: {
         kind: 'screen_recording',
-        path: '/tmp/fixture.mp4',
+        path: path.join(os.tmpdir(), 'doompi-computer-use', 'grant', 'recording.mp4'),
         contentType: 'video/mp4',
         audioScope: 'target_application',
       },

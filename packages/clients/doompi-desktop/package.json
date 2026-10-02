@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-desktop",
-  "version": "0.0.1-alpha.0",
+  "version": "0.0.1-alpha.1",
   "private": true,
   "description": "Standalone DoomPi desktop app: bundles the cockpit and the session server so a download runs an agent with no Node toolchain installed",
   "keywords": [

@@ -136,10 +136,11 @@ export function createComputerUseChannel(): DoomHubChannel {
         let artifact: unknown;
         if (authorization !== null && host.computerUse?.available) {
           try {
-            artifact = await host.computerUse.request(scope, {
+            const stopped = await host.computerUse.request(scope, {
               operation: 'stop',
               payload: { grantId: authorization.grantId },
             });
+            artifact = record(stopped)?.artifact;
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             artifact = {
@@ -364,7 +365,7 @@ export function createComputerUseChannel(): DoomHubChannel {
       return source;
     },
     receive(scope, payload, connection) {
-      if (connection.desktopAuthorized !== true) return;
+      if (connection.desktopAuthorized !== true && connection.computerUseAuthorized !== true) return;
       receiveCommand?.(scope, payload);
     },
   };

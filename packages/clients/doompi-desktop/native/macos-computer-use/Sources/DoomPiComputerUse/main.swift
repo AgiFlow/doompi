@@ -123,6 +123,31 @@ func discoverTargets() throws -> [[String: JSONValue]] {
     }
 }
 
+@MainActor
+func selectTarget() throws -> [String: JSONValue]? {
+    let targets = try discoverTargets()
+    guard !targets.isEmpty else { throw ProtocolError.invalid("No eligible application windows are available.") }
+    NSApplication.shared.setActivationPolicy(.accessory)
+    let picker = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 460, height: 26), pullsDown: false)
+    picker.setAccessibilityLabel("Application window")
+    for target in targets {
+        let application = target["applicationName"]?.value as? String ?? "Application"
+        let title = target["windowTitle"]?.value as? String ?? "Window"
+        picker.addItem(withTitle: "\(application): \(title)")
+    }
+    let alert = NSAlert()
+    alert.messageText = "Choose a window for computer use"
+    alert.informativeText = "Window names stay on this Mac. Selecting a window does not start control. Approve the selected window in the next Mac dialog."
+    alert.accessoryView = picker
+    alert.addButton(withTitle: "Cancel")
+    alert.addButton(withTitle: "Select window")
+    NSApplication.shared.activate(ignoringOtherApps: true)
+    guard alert.runModal() == .alertSecondButtonReturn else { return nil }
+    let index = picker.indexOfSelectedItem
+    guard targets.indices.contains(index) else { throw ProtocolError.invalid("No window was selected.") }
+    return targets[index]
+}
+
 func children(_ element: AXUIElement) -> [AXUIElement] { axValue(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] }
 
 func stableHash(_ value: String) -> String {
@@ -376,26 +401,17 @@ func record(_ activation: ActivationEnvelope) async throws {
     let captureScale = min(2, 1920 / max(window.frame.width, 1), 1080 / max(window.frame.height, 1))
     configuration.width = max(1, Int(window.frame.width * captureScale))
     configuration.height = max(1, Int(window.frame.height * captureScale))
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("doompi-computer-use", isDirectory: true)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-    let staged = try FileManager.default.contentsOfDirectory(
-        at: directory,
-        includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
-        options: [.skipsHiddenFiles])
-        .sorted {
-            let left = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            let right = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            return left > right
-        }
-    let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
-    for (index, candidate) in staged.enumerated() {
-        let values = try? candidate.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
-        if values?.isRegularFile == true && (index >= 8 || (values?.contentModificationDate ?? .distantPast) < cutoff) {
-            try? FileManager.default.removeItem(at: candidate)
-        }
+    guard activation.grantId.range(of: "^[a-zA-Z0-9-]{1,128}$", options: .regularExpression) != nil else {
+        throw ProtocolError.invalid("Invalid recording grant.")
     }
-    let url = directory.appendingPathComponent("\(UUID().uuidString).mp4")
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("doompi-computer-use", isDirectory: true)
+        .appendingPathComponent(activation.grantId, isDirectory: true)
+    let values = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+    guard values.isDirectory == true && values.isSymbolicLink != true else {
+        throw ProtocolError.invalid("Recording staging is unavailable.")
+    }
+    let url = directory.appendingPathComponent("recording.mp4")
     let output = try RecordingWriter(url: url, width: configuration.width, height: configuration.height)
     let stream = SCStream(filter: filter, configuration: configuration, delegate: nil)
     try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: output.queue)
@@ -410,9 +426,18 @@ func record(_ activation: ActivationEnvelope) async throws {
     expiry.schedule(deadline: .now() + .milliseconds(Int(min(remainingMilliseconds, 1_800_000))))
     expiry.setEventHandler { stop.finish() }
     expiry.resume()
+    let sizeLimit = 128 * 1024 * 1024
+    let quota = DispatchSource.makeTimerSource(queue: .global())
+    quota.schedule(deadline: .now() + .seconds(1), repeating: .seconds(1))
+    quota.setEventHandler {
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let size = attributes[.size] as? NSNumber, size.intValue >= sizeLimit { stop.finish() }
+    }
+    quota.resume()
     emit(["recording": JSONValue(value: true), "audioScope": JSONValue(value: "target_application")])
     await stop.wait()
     expiry.cancel()
+    quota.cancel()
     var stopError: Error?
     do {
         try await stream.stopCapture()
@@ -424,6 +449,11 @@ func record(_ activation: ActivationEnvelope) async throws {
     try? stream.removeStreamOutput(output, type: .audio)
     try await output.finish()
     if let stopError { throw stopError }
+    let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+    if let size = attributes[.size] as? NSNumber, size.intValue > sizeLimit {
+        try FileManager.default.removeItem(at: url)
+        throw ProtocolError.invalid("Recording exceeds the permitted size.")
+    }
     try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     emit(["stopped": JSONValue(value: true), "artifact": JSONValue(value: [
         "kind": JSONValue(value: "screen_recording"), "path": JSONValue(value: url.path),
@@ -432,6 +462,13 @@ func record(_ activation: ActivationEnvelope) async throws {
 }
 
 let operation = CommandLine.arguments.dropFirst().first ?? ""
+if operation == "select_target" {
+    do {
+        if let target = try selectTarget() { emit(target) }
+        else { emit(NSNull()) }
+        exit(0)
+    } catch { fail(error) }
+}
 Task {
     do {
         switch operation {

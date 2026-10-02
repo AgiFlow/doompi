@@ -178,6 +178,7 @@ export interface HeadlessHub {
     payload: unknown,
     connectionId: string,
     desktopAuthorized?: boolean,
+    computerUseAuthorized?: boolean,
   ): void;
   disconnectChannels(connectionId: string): void;
   close(): Promise<void>;
@@ -633,7 +634,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     return true;
   };
 
-  const unregisterSession = (sessionId: string, options?: HeadlessSessionCloseOptions): void => {
+  const unregisterSession = (sessionId: string, closeOptions?: HeadlessSessionCloseOptions): void => {
     const current = sessions.get(sessionId);
     if (current === undefined) return;
     const cleanup = sessionCleanups.get(sessionId);
@@ -641,6 +642,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     communicationEndpoints.get(sessionId)?.endpoint.close();
     // Let scoped sources dispatch their final stop while the live-session boundary still admits it.
     for (const { source } of selectedChannels(current)) source.sessionRemoved?.(sessionId);
+    options.computerUse?.forgetSession?.(sessionId);
     sessions.delete(sessionId);
     activities.delete(sessionId);
     sessionCleanups.delete(sessionId);
@@ -648,7 +650,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     presentationCleanups.delete(sessionId);
     avatarIcons.delete(sessionId);
     directEvents.clearSession?.(sessionId);
-    emit({ kind: 'removed', sessionId, ...(options?.keepDormant === true ? { dormant: true as const } : {}) });
+    emit({ kind: 'removed', sessionId, ...(closeOptions?.keepDormant === true ? { dormant: true as const } : {}) });
   };
 
   const startSessionShutdown = (
@@ -1089,7 +1091,14 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       }
       return undefined;
     },
-    receiveChannel(sessionId, frameType, payload, connectionId, desktopAuthorized = false) {
+    receiveChannel(
+      sessionId,
+      frameType,
+      payload,
+      connectionId,
+      desktopAuthorized = false,
+      computerUseAuthorized = false,
+    ) {
       if (connectionId === '') return;
       const session = sessions.get(sessionId);
       const started = session && selectedChannels(session).find(({ channel }) => channel.frameType === frameType);
@@ -1097,6 +1106,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       started.channel.receive?.(scopeOf(session), payload, {
         connectionId,
         ...(desktopAuthorized ? { desktopAuthorized: true } : {}),
+        ...(computerUseAuthorized ? { computerUseAuthorized: true } : {}),
       } satisfies DoomHubChannelConnection);
     },
     disconnectChannels(connectionId) {

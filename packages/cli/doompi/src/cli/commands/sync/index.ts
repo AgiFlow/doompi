@@ -155,6 +155,7 @@ const RECORDED_KEYS = ['CLAUDE_PROJECT_DIR', 'CODEX_REPO_ROOT', 'ORIGINAL_REPO_P
  * to: Doom Team resolves Pi's own CLI when the variable is absent.
  */
 const EXCLUDED_KEYS = new Set([
+  'DOOMPI_DISTRIBUTION',
   'DOOMPI_CHILD_EXTENSIONS',
   'DOOMPI_COMPOSED',
   'DOOMPI_MUTE',
@@ -308,7 +309,7 @@ export async function synchronize(
   if (globalOnly && !check) fs.mkdirSync(globalRoot, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
   // Sync tolerates keys it does not recognise so a config written against a
   // different version cannot break a build. `doompi doctor` reports them.
-  const modes = loadMajorModesConfigLenient(repoRoot, homeDirectory);
+  const modes = loadMajorModesConfigLenient(repoRoot, homeDirectory, environment);
   const configDiagnostics = [...loadDoomConfigLenient(repoRoot, homeDirectory).diagnostics, ...modes.diagnostics];
   const defaultMajorMode = modes.config.defaultMajorMode;
   const defaultDomains = loadDomains(repoRoot, homeDirectory).defaultDomains;
@@ -355,7 +356,12 @@ export async function synchronize(
       output.write(`doompi sync is out of date:\n  ${detail}\n`);
       return 1;
     }
-    const expectedCompositionFingerprint = selectionCompositionFingerprint(repoRoot, parsed.options, homeDirectory);
+    const expectedCompositionFingerprint = selectionCompositionFingerprint(
+      repoRoot,
+      parsed.options,
+      homeDirectory,
+      environment,
+    );
     const drift = collectDrift(
       repoRoot,
       selection,
@@ -377,6 +383,7 @@ export async function synchronize(
   // generation becomes garbage. Same inputs, same published result.
   const driftOptions = {
     repoRoot,
+    environment,
     homeDirectory,
     requireWebBundle: Boolean(environment.DOOMPI_WEB_PACKAGE_ROOT),
   };
@@ -432,6 +439,7 @@ async function stageSync(
       ...options,
       repoRoot: location.root,
       homeDirectory,
+      environment,
       cwd: location.root,
       resourceDirectory: directory,
     });
@@ -445,7 +453,7 @@ async function stageSync(
     const selection = toSelection(options);
     const resolvers = createLayerResolvers(location.root);
     const resolved = recordResolvedEntries(context.majorModesConfig, resolvers);
-    const compositionFingerprint = selectionCompositionFingerprint(location.root, options, homeDirectory);
+    const compositionFingerprint = selectionCompositionFingerprint(location.root, options, homeDirectory, environment);
     const agentDirectory = piAgentDirectory(environment, homeDirectory);
     const persistedThemePath = path.join(piThemeDirectory(agentDirectory), `${DEFAULT_THEME_NAME}.json`);
     const themePath =
@@ -454,7 +462,7 @@ async function stageSync(
       version: SYNC_STATE_VERSION,
       root: location.root,
       identity: location.identity,
-      inputsHash: computeInputsHash(location.root, selection, homeDirectory),
+      inputsHash: computeInputsHash(location.root, selection, homeDirectory, context.environment),
       webSourcesHash: computeWebSourcesHash(resolved),
       compositionFingerprint,
       selection,

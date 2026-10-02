@@ -179,7 +179,9 @@ describe('BuildCommand', () => {
 
     await prepareSync(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', output);
 
-    expect(mocks.computeInputsHash).toHaveBeenCalledWith('/repo', syncedState.selection, expect.any(String));
+    expect(mocks.computeInputsHash).toHaveBeenCalledWith('/repo', syncedState.selection, expect.any(String), {
+      DOOMPI_ROOT: '/repo',
+    });
     expect(mocks.recordResolvedEntries).toHaveBeenCalledWith(majorModesConfig, layerResolvers);
     expect(mocks.buildSyncedRuntime).toHaveBeenCalledWith('/repo', { DOOMPI_ROOT: '/repo' }, expect.any(String));
     expect(text()).toContain('bootstrap.hash.mjs');

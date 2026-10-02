@@ -36,10 +36,11 @@ function syncStateIsCurrent(
   majorModesConfig: MajorModesConfig,
   compositionFingerprint: string,
   homeDirectory: string,
+  environment: NodeJS.ProcessEnv,
 ): boolean {
   if (!syncStateRootMatches(repoRoot, state.root)) return false;
   if (state.compositionFingerprint !== compositionFingerprint) return false;
-  if (computeInputsHash(repoRoot, state.selection, homeDirectory) !== state.inputsHash) return false;
+  if (computeInputsHash(repoRoot, state.selection, homeDirectory, environment) !== state.inputsHash) return false;
   const resolved = recordResolvedEntries(majorModesConfig, createLayerResolvers(repoRoot));
   return JSON.stringify(resolved) === JSON.stringify(state.resolved);
 }
@@ -52,7 +53,7 @@ export async function buildPreparedRuntime(
   const { repoRoot } = options;
   const homeDirectory = options.homeDirectory ?? environment.HOME ?? os.homedir();
   const location = resolveSyncLocation(repoRoot, homeDirectory);
-  const context = await buildHarnessContext({ ...options, repoRoot, homeDirectory }, telemetry);
+  const context = await buildHarnessContext({ ...options, repoRoot, homeDirectory, environment }, telemetry);
   try {
     await ensureLayerPackages({
       repoRoot,
@@ -72,7 +73,7 @@ export async function buildPreparedRuntime(
     }
     if (
       syncState &&
-      syncStateIsCurrent(repoRoot, syncState, context.majorModesConfig, built.fingerprint, homeDirectory)
+      syncStateIsCurrent(repoRoot, syncState, context.majorModesConfig, built.fingerprint, homeDirectory, environment)
     ) {
       const { buildSyncedRuntime } = await import('./index');
       synced = await buildSyncedRuntime(repoRoot, environment, homeDirectory);

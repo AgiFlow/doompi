@@ -14,6 +14,7 @@ const Error = Type.Object({ code: S, message: S });
 const Artifact = Type.Object({
   artifactId: S,
   status: values(['ready', 'failed']),
+  sizeBytes: O(N),
   downloadUrl: O(S),
   previewUrl: O(S),
   actionCount: O(N),
@@ -70,22 +71,63 @@ export const apiContracts = defineApiContract({
   dynamic: ['Desktop provider target extensions, observations and operation results are runtime-defined JSON.'],
   http: [
     {
+      id: 'computer.activation.state',
+      scope: 'session',
+      basePath: 'computer-use',
+      path: '/activate',
+      method: 'GET',
+      authentication: 'owner',
+      description: 'Read state as the matching pending requester or approved recording reader.',
+      responses: jsonApiResponses(ComputerStateSchema),
+    },
+    {
+      id: 'computer.activation.cancel',
+      scope: 'session',
+      basePath: 'computer-use',
+      path: '/activate',
+      method: 'DELETE',
+      authentication: 'owner',
+      description: 'Cancel only the matching requester pending activation.',
+      responses: jsonApiResponses(ComputerStateSchema, 202),
+    },
+    {
       id: 'computer.activate',
       scope: 'session',
       basePath: 'computer-use',
       path: '/activate',
       method: 'POST',
       authentication: 'owner',
-      description: 'Request confirmed Desktop access with admitted caller and remote step-up context.',
+      description:
+        'Request confirmed Desktop access with admitted caller and remote step-up context. A remote caller may omit target so the local Mac selects the window.',
       body: {
         required: true,
         contentType: 'application/json',
         schema: Type.Object({
-          target: Type.Object({ windowId: S, bundleId: S }),
+          target: O(Type.Object({ windowId: S, bundleId: S })),
           durationMs: Type.Integer({ minimum: 1000, maximum: 1800000 }),
         }),
       },
       responses: jsonApiResponses(ComputerStateSchema, 202),
+    },
+    {
+      id: 'computer.artifact',
+      scope: 'session',
+      basePath: 'computer-use',
+      path: '/artifact',
+      method: 'GET',
+      authentication: 'owner',
+      description: 'Read at most 1 MiB of a recording belonging to this session and approved caller.',
+      parameters: [
+        { name: 'artifactId', in: 'query', required: true, schema: S },
+        { name: 'offset', in: 'query', required: true, schema: Type.Integer({ minimum: 0 }) },
+      ],
+      responses: {
+        206: {
+          description: 'Bounded recording bytes.',
+          contentType: 'video/mp4',
+          schema: Type.String({ format: 'binary' }),
+        },
+      },
     },
     internal('GET', '/agent/state', ComputerStateSchema),
     internal('GET', '/hub/state', ComputerStateSchema),

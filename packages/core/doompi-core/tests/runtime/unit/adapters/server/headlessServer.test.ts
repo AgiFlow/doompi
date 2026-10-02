@@ -222,6 +222,63 @@ describe('serveHeadlessServer', () => {
     }
   });
 
+  it('permits only own pending status/cancel and independent recording reads', async () => {
+    const first = host();
+    const isOwner = (headers: Headers) => headers.get('x-doompi-api-caller-device-id') === 'paired-owner';
+    const hub = createHeadlessHub({
+      manager: { closeSession: vi.fn(async () => undefined) } as never,
+      computerUse: {
+        available: true,
+        request: vi.fn(),
+        ownsSession: (id) => id === 'one',
+        authorizeSession: () => false,
+        authorizePending: (_id, headers) => isOwner(headers),
+        authorizeRecording: (_id, headers) => headers.get('x-doompi-api-caller-device-id') === 'reader',
+      },
+    });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: first.host,
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const dispatch = vi.spyOn(hub, 'requestApi').mockImplementation(async () => Response.json({ ok: true }));
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'hub-secret' });
+    servers.push(server);
+    const root = `${server.url}/api/workspaces/test-workspace/sessions/one`;
+    const headers = { authorization: 'Bearer hub-secret', 'x-doompi-api-caller-device-id': 'paired-owner' };
+    try {
+      const activation = `${root}/plugins/computer-use/activate`;
+      expect((await fetch(activation, { headers })).status).toBe(200);
+      expect((await fetch(activation, { headers, method: 'DELETE' })).status).toBe(200);
+      expect((await fetch(root, { headers })).status).toBe(404);
+      expect((await fetch(`${root}/plugins/computer-use/agent/observe`, { headers, method: 'POST' })).status).toBe(404);
+      expect((await fetch(`${root}/mcp/config`, { headers })).status).toBe(404);
+      expect(
+        (await fetch(activation, { headers: { ...headers, 'x-doompi-api-caller-device-id': 'other' } })).status,
+      ).toBe(404);
+      expect((await fetch(activation, { headers: { 'x-doompi-api-caller-device-id': 'paired-owner' } })).status).toBe(
+        404,
+      );
+      const readerHeaders = { ...headers, 'x-doompi-api-caller-device-id': 'reader' };
+      expect((await fetch(activation, { headers: readerHeaders })).status).toBe(200);
+      expect((await fetch(`${root}/plugins/computer-use/artifact`, { headers: readerHeaders })).status).toBe(200);
+      expect((await fetch(activation, { headers: readerHeaders, method: 'DELETE' })).status).toBe(404);
+      expect(dispatch).toHaveBeenCalledTimes(4);
+    } finally {
+      dispatch.mockRestore();
+      await hub.close();
+    }
+  });
+
   it('closes active Pi clients before waiting for the HTTP server', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
     await hub.mountFacets([], {
@@ -1341,7 +1398,7 @@ describe('serveHeadlessServer', () => {
     const runInSpan = vi.fn(async (_name, _attributes, dispatch: () => Promise<Response>) => dispatch());
     const telemetry = { recordEvent, runInSpan } as never;
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn() } as never });
-    const requestApi = vi.spyOn(hub, 'requestApi').mockResolvedValue(Response.json({ ok: true }));
+    const requestApi = vi.spyOn(hub, 'requestApi').mockImplementation(async () => Response.json({ ok: true }));
     await hub.mountFacets([], {
       scope: 'workspace',
       workspaceId: 'test-workspace',

@@ -35,7 +35,10 @@ export const DOOMPI_RUNTIME_PACKAGES = new Set([
 ]);
 const DOOMPI_PACKAGE_DIRECTORIES = ['cli', 'core', 'foundations', 'default', 'minor', 'utils'] as const;
 const PLATFORM_PACKAGE_SUFFIX = /-(darwin|linux)-(arm64|x64)$/u;
-const EXTERNAL_RUNTIME_PACKAGES = new Set(['@earendil-works/pi-coding-agent']);
+const EXTERNAL_RUNTIME_PACKAGES = new Set([
+  '@earendil-works/pi-coding-agent',
+  '@earendil-works/pi-session-backend-sqlite-node',
+]);
 
 const WEB_RUNTIME_PACKAGES = new Set([
   '@agimon-ai/doompi-core',
@@ -72,10 +75,19 @@ export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plug
       return { id: source, external: true };
     },
     transform(source, id) {
-      if (id.includes('/doompi/') && id.includes('/src/adapters/modules/moduleResolution.')) {
-        const original = 'path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))))';
+      if (id.includes('/doompi/src/builders/cli/entryResolution.')) {
+        const original = 'path.dirname(fileURLToPath(import.meta.url))';
         if (source.includes(original)) {
           return source.replace(original, `(process.env.DOOMPI_PACKAGE_ROOT || ${original})`);
+        }
+      }
+      if (id.includes('/doompi/src/builders/cli/piExtensionAlias/index.')) {
+        const original = 'nearestPackageRoot(path.dirname(fileURLToPath(moduleUrl)))';
+        if (source.includes(original)) {
+          return source.replace(
+            original,
+            `nearestPackageRoot(process.env.DOOMPI_PACKAGE_ROOT || path.dirname(fileURLToPath(moduleUrl)))`,
+          );
         }
       }
       if (!id.includes('/vite/dist/node/')) return null;
@@ -93,25 +105,39 @@ export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plug
         'packages/cli/doompi',
         'native/node_modules/@agimon-ai/doompi',
       );
+      const runtimeModules = path.join(options.outDir, 'node_modules');
+      const cliRoot = path.join(options.workspaceRoot, 'packages', 'cli', 'doompi');
+      copyRuntimePackages(options.workspaceRoot, runtimeModules, DOOMPI_RUNTIME_PACKAGES, cliRoot);
       copyRuntimePackages(
         options.workspaceRoot,
-        path.join(options.outDir, 'node_modules'),
-        new Set([
-          ...DOOMPI_RUNTIME_PACKAGES,
-          `@agimon-ai/doompi-runner-doompi-runner-rmux-${target}`,
-          `@agimon-ai/doompi-runner-rtk-${target}`,
-          `@tursodatabase/database-${napiTarget}`,
-          `sqlite-vec-${process.platform === 'win32' ? `windows-${process.arch}` : target}`,
-        ]),
-        path.join(options.workspaceRoot, 'packages', 'cli', 'doompi'),
+        runtimeModules,
+        new Set([`@agimon-ai/doompi-runner-rmux-${target}`, `@agimon-ai/doompi-runner-rtk-${target}`]),
+        path.join(options.workspaceRoot, 'packages', 'default', 'doompi-runner'),
       );
+      const cliRequire = createRequire(path.join(cliRoot, 'package.json'));
+      const logRequire = createRequire(resolveManifest(cliRequire, '@agimon-ai/log-sink-mcp'));
+      for (const [owner, native] of [
+        ['@tursodatabase/database', `@tursodatabase/database-${napiTarget}`],
+        ['sqlite-vec', `sqlite-vec-${target}`],
+      ] as const) {
+        copyRuntimePackages(
+          options.workspaceRoot,
+          runtimeModules,
+          new Set([native]),
+          path.dirname(resolveManifest(logRequire, owner)),
+        );
+      }
       copyPackageCatalog(options.workspaceRoot, options.outDir, target);
       copyRuntimePackages(options.workspaceRoot, path.join(options.outDir, 'native', 'node_modules'), runtimePackages);
+      const webRoot = path.join(options.workspaceRoot, 'packages', 'clients', 'doompi-web');
+      const webManifest = JSON.parse(fs.readFileSync(path.join(webRoot, 'package.json'), 'utf8')) as {
+        dependencies?: Record<string, string>;
+      };
       copyRuntimePackages(
         options.workspaceRoot,
         path.join(options.outDir, 'doompi-web', 'node_modules'),
-        WEB_RUNTIME_PACKAGES,
-        path.join(options.workspaceRoot, 'packages', 'clients', 'doompi-web'),
+        new Set([...WEB_RUNTIME_PACKAGES, ...Object.keys(webManifest.dependencies ?? {})]),
+        webRoot,
         new Set(['@earendil-works/pi-coding-agent']),
       );
       copyMermaidD3Runtime(options.workspaceRoot, options.outDir);
@@ -270,6 +296,8 @@ function copyRuntimePackages(
     const source = path.dirname(manifestPath);
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
       dependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+      peerDependenciesMeta?: Record<string, { optional?: boolean }>;
       files?: unknown;
     };
     const destination = path.join(destinationRoot, ...packageName.split('/'));
@@ -278,6 +306,16 @@ function copyRuntimePackages(
     if (shallowPackages.has(packageName)) return;
     const dependencyRequire = createRequire(manifestPath);
     for (const dependency of Object.keys(manifest.dependencies ?? {})) copy(dependency, dependencyRequire);
+    for (const peer of Object.keys(manifest.peerDependencies ?? {})) {
+      if (manifest.peerDependenciesMeta?.[peer]?.optional) {
+        try {
+          resolveManifest(dependencyRequire, peer);
+        } catch {
+          continue;
+        }
+      }
+      copy(peer, dependencyRequire);
+    }
   };
 
   for (const packageName of packages) copy(packageName, rootRequire);

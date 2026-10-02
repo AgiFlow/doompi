@@ -18,6 +18,7 @@ export const COMPUTER_USE_CONFIRMATION_WINDOW_MS = 2 * 60 * 1_000;
  */
 export const COMPUTER_USE_ROUTES = {
   activate: '/activate',
+  artifact: '/artifact',
   agentState: '/agent/state',
   agentObserve: '/agent/observe',
   agentAction: '/agent/action',
@@ -35,6 +36,7 @@ export const COMPUTER_USE_WAKE_LIMIT = 1_000_000;
 export interface ComputerUseArtifactView {
   readonly artifactId: string;
   readonly status: 'ready' | 'failed';
+  readonly sizeBytes?: number;
   readonly downloadUrl?: string;
   readonly previewUrl?: string;
   readonly actionCount?: number;
@@ -57,7 +59,7 @@ export interface ComputerUseSessionView {
 
 export interface ComputerUseActivationRequest {
   readonly requestId: string;
-  readonly target: Record<string, unknown>;
+  readonly target?: Record<string, unknown>;
   readonly durationSeconds: number;
   readonly createdAt: number;
   readonly confirmationExpiresAt: number;

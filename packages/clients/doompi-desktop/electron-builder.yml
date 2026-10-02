@@ -47,6 +47,7 @@ mac:
       arch: [arm64]
     - target: zip
       arch: [arm64]
+  minimumSystemVersion: "15.0"
   hardenedRuntime: true
   gatekeeperAssess: false
   # Driven by APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID in CI.

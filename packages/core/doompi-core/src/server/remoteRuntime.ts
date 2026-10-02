@@ -53,6 +53,10 @@ const FORBIDDEN_HEADERS = new Set([
   'transfer-encoding',
   'upgrade',
   'x-doompi-token',
+  'x-doompi-desktop',
+  DOOM_API_CALLER_LOCALITY_HEADER,
+  DOOM_API_CALLER_DEVICE_ID_HEADER,
+  DOOM_API_CALLER_STEP_UP_HEADER,
   'x-forwarded-for',
   'x-forwarded-host',
   'x-forwarded-proto',
@@ -109,7 +113,8 @@ export interface RemoteRuntimeOptions {
   onNotice(message: string): void;
   /** The listener to which a sealed, authenticated request is forwarded. */
   forward(request: Request): Promise<Response>;
-  connectProtocol(pathname: string): WebSocket;
+  connectProtocol(pathname: string, deviceId?: string): WebSocket;
+  onDeviceDropped?: (deviceId: string) => void;
   launchTunnel?: TunnelLauncher;
   /** Ports the host itself listens on, which a dev proxy target may never name. */
   reservedPorts?: () => readonly (number | undefined)[];
@@ -187,6 +192,7 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
 
   remote = createRemoteAccess({
     store,
+    onDeviceDropped: options.onDeviceDropped,
     launchTunnel:
       options.launchTunnel ??
       createTunnelLauncher({
@@ -278,7 +284,7 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
         webSockets.handleUpgrade(incoming, socket, head, (client) => {
           let upstream: WebSocket;
           try {
-            upstream = options.connectProtocol(url.pathname);
+            upstream = options.connectProtocol(url.pathname, device);
           } catch (error) {
             options.onNotice(`remote protocol could not connect: ${String(error)}`);
             client.close(1011, 'protocol unavailable');
@@ -297,6 +303,10 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
           };
           client.on('message', (raw: RawData) => {
             if (closed) return;
+            if (!remote.isDeviceAuthorized(device)) {
+              close();
+              return;
+            }
             const bytes = Array.isArray(raw) ? Buffer.concat(raw) : Buffer.from(raw as Buffer);
             let envelope: unknown;
             try {

@@ -21,6 +21,7 @@ public struct Target: Codable, Equatable, Sendable {
 
 public struct ActivationEnvelope: Decodable, Sendable {
     public struct Payload: Decodable, Sendable { public let target: Target }
+    public let grantId: String
     public let expiresAt: Int64
     public let payload: Payload
 }

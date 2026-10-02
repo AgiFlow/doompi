@@ -53,7 +53,7 @@ export function resolveHarnessOptions(input: ResolveHarnessOptionsInput): Harnes
   const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : resolveConfigurationRoot(initial.options.cwd);
   const homeDirectory = initial.options.homeDirectory ?? environment.HOME ?? os.homedir();
   const configRoot = input.configRoot ?? repoRoot;
-  const defaults = loadDoomConfig(configRoot, homeDirectory).selection;
+  const defaults = loadDoomConfig(configRoot, homeDirectory, environment).selection;
   const selectedEnvironment = { ...environment };
   for (const axis of ['majorMode', 'domains', 'profile'] as const) {
     const value = defaults?.[axis];
@@ -64,7 +64,7 @@ export function resolveHarnessOptions(input: ResolveHarnessOptionsInput): Harnes
     args,
     selectedEnvironment,
     cwd,
-    loadMajorModesConfig(configRoot, homeDirectory).defaultMajorMode,
+    loadMajorModesConfig(configRoot, homeDirectory, environment).defaultMajorMode,
     loadDomains(configRoot, homeDirectory).defaultDomains,
     loadProfileCatalog(configRoot, homeDirectory).defaultProfile,
   );

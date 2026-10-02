@@ -273,7 +273,11 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   ) => Promise<{ id: string; root: string; name?: string; available: boolean }> = async () => {
     throw new Error('Workspace admission is not ready.');
   };
-  const computerUse = await createComputerUseBinding();
+  let remoteRuntime: RemoteRuntime | undefined;
+  const computerUse = await createComputerUseBinding(process, {
+    isDeviceAuthorized: (id) => remoteRuntime?.remote.isDeviceAuthorized(id) === true,
+    stepUpRequired: () => remoteRuntime?.remote.stepUpRequired('computer-use.activate') === true,
+  });
   let hub!: HeadlessHub;
   hub = createHeadlessHub({
     manager: sessionManager,
@@ -325,7 +329,6 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   });
   let harnessContext: Awaited<ReturnType<typeof buildHarnessContext>> | undefined;
   let cockpit: Awaited<ReturnType<typeof serveHeadlessServer>> | undefined;
-  let remoteRuntime: RemoteRuntime | undefined;
   let attachToken: string | undefined;
   let webCompositions: ReturnType<typeof createWebCompositions> | undefined;
   const stopResourceMonitor = monitorRuntimeResources({
@@ -368,7 +371,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         const selected =
           selection ??
           (() => {
-            const config = loadMajorModesConfig(root, homeDirectory);
+            const config = loadMajorModesConfig(root, homeDirectory, baseEnvironment);
             const majorMode = config.defaultMajorMode;
             return { root, majorMode, activeLayers: resolveLayers(config, majorMode) };
           })();
@@ -425,7 +428,12 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         readRepositorySync: (id: string) => {
           const root = hub.workspaces().find((workspace) => workspace.id === id)?.root;
           if (!root) return undefined;
-          const drift = readSyncDrift({ repoRoot: root, homeDirectory, requireWebBundle: true });
+          const drift = readSyncDrift({
+            repoRoot: root,
+            environment: baseEnvironment,
+            homeDirectory,
+            requireWebBundle: true,
+          });
           const state = readSyncState(root, homeDirectory);
           return { ...drift, mcpProjection: state?.fileState.mcpProjection };
         },
@@ -436,6 +444,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       remoteRuntime = createRemoteRuntime({
         homeDirectory,
         registrationToken: token,
+        onDeviceDropped: (id) => computerUse?.revokeDevice?.(id),
         reservedPorts: () => [options.webPort],
         bundleTrust: () => webCompositions?.shellTrust(),
         onNotice: notice,
@@ -450,11 +459,22 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             new Request(request, { headers, redirect: 'manual' }),
           );
         },
-        connectProtocol: (pathname) => {
+        connectProtocol: (pathname, deviceId) => {
           if (!cockpit || !attachToken) throw new Error('The headless protocol listener is not ready.');
           const url = new URL(pathname, cockpit.url);
           url.protocol = 'ws:';
-          return new WebSocket(url, { headers: { 'x-doompi-token': attachToken } });
+          return new WebSocket(url, {
+            headers: {
+              'x-doompi-token': attachToken,
+              ...(deviceId === undefined
+                ? {}
+                : {
+                    'x-doompi-api-caller-locality': 'remote',
+                    'x-doompi-api-caller-device-id': deviceId,
+                    'x-doompi-api-caller-step-up': 'not-required',
+                  }),
+            },
+          });
         },
       });
       await hub.mountFacets(globalBundle.facets, {
@@ -659,6 +679,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             const config = loadMajorModesConfig(
               policyOptions.configRoot ?? policyOptions.repoRoot,
               policyOptions.homeDirectory,
+              policyOptions.environment ?? baseEnvironment,
             );
             return {
               ...requested,
@@ -691,9 +712,21 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
                   get enabled() {
                     return computerUse.enabled === true;
                   },
-                  authorize: (headers: Headers) => computerUse.authorize?.(headers) === true,
-                  claim: () => computerUse.claimSession?.(sessionOptions.sessionId),
-                  subscribe: (listener: () => void) => computerUse.subscribe?.(listener) ?? (() => undefined),
+                  authorize: (headers: Headers) =>
+                    computerUse.authorizeSession?.(sessionOptions.sessionId, headers) === true ||
+                    computerUse.authorize?.(headers) === true,
+                  authorizeRecording: (headers: Headers) =>
+                    computerUse.authorizeRecording?.(sessionOptions.sessionId, headers) === true,
+                  authorizeActivation: (headers: Headers) => computerUse.authorizeActivation?.(headers) === true,
+                  claim: (headers?: Headers) => computerUse.claimSession?.(sessionOptions.sessionId, headers),
+                  fetchRecording: (artifactId: string, range: string) =>
+                    computerUse.readRecording?.(
+                      { sessionId: sessionOptions.sessionId, cwd: sessionOptions.cwd },
+                      artifactId,
+                      range,
+                    ) ?? Promise.resolve(Response.json({ error: 'Not found.' }, { status: 404 })),
+                  subscribe: (listener: () => void) =>
+                    computerUse.subscribe?.(listener, sessionOptions.sessionId) ?? (() => undefined),
                 },
               }),
           hubToken: token,

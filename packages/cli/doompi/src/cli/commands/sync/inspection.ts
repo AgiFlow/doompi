@@ -70,8 +70,9 @@ export function selectionCompositionFingerprint(
   repoRoot: string,
   options: Pick<HarnessOptions, 'agents' | 'hooks' | 'majorMode' | 'mcp' | 'preset'>,
   homeDirectory: string = os.homedir(),
+  environment: NodeJS.ProcessEnv = process.env,
 ): string {
-  const majorModesConfig = loadMajorModesConfig(repoRoot, homeDirectory);
+  const majorModesConfig = loadMajorModesConfig(repoRoot, homeDirectory, environment);
   const resolvers = createLayerResolvers(repoRoot);
   return resolveExtensionComposition({
     agents: options.agents,
@@ -132,13 +133,13 @@ export function collectDrift(
     drift.push('selection changed since the last sync');
   }
   // Hash the recorded selection so selection changes are not counted twice.
-  if (computeInputsHash(repoRoot, recorded, environment.HOME ?? os.homedir()) !== state.inputsHash) {
+  if (computeInputsHash(repoRoot, recorded, environment.HOME ?? os.homedir(), environment) !== state.inputsHash) {
     drift.push('.doom configuration changed');
   }
   if (
     JSON.stringify(
       recordResolvedEntries(
-        loadMajorModesConfig(repoRoot, environment.HOME ?? os.homedir()),
+        loadMajorModesConfig(repoRoot, environment.HOME ?? os.homedir(), environment),
         createLayerResolvers(repoRoot),
       ),
     ) !== JSON.stringify(state.resolved)
@@ -165,7 +166,7 @@ export function collectDrift(
       drift.push('synced theme location is out of date');
     }
   }
-  const sharedDrift = readSyncDrift({ repoRoot, homeDirectory: environment.HOME ?? os.homedir() });
+  const sharedDrift = readSyncDrift({ repoRoot, environment, homeDirectory: environment.HOME ?? os.homedir() });
   const sharedMessages: Partial<Record<SyncDriftReason, string>> = {
     'never-synced': 'sync registration is missing or invalid',
     'code-changed': 'cockpit sources changed since the last sync',

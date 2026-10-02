@@ -43,9 +43,13 @@ describe('the URLs this package sends', () => {
     expect(url.startsWith('//')).toBe(false);
   });
 
-  it('declares every broker path once, from the table the dispatcher reads', () => {
-    expect(Object.fromEntries(Object.entries(routes).map(([name, spec]) => [name, spec.path]))).toEqual(
-      COMPUTER_USE_ROUTES,
-    );
+  it('declares every broker path from the table the dispatcher reads', () => {
+    expect(Object.fromEntries(Object.entries(routes).map(([name, spec]) => [name, spec.path]))).toEqual({
+      ...COMPUTER_USE_ROUTES,
+      activationState: COMPUTER_USE_ROUTES.activate,
+      cancelActivation: COMPUTER_USE_ROUTES.activate,
+    });
+    expect(api.session(SESSION).activationState.spec.method).toBe('GET');
+    expect(api.session(SESSION).cancelActivation.spec.method).toBe('DELETE');
   });
 });

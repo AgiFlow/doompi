@@ -116,7 +116,7 @@ export async function buildHarnessContext(
   // with no other record.
   const configured = await telemetry
     .runInSpan(`doom_pi.${RESOLVE_CONFIG_PHASE}`, { 'harness.phase': RESOLVE_CONFIG_PHASE }, async () => {
-      const majorModesConfig = loadMajorModesConfig(configRoot, options.homeDirectory);
+      const majorModesConfig = loadMajorModesConfig(configRoot, options.homeDirectory, options.environment);
       const selectedLayers = filterHookDisabledLayers(
         majorModesConfig,
         resolveLayers(majorModesConfig, options.majorMode),

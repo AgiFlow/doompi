@@ -4,7 +4,12 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { loadDoomConfigLayers } from '../src/services/config';
+import {
+  loadDoomConfig,
+  loadDoomConfigAsync,
+  loadDoomConfigLenient,
+  loadDoomConfigLayers,
+} from '../src/services/config';
 import {
   configLeafKeys,
   configScopeOf,
@@ -44,6 +49,27 @@ function writeRepository(repo: string, yaml: string): void {
 
 afterEach(() => {
   while (temporaries.length > 0) fs.rmSync(temporaries.pop()!, { recursive: true, force: true });
+});
+
+describe('Desktop distribution defaults', () => {
+  it('defaults all effective reads without changing portable configuration or user files', async () => {
+    const { home, repo } = workspace();
+    writeGlobal(home, 'projectTrust: ask\n');
+    const desktop = { DOOMPI_DISTRIBUTION: 'desktop' };
+    expect(loadDoomConfig(repo, home, {}).computerUse).toBeUndefined();
+    expect(loadDoomConfig(repo, home, desktop).computerUse?.enabled).toBe(true);
+    expect((await loadDoomConfigAsync(repo, home, desktop)).computerUse?.enabled).toBe(true);
+    expect(loadDoomConfigLenient(repo, home, desktop).config.computerUse?.enabled).toBe(true);
+    const layers = loadDoomConfigLayers(undefined, home, desktop);
+    expect(layers.effective.computerUse?.enabled).toBe(true);
+    expect(layers.originOf(['computerUse', 'enabled'])).toBe('default');
+    expect(fs.readFileSync(path.join(home, '.pi', '.doom', 'config.yaml'), 'utf8')).toBe('projectTrust: ask\n');
+    writeGlobal(home, 'computerUse:\n  enabled: false\n');
+    expect(loadDoomConfig(repo, home, desktop).computerUse?.enabled).toBe(false);
+    expect(loadDoomConfigLayers(repo, home, desktop).originOf(['computerUse', 'enabled'])).toBe('global');
+    writeRepository(repo, 'computerUse:\n  enabled: true\n');
+    expect(() => loadDoomConfig(repo, home, desktop)).toThrow('global-only');
+  });
 });
 
 describe('which file a key may be written to', () => {

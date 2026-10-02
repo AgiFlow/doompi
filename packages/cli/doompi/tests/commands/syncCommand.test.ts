@@ -429,6 +429,7 @@ describe('recorded environment', () => {
     const recorded = recordedEnvironment({
       DOOMPI_MAJOR_MODE: 'dev',
       DOOMPI_TEMP_DIR: '/tmp/doom-pi-123',
+      DOOMPI_DISTRIBUTION: 'desktop',
       DOOMPI_CHILD_EXTENSIONS: '["/a"]',
       PI_SUBAGENT_PI_BINARY: '/repo/pi.sh',
     });

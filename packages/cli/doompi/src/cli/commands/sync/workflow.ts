@@ -72,6 +72,7 @@ export async function runSync(
   // workspace package selection.
   const driftOptions = {
     repoRoot: targetRoot,
+    environment,
     homeDirectory,
     requireWebBundle: Boolean(environment.DOOMPI_WEB_PACKAGE_ROOT),
   };
@@ -145,7 +146,7 @@ async function refreshPackages(
   environment: NodeJS.ProcessEnv,
   progress: SyncProgress,
 ): Promise<void> {
-  const config = loadMajorModesConfig(sourceRoot, homeDirectory);
+  const config = loadMajorModesConfig(sourceRoot, homeDirectory, environment);
   const done = progress.start(PACKAGES_LABEL, 'checking configured packages for updates');
   const result = await ensureLayerPackages({
     // Configuration may come from a workspace while the managed store belongs

@@ -105,6 +105,8 @@ export interface RemoteAccess {
   /** Turns an approved request into a session, exactly once. */
   redeem(requestId: string): (EnrolledDevice & { maxAgeSeconds: number }) | undefined;
   authorize(token: string | undefined): string | undefined;
+  /** Liveness check for a server-authenticated device identity, without extending expiry. */
+  isDeviceAuthorized(deviceId: string): boolean;
   /** Mints a session for a device that proved a registered passkey. */
   sessionForPasskey(label: string): EnrolledDevice & { maxAgeSeconds: number };
   passkeys(): {
@@ -486,6 +488,10 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
     },
 
     authorize: (token) => devices.verify(token)?.id,
+    isDeviceAuthorized(deviceId) {
+      devices.sweep();
+      return listener !== undefined && devices.list().some((record) => record.id === deviceId);
+    },
 
     sessionForPasskey(label) {
       const enrolled = devices.enrol({ userAgent: label });
