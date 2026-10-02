@@ -68,14 +68,10 @@ Install a Developer ID Application certificate with its private key. `security f
 
 ```bash
 export CSC_NAME='Developer ID Application: Your Company (TEAMID1234)'
-export APPLE_ID='your-apple-id@example.com'
-export APPLE_APP_SPECIFIC_PASSWORD='use-an-app-specific-password'
 export APPLE_TEAM_ID='TEAMID1234'
 export NOTARYTOOL_KEYCHAIN_PROFILE='DoomPiNotary'
-xcrun notarytool store-credentials "$NOTARYTOOL_KEYCHAIN_PROFILE" \
-  --apple-id "$APPLE_ID" \
-  --team-id "$APPLE_TEAM_ID" \
-  --password "$APPLE_APP_SPECIFIC_PASSWORD"
+# Enter your Apple ID and app-specific password at the prompts, not in shell history.
+xcrun notarytool store-credentials "$NOTARYTOOL_KEYCHAIN_PROFILE" --team-id "$APPLE_TEAM_ID"
 pnpm build:desktop:macos --out "$HOME/Desktop/doompi-artifacts"
 ```
 

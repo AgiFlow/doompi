@@ -94,4 +94,4 @@ jobs:
         run: |
           app="packages/clients/doompi-desktop/release/mac-arm64/DoomPi.app"
           codesign -dv --verbose=4 "$app"
-          spctl -a -vvv -t install "$app"
+          spctl -a -vvv -t execute "$app"

@@ -7,7 +7,9 @@ import test from 'node:test';
 
 import {
   artifactNames,
+  assertAppleCredentials,
   checksumContents,
+  createBuildEnvironment,
   createBuildManifest,
   readBuildManifest,
   parseArguments,
@@ -93,6 +95,46 @@ test('identity validation requires the installed Developer ID certificate and te
   );
 });
 
+test('notarization uses the verified keychain profile without raw Apple credentials', () => {
+  const identity = 'Developer ID Application: Example (TEAMID1234)';
+  const env = { CSC_NAME: identity, APPLE_TEAM_ID: 'TEAMID1234', NOTARYTOOL_KEYCHAIN_PROFILE: 'agimon' };
+  const calls = [];
+  assert.deepEqual(
+    assertAppleCredentials(env, (command, args) => {
+      calls.push([command, args]);
+      return { stdout: `1) ABCDEF "${identity}"` };
+    }),
+    { identity, teamId: 'TEAMID1234', profile: 'agimon' },
+  );
+  assert.deepEqual(calls, [
+    ['security', ['find-identity', '-v', '-p', 'codesigning']],
+    ['xcrun', ['notarytool', 'history', '--keychain-profile', 'agimon', '--output-format', 'json']],
+  ]);
+  assert.throws(() => assertAppleCredentials({ ...env, APPLE_TEAM_ID: '' }), /APPLE_TEAM_ID/);
+  assert.throws(
+    () =>
+      assertAppleCredentials(env, () => {
+        throw new Error('profile unavailable');
+      }),
+    /profile unavailable/,
+  );
+  const competing = Object.fromEntries(
+    [
+      'APPLE_ID',
+      'APPLE_APP_SPECIFIC_PASSWORD',
+      'APPLE_API_KEY',
+      'APPLE_API_KEY_ID',
+      'APPLE_API_ISSUER',
+      'APPLE_KEYCHAIN',
+    ].map((name) => [name, 'unused']),
+  );
+  const build = createBuildEnvironment(identity, '/artifacts', 'agimon', { ...env, ...competing });
+  assert.equal(build.APPLE_KEYCHAIN_PROFILE, 'agimon');
+  assert.equal(build.NOTARYTOOL_KEYCHAIN_PROFILE, 'agimon');
+  assert.equal(build.CSC_NAME, identity);
+  assert.equal(build.DOOMPI_DESKTOP_REQUIRE_SIGNING, '1');
+  for (const name of Object.keys(competing)) assert.equal(build[name], undefined);
+});
 test('command failures redact credential values', () => {
   const env = {
     ...process.env,

@@ -211,32 +211,37 @@ export function parseDeveloperIdIdentity(identity, identityOutput, teamId) {
   return identity;
 }
 
-function assertAppleCredentials() {
-  const required = [
-    'APPLE_ID',
-    'APPLE_APP_SPECIFIC_PASSWORD',
-    'APPLE_TEAM_ID',
-    'CSC_NAME',
-    'NOTARYTOOL_KEYCHAIN_PROFILE',
-  ];
-  const missing = required.filter((name) => (process.env[name] ?? '').trim() === '');
+export function assertAppleCredentials(env = process.env, run = runCommand) {
+  const required = ['APPLE_TEAM_ID', 'CSC_NAME', 'NOTARYTOOL_KEYCHAIN_PROFILE'];
+  const missing = required.filter((name) => (env[name] ?? '').trim() === '');
   if (missing.length > 0) throw new Error(`Missing Apple release environment: ${missing.join(', ')}.`);
-  const teamId = process.env.APPLE_TEAM_ID.trim();
+  const teamId = env.APPLE_TEAM_ID.trim();
   if (!/^[A-Z0-9]{10}$/u.test(teamId)) throw new Error('APPLE_TEAM_ID must be the ten-character Apple Team ID.');
   const identity = parseDeveloperIdIdentity(
-    process.env.CSC_NAME.trim(),
-    runCommand('security', ['find-identity', '-v', '-p', 'codesigning']).stdout,
+    env.CSC_NAME.trim(),
+    run('security', ['find-identity', '-v', '-p', 'codesigning']).stdout,
     teamId,
   );
-  const profile = process.env.NOTARYTOOL_KEYCHAIN_PROFILE.trim();
+  const profile = env.NOTARYTOOL_KEYCHAIN_PROFILE.trim();
   if (!/^[A-Za-z0-9._-]+$/u.test(profile))
     throw new Error('NOTARYTOOL_KEYCHAIN_PROFILE contains unsupported characters.');
-  runCommand('xcrun', ['notarytool', 'history', '--keychain-profile', profile, '--output-format', 'json']);
+  run('xcrun', ['notarytool', 'history', '--keychain-profile', profile, '--output-format', 'json']);
   return { identity, profile, teamId };
 }
 
-function createBuildEnvironment(identity, outputDirectory, profile) {
-  const env = { ...process.env };
+export function createBuildEnvironment(identity, outputDirectory, profile, environment = process.env) {
+  const env = { ...environment };
+  // Use the same default-keychain profile validated above, not competing inherited credentials.
+  for (const name of [
+    'APPLE_ID',
+    'APPLE_APP_SPECIFIC_PASSWORD',
+    'APPLE_API_KEY',
+    'APPLE_API_KEY_ID',
+    'APPLE_API_ISSUER',
+    'APPLE_KEYCHAIN',
+  ])
+    delete env[name];
+  env.APPLE_KEYCHAIN_PROFILE = profile;
   delete env.CSC_LINK;
   delete env.CSC_KEY_PASSWORD;
   delete env.APPLE_CERTIFICATE_P12_BASE64;
@@ -392,7 +397,7 @@ function verifyApp(appPath, expectedVersion, teamId, expectedCommit) {
     throw new Error(`Packaged app is not signed by the expected Developer ID team: ${appPath}.`);
   }
   runCommand('codesign', ['--verify', '--deep', '--strict', '--verbose=2', appPath]);
-  runCommand('spctl', ['--assess', '--type', 'install', '--verbose=4', appPath]);
+  runCommand('spctl', ['--assess', '--type', 'execute', '--verbose=4', appPath]);
   runCommand('xcrun', ['stapler', 'validate', appPath]);
 
   const signableRoots = [
