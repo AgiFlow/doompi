@@ -1,3 +1,21 @@
+## 0.0.1-alpha.75 (2026-10-02)
+
+### 🩹 Fixes
+
+- expose configured MCP tools to native agents ([#280](https://github.com/AgiFlow/doompi/pull/280))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.112
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.107
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.108
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.66
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.74 (2026-10-02)
 
 ### 🚀 Features

@@ -1,3 +1,14 @@
+## 0.0.1-alpha.108 (2026-10-02)
+
+### 🩹 Fixes
+
+- **doompi-core:** repair forked storage and Pi turn boundaries ([#279](https://github.com/AgiFlow/doompi/pull/279))
+- expose configured MCP tools to native agents ([#280](https://github.com/AgiFlow/doompi/pull/280))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.107 (2026-10-02)
 
 ### 🚀 Features
