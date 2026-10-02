@@ -6,7 +6,7 @@
  * before the enclosing bundle is signed. Signing happens deepest-first because
  * signing an inner file afterwards would invalidate the outer signature.
  */
-const { spawnSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -41,6 +41,30 @@ function collect(directory, found = []) {
 
 const depth = (filePath) => filePath.split(path.sep).length;
 
+// Apple also inspects the offline package archives used by first-run sync.
+function signCatalogArchives(catalogDirectory, signBinary) {
+  let signed = 0;
+  for (const entry of fs.readdirSync(catalogDirectory, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.tgz')) continue;
+    const archive = path.join(catalogDirectory, entry.name);
+    const temporary = fs.mkdtempSync(path.join(catalogDirectory, '.sign-'));
+    try {
+      execFileSync('tar', ['-xzf', archive, '-C', temporary]);
+      const binaries = collect(temporary).sort((left, right) => depth(right) - depth(left));
+      if (binaries.length === 0) continue;
+      for (const binary of binaries) signBinary(binary);
+      const replacement = path.join(temporary, 'signed.tgz');
+      execFileSync('tar', ['--no-xattrs', '-czf', replacement, '-C', temporary, 'package']);
+      fs.renameSync(replacement, archive);
+      signed += binaries.length;
+    } finally {
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }
+  return signed;
+}
+exports.signCatalogArchives = signCatalogArchives;
+
 exports.default = async function signHubBinaries(context) {
   if (context.electronPlatformName !== 'darwin') return;
 
@@ -67,8 +91,7 @@ exports.default = async function signHubBinaries(context) {
   const binaries = [...collect(runtimeDirectory), helperPath].sort((left, right) => depth(right) - depth(left));
   if (binaries.length < 2) throw new Error(`The packaged app has no signable native payload at ${resourcesDirectory}`);
 
-  for (const binary of binaries) {
-    const entitlements = binary === helperPath ? helperEntitlements : runtimeEntitlements;
+  const signBinary = (binary, entitlements) => {
     const result = spawnSync(
       'codesign',
       ['--sign', identity, '--force', '--timestamp', '--options', 'runtime', '--entitlements', entitlements, binary],
@@ -77,7 +100,11 @@ exports.default = async function signHubBinaries(context) {
     if (result.status !== 0) throw new Error(`codesign failed for ${binary}`);
     const verification = spawnSync('codesign', ['--verify', '--strict', '--verbose=2', binary], { stdio: 'inherit' });
     if (verification.status !== 0) throw new Error(`Developer ID signature validation failed for ${binary}`);
-  }
+  };
+  for (const binary of binaries) signBinary(binary, binary === helperPath ? helperEntitlements : runtimeEntitlements);
+  const archived = signCatalogArchives(path.join(runtimeDirectory, 'catalog'), (binary) =>
+    signBinary(binary, runtimeEntitlements),
+  );
 
-  console.log(`[sign-hub] signed ${String(binaries.length)} binaries in the desktop native payload`);
+  console.log(`[sign-hub] signed ${String(binaries.length)} native files and ${String(archived)} archived binaries`);
 };
