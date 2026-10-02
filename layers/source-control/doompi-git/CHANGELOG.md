@@ -1,3 +1,22 @@
+## 0.0.1-alpha.42 (2026-10-02)
+
+### 🩹 Fixes
+
+- unify Git activity and background session status ([#266](https://github.com/AgiFlow/doompi/pull/266))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.25
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.106
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.64
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.56
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.91
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.41 (2026-10-02)
 
 ### 🩹 Fixes
