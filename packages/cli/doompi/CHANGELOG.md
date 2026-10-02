@@ -1,3 +1,30 @@
+## 0.0.1-alpha.109 (2026-10-02)
+
+### 🩹 Fixes
+
+- **doompi-core:** contain session runtime failures ([#268](https://github.com/AgiFlow/doompi/pull/268))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.82
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.104
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.83
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.105
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.83
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.82
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.83
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.29
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.106
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.83
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.105
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.105
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.108 (2026-10-01)
 
 ### 🧱 Updated Dependencies

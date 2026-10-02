@@ -1,3 +1,19 @@
+## 0.0.1-alpha.41 (2026-10-02)
+
+### 🩹 Fixes
+
+- unify Git activity and background session status ([#266](https://github.com/AgiFlow/doompi/pull/266))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.105
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.29
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.63
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.40 (2026-10-01)
 
 ### 🧱 Updated Dependencies
