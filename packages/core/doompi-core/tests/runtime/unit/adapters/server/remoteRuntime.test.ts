@@ -299,12 +299,10 @@ describe('global remote control', () => {
     let server!: HeadlessServer;
     const control = runtime(async (request) => {
       const source = new URL(request.url);
-      return fetch(new URL(`${source.pathname}${source.search}`, server.url), {
-        method: request.method,
-        headers: request.headers,
-        redirect: 'manual',
-        ...(request.method === 'GET' || request.method === 'HEAD' ? {} : { body: await request.arrayBuffer() }),
-      });
+      return fetch(
+        new URL(`${source.pathname}${source.search}`, server.url),
+        new Request(request, { redirect: 'manual' }),
+      );
     });
     server = await serveHeadlessServer({
       headlessHub: hub,
