@@ -568,15 +568,19 @@ export class McpSession {
         ? services.clientManager.ensureConnected(change.serverName).then((connection) => connection.listTools())
         : Promise.resolve([]);
     void tools
-      .catch(() => [])
-      .then((tools) => {
+      .then(
+        (tools) => ({ tools, error: undefined }),
+        () => ({ tools: [], error: `Could not discover tools for MCP server "${change.serverName}".` }),
+      )
+      .then(({ tools, error }) => {
         if (
           generation !== this.lifecycleGeneration ||
           !runtime?.isCurrent(services) ||
           this.disconnectedServers.has(change.serverName)
         )
           return;
-        this.catalog.applyStateChange(change, tools);
+        if (error) this.catalog.addDiagnostic(error);
+        this.catalog.applyStateChange(error ? { ...change, error } : change, tools);
         this.trackTools(this.catalog.allTools());
         this.emitChange();
         this.updateToolVisibility();

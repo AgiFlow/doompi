@@ -376,18 +376,82 @@ describe('McpSession', () => {
       expect(activeTools()).toEqual(['read']);
     });
 
-    it('keeps the session alive when a connected server refuses to list its tools', async () => {
-      listTools.mockRejectedValue(new Error('protocol error'));
-      const { pi } = fakePi();
-      const active = await session(pi);
+    it.each(['ensureConnected', 'listTools'] as const)(
+      'records safe discovery errors from %s and recovers',
+      async (operation) => {
+        const failing = operation === 'ensureConnected' ? ensureConnected : listTools;
+        failing.mockRejectedValue(new Error('secret-token https://private.example'));
+        const { pi, activeTools } = fakePi();
+        const active = await session(pi);
+        active.install();
+        await active.start();
+        const message = 'Could not discover tools for MCP server "pencil".';
+        emitState({ serverName: 'pencil', state: 'connected' });
+        await vi.waitFor(() => expect(active.getServers()[0].error).toBe(message));
+        expect(active.getSnapshot().servers[0]).toMatchObject({ state: 'connected', tools: [] });
+        expect(active.getDiagnostics()).toEqual([message]);
+        expect(activeTools()).toEqual(['read']);
+        const listener = vi.fn();
+        active.onChange(listener);
+        emitState({ serverName: 'pencil', state: 'connected' });
+        await vi.waitFor(() => expect(listener).toHaveBeenCalledOnce());
+        expect(active.getDiagnostics()).toEqual([message]);
+        ensureConnected.mockResolvedValue({ callTool, listTools, listResources });
+        listTools.mockResolvedValue([{ name: 'get_screenshot', inputSchema: { type: 'object' } }]);
+        emitState({ serverName: 'pencil', state: 'connected' });
+        await vi.waitFor(() => expect(activeTools()).toContain('pencil_get_screenshot'));
+        expect(active.getServers()[0].error).toBeUndefined();
+      },
+    );
+
+    it('accepts successful empty discovery and clears a previous error', async () => {
+      const active = await session(fakePi().pi);
       active.install();
       await active.start();
-
+      listTools.mockResolvedValue([]);
       emitState({ serverName: 'pencil', state: 'connected' });
-      await vi.waitFor(() => expect(active.getSnapshot().servers[0].state).toBe('connected'));
-
-      expect(active.getSnapshot().servers[0].tools).toEqual([]);
+      await vi.waitFor(() => expect(active.getServers()[0].state).toBe('connected'));
+      expect(active.getServers()[0].error).toBeUndefined();
+      expect(active.getDiagnostics()).toEqual([]);
+      listTools.mockRejectedValueOnce(new Error('sensitive'));
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(active.getServers()[0].error).toBeDefined());
+      listTools.mockResolvedValue([]);
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(active.getServers()[0].error).toBeUndefined());
+      expect(active.getSnapshot().servers[0]).toMatchObject({ state: 'connected', tools: [] });
+      expect(active.getDiagnostics()).toHaveLength(1);
     });
+
+    it.each(['disconnect', 'restart', 'dispose'] as const)(
+      'ignores rejected discovery after %s',
+      async (retirement) => {
+        const { pi, registered } = fakePi();
+        const active = await session(pi);
+        active.install();
+        await active.start();
+        let reject!: (error: Error) => void;
+        listTools.mockReturnValueOnce(
+          new Promise((_, rejectDiscovery) => {
+            reject = rejectDiscovery;
+          }),
+        );
+        emitState({ serverName: 'pencil', state: 'connected' });
+        await vi.waitFor(() => expect(listTools).toHaveBeenCalledOnce());
+        if (retirement === 'disconnect') await active.disconnect('pencil');
+        else if (retirement === 'restart') await active.start();
+        else await active.dispose();
+        const snapshot = active.getSnapshot();
+        const listener = vi.fn();
+        active.onChange(listener);
+        reject(new Error('sensitive stale failure'));
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(active.getSnapshot()).toEqual(snapshot);
+        expect(active.getDiagnostics()).toEqual([]);
+        expect(listener).not.toHaveBeenCalled();
+        expect(registered).toEqual([]);
+      },
+    );
 
     // A `/domains` switch replaces the runtime; a change from the old one must not
     // write tools into the new session.
