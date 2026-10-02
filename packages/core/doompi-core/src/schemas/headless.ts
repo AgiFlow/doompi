@@ -112,9 +112,10 @@ export interface DoomHeadlessSession {
   /**
    * Resolves when accepted by the session, before the agent turn settles. Here 'steer' describes
    * how to deliver IF a turn is already running; an idle agent is woken either way, matching Pi's
-   * ExtensionAPI.sendMessage({ triggerTurn: true, deliverAs: 'steer' }).
+   * ExtensionAPI.sendMessage({ triggerTurn: true, deliverAs: 'steer' }). 'interrupt' cancels the
+   * active run and directly admits this user input without releasing retained queued work.
    */
-  admitPrompt?(text: string, delivery?: 'prompt' | 'steer' | 'followUp'): Promise<void>;
+  admitPrompt?(text: string, delivery?: 'prompt' | 'steer' | 'followUp' | 'interrupt'): Promise<void>;
   abort(): Promise<void>;
   compact(instructions?: string): Promise<void>;
   activity(): Promise<{ hasPendingMessages: boolean; isIdle: boolean }>;

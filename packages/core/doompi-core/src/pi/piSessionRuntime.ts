@@ -490,14 +490,8 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     async steer(text: string | SessionMessageArgs) {
       requireLive();
       const args = messageArgs(text);
-      const { operation } = await options.runtime.readLifecycle();
-      if (operation === null || operation.status === 'aborting') {
-        // The turn may have completed between the client's send and this request. Retain the
-        // acknowledged input for the next eligible turn instead of dropping it at the boundary.
-        await options.runtime.enqueueAutomatic(args.message, args.images);
-        return;
-      }
-      await options.runtime.steer(args.message, args.images);
+      const submission = await options.runtime.submitUserPrompt(args.message, args.images);
+      void submission.settled.catch((error: unknown) => present({ type: 'error', error: String(error) }));
     },
     async abort() {
       requireLive();
@@ -538,7 +532,12 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     },
     async promoteQueued(args, context) {
       guardContext(context);
-      if (!args || typeof args.id !== 'string' || !args.id || typeof args.operationId !== 'string' || !args.operationId)
+      if (
+        !args ||
+        typeof args.id !== 'string' ||
+        !args.id ||
+        (args.operationId !== undefined && (typeof args.operationId !== 'string' || !args.operationId))
+      )
         throw new Error('Invalid queue promotion');
       return options.runtime.promoteQueued(args.id, args.operationId);
     },

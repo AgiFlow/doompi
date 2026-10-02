@@ -26,7 +26,21 @@ export const Empty = {
 };
 export const Streaming = {
   render: () => {
-    seedConversationStory({ streaming: true, entries: queuedEntries }, { draft: 'Also check the mobile layout.' });
+    const queue = queuedEntries.map(({ id, text }) => ({
+      id,
+      text,
+      delivery: 'followUp' as const,
+      scheduling: 'held' as const,
+      disposition: 'pending' as const,
+    }));
+    seedConversationStory(
+      {
+        streaming: true,
+        entries: queue.map((entry) => ({ ...entry, kind: 'queued' })),
+        lifecycle: { revision: 1, operation: { id: 'story-run', kind: 'run', status: 'open' }, paused: false, queue },
+      },
+      { draft: 'Also check the mobile layout.' },
+    );
     return frame();
   },
 };

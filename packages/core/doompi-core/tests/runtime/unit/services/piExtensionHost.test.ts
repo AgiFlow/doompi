@@ -58,6 +58,12 @@ function stubRuntime(entries: Entry[], options?: { parentSessionId?: string; fai
       },
     },
     readEntries,
+    submitUserPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
+    submitPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
+    admitMessage: vi.fn(async () => ({ settled: Promise.resolve() })),
+    dispatchCommand: vi.fn(async () => true),
+    followUp: vi.fn(async () => undefined),
+    steer: vi.fn(async () => undefined),
     readState: async () => ({ pendingMessageCount: 0 }),
     readLifecycle: async () => ({ revision: 0, operation: null, paused: false, queue: [] }),
     onPresentationFrame: () => () => undefined,
@@ -375,6 +381,7 @@ async function loadedHost(
   return {
     host,
     actions: preload.runtime,
+    runtime: stub.runtime,
     emit: stub.emit,
     readEntries: stub.readEntries,
     appended: stub.appended,
@@ -382,6 +389,34 @@ async function loadedHost(
 }
 
 describe('Pi extension tool surface in the headless host', () => {
+  it('forwards explicit user delivery options and preserves structured content', async () => {
+    const { actions, runtime, emit } = await loadedHost([]);
+    const content = [
+      { type: 'text' as const, text: 'voice' },
+      { type: 'image' as const, data: 'encoded', mimeType: 'image/png' },
+    ];
+    actions.sendUserMessage(content, { deliverAs: 'steer' });
+    await vi.waitFor(() =>
+      expect(runtime.submitUserPrompt).toHaveBeenCalledWith({ role: 'user', content, timestamp: expect.any(Number) }),
+    );
+    expect(runtime.followUp).not.toHaveBeenCalled();
+    actions.sendUserMessage('queued', { deliverAs: 'followUp' });
+    await vi.waitFor(() =>
+      expect(runtime.followUp).toHaveBeenCalledWith(expect.objectContaining({ role: 'user', content: 'queued' })),
+    );
+    actions.sendUserMessage('plain');
+    await vi.waitFor(() => expect(runtime.submitPrompt).toHaveBeenCalledWith('plain'));
+    actions.sendUserMessage('/profile selected', { deliverAs: 'followUp', expandPromptTemplates: true });
+    await vi.waitFor(() => expect(runtime.dispatchCommand).toHaveBeenCalledWith('/profile selected'));
+    expect(runtime.followUp).toHaveBeenCalledTimes(1);
+    await emit({ type: 'run_start', lane: 'main', operationId: 'op', runId: 'run', startedAt: Date.now() } as never);
+    actions.sendMessage({ customType: 'notice', content: 'custom', display: true }, { deliverAs: 'steer' });
+    await vi.waitFor(() =>
+      expect(runtime.steer).toHaveBeenCalledWith(expect.objectContaining({ role: 'custom', content: 'custom' })),
+    );
+    expect(runtime.submitUserPrompt).toHaveBeenCalledTimes(1);
+  });
+
   it('exposes every registered tool until a restriction narrows the set', async () => {
     const { host, actions } = await loadedHost(['alpha', 'beta']);
 

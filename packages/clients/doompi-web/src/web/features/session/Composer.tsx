@@ -488,7 +488,7 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
   const placeholder = !attached
     ? 'waiting for the session…'
     : active
-      ? 'steer the run without stopping it…'
+      ? 'interrupt the run and respond…'
       : 'ask anything · / for commands · $ for skills · @ for files…';
   const abortAction = (
     <Button
@@ -518,11 +518,13 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
     return (
       <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
         <QueueSheet
+          key={sessionId}
           count={queued}
+          disabled={!attached || lifecycle === null || aborting}
           entries={queuedEntries}
           onClear={() => clearQueuedMessages(sessionId)}
           onDelete={(id) => deleteQueuedMessage(id, queued, sessionId)}
-          onPromote={(id) => promoteQueuedMessage(id, sessionId)}
+          onPromote={(id, operationId) => promoteQueuedMessage(id, operationId, sessionId)}
           onResume={() => resumeQueuedMessages(sessionId)}
           operationId={lifecycle?.operation?.id}
           paused={lifecycle?.paused}
@@ -538,11 +540,13 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
   return (
     <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
       <QueueSheet
+        key={sessionId}
         count={queued}
+        disabled={!attached || lifecycle === null || aborting}
         entries={queuedEntries}
         onClear={() => clearQueuedMessages(sessionId)}
         onDelete={(id) => deleteQueuedMessage(id, queued, sessionId)}
-        onPromote={(id) => promoteQueuedMessage(id, sessionId)}
+        onPromote={(id, operationId) => promoteQueuedMessage(id, operationId, sessionId)}
         onResume={() => resumeQueuedMessages(sessionId)}
         operationId={lifecycle?.operation?.id}
         paused={lifecycle?.paused}

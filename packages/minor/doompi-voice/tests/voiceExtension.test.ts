@@ -21,21 +21,23 @@ import {
 import { deliverAutoCaptureInput } from '../src/services/voiceController';
 import { createDoomVoiceToolsService } from '../src/services/voiceTools';
 describe('autonomous prompt delivery', () => {
-  it('queues composed prompts as follow-ups without changing ordinary idle or steer delivery', () => {
+  it('requests immediate steering for idle and busy voice while preserving explicit follow-ups', () => {
     const sendUserMessage = vi.fn();
     const pi = { sendUserMessage } as unknown as Pick<ExtensionAPI, 'sendUserMessage'>;
-    const idle = { isIdle: () => true } as Pick<ExtensionContext, 'isIdle'>;
-    const busy = { isIdle: () => false } as Pick<ExtensionContext, 'isIdle'>;
+    const idle = { isIdle: vi.fn(() => true) };
+    const busy = { isIdle: vi.fn(() => false) };
 
     deliverAutoCaptureInput(pi, idle, 'idle prompt');
     deliverAutoCaptureInput(pi, busy, 'busy prompt');
     deliverAutoCaptureInput(pi, idle, 'idle composition', 'queuedFollowUp');
     deliverAutoCaptureInput(pi, busy, 'busy composition', 'queuedFollowUp');
 
-    expect(sendUserMessage).toHaveBeenNthCalledWith(1, 'idle prompt');
+    expect(sendUserMessage).toHaveBeenNthCalledWith(1, 'idle prompt', { deliverAs: 'steer' });
     expect(sendUserMessage).toHaveBeenNthCalledWith(2, 'busy prompt', { deliverAs: 'steer' });
     expect(sendUserMessage).toHaveBeenNthCalledWith(3, 'idle composition', { deliverAs: 'followUp' });
     expect(sendUserMessage).toHaveBeenNthCalledWith(4, 'busy composition', { deliverAs: 'followUp' });
+    expect(idle.isIdle).not.toHaveBeenCalled();
+    expect(busy.isIdle).not.toHaveBeenCalled();
   });
 });
 

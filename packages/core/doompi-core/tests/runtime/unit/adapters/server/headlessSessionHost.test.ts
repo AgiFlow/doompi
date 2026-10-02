@@ -515,6 +515,7 @@ describe('headless session facet surface', () => {
     const steer = vi.spyOn(runtime, 'steer').mockResolvedValue(undefined);
     const followUp = vi.spyOn(runtime, 'followUp').mockResolvedValue(undefined);
     const submitPrompt = vi.spyOn(runtime, 'submitPrompt').mockResolvedValue({ settled: Promise.resolve() });
+    const submitUserPrompt = vi.spyOn(runtime, 'submitUserPrompt').mockResolvedValue({ settled: Promise.resolve() });
 
     // prompt awaits the turn, so a streaming delivery only enqueues into a running turn.
     await session.prompt('steered', 'steer');
@@ -526,6 +527,7 @@ describe('headless session facet surface', () => {
     // a capture is queued, so routing it through submitPrompt would start an unrequested turn.
     await session.admitPrompt!('admitted follow up', 'followUp');
     await session.admitPrompt!('admitted plain');
+    await session.admitPrompt!('interrupt now', 'interrupt');
 
     expect(steer).toHaveBeenCalledExactlyOnceWith('steered');
     expect(followUp.mock.calls).toEqual([['queued'], ['admitted follow up']]);
@@ -533,6 +535,7 @@ describe('headless session facet surface', () => {
     expect(submitPrompt).toHaveBeenNthCalledWith(1, 'admitted steer', undefined, 'steer');
     expect(submitPrompt).toHaveBeenNthCalledWith(2, 'admitted plain', undefined, undefined);
     expect(submitPrompt).toHaveBeenCalledTimes(2);
+    expect(submitUserPrompt).toHaveBeenCalledExactlyOnceWith('interrupt now');
   });
 
   it('reports an admitted prompt that fails after admission to the operator', async () => {

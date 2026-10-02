@@ -178,7 +178,7 @@ export interface QueuedItemArgs {
   id: string;
 }
 export interface PromoteQueuedArgs extends QueuedItemArgs {
-  operationId: string;
+  operationId?: string;
 }
 
 export interface ClearQueueResult {

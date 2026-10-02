@@ -47,6 +47,8 @@ export interface HeadlessSession {
   setSessionStats(stats: HeadlessSessionStats): void;
   waitForAttach(timeoutMs?: number): Promise<void>;
   waitForCommand(type: string, timeoutMs?: number): Promise<Frame>;
+  /** Hold the next command until emit supplies its response. */
+  deferCommand(type: string): void;
   dropClient(): void;
   connectAnotherClient(): Promise<() => Promise<void>>;
   close(): Promise<void>;
@@ -115,6 +117,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   const listeners = new Set<(frame: Frame) => void>();
   const commandWaiters: Array<{ type: string; resolve: (frame: Frame) => void }> = [];
   const pending = new Map<string, PendingResult[]>();
+  const deferredCommands = new Set<string>();
   const entries: Frame[] = [];
   let usageEntries: unknown[] = [];
   let availableModels: unknown[] = [];
@@ -156,7 +159,9 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
 
   const record = (frame: Frame): void => {
     const { id: protocolId, ...payload } = frame;
-    const command = frame.type === 'extension_ui_response' ? frame : payload;
+    const command = ['extension_ui_response', 'remove_queued', 'promote_queued'].includes(String(frame.type))
+      ? frame
+      : payload;
     void protocolId;
     received.push(command);
     for (let index = commandWaiters.length - 1; index >= 0; index -= 1) {
@@ -172,6 +177,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       const waiter: PendingResult = { command, resolve, reject };
       const waiters = pending.get(command) ?? [];
       pending.set(command, [...waiters, waiter]);
+      if (deferredCommands.delete(command)) return;
       const fallbackDelay = ['get_available_models', 'get_available_thinking_levels'].includes(command) ? 1_000 : 0;
       setTimeout(() => {
         const current = pending.get(command) ?? [];
@@ -205,6 +211,19 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       leafId: string | null;
     };
     return { entries: result.entries, leafId: result.leafId };
+  };
+
+  const appendUserInput = (message: string, images: unknown[] = []): void => {
+    const entry = {
+      id: `user-${randomUUID()}`,
+      type: 'message',
+      seq: entries.length + 1,
+      parentId: entries.at(-1)?.id ?? null,
+      timestamp: Date.now(),
+      message: { role: 'user', content: [{ type: 'text', text: message }, ...images] },
+    };
+    entries.push(entry);
+    for (const listener of listeners) listener({ type: 'entry_appended', entry });
   };
 
   const runtime = {
@@ -280,7 +299,8 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     },
     removeQueued: async (itemId: string) => {
       record({ type: 'remove_queued', id: itemId });
-      await answer('remove_queued', undefined);
+      const outcome = await answer('remove_queued', 'removed');
+      if (outcome !== 'removed') return outcome;
       lifecycle = {
         ...lifecycle,
         revision: lifecycle.revision + 1,
@@ -289,13 +309,21 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
       return 'removed';
     },
-    promoteQueued: async (itemId: string, operationId: string) => {
-      record({ type: 'promote_queued', id: itemId, operationId });
-      await answer('promote_queued', undefined);
+    promoteQueued: async (itemId: string, operationId?: string) => {
+      record({ type: 'promote_queued', id: itemId, ...(operationId === undefined ? {} : { operationId }) });
+      const outcome = await answer('promote_queued', 'promoted');
+      if (outcome !== 'promoted') return outcome;
+      if (lifecycle.operation?.id !== operationId) return 'target_changed';
+      const selected = lifecycle.queue.find(({ id }) => id === itemId);
+      if (selected === undefined) return 'not_found';
+      if (selected.disposition !== 'pending') return 'in_flight';
+      appendUserInput(selected.text, selected.images === undefined ? [] : [...selected.images]);
       lifecycle = {
         ...lifecycle,
         revision: lifecycle.revision + 1,
-        queue: lifecycle.queue.map((entry) => (entry.id === itemId ? { ...entry, delivery: 'steer' as const } : entry)),
+        operation: { id: `turn-${randomUUID()}`, kind: 'run', status: 'open' },
+        paused: true,
+        queue: lifecycle.queue.filter(({ id }) => id !== itemId),
       };
       for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
       return 'promoted';
@@ -350,7 +378,11 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     clearQueue: async () => {
       record({ type: 'clear_queue' });
       await answer('clear_queue', { steering: [], followUp: [] });
-      lifecycle = { ...lifecycle, revision: lifecycle.revision + 1, queue: [] };
+      lifecycle = {
+        ...lifecycle,
+        revision: lifecycle.revision + 1,
+        queue: lifecycle.queue.filter((entry) => entry.disposition === 'uncertain' || entry.disposition === 'handoff'),
+      };
       for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
       return { steering: [], followUp: [] };
     },
@@ -375,19 +407,20 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
         ...(streamingBehavior === undefined ? {} : { streamingBehavior }),
       });
       await answer('prompt', undefined);
-      const entry = {
-        id: `user-${randomUUID()}`,
-        type: 'message',
-        seq: entries.length + 1,
-        parentId: entries.at(-1)?.id ?? null,
-        timestamp: Date.now(),
-        message: {
-          role: 'user',
-          content: [{ type: 'text', text: message }, ...(images ?? [])],
-        },
+      appendUserInput(message, images);
+      return { settled: Promise.resolve() };
+    },
+    submitUserPrompt: async (message: string, images?: unknown[]) => {
+      record({ type: 'steer', message, ...(images === undefined ? {} : { images }) });
+      await answer('steer', undefined);
+      appendUserInput(message, images);
+      lifecycle = {
+        ...lifecycle,
+        revision: lifecycle.revision + 1,
+        operation: { id: `turn-${randomUUID()}`, kind: 'run', status: 'open' },
+        paused: true,
       };
-      entries.push(entry);
-      for (const listener of listeners) listener({ type: 'entry_appended', entry });
+      for (const listener of listeners) listener({ type: 'lifecycle_update', lifecycle });
       return { settled: Promise.resolve() };
     },
     prompt: async (message: string, images?: unknown[]) => {
@@ -467,6 +500,10 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
         // followUp stays enqueue-only, mirroring headlessSessionHost: voiceServer/index.ts:120 asks
         // for 'followUp' while idle whenever a capture is queued.
         if (delivery === 'followUp') return runtime.followUp(text);
+        if (delivery === 'interrupt') {
+          await runtime.submitUserPrompt(text);
+          return;
+        }
         await runtime.submitPrompt(text, undefined, delivery === 'steer' ? 'steer' : undefined);
       },
       abort: () => runtime.abort(),
@@ -590,6 +627,8 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
           });
         return;
       }
+      if (frame.type === 'lifecycle_update' && typeof frame.lifecycle === 'object' && frame.lifecycle !== null)
+        lifecycle = frame.lifecycle as SessionLifecycle;
       const assistantEvent =
         typeof frame.assistantMessageEvent === 'object' && frame.assistantMessageEvent !== null
           ? (frame.assistantMessageEvent as Frame)
@@ -641,6 +680,9 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       for (const listener of listeners) listener(frame);
     },
     replaceEntries,
+    deferCommand(type) {
+      deferredCommands.add(type);
+    },
     setSessionStats(next) {
       const input = next.tokens.input ?? 0;
       const output = next.tokens.output ?? 0;

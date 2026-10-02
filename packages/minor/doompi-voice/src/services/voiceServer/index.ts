@@ -150,8 +150,7 @@ export function createVoiceServer(
   const deliver = async (text: string, queued = false): Promise<void> => {
     host.assertActive();
     if (!execution.session.admitPrompt) throw new Error('The session cannot admit voice prompts.');
-    const activity = await execution.session.activity();
-    await execution.session.admitPrompt(text, queued || !activity.isIdle ? 'followUp' : 'prompt');
+    await execution.session.admitPrompt(text, queued ? 'followUp' : 'interrupt');
   };
   const liveAgent = new LiveAgentSession(
     execution.sessionId,

@@ -26,8 +26,8 @@ export function removeQueuedCommand(id: string): Frame {
   return { type: 'remove_queued', id };
 }
 
-export function promoteQueuedCommand(id: string, operationId: string): Frame {
-  return { type: 'promote_queued', id, operationId };
+export function promoteQueuedCommand(id: string, operationId?: string): Frame {
+  return { type: 'promote_queued', id, ...(operationId === undefined ? {} : { operationId }) };
 }
 
 export function resumeQueueCommand(): Frame {
