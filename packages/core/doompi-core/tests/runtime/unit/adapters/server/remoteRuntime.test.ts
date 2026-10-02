@@ -5,9 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { createClientHandshake } from '@agimon-ai/doompi-web-security/node';
+import { Client, type ByteTransportFactory } from '@earendil-works/pi-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 
+import {
+  DOOM_COCKPIT_SERVER_ID,
+  DoomSessionManagementService,
+  DoomSessionService,
+} from '../../../../../src/exports/sessionProtocol';
 import { createHeadlessHub, type HeadlessHub } from '../../../../../src/server/headlessHub';
 import { serveHeadlessServer, type HeadlessServer } from '../../../../../src/server/headlessServer';
 import { createRemoteRuntime, type RemoteRuntime } from '../../../../../src/server/remoteRuntime';
@@ -30,6 +36,35 @@ afterEach(async () => {
   await Promise.all(frontends.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   for (const home of homes.splice(0)) fs.rmSync(home, { recursive: true, force: true });
 });
+
+function websocketTransport(url: string, headers?: Record<string, string>): ByteTransportFactory {
+  return async (handlers) => {
+    const socket = new WebSocket(url, { headers });
+    await new Promise<void>((resolve, reject) => {
+      socket.once('open', resolve);
+      socket.once('error', reject);
+    });
+    let terminal = false;
+    const stop = (error?: Error): void => {
+      if (terminal) return;
+      terminal = true;
+      if (error) handlers.onError(error);
+      else handlers.onClose();
+    };
+    socket.on('message', (data) => handlers.onData(Buffer.from(data as ArrayBuffer)));
+    socket.on('close', () => stop());
+    socket.on('error', (error) => stop(error));
+    return {
+      send: (chunk) =>
+        new Promise<void>((resolve, reject) => {
+          socket.send(chunk, (error) => (error ? reject(error) : resolve()));
+        }),
+      close() {
+        socket.close();
+      },
+    };
+  };
+}
 
 function runtime(
   forward: (request: Request) => Promise<Response> = async () => Response.json({ ok: true }),
@@ -169,8 +204,27 @@ describe('global remote control', () => {
     expect(forward).toHaveBeenCalledTimes(7);
   });
 
-  it('completes session MCP OAuth and lists tools through the public tunnel', async () => {
-    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+  it('keeps preauthorized sibling MCP tools available through the public tunnel after stalled Pi admission exits', async () => {
+    const reservations = new Map<string, { parentSessionId: string; cwd: string }>();
+    const hub = createHeadlessHub({
+      manager: { closeSession: vi.fn(async () => undefined) } as never,
+      sessionReservations: {
+        read: (id, parentSessionId) => {
+          const reservation = reservations.get(id);
+          if (reservation?.parentSessionId !== parentSessionId) throw new Error('Reservation is unavailable.');
+          return { sessionId: id, cwd: reservation.cwd };
+        },
+        prepare: async (id, parentSessionId, cwd) => {
+          reservations.set(id, { parentSessionId, cwd });
+          return { sessionId: id, cwd };
+        },
+        complete: async (id, parentSessionId) => {
+          const reservation = reservations.get(id);
+          if (reservation?.parentSessionId !== parentSessionId) throw new Error('Reservation is unavailable.');
+          return { sessionId: id, workspaceId: 'test-workspace', cwd: reservation.cwd };
+        },
+      },
+    });
     hubs.push(hub);
     hub.register({
       workspaceId: 'test-workspace',
@@ -211,6 +265,27 @@ describe('global remote control', () => {
         dispose: vi.fn(async () => undefined),
       },
     });
+    let exit!: (code: number) => void;
+    const submitPrompt = vi.fn(() => new Promise<never>(() => undefined));
+    const sibling = hub.session('one')!;
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'failing',
+      name: 'Failing',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: {
+        ...sibling.host,
+        runtime: {
+          exited: new Promise<number>((resolve) => {
+            exit = resolve;
+          }),
+          readLifecycle: async () => ({ revision: 0, operation: null, paused: false, queue: [] }),
+          submitPrompt,
+        } as never,
+        dispose: vi.fn(async () => undefined),
+      },
+    });
     await hub.mountFacets([], {
       scope: 'workspace',
       workspaceId: 'test-workspace',
@@ -235,6 +310,21 @@ describe('global remote control', () => {
       sessionMcpPublicOriginRevision: () => control.remote.publicOriginRevision(),
     });
     headlessServers.push(server);
+    hub.sessionService.registerReservedWorktreeProvisioner!(async ({ reservationId, parentSessionId }) => {
+      const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-remote-conversation-'));
+      homes.push(cwd);
+      const prepared = await server.sessionReservations.prepare(reservationId, parentSessionId, cwd);
+      hub.register({
+        workspaceId: 'test-workspace',
+        id: prepared.sessionId,
+        name: 'Conversation',
+        cwd: prepared.cwd,
+        createdAt: 'now',
+        parentSessionId,
+        host: sibling.host,
+      });
+      return server.sessionReservations.complete(reservationId, parentSessionId);
+    });
     await local(control, '/api/remote/settings', 'PUT', {
       tunnel: { kind: 'named', hostname: 'remote.example.com' },
     });
@@ -289,6 +379,31 @@ describe('global remote control', () => {
     );
     expect(token.status, await token.clone().text()).toBe(200);
     const tokens = (await token.json()) as { access_token: string };
+    const port = control.remote.tunnelPort()!;
+    const pi = await Client.connect({
+      serverId: DOOM_COCKPIT_SERVER_ID,
+      transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/ws`, {
+        'x-doompi-token': 'browser-secret',
+      }),
+    });
+    try {
+      await pi.request(
+        { serverId: DOOM_COCKPIT_SERVER_ID },
+        { serviceId: DoomSessionManagementService.id, member: 'attach', args: ['failing'] },
+      );
+      const pending = expect(
+        pi.request(pi.attachment!, {
+          serviceId: DoomSessionService.id,
+          member: 'prompt',
+          args: ['stalled'],
+        }),
+      ).rejects.toThrow();
+      await vi.waitFor(() => expect(submitPrompt).toHaveBeenCalledWith('stalled', undefined));
+      exit(1);
+      await pending;
+    } finally {
+      await pi.dispose();
+    }
     const mcp = await tunnel(
       control.remote.tunnelPort()!,
       root,
@@ -305,6 +420,34 @@ describe('global remote control', () => {
     );
     expect(mcp.status, await mcp.clone().text()).toBe(200);
     await expect(mcp.json()).resolves.toMatchObject({ result: { tools: [{ name: 'read' }] } });
+    const called = await tunnel(
+      port,
+      root,
+      'POST',
+      {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: {
+          name: 'read',
+          arguments: {},
+          _meta: { ...MODERN_ENVELOPE, 'openai/session': 'surviving-chatgpt-conversation' },
+        },
+      },
+      undefined,
+      false,
+      {
+        authorization: `Bearer ${tokens.access_token}`,
+        accept: 'application/json, text/event-stream',
+        'mcp-protocol-version': MODERN_PROTOCOL_VERSION,
+        'mcp-method': 'tools/call',
+        'mcp-name': 'read',
+      },
+    );
+    expect(called.status, await called.clone().text()).toBe(200);
+    await expect(called.json()).resolves.toMatchObject({ result: { content: [{ type: 'text', text: 'done' }] } });
+    expect(sibling.host.mcpSurface.invokeTool).toHaveBeenCalledOnce();
+    expect(control.remote.tunnelPort()).toBe(port);
   });
 
   it('aborts a forwarded public MCP request when the tunnel client disconnects', async () => {
