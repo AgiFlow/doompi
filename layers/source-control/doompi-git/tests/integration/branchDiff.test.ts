@@ -150,6 +150,36 @@ describe('branch review', () => {
     expect((await diff.review(repo, { recordedBaseRef: 'feat/y' }))?.changes.base).toBeUndefined();
   });
 
+  it.each(['main', 'wt/fix-auth'])(
+    'reviews a linked worktree against recorded base %s, not its parent checkout',
+    async (recordedBaseRef) => {
+      const repo = sandbox.repository('repo');
+      sandbox.remote(repo, 'origin');
+      const checkout = path.join(sandbox.root, 'worktree');
+      sandbox.git(repo, 'worktree', 'add', '-q', '-b', 'wt/fix-auth', checkout, 'main');
+      sandbox.commit(checkout, 'committed.txt', 'committed\n', 'branch work');
+      fs.writeFileSync(path.join(checkout, 'README.md'), '# child edit\n');
+      sandbox.git(checkout, 'add', 'README.md');
+      fs.writeFileSync(path.join(checkout, 'notes.txt'), 'child note\n');
+      fs.writeFileSync(path.join(repo, 'parent-only.txt'), 'not in the worktree\n');
+
+      const diff = createBranchDiff();
+      const review = (await diff.review(checkout, { recordedBaseRef }))!;
+      expect(review.changes).toMatchObject({
+        branch: 'wt/fix-auth',
+        base: 'origin/main',
+        added: 3,
+        removed: 1,
+        files: 3,
+      });
+      expect(review.summary.files.map((file) => file.path)).toEqual(['committed.txt', 'notes.txt', 'README.md']);
+      expect((await diff.fileDiff(review, 'README.md')).hunks[0]?.rows).toEqual([
+        { marker: '-', line: 1, content: '# repo' },
+        { marker: '+', line: 1, content: '# child edit' },
+      ]);
+    },
+  );
+
   it('reports the upstream gap, and nothing outside a repository', async () => {
     const repo = sandbox.repository('repo');
     const remote = sandbox.remote(repo, 'origin');

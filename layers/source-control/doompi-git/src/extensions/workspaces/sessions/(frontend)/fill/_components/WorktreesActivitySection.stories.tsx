@@ -6,8 +6,10 @@
  * session id, which is exactly where the hub channel puts them.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
+import { Kbd } from '@agimon-ai/doompi-web-components';
 
 import type { WorktreeView } from '../../../../../../types/webWorktrees';
+import { gitChanges } from '../../_lib/gitChangesStore';
 import { worktreeActivity } from '../../_lib/worktreesActivityStore';
 import { WorktreesActivitySection } from './WorktreesActivitySection';
 
@@ -92,6 +94,66 @@ export const Playground = {
         <span className="text-2xs text-doom-dim uppercase tracking-widest">narrow · long branch</span>
         <WorktreesActivitySection {...slot('s-narrow')} />
       </div>
+    </div>
+  ),
+};
+
+// The real Git group body, seeded for regular, parent and worktree sessions.
+const GIT_SESSIONS = [
+  { label: 'regular session', id: 'git-main', branch: 'fix/git-branch', added: 120, removed: 34, files: 6 },
+  { label: 'parent session with a worktree', id: 'git-parent', branch: 'main', added: 8, removed: 2, files: 1 },
+  { label: 'focused worktree session', id: 'git-child', branch: WORKTREES[0].branch, added: 64, removed: 12, files: 4 },
+  {
+    label: 'clean top-level worktree session',
+    id: 'git-clean-child',
+    branch: WORKTREES[0].branch,
+    added: 0,
+    removed: 0,
+    files: 0,
+  },
+];
+
+for (const session of GIT_SESSIONS) {
+  gitChanges.update(session.id, () => ({
+    changes: {
+      branch: session.branch,
+      base: 'origin/main',
+      added: session.added,
+      removed: session.removed,
+      files: session.files,
+    },
+    pending: undefined,
+    error: undefined,
+    errorTarget: undefined,
+  }));
+  worktreeActivity.update(session.id, () => ({
+    worktrees: session.id === 'git-parent' ? WORKTREES.slice(0, 1) : [],
+    pending: undefined,
+    error: undefined,
+  }));
+}
+worktreeActivity.update('git-clean-child', (current) => ({
+  ...current,
+  worktrees: [{ ...WORKTREES[0], sessionId: 'git-clean-child' }],
+}));
+export const UnifiedGit = {
+  render: () => (
+    <div className="grid w-fit grid-cols-2 items-start gap-6 bg-doom-bg p-6">
+      {GIT_SESSIONS.map((session) => (
+        <div key={session.id} className="flex w-80 flex-col gap-2">
+          <span className="text-2xs text-doom-dim uppercase tracking-widest">{session.label}</span>
+          <div className="flex flex-col gap-2 border-b border-doom-border-soft bg-doom-panel px-3 py-3">
+            <div className="flex items-center gap-2 px-1">
+              <span aria-hidden className="text-sm font-bold text-doom-faint">
+                #
+              </span>
+              <span className="flex-1 text-sm font-bold text-doom-text">git</span>
+              <Kbd className="bg-doom-panel">g w</Kbd>
+            </div>
+            <WorktreesActivitySection {...slot(session.id)} />
+          </div>
+        </div>
+      ))}
     </div>
   ),
 };

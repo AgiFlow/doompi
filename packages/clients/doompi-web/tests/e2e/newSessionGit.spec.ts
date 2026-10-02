@@ -42,9 +42,20 @@ test('opens an existing branch as a top-level worktree session', async ({ page, 
 
   await expect(page.getByTestId('new-session-dialog')).toBeHidden({ timeout: 60_000 });
   await expect(page).not.toHaveURL(before);
+  await cockpit.sessions[1]!.waitForAttach();
   const card = page.locator('[data-testid^="session-card-"]', { hasText: 'feature/existing' });
   await expect(card).toBeVisible();
   await expect(card).toHaveAttribute('data-nested', 'false');
+
+  const changes = page.getByTestId('activity-git').getByTestId('activity-diff-changes');
+  await expect(changes).toContainText('feature/existing');
+  await expect(changes).toHaveAttribute(
+    'aria-label',
+    'review feature/existing changes: 0 added, 0 removed vs origin/main',
+  );
+  await expect(page.getByTestId('activity-diff')).toHaveCount(0);
+  await changes.click();
+  await expect(page.getByTestId('git-review-empty')).toBeVisible();
 });
 
 test('tracks a remote-only branch in its worktree', async ({ page, cockpit }) => {

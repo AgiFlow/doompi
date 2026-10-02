@@ -29,7 +29,12 @@ gitChanges.update('s-syncing', () => ({
   error: undefined,
   errorTarget: undefined,
 }));
-
+gitChanges.update('s-worktree-changes', () => ({
+  changes: { branch: 'wt/fix-auth', base: 'origin/main', added: 64, removed: 12, files: 4 },
+  pending: undefined,
+  error: undefined,
+  errorTarget: undefined,
+}));
 const slot = (sessionId: string | null) => slotPropsFixture({ sessionId }).props;
 
 const meta = {
@@ -45,6 +50,7 @@ export const Playground = {
     <div className="flex flex-col gap-6 bg-doom-bg p-6">
       {[
         { label: 'branch vs base', id: 's-changes' },
+        { label: 'worktree branch vs base', id: 's-worktree-changes' },
         { label: 'nothing changed yet', id: 's-clean' },
         { label: 'sync running', id: 's-syncing' },
         { label: 'not reported yet', id: 's-unknown' },

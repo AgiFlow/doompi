@@ -245,8 +245,24 @@ test('highlights background work and renders its resume notice once the agent se
 
   cockpit.session.emit({ type: 'agent_settled' });
   await expect(notice).toHaveText('Background work is still running. The agent will resume when results are ready.');
+  const railStatus = page.getByTestId('session-card-s1').getByTestId('session-status');
+  await expect(railStatus).toHaveText('running');
   await expect.poll(() => notice.evaluate((element) => getComputedStyle(element).position)).toBe('static');
   await expect.poll(() => notice.evaluate((element) => element.parentElement?.lastElementChild === element)).toBe(true);
+
+  writeRunnerRecord(cockpit.runnerStore, 's1', {
+    id: 'runner-web',
+    name: 'web',
+    command: 'pnpm dev',
+    record: {
+      state: 'completed',
+      exit: { reason: 'completed', code: 0, signal: null, finishedAt: new Date().toISOString() },
+    },
+  });
+  // Runner updates are lifecycle snapshots, not filesystem notifications.
+  cockpit.publishSessionEvent('runner_runs', 's1', { runs: [] });
+  await expect(page.getByTestId('activity-busy')).toBeHidden();
+  await expect(railStatus).toHaveText('done · waiting for you');
 
   cockpit.session.emit({ type: 'agent_start' });
   await expect(notice).toBeHidden();
