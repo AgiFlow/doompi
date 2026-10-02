@@ -1,3 +1,22 @@
+## 0.0.1-alpha.108 (2026-10-02)
+
+### 🩹 Fixes
+
+- **doompi-mcp:** keep output-schema failures non-blocking ([#271](https://github.com/AgiFlow/doompi/pull/271))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.26
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.106
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.107
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.107
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.57
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.107 (2026-10-02)
 
 ### 🩹 Fixes
