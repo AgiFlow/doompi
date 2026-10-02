@@ -1,3 +1,22 @@
+## 0.0.1-alpha.106 (2026-10-02)
+
+### 🩹 Fixes
+
+- interrupt voice input and send individual queued prompts ([#267](https://github.com/AgiFlow/doompi/pull/267))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.104
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.105
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.29
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.105
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.105
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.105 (2026-10-01)
 
 ### 🧱 Updated Dependencies

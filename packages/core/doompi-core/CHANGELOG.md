@@ -1,3 +1,14 @@
+## 0.0.1-alpha.105 (2026-10-02)
+
+### 🩹 Fixes
+
+- **doompi-core:** contain session runtime failures ([#268](https://github.com/AgiFlow/doompi/pull/268))
+- interrupt voice input and send individual queued prompts ([#267](https://github.com/AgiFlow/doompi/pull/267))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.104 (2026-10-01)
 
 ### 🩹 Fixes
