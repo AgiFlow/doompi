@@ -7,7 +7,7 @@ import type { Context } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { createSession, defineDoc, type Storage } from '@earendil-works/pi-durable';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
-import { NodeSqliteDatabase, openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node';
+import { NodeSqliteDatabase, openNodeSqliteDatabase } from '@earendil-works/pi-durable/storage/sqlite/node';
 
 import type { DirectHarnessRuntimeOptions } from '../../types/server/directHarnessRuntime';
 
@@ -123,10 +123,14 @@ export async function openSqliteSessionStorage(
   fs.mkdirSync(path.dirname(sessionFile), { recursive: true, mode: 0o700 });
   const historyLease = await options.historyOwnership.acquire(sessionFile);
   let storage: Storage | undefined;
+  let database: NodeSqliteDatabase | undefined;
+  let writerOpenAttempted = false;
   try {
     await historyLease.assertQuiescent();
     if (fs.existsSync(sessionFile)) validateDurableSessionFile(sessionFile);
-    storage = await openNodeSqliteStorage(sessionFile);
+    writerOpenAttempted = true;
+    database = await openNodeSqliteDatabase(sessionFile);
+    storage = await SqliteStorage.open(database);
     const session = createSession(storage);
     const identity = await session.snapshot(SessionIdentityDoc, context);
     if (existing && (!identity || identity.id !== id))
@@ -143,8 +147,11 @@ export async function openSqliteSessionStorage(
     const repository = { close: (closeContext: Context = context) => session.close(closeContext) };
     return { storage, session, sessionFile, repository, historyLease };
   } catch (error) {
+    // ponytail: An upstream open rejection has no closure receipt, so retain ownership until shutdown is confirmed.
+    if (writerOpenAttempted && !database) throw error;
     try {
       if (storage) await storage.close(context);
+      else if (database) await database.close();
     } catch (cleanupError) {
       throw new AggregateError([error, cleanupError], 'SQLite storage initialization cleanup failed');
     }

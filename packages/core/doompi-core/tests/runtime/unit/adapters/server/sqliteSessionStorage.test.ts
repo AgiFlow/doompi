@@ -4,9 +4,10 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
+import { NodeSqliteDatabase } from '@earendil-works/pi-durable/storage/sqlite/node';
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
+import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../../src/services/historyOwnership';
 import { DURABLE_BACKGROUND_CONTEXT as BACKGROUND_CONTEXT } from '../../../../../src/services/sqliteSessionStorage';
 import { openReadOnlyDurableStorage, openSqliteSessionStorage } from '../../../../../src/services/sqliteSessionStorage';
 
@@ -194,3 +195,39 @@ it('closes the native reader when storage initialization fails', async () => {
     await writer.historyLease.release();
   }
 });
+
+it.each([false, true])(
+  'cleans up failed writer initialization, retaining ownership if close fails (%s)',
+  async (closeFails) => {
+    const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-writer-init-'));
+    directories.push(sessionsRoot);
+    const sessionFile = path.join(sessionsRoot, 'durable-v1', 'failure.sqlite');
+    const failure = new Error('writer initialization failed');
+    const cleanupFailure = new Error('writer closure failed');
+    let database: Parameters<typeof SqliteStorage.open>[0] | undefined;
+    vi.spyOn(SqliteStorage, 'open').mockImplementationOnce(async (adapter) => {
+      database = adapter;
+      throw failure;
+    });
+    const close = vi.spyOn(NodeSqliteDatabase.prototype, 'close');
+    if (closeFails) close.mockRejectedValueOnce(cleanupFailure);
+    try {
+      const opening = openSqliteSessionStorage(
+        {
+          sessionsRoot,
+          sessionId: 'failure',
+          historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
+        },
+        BACKGROUND_CONTEXT,
+      );
+      if (closeFails) await expect(opening).rejects.toMatchObject({ errors: [failure, cleanupFailure] });
+      else await expect(opening).rejects.toBe(failure);
+      expect(close).toHaveBeenCalledOnce();
+      if (closeFails) await expect(fs.access(historyOwnershipLockPath(sessionFile))).resolves.toBeUndefined();
+      else await expect(fs.access(historyOwnershipLockPath(sessionFile))).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      vi.restoreAllMocks();
+      await database?.close();
+    }
+  },
+);
