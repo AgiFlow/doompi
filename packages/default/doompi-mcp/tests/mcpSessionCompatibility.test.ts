@@ -3,6 +3,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { AuthEntry } from '@agimon-ai/mcp-proxy';
 import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -193,3 +194,169 @@ it.each(['request rejection', 'invalid output schema'] as const)(
   },
   30000,
 );
+
+// Saved-token isolation only, with no interactive OAuth provider or real credentials.
+it('keeps same-endpoint accounts independent across concurrent direct calls and a per-entry reconnect', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-mcp-accounts-'));
+  const peers = new Set<Server>();
+  const failures: unknown[] = [];
+  const calls: { account: string; tool: string }[] = [];
+  const reads: string[] = [];
+  const entries = new Map<string, AuthEntry>();
+  const server = http.createServer((request, response) => {
+    const account =
+      request.headers.authorization === 'Bearer synthetic-personal'
+        ? 'personal'
+        : request.headers.authorization === 'Bearer synthetic-work'
+          ? 'work'
+          : 'unauthenticated';
+    const peer = new Server({ name: 'shared-account-fixture', version: '1.0.0' }, { capabilities: { tools: {} } });
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    peers.add(peer);
+    peer.setRequestHandler(ListToolsRequestSchema, async () => ({
+      tools: [
+        {
+          name: 'search',
+          description: 'Return a harmless account marker',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+    }));
+    peer.setRequestHandler(CallToolRequestSchema, async (message) => {
+      calls.push({ account, tool: message.params.name });
+      return { content: [{ type: 'text', text: account }] };
+    });
+    response.on('close', () => {
+      peers.delete(peer);
+      void peer.close().catch((error: unknown) => failures.push(error));
+    });
+    void peer
+      .connect(transport)
+      .then(() => transport.handleRequest(request, response))
+      .catch((error: unknown) => {
+        failures.push(error);
+        response.writeHead(500).end();
+      });
+  });
+  const session = new McpSession({
+    environment: {},
+    tokenStore: {
+      read: async (name) => {
+        reads.push(name);
+        return entries.get(name);
+      },
+      write: async (name, value) => {
+        entries.set(name, value);
+      },
+      clear: async (name) => {
+        entries.delete(name);
+      },
+    },
+  });
+  try {
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Expected loopback TCP address');
+    const url = `http://127.0.0.1:${address.port}/mcp`;
+    for (const name of ['personal', 'work']) {
+      entries.set(name, { serverUrl: url, tokens: { access_token: `synthetic-${name}`, token_type: 'Bearer' } });
+    }
+    fs.writeFileSync(
+      path.join(repoRoot, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: { personal: { type: 'http', url }, work: { type: 'http', url } },
+      }),
+    );
+    session.install({ repoRoot, stagingDirectory: path.join(repoRoot, '.staging') });
+    await session.start();
+    const tools = createMcpSessionToolsService(session, 'account-regression');
+    await expect
+      .poll(
+        () =>
+          tools
+            .snapshot()
+            .map(({ piName }) => piName)
+            .sort(),
+        { timeout: 10000 },
+      )
+      .toEqual(['personal_search', 'work_search']);
+    expect(tools.snapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ piName: 'personal_search', serverName: 'personal', toolName: 'search' }),
+        expect.objectContaining({ piName: 'work_search', serverName: 'work', toolName: 'search' }),
+      ]),
+    );
+    const direct = new Map<string, ToolDefinition>();
+    for (const declaration of createMcpToolCollection(session).snapshot()) {
+      if (!('register' in declaration)) throw new Error('Expected Pi tool declaration');
+      declaration.register({
+        registerTool: (tool: ToolDefinition) => {
+          direct.set(tool.name, tool);
+        },
+      } as ExtensionAPI);
+    }
+    const invoke = async (name: string) => {
+      const tool = direct.get(`${name}_search`);
+      if (!tool) throw new Error(`Missing direct declaration for ${name}`);
+      return tool.execute(`call-${name}`, {}, undefined, undefined, {} as never);
+    };
+    const results = await Promise.all([invoke('personal'), invoke('work')]);
+    expect(results[0]).toMatchObject({ content: [{ type: 'text', text: 'personal' }] });
+    expect(results[1]).toMatchObject({ content: [{ type: 'text', text: 'work' }] });
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        { account: 'personal', tool: 'search' },
+        { account: 'work', tool: 'search' },
+      ]),
+    );
+    expect(reads).toEqual(expect.arrayContaining(['personal', 'work']));
+    const projected = tools.project();
+    const projectedResults = await Promise.all(projected.map((tool) => tool.execute('projected', {})));
+    expect(projectedResults).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          content: [{ type: 'text', text: 'personal' }],
+          details: { server: 'personal', tool: 'search' },
+        }),
+        expect.objectContaining({
+          content: [{ type: 'text', text: 'work' }],
+          details: { server: 'work', tool: 'search' },
+        }),
+      ]),
+    );
+    expect(JSON.stringify(session.getSnapshot())).not.toContain('synthetic-');
+
+    const manager = session.getClientManager();
+    if (!manager) throw new Error('Expected running client manager');
+    const workConnection = await manager.ensureConnected('work');
+    const savedWork = entries.get('work');
+    await manager.disconnectServer('personal');
+    await expect(invoke('work')).resolves.toMatchObject({ content: [{ type: 'text', text: 'work' }] });
+    await manager.ensureConnected('personal');
+    await expect
+      .poll(
+        () =>
+          tools
+            .snapshot()
+            .map(({ piName }) => piName)
+            .sort(),
+        { timeout: 10000 },
+      )
+      .toEqual(['personal_search', 'work_search']);
+    await expect(tools.invoke('personal_search', {})).resolves.toMatchObject({
+      content: [{ type: 'text', text: 'personal' }],
+    });
+    await expect(invoke('work')).resolves.toMatchObject({ content: [{ type: 'text', text: 'work' }] });
+    expect(await manager.ensureConnected('work')).toBe(workConnection);
+    expect(entries.get('work')).toEqual(savedWork);
+    expect(calls).toHaveLength(7);
+    tools.dispose();
+    expect(failures).toEqual([]);
+  } finally {
+    await session.dispose();
+    await Promise.all([...peers].map((peer) => peer.close()));
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+}, 30000);

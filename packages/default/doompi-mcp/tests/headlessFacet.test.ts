@@ -28,6 +28,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { facet as mcpHeadlessFacet } from '../generated/server';
 import sessionMcp from '../src/extensions/workspaces/sessions/(backend)/tool/session_mcp.mcp';
+import { MCP_HEADLESS_TOOLS_SERVICE, type McpHeadlessToolCatalog } from '../src/services/mcpHeadlessTools';
 import type { McpRuntimeOptions } from '../src/services/mcpRuntime';
 import { MCP_SESSION_TOOLS_SERVICE, type McpSessionToolsService } from '../src/services/mcpSessionTools';
 import { sessionConfigEnvironment } from '../src/services/sessionConfig';
@@ -180,7 +181,12 @@ async function setup(
     },
     registerTool: (value: DoomHeadlessTool) => {
       tools.push(value);
-      return registration();
+      return {
+        dispose: () => {
+          const index = tools.indexOf(value);
+          if (index !== -1) tools.splice(index, 1);
+        },
+      };
     },
   } as unknown as DoomHeadlessHostService;
   const context = new Context();
@@ -219,7 +225,8 @@ async function setup(
     statuses,
     resources,
     command: commands[0]!,
-    tool: tools[0]!,
+    tools,
+    tool: (context.get(MCP_HEADLESS_TOOLS_SERVICE) as McpHeadlessToolCatalog).get('mcp_use')!,
     start,
     service,
     childTool,
@@ -240,6 +247,7 @@ describe('MCP server facet contracts', () => {
   it('keeps config out of the prompt and rejects tools before startup', async () => {
     const current = await setup();
     expect(current.resources).toEqual([]);
+    expect(current.tools).toEqual([]);
     expect(
       await current.tool.execute('call', { server: 'example', tool: 'ping' }, undefined, undefined, current.execution),
     ).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('not started') }] });
@@ -280,6 +288,66 @@ describe('MCP server facet contracts', () => {
     await current.stop();
     warn(warning);
     expect(current.statuses[CONTEXT_TOOL_WARNINGS_STATUS_KEY]).toBeUndefined();
+  });
+
+  it('registers named native declarations and lends the same guarded catalog without new connections', async () => {
+    const current = await connected();
+    expect(current.tools.map((tool) => tool.name)).toEqual(['example_ping']);
+    const direct = current.tools[0]!;
+    expect(direct).toMatchObject({ description: 'Ping upstream', parameters: { type: 'object' } });
+    const child = current.childTool() as import('@agimon-ai/doompi-core/childSession').DoomChildSessionMcpTool;
+    expect(child.catalog?.snapshot()[0]).toBe(direct);
+    expect(child.catalog?.resolveSelectors(['example/ping'])).toEqual(['example_ping']);
+    expect(child.catalog?.resolveSelectors(['pending/ping'])).toEqual([]);
+    await direct.execute('native', {}, undefined, undefined, current.execution);
+    await child.catalog!.snapshot()[0]!.execute('borrowed', {});
+    expect(mock.options).toHaveLength(1);
+    const changed = vi.fn();
+    const stop = child.catalog!.subscribe(changed);
+    mock.options[0]!.onOutputSchemaWarning?.({
+      serverName: 'example',
+      toolName: 'ping',
+      method: 'tools/call',
+      path: 'value',
+      message: 'warning',
+    });
+    expect(current.tools[0]).toBe(direct);
+    await current.command.execute('disconnect example', current.execution);
+    expect(current.tools).toEqual([]);
+    expect(child.catalog!.snapshot()).toEqual([]);
+    await expect(direct.execute('retired', {}, undefined, undefined, current.execution)).rejects.toThrow(
+      'no longer available',
+    );
+    expect(changed).toHaveBeenCalled();
+    stop();
+  });
+
+  it('retires same-name native and remote declarations before reload replaces their runtime', async () => {
+    const current = await connected();
+    const native = current.tools[0]!;
+    const lifecycle = new AbortController();
+    const remote = sessionMcp({
+      services: { get: <T>(name: string) => current.context.get(name) as T | undefined },
+      signal: lifecycle.signal,
+      refresh: vi.fn(),
+    } as unknown as Parameters<typeof sessionMcp>[0])[0]!;
+    await current.command.execute('reload', current.execution);
+    await vi.waitFor(() => expect(mock.options).toHaveLength(2));
+    mock.options[1]!.onServerStateChange?.({ serverName: 'example', state: 'connected' });
+    await vi.waitFor(() => expect(current.tools).toHaveLength(1));
+    expect(current.tools[0]!.name).toBe(native.name);
+    expect(current.tools[0]).not.toBe(native);
+    mock.callTool.mockClear();
+    await expect(native.execute('retired-native', {}, undefined, undefined, current.execution)).rejects.toThrow(
+      'no longer available',
+    );
+    await expect(remote.execute('retired-remote', {}, undefined, undefined, current.execution)).rejects.toThrow(
+      'no longer available',
+    );
+    expect(mock.callTool).not.toHaveBeenCalled();
+    await current.tools[0]!.execute('replacement', {}, undefined, undefined, current.execution);
+    expect(mock.callTool).toHaveBeenCalledOnce();
+    lifecycle.abort();
   });
 
   it('publishes the filtered parent MCP dispatcher for child sessions', async () => {

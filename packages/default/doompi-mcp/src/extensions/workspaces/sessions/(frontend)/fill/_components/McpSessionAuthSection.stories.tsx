@@ -12,7 +12,14 @@ import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../.
 import { McpSessionAuthSection } from './McpSessionAuthSection';
 
 const status = formatMcpSessionAuthStatus([
-  { name: 'linear', state: 'connected' },
+  {
+    name: 'linear',
+    state: 'connected',
+    tools: [
+      { toolName: 'list_issues', piName: 'linear_list_issues', active: true },
+      { toolName: 'create_issue', piName: 'linear_create_issue', active: true },
+    ],
+  },
   { name: 'github', state: 'needs-auth', authorizationUrl: 'https://github.com/login/oauth/authorize?client_id=x' },
   { name: 'sentry', state: 'connecting' },
   { name: 'notion', state: 'failed' },
@@ -23,10 +30,10 @@ const slot = slotPropsFixture({
   sessionId: 's1',
   statuses: { [MCP_SESSION_AUTH_STATUS_KEY]: status ?? '' },
   contextInventory: [
-    { name: 'list_issues', itemKind: 'tool', source: 'mcp', owner: 'linear', tokens: 1420, active: true },
-    { name: 'create_issue', itemKind: 'tool', source: 'mcp', owner: 'linear', tokens: 980, active: true },
-    { name: 'search_docs', itemKind: 'tool', source: 'mcp', owner: 'linear', tokens: 610, active: false },
-    { name: 'list_repos', itemKind: 'tool', source: 'mcp', owner: 'github', tokens: null, active: false },
+    { name: 'linear_list_issues', itemKind: 'tool', source: 'mcp', owner: 'linear', tokens: 1420, active: true },
+    { name: 'linear_create_issue', itemKind: 'tool', source: 'mcp', owner: 'linear', tokens: 980, active: true },
+    { name: 'linear_search_docs', itemKind: 'tool', source: 'mcp', owner: 'linear', tokens: 610, active: false },
+    { name: 'github_list_repos', itemKind: 'tool', source: 'mcp', owner: 'github', tokens: null, active: false },
   ],
 }).props;
 
@@ -74,6 +81,37 @@ export const Manage = {
             [MCP_SESSION_AUTH_STATUS_KEY]:
               formatMcpSessionAuthStatus([{ name: 'scaffold-mcp', state: 'connected' }]) ?? '',
           },
+        }).props}
+      />
+    </div>
+  ),
+};
+
+export const Accounts = {
+  render: () => (
+    <div className="bg-doom-bg p-6">
+      <McpSessionAuthSection
+        {...slotPropsFixture({
+          sessionId: 'accounts',
+          statuses: {
+            [MCP_SESSION_AUTH_STATUS_KEY]:
+              formatMcpSessionAuthStatus([
+                {
+                  name: 'personal',
+                  state: 'connected',
+                  tools: [{ toolName: 'search', piName: 'personal_search', active: true, tokens: 180 }],
+                },
+                {
+                  name: 'work',
+                  state: 'connected',
+                  tools: [{ toolName: 'search', piName: 'work_search', active: true, tokens: 180 }],
+                },
+              ]) ?? '',
+          },
+          contextInventory: [
+            { name: 'personal_search', itemKind: 'tool', source: 'mcp', owner: 'personal', tokens: 180, active: true },
+            { name: 'work_search', itemKind: 'tool', source: 'mcp', owner: 'work', tokens: 180, active: true },
+          ],
         }).props}
       />
     </div>

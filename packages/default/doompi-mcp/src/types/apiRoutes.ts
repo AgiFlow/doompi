@@ -62,7 +62,7 @@ export default defineApiRoutes({
     query: [MCP_REPOSITORY_ID_QUERY],
     response: apiResponse<McpAuthorizationFlow>(),
   },
-  /** Session scope: one tool the session reaches through mcp_use, with its description and schema. */
+  /** Session scope: one available tool's registered name, description and schema. */
   sessionTool: {
     method: 'GET',
     path: MCP_SESSION_TOOL_API_PATH,

@@ -221,7 +221,9 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
                   ) : (
                     server.tools.map((tool) => (
                       <div key={tool.piName} className="flex min-w-0 gap-2 text-2xs">
-                        <code className="shrink-0 text-doom-hi">{tool.name}</code>
+                        <code title={tool.piName} className="min-w-0 truncate text-doom-hi">
+                          {tool.piName}
+                        </code>
                         <span className="truncate text-doom-faint">{tool.description ?? tool.piName}</span>
                       </div>
                     ))

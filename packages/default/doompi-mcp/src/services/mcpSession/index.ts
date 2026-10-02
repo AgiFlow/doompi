@@ -259,6 +259,20 @@ export class McpSession {
     );
   }
 
+  get toolGeneration(): number {
+    return this.lifecycleGeneration;
+  }
+
+  /** Capture a declaration's runtime, so retired wrappers cannot reach a same-name replacement. */
+  bindToolInvocation(tool: CatalogTool) {
+    const generation = this.lifecycleGeneration;
+    return async (parameters: Record<string, unknown>, signal?: AbortSignal) => {
+      if (generation !== this.lifecycleGeneration || !this.isToolAvailable(tool))
+        throw new Error(`MCP tool ${tool.piName} is no longer available in the current session configuration.`);
+      return toHeadlessToolResult(tool, await this.callTool(tool, parameters, signal));
+    };
+  }
+
   /** Executes through this session's existing manager, never a remote replacement runtime. */
   async invokeTool(
     name: string,
@@ -268,7 +282,7 @@ export class McpSession {
     const tool = this.activeToolDefinitions().find((candidate) => candidate.piName === name);
     if (!tool || !this.isToolAvailable(tool))
       throw new Error(`MCP tool ${name} is not available in the current session configuration.`);
-    return toHeadlessToolResult(tool, await this.callTool(tool, parameters, signal));
+    return this.bindToolInvocation(tool)(parameters, signal);
   }
 
   /** Shared raw execution for Pi and headless, before their distinct result conventions. */

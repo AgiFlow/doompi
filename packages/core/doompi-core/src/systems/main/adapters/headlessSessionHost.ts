@@ -20,7 +20,7 @@ import { Value } from 'typebox/value';
 import {
   DOOM_CHILD_SESSION_SERVICE,
   DOOM_CHILD_SESSION_MCP_TOOL_SERVICE,
-  type DoomChildSessionTool,
+  type DoomChildSessionMcpTool,
 } from '../../../exports/childSession';
 import type {
   DoomHeadlessEventName,
@@ -879,9 +879,17 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       if (typeof state.fastMode !== 'boolean') throw new Error('Parent Fast mode must be a boolean.');
       return state.fastMode;
     },
+    subscribeMcpTool: (listener) => {
+      const root = mcpServiceRoot;
+      return (
+        root?.on('internal/service', (name) => {
+          if (name === DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) listener();
+        }) ?? (() => undefined)
+      );
+    },
     mcpTool: () => {
       if (disposed || !headlessReady || !headlessHost?.status.ready) return undefined;
-      return mcpServiceRoot?.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionTool | undefined;
+      return mcpServiceRoot?.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionMcpTool | undefined;
     },
   });
 

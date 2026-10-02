@@ -1,3 +1,4 @@
+import type { ContextToolWarning } from '@agimon-ai/doompi-core/contextApi';
 import type { DoomApi } from '@agimon-ai/doompi-core/packageApi';
 
 import {
@@ -16,14 +17,15 @@ function json(body: unknown, status = 200): Response {
 }
 
 export interface McpSessionApiSource {
-  /** The tools `mcp_use` accepts right now. */
+  /** The permitted tools available in this session right now. */
   activeToolDefinitions(): readonly CatalogTool[];
+  getToolWarnings?(): Readonly<Record<string, readonly ContextToolWarning[]>>;
 }
 
 /**
  * This package's session mount, `mcp-session`: one reachable tool's description and schema.
  *
- * Read-only and bounded to the tools `mcp_use` accepts, so a page can inspect what the agent may
+ * Read-only and bounded to available tools, so a page can inspect what the agent may
  * call without the status line carrying every schema.
  */
 export function createMcpSessionApi(source: McpSessionApiSource, countTokens: () => Promise<CountTokens>): DoomApi {
@@ -42,9 +44,12 @@ export function createMcpSessionApi(source: McpSessionApiSource, countTokens: ()
             .activeToolDefinitions()
             .find((candidate) => candidate.serverName === server && candidate.toolName === name);
           if (!tool) return json({ error: `MCP tool ${server}/${name} is not available in this session.` }, 404);
+          const warnings = source.getToolWarnings?.()[tool.piName];
           const detail: McpSessionToolDetail = {
             server,
             tool: name,
+            piName: tool.piName,
+            ...(warnings?.length ? { warnings } : {}),
             ...(tool.description === undefined ? {} : { description: tool.description }),
             inputSchema: tool.inputSchema,
             tokens: mcpToolTokens(tool, await countTokens()),

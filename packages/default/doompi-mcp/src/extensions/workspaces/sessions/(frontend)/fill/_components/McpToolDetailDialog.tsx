@@ -15,6 +15,8 @@ export interface McpToolTarget {
   sessionId: string;
   server: string;
   tool: string;
+  piName?: string;
+  inContext?: boolean;
 }
 
 type Loaded = { key: string; detail?: McpSessionToolDetail; error?: string };
@@ -23,7 +25,7 @@ function keyOf(target: McpToolTarget): string {
   return `${target.sessionId}\u0000${target.server}\u0000${target.tool}`;
 }
 
-/** What one reachable MCP tool would put in context: its description and input schema. */
+/** One MCP declaration's description, complete input schema and estimated context cost. */
 export function McpToolDetailDialog({ target, onClose }: { target: McpToolTarget | null; onClose: () => void }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
 
@@ -54,12 +56,14 @@ export function McpToolDetailDialog({ target, onClose }: { target: McpToolTarget
         <DialogHeader className="items-start px-4 py-4 sm:px-5">
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <DialogTitle className="break-words text-base leading-snug">
-              {target === null ? '' : `${target.server} · ${target.tool}`}
+              {detail?.piName ?? target?.piName ?? (target === null ? '' : `${target.server} · ${target.tool}`)}
             </DialogTitle>
             <DialogDescription>
+              {target === null ? '' : `${target.server} / ${target.tool}. `}
+              {target?.inContext === false ? 'Not in the model context. ' : ''}
               {detail === undefined
-                ? 'Reached through mcp_use, so it is not in the model context.'
-                : `Reached through mcp_use, so it is not in the model context. Added directly it would cost ~${detail.tokens.toLocaleString()} tokens.`}
+                ? 'Description and complete input schema.'
+                : `Estimated schema cost: ~${detail.tokens.toLocaleString()} tokens.`}
             </DialogDescription>
           </div>
         </DialogHeader>
@@ -72,6 +76,15 @@ export function McpToolDetailDialog({ target, onClose }: { target: McpToolTarget
                 <p className="text-2xs font-bold uppercase tracking-wide text-doom-faint">description</p>
                 <p className="whitespace-pre-wrap text-sm text-doom-text">{detail.description ?? 'No description.'}</p>
               </section>
+              {detail.warnings?.length ? (
+                <section aria-label="Tool warnings" className="flex flex-col gap-1 text-xs text-doom-yellow">
+                  {detail.warnings.map((warning) => (
+                    <p key={`${warning.source}:${warning.path}:${warning.message}`}>
+                      {warning.source} {warning.path}: {warning.message}
+                    </p>
+                  ))}
+                </section>
+              ) : null}
               <section className="flex min-h-0 flex-col gap-1">
                 <p className="text-2xs font-bold uppercase tracking-wide text-doom-faint">input schema</p>
                 <pre

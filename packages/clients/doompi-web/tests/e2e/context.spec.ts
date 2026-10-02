@@ -61,6 +61,95 @@ test('says so plainly when the session has published no composition', async ({ p
 test.describe('with the synced MCP context contribution', () => {
   test.use({ assets: 'synced' });
 
+  test('opens account-specific direct MCP schemas without duplicating context costs', async ({ page, cockpit }) => {
+    const requests: { server: string; tool: string }[] = [];
+    await page.route('**/plugins/mcp-session/tool?*', async (route) => {
+      const url = new URL(route.request().url());
+      const server = url.searchParams.get('server') ?? '';
+      const tool = url.searchParams.get('tool') ?? '';
+      requests.push({ server, tool });
+      await route.fulfill({
+        json: {
+          server,
+          tool,
+          piName: `${server}_search`,
+          description: `Search the ${server} account.`,
+          inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+          tokens: 180,
+          ...(server === 'work'
+            ? { warnings: [{ source: 'work/search', path: '/value', message: 'Expected string' }] }
+            : {}),
+        },
+      });
+    });
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForAttach();
+    cockpit.session.emit(
+      status(
+        'doom-mcp-session-auth',
+        JSON.stringify(
+          ['personal', 'work'].map((name) => ({
+            name,
+            state: 'connected',
+            tools: [{ name: 'search', piName: `${name}_search`, tokens: 180 }],
+          })),
+        ),
+      ),
+    );
+    cockpit.session.emit({
+      type: 'entry_appended',
+      entry: {
+        type: 'custom',
+        id: 'mcp-accounts',
+        customType: 'doom-context',
+        data: {
+          version: 1,
+          revision: 1,
+          estimator: 'gpt-tokenizer',
+          totalTokens: 360,
+          inactiveTokens: 0,
+          groups: [
+            {
+              id: 'core',
+              label: 'core',
+              kind: 'core',
+              tokens: 360,
+              inactiveTokens: 0,
+              items: ['personal', 'work'].map((owner) => ({
+                name: `${owner}_search`,
+                itemKind: 'tool',
+                source: 'mcp',
+                owner,
+                tokens: 180,
+                active: true,
+              })),
+            },
+          ],
+        },
+      },
+    });
+    await page.getByTestId('dock-tab-context').click();
+    await expect(page.getByTestId('context-total')).toHaveText('~360');
+    await page.getByRole('button', { name: 'Open schema for work_search', exact: true }).press('Enter');
+    const dialog = page.getByTestId('mcp-tool-detail-dialog');
+    await expect(dialog.getByRole('heading', { name: 'work_search', exact: true })).toBeVisible();
+    await expect(dialog).toContainText('Search the work account.');
+    await expect(dialog.getByTestId('mcp-tool-detail-schema')).toContainText('"query"');
+    await expect(dialog).toContainText('Estimated schema cost: ~180 tokens.');
+    await expect(dialog.getByRole('region', { name: 'Tool warnings' })).toContainText('Expected string');
+    expect(requests).toEqual([{ server: 'work', tool: 'search' }]);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await page.getByRole('button', { name: 'Open schema for personal_search', exact: true }).click();
+    await expect(dialog).toContainText('Search the personal account.');
+    await expect(dialog.getByRole('heading', { name: 'personal_search', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('region', { name: 'Tool warnings' })).toHaveCount(0);
+    expect(requests).toEqual([
+      { server: 'work', tool: 'search' },
+      { server: 'personal', tool: 'search' },
+    ]);
+  });
+
   test('shows zero-tool auth needs, sends one exact keyboard request, and follows live status changes', async ({
     page,
     cockpit,

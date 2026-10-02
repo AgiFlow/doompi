@@ -25,7 +25,7 @@ export function requestMcpSessionAuthorization(
 }
 
 function tokenEstimate(value: number | null): string {
-  return value === null ? '—' : `~${value.toLocaleString()}`;
+  return value === null ? '-' : `~${value.toLocaleString()}`;
 }
 
 /** Keep configured servers actionable even before they have discovered any tools. */
@@ -112,8 +112,7 @@ export function McpSessionAuthSection({
           </div>
           <ul aria-label="MCP servers" className="flex flex-col gap-2">
             {servers.map((item) => {
-              // Tools the model carries itself come from the context inventory; tools reached
-              // through mcp_use come from the server's status and cost nothing until called.
+              // Only the context inventory measures what is actually emitted to the model.
               const tools = contextInventory.filter(
                 (inventoryItem) => inventoryItem.source === 'mcp' && inventoryItem.owner === item.name,
               );
@@ -146,35 +145,57 @@ export function McpSessionAuthSection({
                   </div>
                   {tools.length > 0 ? (
                     <ul aria-label={`${item.name} tools and skills`} className="flex flex-col">
-                      {tools.map((tool) => (
-                        <li
-                          key={`${tool.itemKind}:${tool.name}`}
-                          data-active={tool.active}
-                          className="flex min-w-0 items-center gap-2 py-px pl-3"
-                        >
-                          <abbr
-                            title={tool.itemKind}
-                            className={`w-3 shrink-0 text-2xs font-bold no-underline ${tool.active ? 'text-doom-violet' : 'text-doom-faint'}`}
+                      {tools.map((tool) => {
+                        const identity = reachable.find((candidate) => candidate.piName === tool.name);
+                        return (
+                          <li
+                            key={`${tool.itemKind}:${tool.name}`}
+                            data-active={tool.active}
+                            className="flex min-w-0 items-center gap-2 py-px pl-3"
                           >
-                            {tool.itemKind === 'skill' ? 'S' : 'T'}
-                          </abbr>
-                          <span
-                            className={`min-w-0 flex-1 truncate text-2xs ${tool.active ? 'text-doom-hi' : 'text-doom-faint'}`}
-                          >
-                            {tool.name}
-                          </span>
-                          <span
-                            className={`w-14 shrink-0 text-right text-2xs ${tool.active ? 'text-doom-text' : 'text-doom-faint'}`}
-                          >
-                            {tool.active ? tokenEstimate(tool.tokens) : `(${tokenEstimate(tool.tokens)})`}
-                          </span>
-                        </li>
-                      ))}
+                            <abbr
+                              title={tool.itemKind}
+                              className={`w-3 shrink-0 text-2xs font-bold no-underline ${tool.active ? 'text-doom-violet' : 'text-doom-faint'}`}
+                            >
+                              {tool.itemKind === 'skill' ? 'S' : 'T'}
+                            </abbr>
+                            {tool.itemKind === 'tool' ? (
+                              <Button
+                                variant="ghost"
+                                size="card"
+                                aria-label={`Open schema for ${tool.name}`}
+                                data-testid={`context-mcp-tool-${tool.name}`}
+                                disabled={sessionId === null || identity === undefined}
+                                onClick={() => {
+                                  if (sessionId !== null && identity !== undefined)
+                                    setToolTarget({
+                                      sessionId,
+                                      server: item.name,
+                                      tool: identity.name,
+                                      piName: identity.piName,
+                                      inContext: tool.active,
+                                    });
+                                }}
+                                className={`min-w-0 flex-1 truncate rounded-none py-0 text-left text-2xs ${tool.active ? 'text-doom-hi' : 'text-doom-faint'}`}
+                              >
+                                {tool.name}
+                              </Button>
+                            ) : (
+                              <span className="min-w-0 flex-1 truncate text-2xs text-doom-faint">{tool.name}</span>
+                            )}
+                            <span
+                              className={`w-14 shrink-0 text-right text-2xs ${tool.active ? 'text-doom-text' : 'text-doom-faint'}`}
+                            >
+                              {tool.active ? tokenEstimate(tool.tokens) : `(${tokenEstimate(tool.tokens)})`}
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : reachable.length > 0 ? (
                     <div className="flex flex-col">
                       <p className="pl-3 text-2xs text-doom-faint">
-                        {`${reachable.length} ${reachable.length === 1 ? 'tool' : 'tools'} via mcp_use, not in context`}
+                        {`${reachable.length} available ${reachable.length === 1 ? 'tool' : 'tools'}, not in context`}
                       </p>
                       <ul aria-label={`${item.name} reachable tools`} className="flex flex-col">
                         {reachable.map((tool) => (
@@ -187,7 +208,13 @@ export function McpSessionAuthSection({
                               disabled={sessionId === null}
                               onClick={() => {
                                 if (sessionId !== null)
-                                  setToolTarget({ sessionId, server: item.name, tool: tool.name });
+                                  setToolTarget({
+                                    sessionId,
+                                    server: item.name,
+                                    tool: tool.name,
+                                    piName: tool.piName,
+                                    inContext: false,
+                                  });
                               }}
                               className="min-w-0 flex-1 flex-row items-center gap-2 rounded-none py-px pr-0 pl-3"
                             >
@@ -198,13 +225,13 @@ export function McpSessionAuthSection({
                                 T
                               </abbr>
                               <span className="min-w-0 flex-1 truncate text-left text-2xs text-doom-text">
-                                {tool.name}
+                                {tool.piName ?? tool.name}
                               </span>
                               <span
                                 title="what the schema would cost if added to context directly"
                                 className="w-14 shrink-0 text-right text-2xs text-doom-faint"
                               >
-                                {tool.tokens === undefined ? '(—)' : `(~${tool.tokens.toLocaleString()})`}
+                                {tool.tokens === undefined ? '(-)' : `(~${tool.tokens.toLocaleString()})`}
                               </span>
                             </Button>
                           </li>

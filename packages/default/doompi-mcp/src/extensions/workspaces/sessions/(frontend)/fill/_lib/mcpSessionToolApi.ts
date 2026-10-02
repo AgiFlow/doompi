@@ -7,7 +7,7 @@ import {
 
 export type FetchSessionToolResult = { ok: true; detail: McpSessionToolDetail } | { ok: false; error: string };
 
-/** One tool the session reaches through mcp_use: its description, schema and token cost. */
+/** One available session tool: its registered name, description, schema and token estimate. */
 export async function fetchSessionTool(
   sessionId: string,
   server: string,
