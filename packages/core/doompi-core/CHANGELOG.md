@@ -1,3 +1,20 @@
+## 0.0.1-alpha.106 (2026-10-02)
+
+### 🩹 Fixes
+
+- **doompi-mcp:** keep output-schema failures non-blocking ([#271](https://github.com/AgiFlow/doompi/pull/271))
+- **doompi-core:** contain session runtime failures ([#268](https://github.com/AgiFlow/doompi/pull/268))
+- interrupt voice input and send individual queued prompts ([#267](https://github.com/AgiFlow/doompi/pull/267))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.93
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.56
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.105 (2026-10-02)
 
 ### 🩹 Fixes
