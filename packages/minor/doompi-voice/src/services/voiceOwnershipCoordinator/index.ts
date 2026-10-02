@@ -249,7 +249,8 @@ export class VoiceOwnershipCoordinator {
     return this.targetsFor(sessionId).map(({ sessionId: _sessionId, ...target }) => target);
   }
 
-  public publishCatalogs(sessionIds?: readonly string[]): Promise<void> {
+  /** Delivers each catalog independently and resolves with the deliveries that failed. */
+  public publishCatalogs(sessionIds?: readonly string[]): Promise<Array<{ sessionId: string; error: unknown }>> {
     return this.enqueue(async () => {
       this.prune();
       const participants =
@@ -259,6 +260,7 @@ export class VoiceOwnershipCoordinator {
               const participant = this.participants.get(sessionId);
               return participant === undefined ? [] : [participant];
             });
+      const failed: Array<{ sessionId: string; error: unknown }> = [];
       for (const participant of participants) {
         const command: VoiceOwnershipCommand = {
           version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
@@ -267,10 +269,16 @@ export class VoiceOwnershipCoordinator {
           targets: this.catalog(participant.sessionId),
           catalogRevision: this.catalogRevision(),
         };
-        const acknowledgement = await this.delivery.send(participant.sessionId, command);
-        this.applyAcknowledgement(participant.sessionId, acknowledgement);
+        try {
+          const acknowledgement = await this.delivery.send(participant.sessionId, command);
+          this.applyAcknowledgement(participant.sessionId, acknowledgement);
+        } catch (error) {
+          // An unavailable participant must not starve the healthy ones behind it.
+          failed.push({ sessionId: participant.sessionId, error });
+        }
       }
       this.reconcileSelection();
+      return failed;
     });
   }
 

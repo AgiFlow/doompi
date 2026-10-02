@@ -21,6 +21,8 @@ import {
 
 const MAX_HANDLED_REQUESTS = 512;
 const MAX_EVENT_EPOCH_LENGTH = 200;
+const CATALOG_RETRY_BASE_MS = 1_000;
+const CATALOG_RETRY_MAX_MS = 30_000;
 
 function parseVoiceMediaWake(value: unknown): VoiceMediaWake | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
@@ -95,7 +97,9 @@ export function createVoiceOwnershipChannel(
       const handledRequests = new Set<string>();
       const localRegistrations = new Map<string, NonNullable<VoiceOwnershipSessionSnapshot['registration']>>();
       const remoteSessions = new Set<string>();
-      let catalogSignature = '';
+      // Per-session delivery state, so one failing participant neither blocks nor re-floods the rest.
+      const deliveredCatalogs = new Map<string, string>();
+      const catalogRetries = new Map<string, { failures: number; retryAt: number }>();
       let catalogRun: Promise<void> | undefined;
       let peerRefreshTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -158,10 +162,34 @@ export function createVoiceOwnershipChannel(
           .sort((left, right) => left.localeCompare(right))
           .map((sessionId) => `${sessionId}:${JSON.stringify(coordinator.catalog(sessionId))}`)
           .join('|');
-        if (nextSignature === catalogSignature) return;
-        await coordinator.publishCatalogs([...scopes.keys()]);
-        catalogSignature = nextSignature;
-        onCatalogChange?.(coordinator);
+        const now = Date.now();
+        const pending = [...scopes.keys()].filter(
+          (sessionId) =>
+            deliveredCatalogs.get(sessionId) !== nextSignature &&
+            coordinator.registration(sessionId) !== undefined &&
+            (catalogRetries.get(sessionId)?.retryAt ?? 0) <= now,
+        );
+        if (pending.length === 0) return;
+        const failures = await coordinator.publishCatalogs(pending);
+        const failed = new Set(failures.map((failure) => failure.sessionId));
+        for (const sessionId of pending) {
+          if (!scopes.has(sessionId)) continue;
+          if (!failed.has(sessionId)) {
+            deliveredCatalogs.set(sessionId, nextSignature);
+            catalogRetries.delete(sessionId);
+            continue;
+          }
+          const attempts = (catalogRetries.get(sessionId)?.failures ?? 0) + 1;
+          const delay = Math.min(CATALOG_RETRY_BASE_MS * 2 ** (attempts - 1), CATALOG_RETRY_MAX_MS);
+          catalogRetries.set(sessionId, { failures: attempts, retryAt: Date.now() + delay });
+        }
+        if (failed.size < pending.length) onCatalogChange?.(coordinator);
+        if (failures.length > 0)
+          throw new Error(
+            failures
+              .map(({ sessionId, error }) => `${sessionId}: ${error instanceof Error ? error.message : String(error)}`)
+              .join('; '),
+          );
       };
 
       /**
@@ -209,7 +237,7 @@ export function createVoiceOwnershipChannel(
         }
       };
 
-      const applySnapshot = (sessionId: string, value: unknown): void => {
+      const applySnapshot = (sessionId: string, value: unknown, replayed = false): void => {
         const snapshot = parseVoiceOwnershipSessionSnapshot(value);
         if (snapshot?.registration === undefined) {
           localRegistrations.delete(sessionId);
@@ -221,6 +249,9 @@ export function createVoiceOwnershipChannel(
           );
           return;
         }
+        // A replayed snapshot has no age and would renew the lease of a stopped runtime.
+        // Live runtimes republish on every sync, so only fresh snapshots register.
+        if (replayed) return;
         localRegistrations.set(sessionId, snapshot.registration);
         coordinator.update(sessionId, snapshot.registration);
         void processSnapshot(sessionId, snapshot);
@@ -238,12 +269,14 @@ export function createVoiceOwnershipChannel(
         sessionAdded(scope) {
           scopes.set(scope.sessionId, scope);
           subscriptions.get(scope.sessionId)?.();
+          let replaying = true;
           const unsubscribe = host.directEvents.subscribe(
             VOICE_OWNERSHIP_FRAME_TYPE,
             scope.sessionId,
-            (payload) => applySnapshot(scope.sessionId, payload),
+            (payload) => applySnapshot(scope.sessionId, payload, replaying),
             { replayLatest: true },
           );
+          replaying = false;
           subscriptions.set(scope.sessionId, unsubscribe);
           void refreshCatalogs().catch((error: unknown) =>
             host.onNotice(
@@ -267,7 +300,8 @@ export function createVoiceOwnershipChannel(
           scopes.delete(sessionId);
           localRegistrations.delete(sessionId);
           coordinator.remove(sessionId);
-          catalogSignature = '';
+          deliveredCatalogs.clear();
+          catalogRetries.delete(sessionId);
         },
         close() {
           for (const unsubscribe of subscriptions.values()) unsubscribe();
@@ -276,6 +310,8 @@ export function createVoiceOwnershipChannel(
           localRegistrations.clear();
           remoteSessions.clear();
           handledRequests.clear();
+          deliveredCatalogs.clear();
+          catalogRetries.clear();
           if (peerRefreshTimer !== undefined) clearInterval(peerRefreshTimer);
           peerRefreshTimer = undefined;
           unregisterPeerOwnership();
