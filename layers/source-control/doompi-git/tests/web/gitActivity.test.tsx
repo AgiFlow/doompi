@@ -96,6 +96,7 @@ describe('Git activity group', () => {
   it('preserves the review shortcut separately from the worktrees heading', () => {
     expect(gitGroup.transientTab?.().id).toBe('git-worktrees');
     expect(reviewBinding.path.map((segment) => segment.key).join(' ')).toBe('g d');
+    expect(reviewBinding.path[0]?.label).toBe('goal');
     const fixture = slotPropsFixture({ sessionId: SESSION });
     if ('run' in reviewBinding) reviewBinding.run(fixture.props);
     expect(fixture.actions).toEqual([{ action: 'openTransientTab', target: 'git-review' }]);

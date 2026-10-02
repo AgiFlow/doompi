@@ -4,7 +4,8 @@ import { reviewTab } from '../_components/GitReviewPanel';
 
 export default defineLeaderBinding({
   path: [
-    { key: 'g', label: 'git' },
+    // The shared g prefix must keep the existing Goal group's label.
+    { key: 'g', label: 'goal' },
     { key: 'd', label: 'diff', detail: 'review this checkout’s changes' },
   ],
   run: (context) => context.openTransientTab(reviewTab()),
