@@ -3,11 +3,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
+import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
+import { NodeSqliteDatabase } from '@earendil-works/pi-durable/storage/sqlite/node';
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
+import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../../src/services/historyOwnership';
 import { DURABLE_BACKGROUND_CONTEXT as BACKGROUND_CONTEXT } from '../../../../../src/services/sqliteSessionStorage';
-import { openSqliteSessionStorage } from '../../../../../src/services/sqliteSessionStorage';
+import { openReadOnlyDurableStorage, openSqliteSessionStorage } from '../../../../../src/services/sqliteSessionStorage';
 
 const directories: string[] = [];
 afterEach(async () => {
@@ -156,3 +158,76 @@ it('rejects a real legacy SQLite schema before opening a writable connection', a
   expect(await fs.readFile(file)).toEqual(before);
   expect(await fs.readdir(path.dirname(file))).toEqual(['old.sqlite']);
 });
+
+it('closes an active WAL reader without checkpointing the writer', async () => {
+  const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-reader-'));
+  directories.push(sessionsRoot);
+  const writer = await openSqliteSessionStorage(
+    { sessionsRoot, sessionId: 'reader', historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }) },
+    BACKGROUND_CONTEXT,
+  );
+  try {
+    const reader = await openReadOnlyDurableStorage(writer.sessionFile);
+    await reader.scanConversations({}, 10, undefined, BACKGROUND_CONTEXT);
+    await expect(reader.close(BACKGROUND_CONTEXT)).resolves.toBeUndefined();
+    await expect(reader.close(BACKGROUND_CONTEXT)).resolves.toBeUndefined();
+  } finally {
+    await writer.session.close(BACKGROUND_CONTEXT);
+    await writer.historyLease.release();
+  }
+});
+
+it('closes the native reader when storage initialization fails', async () => {
+  const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-reader-init-'));
+  directories.push(sessionsRoot);
+  const writer = await openSqliteSessionStorage(
+    { sessionsRoot, sessionId: 'init', historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }) },
+    BACKGROUND_CONTEXT,
+  );
+  const failure = new Error('initialization failed');
+  const close = vi.spyOn(DatabaseSync.prototype, 'close');
+  vi.spyOn(SqliteStorage, 'open').mockRejectedValueOnce(failure);
+  try {
+    await expect(openReadOnlyDurableStorage(writer.sessionFile)).rejects.toBe(failure);
+    expect(close).toHaveBeenCalledTimes(2);
+  } finally {
+    await writer.session.close(BACKGROUND_CONTEXT);
+    await writer.historyLease.release();
+  }
+});
+
+it.each([false, true])(
+  'cleans up failed writer initialization, retaining ownership if close fails (%s)',
+  async (closeFails) => {
+    const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-writer-init-'));
+    directories.push(sessionsRoot);
+    const sessionFile = path.join(sessionsRoot, 'durable-v1', 'failure.sqlite');
+    const failure = new Error('writer initialization failed');
+    const cleanupFailure = new Error('writer closure failed');
+    let database: Parameters<typeof SqliteStorage.open>[0] | undefined;
+    vi.spyOn(SqliteStorage, 'open').mockImplementationOnce(async (adapter) => {
+      database = adapter;
+      throw failure;
+    });
+    const close = vi.spyOn(NodeSqliteDatabase.prototype, 'close');
+    if (closeFails) close.mockRejectedValueOnce(cleanupFailure);
+    try {
+      const opening = openSqliteSessionStorage(
+        {
+          sessionsRoot,
+          sessionId: 'failure',
+          historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
+        },
+        BACKGROUND_CONTEXT,
+      );
+      if (closeFails) await expect(opening).rejects.toMatchObject({ errors: [failure, cleanupFailure] });
+      else await expect(opening).rejects.toBe(failure);
+      expect(close).toHaveBeenCalledOnce();
+      if (closeFails) await expect(fs.access(historyOwnershipLockPath(sessionFile))).resolves.toBeUndefined();
+      else await expect(fs.access(historyOwnershipLockPath(sessionFile))).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      vi.restoreAllMocks();
+      await database?.close();
+    }
+  },
+);

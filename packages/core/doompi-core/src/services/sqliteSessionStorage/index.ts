@@ -7,7 +7,7 @@ import type { Context } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { createSession, defineDoc, type Storage } from '@earendil-works/pi-durable';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
-import { NodeSqliteDatabase, openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node';
+import { NodeSqliteDatabase, openNodeSqliteDatabase } from '@earendil-works/pi-durable/storage/sqlite/node';
 
 import type { DirectHarnessRuntimeOptions } from '../../types/server/directHarnessRuntime';
 
@@ -57,27 +57,45 @@ export function validateDurableSessionFile(file: string): void {
 /** Completed histories use a read-only connection. Initialization cannot write or migrate. */
 export async function openReadOnlyDurableStorage(file: string): Promise<Storage> {
   validateDurableSessionFile(file);
-  const database = new NodeSqliteDatabase(new DatabaseSync(file, { readOnly: true }));
-  const storage = await SqliteStorage.open({
-    exec: (sql) => database.exec(sql),
-    run: (sql, ...params) => database.run(sql, ...params),
-    get: (sql, ...params) => database.get(sql, ...params),
-    all: (sql, ...params) => database.all(sql, ...params),
-    close: () => database.close(),
-    transaction: (callback) =>
-      callback({
-        exec: async (sql) => {
-          if (!/^CREATE TABLE IF NOT EXISTS durable_schema\s/u.test(sql)) throw new Error('Read-only durable storage');
-        },
-        run: async (sql) => {
-          if (sql !== 'INSERT OR IGNORE INTO durable_schema (singleton, version) VALUES (1, 0)')
-            throw new Error('Read-only durable storage');
-        },
-        get: (sql, ...params) => database.get(sql, ...params),
-        all: (sql, ...params) => database.all(sql, ...params),
-      }),
-  });
-  return storage;
+  const native = new DatabaseSync(file, { readOnly: true });
+  const database = new NodeSqliteDatabase(native);
+  let closed = false;
+  const close = async () => {
+    if (closed) return;
+    // The writer adapter checkpoints WAL on close, which read-only connections cannot do.
+    native.close();
+    closed = true;
+  };
+  try {
+    const storage = await SqliteStorage.open({
+      exec: (sql) => database.exec(sql),
+      run: (sql, ...params) => database.run(sql, ...params),
+      get: (sql, ...params) => database.get(sql, ...params),
+      all: (sql, ...params) => database.all(sql, ...params),
+      close,
+      transaction: (callback) =>
+        callback({
+          exec: async (sql) => {
+            if (!/^CREATE TABLE IF NOT EXISTS durable_schema\s/u.test(sql))
+              throw new Error('Read-only durable storage');
+          },
+          run: async (sql) => {
+            if (sql !== 'INSERT OR IGNORE INTO durable_schema (singleton, version) VALUES (1, 0)')
+              throw new Error('Read-only durable storage');
+          },
+          get: (sql, ...params) => database.get(sql, ...params),
+          all: (sql, ...params) => database.all(sql, ...params),
+        }),
+    });
+    return storage;
+  } catch (error) {
+    try {
+      await close();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Read-only storage initialization cleanup failed');
+    }
+    throw error;
+  }
 }
 
 /** Opens the one fresh-format SQLite container owned by a server session. */
@@ -105,10 +123,14 @@ export async function openSqliteSessionStorage(
   fs.mkdirSync(path.dirname(sessionFile), { recursive: true, mode: 0o700 });
   const historyLease = await options.historyOwnership.acquire(sessionFile);
   let storage: Storage | undefined;
+  let database: NodeSqliteDatabase | undefined;
+  let writerOpenAttempted = false;
   try {
     await historyLease.assertQuiescent();
     if (fs.existsSync(sessionFile)) validateDurableSessionFile(sessionFile);
-    storage = await openNodeSqliteStorage(sessionFile);
+    writerOpenAttempted = true;
+    database = await openNodeSqliteDatabase(sessionFile);
+    storage = await SqliteStorage.open(database);
     const session = createSession(storage);
     const identity = await session.snapshot(SessionIdentityDoc, context);
     if (existing && (!identity || identity.id !== id))
@@ -125,10 +147,18 @@ export async function openSqliteSessionStorage(
     const repository = { close: (closeContext: Context = context) => session.close(closeContext) };
     return { storage, session, sessionFile, repository, historyLease };
   } catch (error) {
+    // ponytail: An upstream open rejection has no closure receipt, so retain ownership until shutdown is confirmed.
+    if (writerOpenAttempted && !database) throw error;
     try {
       if (storage) await storage.close(context);
-    } finally {
+      else if (database) await database.close();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'SQLite storage initialization cleanup failed');
+    }
+    try {
       await historyLease.release();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'SQLite storage ownership cleanup failed');
     }
     throw error;
   }

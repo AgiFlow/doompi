@@ -671,6 +671,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   let retainedQueuedMessages = 0;
   let turnIndex = 0;
   let runMessages: AgentMessage[] = [];
+  const turnEntryIds = new Set<string>();
   const toolArguments = new Map<string, unknown>();
   /** Whether the compaction now running came from a Pi extension rather than the harness. */
   let compactionFromExtension = false;
@@ -846,6 +847,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         currentOperation = 'run';
         turnIndex = 0;
         runMessages = [];
+        turnEntryIds.clear();
         toolArguments.clear();
         await runner?.emit({ type: 'agent_start' });
         return;
@@ -853,6 +855,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         currentOperation = 'run';
         return;
       case 'turn_start':
+        turnEntryIds.clear();
         await runner?.emit({ type: 'turn_start', turnIndex, timestamp: Date.now() });
         return;
       case 'message_start':
@@ -902,32 +905,35 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         return;
       case 'entry_added':
         sessionSync?.append(event.entry);
+        if (event.entry.type === 'message') turnEntryIds.add(event.entry.id);
         return;
       case 'queue_update':
         nativeQueuedMessages = event.queues.filter((item) => item.kind !== 'write').length;
         return;
       case 'turn_end': {
-        const branch = sessionManager?.getBranch() ?? [];
-        // The harness commits a fresh entry after message_end (and may normalize the message
-        // during settlement), so its entry_added payload need not share the event's identity.
-        // A turn ends at the latest persisted assistant on this branch.
-        const messageEntryId = branch.findLast(
-          (entry) => entry.type === 'message' && entry.message.role === 'assistant',
+        // Only commits observed in this turn can satisfy its boundary. Event messages may
+        // be cloned or normalized, so resolve persisted IDs rather than object identity.
+        const entries = (sessionManager?.getBranch() ?? []).filter((entry) =>
+          turnEntryIds.has(sessionSync?.toHarnessId(entry.id) ?? entry.id),
+        );
+        turnEntryIds.clear();
+        const messageEntryId = entries.findLast(
+          (entry) => entry?.type === 'message' && entry.message.role === 'assistant',
         )?.id;
-        if (messageEntryId === undefined) {
-          report('turn_end', new Error('The persisted assistant entry was not available for the Pi boundary'));
+        const toolResultEntryIds = event.toolResults.map(
+          (result) =>
+            entries.findLast(
+              (entry) =>
+                entry?.type === 'message' &&
+                entry.message.role === 'toolResult' &&
+                entry.message.toolCallId === result.toolCallId,
+            )?.id,
+        );
+        if (messageEntryId === undefined || toolResultEntryIds.some((id) => id === undefined)) {
+          report('turn_end', new Error('The persisted current-turn entries were not available for the Pi boundary'));
           turnIndex += 1;
           return;
         }
-        const toolResultEntryIds = event.toolResults.flatMap((result) => {
-          const entryId = branch.findLast(
-            (entry) =>
-              entry.type === 'message' &&
-              entry.message.role === 'toolResult' &&
-              entry.message.toolCallId === result.toolCallId,
-          )?.id;
-          return entryId === undefined ? [] : [entryId];
-        });
         await runner?.emitBoundary(
           {
             type: 'turn_end',
@@ -935,7 +941,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
             message: event.message,
             toolResults: event.toolResults,
             messageEntryId,
-            toolResultEntryIds,
+            toolResultEntryIds: toolResultEntryIds as string[],
             outcome:
               event.message.stopReason === 'aborted'
                 ? 'aborted'
@@ -953,6 +959,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         await runner?.emit({ type: 'agent_end', messages: runMessages });
         await runner?.emit({ type: 'agent_settled' });
         runMessages = [];
+        turnEntryIds.clear();
         toolArguments.clear();
         return;
       case 'compaction_start':
@@ -988,6 +995,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         return;
       }
       case 'navigation_start':
+        turnEntryIds.clear();
         currentOperation = 'navigation';
         return;
       case 'navigation_end': {
@@ -1167,6 +1175,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       sessionSync = undefined;
       sessionManager = undefined;
       runMessages = [];
+      turnEntryIds.clear();
       toolArguments.clear();
       const connection = cordisConnection;
       cordisConnection = undefined;

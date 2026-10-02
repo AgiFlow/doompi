@@ -663,9 +663,28 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     const attach = async () => {
       if (watcher) await watcher.stop();
       watcher = await watchEvents(harness, conversation.id, context);
+      let predecessor = watcher.snapshot.entries.at(-1)?.id;
+      lastAssistant = undefined;
+      partial = undefined;
+      toolResults = [];
       watcher.start(async (events, eventContext) => {
         for (const event of events) {
           let mapped: HarnessEvent | undefined;
+          if (event.type === 'turn_start' || event.type === 'run_start') {
+            lastAssistant = undefined;
+            partial = undefined;
+            toolResults = [];
+          }
+          if (event.type === 'message_end' || event.type === 'entry_appended') {
+            const entry = projectDurableEntries([event.entry])[0];
+            if (entry) {
+              entry.parentId = predecessor === undefined ? null : String(predecessor);
+              const added: HarnessEvent = { type: 'entry_added', entry };
+              emit({ type: 'entry_appended', entry });
+              eventsSettled = eventsSettled.then(() => deliver(added, eventContext));
+            }
+            predecessor = event.entry.id;
+          }
           if (['run_start', 'run_end', 'turn_start', 'compaction_start'].includes(event.type))
             mapped = { type: event.type } as HarnessEvent;
           if (event.type === 'message_start') {
@@ -678,8 +697,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
             if (message.role === 'toolResult') toolResults.push(message);
             mapped = { type: 'message_end', message, entryId: String(event.entry.id), runId: String(conversation.id) };
           }
-          if (event.type === 'entry_appended')
-            mapped = { type: 'entry_added', entry: projectDurableEntries([event.entry])[0] };
+
           if (event.type === 'tool_execution_start') mapped = { ...event, type: 'tool_start' };
           if (event.type === 'tool_execution_end') {
             const result = event.entry?.model?.find((m) => m.role === 'toolResult');
@@ -697,6 +715,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           if (event.type === 'turn_end' && lastAssistant) {
             mapped = { type: 'turn_end', message: lastAssistant, toolResults };
             toolResults = [];
+            lastAssistant = undefined;
+            partial = undefined;
           }
           if (event.type === 'message_update' && partial) {
             for (const change of event.changes) {
@@ -756,7 +776,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
             };
           if (event.type === 'inbox_update')
             mapped = { type: 'queue_update', queues: event.items.map((item) => ({ kind: item.mode })) };
-          if (event.type === 'entry_appended') {
+          if (event.type === 'message_end') {
             for (const message of event.entry.model ?? [])
               if (message.role === 'assistant')
                 eventsSettled = eventsSettled.then(() =>
@@ -1197,20 +1217,26 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     let disposePromise: Promise<void> | undefined;
     const dispose = () =>
       (disposePromise ??= (async () => {
-        await interrupt();
+        const failures: unknown[] = [];
+        const attempt = async (cleanup: () => Promise<unknown>) => {
+          try {
+            await cleanup();
+            return true;
+          } catch (error) {
+            failures.push(error);
+            return false;
+          }
+        };
+        await attempt(interrupt);
         disposed = true;
-        await watcher.stop();
-        await eventsSettled;
-        try {
-          await harness.close(context);
-          await storage.repository?.close(context);
-          await environment.cleanup(context);
-          await storage.historyLease?.release();
-          resolveExited(0);
-        } catch (error) {
-          resolveExited(1);
-          throw error;
-        }
+        await attempt(() => watcher.stop());
+        await attempt(() => eventsSettled);
+        const harnessClosed = await attempt(() => harness.close(context));
+        const repositoryClosed = harnessClosed && (await attempt(async () => storage.repository?.close(context)));
+        await attempt(() => environment.cleanup(context));
+        if (harnessClosed && repositoryClosed) await attempt(async () => storage.historyLease?.release());
+        resolveExited(failures.length ? 1 : 0);
+        if (failures.length) throw new AggregateError(failures, 'Direct harness cleanup failed');
       })());
     const recordUsage: DirectHarnessRuntime<TContext>['recordUsage'] = async (usage, usageOptions) => {
       const entryId = await appendEntry({
@@ -1673,15 +1699,13 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     } catch (closeError) {
       failures.push(closeError);
     }
-    try {
-      await storage.repository?.close(context);
-    } catch (closeError) {
-      failures.push(closeError);
-    }
-    try {
-      await storage.historyLease?.release();
-    } catch (closeError) {
-      failures.push(closeError);
+    if (failures.length === 1) {
+      try {
+        await storage.repository?.close(context);
+        await storage.historyLease?.release();
+      } catch (closeError) {
+        failures.push(closeError);
+      }
     }
     if (failures.length > 1) throw new AggregateError(failures, 'Direct harness startup and cleanup failed');
     throw error;

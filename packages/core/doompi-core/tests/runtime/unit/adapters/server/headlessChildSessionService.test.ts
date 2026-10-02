@@ -13,7 +13,7 @@ import type { DoomChildSessionRequest } from '../../../../../src/exports/childSe
 import type { DirectHarnessRuntime, DirectHarnessRuntimeOptions } from '../../../../../src/server/directHarnessRuntime';
 import { DurableNavigationDoc } from '../../../../../src/services/durableNavigation';
 import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
-import { openSqliteSessionStorage } from '../../../../../src/services/sqliteSessionStorage';
+import { openSqliteSessionStorage, SessionMetadataDoc } from '../../../../../src/services/sqliteSessionStorage';
 import {
   composeDirectHarnessRequestOptions,
   bindChildMcpCatalog,
@@ -98,7 +98,10 @@ function runtimeFactory(runtime: DirectHarnessRuntime) {
   return vi.fn(async (_options: DirectHarnessRuntimeOptions) => runtime);
 }
 
-async function createSource(root: string): Promise<string> {
+async function createSource(
+  root: string,
+  whileOpen?: (opened: Awaited<ReturnType<typeof openSqliteSessionStorage>>) => Promise<void>,
+): Promise<string> {
   const opened = await openSqliteSessionStorage(
     { sessionId: 'source', sessionsRoot: root, historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }) },
     BACKGROUND_CONTEXT,
@@ -116,9 +119,12 @@ async function createSource(root: string): Promise<string> {
     });
     (await tx.doc(DurableNavigationDoc)).activeConversationId = conversation.id;
   }, BACKGROUND_CONTEXT);
-  await opened.session.close(BACKGROUND_CONTEXT);
-  await opened.repository.close(BACKGROUND_CONTEXT);
-  await opened.historyLease.release();
+  try {
+    await whileOpen?.(opened);
+  } finally {
+    await opened.session.close(BACKGROUND_CONTEXT);
+    await opened.historyLease.release();
+  }
   return opened.sessionFile;
 }
 
@@ -220,6 +226,34 @@ describe('headless child session provider', () => {
   });
 
   beforeEach(() => vi.restoreAllMocks());
+
+  it('forks a live parent with pending WAL without checkpointing or closing its writer', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-child-live-fork-'));
+    const factory = runtimeFactory(fakeRuntime('live-child'));
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent',
+      cwd: root,
+      runtimeFactory: factory,
+    });
+    try {
+      await createSource(root, async (parent) => {
+        const wal = fs.readFileSync(`${parent.sessionFile}-wal`);
+        expect(wal.length).toBeGreaterThan(0);
+        const child = await service.start(
+          request({ kind: 'v4-fork', sessionFile: parent.sessionFile, branch: 'main' }, root),
+        );
+        expect(factory.mock.calls[0]?.[0].sessionPath).not.toBe(parent.sessionFile);
+        expect(fs.readFileSync(`${parent.sessionFile}-wal`)).toEqual(wal);
+        await parent.session.commit(async (tx) => {
+          (await tx.doc(SessionMetadataDoc)).name = 'still writable';
+        }, BACKGROUND_CONTEXT);
+        await child.dispose();
+      });
+    } finally {
+      await service.close();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
 
   it.each([true, false])('snapshots parent Fast %s for fresh, restored, and forked children', async (enabled) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-child-fast-'));
@@ -1004,7 +1038,7 @@ describe('headless child session provider', () => {
     }
   });
 
-  it('removes a forked journal when child runtime startup fails', async () => {
+  it('preserves a forked journal when factory cleanup cannot be confirmed', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-child-fork-startup-'));
     const sourcePath = await createSource(root);
     const sourceRelease = vi.fn();
@@ -1031,9 +1065,48 @@ describe('headless child session provider', () => {
       ).rejects.toThrow('child runtime failed');
       const forkPath = factory.mock.calls[0]?.[0].sessionPath;
       expect(forkPath).toEqual(expect.any(String));
-      expect(fs.existsSync(forkPath!)).toBe(false);
+      expect(fs.existsSync(forkPath!)).toBe(true);
       expect(sourceRelease).not.toHaveBeenCalled();
       expect(destinationRelease).toHaveBeenCalledOnce();
+    } finally {
+      await service.close();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+  it('preserves a fork journal when runtime disposal fails during startup cleanup', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-child-fork-dispose-'));
+    const sourcePath = await createSource(root);
+    const startupError = new Error('installation failed');
+    const disposeError = new Error('dispose failed');
+    const runtime = fakeRuntime('child');
+    runtime.setThinkingLevel = vi.fn(async () => {
+      throw startupError;
+    });
+    runtime.dispose = vi.fn(async () => {
+      throw disposeError;
+    });
+    const intercomError = new Error('intercom cleanup failed');
+    const intercom = {
+      bindRuntime: vi.fn(),
+      dispose: vi.fn(() => {
+        throw intercomError;
+      }),
+    };
+    const factory = vi.fn(async (_options: DirectHarnessRuntimeOptions) => runtime);
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent',
+      cwd: root,
+      runtimeFactory: factory,
+    });
+    try {
+      await expect(
+        service.start({
+          ...request({ kind: 'v4-fork', sessionFile: sourcePath, branch: 'main' }, root),
+          thinking: 'low',
+          intercom,
+        }),
+      ).rejects.toMatchObject({ errors: [startupError, disposeError, intercomError] });
+      expect(fs.existsSync(factory.mock.calls[0]![0].sessionPath!)).toBe(true);
     } finally {
       await service.close();
       fs.rmSync(root, { recursive: true, force: true });
