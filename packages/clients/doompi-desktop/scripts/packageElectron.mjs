@@ -34,6 +34,9 @@ if (requireSigning) {
   if ((process.env.CSC_NAME ?? '').trim() === '') throw new Error('CSC_NAME is required for a signed desktop package.');
   builderArgs.push('--config.forceCodeSigning=true');
 }
+// Electron Builder expects a qualifier; the native codesign hook still needs the full CSC_NAME.
+const identity = process.env.CSC_NAME?.trim();
+if (identity) builderArgs.push(`--config.mac.identity=${identity.replace(/^Developer ID Application:\s*/u, '')}`);
 const result = spawnSync('npx', ['--yes', 'electron-builder@26.0.12', ...builderArgs], {
   cwd: packageRoot,
   stdio: 'inherit',
