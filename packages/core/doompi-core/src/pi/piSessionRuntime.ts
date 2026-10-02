@@ -155,6 +155,7 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     return next !== undefined;
   };
   const settlers = new Set<{ resolve(): void; reject(error: Error): void }>();
+  const promptFailures = new Set<(error: Error) => void>();
   let promptLatency: PromptLatency | undefined;
   let lastToolResultAt: number | undefined;
   let assistantMessageStartedAt: number | undefined;
@@ -178,17 +179,6 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     for (const waiter of settlers) waiter.reject(error);
     settlers.clear();
   };
-
-  void options.runtime.exited.then(
-    () => {
-      disposed = true;
-      rejectSettlers(new Error('The session runtime exited'));
-    },
-    (error: unknown) => {
-      disposed = true;
-      rejectSettlers(error instanceof Error ? error : new Error(String(error)));
-    },
-  );
 
   const subscribePresentation =
     options.onPresentationFrame ??
@@ -288,6 +278,20 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     }
   });
 
+  const terminate = (error: Error): void => {
+    if (disposed) return;
+    disposed = true;
+    for (const fail of promptFailures) fail(error);
+    promptFailures.clear();
+    rejectSettlers(error);
+    unsubscribePresentation();
+  };
+  observe(
+    options.runtime.exited.then(
+      () => terminate(new Error('The session runtime exited')),
+      (error: unknown) => terminate(error instanceof Error ? error : new Error(String(error))),
+    ),
+  );
   const requireLive = (): void => {
     if (disposed) throw new Error('The session runtime is disposed');
   };
@@ -295,33 +299,25 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     requireLive();
     context.abortSignal?.throwIfAborted();
   };
-  const awaitSettled = (context: Context): { promise: Promise<void>; resolve(): void; reject(error: Error): void } => {
+  const awaitSettled = (): { promise: Promise<void>; resolve(): void; reject(error: Error): void } => {
     let fail!: (error: Error) => void;
     let finish!: () => void;
     const promise = new Promise<void>((resolve, reject) => {
-      const cleanup = (): void => {
-        settlers.delete(waiter);
-        context.abortSignal?.removeEventListener('abort', cancel);
-      };
       const waiter = {
         resolve: () => {
-          cleanup();
+          settlers.delete(waiter);
           resolve();
         },
         reject: (error: Error) => {
-          cleanup();
+          settlers.delete(waiter);
           reject(error);
         },
-      };
-      const cancel = (): void => {
-        waiter.reject(new Error('The session prompt was cancelled', { cause: context.abortSignal?.reason }));
-        void options.runtime.abort().catch(() => undefined);
       };
       fail = waiter.reject;
       finish = waiter.resolve;
       settlers.add(waiter);
-      context.abortSignal?.addEventListener('abort', cancel, { once: true });
     });
+    observe(promise);
     return { promise, resolve: finish, reject: fail };
   };
   const messageArgs = (
@@ -386,106 +382,104 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       const args = messageArgs(text);
       const waitFor = typeof text === 'string' ? 'settled' : (text.waitFor ?? 'settled');
       if (waitFor !== 'accepted' && waitFor !== 'settled') throw new Error('Invalid prompt acknowledgement mode');
-      if ((await options.runtime.readLifecycle()).operation !== null || settlers.size > 0) {
-        if (isSelectionCommand(args.message) && (await options.runtime.dispatchCommand(args.message))) return;
-        throw new Error('A turn is already running');
-      }
-      if (waitFor === 'accepted') {
-        if (!options.telemetry) {
-          await options.runtime.submitPrompt(args.message, args.images);
-          return;
-        }
-        const telemetry = options.telemetry;
-        const startedAt = Date.now();
-        promptLatency = { startedAt, lastStageAt: startedAt, reported: new Set() };
-        const settled = awaitSettled(BACKGROUND_CONTEXT);
-        let resolveAdmission!: () => void;
-        let rejectAdmission!: (error: Error) => void;
-        const admitted = new Promise<void>((resolve, reject) => {
-          resolveAdmission = resolve;
-          rejectAdmission = reject;
-        });
-        observe(
-          telemetry.runInSpan('doompi_server.prompt_to_settled', { session_id: options.sessionId }, async () => {
-            let accepted = false;
-            try {
-              const submission = await telemetry.runInSpan(
-                'doompi_server.prompt_admission',
-                { session_id: options.sessionId },
-                () => options.runtime.submitPrompt(args.message, args.images),
-              );
-              if (submission.handledCommand) settled.resolve();
-              reportPromptLatency('accepted');
-              accepted = true;
-              resolveAdmission();
-              await Promise.all([
-                telemetry.runInSpan(
-                  'doompi_server.prompt_engine_settlement',
-                  { session_id: options.sessionId },
-                  () => submission.settled,
-                ),
-                telemetry.runInSpan(
-                  'doompi_server.prompt_projection_settlement',
-                  { session_id: options.sessionId },
-                  () => settled.promise,
-                ),
-              ]);
-            } catch (error) {
-              reportPromptLatency('failed');
-              promptLatency = undefined;
-              const failure = error instanceof Error ? error : new Error(String(error));
-              settled.reject(failure);
-              if (!accepted) {
-                await settled.promise.catch(() => undefined);
-                rejectAdmission(failure);
-              }
-              throw failure;
-            }
-          }),
-        );
-        await admitted;
-        return;
-      }
-      const startedAt = Date.now();
-      promptLatency = { startedAt, lastStageAt: startedAt, reported: new Set() };
-      const settled = awaitSettled(context);
-      const run = async (): Promise<void> => {
-        try {
-          const submit = () => options.runtime.submitPrompt(args.message, args.images);
-          const submission = options.telemetry
-            ? await options.telemetry.runInSpan(
-                'doompi_server.prompt_admission',
-                { session_id: options.sessionId },
-                submit,
-              )
-            : await submit();
-          if (submission.handledCommand) settled.resolve();
-          reportPromptLatency('accepted');
-          const engineSettlement = options.telemetry
-            ? options.telemetry.runInSpan(
-                'doompi_server.prompt_engine_settlement',
-                { session_id: options.sessionId },
-                () => submission.settled,
-              )
-            : submission.settled;
-          const projectionSettlement = options.telemetry
-            ? options.telemetry.runInSpan(
-                'doompi_server.prompt_projection_settlement',
-                { session_id: options.sessionId },
-                () => settled.promise,
-              )
-            : settled.promise;
-          await Promise.all([engineSettlement, projectionSettlement]);
-        } catch (error) {
+      let projection: ReturnType<typeof awaitSettled> | undefined;
+      let latency: PromptLatency | undefined;
+      let submitted = false;
+      let failed: Error | undefined;
+      let rejectFailure!: (error: Error) => void;
+      const failure = new Promise<void>((_resolve, reject) => {
+        rejectFailure = reject;
+      });
+      const fail = (error: Error): void => {
+        if (failed !== undefined) return;
+        failed = error;
+        projection?.reject(error);
+        rejectFailure(error);
+        if (latency !== undefined && promptLatency === latency) {
           reportPromptLatency('failed');
           promptLatency = undefined;
-          settled.reject(error instanceof Error ? error : new Error(String(error)));
-          await settled.promise;
         }
       };
-      if (options.telemetry)
-        await options.telemetry.runInSpan('doompi_server.prompt_to_settled', { session_id: options.sessionId }, run);
-      else await run();
+      const cancel = (): void => {
+        if (failed !== undefined) return;
+        fail(new Error('The session prompt was cancelled', { cause: context.abortSignal?.reason }));
+        if (submitted && waitFor === 'settled') void options.runtime.abort().catch(() => undefined);
+      };
+      const guardPrompt = (): void => {
+        if (failed !== undefined) throw failed;
+        guardContext(context);
+      };
+      const submit = async () => {
+        guardPrompt();
+        submitted = true;
+        const submission = await options.runtime.submitPrompt(args.message, args.images);
+        observe(submission.settled);
+        guardPrompt();
+        return submission;
+      };
+      const span = <T>(name: string, callback: () => Promise<T>): Promise<T> => {
+        const operation = options.telemetry
+          ? options.telemetry.runInSpan(name, { session_id: options.sessionId }, callback)
+          : callback();
+        observe(operation);
+        return operation;
+      };
+      const run = async (): Promise<void> => {
+        guardPrompt();
+        const lifecycle = await options.runtime.readLifecycle();
+        guardPrompt();
+        if (lifecycle.operation !== null || settlers.size > 0) {
+          if (isSelectionCommand(args.message)) {
+            const handled = await options.runtime.dispatchCommand(args.message);
+            guardPrompt();
+            if (handled) return;
+          }
+          throw new Error('A turn is already running');
+        }
+        if (waitFor === 'accepted' && !options.telemetry) {
+          await submit();
+          return;
+        }
+        const startedAt = Date.now();
+        latency = promptLatency = { startedAt, lastStageAt: startedAt, reported: new Set() };
+        const settled = (projection = awaitSettled());
+        let resolveAdmission: (() => void) | undefined;
+        const admitted =
+          waitFor === 'accepted'
+            ? new Promise<void>((resolve) => {
+                resolveAdmission = resolve;
+              })
+            : undefined;
+        const completion = span('doompi_server.prompt_to_settled', async () => {
+          const submission = await span('doompi_server.prompt_admission', submit);
+          guardPrompt();
+          if (submission.handledCommand) settled.resolve();
+          reportPromptLatency('accepted');
+          resolveAdmission?.();
+          await Promise.all([
+            span('doompi_server.prompt_engine_settlement', () => submission.settled),
+            span('doompi_server.prompt_projection_settlement', () => settled.promise),
+          ]);
+        }).catch((error: unknown) => {
+          const cause = error instanceof Error ? error : new Error(String(error));
+          fail(cause);
+          throw cause;
+        });
+        if (admitted) await Promise.race([admitted, completion]);
+        else await completion;
+      };
+      promptFailures.add(fail);
+      context.abortSignal?.addEventListener('abort', cancel, { once: true });
+      try {
+        await Promise.race([run(), failure]);
+      } catch (error) {
+        const cause = error instanceof Error ? error : new Error(String(error));
+        fail(cause);
+        throw cause;
+      } finally {
+        promptFailures.delete(fail);
+        context.abortSignal?.removeEventListener('abort', cancel);
+      }
     },
     async steer(text: string | SessionMessageArgs) {
       requireLive();
@@ -627,10 +621,7 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       await options.runtime.setName(name);
     },
     async dispose() {
-      if (disposed) return;
-      disposed = true;
-      unsubscribePresentation();
-      rejectSettlers(new Error('The session runtime is disposed'));
+      terminate(new Error('The session runtime is disposed'));
     },
   };
 }

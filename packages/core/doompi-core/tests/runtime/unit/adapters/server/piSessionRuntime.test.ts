@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process';
+
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -5,14 +7,55 @@ import { createAgentSessionRuntime } from '../../../../../src/pi/piSessionRuntim
 import type { ServerTelemetry } from '../../../../../src/services/serverTelemetry';
 import type { DirectHarnessFrame, DirectHarnessRuntime } from '../../../../../src/types/server/directHarnessRuntime';
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
+function tracing(): ServerTelemetry {
+  return {
+    recordEvent: vi.fn(async () => undefined),
+    recordWarning: vi.fn(async () => undefined),
+    recordError: vi.fn(async () => undefined),
+    runInSpan: vi.fn(async (_name, _attributes, callback) => callback()),
+    flush: vi.fn(async () => undefined),
+    shutdown: vi.fn(async () => undefined),
+  } as ServerTelemetry;
+}
+
+// A deadline is only a hang guard. Gates, not elapsed time, select each ordering.
+async function bounded<T>(promise: Promise<T>): Promise<T> {
+  let timer!: ReturnType<typeof setTimeout>;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('runtime regression timed out')), 1_000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function fixture(telemetry?: ServerTelemetry) {
   const listeners = new Set<(frame: DirectHarnessFrame) => void>();
   let operation: { id: string; kind: 'run'; status: 'open' } | null = null;
+  const exit = deferred<number>();
+  const unsubscribe = vi.fn();
   const direct = {
-    exited: new Promise<number>(() => undefined),
+    exited: exit.promise,
     onPresentationFrame(listener: (frame: DirectHarnessFrame) => void) {
       listeners.add(listener);
-      return () => listeners.delete(listener);
+      return () => {
+        unsubscribe();
+        listeners.delete(listener);
+      };
     },
     readEntries: vi.fn(async () => ({ entries: [], leafId: null })),
     readState: vi.fn(async () => ({ sessionId: 's1', thinkingLevel: 'off' })),
@@ -70,6 +113,8 @@ function fixture(telemetry?: ServerTelemetry) {
   return {
     direct,
     runtime,
+    exit,
+    unsubscribe,
     respondToExtensionUi,
     emit(frame: DirectHarnessFrame) {
       if (frame.type === 'agent_start') operation = { id: 'op-1', kind: 'run', status: 'open' };
@@ -558,4 +603,265 @@ describe('typed session runtime controls', () => {
       await runtime.dispose();
     }
   });
+});
+
+describe('deterministic prompt ownership regressions', () => {
+  for (const waitFor of ['accepted', 'settled'] as const) {
+    for (const telemetry of [false, true]) {
+      for (const gate of ['lifecycle', 'admission'] as const) {
+        for (const termination of ['exit', 'dispose'] as const) {
+          it(`${waitFor}, telemetry ${telemetry}: ${termination} rejects before held ${gate}`, async () => {
+            const f = fixture(telemetry ? tracing() : undefined);
+            const lifecycle = deferred<Awaited<ReturnType<DirectHarnessRuntime['readLifecycle']>>>();
+            const admission = deferred<Awaited<ReturnType<DirectHarnessRuntime['submitPrompt']>>>();
+            const entered = deferred<void>();
+            if (gate === 'lifecycle')
+              vi.mocked(f.direct.readLifecycle).mockImplementationOnce(() => {
+                entered.resolve();
+                return lifecycle.promise;
+              });
+            else
+              vi.mocked(f.direct.submitPrompt).mockImplementationOnce(() => {
+                entered.resolve();
+                return admission.promise;
+              });
+            const outcome = f.runtime.prompt({ text: 'held', waitFor }, BACKGROUND_CONTEXT).then(
+              () => {
+                throw new Error('prompt unexpectedly succeeded');
+              },
+              (error: unknown) => error,
+            );
+            try {
+              await entered.promise;
+              if (termination === 'exit') f.exit.resolve(0);
+              else await f.runtime.dispose();
+              expect(await bounded(outcome)).toBeInstanceOf(Error);
+              expect(String(await outcome)).toContain(termination === 'exit' ? 'exited' : 'disposed');
+            } finally {
+              lifecycle.resolve({ revision: 0, operation: null, paused: false, queue: [] });
+              admission.reject(new Error('late admission rejection'));
+              // The unused gate has no runtime owner.
+              if (gate === 'lifecycle') await admission.promise.catch(() => undefined);
+              await f.runtime.dispose();
+              await new Promise<void>((resolve) => setImmediate(resolve));
+            }
+            expect(f.unsubscribe).toHaveBeenCalledOnce();
+            expect(f.direct.abort).not.toHaveBeenCalled();
+            if (gate === 'lifecycle') expect(f.direct.submitPrompt).not.toHaveBeenCalled();
+          });
+        }
+      }
+      it(`${waitFor}, telemetry ${telemetry}: owns engine returned by late admission`, async () => {
+        const f = fixture(telemetry ? tracing() : undefined);
+        const admission = deferred<Awaited<ReturnType<DirectHarnessRuntime['submitPrompt']>>>();
+        const engine = deferred<void>();
+        const entered = deferred<void>();
+        vi.mocked(f.direct.submitPrompt).mockImplementationOnce(() => {
+          entered.resolve();
+          return admission.promise;
+        });
+        const outcome = f.runtime
+          .prompt({ text: 'late engine', waitFor }, BACKGROUND_CONTEXT)
+          .catch((error: unknown) => error);
+        try {
+          await entered.promise;
+          f.exit.resolve(0);
+          expect(String(await bounded(outcome))).toContain('exited');
+        } finally {
+          admission.resolve({ settled: engine.promise });
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          engine.reject(new Error('engine from late admission'));
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          await f.runtime.dispose();
+        }
+      });
+      it(`${waitFor}, telemetry ${telemetry}: owns late engine rejection after exit`, async () => {
+        const f = fixture(telemetry ? tracing() : undefined);
+        const engine = deferred<void>();
+        const entered = deferred<void>();
+        vi.mocked(f.direct.submitPrompt).mockImplementationOnce(async () => {
+          entered.resolve();
+          return { settled: engine.promise };
+        });
+        const pending = f.runtime.prompt({ text: 'engine', waitFor }, BACKGROUND_CONTEXT);
+        const outcome = pending.then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+        await entered.promise;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        if (waitFor === 'accepted') await pending;
+        f.exit.resolve(0);
+        if (waitFor === 'settled') expect(await bounded(outcome)).toBeInstanceOf(Error);
+        engine.reject(new Error('late engine rejection'));
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        await f.runtime.dispose();
+        expect(f.unsubscribe).toHaveBeenCalledOnce();
+      });
+    }
+  }
+
+  it.each([false, true])('preserves original engine error after projection, telemetry %s', async (telemetry) => {
+    const f = fixture(telemetry ? tracing() : undefined);
+    const engine = deferred<void>();
+    const failure = new Error('engine failed after projection');
+    const entered = deferred<void>();
+    vi.mocked(f.direct.submitPrompt).mockImplementationOnce(async () => {
+      entered.resolve();
+      return { settled: engine.promise };
+    });
+    const outcome = f.runtime.prompt('project first', BACKGROUND_CONTEXT).catch((error: unknown) => error);
+    await entered.promise;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    f.emit({ type: 'agent_settled' });
+    engine.reject(failure);
+    expect(await bounded(outcome)).toBe(failure);
+    await f.runtime.dispose();
+  });
+
+  it.each(['accepted', 'settled'] as const)(
+    'owns outer telemetry rejection before callback for %s',
+    async (waitFor) => {
+      const telemetry = tracing();
+      const failure = new Error('outer span failed');
+      vi.mocked(telemetry.runInSpan).mockRejectedValueOnce(failure);
+      const f = fixture(telemetry);
+      const outcome = f.runtime
+        .prompt({ text: 'never admitted', waitFor }, BACKGROUND_CONTEXT)
+        .catch((error: unknown) => error);
+      expect(await bounded(outcome)).toBe(failure);
+      expect(f.direct.submitPrompt).not.toHaveBeenCalled();
+      await f.runtime.dispose();
+    },
+  );
+
+  it.each([
+    { telemetry: false, late: 'reject' },
+    { telemetry: true, late: 'reject' },
+    { telemetry: false, late: 'resolve' },
+    { telemetry: true, late: 'resolve' },
+  ])('cancels held admission once, telemetry $telemetry, late $late', async ({ telemetry, late }) => {
+    const f = fixture(telemetry ? tracing() : undefined);
+    const admission = deferred<Awaited<ReturnType<DirectHarnessRuntime['submitPrompt']>>>();
+    const entered = deferred<void>();
+    vi.mocked(f.direct.submitPrompt).mockImplementationOnce(() => {
+      entered.resolve();
+      return admission.promise;
+    });
+    const controller = new AbortController();
+    const outcome = f.runtime
+      .prompt('cancel', withAbortSignal(controller.signal, BACKGROUND_CONTEXT))
+      .catch((error: unknown) => error);
+    await entered.promise;
+    controller.abort(new Error('caller cancelled'));
+    expect(String(await bounded(outcome))).toContain('cancel');
+    if (late === 'resolve') {
+      const engine = deferred<void>();
+      admission.resolve({ settled: engine.promise });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      engine.reject(new Error('late cancellation engine'));
+    } else admission.reject(new Error('late cancellation admission'));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await f.runtime.dispose();
+    expect(f.direct.abort).toHaveBeenCalledOnce();
+  });
+
+  it.each(['accepted', 'settled'] as const)('preserves rejected runtime exit for %s', async (waitFor) => {
+    const f = fixture(waitFor === 'accepted' ? tracing() : undefined);
+    const admission = deferred<Awaited<ReturnType<DirectHarnessRuntime['submitPrompt']>>>();
+    const entered = deferred<void>();
+    const failure = new Error('runtime exit failed');
+    vi.mocked(f.direct.submitPrompt).mockImplementationOnce(() => {
+      entered.resolve();
+      return admission.promise;
+    });
+    const outcome = f.runtime.prompt({ text: 'held', waitFor }, BACKGROUND_CONTEXT).catch((error: unknown) => error);
+    try {
+      await entered.promise;
+      f.exit.reject(failure);
+      expect(await bounded(outcome)).toBe(failure);
+      await expect(f.runtime.getState(BACKGROUND_CONTEXT)).rejects.toThrow('disposed');
+    } finally {
+      admission.resolve({ settled: Promise.reject(new Error('late rejected-exit engine')) });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      await f.runtime.dispose();
+    }
+    expect(f.unsubscribe).toHaveBeenCalledOnce();
+  });
+  it.each(['exit-dispose', 'dispose-exit'] as const)('unsubscribes exactly once for %s', async (ordering) => {
+    const f = fixture();
+    if (ordering === 'dispose-exit') await f.runtime.dispose();
+    f.exit.resolve(0);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await f.runtime.dispose();
+    await f.runtime.dispose();
+    expect(f.unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('strict Node built child owns late failures and keeps a sibling usable', async () => {
+    const server = new URL('../../../../../dist/server.mjs', import.meta.url).href;
+    const script = `
+import assert from 'node:assert/strict';
+import { createAgentSessionRuntime } from ${JSON.stringify(server)};
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+const deferred = () => { let resolve, reject; const promise = new Promise((y,n) => {resolve=y;reject=n}); return {promise,resolve,reject}; };
+const tick = () => new Promise(r => setImmediate(r));
+const telemetry = { recordEvent: async()=>{}, runInSpan: async(_n,_a,fn)=>fn() };
+function fixture(trace) {
+  const exit=deferred(), admission=deferred(), entered=deferred(); let listener, unsubscribed=0;
+  const direct={exited:exit.promise, onPresentationFrame(fn){listener=fn;return ()=>{unsubscribed++;};},
+    readLifecycle:async()=>({revision:0,operation:null,paused:false,queue:[]}),
+    submitPrompt:()=>{entered.resolve();return admission.promise;}, abort:async()=>{}};
+  const runtime=createAgentSessionRuntime({runtime:direct,sessionId:'strict',sessionName:'strict',cwd:'/test',telemetry:trace});
+  return {runtime,exit,admission,entered,emit:()=>listener({type:'agent_settled'}),count:()=>unsubscribed};
+}
+for (const mode of ['accepted','settled']) for (const trace of [undefined,telemetry]) {
+  const f=fixture(trace), sibling=fixture();
+  const outcome=f.runtime.prompt({text:'held',waitFor:mode},BACKGROUND_CONTEXT).then(()=>{throw Error('unexpected success');},e=>e);
+  await f.entered.promise; f.exit.resolve(0);
+  const error=await outcome; assert.match(error.message,/exited/);
+  console.log('PUBLIC_REJECTION_BEFORE_RELEASE',mode,!!trace);
+  f.admission.reject(Error('late admission')); await tick();
+  const success=sibling.runtime.prompt('sibling',BACKGROUND_CONTEXT);
+  await sibling.entered.promise; sibling.admission.resolve({settled:Promise.resolve()}); sibling.emit(); await success;
+  await f.runtime.dispose(); await sibling.runtime.dispose(); assert.equal(f.count(),1);
+  console.log('SIBLING_SUCCESS',mode,!!trace);
+}
+for (const mode of ['accepted','settled']) for (const trace of [undefined,telemetry]) {
+ const f=fixture(trace), engine=deferred();
+ const outcome=f.runtime.prompt({text:'engine',waitFor:mode},BACKGROUND_CONTEXT).catch(e=>e);
+ await f.entered.promise; f.admission.resolve({settled:engine.promise}); await tick();
+ if(mode==='accepted') await outcome;
+ f.exit.resolve(0); if(mode==='settled') assert.match((await outcome).message,/exited/);
+ engine.reject(Error('late engine')); await tick(); await f.runtime.dispose();
+ console.log('LATE_ENGINE_OWNED',!!trace);
+}
+console.log('STRICT_COMPLETE');`;
+    const child = spawn(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '-e', script], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (data: Buffer) => {
+      stdout += data.toString();
+    });
+    child.stderr.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
+    const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
+    try {
+      const code = await new Promise<number | null>((resolve, reject) => {
+        child.once('error', reject);
+        child.once('close', resolve);
+      });
+      expect(code, stderr + stdout).toBe(0);
+      expect(stdout.match(/PUBLIC_REJECTION_BEFORE_RELEASE/g)).toHaveLength(4);
+      expect(stdout.match(/SIBLING_SUCCESS/g)).toHaveLength(4);
+      expect(stdout.match(/LATE_ENGINE_OWNED/g)).toHaveLength(4);
+      expect(stdout).toContain('STRICT_COMPLETE');
+    } finally {
+      clearTimeout(timer);
+      if (child.exitCode === null) child.kill('SIGKILL');
+    }
+  }, 15_000);
 });

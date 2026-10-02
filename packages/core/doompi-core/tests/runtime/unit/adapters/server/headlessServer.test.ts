@@ -1787,6 +1787,64 @@ describe('serveHeadlessServer', () => {
     await hub.close();
   });
 
+  it('keeps a sibling Pi attachment and HTTP health alive when stalled prompt admission exits', async () => {
+    const first = host();
+    const second = host();
+    vi.mocked(first.runtime.submitPrompt).mockImplementation(() => new Promise(() => undefined));
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    for (const [id, session] of [
+      ['one', first],
+      ['two', second],
+    ] as const)
+      hub.register({ workspaceId: 'test-workspace', id, name: id, cwd: '/repo', createdAt: 'now', host: session.host });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0 });
+    servers.push(server);
+    const clients: Client[] = [];
+    const bindings: ReturnType<typeof createRemoteServiceBinding>[] = [];
+    try {
+      for (const id of ['one', 'two']) {
+        const client = await Client.connect({
+          serverId: DOOM_COCKPIT_SERVER_ID,
+          transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/ws`),
+        });
+        clients.push(client);
+        await client.request(
+          { serverId: DOOM_COCKPIT_SERVER_ID },
+          { serviceId: DoomSessionManagementService.id, member: 'attach', args: [id] },
+        );
+        const binding = createRemoteServiceBinding({
+          services: [DoomSessionService],
+          transport: createClientServiceTransport(client, () => client.attachment),
+        });
+        bindings.push(binding);
+        await binding.ready(BACKGROUND_CONTEXT);
+      }
+      const attachment = clients[1]!.attachment;
+      const pending = expect(
+        bindings[0]!.use(DoomSessionService).prompt('stalled', BACKGROUND_CONTEXT),
+      ).rejects.toThrow();
+      await vi.waitFor(() => expect(first.runtime.submitPrompt).toHaveBeenCalledWith('stalled', undefined));
+      first.exit();
+      await pending;
+      const prompt = bindings[1]!.use(DoomSessionService).prompt('survives', BACKGROUND_CONTEXT);
+      await vi.waitFor(() => expect(second.runtime.submitPrompt).toHaveBeenCalledWith('survives', undefined));
+      second.emitFrame({ type: 'agent_settled' });
+      await prompt;
+      expect(clients[1]!.attachment).toEqual(attachment);
+      expect((await fetch(`${server.url}/api/health`)).status).toBe(200);
+    } finally {
+      await Promise.allSettled(bindings.map((binding) => binding.dispose(BACKGROUND_CONTEXT)));
+      await Promise.all(clients.map((client) => client.dispose()));
+      await hub.close();
+    }
+  });
+
   it('reattaches a Pi client to a replacement runtime with the same session id', async () => {
     const first = host();
     const second = host();

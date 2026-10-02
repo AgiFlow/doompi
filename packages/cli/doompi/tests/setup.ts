@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { HARNESS_STATE_POINTER, resetHarnessStore } from '@agimon-ai/doompi-config';
+// Do not preload configuration loaders before test-module mocks are installed.
+import { HARNESS_STATE_POINTER, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 
 // Point HOME at an empty directory before any test module is imported. Every
