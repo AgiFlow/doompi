@@ -27,7 +27,8 @@ function fixture(initial: ComputerUseSessionView = state('inactive'), desktop = 
     if (request.operation === 'targets') return [{ id: 'screen' }, null, 'bad'];
     if (request.operation === 'activate') return { grantId: 'grant-1' };
     if (request.operation === 'status') return { ownedBySession: true };
-    if (request.operation === 'stop') return { artifactId: 'artifact-1', status: 'ready' };
+    if (request.operation === 'stop')
+      return { stopped: true, artifact: { artifactId: 'artifact-1', status: 'ready', sizeBytes: 10 } };
     return { ok: true };
   });
   const requestSessionApi = vi.fn(async (_scope: DoomHubSessionScope, request: { path: string; body?: string }) => {
@@ -129,6 +130,13 @@ describe('computer-use hub channel', () => {
     test.setAuthorization({ grantId: 'grant-1' });
     test.source.sessionAdded?.(scope);
     await vi.waitFor(() => expect(test.source.payloadFor(scope)).toMatchObject({ state: { phase: 'inactive' } }));
+    expect(test.requestSessionApi).toHaveBeenCalledWith(
+      scope,
+      expect.objectContaining({
+        path: COMPUTER_USE_ROUTES.hubStop,
+        body: JSON.stringify({ artifact: { artifactId: 'artifact-1', status: 'ready', sizeBytes: 10 } }),
+      }),
+    );
     test.setState(state('stopping'));
     test.channel.receive?.(scope, { action: 'stop' }, { connectionId: 'c1', desktopAuthorized: true });
     await vi.waitFor(() =>

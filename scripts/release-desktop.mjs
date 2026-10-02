@@ -7,10 +7,10 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const REPOSITORY = 'AgiFlow/doompi';
-const NIGHTLY_TAG = 'desktop-nightly';
+const BUILD_MANIFEST = 'desktop-build.json';
+const DESKTOP_MANIFEST_PATH = 'packages/clients/doompi-desktop/package.json';
 const DESKTOP_PACKAGE = '@agimon-ai/doompi-desktop';
 const MIN_NODE_VERSION = [22, 22, 1];
-const ZERO_SHA = '0'.repeat(40);
 const SECRET_ENV_NAMES = [
   'APPLE_APP_SPECIFIC_PASSWORD',
   'APPLE_CERTIFICATE_PASSWORD',
@@ -47,13 +47,19 @@ export function runCommand(file, args, options = {}) {
   const cwd = options.cwd ?? REPOSITORY_ROOT;
   const env = options.env ?? process.env;
   const inherit = options.inherit === true;
-  const result = spawnSync(file, args, {
-    cwd,
-    env,
-    encoding: 'utf8',
-    input: options.input,
-    stdio: inherit ? 'inherit' : ['pipe', 'pipe', 'pipe'],
-  });
+  let result;
+  const output = options.stdoutFile === undefined ? undefined : fs.openSync(options.stdoutFile, 'wx', 0o600);
+  try {
+    result = spawnSync(file, args, {
+      cwd,
+      env,
+      encoding: 'utf8',
+      input: options.input,
+      stdio: output === undefined ? (inherit ? 'inherit' : ['pipe', 'pipe', 'pipe']) : ['pipe', output, 'pipe'],
+    });
+  } finally {
+    if (output !== undefined) fs.closeSync(output);
+  }
   if (result.error || ((result.status ?? 1) !== 0 && options.allowFailure !== true)) {
     throw new CommandError(file, args, result, env);
   }
@@ -146,26 +152,15 @@ function assertMacHost() {
   if (major < 15) throw new Error(`macOS 15 or newer is required by the native helper; found ${macOSVersion}.`);
 }
 
-function assertToolchain() {
-  for (const command of [
-    'codesign',
-    'ditto',
-    'file',
-    'gh',
-    'git',
-    'hdiutil',
-    'plutil',
-    'pnpm',
-    'security',
-    'spctl',
-    'swift',
-    'sw_vers',
-    'xcrun',
-  ]) {
+function assertToolchain(build = true) {
+  for (const command of ['codesign', 'ditto', 'file', 'git', 'hdiutil', 'plutil', 'spctl', 'sw_vers', 'xcrun']) {
     assertExecutable(command);
   }
-  runCommand('swift', ['--version']);
-  runCommand('xcrun', ['--find', 'notarytool']);
+  if (build) {
+    for (const command of ['pnpm', 'security', 'swift']) assertExecutable(command);
+    runCommand('swift', ['--version']);
+    runCommand('xcrun', ['--find', 'notarytool']);
+  }
 }
 
 function readJsonFile(filePath) {
@@ -216,32 +211,37 @@ export function parseDeveloperIdIdentity(identity, identityOutput, teamId) {
   return identity;
 }
 
-function assertAppleCredentials() {
-  const required = [
-    'APPLE_ID',
-    'APPLE_APP_SPECIFIC_PASSWORD',
-    'APPLE_TEAM_ID',
-    'CSC_NAME',
-    'NOTARYTOOL_KEYCHAIN_PROFILE',
-  ];
-  const missing = required.filter((name) => (process.env[name] ?? '').trim() === '');
+export function assertAppleCredentials(env = process.env, run = runCommand) {
+  const required = ['APPLE_TEAM_ID', 'CSC_NAME', 'NOTARYTOOL_KEYCHAIN_PROFILE'];
+  const missing = required.filter((name) => (env[name] ?? '').trim() === '');
   if (missing.length > 0) throw new Error(`Missing Apple release environment: ${missing.join(', ')}.`);
-  const teamId = process.env.APPLE_TEAM_ID.trim();
+  const teamId = env.APPLE_TEAM_ID.trim();
   if (!/^[A-Z0-9]{10}$/u.test(teamId)) throw new Error('APPLE_TEAM_ID must be the ten-character Apple Team ID.');
   const identity = parseDeveloperIdIdentity(
-    process.env.CSC_NAME.trim(),
-    runCommand('security', ['find-identity', '-v', '-p', 'codesigning']).stdout,
+    env.CSC_NAME.trim(),
+    run('security', ['find-identity', '-v', '-p', 'codesigning']).stdout,
     teamId,
   );
-  const profile = process.env.NOTARYTOOL_KEYCHAIN_PROFILE.trim();
+  const profile = env.NOTARYTOOL_KEYCHAIN_PROFILE.trim();
   if (!/^[A-Za-z0-9._-]+$/u.test(profile))
     throw new Error('NOTARYTOOL_KEYCHAIN_PROFILE contains unsupported characters.');
-  runCommand('xcrun', ['notarytool', 'history', '--keychain-profile', profile, '--output-format', 'json']);
+  run('xcrun', ['notarytool', 'history', '--keychain-profile', profile, '--output-format', 'json']);
   return { identity, profile, teamId };
 }
 
-function createBuildEnvironment(identity, outputDirectory, profile) {
-  const env = { ...process.env };
+export function createBuildEnvironment(identity, outputDirectory, profile, environment = process.env) {
+  const env = { ...environment };
+  // Use the same default-keychain profile validated above, not competing inherited credentials.
+  for (const name of [
+    'APPLE_ID',
+    'APPLE_APP_SPECIFIC_PASSWORD',
+    'APPLE_API_KEY',
+    'APPLE_API_KEY_ID',
+    'APPLE_API_ISSUER',
+    'APPLE_KEYCHAIN',
+  ])
+    delete env[name];
+  env.APPLE_KEYCHAIN_PROFILE = profile;
   delete env.CSC_LINK;
   delete env.CSC_KEY_PASSWORD;
   delete env.APPLE_CERTIFICATE_P12_BASE64;
@@ -277,10 +277,19 @@ function findArtifacts(outputDirectory) {
 }
 
 function safeVersion(version) {
-  if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/u.test(version)) {
+  if (
+    typeof version !== 'string' ||
+    !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u.test(
+      version,
+    )
+  ) {
     throw new Error(`Desktop package version is not a valid release version: ${version}.`);
   }
-  return version.replace(/[^0-9A-Za-z.+-]/gu, '_');
+  const prerelease = version.split('+')[0].split('-').slice(1).join('-');
+  if (prerelease.split('.').some((identifier) => /^0\d+$/u.test(identifier))) {
+    throw new Error(`Desktop package version has a noncanonical numeric prerelease: ${version}.`);
+  }
+  return version;
 }
 
 export function artifactNames(version, commit, builtAt = new Date()) {
@@ -363,8 +372,14 @@ function plistValue(appPath, key) {
   ]).stdout.trim();
 }
 
-function verifyApp(appPath, expectedVersion, teamId) {
-  if (plistValue(appPath, 'CFBundleShortVersionString') !== expectedVersion) {
+function verifyApp(appPath, expectedVersion, teamId, expectedCommit) {
+  const shortVersion = plistValue(appPath, 'CFBundleShortVersionString');
+  if (
+    plistValue(appPath, 'DoomPiVersion') !== expectedVersion ||
+    plistValue(appPath, 'DoomPiCommit') !== expectedCommit ||
+    plistValue(appPath, 'CFBundleIdentifier') !== 'ai.agimon.doompi' ||
+    ![expectedVersion, expectedVersion.split(/[+-]/u)[0]].includes(shortVersion)
+  ) {
     throw new Error(`Packaged app version does not match ${expectedVersion}: ${appPath}.`);
   }
   const executable = plistValue(appPath, 'CFBundleExecutable');
@@ -382,7 +397,7 @@ function verifyApp(appPath, expectedVersion, teamId) {
     throw new Error(`Packaged app is not signed by the expected Developer ID team: ${appPath}.`);
   }
   runCommand('codesign', ['--verify', '--deep', '--strict', '--verbose=2', appPath]);
-  runCommand('spctl', ['--assess', '--type', 'install', '--verbose=4', appPath]);
+  runCommand('spctl', ['--assess', '--type', 'execute', '--verbose=4', appPath]);
   runCommand('xcrun', ['stapler', 'validate', appPath]);
 
   const signableRoots = [
@@ -433,16 +448,16 @@ function ensureZipTicket(zipPath) {
   }
 }
 
-function verifyZip(zipPath, expectedVersion, teamId) {
+function verifyZip(zipPath, expectedVersion, teamId, expectedCommit) {
   const extracted = zipApplication(zipPath);
   try {
-    verifyApp(extracted.application, expectedVersion, teamId);
+    verifyApp(extracted.application, expectedVersion, teamId, expectedCommit);
   } finally {
     fs.rmSync(extracted.extractionDirectory, { recursive: true, force: true });
   }
 }
 
-function verifyDmg(dmgPath, expectedVersion, teamId) {
+function verifyDmg(dmgPath, expectedVersion, teamId, expectedCommit) {
   runCommand('xcrun', ['stapler', 'validate', dmgPath]);
   const mountDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-desktop-dmg-'));
   let mounted = false;
@@ -453,7 +468,7 @@ function verifyDmg(dmgPath, expectedVersion, teamId) {
     const applications = findApplications(mountDirectory);
     if (applications.length !== 1)
       throw new Error(`Expected one app in ${path.basename(dmgPath)}; found ${applications.length}.`);
-    verifyApp(applications[0], expectedVersion, teamId);
+    verifyApp(applications[0], expectedVersion, teamId, expectedCommit);
   } catch (error) {
     failure = error;
   } finally {
@@ -467,7 +482,7 @@ function verifyDmg(dmgPath, expectedVersion, teamId) {
   if (failure !== undefined) throw failure;
 }
 
-function notarizeAndVerify(artifacts, version, teamId, profile) {
+function notarizeAndVerify(artifacts, version, teamId, profile, commit) {
   const result = runCommand('xcrun', [
     'notarytool',
     'submit',
@@ -481,185 +496,208 @@ function notarizeAndVerify(artifacts, version, teamId, profile) {
   const report = parseJson(result.stdout, 'xcrun notarytool submit');
   if (report.status !== 'Accepted') throw new Error(`Apple notarization was not accepted: ${String(report.status)}.`);
   runCommand('xcrun', ['stapler', 'staple', artifacts.dmg]);
-  verifyDmg(artifacts.dmg, version, teamId);
+  verifyDmg(artifacts.dmg, version, teamId, commit);
   ensureZipTicket(artifacts.zip);
-  verifyZip(artifacts.zip, version, teamId);
+  verifyZip(artifacts.zip, version, teamId, commit);
 }
 
-function releaseState(client) {
+export function releaseTag(version) {
+  return `desktop-v${safeVersion(version)}`;
+}
+
+export function createBuildManifest(artifacts, version, commit, teamId, builtAt) {
   return {
-    release: ghOptionalApi(`repos/${REPOSITORY}/releases/tags/${NIGHTLY_TAG}`, client),
-    ref: ghOptionalApi(`repos/${REPOSITORY}/git/ref/tags/${NIGHTLY_TAG}`, client),
+    schemaVersion: 1,
+    repository: REPOSITORY,
+    version: safeVersion(version),
+    commit,
+    target: 'darwin-arm64',
+    teamId,
+    builtAt: builtAt.toISOString(),
+    files: Object.fromEntries(
+      ['dmg', 'zip', 'checksum'].map((kind) => [
+        kind,
+        {
+          name: artifacts.names[kind],
+          size: fs.statSync(artifacts[kind]).size,
+          sha256: sha256(artifacts[kind]),
+        },
+      ]),
+    ),
   };
 }
 
-function refFingerprint(ref) {
-  return ref === null ? null : `${ref.object?.type ?? ''}:${ref.object?.sha ?? ''}`;
-}
-
-function assertNightlyRelease(release, label) {
-  if (release === null) return;
-  if (release.immutable === true || release.is_immutable === true) {
-    throw new Error(`The ${label} nightly release is immutable and cannot be replaced.`);
+function confinedFile(directory, name) {
+  if (typeof name !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9.+_-]*$/u.test(name) || path.basename(name) !== name) {
+    throw new Error('Artifact names must be confined basenames.');
   }
-  if (release.tag_name !== NIGHTLY_TAG) throw new Error(`The ${label} release has an unexpected tag.`);
+  const filePath = path.join(directory, name);
+  if (!fs.lstatSync(filePath).isFile()) throw new Error(`Artifact is not a regular file: ${name}.`);
+  return filePath;
 }
 
-function transitionToDraft(release, client) {
-  if (release === null || release.draft === true) return release;
-  ghApi(`repos/${REPOSITORY}/releases/${release.id}`, {
-    ...client,
-    method: 'PATCH',
-    input: { draft: true },
-  });
-  const updated = ghOptionalApi(`repos/${REPOSITORY}/releases/${NIGHTLY_TAG}`, client);
-  if (updated === null || updated.id !== release.id || updated.draft !== true) {
-    throw new Error('GitHub did not confirm the nightly release draft transition.');
+export function readBuildManifest(directory) {
+  const root = fs.realpathSync(directory);
+  const manifestPath = confinedFile(root, BUILD_MANIFEST);
+  const manifest = readJsonFile(manifestPath);
+  if (
+    manifest.schemaVersion !== 1 ||
+    manifest.repository !== REPOSITORY ||
+    manifest.target !== 'darwin-arm64' ||
+    !/^[0-9a-f]{40}$/u.test(manifest.commit ?? '') ||
+    !/^[A-Z0-9]{10}$/u.test(manifest.teamId ?? '') ||
+    typeof manifest.builtAt !== 'string' ||
+    !Number.isFinite(Date.parse(manifest.builtAt))
+  ) {
+    throw new Error('The desktop build manifest has invalid identity fields.');
   }
-  return updated;
+  safeVersion(manifest.version);
+  const artifacts = { names: {}, manifest: manifestPath };
+  const expectedNames = artifactNames(manifest.version, manifest.commit, new Date(manifest.builtAt));
+  if (!manifest.files || Object.keys(manifest.files).sort().join(',') !== 'checksum,dmg,zip') {
+    throw new Error('The manifest must describe exactly DMG, ZIP and checksums.');
+  }
+  for (const kind of ['dmg', 'zip', 'checksum']) {
+    const entry = manifest.files[kind];
+    if (
+      !entry ||
+      entry.name !== expectedNames[kind] ||
+      !Number.isSafeInteger(entry.size) ||
+      entry.size <= 0 ||
+      typeof entry.sha256 !== 'string' ||
+      !/^[0-9a-f]{64}$/u.test(entry.sha256)
+    ) {
+      throw new Error(`Invalid manifest artifact: ${kind}.`);
+    }
+    const filePath = confinedFile(root, entry.name);
+    if (fs.statSync(filePath).size !== entry.size || sha256(filePath) !== entry.sha256) {
+      throw new Error(`Artifact checksum mismatch: ${entry.name}.`);
+    }
+    artifacts[kind] = filePath;
+    artifacts.names[kind] = entry.name;
+  }
+  artifacts.names.manifest = BUILD_MANIFEST;
+  verifyChecksums(artifacts);
+  return { manifest, artifacts };
 }
 
-function moveNightlyTag(commit, observedRef) {
-  const expected = observedRef?.object?.sha ?? ZERO_SHA;
-  runCommand(
-    'git',
-    ['push', `--force-with-lease=refs/tags/${NIGHTLY_TAG}:${expected}`, 'origin', `${commit}:refs/tags/${NIGHTLY_TAG}`],
-    { cwd: REPOSITORY_ROOT },
-  );
-}
-
-function releaseBody(version, commit, builtAt) {
-  return [
-    'DoomPi Desktop nightly build.',
-    '',
-    `Version: ${version}`,
-    `Commit: ${commit}`,
-    `Built: ${builtAt.toISOString()}`,
-    'Architecture: macOS arm64',
-    '',
-    'This release is kept as a draft prerelease. Review and publish it manually after installation testing.',
-  ].join('\n');
-}
-
-function releasePayload(version, commit, builtAt) {
+function releasePayload(manifest, artifacts) {
   return {
-    name: 'DoomPi Desktop nightly',
-    body: releaseBody(version, commit, builtAt),
-    tag_name: NIGHTLY_TAG,
-    target_commitish: commit,
+    name: `DoomPi Desktop ${manifest.version}`,
+    body: [
+      'DoomPi Desktop for macOS 15+ arm64.',
+      `Version: ${manifest.version}`,
+      `Commit: ${manifest.commit}`,
+      `Built: ${manifest.builtAt}`,
+      `Manifest SHA-256: ${sha256(artifacts.manifest)}`,
+      '',
+      'Review and publish manually only after installing and testing both downloads.',
+    ].join('\n'),
+    tag_name: releaseTag(manifest.version),
+    target_commitish: manifest.commit,
     draft: true,
-    prerelease: true,
+    prerelease: manifest.version.split('+')[0].includes('-'),
     make_latest: 'false',
   };
 }
 
-function assertReleaseReady(release, id) {
-  if (release === null || release.id !== id)
-    throw new Error('The nightly release changed while it was being replaced.');
-  if (release.draft !== true || release.prerelease !== true) {
-    throw new Error('The nightly release must remain a draft prerelease during replacement.');
+export function verifyRemoteAssets(assets, artifacts, download) {
+  const expected = Object.entries(artifacts.names);
+  if (assets.length !== expected.length || new Set(assets.map((asset) => asset.name)).size !== assets.length) {
+    throw new Error('GitHub contains unexpected or duplicate assets.');
   }
-}
-
-export function verifyRemoteAssets(assets, artifacts) {
-  const expected = new Map([
-    [artifacts.names.dmg, artifacts.dmg],
-    [artifacts.names.zip, artifacts.zip],
-    [artifacts.names.checksum, artifacts.checksum],
-  ]);
-  for (const [name, filePath] of expected) {
+  for (const [kind, name] of expected) {
     const asset = assets.find((candidate) => candidate.name === name);
+    const filePath = artifacts[kind];
     if (asset === undefined || asset.size !== fs.statSync(filePath).size) {
       throw new Error(`GitHub asset ${name} does not match the local artifact size.`);
     }
-    if (typeof asset.digest === 'string' && asset.digest !== `sha256:${sha256(filePath)}`) {
-      throw new Error(`GitHub asset ${name} has an unexpected digest.`);
+    const digest = typeof asset.digest === 'string' ? asset.digest : download?.(asset);
+    if (digest !== `sha256:${sha256(filePath)}`) {
+      throw new Error(`GitHub asset ${name} has an unexpected or unverifiable digest.`);
     }
   }
 }
 
-function uploadAssets(release, artifacts, client) {
-  runCommand(
-    'gh',
-    ['release', 'upload', NIGHTLY_TAG, artifacts.dmg, artifacts.zip, artifacts.checksum, '--repo', REPOSITORY],
-    client,
-  );
-  const assets = ghApi(`repos/${REPOSITORY}/releases/${release.id}/assets?per_page=100`, client);
-  const expected = new Set(Object.values(artifacts.names));
-  const uploaded = new Set(assets.map((asset) => asset.name));
-  for (const name of expected) if (!uploaded.has(name)) throw new Error(`GitHub upload did not produce ${name}.`);
-  verifyRemoteAssets(assets, artifacts);
-  return assets;
-}
-
-function removeStaleAssets(assets, artifacts, client) {
-  const expected = new Set(Object.values(artifacts.names));
-  for (const asset of assets) {
-    if (expected.has(asset.name)) continue;
-    ghApi(`repos/${REPOSITORY}/releases/assets/${asset.id}`, { ...client, method: 'DELETE', parseJson: false });
+function downloadAssetDigest(asset, command) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-desktop-asset-'));
+  try {
+    const destination = path.join(directory, 'asset');
+    // gh handles authentication. Binary bytes go directly to disk, not a UTF-8 stdout buffer.
+    command(
+      'gh',
+      ['api', `repos/${REPOSITORY}/releases/assets/${asset.id}`, '-H', 'Accept: application/octet-stream'],
+      { stdoutFile: destination },
+    );
+    return `sha256:${sha256(destination)}`;
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
   }
 }
 
-function confirmRemoteState(releaseId, commit, artifacts, client) {
-  const finalRelease = ghOptionalApi(`repos/${REPOSITORY}/releases/tags/${NIGHTLY_TAG}`, client);
-  assertReleaseReady(finalRelease, releaseId);
-  const finalRef = ghOptionalApi(`repos/${REPOSITORY}/git/ref/tags/${NIGHTLY_TAG}`, client);
-  if (finalRef === null || finalRef.object?.type !== 'commit' || finalRef.object.sha !== commit) {
-    throw new Error(`refs/tags/${NIGHTLY_TAG} does not point to ${commit}.`);
+/** Missing-asset retries are allowed only on the exact same draft generation. */
+export function uploadDraft(manifest, artifacts, client = {}) {
+  const api = client.api ?? ghApi;
+  const optionalApi = client.optionalApi ?? ghOptionalApi;
+  const command = client.command ?? runCommand;
+  const download = client.download ?? ((asset) => downloadAssetDigest(asset, command));
+  const tag = releaseTag(manifest.version);
+  const payload = releasePayload(manifest, artifacts);
+  const refEndpoint = `repos/${REPOSITORY}/git/ref/tags/${tag}`;
+  const releaseEndpoint = `repos/${REPOSITORY}/releases/tags/${tag}`;
+  const checkRef = (ref) => {
+    if (ref !== null && (ref.object?.type !== 'commit' || ref.object.sha !== manifest.commit)) {
+      throw new Error(`Existing ${tag} points to a different source. Tags are never moved.`);
+    }
+  };
+  const checkRelease = (release) => {
+    if (
+      release &&
+      (release.draft !== true ||
+        release.tag_name !== tag ||
+        release.body !== payload.body ||
+        release.prerelease !== payload.prerelease ||
+        release.immutable === true ||
+        release.is_immutable === true)
+    ) {
+      throw new Error('Existing release is published or differs from this build. Refusing replacement.');
+    }
+  };
+  let ref = optionalApi(refEndpoint);
+  let release = optionalApi(releaseEndpoint);
+  checkRef(ref);
+  checkRelease(release);
+  const existingAssets = release ? api(`repos/${REPOSITORY}/releases/${release.id}/assets?per_page=100`) : [];
+  const existingNames = new Set(existingAssets.map((asset) => asset.name));
+  const expectedNames = new Set(Object.values(artifacts.names));
+  if (existingNames.size !== existingAssets.length || existingAssets.some((asset) => !expectedNames.has(asset.name))) {
+    throw new Error('Existing draft contains unexpected assets.');
   }
-  const assets = ghApi(`repos/${REPOSITORY}/releases/${releaseId}/assets?per_page=100`, client);
-  const compareNames = (left, right) => left.localeCompare(right);
-  const names = assets.map((asset) => asset.name).sort(compareNames);
-  const expected = Object.values(artifacts.names).sort(compareNames);
-  if (JSON.stringify(names) !== JSON.stringify(expected)) {
-    throw new Error(`Nightly assets are not the expected current generation: ${names.join(', ')}.`);
+  for (const asset of existingAssets) {
+    const kind = Object.keys(artifacts.names).find((key) => artifacts.names[key] === asset.name);
+    verifyRemoteAssets([asset], { names: { [kind]: asset.name }, [kind]: artifacts[kind] }, download);
   }
-  verifyRemoteAssets(assets, artifacts);
+  if (ref === null) {
+    api(`repos/${REPOSITORY}/git/refs`, { method: 'POST', input: { ref: `refs/tags/${tag}`, sha: manifest.commit } });
+  }
+  ref = optionalApi(refEndpoint);
+  checkRef(ref);
+  if (ref === null) throw new Error('GitHub did not confirm the version tag.');
+  if (release === null) release = api(`repos/${REPOSITORY}/releases`, { method: 'POST', input: payload });
+  checkRelease(release);
+  if (!release?.id) throw new Error('GitHub did not return a release ID.');
+  const missing = Object.entries(artifacts.names)
+    .filter(([, name]) => !existingNames.has(name))
+    .map(([kind]) => artifacts[kind]);
+  if (missing.length) command('gh', ['release', 'upload', tag, ...missing, '--repo', REPOSITORY]);
+  const finalRelease = optionalApi(releaseEndpoint);
+  checkRelease(finalRelease);
+  const finalRef = optionalApi(refEndpoint);
+  checkRef(finalRef);
+  if (finalRef === null) throw new Error('The version tag disappeared during upload.');
+  if (finalRelease?.id !== release.id) throw new Error('The release changed during upload.');
+  verifyRemoteAssets(api(`repos/${REPOSITORY}/releases/${release.id}/assets?per_page=100`), artifacts, download);
   return finalRelease.html_url;
-}
-
-function replaceNightlyRelease(version, commit, builtAt, artifacts) {
-  const client = { cwd: REPOSITORY_ROOT, env: process.env };
-  const initial = releaseState(client);
-  assertNightlyRelease(initial.release, 'existing');
-  let release = transitionToDraft(initial.release, client);
-  const beforeTagMutation = releaseState(client);
-  if (refFingerprint(beforeTagMutation.ref) !== refFingerprint(initial.ref)) {
-    throw new Error('The nightly tag changed while the release was being prepared. Retry after other writers stop.');
-  }
-  if (
-    release !== null &&
-    (beforeTagMutation.release === null ||
-      beforeTagMutation.release.id !== release.id ||
-      beforeTagMutation.release.draft !== true)
-  ) {
-    throw new Error('The nightly release changed while it was being prepared.');
-  }
-  moveNightlyTag(commit, beforeTagMutation.ref);
-  const afterTag = releaseState(client);
-  if (afterTag.ref === null || afterTag.ref.object?.type !== 'commit' || afterTag.ref.object.sha !== commit) {
-    throw new Error(`refs/tags/${NIGHTLY_TAG} was not moved to ${commit}.`);
-  }
-  if (release !== null) {
-    assertReleaseReady(afterTag.release, release.id);
-    release = ghApi(`repos/${REPOSITORY}/releases/${release.id}`, {
-      ...client,
-      method: 'PATCH',
-      input: releasePayload(version, commit, builtAt),
-    });
-  } else {
-    release = ghApi(`repos/${REPOSITORY}/releases`, {
-      ...client,
-      method: 'POST',
-      input: releasePayload(version, commit, builtAt),
-    });
-  }
-  assertReleaseReady(release, release.id);
-  const assets = uploadAssets(release, artifacts, client);
-  const current = ghOptionalApi(`repos/${REPOSITORY}/releases/tags/${NIGHTLY_TAG}`, client);
-  assertReleaseReady(current, release.id);
-  removeStaleAssets(assets, artifacts, client);
-  return confirmRemoteState(release.id, commit, artifacts, client);
 }
 
 function acquireLock() {
@@ -678,55 +716,91 @@ function acquireLock() {
   };
 }
 
-export function runRelease() {
-  const releaseLock = acquireLock();
-  let outputDirectory;
+export function runBuild(outputDirectory) {
+  const unlock = acquireLock();
   try {
     assertMacHost();
     assertToolchain();
     assertNodeAndPnpm();
     assertCleanCheckout();
     const commit = currentCommit();
-    assertGitHubAccess(commit);
+    const version = safeVersion(readJsonFile(path.join(REPOSITORY_ROOT, DESKTOP_MANIFEST_PATH)).version);
     const { identity, profile, teamId } = assertAppleCredentials();
-    const desktopManifest = readJsonFile(
-      path.join(REPOSITORY_ROOT, 'packages', 'clients', 'doompi-desktop', 'package.json'),
-    );
-    const version = desktopManifest.version;
-    if (typeof version !== 'string') throw new Error('The desktop package has no version.');
-    outputDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-desktop-nightly-'));
-    console.log(`Building DoomPi Desktop nightly from ${commit}.`);
-    console.log(`Build artifacts will be preserved at ${outputDirectory}.`);
-    buildDesktop(outputDirectory, identity, profile);
-    if (currentCommit() !== commit)
-      throw new Error('HEAD changed while building; refusing to release a moving source.');
+    const output = path.resolve(outputDirectory);
+    if (output === REPOSITORY_ROOT || output.startsWith(`${REPOSITORY_ROOT}${path.sep}`)) {
+      throw new Error('Build output must be outside the checkout.');
+    }
+    // Exclusive creation prevents accidental replacement of a previously tested build.
+    fs.mkdirSync(output);
+    console.log(`Building DoomPi Desktop ${version} from ${commit}. Artifacts preserved at ${output}.`);
+    buildDesktop(output, identity, profile);
+    if (currentCommit() !== commit) throw new Error('HEAD changed while building.');
     assertCleanCheckout();
     const builtAt = new Date();
-    const artifacts = finalizeArtifacts(outputDirectory, version, commit, builtAt);
-    notarizeAndVerify(artifacts, version, teamId, profile);
+    const artifacts = finalizeArtifacts(output, version, commit, builtAt);
+    notarizeAndVerify(artifacts, version, teamId, profile, commit);
     writeChecksums(artifacts);
-    verifyChecksums(artifacts);
-    const url = replaceNightlyRelease(version, commit, builtAt, artifacts);
-    console.log(`Draft nightly release ready: ${url}`);
-    return { url, outputDirectory, artifacts };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const preserved = outputDirectory === undefined ? '' : ` Artifacts were preserved at ${outputDirectory}.`;
-    throw new Error(`${redactSecrets(message)}${preserved}`);
+    const manifest = createBuildManifest(artifacts, version, commit, teamId, builtAt);
+    fs.writeFileSync(path.join(output, BUILD_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' });
+    readBuildManifest(output);
+    console.log(`Build ready. Install both artifacts before running pnpm release:desktop --from ${output}.`);
+    return { outputDirectory: output, artifacts, manifest };
   } finally {
-    releaseLock();
+    unlock();
   }
+}
+
+export function runRelease(directory) {
+  const unlock = acquireLock();
+  try {
+    const { manifest, artifacts } = readBuildManifest(directory);
+    assertMacHost();
+    assertToolchain(false);
+    assertExecutable('gh');
+    verifyDmg(artifacts.dmg, manifest.version, manifest.teamId, manifest.commit);
+    verifyZip(artifacts.zip, manifest.version, manifest.teamId, manifest.commit);
+    assertGitHubAccess(manifest.commit);
+    const source = ghApi(`repos/${REPOSITORY}/contents/${DESKTOP_MANIFEST_PATH}?ref=${manifest.commit}`);
+    const sourceManifest = parseJson(
+      Buffer.from(source.content ?? '', 'base64').toString('utf8'),
+      'source package manifest',
+    );
+    if (sourceManifest.name !== DESKTOP_PACKAGE || sourceManifest.version !== manifest.version) {
+      throw new Error('Recorded build version does not match the package at its GitHub commit.');
+    }
+    // Recheck after extraction and remote preflight. Upload never changes artifact bytes.
+    readBuildManifest(directory);
+    const url = uploadDraft(manifest, artifacts);
+    console.log(`Versioned draft ready: ${url}`);
+    return { url, artifacts, manifest };
+  } finally {
+    unlock();
+  }
+}
+
+export function parseArguments(args) {
+  const [mode, flag, directory, ...extra] = args;
+  if (
+    !['build', 'upload'].includes(mode) ||
+    flag !== (mode === 'build' ? '--out' : '--from') ||
+    !directory ||
+    !path.isAbsolute(directory) ||
+    extra.length
+  ) {
+    throw new Error('Usage: release-desktop.mjs build --out /new/artifacts | upload --from /existing/artifacts');
+  }
+  return { mode, directory };
 }
 
 const isMain =
   process.argv[1] !== undefined && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (isMain) {
   try {
-    runRelease();
+    const { mode, directory } = parseArguments(process.argv.slice(2));
+    if (mode === 'build') runBuild(directory);
+    else runRelease(directory);
   } catch (error) {
-    console.error(
-      `Desktop nightly release failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`,
-    );
+    console.error(`Desktop delivery failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`);
     process.exitCode = 1;
   }
 }

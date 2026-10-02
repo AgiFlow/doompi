@@ -183,7 +183,7 @@ describe('buildSyncedRuntime', () => {
   it('uses the supplied home directory when loading major-mode configuration', async () => {
     await buildSyncedRuntime('/repo', { HOME: '/wrong-home' }, '/configured-home');
 
-    expect(mocks.loadMajorModesConfig).toHaveBeenCalledWith('/repo', '/configured-home');
+    expect(mocks.loadMajorModesConfig).toHaveBeenCalledWith('/repo', '/configured-home', { HOME: '/wrong-home' });
   });
 
   it('refuses to publish artifacts over synchronization that changed during compilation', async () => {

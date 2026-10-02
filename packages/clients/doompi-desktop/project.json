@@ -18,7 +18,7 @@
     },
     "package": {
       "executor": "nx:run-commands",
-      "dependsOn": ["build", "^build", { "projects": ["@agimon-ai/doompi-web"], "target": "build" }],
+      "dependsOn": ["build", "^build", { "projects": ["@agimon-ai/doompi*"], "target": "build" }],
       "cache": false,
       "options": {
         "command": "pnpm run package",
@@ -28,6 +28,17 @@
     },
     "test": {
       "dependsOn": ["build", "^build", { "projects": ["@agimon-ai/doompi*"], "target": "build" }]
+    },
+    "test-runtime": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build", "^build", { "projects": ["@agimon-ai/doompi*"], "target": "build" }],
+      "cache": false,
+      "options": {
+        "commands": ["pnpm run build:runtime", "pnpm exec vitest run --config vitest.runtime.config.ts"],
+        "parallel": false,
+        "cwd": "packages/clients/doompi-desktop",
+        "forwardAllArgs": false
+      }
     },
     "test:e2e": {
       "executor": "nx:run-commands",

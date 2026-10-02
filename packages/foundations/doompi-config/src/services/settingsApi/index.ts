@@ -61,7 +61,7 @@ export const settingsApi: DoomApi = {
       if (addresses(routes.repositories)) return Response.json({ repositories: context.repositories?.() ?? [] });
       if (addresses(routes.repository)) {
         return currentRepository
-          ? Response.json(repositorySettingsView(currentRepository, homeDirectory))
+          ? Response.json(repositorySettingsView(currentRepository, homeDirectory, context.environment))
           : Response.json({ error: 'Choose a workspace.' }, { status: 404 });
       }
       // One path, two methods, so the branch is on the path the pair share.
@@ -93,7 +93,7 @@ export const settingsApi: DoomApi = {
           return Response.json({ error: 'A selection write needs typed changes and a file hash.' }, { status: 400 });
         if (!currentRepository || body.repositoryId !== currentRepository.id)
           return Response.json({ error: 'Workspace not found in this mount.' }, { status: 404 });
-        const before = repositorySettingsView(currentRepository, homeDirectory);
+        const before = repositorySettingsView(currentRepository, homeDirectory, context.environment);
         if (before.hash !== body.expectedHash)
           return Response.json(
             { error: 'The repository config changed since it was read.', hash: before.hash },
@@ -105,7 +105,7 @@ export const settingsApi: DoomApi = {
           scope: 'repository',
         });
         context.configurationChanged?.();
-        return Response.json(repositorySettingsView(currentRepository, homeDirectory));
+        return Response.json(repositorySettingsView(currentRepository, homeDirectory, context.environment));
       }
       if (addresses(routes.value)) {
         const body = parseWrite(await request.json());

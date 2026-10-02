@@ -21,6 +21,17 @@ afterEach(() => computerUse.reset());
 const render = () => renderPlugin(webPlugin.fills![0]!.component!, slotPropsFixture({ sessionId: 's1' }).props);
 
 describe('computer-use panel', () => {
+  it('offers Mac window selection without requiring a remote window list', () => {
+    driveChannel(computerUseChannel, 's1', {
+      state: { sessionId: 's1', revision: 1, wake: 1, phase: 'inactive' },
+      targets: [],
+    });
+    const rendered = render();
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.html).toContain('Choose window on Mac');
+    expect(rendered.html).not.toContain('disabled=""');
+  });
+
   it('renders target activation controls for an inactive session', () => {
     driveChannel(computerUseChannel, 's1', {
       state: { sessionId: 's1', revision: 1, wake: 1, phase: 'inactive' },
@@ -49,16 +60,17 @@ describe('computer-use panel', () => {
           artifactId: 'artifact-1',
           status: 'ready',
           actionCount: 4,
-          previewUrl: '/api/workspaces/test-workspace/sessions/s1/computer-use/artifacts/artifact-1',
-          downloadUrl: '/api/workspaces/test-workspace/sessions/s1/computer-use/artifacts/artifact-1?download=1',
+          sizeBytes: 11,
         },
       },
       targets: [],
     });
     expect(render().html).toContain('Completed recording');
     expect(render().html).toContain('Actions:');
-    expect(render().html).toContain('<video');
-    expect(render().html).toContain('Download recording');
+    // Static markup cannot run the sealed download effect or prove playback.
+    expect(render().html).toContain('Loading recording through the secure channel.');
+    expect(render().html).not.toContain('<video');
+    expect(render().html).not.toContain('href="/api/');
   });
 
   it('registers as a default-off minor mode and Activity section without a permanent tab', () => {

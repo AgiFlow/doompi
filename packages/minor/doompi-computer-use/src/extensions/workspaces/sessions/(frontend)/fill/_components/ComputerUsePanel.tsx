@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../../../../../../../generated/client';
 import { COMPUTER_USE_DEFAULT_DURATION_MS, computerUseChannelType } from '../../../../../../types/computerUseApi';
+import { loadComputerUseRecording } from '../../_lib/computerUseRecording';
 import { computerUse } from '../../_lib/computerUseStore';
 
 function text(value: unknown, fallback: string): string {
@@ -16,6 +17,8 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
   const [selected, setSelected] = useState(0);
   const [confirmationTarget, setConfirmationTarget] = useState<Record<string, unknown>>();
   const [error, setError] = useState<string>();
+  const [recordingUrl, setRecordingUrl] = useState<string>();
+  const [recordingAccessDenied, setRecordingAccessDenied] = useState(false);
   const send = (payload: Record<string, unknown>) => {
     if (sessionId !== null) sendSessionFrame(sessionId, { type: computerUseChannelType, payload });
   };
@@ -26,29 +29,96 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
     sendSessionFrame(sessionId, { type: computerUseChannelType, payload: { action: 'targets' } });
   }, [sendSessionFrame, sessionId]);
 
+  useEffect(() => {
+    if (sessionId === null) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        const result = await api.session(sessionId).activationState({ signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setRecordingAccessDenied(!result.ok);
+        if (result.ok) {
+          computerUse.update(sessionId, (current) =>
+            result.data.revision >= current.state.revision ? { ...current, state: result.data } : current,
+          );
+        }
+      } catch {
+        // A closed session or standalone story may no longer have an API address.
+        // Fail closed and dispose any existing recording instead of rejecting globally.
+        if (!controller.signal.aborted) setRecordingAccessDenied(true);
+      }
+      if (!controller.signal.aborted) timer = setTimeout(() => void poll(), 2000);
+    };
+    void poll();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [sessionId]);
+
+  const artifactId = session.state.artifact?.artifactId;
+  const artifactSize = session.state.artifact?.sizeBytes;
+  const artifactStatus = session.state.artifact?.status;
+  useEffect(() => {
+    setRecordingUrl(undefined);
+    if (
+      recordingAccessDenied ||
+      sessionId === null ||
+      artifactId === undefined ||
+      artifactSize === undefined ||
+      artifactStatus !== 'ready'
+    )
+      return;
+    const controller = new AbortController();
+    let asset: Awaited<ReturnType<typeof loadComputerUseRecording>> | undefined;
+    void loadComputerUseRecording(sessionId, artifactId, artifactSize, controller.signal)
+      .then((loaded) => {
+        if (controller.signal.aborted) loaded.dispose();
+        else {
+          asset = loaded;
+          setRecordingUrl(loaded.url);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError('The recording is unavailable or access was revoked.');
+      });
+    return () => {
+      controller.abort();
+      asset?.dispose();
+    };
+  }, [sessionId, artifactId, artifactSize, artifactStatus, recordingAccessDenied]);
+
   if (sessionId === null) return <p className="px-1 text-xs text-doom-faint">Select a session.</p>;
   const state = session.state;
   const target = session.targets[selected];
   const artifact = state.artifact;
-  const confirm = async () => {
-    if (confirmationTarget === undefined) return;
+  const confirm = async (chosenTarget = confirmationTarget) => {
     setError(undefined);
-    // Through the generated client, which carries the sealed transport: this
-    // request names an application window a reader just agreed to hand over,
-    // and the global fetch it used to call handed that to a remote session's
-    // relay in the clear.
-    const result = await api.session(sessionId).activate({
-      body: { target: confirmationTarget, durationMs: COMPUTER_USE_DEFAULT_DURATION_MS },
-    });
-    if (!result.ok) {
-      // `status: 0` is the one case nothing answered at all, which the old
-      // bare fetch reported by rejecting into nobody's handler.
-      if (result.status === 0) setError('The session is unreachable.');
-      else setError(result.error === '' ? `Activation failed with HTTP ${result.status}.` : result.error);
-      return;
+    try {
+      // Through the generated client, which carries the sealed transport: this
+      // request names an application window a reader just agreed to hand over,
+      // and the global fetch it used to call handed that to a remote session's
+      // relay in the clear.
+      const result = await api.session(sessionId).activate({
+        body: {
+          ...(chosenTarget === undefined ? {} : { target: chosenTarget }),
+          durationMs: COMPUTER_USE_DEFAULT_DURATION_MS,
+        },
+      });
+      if (!result.ok) {
+        // `status: 0` is the one case nothing answered at all, which the old
+        // bare fetch reported by rejecting into nobody's handler.
+        if (result.status === 0) setError('The session is unreachable.');
+        else setError(result.error === '' ? `Activation failed with HTTP ${result.status}.` : result.error);
+        return;
+      }
+      setConfirmationTarget(undefined);
+      computerUse.update(sessionId, (current) => ({ ...current, state: result.data }));
+      send({ action: 'status' });
+    } catch {
+      setError('The activation request is unavailable.');
     }
-    setConfirmationTarget(undefined);
-    send({ action: 'status' });
   };
 
   return (
@@ -88,11 +158,14 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
           <Button
             size="sm"
             type="button"
-            disabled={!target || Boolean(session.busy)}
+            disabled={Boolean(session.busy)}
             variant="primary"
-            onClick={() => target !== undefined && setConfirmationTarget(Object.freeze({ ...target }))}
+            onClick={() => {
+              if (target === undefined) void confirm();
+              else setConfirmationTarget(Object.freeze({ ...target }));
+            }}
           >
-            Request activation
+            {target === undefined ? 'Choose window on Mac' : 'Request activation'}
           </Button>
         </div>
       ) : null}
@@ -122,7 +195,26 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
       ) : null}
 
       {state.phase === 'awaiting_confirmation' || state.phase === 'activating' ? (
-        <p>Desktop activation is pending.</p>
+        <div>
+          <p>Desktop activation is pending.</p>
+          <Button
+            size="sm"
+            type="button"
+            onClick={() => {
+              void (async () => {
+                try {
+                  const result = await api.session(sessionId).cancelActivation();
+                  if (!result.ok) setError('The activation could not be cancelled.');
+                  else computerUse.update(sessionId, (current) => ({ ...current, state: result.data }));
+                } catch {
+                  setError('The activation could not be cancelled.');
+                }
+              })();
+            }}
+          >
+            Cancel activation
+          </Button>
+        </div>
       ) : null}
       {state.phase === 'active' || state.phase === 'stopping' ? (
         <Button
@@ -143,13 +235,16 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
           {artifact.failure ? <p className="text-doom-red">{artifact.failure.message}</p> : null}
           {artifact.completedAt ? <p>Completed: {artifact.completedAt}</p> : null}
           {artifact.actionCount !== undefined ? <p>Actions: {artifact.actionCount}</p> : null}
-          {artifact.status === 'ready' && artifact.previewUrl ? (
-            <video className="mt-2 w-full" controls preload="metadata" src={artifact.previewUrl}>
+          {artifact.status === 'ready' && artifact.sizeBytes && !recordingUrl ? (
+            <p>Loading recording through the secure channel.</p>
+          ) : null}
+          {artifact.status === 'ready' && recordingUrl ? (
+            <video className="mt-2 w-full" controls preload="metadata" src={recordingUrl}>
               <track kind="captions" />
             </video>
           ) : null}
-          {artifact.status === 'ready' && artifact.downloadUrl ? (
-            <a className="mt-2 inline-block text-doom-blue" href={artifact.downloadUrl} download>
+          {artifact.status === 'ready' && recordingUrl ? (
+            <a className="mt-2 inline-block text-doom-blue" href={recordingUrl} download="DoomPi-recording.mp4">
               Download recording
             </a>
           ) : null}

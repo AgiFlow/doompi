@@ -281,7 +281,11 @@ function parseDefault(value: unknown): LayerDefinition {
  * global layer naming `./extensions/x` still points beside the global config
  * once it is loaded from inside some other repository.
  */
-export function loadMajorModesConfig(repoRoot: string, homeDirectory: string = os.homedir()): MajorModesConfig {
+export function loadMajorModesConfig(
+  repoRoot: string,
+  homeDirectory: string = os.homedir(),
+  environment: NodeJS.ProcessEnv = process.env,
+): MajorModesConfig {
   const sources = readDoomConfigSources<ModesDocument>(MODES_FILE, repoRoot, homeDirectory);
   let defaultDefinition: ResolvedLayerDefinition | undefined;
   const layers: Record<string, ResolvedLayerDefinition> = {};
@@ -334,6 +338,16 @@ export function loadMajorModesConfig(repoRoot: string, homeDirectory: string = o
   }
   if (hasConfiguredDefault && !Object.hasOwn(majorMode, defaultMajorMode)) {
     throw new Error(`Unknown default major mode "${defaultMajorMode}" in ${MAJOR_MODES_RELATIVE_PATH}`);
+  }
+  if (environment.DOOMPI_DISTRIBUTION === 'desktop') {
+    const computerUsePackage = '@agimon-ai/doompi-computer-use';
+    const packages = defaultDefinition?.packages ?? [];
+    if (!packages.some((entry) => (typeof entry === 'string' ? entry : entry.name) === computerUsePackage)) {
+      defaultDefinition = {
+        ...(defaultDefinition ?? { baseDirectory: repoRoot }),
+        packages: [...packages, computerUsePackage],
+      };
+    }
   }
   return {
     ...(defaultDefinition ? { default: defaultDefinition } : {}),
@@ -483,12 +497,13 @@ export function filterHookDisabledLayers(
 export function loadMajorModesConfigLenient(
   repoRoot: string,
   homeDirectory: string = os.homedir(),
+  environment: NodeJS.ProcessEnv = process.env,
 ): { config: MajorModesConfig; diagnostics: ConfigDiagnostic[] } {
   const diagnostics: ConfigDiagnostic[] = [];
   const previous = unknownKeySink;
   unknownKeySink = diagnostics;
   try {
-    return { config: loadMajorModesConfig(repoRoot, homeDirectory), diagnostics };
+    return { config: loadMajorModesConfig(repoRoot, homeDirectory, environment), diagnostics };
   } finally {
     unknownKeySink = previous;
   }

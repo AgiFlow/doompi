@@ -139,7 +139,8 @@ function proxyHeaders(request: IncomingMessage, token: string | undefined): Reco
       HOP_BY_HOP_HEADERS.has(name) ||
       name === 'host' ||
       name === 'content-length' ||
-      name === 'x-doompi-web-registration'
+      name === 'x-doompi-web-registration' ||
+      name.startsWith('x-doompi-api-caller-')
     )
       continue;
     headers[name] = Array.isArray(value) ? value.join(', ') : value;

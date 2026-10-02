@@ -290,7 +290,7 @@ export async function composeRuntimeLoadPlan(
     personaEntry: resolvers.packageEntry(PERSONA_ENTRY),
     majorMode: harness.majorMode,
     layers: [...harness.layers],
-    majorModesConfig: loadMajorModesConfig(repoRoot),
+    majorModesConfig: loadMajorModesConfig(repoRoot, environment.HOME ?? os.homedir(), environment),
     resolvers,
   };
 
@@ -422,7 +422,7 @@ export async function composeDoomSession(pi: ExtensionAPI, options: ComposeOptio
     await startSyncedSession(state, repoRoot, environment);
     const flags = readStartupFlags(argv);
     if (flags.mute) environment[MUTE_ENV] = ENABLED_FLAG;
-    await applyStartupFlags(flags, loadMajorModesConfig(repoRoot), repoRoot, problems);
+    await applyStartupFlags(flags, loadMajorModesConfig(repoRoot, homeDirectory, environment), repoRoot, problems);
   }
 
   let loadPlan: ComposedRuntimeLoadPlan;
@@ -451,7 +451,7 @@ export async function composeDoomSession(pi: ExtensionAPI, options: ComposeOptio
   return {
     problems,
     stale:
-      computeInputsHash(repoRoot, state.selection, homeDirectory) !== state.inputsHash ||
+      computeInputsHash(repoRoot, state.selection, homeDirectory, environment) !== state.inputsHash ||
       (loadHarnessState(environment).state.majorMode === state.selection.majorMode &&
         loadPlan.fingerprint !== state.compositionFingerprint),
     loaded,

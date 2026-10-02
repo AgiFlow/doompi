@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -26,6 +27,9 @@ describe('desktop runtime externals', () => {
     expect(isExternalRuntimePackage('@earendil-works/pi-coding-agent/client')).toBe(true);
   });
 
+  it('keeps SQLite migration URLs relative to their staged owning package', () => {
+    expect(isExternalRuntimePackage('@earendil-works/pi-session-backend-sqlite-node')).toBe(true);
+  });
   it('continues bundling unrelated dependencies', () => {
     expect(isExternalRuntimePackage('@earendil-works/pi-server')).toBe(false);
   });
@@ -36,15 +40,23 @@ describe('desktop runtime externals', () => {
 });
 
 describe('desktop DoomPi entrypoints', () => {
+  it('keeps every staged entry on an existing source file', () => {
+    const input = runtimeConfig.build?.rollupOptions?.input;
+    expect(input).toBeDefined();
+    for (const entry of Object.values(input ?? {})) {
+      expect(fs.existsSync(entry), `Missing staged entry: ${entry}`).toBe(true);
+    }
+  });
+
   it('stages the entries needed to sync a repository', () => {
     expect(runtimeConfig).toMatchObject({
       build: {
         rollupOptions: {
           input: {
-            'doompi/dist/src/extensions/entries/agentModel': expect.any(String),
-            'doompi/dist/src/extensions/entries/doom': expect.any(String),
-            'doompi/dist/src/extensions/entries/minorModeCommand': expect.any(String),
-            'doompi/dist/src/extensions/entries/styleSystem': expect.any(String),
+            'doompi/dist/extensions/agentModel': expect.any(String),
+            'doompi/dist/extensions/composedPi': expect.any(String),
+            'doompi/dist/builders/cli/index': expect.any(String),
+            'doompi/dist/extensions/styleSystem': expect.any(String),
           },
         },
       },
@@ -61,6 +73,9 @@ describe('desktop DoomPi package catalog', () => {
 
     expect(names).toEqual(
       expect.arrayContaining([
+        '@agimon-ai/doompi-computer-use',
+        `@agimon-ai/doompi-runner-rmux-${process.platform}-${process.arch}`,
+        `@agimon-ai/doompi-runner-rtk-${process.platform}-${process.arch}`,
         '@agimon-ai/doompi-sandbox',
         '@agimon-ai/doompi-task',
         '@agimon-ai/doompi-team',

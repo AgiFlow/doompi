@@ -1,5 +1,7 @@
 /** Where the staged presentation and headless payloads live and how they should be started. */
 export interface HubLaunchPlan {
+  /** Enables packaged Desktop defaults, not native authorization. */
+  desktopDistribution?: boolean;
   /** Absolute path to the staged doompi-web presentation entry. */
   entry: string;
   /** Absolute path to the staged doompi-server headless entry. */

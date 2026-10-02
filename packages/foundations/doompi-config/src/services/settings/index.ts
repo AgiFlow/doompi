@@ -77,10 +77,11 @@ export function configuredSelectionValue<T>(
 export function repositorySettingsView(
   repository: SettingsRepository,
   homeDirectory: string | undefined,
+  environment: NodeJS.ProcessEnv = process.env,
 ): RepositorySettingsView {
   const repoRoot = repository.path;
-  const layers = loadDoomConfigLayers(repoRoot, homeDirectory);
-  const modes = loadMajorModesConfig(repoRoot, homeDirectory);
+  const layers = loadDoomConfigLayers(repoRoot, homeDirectory, environment);
+  const modes = loadMajorModesConfig(repoRoot, homeDirectory, environment);
   const domains = loadDomains(repoRoot, homeDirectory);
   const profiles = loadProfiles(repoRoot, homeDirectory);
   const configured = layers.effective.selection;
@@ -185,7 +186,7 @@ export function selectionEdits(changes: RepositorySelectionChanges) {
 
 export function configView(context: DoomApiContext, keys: readonly string[]): SettingsConfigView {
   const root = context.scope === 'workspace' ? context.workspaceRoot : undefined;
-  const layers = loadDoomConfigLayers(root, context.homeDirectory);
+  const layers = loadDoomConfigLayers(root, context.homeDirectory, context.environment);
   const values: Record<string, SettingsValueView> = {};
   for (const key of keys) {
     const keyPath = key.split(KEY_SEPARATOR);

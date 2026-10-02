@@ -43,7 +43,7 @@ export async function prepareSync(
     args.slice(1).filter((argument) => argument !== '--global'),
     selectionEnvironment(repoRoot, scopedEnvironment, homeDirectory),
     roots.globalOnly ? repoRoot : currentDirectory,
-    loadMajorModesConfig(repoRoot, homeDirectory).defaultMajorMode,
+    loadMajorModesConfig(repoRoot, homeDirectory, environment).defaultMajorMode,
     loadDomains(repoRoot, homeDirectory).defaultDomains,
   );
   const result = await buildPreparedRuntime(

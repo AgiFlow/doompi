@@ -60,38 +60,37 @@ Packaging is not a portable cross-platform build. Build each target on the corre
 
 For artifact structure, signing inputs, and the absence of an in-app updater, read [Runtime and packaging](./runtime-and-packaging.md).
 
-### Build and stage the rolling macOS nightly
+### Build locally, then upload a versioned draft
 
-The local release script is the default distribution path for the desktop app. It must run on an Apple Silicon Mac running macOS 15 or newer, because the native computer-use helper targets that platform:
+Run on an Apple Silicon Mac with macOS 15 or newer. Select the Desktop package version in `packages/clients/doompi-desktop/package.json` and commit it before building. Desktop versions are independent of the npm release groups. Use a clean checkout and an artifact directory outside it that does not already exist.
+
+Install a Developer ID Application certificate with its private key. `security find-identity -v -p codesigning` must list the exact `CSC_NAME`. Keep all credentials outside repository files and logs.
 
 ```bash
 export CSC_NAME='Developer ID Application: Your Company (TEAMID1234)'
-export APPLE_ID='your-apple-id@example.com'
-export APPLE_APP_SPECIFIC_PASSWORD='use-an-app-specific-password'
 export APPLE_TEAM_ID='TEAMID1234'
 export NOTARYTOOL_KEYCHAIN_PROFILE='DoomPiNotary'
-pnpm release:desktop
+# Enter your Apple ID and app-specific password at the prompts, not in shell history.
+xcrun notarytool store-credentials "$NOTARYTOOL_KEYCHAIN_PROFILE" --team-id "$APPLE_TEAM_ID"
+pnpm build:desktop:macos --out "$HOME/Desktop/doompi-artifacts"
 ```
 
-The script requires a clean checkout, an installed Developer ID Application certificate with its private key, authenticated `gh` access with push permission to `AgiFlow/doompi`, and a validated `notarytool` keychain profile. It builds only the macOS arm64 DMG and ZIP, verifies the signed apps inside both downloads, and preserves the generated files in a temporary directory. It never publishes npm packages.
+The build requires Node, pnpm, Swift/Xcode tools and validated Apple credentials, but no GitHub authentication. It builds macOS arm64 DMG and ZIP, completes signing/notarization/stapling, verifies both enclosed applications, and then writes SHA-256 checksums and `desktop-build.json`. The signed plist records the full version and source commit. Output is preserved after failures and never silently replaced.
 
-Create the notarization profile once in your login keychain. Do not commit the password or put it in a repository file:
+Before uploading, install **both final artifacts** on a clean Mac without Node, pnpm or the workspace. Verify first-run startup, computer-use permissions/actions, local and remote approval/revocation, recording playback/download, and child cleanup on quit. Test the exact checksummed bytes. Rebuilding requires repeated acceptance. The automated staged-runtime test supplements, but does not replace, this signed-app smoke test.
+
+After the build commit is pushed to `AgiFlow/doompi`:
 
 ```bash
-xcrun notarytool store-credentials DoomPiNotary \\
-  --apple-id "$APPLE_ID" \\
-  --team-id "$APPLE_TEAM_ID" \\
-  --password "$APPLE_APP_SPECIFIC_PASSWORD"
 gh auth login --hostname github.com
+pnpm release:desktop --from "$HOME/Desktop/doompi-artifacts"
 ```
 
-The Apple Developer account must have a Developer ID Application certificate. Open Keychain Access after creating or importing it and confirm that the certificate has its private key. `security find-identity -v -p codesigning` must list the exact value used in `CSC_NAME`.
+Upload requires `gh` push access and local macOS verification tools, but no signing private key or Apple credentials. It verifies file confinement, hashes, signatures/notarization, embedded version/commit and the Desktop manifest at the recorded GitHub commit. It never rebuilds, re-signs, repacks or bumps versions.
 
-A successful run refreshes the single rolling `desktop-nightly` GitHub prerelease as a **draft**. The script moves only that tag to the built commit, uploads generation-specific DMG, ZIP, and SHA-256 files, removes older assets from that release, and verifies the final inventory. It never publishes the release or marks it latest. Review the draft and publish it manually after installing both files on a clean Apple Silicon Mac. The CI package-check workflow is manual-only and never publishes a release.
+The script creates `desktop-v<version>` at the built commit and uploads DMG, ZIP, checksums and build manifest to a **GitHub draft**. Prerelease status follows the version. It never moves a tag, overwrites assets, publishes npm packages, publishes automatically or marks a release latest. The manual CI package-check workflow still does not publish.
 
-If an already published nightly is refreshed, the script first returns it to draft. Downloads are therefore unavailable until you publish the refreshed draft again. GitHub mutations are not transactional: a failure after the tag or asset step can leave a partial draft. Keep the preserved temporary directory, stop other release writers, and rerun the script to repair the nightly. Do not manually publish while a replacement is in progress.
-
-The downloaded DMG and ZIP should be smoke-tested on a Mac without Node.js, pnpm, or the workspace installed. Confirm DoomPi starts its local server and web proxy, the cockpit loads, and quitting the app cleans up both child processes.
+GitHub writes are not transactional. After an interrupted upload, keep the original artifact directory and rerun `release:desktop --from` to upload only missing assets into the matching draft. Existing assets must match their hashes. Conflicting tags, unexpected assets, a different build manifest or an already published release are refused. Do not publish while an upload is in progress. Review the complete draft and publish it manually only after acceptance passes.
 
 ## Troubleshooting
 

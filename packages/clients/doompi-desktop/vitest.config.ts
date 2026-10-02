@@ -8,7 +8,15 @@ export default defineConfig({
     environment: 'node',
     setupFiles: [],
     bail: 10,
-    exclude: ['node_modules/**/*', 'dist/**/*', 'build/**/*', 'release/**/*', 'coverage/**/*', 'tests/e2e/**/*'],
+    exclude: [
+      'node_modules/**/*',
+      'dist/**/*',
+      'build/**/*',
+      'release/**/*',
+      'coverage/**/*',
+      'tests/e2e/**/*',
+      'tests/system/**/*',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text'],

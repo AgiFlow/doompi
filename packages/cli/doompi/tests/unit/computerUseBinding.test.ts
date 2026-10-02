@@ -23,14 +23,18 @@ class DesktopPeer extends EventEmitter {
     this.sent.push(message);
     queueMicrotask(() => {
       if (message.type === 'doompi:computer-use:hello') {
-        this.emit('message', { ...message, type: 'doompi:computer-use:ready', token: this.token });
+        this.emit('message', { ...message, type: 'doompi:computer-use:ready', token: this.token, enabled: true });
       } else if (this.respond && message.type === 'doompi:computer-use:request') {
         this.emit('message', {
           ...message,
           type: 'doompi:computer-use:response',
           hostGeneration: this.generation,
           ok: true,
-          result: { operation: message.operation, sessionId: message.sessionId },
+          result: {
+            operation: message.operation,
+            sessionId: message.sessionId,
+            ...(message.operation === 'activate' ? { expiresAt: Date.now() + 60000 } : {}),
+          },
         });
       }
       callback?.(null);
@@ -41,7 +45,151 @@ class DesktopPeer extends EventEmitter {
 
 const scope = { sessionId: 'session-a', cwd: '/fixture' };
 
+const remoteHeaders = (deviceId = 'device-a', stepUp = 'not-required') =>
+  new Headers({
+    'x-doompi-api-caller-locality': 'remote',
+    'x-doompi-api-caller-device-id': deviceId,
+    'x-doompi-api-caller-step-up': stepUp,
+  });
+
 describe('Desktop computer-use IPC binding', () => {
+  it('requires native approval and isolates paired sessions with revocation', async () => {
+    const peer = new DesktopPeer();
+    const binding = (await createComputerUseBinding(peer as never, { isDeviceAuthorized: () => true }))!;
+    const headers = remoteHeaders();
+    try {
+      expect(binding.authorizeActivation?.(headers)).toBe(true);
+      expect(binding.authorize?.(headers)).toBe(false);
+      binding.claimSession?.(scope.sessionId, headers);
+      expect(binding.authorizeSession?.(scope.sessionId, headers)).toBe(false);
+      await binding.request(scope, { operation: 'activate' });
+      expect(binding.authorizeSession?.(scope.sessionId, headers)).toBe(true);
+      expect(binding.authorizeSession?.(scope.sessionId, remoteHeaders('device-b'))).toBe(false);
+      expect(() => binding.claimSession?.(scope.sessionId, remoteHeaders('device-b'))).toThrow(/another paired/u);
+      binding.revokeDevice?.('device-a');
+      expect(binding.authorizeSession?.(scope.sessionId, headers)).toBe(false);
+      await expect(binding.request(scope, { operation: 'observe' })).rejects.toThrow(/revoked/u);
+    } finally {
+      binding.close?.();
+    }
+  });
+
+  it('requires fresh verified step-up for named tunnels and cancels pending approval on revocation', async () => {
+    const peer = new DesktopPeer();
+    const binding = (await createComputerUseBinding(peer as never, {
+      isDeviceAuthorized: () => true,
+      stepUpRequired: () => true,
+    }))!;
+    try {
+      expect(binding.authorizeActivation?.(remoteHeaders())).toBe(false);
+      const headers = remoteHeaders('device-a', 'verified');
+      expect(binding.authorizeActivation?.(headers)).toBe(true);
+      binding.claimSession?.(scope.sessionId, headers);
+      peer.respond = false;
+      const pending = binding.request(scope, { operation: 'activate' });
+      binding.revokeDevice?.('device-a');
+      await expect(pending).rejects.toThrow(/cancelled/u);
+      expect(binding.authorizeSession?.(scope.sessionId, headers)).toBe(false);
+      expect(peer.sent.some((message) => message.type === 'doompi:computer-use:cancel')).toBe(true);
+    } finally {
+      binding.close?.();
+    }
+  });
+  it('allows only the matching pending requester without granting session or recording access', async () => {
+    const peer = new DesktopPeer();
+    let deviceLive = true;
+    const binding = (await createComputerUseBinding(peer as never, { isDeviceAuthorized: () => deviceLive }))!;
+    try {
+      const headers = remoteHeaders();
+      binding.claimSession?.(scope.sessionId, headers);
+      expect(binding.authorizePending?.(scope.sessionId, headers)).toBe(true);
+      expect(binding.authorizePending?.(scope.sessionId, remoteHeaders('device-b'))).toBe(false);
+      expect(binding.authorizePending?.('other', headers)).toBe(false);
+      expect(binding.authorizeSession?.(scope.sessionId, headers)).toBe(false);
+      expect(binding.authorizeRecording?.(scope.sessionId, headers)).toBe(false);
+      deviceLive = false;
+      expect(binding.authorizePending?.(scope.sessionId, headers)).toBe(false);
+    } finally {
+      binding.close?.();
+    }
+  });
+
+  it('expires action access separately from completed-recording access', async () => {
+    const peer = new DesktopPeer();
+    const binding = (await createComputerUseBinding(peer as never, { isDeviceAuthorized: () => true }))!;
+    const headers = remoteHeaders();
+    try {
+      binding.claimSession?.(scope.sessionId, headers);
+      await binding.request(scope, { operation: 'activate' });
+      expect(binding.authorizePending?.(scope.sessionId, headers)).toBe(false);
+      const now = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 120000);
+      expect(binding.authorizeSession?.(scope.sessionId, headers)).toBe(false);
+      expect(binding.authorizeRecording?.(scope.sessionId, headers)).toBe(true);
+      clock.mockRestore();
+      peer.emit('message', { type: 'doompi:computer-use:availability', version: 1, enabled: true });
+      expect(binding.enabled).toBe(true);
+      expect(binding.authorizeSession?.(scope.sessionId, headers)).toBe(false);
+      expect(binding.authorizePending?.(scope.sessionId, headers)).toBe(false);
+      expect(binding.authorizeRecording?.(scope.sessionId, headers)).toBe(true);
+      peer.emit('message', { type: 'doompi:computer-use:availability', version: 1, enabled: false });
+      expect(binding.authorizeRecording?.(scope.sessionId, headers)).toBe(true);
+      binding.forgetSession?.(scope.sessionId);
+      expect(binding.authorizeRecording?.(scope.sessionId, headers)).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+      binding.close?.();
+    }
+  });
+
+  it('ends control immediately when finalization starts without losing recording reads', async () => {
+    const peer = new DesktopPeer();
+    const binding = (await createComputerUseBinding(peer as never, { isDeviceAuthorized: () => true }))!;
+    const headers = remoteHeaders();
+    try {
+      binding.claimSession?.(scope.sessionId, headers);
+      await binding.request(scope, { operation: 'activate' });
+      peer.respond = false;
+      const controller = new AbortController();
+      const stopped = binding.request(scope, {
+        operation: 'stop',
+        payload: { grantId: 'grant' },
+        signal: controller.signal,
+      });
+      expect(binding.authorizeSession?.(scope.sessionId, headers)).toBe(false);
+      expect(binding.authorizePending?.(scope.sessionId, headers)).toBe(false);
+      expect(binding.authorizeRecording?.(scope.sessionId, headers)).toBe(true);
+      controller.abort();
+      await expect(stopped).rejects.toThrow(/cancelled/u);
+    } finally {
+      binding.close?.();
+    }
+  });
+
+  it('revokes recording reads on device loss and Desktop disconnect', async () => {
+    const peer = new DesktopPeer();
+    let live = true;
+    const binding = (await createComputerUseBinding(peer as never, { isDeviceAuthorized: () => live }))!;
+    const headers = remoteHeaders();
+    try {
+      binding.claimSession?.(scope.sessionId, headers);
+      await binding.request(scope, { operation: 'activate' });
+      expect(binding.authorizeRecording?.(scope.sessionId, headers)).toBe(true);
+      live = false;
+      expect(binding.authorizeRecording?.(scope.sessionId, headers)).toBe(false);
+      live = true;
+      binding.revokeDevice?.('device-a');
+      expect(binding.authorizeRecording?.(scope.sessionId, headers)).toBe(false);
+      binding.claimSession?.(scope.sessionId, headers);
+      await binding.request(scope, { operation: 'activate' });
+      peer.connected = false;
+      peer.emit('disconnect');
+      expect(binding.authorizeRecording?.(scope.sessionId, headers)).toBe(false);
+    } finally {
+      binding.close?.();
+    }
+  });
+
   it('does not discover a capability from an ordinary process or malformed handshake', async () => {
     expect(await createComputerUseBinding({ connected: false } as never)).toBeUndefined();
     const peer = new DesktopPeer();

@@ -43,6 +43,25 @@ describe('major mode configuration', () => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
+  it('includes computer use only in the effective Desktop default and preserves package configuration', () => {
+    writeRepoModes("default:\n  packages: ['@example/custom']\n");
+    const desktop = { DOOMPI_DISTRIBUTION: 'desktop' };
+    expect(loadMajorModesConfig(root, home, {}).default?.packages).toEqual(['@example/custom']);
+    expect(loadMajorModesConfig(root, home, desktop).default?.packages).toEqual([
+      '@example/custom',
+      '@agimon-ai/doompi-computer-use',
+    ]);
+    expect(fs.readFileSync(path.join(root, '.doom', 'modes.yaml'), 'utf8')).toBe(
+      "default:\n  packages: ['@example/custom']\n",
+    );
+    writeRepoModes(
+      "default:\n  packages:\n    - name: '@agimon-ai/doompi-computer-use'\n      config: { marker: retained }\n",
+    );
+    expect(loadMajorModesConfig(root, home, desktop).default?.packages).toEqual([
+      { name: '@agimon-ai/doompi-computer-use', config: { marker: 'retained' } },
+    ]);
+  });
+
   it('loads descriptions and resolves layers from rich major modes', () => {
     writeRepoModes(`layers:
   guardrails:

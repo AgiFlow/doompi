@@ -41,6 +41,7 @@ export interface SyncDrift {
 
 export interface ReadSyncDriftOptions {
   repoRoot: string;
+  environment?: NodeJS.ProcessEnv;
   /** Launcher-owned Doom entry used to build this repository's generated bootstrap. */
   expectedBootstrapEntry?: string;
   homeDirectory?: string;
@@ -269,7 +270,7 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
 
   let currentInputsHash: string | undefined;
   try {
-    currentInputsHash = computeInputsHash(options.repoRoot, state.selection, homeDirectory);
+    currentInputsHash = computeInputsHash(options.repoRoot, state.selection, homeDirectory, options.environment);
   } catch {
     // A malformed document cannot be hashed, and syncing is what reports it.
     reasons.push('configuration-changed');

@@ -110,7 +110,7 @@ export async function startHub(
   const url = `http://${plan.host}:${String(plan.port)}`;
   const headless = spawn(nodeRuntimeExecutable(process.execPath), headlessArguments(plan), {
     cwd: plan.cwd,
-    env: hubEnvironment(process.env, plan.entry),
+    env: hubEnvironment(process.env, plan.entry, plan.desktopDistribution),
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
   let computerUseBridge: ReturnType<typeof attachComputerUseHostBridge> | undefined;
@@ -126,7 +126,7 @@ export async function startHub(
     await waitForHealth(plan.host, plan.headlessPort, headless, 'headless server');
     presentation = spawn(nodeRuntimeExecutable(process.execPath), hubArguments(plan), {
       cwd: plan.cwd,
-      env: hubEnvironment(process.env, plan.entry),
+      env: hubEnvironment(process.env, plan.entry, plan.desktopDistribution),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     presentation.stdout?.on('data', (chunk: Buffer) => onNotice(chunk.toString().trimEnd()));

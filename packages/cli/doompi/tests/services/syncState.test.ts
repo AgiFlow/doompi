@@ -509,6 +509,16 @@ describe('web sources hash', () => {
 });
 
 describe('inputs hash', () => {
+  it('invalidates a portable generation for Desktop defaults without persisting the hint', () => {
+    const root = makeRoot();
+    const home = homeFor(root);
+    const portable = computeInputsHash(root, SELECTION, home, {});
+    const desktop = computeInputsHash(root, SELECTION, home, { DOOMPI_DISTRIBUTION: 'desktop' });
+    expect(desktop).not.toBe(portable);
+    expect(computeInputsHash(root, SELECTION, home, { DOOMPI_DISTRIBUTION: 'unknown' })).toBe(portable);
+    expect(computeInputsHash(root, SELECTION, home, {})).toBe(portable);
+  });
+
   it('hashes a symlinked repository identically to the canonical sync root', () => {
     const root = makeRoot();
     const alias = path.join(makeRoot(), 'alias');

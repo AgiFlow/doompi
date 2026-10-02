@@ -25,13 +25,14 @@ export function headlessEntry(input: { resourcesPath: string; packaged: boolean;
  * Runs every desktop child on Electron's Node runtime and points dynamic launch
  * seams at files in the bundled artifact rather than an installed node_modules.
  */
-export function hubEnvironment(base: NodeJS.ProcessEnv, entry: string): NodeJS.ProcessEnv {
+export function hubEnvironment(base: NodeJS.ProcessEnv, entry: string, desktopDistribution = false): NodeJS.ProcessEnv {
   const runtimeRoot = path.resolve(path.dirname(entry), '..', '..', '..');
   const artifact = (...segments: string[]): string => path.join(runtimeRoot, ...segments);
   const inherited = Object.fromEntries(Object.entries(base).filter(([name]) => !name.startsWith('DOOMPI_')));
   return {
     ...inherited,
     ELECTRON_RUN_AS_NODE: '1',
+    ...(desktopDistribution ? { DOOMPI_DISTRIBUTION: 'desktop' } : {}),
     // Resolve the staged DoomPi package before native-only shims so sync can
     // register its real Pi extension entry instead of the minimal native manifest.
     NODE_PATH: [artifact('node_modules'), artifact('native', 'node_modules')].join(path.delimiter),
@@ -40,8 +41,9 @@ export function hubEnvironment(base: NodeJS.ProcessEnv, entry: string): NodeJS.P
     // persisted Pi integration. Sync and sessions must use that same entry point.
     DOOMPI_AGENT_COMMAND: artifact('doompi', 'dist', 'bin', 'dpi.mjs'),
     DOOMPI_SYNC_COMMAND: artifact('doompi', 'dist', 'bin', 'dpi.mjs'),
-    DOOMPI_PACKAGE_ROOT: artifact('doompi', 'dist', 'src'),
-    DOOMPI_BOOTSTRAP_ENTRY: artifact('doompi', 'dist', 'src', 'extensions', 'entries', 'doom.mjs'),
+    // Registration needs the preserved manifest, Pi entries and resources, not the bundled-command shim.
+    DOOMPI_PACKAGE_ROOT: artifact('node_modules', '@agimon-ai', 'doompi'),
+    DOOMPI_BOOTSTRAP_ENTRY: artifact('node_modules', '@agimon-ai', 'doompi', 'dist', 'extensions', 'composedPi.mjs'),
     DOOMPI_PACKAGE_CATALOG: artifact('catalog', 'index.json'),
     DOOMPI_NPM_CLI: artifact('vendor', 'npm', 'bin', 'npm-cli.js'),
     DOOMPI_WEB_MODULE: pathToFileURL(artifact('doompi-web', 'dist', 'index.mjs')).href,
@@ -77,6 +79,8 @@ export function headlessArguments(plan: { headlessEntry: string; headlessPort: n
     plan.headlessEntry,
     '--auth-token-file',
     plan.tokenFile,
+    // HOME need not be a repository. Open a workspace/session through the cockpit.
+    '--no-session',
     '--name',
     'DoomPi Desktop',
     '--web',

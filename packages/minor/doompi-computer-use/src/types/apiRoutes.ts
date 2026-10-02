@@ -20,12 +20,28 @@ import {
  * disagreement this file exists to prevent. The dispatcher now reads this
  * table, so the page, the broker and the hub all resolve one set of strings.
  *
- * Only `activate` is reachable from a browser. The `/agent/` and `/hub/` routes
+ * Activation, status, cancellation and recording reads are reachable from a browser. The `/agent/` and `/hub/` routes
  * each demand a host-issued bearer token and answer 404 without one; they are
  * declared here because they are this API's surface, not because a page calls
  * them.
  */
 export default defineApiRoutes({
+  artifact: {
+    method: 'GET',
+    path: COMPUTER_USE_ROUTES.artifact,
+    query: ['artifactId', 'offset'],
+    raw: true,
+  },
+  activationState: {
+    method: 'GET',
+    path: COMPUTER_USE_ROUTES.activate,
+    response: apiResponse<ComputerUseSessionView>(),
+  },
+  cancelActivation: {
+    method: 'DELETE',
+    path: COMPUTER_USE_ROUTES.activate,
+    response: apiResponse<ComputerUseSessionView>(),
+  },
   activate: {
     method: 'POST',
     path: COMPUTER_USE_ROUTES.activate,

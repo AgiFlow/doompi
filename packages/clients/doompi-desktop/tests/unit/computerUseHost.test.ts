@@ -63,6 +63,108 @@ function fixture(confirmLocalActivation = vi.fn(async () => true)) {
 }
 
 describe('ComputerUseHost', () => {
+  it('lets the Mac choose an omitted remote target, then confirms the exact chosen window', async () => {
+    const confirmation = vi.fn(async () => true);
+    const { host, backend } = fixture(confirmation);
+    backend.selectTarget = vi.fn(async () => activation().target);
+    const { target: _target, ...input } = activation();
+    const result = await host.handle(
+      request('s1', 'activate', {
+        ...input,
+        caller: { locality: 'remote', deviceId: 'paired-device', stepUp: 'not-required' },
+      }),
+    );
+    expect(result.ok).toBe(true);
+    expect(backend.selectTarget).toHaveBeenCalledOnce();
+    expect(confirmation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationName: 'Fixture',
+        windowTitle: 'Fixture Window',
+        deviceId: 'paired-device',
+      }),
+    );
+    expect(backend.activate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ target: activation().target }),
+      }),
+    );
+    if (result.ok) expect(result.result).toMatchObject({ target: activation().target });
+    await host.stopActive();
+  });
+
+  it('does not allow an omitted local target to reach the remote window selector', async () => {
+    const { host, backend } = fixture();
+    backend.selectTarget = vi.fn(async () => activation().target);
+    const { target: _target, ...input } = activation();
+    expect((await host.handle(request('s1', 'activate', input))).ok).toBe(false);
+    expect(backend.selectTarget).not.toHaveBeenCalled();
+    expect(backend.activate).not.toHaveBeenCalled();
+  });
+
+  it('cannot activate after cancellation or revocation while the Mac chooser is open', async () => {
+    for (const revoke of [false, true]) {
+      const confirmation = vi.fn(async () => true);
+      const { host, backend } = fixture(confirmation);
+      const controller = new AbortController();
+      backend.selectTarget = vi.fn(async () => {
+        if (revoke) await host.stopActive();
+        else controller.abort();
+        return activation().target;
+      });
+      const { target: _target, ...input } = activation();
+      const result = await host.handle(
+        request('s1', 'activate', {
+          ...input,
+          caller: { locality: 'remote', deviceId: 'paired-device', stepUp: 'verified' },
+        }),
+        controller.signal,
+      );
+      expect(result.ok).toBe(false);
+      expect(confirmation).not.toHaveBeenCalled();
+      expect(backend.activate).not.toHaveBeenCalled();
+    }
+  });
+
+  it('does not activate when the Mac cancels selection or denies the chosen window', async () => {
+    for (const selectCancelled of [true, false]) {
+      const confirmation = vi.fn(async () => false);
+      const { host, backend } = fixture(confirmation);
+      backend.selectTarget = vi.fn(async () => (selectCancelled ? undefined : activation().target));
+      const { target: _target, ...input } = activation();
+      const result = await host.handle(
+        request('s1', 'activate', {
+          ...input,
+          caller: { locality: 'remote', deviceId: 'paired-device', stepUp: 'not-required' },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      expect(backend.activate).not.toHaveBeenCalled();
+      expect(confirmation).toHaveBeenCalledTimes(selectCancelled ? 0 : 1);
+    }
+  });
+
+  it('requires a fresh confirmation and native approval after window selection', async () => {
+    const confirmation = vi.fn(async () => false);
+    const { host, backend, advance } = fixture(confirmation);
+    backend.selectTarget = vi.fn(async () => {
+      advance(122_000);
+      return activation().target;
+    });
+    const { target: _target, ...input } = activation();
+    expect(
+      (
+        await host.handle(
+          request('s1', 'activate', {
+            ...input,
+            caller: { locality: 'remote', deviceId: 'paired-device', stepUp: 'verified' },
+          }),
+        )
+      ).ok,
+    ).toBe(false);
+    expect(confirmation).not.toHaveBeenCalled();
+    expect(backend.activate).not.toHaveBeenCalled();
+  });
+
   it('publishes opt-in changes without polling and stops a grant immediately on disable', async () => {
     const { host, backend, setEnabled } = fixture();
     const listener = vi.fn();
@@ -175,7 +277,7 @@ describe('ComputerUseHost', () => {
     ['missing remote device', { ...activation(), caller: { locality: 'remote', stepUp: 'verified' } }],
     [
       'unverified remote caller',
-      { ...activation(), caller: { locality: 'remote', deviceId: 'device-1', stepUp: 'not-required' } },
+      { ...activation(), caller: { locality: 'remote', deviceId: 'device-1', stepUp: 'unavailable' } },
     ],
   ])('rejects %s before native activation', async (_name, payload) => {
     const { backend, host } = fixture();
@@ -186,7 +288,7 @@ describe('ComputerUseHost', () => {
     expect(backend.activate).not.toHaveBeenCalled();
   });
 
-  it('rejects verified and quick-tunnel remote callers before native activation', async () => {
+  it('accepts verified remote callers only after local approval and rejects unavailable step-up', async () => {
     const verified = fixture();
     const unavailable = fixture();
     expect(
@@ -196,8 +298,9 @@ describe('ComputerUseHost', () => {
           caller: { locality: 'remote', deviceId: 'device-1', stepUp: 'verified' },
         }),
       ),
-    ).toMatchObject({ ok: false, code: 'invalid_request' });
-    expect(verified.backend.activate).not.toHaveBeenCalled();
+    ).toMatchObject({ ok: true });
+    expect(verified.backend.activate).toHaveBeenCalledOnce();
+    await verified.host.stopActive();
     expect(
       await unavailable.host.handle(
         request('session-a', 'activate', {
@@ -224,6 +327,37 @@ describe('ComputerUseHost', () => {
     expect(test.host.enabled).toBe(true);
     expect(await test.host.handle(request('session-a', 'observe', { grantId: 'id-1' }))).toMatchObject({ ok: false });
     unsubscribe();
+  });
+
+  it('requires local approval for quick tunnels and cancels late dialog approval', async () => {
+    let confirm!: (value: boolean) => void;
+    const confirmation = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          confirm = resolve;
+        }),
+    );
+    const test = fixture(confirmation);
+    const controller = new AbortController();
+    const pending = test.host.handle(
+      request('session-a', 'activate', {
+        ...activation(),
+        caller: { locality: 'remote', deviceId: 'device-quick', stepUp: 'not-required' },
+      }),
+      controller.signal,
+    );
+    await vi.waitFor(() => expect(confirm).toBeTypeOf('function'));
+    expect(confirmation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'session-a',
+        deviceId: 'device-quick',
+        durationSeconds: 60,
+      }),
+    );
+    controller.abort();
+    confirm(true);
+    expect(await pending).toMatchObject({ ok: false, code: 'request_cancelled' });
+    expect(test.backend.activate).not.toHaveBeenCalled();
   });
 
   it('rejects confirmation that expires while the native dialog is open', async () => {
@@ -256,6 +390,7 @@ describe('ComputerUseHost', () => {
       applicationName: 'Fixture',
       windowTitle: 'Fixture Window',
       durationSeconds: 60,
+      sessionId: 'session-a',
     });
     expect(backend.activate).not.toHaveBeenCalled();
   });

@@ -37,10 +37,10 @@ function syncWorkflowUrl(): string {
 
 function runSyncProcess(root: string, syncEnvironment: NodeJS.ProcessEnv, global: boolean): Promise<void> {
   const environment = global ? { ...syncEnvironment, [DOOMPI_ROOT_ENV]: root } : syncEnvironment;
-  return new Promise((resolve, reject) => {
-    execFile(
-      process.execPath,
-      [
+  const syncCommand = environment.DOOMPI_SYNC_COMMAND?.trim();
+  const args = syncCommand
+    ? [...process.execArgv, syncCommand, 'sync', ...(global ? ['--global'] : [])]
+    : [
         ...process.execArgv,
         '--input-type=module',
         '--eval',
@@ -48,17 +48,16 @@ function runSyncProcess(root: string, syncEnvironment: NodeJS.ProcessEnv, global
         syncWorkflowUrl(),
         root,
         global ? '1' : '0',
-      ],
-      { cwd: root, env: environment, encoding: 'utf8' },
-      (error, stdout, stderr) => {
-        if (!error) {
-          resolve();
-          return;
-        }
-        const detail = `${stderr || stdout}`.trim();
-        reject(new Error(detail || `Workspace sync exited with code ${String(error.code ?? 1)}`));
-      },
-    );
+      ];
+  return new Promise((resolve, reject) => {
+    execFile(process.execPath, args, { cwd: root, env: environment, encoding: 'utf8' }, (error, stdout, stderr) => {
+      if (!error) {
+        resolve();
+        return;
+      }
+      const detail = `${stderr || stdout}`.trim();
+      reject(new Error(detail || `Workspace sync exited with code ${String(error.code ?? 1)}`));
+    });
   });
 }
 export async function runServer(args: readonly string[]): Promise<number> {
@@ -72,6 +71,7 @@ export async function runServer(args: readonly string[]): Promise<number> {
   ): Promise<void> => {
     const runtimeDrift = readSyncDrift({
       repoRoot: root,
+      environment: syncEnvironment,
       homeDirectory: syncEnvironment.HOME,
       requireFreshSources,
       requireWebBundle: true,

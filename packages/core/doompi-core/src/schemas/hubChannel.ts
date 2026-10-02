@@ -220,10 +220,18 @@ export interface DoomComputerUseHostBinding {
   /** Checks a proof injected by the owning Desktop process, never a renderer marker. */
   authorize?(headers: Headers): boolean;
   /** Pins a session to Desktop before asking for a native grant. Ownership is not persisted. */
-  claimSession?(sessionId: string): void;
+  claimSession?(sessionId: string, headers?: Headers): void;
   ownsSession?(sessionId: string): boolean;
+  /** Server-authenticated paired identity, checked against live native approval for this session. */
+  authorizeSession?(sessionId: string, headers: Headers): boolean;
+  authorizeRecording?(sessionId: string, headers: Headers): boolean;
+  authorizeActivation?(headers: Headers): boolean;
+  /** Own pending activation only, never general session control. */
+  authorizePending?(sessionId: string, headers: Headers): boolean;
+  revokeDevice?(deviceId: string): void;
+  readRecording?(scope: DoomHubSessionScope, artifactId: string, range: string): Promise<Response>;
   forgetSession?(sessionId: string): void;
-  subscribe?(listener: () => void): () => void;
+  subscribe?(listener: () => void, sessionId?: string): () => void;
   close?(): void;
 }
 
@@ -232,7 +240,11 @@ export interface DoomComputerUseSessionAccess {
   readonly available: boolean;
   readonly enabled?: boolean;
   authorize(headers: Headers): boolean;
-  claim(): void;
+  authorizeRecording?(headers: Headers): boolean;
+  authorizeActivation?(headers: Headers): boolean;
+  authorizePending?(headers: Headers): boolean;
+  claim(headers?: Headers): void;
+  fetchRecording?(artifactId: string, range: string): Promise<Response>;
   subscribe(listener: () => void): () => void;
 }
 
@@ -240,6 +252,8 @@ export interface DoomHubChannelConnection {
   connectionId: string;
   /** Host-verified native renderer proof, never copied from a channel payload. */
   desktopAuthorized?: boolean;
+  /** Live session authorization evaluated by the host, never a client frame. */
+  computerUseAuthorized?: boolean;
 }
 
 export interface DoomHubChannelHost {

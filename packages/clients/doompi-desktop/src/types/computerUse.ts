@@ -55,6 +55,7 @@ export interface ComputerUseStopResult {
 export interface ComputerUseBackend {
   status(): Promise<unknown>;
   targets(): Promise<unknown>;
+  selectTarget?(signal?: AbortSignal): Promise<unknown>;
   activate(input: {
     sessionId: string;
     grantId: string;

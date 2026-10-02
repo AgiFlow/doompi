@@ -373,11 +373,15 @@ export function computeInputsHash(
   repoRoot: string,
   selection: SyncSelection,
   homeDirectory: string = os.homedir(),
+  environment: NodeJS.ProcessEnv = process.env,
 ): string {
   // Match sync publication, including callers that reach the repository through a symlink.
   repoRoot = resolveSyncLocation(repoRoot, homeDirectory).root;
   const hash = crypto.createHash('sha256');
   hash.update(JSON.stringify({ ...selection, domains: [...selection.domains].sort() }));
+  if (environment.DOOMPI_DISTRIBUTION === 'desktop') {
+    updateFramedHash(hash, 'distribution', 'desktop:computer-use-default-v1');
+  }
   // Every .doom document layers the global copy under the repository one, so an
   // edit in either location is a real change.
   for (const directory of [

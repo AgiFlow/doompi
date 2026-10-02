@@ -184,6 +184,7 @@ function managementHost(
   dormantSessions: () => readonly OpenSessionRecord[],
   authorizeSession: (id: string) => boolean,
   authorizeDesktop: () => boolean,
+  authorizeComputerUse: (id: string) => boolean,
 ): RoutedServerServiceHost {
   return {
     attachClient(presentation) {
@@ -214,7 +215,10 @@ function managementHost(
             .filter((session) => visible.has(session.id))
             .map(sessionView),
           ...dormantSessions()
-            .filter((record) => !visible.has(record.sessionId) && permitsDormant(mount, record))
+            .filter(
+              (record) =>
+                !visible.has(record.sessionId) && authorizeSession(record.sessionId) && permitsDormant(mount, record),
+            )
             .map(dormantView),
         ],
       });
@@ -245,7 +249,7 @@ function managementHost(
             event.dormant === true
               ? dormantSessions().find((candidate) => candidate.sessionId === event.sessionId)
               : undefined;
-          if (record !== undefined && permitsDormant(mount, record)) {
+          if (record !== undefined && authorizeSession(record.sessionId) && permitsDormant(mount, record)) {
             publish({ type: 'session_upsert', session: dormantView(record) });
             return;
           }
@@ -255,7 +259,7 @@ function managementHost(
           if (event.kind === 'upsert') visible.add(id);
         }
         if (event.kind === 'channel') {
-          if (event.frameType === 'computer_use_state' && !authorizeDesktop()) return;
+          if (event.frameType === 'computer_use_state' && !authorizeComputerUse(event.sessionId)) return;
           if (!subscriptions.has(event.sessionId)) return;
           if (event.connectionId !== undefined && event.connectionId !== connectionId) return;
         }
@@ -282,7 +286,8 @@ function managementHost(
             if (!hub.session(sessionId)) return;
             subscriptions.add(sessionId);
             for (const channelFrame of hub.channelFrames(sessionId)) {
-              if (channelFrame.type !== 'computer_use_state' || authorizeDesktop()) publish(channelFrame as HubFrame);
+              if (channelFrame.type !== 'computer_use_state' || authorizeComputerUse(sessionId))
+                publish(channelFrame as HubFrame);
             }
             return;
           }
@@ -309,7 +314,14 @@ function managementHost(
             return;
           }
           if (sessionId !== undefined)
-            hub.receiveChannel(sessionId, frame.type, frame.payload, connectionId, authorizeDesktop());
+            hub.receiveChannel(
+              sessionId,
+              frame.type,
+              frame.payload,
+              connectionId,
+              authorizeDesktop(),
+              authorizeComputerUse(sessionId),
+            );
         },
       };
       const provider = new RemoteServiceProvider([
@@ -374,9 +386,18 @@ function protocolHost(
   dormantSessions: () => readonly OpenSessionRecord[],
   authorizeSession: (id: string) => boolean,
   authorizeDesktop: () => boolean,
+  authorizeComputerUse: (id: string) => boolean,
 ): ServerHost<DoomSessionMetadata> {
   return {
-    serverServices: managementHost(hub, threads, mount, dormantSessions, authorizeSession, authorizeDesktop),
+    serverServices: managementHost(
+      hub,
+      threads,
+      mount,
+      dormantSessions,
+      authorizeSession,
+      authorizeDesktop,
+      authorizeComputerUse,
+    ),
     async resolveSession(sessionId) {
       const session = hub.session(sessionId);
       if (!session || !permitsSession(hub, mount, session.id, authorizeSession))
@@ -452,6 +473,7 @@ export async function createHeadlessProtocol(options: {
   /** Evaluated for every invocation, including attachments established before a Desktop claim. */
   authorizeSession?: (sessionId: string) => boolean;
   authorizeDesktop?: () => boolean;
+  authorizeComputerUse?: (sessionId: string) => boolean;
 }): Promise<HeadlessProtocol> {
   const listener = createPiWebSocketListener({ onError: (error) => options.onNotice?.(error.message) });
   const threads = createThreadJournals({
@@ -466,6 +488,7 @@ export async function createHeadlessProtocol(options: {
       () => (options.dormantSessions === undefined ? [] : options.dormantSessions()),
       options.authorizeSession ?? ((id) => !options.hub.computerUse?.ownsSession?.(id)),
       options.authorizeDesktop ?? (() => false),
+      options.authorizeComputerUse ?? (() => options.authorizeDesktop?.() === true),
     ),
     {
       listeners: [listener],

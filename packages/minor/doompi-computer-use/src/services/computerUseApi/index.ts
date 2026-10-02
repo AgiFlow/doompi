@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import type { DoomComputerUseSessionAccess, DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
-import { type DoomApi, type DoomApiContext, type DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
+import {
+  doomApiCallerFrom,
+  type DoomApi,
+  type DoomApiContext,
+  type DoomApiHandler,
+} from '@agimon-ai/doompi-core/packageApi';
 
 import routes from '../../types/apiRoutes';
 import type { ComputerUseAction, ComputerUseObservation } from '../../types/computerUse';
@@ -78,6 +83,9 @@ function artifactView(value: unknown): ComputerUseArtifactView | undefined {
   return {
     artifactId: input.artifactId,
     status: input.status,
+    ...(typeof input.sizeBytes === 'number' && Number.isSafeInteger(input.sizeBytes) && input.sizeBytes > 0
+      ? { sizeBytes: input.sizeBytes }
+      : {}),
     ...(downloadUrl === undefined ? {} : { downloadUrl }),
     ...(previewUrl === undefined ? {} : { previewUrl }),
     ...(typeof input.actionCount === 'number' ? { actionCount: input.actionCount } : {}),
@@ -215,16 +223,24 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
   }
 
   private async requestActivation(request: Request): Promise<Response> {
-    if (!this.desktop?.available || !this.desktop.authorize(request.headers)) return jsonError('Not found.', 404);
+    if (
+      !this.desktop?.available ||
+      !(this.desktop.authorizeActivation?.(request.headers) ?? this.desktop.authorize(request.headers))
+    )
+      return jsonError('Not found.', 404);
     if (this.desktop.enabled === false) return jsonError('Enable computer use in global Desktop settings first.', 409);
-    // Only the owning native renderer can reach this point. Remote/browser caller stamps cannot grant access.
-    const caller = { locality: 'local', stepUp: 'not-required' } as const;
+    // Caller stamps are admitted by the host only after native proof or sealed paired authentication.
+    const stamped = doomApiCallerFrom(request.headers);
+    const caller = stamped?.locality === 'remote' ? stamped : ({ locality: 'local', stepUp: 'not-required' } as const);
     if (this.phase !== 'inactive' && this.phase !== 'failed') return jsonError('Computer use is already busy.', 409);
     const input = await body(request);
     const target = record(input.target);
     const durationMs = input.durationMs;
-    if (target === undefined || typeof target.windowId !== 'string' || typeof target.bundleId !== 'string')
-      return jsonError('A Desktop target is required.', 400);
+    if (
+      (target === undefined && (input.target !== undefined || caller.locality !== 'remote')) ||
+      (target !== undefined && (typeof target.windowId !== 'string' || typeof target.bundleId !== 'string'))
+    )
+      return jsonError('A Desktop target is required, or a remote request must leave selection to the Mac.', 400);
     if (
       typeof durationMs !== 'number' ||
       !Number.isInteger(durationMs) ||
@@ -232,8 +248,8 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
       durationMs > COMPUTER_USE_MAX_DURATION_MS
     )
       return jsonError('The requested duration is invalid.', 400);
-    this.desktop.claim();
     try {
+      this.desktop.claim(request.headers);
       await this.beforeActivate?.();
     } catch (error) {
       return jsonError(error instanceof Error ? error.message : String(error), 409);
@@ -244,7 +260,7 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
     const createdAt = Date.now();
     this.activation = Object.freeze({
       requestId: randomUUID(),
-      target: Object.freeze({ ...target }),
+      ...(target === undefined ? {} : { target: Object.freeze({ ...target }) }),
       durationSeconds: durationMs / 1_000,
       createdAt,
       confirmationExpiresAt: createdAt + COMPUTER_USE_CONFIRMATION_WINDOW_MS,
@@ -317,7 +333,38 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
 
   public async fetch(request: Request): Promise<Response> {
     if (this.closed) return jsonError('Computer-use broker is closed.', 503);
-    const path = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    const path = url.pathname;
+    if (request.method === 'GET' && path === routes.artifact.path) {
+      if (
+        !(this.desktop?.authorizeRecording?.(request.headers) ?? this.desktop?.authorize(request.headers)) ||
+        !this.desktop?.fetchRecording
+      )
+        return jsonError('Not found.', 404);
+      const artifactId = url.searchParams.get('artifactId') ?? '';
+      const offsetText = url.searchParams.get('offset') ?? '';
+      const offset = Number(offsetText);
+      if (!/^[0-9]+$/u.test(offsetText) || !Number.isSafeInteger(offset) || offset < 0 || offset > 128 * 1024 * 1024)
+        return jsonError('Invalid recording offset.', 400);
+      return this.desktop.fetchRecording(artifactId, `bytes=${offset}-${offset + 1024 * 1024 - 1}`);
+    }
+    if (path === routes.activate.path && request.method === 'GET') {
+      if (
+        !this.desktop?.authorizePending?.(request.headers) &&
+        !(this.desktop?.authorizeRecording?.(request.headers) ?? this.desktop?.authorize(request.headers))
+      )
+        return jsonError('Not found.', 404);
+      return Response.json(this.state());
+    }
+    if (path === routes.activate.path && request.method === 'DELETE') {
+      if (!this.desktop?.authorizePending?.(request.headers)) return jsonError('Not found.', 404);
+      if (this.phase !== 'awaiting_confirmation' && this.phase !== 'activating')
+        return jsonError('No activation is pending.', 409);
+      this.phase = 'stopping';
+      this.rejectPending('The activation was cancelled.');
+      this.changed();
+      return Response.json(this.state(), { status: 202 });
+    }
     if (request.method === 'POST' && path === routes.activate.path) return this.requestActivation(request);
     const agent = path.startsWith('/agent/');
     const hub = path.startsWith('/hub/');
@@ -378,6 +425,9 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
             (host.expiresAt as number) <= Date.now()
           )
             return jsonError('Desktop did not issue a complete grant.', 502);
+          const selectedTarget = record(host.target);
+          if (this.activation !== undefined && selectedTarget !== undefined)
+            this.activation = Object.freeze({ ...this.activation, target: Object.freeze({ ...selectedTarget }) });
           this.grantId = host.grantId;
           this.expiresAt = host.expiresAt as number;
           this.actionSequence = 0;
@@ -401,7 +451,7 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
         this.grantId = undefined;
         this.expiresAt = undefined;
         this.activation = undefined;
-        this.artifact = artifactView(input.artifact);
+        this.artifact = artifactView(input.artifact) ?? this.artifact;
       }
       this.changed();
       return Response.json(this.state());

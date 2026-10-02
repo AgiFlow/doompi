@@ -46,7 +46,7 @@ describe('resolveHarnessOptions', () => {
 
     expect(options.repoRoot).toBe(cwd);
     expect(options.cwd).toBe(cwd);
-    expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(cwd, expect.any(String));
+    expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(cwd, expect.any(String), {});
     expect(configMocks.loadDomains).toHaveBeenCalledWith(cwd, expect.any(String));
   });
 
@@ -60,7 +60,7 @@ describe('resolveHarnessOptions', () => {
 
     expect(options.repoRoot).toBe(root);
     expect(options.cwd).toBe(cwd);
-    expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(root, expect.any(String));
+    expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(root, expect.any(String), {});
     expect(configMocks.loadDomains).toHaveBeenCalledWith(root, expect.any(String));
   });
 
@@ -78,9 +78,9 @@ describe('resolveHarnessOptions', () => {
 
     expect(options.repoRoot).toBe(checkout);
     expect(options.configRoot).toBe(workspaceRoot);
-    expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(workspaceRoot, expect.any(String));
+    expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(workspaceRoot, expect.any(String), {});
     expect(configMocks.loadDomains).toHaveBeenCalledWith(workspaceRoot, expect.any(String));
-    expect(configMocks.loadMajorModesConfig).not.toHaveBeenCalledWith(checkout, expect.any(String));
+    expect(configMocks.loadMajorModesConfig).not.toHaveBeenCalledWith(checkout, expect.any(String), {});
   });
 
   it('starts on the repository default profile, and lets a run override it', () => {
