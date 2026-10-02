@@ -1,3 +1,7 @@
+## 0.0.1-alpha.92 (2026-10-02)
+
+This was a version bump only for @agimon-ai/doompi-runner-rmux-darwin-x64 to align it with other projects, there were no code changes.
+
 ## 0.0.1-alpha.91 (2026-10-02)
 
 This was a version bump only for @agimon-ai/doompi-runner-rmux-darwin-x64 to align it with other projects, there were no code changes.

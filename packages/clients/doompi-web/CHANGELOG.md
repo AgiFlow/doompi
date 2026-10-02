@@ -1,3 +1,29 @@
+## 0.0.1-alpha.74 (2026-10-02)
+
+### 🚀 Features
+
+- **doompi-desktop:** standalone macOS delivery with approved computer use ([#275](https://github.com/AgiFlow/doompi/pull/275))
+
+### 🩹 Fixes
+
+- **doompi-mcp:** keep output-schema failures non-blocking ([#271](https://github.com/AgiFlow/doompi/pull/271))
+- unify Git activity and background session status ([#266](https://github.com/AgiFlow/doompi/pull/266))
+- interrupt voice input and send individual queued prompts ([#267](https://github.com/AgiFlow/doompi/pull/267))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.111
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.106
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.107
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.57
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.91
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.73 (2026-10-02)
 
 ### 🩹 Fixes
