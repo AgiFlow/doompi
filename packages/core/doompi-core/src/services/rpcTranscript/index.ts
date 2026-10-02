@@ -336,6 +336,7 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
     phase: 'idle',
     model: UNKNOWN_MODEL,
     thinkingLevel: 'medium',
+    fastMode: false,
     attached: false,
     locked: false,
     revision: 0,

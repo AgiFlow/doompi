@@ -1,13 +1,7 @@
 export function historyExportHelp(): string {
-  return `Usage: doompi history-export <v4-source> <v3-destination> [options]
+  return `Usage: doompi history-export [--help]
 
-Exports one canonical v4 JSONL session to a distinct v3 JSONL file and writes a
-machine-readable loss report. Existing destination, report, and state files are
-never overwritten.
-
-Options:
-  --report <path>            Loss report path (default: <destination>.loss.json)
-  --state <path>             Resumable export state path
-  -h, --help                Show this help
+Unsupported in Pi 1.0. Legacy history conversion is not available.
+No history files are read, written, migrated, or backed up.
 `;
 }

@@ -96,6 +96,7 @@ export interface DoomHeadlessModelSettings {
 
 export interface DoomHeadlessSession {
   readModelSettings?(): Promise<DoomHeadlessModelSettings>;
+  setFastMode?(enabled: boolean): Promise<void>;
   setModelSettings?(settings: Partial<DoomHeadlessModelSettings>): Promise<void>;
   /** Query durable history on demand; hosts do not retain the entire transcript. */
   entries(query?: {

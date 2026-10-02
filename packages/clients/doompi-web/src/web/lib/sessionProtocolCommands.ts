@@ -99,6 +99,9 @@ export function bindSessionProtocol(
         return service.setName(text(frame.name), context);
       case 'set_model':
         return service.setModel({ provider: text(frame.provider), id: text(frame.modelId) }, context);
+      case 'set_fast_mode':
+        if (typeof frame.enabled !== 'boolean') throw new Error('Invalid Fast mode.');
+        return service.setFastMode(frame.enabled, context);
       case 'set_thinking_level': {
         const level = text(frame.level);
         if (!['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(level))

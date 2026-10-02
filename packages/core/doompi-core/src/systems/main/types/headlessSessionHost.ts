@@ -24,6 +24,8 @@ export interface HeadlessSessionHostOptions {
   inheritedArtifact?: SyncRegistration;
   webComposition?: DoomWebComposition;
   sessionName: string;
+  /** Creation-only Fast snapshot. Restored session state takes precedence. */
+  initialFastMode?: boolean;
   parentSessionId?: string;
   sessionProvenance?: string;
   agentArgs: readonly string[];

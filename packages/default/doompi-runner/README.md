@@ -12,7 +12,7 @@ inline; long commands can be promoted to a background runner instead of blocking
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.85.0 and Pi TUI 0.85.0
+- Pi 1.0.0 and Pi TUI 0.85.0
 - `/bin/bash`
 - macOS or Linux on arm64 or x64 for bundled RMUX and RTK support
 

@@ -14,7 +14,7 @@ tree comparison. See [What this cannot see](#what-this-cannot-see) for gaps in t
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.85.0 and Pi TUI 0.85.0
+- Pi 1.0.0 and Pi TUI 0.85.0
 - Git for diffs against `HEAD`
 
 ## Install

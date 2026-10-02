@@ -1,9 +1,22 @@
 import type { Context } from '@earendil-works/chord';
 
 import type { JsonValue, TranscriptPage, TranscriptPageRequest } from '../../exports/sessionProtocol';
-import type { DirectHarnessRuntime } from '../../types/server/directHarnessRuntime';
+import type { DirectHarnessRuntime, Entry } from '../../types/server/directHarnessRuntime';
 
 const PAGE_SIZE = 100;
+
+export interface TranscriptEntryQuery {
+  start?: string;
+  order?: 'oldestFirst' | 'newestFirst';
+  limit?: number;
+  cursor?: { seq: number };
+  type?: Entry['type'];
+  customType?: string;
+}
+export interface TranscriptLane {
+  getTipId(context: Context): Promise<string | null>;
+  findEntries(query: TranscriptEntryQuery, context: Context): Promise<Entry[]>;
+}
 
 export function transcriptCursor(sessionId: string, lane: string, generation: number, seq: number): string {
   return Buffer.from(JSON.stringify([sessionId, lane, generation, seq])).toString('base64url');
@@ -12,7 +25,7 @@ export function transcriptCursor(sessionId: string, lane: string, generation: nu
 /** Branch-relative keyset reads never materialize the complete conversation. */
 export async function readTranscriptPage(
   runtime: Pick<DirectHarnessRuntime, 'sessionId' | 'laneName'> & {
-    lane: Pick<DirectHarnessRuntime['lane'], 'getTipId' | 'findEntries'>;
+    lane: TranscriptLane;
   },
   request: TranscriptPageRequest,
   generation: number,
@@ -95,4 +108,51 @@ export async function readTranscriptPage(
     newerCursor: last && (newer ? more : seq !== undefined) ? encode(last.seq) : null,
     generation,
   };
+}
+
+/** Protocol identities are strings; durable record IDs remain numeric internally. */
+export function projectDurableEntries(
+  records: readonly import('@earendil-works/pi-durable').EntryRecord[],
+): import('../../types/server/directHarnessRuntime').Entry[] {
+  return records.flatMap((raw, index) => {
+    const data = raw.data && typeof raw.data === 'object' && !Array.isArray(raw.data) ? raw.data : undefined;
+    const message = raw.model?.[0];
+    const timestamp =
+      message && 'timestamp' in message && typeof message.timestamp === 'number'
+        ? message.timestamp
+        : typeof data?.timestamp === 'number'
+          ? data.timestamp
+          : 0;
+    const base = {
+      id: String(raw.id),
+      parentId: index ? String(records[index - 1]!.id) : null,
+      timestamp,
+      seq: Number(raw.id),
+    };
+    if (raw.kind === 'doompi.entry' && data)
+      return [{ ...data, ...base } as import('../../types/server/directHarnessRuntime').Entry];
+    if (raw.kind === 'pi.compaction') {
+      const content = message?.content;
+      const summary =
+        typeof content === 'string'
+          ? content
+          : Array.isArray(content)
+            ? content
+                .filter((part) => part.type === 'text')
+                .map((part) => part.text)
+                .join('')
+            : '';
+      return [{ ...base, type: 'compaction' as const, summary, tokensBefore: 0, retainedTail: [], fromHook: false }];
+    }
+    if (raw.model?.length)
+      return raw.model.map((item, position) => ({
+        ...base,
+        id: position === 0 ? base.id : `${base.id}:${position}`,
+        type: 'message' as const,
+        message: item,
+      }));
+    return [
+      { ...base, type: 'custom' as const, customType: raw.kind, ...(raw.data === undefined ? {} : { data: raw.data }) },
+    ];
+  });
 }

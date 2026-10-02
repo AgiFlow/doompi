@@ -1,151 +1,47 @@
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
+import { expect, it, vi } from 'vitest';
 
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { value, type Write } from '@earendil-works/pi-agent-core/harness/session';
-import { expect, it } from 'vitest';
+import { DURABLE_BACKGROUND_CONTEXT as context } from '../../../../../src/services/sqliteSessionStorage';
+import { readTranscriptPage, type TranscriptEntryQuery } from '../../../../../src/services/transcriptPages';
+import type { Entry } from '../../../../../src/types/server/directHarnessRuntime';
 
-import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
-import { openSqliteSessionStorage } from '../../../../../src/services/sqliteSessionStorage';
-import { readSqliteTranscript } from '../../../../../src/services/sqliteTranscriptReader';
-import { readTranscriptPage } from '../../../../../src/services/transcriptPages';
-
-it('keeps indexed pages bounded at 1k, 10k and 100k entries, with bidirectional cursors and read-only child access', async () => {
-  const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-pages-'));
-  const storage = await openSqliteSessionStorage(
-    { sessionsRoot, sessionId: 'pages', historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }) },
-    BACKGROUND_CONTEXT,
+it('bounds protocol pages and supports bidirectional, lane-relative cursors', async () => {
+  const entries: Entry[] = Array.from({ length: 200 }, (_, index) => ({
+    id: String(index + 1),
+    parentId: index ? String(index) : null,
+    seq: index + 1,
+    timestamp: index,
+    type: 'message',
+    message: { role: 'user', content: `message ${index}`, timestamp: index },
+  }));
+  const findEntries = vi.fn(async (query: TranscriptEntryQuery) => {
+    let rows = entries;
+    if (query.cursor)
+      rows = rows.filter((entry) =>
+        query.order === 'oldestFirst' ? entry.seq > query.cursor!.seq : entry.seq < query.cursor!.seq,
+      );
+    if (query.type) rows = rows.filter((entry) => entry.type === query.type);
+    if (query.order !== 'oldestFirst') rows = [...rows].reverse();
+    return rows.slice(0, query.limit);
+  });
+  const reader = { sessionId: 'session', laneName: '2', lane: { getTipId: async () => '200', findEntries } };
+  const newest = await readTranscriptPage(reader, { limit: 20 }, 0, context);
+  expect(newest.entries).toHaveLength(20);
+  expect(newest.entries[0]).toMatchObject({ id: '181' });
+  expect(findEntries.mock.calls[0]![0].limit).toBe(21);
+  const older = await readTranscriptPage(reader, { limit: 20, cursor: newest.olderCursor! }, 0, context);
+  expect(older.entries[0]).toMatchObject({ id: '161' });
+  const newer = await readTranscriptPage(
+    reader,
+    { limit: 20, cursor: older.newerCursor!, direction: 'newer' },
+    0,
+    context,
   );
-  try {
-    await storage.session.setValue(value('doompi.session', 'workspaceRoot'), '/repo', BACKGROUND_CONTEXT);
-    const branch = await storage.session.createBranch('main', null, BACKGROUND_CONTEXT);
-    const reader = { sessionId: 'pages', laneName: 'main', lane: branch };
-    let count = 0;
-    for (const size of [1_000, 10_000, 100_000]) {
-      while (count < size) {
-        const writes: Write[] = [];
-        for (const end = Math.min(count + 1_000, size); count < end; count++)
-          writes.push({
-            kind: 'entry',
-            entry: {
-              type: 'message',
-              id: `e${count}`,
-              parentId: count ? `e${count - 1}` : null,
-              message: { role: 'user', content: `message ${count}`, timestamp: count },
-            },
-          });
-        writes.push({ kind: 'value', namespace: 'pi.branch.tip', key: 'main', op: 'set', value: `e${count - 1}` });
-        await storage.session.mutate(
-          (mutation, context) => mutation.commit(writes, context).then(() => undefined),
-          BACKGROUND_CONTEXT,
-        );
-      }
-      const started = performance.now();
-      const page = await readTranscriptPage(reader, {}, 0, BACKGROUND_CONTEXT);
-      console.info(
-        JSON.stringify({
-          metric: 'transcript_page',
-          history_entries: size,
-          page_entries: page.entries.length,
-          duration_ms: performance.now() - started,
-          bytes: JSON.stringify(page).length,
-        }),
-      );
-      expect(page.entries).toHaveLength(100);
-      expect(page.entries[0]).toMatchObject({ id: `e${size - 100}` });
-      expect(page.entries.at(-1)).toMatchObject({ id: `e${size - 1}` });
-      expect(page.newerCursor).toBeNull();
-      const older = await readTranscriptPage(
-        reader,
-        { cursor: page.olderCursor!, direction: 'older' },
-        0,
-        BACKGROUND_CONTEXT,
-      );
-      expect(older.entries.at(-1)).toMatchObject({ id: `e${size - 101}` });
-      const newer = await readTranscriptPage(
-        reader,
-        { cursor: older.newerCursor!, direction: 'newer' },
-        0,
-        BACKGROUND_CONTEXT,
-      );
-      expect(newer.entries).toEqual(page.entries);
-      await expect(readTranscriptPage(reader, { cursor: page.olderCursor! }, 1, BACKGROUND_CONTEXT)).rejects.toThrow(
-        'STALE_TRANSCRIPT_CURSOR',
-      );
-      await expect(
-        readTranscriptPage({ ...reader, sessionId: 'other' }, { cursor: page.olderCursor! }, 0, BACKGROUND_CONTEXT),
-      ).rejects.toThrow('Invalid transcript cursor');
-      await expect(readTranscriptPage(reader, { limit: 101 }, 0, BACKGROUND_CONTEXT)).rejects.toThrow('limit');
-      const filesBefore = await fs.readdir(sessionsRoot);
-      const child = await readSqliteTranscript(storage.sessionFile, {}, BACKGROUND_CONTEXT, {
-        sessionId: 'pages',
-        workspaceRoot: '/repo',
-      });
-      expect(child.entries).toEqual(page.entries);
-      expect(await fs.readdir(sessionsRoot)).toEqual(filesBefore);
-      if (size === 1_000) {
-        await expect(
-          readSqliteTranscript(storage.sessionFile, {}, BACKGROUND_CONTEXT, {
-            sessionId: 'other',
-            workspaceRoot: '/repo',
-          }),
-        ).rejects.toThrow('Saved transcript does not belong to this session');
-        await expect(
-          readSqliteTranscript(storage.sessionFile, {}, BACKGROUND_CONTEXT, {
-            sessionId: 'pages',
-            workspaceRoot: '/other',
-          }),
-        ).rejects.toThrow('Saved transcript does not belong to this workspace');
-      }
-    }
-  } finally {
-    await storage.session.close(BACKGROUND_CONTEXT);
-    await storage.repository.close(BACKGROUND_CONTEXT);
-    await storage.historyLease.release();
-    await fs.rm(sessionsRoot, { recursive: true, force: true });
-  }
-}, 120_000);
-
-it('checks the grouped workspace without treating a worktree journal as parent-root-owned', async () => {
-  const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-worktree-transcript-'));
-  const storage = await openSqliteSessionStorage(
-    { sessionsRoot, sessionId: 'child', historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }) },
-    BACKGROUND_CONTEXT,
+  expect(newer.entries).toEqual(newest.entries);
+  await expect(readTranscriptPage(reader, { cursor: newest.olderCursor! }, 1, context)).rejects.toThrow(
+    'STALE_TRANSCRIPT_CURSOR',
   );
-  try {
-    await storage.session.setValue(value('doompi.session', 'workspaceRoot'), '/external/worktree', BACKGROUND_CONTEXT);
-    await storage.session.setValue(
-      value('doompi.session', 'execution'),
-      JSON.stringify({
-        cwd: '/external/worktree/subdir',
-        repoRoot: '/external/worktree',
-        workspaceId: 'parent-id',
-        groupingRoot: '/parent',
-        sessionProvenance: 'worktree',
-      }),
-      BACKGROUND_CONTEXT,
-    );
-    await expect(
-      readSqliteTranscript(storage.sessionFile, {}, BACKGROUND_CONTEXT, {
-        sessionId: 'child',
-        workspaceRoot: '/external/worktree',
-        workspaceId: 'parent-id',
-        groupingRoot: '/parent',
-      }),
-    ).resolves.toMatchObject({ entries: [] });
-    await expect(
-      readSqliteTranscript(storage.sessionFile, {}, BACKGROUND_CONTEXT, {
-        sessionId: 'child',
-        workspaceRoot: '/external/worktree',
-        workspaceId: 'foreign',
-        groupingRoot: '/parent',
-      }),
-    ).rejects.toThrow('Saved transcript does not belong');
-  } finally {
-    await storage.session.close(BACKGROUND_CONTEXT);
-    await storage.repository.close(BACKGROUND_CONTEXT);
-    await storage.historyLease.release();
-    await fs.rm(sessionsRoot, { recursive: true, force: true });
-  }
+  await expect(
+    readTranscriptPage({ ...reader, laneName: '3' }, { cursor: newest.olderCursor! }, 0, context),
+  ).rejects.toThrow('Invalid transcript cursor');
+  await expect(readTranscriptPage(reader, { limit: 101 }, 0, context)).rejects.toThrow('between 1 and 100');
 });

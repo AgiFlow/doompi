@@ -14,6 +14,7 @@ export default defineConfig({
     'extensions/cordisHost': 'src/extensions/cordisHost.ts',
     'extensions/composedPi': 'src/extensions/composedPi.ts',
     'extensions/effort': 'src/extensions/effort.ts',
+    'extensions/fast': 'src/extensions/fast.ts',
     'extensions/terminalChildSession': 'src/extensions/terminalChildSession.ts',
     'extensions/ollamaProvider': 'src/extensions/ollamaProvider.ts',
     'extensions/styleSystem': 'src/extensions/styleSystem.ts',

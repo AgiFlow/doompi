@@ -1,3 +1,4 @@
+import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
 import { machineApi } from '@agimon-ai/doompi-core/machineApi';
 import { remoteApi } from '@agimon-ai/doompi-core/remoteApi';
 import { api } from '@agimon-ai/doompi-core/runtimeContextApi';
@@ -11,6 +12,18 @@ export const doompiServerFacet = defineServerPlugin({
   global: ({ host }) => ({ api: host.context.remoteControl ? [machineApi, remoteApi] : [machineApi] }),
   session: ({ agent, signal: ownerSignal }) => ({
     api: [api, sessionFilesApi],
+    commands: [
+      {
+        name: 'fast',
+        description: 'Opt this session into Codex priority service (may increase cost)',
+        async execute(args: string, context: DoomHeadlessExecutionContext) {
+          const value = args.trim().toLowerCase();
+          if (value !== 'on' && value !== 'off') throw new Error('Usage: /fast on|off');
+          if (!context.session.setFastMode) throw new Error('Fast mode is unavailable in this session');
+          await context.session.setFastMode(value === 'on');
+        },
+      },
+    ],
     tools: agent
       ? [
           createSetupDiagnosticsTool(

@@ -70,6 +70,7 @@ function fixture(telemetry?: ServerTelemetry) {
     availableThinkingLevels: vi.fn(async () => ['off', 'high']),
     setModel: vi.fn(async () => undefined),
     setThinkingLevel: vi.fn(async () => undefined),
+    setFastMode: vi.fn(async () => undefined),
     setSteeringMode: vi.fn(async () => undefined),
     setFollowUpMode: vi.fn(async () => undefined),
     clearQueue: vi.fn(async () => ({ steering: [], followUp: [] })),
@@ -126,6 +127,26 @@ function fixture(telemetry?: ServerTelemetry) {
 }
 
 describe('typed session runtime controls', () => {
+  it('validates session fast mode controls and projects the opt-in', async () => {
+    const { direct, runtime } = fixture();
+    expect((await runtime.getState(BACKGROUND_CONTEXT)).fastMode).toBe(false);
+    await expect(runtime.setFastMode('on' as never, BACKGROUND_CONTEXT)).rejects.toThrow('Invalid fast mode');
+    expect(direct.setFastMode).not.toHaveBeenCalled();
+    const controller = new AbortController();
+    controller.abort(new Error('caller cancelled'));
+    await expect(runtime.setFastMode(true, withAbortSignal(controller.signal, BACKGROUND_CONTEXT))).rejects.toThrow(
+      'caller cancelled',
+    );
+    expect(direct.setFastMode).not.toHaveBeenCalled();
+    await runtime.setFastMode(true, BACKGROUND_CONTEXT);
+    expect(direct.setFastMode).toHaveBeenCalledWith(true);
+    expect(runtime.state.value.snapshot.fastMode).toBe(true);
+    vi.mocked(direct.setFastMode).mockRejectedValueOnce(new Error('Codex account unavailable'));
+    await expect(runtime.setFastMode(false, BACKGROUND_CONTEXT)).rejects.toThrow('Codex account unavailable');
+    expect(runtime.state.value.snapshot.fastMode).toBe(true);
+    await runtime.dispose();
+    await expect(runtime.setFastMode(false, BACKGROUND_CONTEXT)).rejects.toThrow('disposed');
+  });
   it('uses direct typed reads and model controls', async () => {
     const { direct, runtime } = fixture();
 
@@ -141,46 +162,61 @@ describe('typed session runtime controls', () => {
     await runtime.dispose();
   });
 
-  it('projects v4 storage usage into the client session stats contract', async () => {
+  it('projects durable stats without rereading or mutating the transcript', async () => {
     const { direct, runtime } = fixture();
-    vi.mocked(direct.readState).mockResolvedValue({
-      sessionId: 's1',
-      sessionFile: '/tmp/s1.jsonl',
-      model: { provider: 'test', id: 'm' },
+    const stats = await direct.getSessionStats();
+    vi.mocked(direct.getSessionStats).mockResolvedValue({
+      ...stats,
+      sessionFile: '/tmp/durable-v1/s1.sqlite',
+      contextUsage: { tokens: 140, contextWindow: 1_000, percent: 14 },
     });
-    vi.mocked(direct.availableModels).mockResolvedValue([{ provider: 'test', id: 'm', contextWindow: 1_000 } as never]);
-    vi.mocked(direct.readEntries).mockResolvedValue({
-      leafId: 'assistant',
-      entries: [
-        { type: 'message', id: 'user', message: { role: 'user', content: 'hello' } },
-        {
-          type: 'message',
-          id: 'assistant',
-          message: {
-            role: 'assistant',
-            content: [{ type: 'text', text: 'hi' }],
-            usage: {
-              input: 100,
-              output: 20,
-              cacheRead: 30,
-              cacheWrite: 10,
-              totalTokens: 160,
-              cost: { input: 0.1, output: 0.2, cacheRead: 0.03, cacheWrite: 0.01, total: 0.34 },
-            },
-          },
-        },
-      ] as never,
-    });
-
+    await runtime.initialize();
+    vi.mocked(direct.readState).mockClear();
     await expect(runtime.getSessionStats(BACKGROUND_CONTEXT)).resolves.toEqual({
       sessionId: 's1',
-      sessionFile: '/tmp/s1.jsonl',
+      sessionFile: '/tmp/durable-v1/s1.sqlite',
       totalMessages: 2,
       tokens: { input: 100, output: 20, cacheRead: 30, cacheWrite: 10, total: 160 },
       cost: 0.34,
       contextUsage: { tokens: 140, contextWindow: 1_000, percent: 14 },
     });
+    expect(direct.readEntries).not.toHaveBeenCalled();
+    expect(direct.readState).not.toHaveBeenCalled();
+    expect(direct.availableModels).not.toHaveBeenCalled();
     await runtime.dispose();
+  });
+
+  it('pages from one snapshot without reversing shared history', async () => {
+    const { direct, runtime } = fixture();
+    const entries = Array.from({ length: 420 }, (_, index) => ({
+      type: 'message' as const,
+      id: `j${index}`,
+      seq: index + 1,
+      parentId: index === 0 ? null : `j${index - 1}`,
+      timestamp: index,
+      message: { role: 'user' as const, content: `line ${index}`, timestamp: index },
+    }));
+    vi.mocked(direct.readEntries).mockResolvedValue({ entries, leafId: 'j419' });
+    try {
+      const latest = await runtime.readTranscriptPage({}, BACKGROUND_CONTEXT);
+      expect(latest.entries).toEqual(entries.slice(320));
+      expect(entries[0]?.id).toBe('j0');
+      expect(direct.readEntries).toHaveBeenCalledTimes(1);
+      const older = await runtime.readTranscriptPage(
+        { cursor: latest.olderCursor!, direction: 'older' },
+        BACKGROUND_CONTEXT,
+      );
+      expect(older.entries).toEqual(entries.slice(220, 320));
+      const newer = await runtime.readTranscriptPage(
+        { cursor: older.newerCursor!, direction: 'newer' },
+        BACKGROUND_CONTEXT,
+      );
+      expect(newer.entries).toEqual(latest.entries);
+      expect(direct.readEntries).toHaveBeenCalledTimes(3);
+      expect(entries[0]?.id).toBe('j0');
+    } finally {
+      await runtime.dispose();
+    }
   });
 
   it('publishes native lifecycle independently of presentation phase and targets queue operations', async () => {
@@ -814,6 +850,7 @@ const telemetry = { recordEvent: async()=>{}, runInSpan: async(_n,_a,fn)=>fn() }
 function fixture(trace) {
   const exit=deferred(), admission=deferred(), entered=deferred(); let listener, unsubscribed=0;
   const direct={exited:exit.promise, onPresentationFrame(fn){listener=fn;return ()=>{unsubscribed++;};},
+    readState:async()=>({sessionId:'strict',fastMode:false}),
     readLifecycle:async()=>({revision:0,operation:null,paused:false,queue:[]}),
     submitPrompt:()=>{entered.resolve();return admission.promise;}, abort:async()=>{}};
   const runtime=createAgentSessionRuntime({runtime:direct,sessionId:'strict',sessionName:'strict',cwd:'/test',telemetry:trace});

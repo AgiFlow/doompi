@@ -1,65 +1,75 @@
-import fs from 'node:fs';
+import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 
 import { readJsonlTranscript } from '../../../../../src/server/jsonlTranscriptReader';
+import { readNativeChildTranscript } from '../../../../../src/server/nativeChildTranscriptReader';
+import { DurableNavigationDoc } from '../../../../../src/services/durableNavigation';
+import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
+import {
+  DURABLE_BACKGROUND_CONTEXT as context,
+  openSqliteSessionStorage,
+  SessionMetadataDoc,
+} from '../../../../../src/services/sqliteSessionStorage';
+import { readSqliteTranscript } from '../../../../../src/services/sqliteTranscriptReader';
 
-const roots: string[] = [];
-
-afterEach(() => {
-  for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+it('rejects the retained legacy JSONL entrypoint without reading it', async () => {
+  await expect(readJsonlTranscript('/missing.jsonl', {})).rejects.toThrow('unsupported');
+  await expect(readNativeChildTranscript('/missing.jsonl', {})).rejects.toThrow('unsupported');
 });
 
-describe('readJsonlTranscript', () => {
-  it('reads the active v4 branch without modifying the journal', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-jsonl-transcript-'));
-    roots.push(root);
-    const file = path.join(root, 'child.jsonl');
-    const rows = [
-      { kind: 'header', v: 4, storageVersion: 1, id: 'child', cwd: '/repo', createdAt: 1 },
-      {
-        kind: 'entry',
-        seq: 1,
-        timestamp: 1,
-        type: 'message',
-        id: 'user',
-        parentId: null,
-        message: { role: 'user', content: 'question', timestamp: 1 },
-      },
-      {
-        kind: 'entry',
-        seq: 2,
-        timestamp: 2,
-        type: 'message',
-        id: 'assistant',
-        parentId: 'user',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'answer' }], timestamp: 2 },
-      },
-      { kind: 'value', seq: 3, op: 'set', namespace: 'pi.branch.tip', key: 'main', value: 'assistant' },
-    ];
-    const original = `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`;
-    fs.writeFileSync(file, original);
-
-    const page = await readJsonlTranscript(file, {});
-
+it('reads a completed durable transcript with stable string identities and workspace authorization', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-transcript-'));
+  try {
+    const opened = await openSqliteSessionStorage(
+      { sessionsRoot: root, sessionId: 'saved', historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }) },
+      context,
+    );
+    await opened.session.commit(async (tx) => {
+      const conversation = await tx.createConversation({ ownership: { kind: 'ownerless' } });
+      (await tx.doc(DurableNavigationDoc)).activeConversationId = conversation.id;
+      const metadata = await tx.doc(SessionMetadataDoc);
+      metadata.workspaceRoot = '/repo';
+      metadata.execution = JSON.stringify({
+        cwd: '/repo',
+        repoRoot: '/repo',
+        groupingRoot: '/repo',
+        workspaceId: 'workspace',
+      });
+      await tx.appendEntry(conversation.id, { kind: 'doom-profile-identity', data: { name: 'profile' } });
+      for (let index = 0; index < 5; index++)
+        await tx.appendEntry(conversation.id, {
+          kind: 'pi.user',
+          model: [{ role: 'user', content: `message ${index}`, timestamp: 100 + index }],
+        });
+    }, context);
+    await opened.repository.close(context);
+    await opened.historyLease.release();
+    const before = await fs.readFile(opened.sessionFile);
+    const ownership = { sessionId: 'saved', workspaceRoot: '/repo', workspaceId: 'workspace', groupingRoot: '/repo' };
+    const page = await readSqliteTranscript(opened.sessionFile, { limit: 2 }, context, ownership);
+    expect((await readNativeChildTranscript(opened.sessionFile, { limit: 2 })).entries).toEqual(page.entries);
     expect(page.entries).toHaveLength(2);
-    expect(page.entries[0]).toMatchObject({ id: 'user' });
-    expect(page.entries[1]).toMatchObject({ id: 'assistant' });
-    expect(page.drafts).toEqual([]);
-    expect(fs.readFileSync(file, 'utf8')).toBe(original);
-    expect(fs.readdirSync(root)).toEqual(['child.jsonl']);
-  });
-
-  it('rejects a torn journal without repairing it', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-jsonl-transcript-'));
-    roots.push(root);
-    const file = path.join(root, 'child.jsonl');
-    const original = JSON.stringify({ kind: 'header', v: 4, id: 'child' });
-    fs.writeFileSync(file, original);
-
-    await expect(readJsonlTranscript(file, {})).rejects.toThrow('incomplete');
-    expect(fs.readFileSync(file, 'utf8')).toBe(original);
-  });
+    expect(page.entries[0]).toMatchObject({ type: 'message', message: { content: 'message 3' }, timestamp: 103 });
+    expect(page.context).toHaveLength(1);
+    const older = await readSqliteTranscript(
+      opened.sessionFile,
+      { limit: 2, cursor: page.olderCursor! },
+      context,
+      ownership,
+    );
+    expect(older.entries[0]).toMatchObject({ message: { content: 'message 1' } });
+    expect(await fs.readFile(opened.sessionFile)).toEqual(before);
+    await expect(
+      readSqliteTranscript(opened.sessionFile, {}, context, { ...ownership, workspaceId: 'foreign' }),
+    ).rejects.toThrow('workspace');
+    await expect(
+      readSqliteTranscript(opened.sessionFile, {}, context, { ...ownership, sessionId: 'foreign' }),
+    ).rejects.toThrow('session');
+    await expect(readSqliteTranscript(path.join(root, 'legacy.sqlite'), {}, context)).rejects.toThrow('Legacy');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });

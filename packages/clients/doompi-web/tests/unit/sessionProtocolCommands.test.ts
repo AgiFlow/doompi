@@ -190,3 +190,30 @@ describe('session protocol command lifecycle', () => {
     expect(promoteQueued).toHaveBeenCalledWith({ id: 'item-17', operationId: 'operation-8' }, expect.anything());
   });
 });
+
+describe('Fast mode commands', () => {
+  it('sends explicit opt-in and opt-out to the service', async () => {
+    const setFastMode = vi.fn().mockResolvedValue(undefined);
+    releases.push(bindSessionProtocol('fast', service({ setFastMode }), vi.fn()));
+    expect(await requestSessionProtocolFrame('fast', { type: 'set_fast_mode', enabled: true })).toMatchObject({
+      success: true,
+    });
+    expect(await requestSessionProtocolFrame('fast', { type: 'set_fast_mode', enabled: false })).toMatchObject({
+      success: true,
+    });
+    expect(setFastMode.mock.calls.map((call) => call[0])).toEqual([true, false]);
+  });
+  it('reports rejection without claiming success', async () => {
+    const setFastMode = vi.fn().mockRejectedValue(new Error('Codex only'));
+    releases.push(bindSessionProtocol('fast', service({ setFastMode }), vi.fn()));
+    expect(await requestSessionProtocolFrame('fast', { type: 'set_fast_mode', enabled: true })).toMatchObject({
+      success: false,
+      error: 'Codex only',
+    });
+    expect(await requestSessionProtocolFrame('fast', { type: 'set_fast_mode', enabled: 'true' })).toMatchObject({
+      success: false,
+      error: 'Invalid Fast mode.',
+    });
+    expect(setFastMode).toHaveBeenCalledTimes(1);
+  });
+});

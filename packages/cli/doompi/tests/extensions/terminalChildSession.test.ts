@@ -75,11 +75,12 @@ async function setup(state: RegistryState) {
     getRegisteredNativeProvider: (id: string) => state.native.get(id),
     getProvider: (id: string) => state.generic.get(id),
   } as unknown as ModelRegistry;
+  const parent = { sessionId: 'session-1', entries: [] as unknown[] };
   const context = {
     cwd: '/repo',
     model: undefined,
     modelRegistry,
-    sessionManager: { getSessionId: () => 'session-1' },
+    sessionManager: { getSessionId: () => parent.sessionId, getBranch: () => parent.entries },
   } as unknown as ExtensionContext;
   const dispatch = async (event: SessionStartEvent | SessionShutdownEvent) => {
     for (const handler of lifecycle.get(event.type) ?? []) await handler(event as never, context);
@@ -97,6 +98,8 @@ async function setup(state: RegistryState) {
     throw new Error('The terminal child session service received no providers thunk.');
   return {
     providers,
+    parent,
+    context,
     pi,
     close: () => dispatch({ type: 'session_shutdown', reason: 'reload' }),
   };
@@ -163,6 +166,36 @@ describe('terminal child session providers', () => {
 });
 
 describe('terminal child session wiring', () => {
+  it('projects current parent Fast intent on each spawn without forcing a model', async () => {
+    const fixture = await setup({ ids: [], native: new Map(), generic: new Map() });
+    const options = vi.mocked(createTerminalPiChildSessionServiceProvider).mock.calls[0]![0];
+    const resolve = options.parentFastMode!;
+    const entry = (sessionId: string, enabled: boolean) => ({
+      type: 'custom',
+      customType: 'doompi.fast-mode',
+      data: { version: 1, sessionId, enabled },
+    });
+    try {
+      expect(await resolve()).toBe(false);
+      fixture.parent.entries.push(entry('session-1', true));
+      expect(await resolve()).toBe(true);
+      fixture.context.model = { provider: 'anthropic' } as never;
+      expect(await resolve()).toBe(true);
+      expect(options.defaultModel?.()).toBe(fixture.context.model);
+      fixture.parent.entries.push(entry('session-1', false));
+      expect(await resolve()).toBe(false);
+      fixture.parent.entries = [entry('session-1', true)];
+      expect(await resolve()).toBe(true);
+      fixture.parent.sessionId = 'new-top-level';
+      expect(await resolve()).toBe(false);
+      fixture.parent.entries = [entry('new-top-level', true)];
+      expect(await resolve()).toBe(true);
+      fixture.parent.entries = [];
+      expect(await resolve()).toBe(false);
+    } finally {
+      await fixture.close();
+    }
+  });
   it('resolves providers from the session extension context registry', async () => {
     const fixture = await setup({ ids: [], native: new Map(), generic: new Map() });
     try {
@@ -171,6 +204,7 @@ describe('terminal child session wiring', () => {
         cwd: '/repo',
         providers: expect.any(Function),
         defaultModel: expect.any(Function),
+        parentFastMode: expect.any(Function),
         mcpTool: expect.any(Function),
       });
     } finally {

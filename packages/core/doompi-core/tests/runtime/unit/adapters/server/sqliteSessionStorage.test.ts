@@ -1,22 +1,13 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import {
-  createAssistantMessageEventStream,
-  type AssistantMessage,
-  type Models,
-  type Model,
-  type Api,
-} from '@earendil-works/pi-ai';
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { createDirectHarnessRuntime } from '../../../../../src/server/directHarnessRuntime';
-import { createThreadJournals } from '../../../../../src/server/threadJournals';
 import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
+import { DURABLE_BACKGROUND_CONTEXT as BACKGROUND_CONTEXT } from '../../../../../src/services/sqliteSessionStorage';
 import { openSqliteSessionStorage } from '../../../../../src/services/sqliteSessionStorage';
-import { registerNativeChild } from '../../../../../src/systems/child/adapters/nativeChildRuntimes';
 
 const directories: string[] = [];
 afterEach(async () => {
@@ -34,8 +25,13 @@ it('persists server entries, rejects a second writer, and reopens by session id'
   };
   const first = await openSqliteSessionStorage(options, BACKGROUND_CONTEXT);
   try {
-    const branch = await first.session.createBranch('main', null, BACKGROUND_CONTEXT);
-    await branch.appendMessage({ role: 'user', content: 'durable', timestamp: 100 }, BACKGROUND_CONTEXT);
+    await first.session.commit(async (tx) => {
+      const conversation = await tx.createConversation({ ownership: { kind: 'ownerless' } });
+      await tx.appendEntry(conversation.id, {
+        kind: 'user',
+        model: [{ role: 'user', content: 'durable', timestamp: 100 }],
+      });
+    }, BACKGROUND_CONTEXT);
     await expect(openSqliteSessionStorage(options, BACKGROUND_CONTEXT)).rejects.toThrow('lock');
   } finally {
     await first.session.close(BACKGROUND_CONTEXT);
@@ -44,9 +40,17 @@ it('persists server entries, rejects a second writer, and reopens by session id'
   }
   const second = await openSqliteSessionStorage(options, BACKGROUND_CONTEXT);
   try {
-    const entries = await second.session.findEntries({ order: 'asc', limit: 10 }, BACKGROUND_CONTEXT);
+    const conversations = await second.storage.scanConversations({}, 10, undefined, BACKGROUND_CONTEXT);
+    const entries = (
+      await second.storage.scanEntries(
+        { conversationId: conversations.items[0]!.id },
+        10,
+        undefined,
+        BACKGROUND_CONTEXT,
+      )
+    ).items;
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ type: 'message', message: { content: 'durable' } });
+    expect(entries[0]).toMatchObject({ kind: 'user', model: [{ content: 'durable' }] });
     const header = await fs.readFile(second.sessionFile);
     expect(header.subarray(0, 16).toString()).toBe('SQLite format 3\u0000');
   } finally {
@@ -65,8 +69,13 @@ it('reopens durable SQLite history after its previous process left a valid dead-
     historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
   };
   const first = await openSqliteSessionStorage(options, BACKGROUND_CONTEXT);
-  const branch = await first.session.createBranch('main', null, BACKGROUND_CONTEXT);
-  await branch.appendMessage({ role: 'user', content: 'keep this', timestamp: 100 }, BACKGROUND_CONTEXT);
+  await first.session.commit(async (tx) => {
+    const conversation = await tx.createConversation({ ownership: { kind: 'ownerless' } });
+    await tx.appendEntry(conversation.id, {
+      kind: 'user',
+      model: [{ role: 'user', content: 'keep this', timestamp: 100 }],
+    });
+  }, BACKGROUND_CONTEXT);
   await first.session.close(BACKGROUND_CONTEXT);
   await first.repository.close(BACKGROUND_CONTEXT);
   await first.historyLease.release();
@@ -89,9 +98,17 @@ it('reopens durable SQLite history after its previous process left a valid dead-
   });
   const second = await openSqliteSessionStorage(options, BACKGROUND_CONTEXT);
   try {
-    const entries = await second.session.findEntries({ order: 'asc', limit: 10 }, BACKGROUND_CONTEXT);
+    const conversations = await second.storage.scanConversations({}, 10, undefined, BACKGROUND_CONTEXT);
+    const entries = (
+      await second.storage.scanEntries(
+        { conversationId: conversations.items[0]!.id },
+        10,
+        undefined,
+        BACKGROUND_CONTEXT,
+      )
+    ).items;
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ type: 'message', message: { content: 'keep this' } });
+    expect(entries[0]).toMatchObject({ kind: 'user', model: [{ content: 'keep this' }] });
   } finally {
     await second.session.close(BACKGROUND_CONTEXT);
     await second.repository.close(BACKGROUND_CONTEXT);
@@ -100,96 +117,42 @@ it('reopens durable SQLite history after its previous process left a valid dead-
   await expect(fs.access(lockPath)).rejects.toMatchObject({ code: 'ENOENT' });
 });
 
-it('streams a real harness turn and stores exactly one settlement at its original position', async () => {
-  const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-sqlite-turn-'));
-  directories.push(sessionsRoot);
-  const model: Model<Api> = {
-    id: 'test',
-    provider: 'test',
-    name: 'Test',
-    api: 'test',
-    baseUrl: '',
-    reasoning: false,
-    input: ['text'],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 65536,
-    maxTokens: 100,
-  };
-  const models = {
-    getModels: () => [model],
-    getModel: () => model,
-    getAvailable: async () => [model],
-    streamSimple: () => {
-      const stream = createAssistantMessageEventStream();
-      const message: AssistantMessage = {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'hello' }],
-        api: model.api,
-        provider: model.provider,
-        model: model.id,
-        timestamp: Date.now(),
-        stopReason: 'stop',
-        usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-      };
-      stream.push({ type: 'start', partial: { ...message, content: [] } });
-      stream.push({
-        type: 'text_start',
-        contentIndex: 0,
-        partial: { ...message, content: [{ type: 'text', text: '' }] },
-      });
-      stream.push({ type: 'text_delta', contentIndex: 0, delta: 'hello', partial: message });
-      stream.push({ type: 'done', reason: 'stop', message });
-      return stream;
-    },
-  } as unknown as Models;
+it('rejects legacy files without modifying them or creating a fresh replacement', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-legacy-'));
+  directories.push(root);
+  const legacy = path.join(root, 'old.sqlite');
+  await fs.writeFile(legacy, 'legacy bytes');
   const options = {
-    storage: 'sqlite' as const,
-    sessionId: 'turn',
-    sessionsRoot,
-    cwd: sessionsRoot,
-    model,
-    models,
+    sessionsRoot: root,
+    sessionId: 'old',
     historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
   };
-  const runtime = await createDirectHarnessRuntime(options);
-  const file = path.join(sessionsRoot, 'turn.sqlite');
-  const release = registerNativeChild(file, runtime);
-  const threads = createThreadJournals({ resolve: () => file });
-  const live: Record<string, unknown>[] = [];
-  threads.onFrame(({ frame }) => live.push(frame));
-  expect(threads.subscribe('parent', 'child')).toMatchObject([{ type: 'transcript_state' }]);
-  const frames: Record<string, unknown>[] = [];
-  runtime.onPresentationFrame((frame) => frames.push(frame));
-  try {
-    await runtime.prompt('first');
-    await runtime.prompt('second');
-    expect(frames.filter((frame) => frame.type === 'agent_settled')).toHaveLength(2);
-    expect(live.some((frame) => frame.type === 'transcript_state')).toBe(true);
-    expect((await threads.readPage('parent', 'child', {}, BACKGROUND_CONTEXT)).entries.length).toBe(6);
-  } finally {
-    threads.close();
-    release();
-    await runtime.dispose();
-  }
-  expect((await threads.readPage('parent', 'child', {}, BACKGROUND_CONTEXT)).entries.length).toBe(6);
-  const restored = await openSqliteSessionStorage(options, BACKGROUND_CONTEXT);
-  try {
-    const entries = await restored.session.findEntries({ order: 'asc' }, BACKGROUND_CONTEXT);
-    expect(
-      entries.map((entry) =>
-        entry.type === 'custom' ? entry.customType : entry.type === 'message' ? entry.message.role : entry.type,
-      ),
-    ).toEqual(['user', 'assistant', 'doompi.agent-settled', 'user', 'assistant', 'doompi.agent-settled']);
-  } finally {
-    await restored.session.close(BACKGROUND_CONTEXT);
-    await restored.repository.close(BACKGROUND_CONTEXT);
-    await restored.historyLease.release();
-  }
+  await expect(openSqliteSessionStorage(options, BACKGROUND_CONTEXT)).rejects.toThrow('Legacy');
+  expect(await fs.readFile(legacy, 'utf8')).toBe('legacy bytes');
+  await expect(fs.access(path.join(root, 'durable-v1', 'old.sqlite'))).rejects.toThrow();
+  await fs.mkdir(path.join(root, 'durable-v1'));
+  const freshPath = path.join(root, 'durable-v1', 'old.sqlite');
+  await fs.writeFile(freshPath, 'not durable');
+  await expect(openSqliteSessionStorage(options, BACKGROUND_CONTEXT)).rejects.toThrow();
+  expect(await fs.readFile(freshPath, 'utf8')).toBe('not durable');
+  await expect(fs.access(`${freshPath}.doompi-v4.lock`)).rejects.toThrow();
+});
+
+it('rejects a real legacy SQLite schema before opening a writable connection', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-legacy-sqlite-'));
+  directories.push(root);
+  await fs.mkdir(path.join(root, 'durable-v1'));
+  const file = path.join(root, 'durable-v1', 'old.sqlite');
+  const database = new DatabaseSync(file);
+  database.exec("CREATE TABLE sessions (id TEXT PRIMARY KEY); INSERT INTO sessions VALUES ('old')");
+  database.close();
+  const before = await fs.readFile(file);
+  await expect(
+    openSqliteSessionStorage(
+      { sessionsRoot: root, sessionId: 'old', historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }) },
+      BACKGROUND_CONTEXT,
+    ),
+  ).rejects.toThrow('legacy');
+  expect(await fs.readFile(file)).toEqual(before);
+  expect(await fs.readdir(path.dirname(file))).toEqual(['old.sqlite']);
 });

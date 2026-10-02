@@ -481,6 +481,15 @@ export function selectModel(provider: string, modelId: string, sessionId: string
   sendFrame(sessionId, getAvailableThinkingLevelsCommand());
 }
 
+/** Read back server state rather than optimistically enabling priority. */
+export function selectFastMode(enabled: boolean, sessionId: string | null = activeSessionId()): void {
+  if (sessionId === null) return;
+  const agent = sessionStoreFor(sessionId).state.agent;
+  if (agent?.provider !== 'openai-codex') return;
+  sendFrame(sessionId, { type: 'set_fast_mode', enabled });
+  sendFrame(sessionId, getStateCommand());
+}
+
 /** The set reply carries nothing back, so get_state is what updates the chip. */
 export function selectThinkingLevel(level: string, sessionId: string | null = activeSessionId()): void {
   if (sessionId === null) return;

@@ -1,11 +1,9 @@
 import path from 'node:path';
 
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-
 import type { TranscriptPage, TranscriptPageRequest } from '../exports/sessionProtocol';
+import { DURABLE_BACKGROUND_CONTEXT as BACKGROUND_CONTEXT, DURABLE_DIRECTORY } from '../services/sqliteSessionStorage';
 import { readSqliteTranscript } from '../services/sqliteTranscriptReader';
 import { nativeChildRuntime } from '../systems/child/adapters/nativeChildRuntimes';
-import { readJsonlTranscript } from './jsonlTranscriptReader';
 
 /** Dispatches an already-authorized child journal to its live runtime or completed read-only backend. */
 export async function readNativeChildTranscript(
@@ -14,14 +12,12 @@ export async function readNativeChildTranscript(
   signal?: AbortSignal,
 ): Promise<TranscriptPage> {
   signal?.throwIfAborted();
+  if (path.extname(file) !== '.sqlite' || path.basename(path.dirname(file)) !== DURABLE_DIRECTORY)
+    throw new Error('Legacy child transcripts are unsupported by fresh durable storage');
   const runtime = nativeChildRuntime(file);
   const page = runtime
     ? await runtime.readTranscriptPage(request, BACKGROUND_CONTEXT)
-    : path.extname(file) === '.sqlite'
-      ? await readSqliteTranscript(file, request, BACKGROUND_CONTEXT)
-      : path.extname(file) === '.jsonl'
-        ? await readJsonlTranscript(file, request)
-        : await Promise.reject(new Error('Unsupported child transcript format'));
+    : await readSqliteTranscript(file, request, BACKGROUND_CONTEXT);
   signal?.throwIfAborted();
   return page;
 }

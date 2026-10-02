@@ -101,6 +101,7 @@ export interface SessionSnapshot {
   phase: SessionPhase;
   model: ModelRef;
   thinkingLevel: ThinkingLevel;
+  fastMode: boolean;
   attached: boolean;
   locked: boolean;
   revision: number;
@@ -228,6 +229,7 @@ export type ExtensionUiResponse =
 export interface SessionStateInfo {
   model?: ModelRef;
   thinkingLevel: ThinkingLevel;
+  fastMode: boolean;
   isStreaming: boolean;
   isCompacting: boolean;
   steeringMode: 'all' | 'one-at-a-time';
@@ -283,6 +285,7 @@ export interface SessionService {
   abortOperation(args: { operationId: string }, context: Context): Promise<void>;
   setModel(model: ModelRef, context: Context): Promise<void>;
   setThinking(thinkingLevel: ThinkingLevel, context: Context): Promise<void>;
+  setFastMode(enabled: boolean, context: Context): Promise<void>;
   followUp(args: FollowUpArgs, context: Context): Promise<void>;
   enqueueAutomatic(args: FollowUpArgs, context: Context): Promise<{ id: string }>;
   removeQueued(

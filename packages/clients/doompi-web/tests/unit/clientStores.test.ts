@@ -85,6 +85,7 @@ import {
   runCommand,
   selectModel,
   selectThinkingLevel,
+  selectFastMode,
   rewindToMessage,
   sessionStoreFor,
   submitMessage,
@@ -1113,5 +1114,29 @@ describe('thread holds', () => {
     expect(sent).toHaveLength(1);
     expect(threadStoreKey('s1', 'run-1')).toBe('thread:s1:run-1');
     releaseTransport();
+  });
+});
+
+describe('Fast mode selection', () => {
+  it('blocks unsupported models and sends a setter followed by authoritative readback for Codex', () => {
+    const store = sessionStoreFor('fast-test');
+    selectFastMode(true, 'fast-test');
+    expect(sendSessionProtocolFrame).not.toHaveBeenCalled();
+    store.setState((state) => ({
+      ...state,
+      agent: {
+        provider: 'openai-codex',
+        model: 'codex',
+        thinkingLevel: 'high',
+        sessionId: 'fast-test',
+        sessionName: '',
+        messageCount: 0,
+        isStreaming: false,
+      },
+    }));
+    selectFastMode(true, 'fast-test');
+    expect(sendSessionProtocolFrame).toHaveBeenCalledWith('fast-test', { type: 'set_fast_mode', enabled: true });
+    expect(sendSessionProtocolFrame).toHaveBeenCalledWith('fast-test', { type: 'get_state' });
+    expect(store.state.fastMode).toBe(false);
   });
 });

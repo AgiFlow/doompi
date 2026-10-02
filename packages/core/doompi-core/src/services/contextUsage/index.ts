@@ -1,3 +1,5 @@
+import type { Usage } from '@earendil-works/pi-ai';
+
 /**
  * How much of the model's window a conversation currently occupies.
  *
@@ -10,8 +12,7 @@
  * harness just finished. Both have to agree on what "context tokens" means, so
  * the definition lives here rather than at either call site.
  */
-import type { Entry } from '@earendil-works/pi-agent-core';
-import type { Usage } from '@earendil-works/pi-ai';
+import type { Entry } from '../../types/server/directHarnessRuntime';
 
 export interface ContextUsage {
   /** Null while unknown: no assistant message has been measured against the current context yet. */

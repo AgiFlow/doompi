@@ -51,7 +51,18 @@ releases.
 
 - Node.js 22.19.0 or newer
 - Release targets: macOS arm64, Linux x64, and Linux arm64
-- Pi 0.99.1 and Pi TUI 0.99.1 for packages that declare them as peer requirements
+- Pi 1.0.0 and Pi TUI 1.0.0 for packages that declare them as peer requirements
+
+## Pi 1.0 sessions and Codex Fast
+
+Headless sessions use fresh `durable-v1` storage. Earlier headless sessions cannot be resumed or
+converted. Their files remain untouched, without migration or backups.
+
+Use `/fast on|off` in CLI or server sessions, or the **Fast** switch in the web model picker.
+Fast requests Codex priority service, which may increase cost, independently of thinking effort.
+Fresh top-level sessions default to off. New subagents and child sessions inherit the parent's
+current setting, then persist their own setting across resumes. Other providers never receive
+DoomPi's priority flag.
 
 ## Try DoomPi without replacing your Pi setup
 

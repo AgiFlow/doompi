@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { Context } from '@deepseek-ai/cordis';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';

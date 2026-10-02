@@ -226,6 +226,10 @@ export function createPagedTranscript(
     initialize: () => load('latest'),
     publish(state: SessionServiceState) {
       const previous = latestState?.presentation?.revision;
+      const fastMode = state.snapshot.fastMode === true;
+      if (!latestState || fastMode !== (latestState.snapshot.fastMode === true)) {
+        emit({ type: 'fast_mode_changed', enabled: fastMode });
+      }
       latestState = state;
       if (state.snapshot.lifecycle) applySessionLifecycle(sessionId, state.snapshot.lifecycle, previous === undefined);
       if (previous !== undefined && state.presentation && state.presentation.revision < previous) {

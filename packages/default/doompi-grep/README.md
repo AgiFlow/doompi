@@ -16,7 +16,7 @@ packages use the same hashline protocol.
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.85.0 and Pi TUI 0.85.0
+- Pi 1.0.0 and Pi TUI 0.85.0
 
 ## Install
 

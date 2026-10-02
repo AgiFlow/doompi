@@ -1,23 +1,209 @@
+import type { JsonValue } from '@earendil-works/chord';
+export type { JsonValue } from '@earendil-works/chord';
 import type { Context } from '@earendil-works/chord';
+import type { Message, ToolResultMessage, ModelThinkingLevel, Tool } from '@earendil-works/pi-ai';
 import type {
-  AgentHarness,
-  AgentHarnessOptions,
-  AgentHarnessResources,
-  AgentHarnessTool,
-  AgentMessage,
-  HarnessEvent,
-  AgentLane,
-  HookMap,
-} from '@earendil-works/pi-agent-core';
-import type {
-  CompactionSettings,
-  Entry,
-  EntryProjector,
+  Harness,
+  Conversation,
   Session,
-  SessionStats,
-  ThinkingLevel,
+  Storage,
+  CompactionPolicy,
   QueueMode,
-} from '@earendil-works/pi-agent-core';
+  ConversationStreamOptions,
+} from '@earendil-works/pi-durable';
+import type { Static, TSchema } from 'typebox';
+
+export type AgentMessage = Message | import('@earendil-works/pi-coding-agent').SessionMessageEntry['message'];
+export type ThinkingLevel = ModelThinkingLevel;
+export type CompactionSettings = Partial<CompactionPolicy>;
+export interface Skill {
+  name: string;
+  description: string;
+  content: string;
+  filePath: string;
+  disableModelInvocation?: boolean;
+}
+export interface AgentHarnessResources {
+  skills?: Skill[];
+  promptTemplates?: { name: string; description?: string; content: string }[];
+}
+export interface AgentHarnessToolInvocation {
+  invocationId: string;
+  operationId: string;
+  turnId: string;
+  getMemo(name: string): Promise<JsonValue | undefined>;
+  setMemo(name: string, value: JsonValue | undefined): Promise<void>;
+}
+export type AgentHarnessTool<
+  TContext extends object | undefined = object | undefined,
+  TParameters extends TSchema = TSchema,
+  TDetails = unknown,
+> = Tool<TParameters> & {
+  label?: string;
+  replay?: 'safe' | 'unsafe';
+  executionMode?: 'parallel' | 'sequential';
+  prepareArguments?(args: unknown): Static<TParameters>;
+  execute(
+    callId: string,
+    params: Static<TParameters>,
+    update: (result: { content: ToolResultMessage['content']; details?: TDetails }) => void,
+    toolContext: TContext,
+    invocation: AgentHarnessToolInvocation,
+    context: Context,
+  ): Promise<{ content: ToolResultMessage['content']; details?: TDetails; isError?: boolean }>;
+};
+export type Entry = { id: string; parentId: string | null; timestamp: number; seq: number } & (
+  | { type: 'message'; message: AgentMessage }
+  | { type: 'custom'; customType: string; data?: JsonValue }
+  | {
+      type: 'compaction';
+      summary: string;
+      tokensBefore: number;
+      retainedTail: AgentMessage[];
+      fromHook: boolean;
+      details?: JsonValue;
+      usage?: Usage;
+    }
+  | {
+      type: 'branch_summary';
+      summary: string;
+      fromId?: string | null;
+      fromHook: boolean;
+      details?: JsonValue;
+      usage?: Usage;
+    }
+);
+export interface SessionStats {
+  messageCount: number;
+  userMessages: number;
+  assistantMessages: number;
+  toolCalls: number;
+  toolResults: number;
+  tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+  cost: number;
+  usage: Usage;
+  sessionId?: string;
+  sessionFile?: string;
+  totalMessages?: number;
+  totalCost?: number;
+  contextUsage?: import('@earendil-works/pi-coding-agent').ContextUsage;
+}
+export interface CompactionPreparation {
+  entries: Entry[];
+  messages: AgentMessage[];
+  tokensBefore: number;
+  retainedTail: AgentMessage[];
+  firstKeptEntryId?: string;
+  messagesToSummarize: AgentMessage[];
+  turnPrefixMessages: AgentMessage[];
+  isSplitTurn: boolean;
+  previousSummary?: string;
+  fileOps: import('@earendil-works/pi-coding-agent').FileOperations;
+  settings: { enabled: boolean; reserveTokens: number; keepRecentTokens: number };
+}
+export interface CompactResult {
+  summary: string;
+  tokensBefore: number;
+  retainedTail: AgentMessage[];
+  details?: JsonValue;
+  usage?: Usage;
+}
+export interface HookMap {
+  transform_context: {
+    event: { messages: AgentMessage[]; systemPrompt: string };
+    result: { messages?: AgentMessage[]; systemPrompt?: string } | undefined;
+  };
+  before_payload: { event: { model: Model<Api>; payload: unknown }; result: { payload: unknown } | undefined };
+  before_tool: {
+    event: { toolCallId: string; toolName: string; args: Record<string, JsonValue> };
+    result: { args?: Record<string, JsonValue>; block?: { reason: string; terminate?: boolean } } | undefined;
+  };
+  after_tool: {
+    event: {
+      toolCallId: string;
+      toolName: string;
+      args: Record<string, JsonValue>;
+      content: ToolResultMessage['content'];
+      details?: JsonValue;
+      isError: boolean;
+      usage?: Usage;
+    };
+    result:
+      | {
+          content?: ToolResultMessage['content'];
+          details?: JsonValue;
+          isError?: boolean;
+          usage?: Usage;
+          terminate?: boolean;
+        }
+      | undefined;
+  };
+  before_compaction: {
+    event: {
+      reason: 'manual' | 'threshold' | 'overflow';
+      preparation: CompactionPreparation;
+      customInstructions?: string;
+    };
+    result: { decline?: boolean; compaction?: CompactResult } | undefined;
+  };
+}
+export type HarnessEvent = (
+  | { type: 'run_start' | 'run_resume' | 'run_end' | 'turn_start' | 'compaction_start' | 'navigation_start' }
+  | { type: 'message_start' | 'message_end'; message: AgentMessage; runId?: string; entryId?: string }
+  | {
+      type: 'message_update';
+      message: import('@earendil-works/pi-ai').AssistantMessage;
+      event: import('@earendil-works/pi-ai').AssistantMessageEvent;
+    }
+  | { type: 'tool_start'; toolCallId: string; toolName: string; args: Record<string, JsonValue> }
+  | {
+      type: 'tool_update';
+      toolCallId: string;
+      toolName: string;
+      partialResult: { content: ToolResultMessage['content']; details?: JsonValue };
+    }
+  | {
+      type: 'tool_end';
+      toolCallId: string;
+      toolName: string;
+      result: { content: ToolResultMessage['content']; details?: JsonValue };
+      isError: boolean;
+    }
+  | { type: 'entry_added'; entry: Entry }
+  | { type: 'queue_update'; queues: { kind: string }[] }
+  | { type: 'turn_end'; message: import('@earendil-works/pi-ai').AssistantMessage; toolResults: ToolResultMessage[] }
+  | {
+      type: 'compaction_end';
+      status: 'completed' | 'failed' | 'aborted';
+      reason: 'manual' | 'threshold' | 'overflow';
+      entryId?: string;
+      error?: Error;
+    }
+  | {
+      type: 'navigation_end';
+      status: 'completed' | 'failed' | 'aborted';
+      tipId: string | null;
+      fromTipId: string | null;
+    }
+  | { type: 'value_update'; value: 'session_name'; name: string }
+  | {
+      type: 'config_update';
+      property: 'model';
+      value: { provider: string; modelId: string };
+      previous?: { provider: string; modelId: string };
+    }
+  | { type: 'config_update'; property: 'thinkingLevel'; value: ThinkingLevel; previous: ThinkingLevel }
+  | { type: 'usage'; row: { id: string; usage: Usage } }
+  | { type: 'run_suspend' | 'run_abort' | 'operation_abort' }
+  | { type: 'handler_error' | 'error'; error: string }
+) & { [key: string]: unknown; lane?: string; runId?: string };
+export type EntryProjector = (entry: Entry) => AgentMessage[];
+export interface AgentHarnessOptions<TContext extends object | undefined> {
+  toolContext?: TContext | ((context: Context) => TContext | Promise<TContext>);
+  systemPrompt?: string | ((toolContext: TContext, context: Context) => string | Promise<string>);
+  streamOptions?: ConversationStreamOptions;
+  toProviderMessages?: (messages: AgentMessage[], context: Context) => Message[] | Promise<Message[]>;
+}
 import type {
   Api,
   CredentialStore,
@@ -33,6 +219,7 @@ import type {
 import type { HistoryOwnership, HistoryOwnershipLease } from '../../services/historyImport';
 
 export interface SqliteSessionStorage {
+  storage: Storage;
   session: Session;
   sessionFile: string;
   repository: { close(context: Context): Promise<void> };
@@ -64,9 +251,10 @@ export interface DirectHarnessRuntimeOptions<TContext extends object | undefined
 
   /** Injecting a Session is supported for tests and hosts that already own storage. */
   session?: Session;
-  /** Server hosts select SQLite; terminal hosts retain JSONL. */
+  durableStorage?: Storage;
+  /** Durable hosts write SQLite. The legacy JSONL selector is rejected. */
   storage?: 'jsonl' | 'sqlite';
-  /** Existing v4 JSONL session path. Requires historyOwnership for its lifetime. */
+  /** Existing durable-v1 SQLite session path. Requires historyOwnership for its lifetime. */
   sessionPath?: string;
   /** Existing v3 JSONL path. It is never opened for writing. */
   legacySessionPath?: string;
@@ -93,6 +281,8 @@ export interface DirectHarnessRuntimeOptions<TContext extends object | undefined
   retry?: RetryPolicy;
   compaction?: CompactionSettings;
   thinkingLevel?: ThinkingLevel;
+  /** Creation-time inherited intent. Persisted child state wins on reopen; requests remain Codex-only. */
+  initialFastMode?: boolean;
   activeToolNames?: string[];
   steeringMode?: QueueMode;
   followUpMode?: QueueMode;
@@ -153,11 +343,12 @@ export interface DirectHarnessLifecycle {
 /** Direct, same-process AgentHarness runtime owned by one session host. */
 export interface DirectHarnessRuntime<TContext extends object | undefined = object | undefined> {
   readonly sessionId: string;
+  readonly sessionFile?: string;
   readonly laneName: string;
   readonly harnessId: string;
   readonly session: Session;
-  readonly harness: AgentHarness<TContext>;
-  readonly lane: AgentLane;
+  readonly harness: Harness;
+  readonly lane: Conversation;
   readonly exited: Promise<number>;
   readonly storageQuarantined: boolean;
 
@@ -177,6 +368,7 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   listCommands(): readonly { name: string; description: string }[];
   /** Dispatches a registered command without admitting a model turn. */
   dispatchCommand(text: string): Promise<boolean>;
+  setFastMode(enabled: boolean): Promise<void>;
   setModel(model: { provider: string; id: string }): Promise<void>;
   availableModels(): Promise<readonly Model<Api>[]>;
   /** Shares the harness dispatch guards with host-owned auxiliary model requests. */
@@ -208,10 +400,7 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   appendMessage(message: AgentMessage): Promise<string>;
   /** Names an entry in the session tree. */
   setLabel(targetId: string, label: string | undefined): Promise<void>;
-  recordUsage(
-    usage: Usage,
-    options?: { entryId?: string; details?: import('@earendil-works/pi-agent-core').JsonValue },
-  ): Promise<string>;
+  recordUsage(usage: Usage, options?: { entryId?: string; details?: JsonValue }): Promise<string>;
   submitPrompt(
     text: string,
     images?: ImageContent[],

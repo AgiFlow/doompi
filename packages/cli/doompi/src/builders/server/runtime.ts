@@ -96,7 +96,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   const homeDirectory = baseEnvironment.HOME ?? os.homedir();
   const serverDirectory = path.join(piAgentDirectory(baseEnvironment), 'server');
   // This native history has no agent lane and is deliberately outside the session-history catalog.
-  const requestReceipts = createRequestReceipts({ directory: path.join(serverDirectory, 'request-receipts') });
+  const requestReceipts = createRequestReceipts({ directory: path.join(serverDirectory, 'request-receipts-v1') });
   const activeMedia = new Set<() => boolean>();
   const mediaArbitration: DoomHostMediaArbitration = {
     register(busy) {
@@ -596,6 +596,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           pinned: readonly PinnedSelectionAxis[];
           minorModes?: readonly string[];
           allowedTools?: readonly string[];
+          initialFastMode?: boolean;
         } = { pinned: [] },
       ): HeadlessSessionHostOptions => {
         const policyOptions = context.options;
@@ -620,6 +621,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           // A member checkout runs its workspace's compiled composition, not one of its own.
           ...(isMemberCheckout(policyOptions.repoRoot, workspace) ? { inheritedArtifact: registration } : {}),
           sessionName: identity.sessionName,
+          ...(explicit.initialFastMode === undefined ? {} : { initialFastMode: explicit.initialFastMode }),
           webComposition: webCompositions?.publish(
             { scope: 'session', sessionId: identity.sessionId },
             registration,
@@ -838,7 +840,23 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               openSessions.list().find((record) => record.sessionId === request.parentSessionId)?.artifact);
         const explicit = sessionSelectionArgs(request);
         const start = (async (): Promise<DoomHubSessionScope> => {
+          // Snapshot only for creation. Explicit-ID resumes retain their own durable Fast state.
+          const parent =
+            request.parentSessionId !== undefined && (sessionId === undefined || request.reservationId !== undefined)
+              ? sessionManager.get(request.parentSessionId)
+              : undefined;
+          let initialFastMode: boolean | undefined;
+          if (parent !== undefined) {
+            const state = await parent.runtime.readState();
+            if (typeof state.fastMode !== 'boolean') throw new Error('Parent Fast mode must be a boolean.');
+            initialFastMode = state.fastMode;
+          }
           const childIdentity = resolveSessionIdentity([], identity);
+          if (sessionId !== undefined && request.reservationId === undefined)
+            childIdentity.agentArgs.push(
+              '--session',
+              path.join(serverDirectory, 'sessions', 'durable-v1', `${childIdentity.identity.sessionId}.sqlite`),
+            );
           const childEnvironment = { ...baseEnvironment, ...request.environment };
           for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete childEnvironment[key];
           // The workspace is settled first: a member checkout reads its workspace's configuration.
@@ -900,6 +918,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             const created = await hub.create(
               sessionHostOptions(childContext, bundle, mcpBundle, registration, identity, workspace, {
                 pinned: explicit.pinned,
+                ...(initialFastMode === undefined ? {} : { initialFastMode }),
                 ...(request.selection?.minorModes === undefined ? {} : { minorModes: request.selection.minorModes }),
                 ...(request.tools === undefined ? {} : { allowedTools: request.tools }),
               }),
@@ -984,7 +1003,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         if (pending) return pending;
         const resume = (async () => {
           const target = (await savedHistory(workspaceId)).find((item) => item.summary.id === targetSessionId);
-          if (!target) throw new Error('Saved Pi thread not found in this workspace.');
+          if (!target)
+            throw new Error('Saved Pi 1.0 session not found in this workspace. Earlier sessions cannot be resumed.');
           const artifact = validatedExecution(target.execution, workspaceId);
           await openSession(
             {
@@ -1024,7 +1044,13 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         if (record.repoRoot !== undefined && record.repoRoot !== owner)
           throw new Error('Saved transcript checkout has changed.');
         return readSqliteTranscript(
-          path.join(piAgentDirectory(baseEnvironment), 'server', 'sessions', `${record.sessionId}.sqlite`),
+          path.join(
+            piAgentDirectory(baseEnvironment),
+            'server',
+            'sessions',
+            'durable-v1',
+            `${record.sessionId}.sqlite`,
+          ),
           request,
           context,
           {
@@ -1084,7 +1110,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         if (!workspaceId || !hub.workspaces().some((workspace) => workspace.id === workspaceId))
           throw new Error('Session workspace not found.');
         const target = (await savedHistory(workspaceId)).find((item) => item.summary.id === targetSessionId);
-        if (!target) throw new Error('Saved Pi thread not found in this workspace.');
+        if (!target)
+          throw new Error('Saved Pi 1.0 session not found in this workspace. Earlier sessions cannot be resumed.');
         const artifact = validatedExecution(target.execution, workspaceId);
         const closedRecord = openSessions.list().find((entry) => entry.sessionId === session.id);
         await hub.closeSession(session.id);

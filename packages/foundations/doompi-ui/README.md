@@ -10,7 +10,7 @@ core. Extension authors can depend on its public contracts without adopting the 
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.85.0
+- Pi 1.0.0
 - Pi TUI 0.85.0
 
 ## Install

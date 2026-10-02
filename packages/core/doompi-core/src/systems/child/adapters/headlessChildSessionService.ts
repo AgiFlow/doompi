@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Models, MutableModels, Provider } from '@earendil-works/pi-ai';
 import {
   createBashTool,
@@ -13,7 +13,7 @@ import {
   createReadTool,
   createWriteTool,
 } from '@earendil-works/pi-coding-agent';
-import { SqliteSessionRepo, createNodeSqliteFactory } from '@earendil-works/pi-session-backend-sqlite-node';
+import { createSession, AgentDoc, type Cursor, type EntryRecord, type EntryId } from '@earendil-works/pi-durable';
 
 import {
   createDoomChildSessionService,
@@ -31,8 +31,15 @@ import {
   type DirectHarnessRuntimeOptions,
 } from '../../../server/directHarnessRuntime';
 import { readNativeChildTranscript } from '../../../server/nativeChildTranscriptReader';
+import { DurableNavigationDoc } from '../../../services/durableNavigation';
 import type { HistoryOwnership } from '../../../services/historyImport';
 import { createHistoryOwnership } from '../../../services/historyOwnership';
+import {
+  openReadOnlyDurableStorage,
+  openSqliteSessionStorage,
+  SessionMetadataDoc,
+  SessionIdentityDoc,
+} from '../../../services/sqliteSessionStorage';
 import type { DirectHarnessModel } from '../../../types/server/directHarnessRuntime';
 import { registerNativeChild } from './nativeChildRuntimes';
 
@@ -48,6 +55,8 @@ export interface HeadlessChildSessionServiceOptions {
    */
   readonly providers?: readonly Provider[] | (() => readonly Provider[]);
   readonly defaultModel?: () => DirectHarnessModel | undefined;
+  /** Snapshot the parent preference once per creation, never live-sync child toggles. */
+  readonly parentFastMode?: () => boolean | Promise<boolean>;
   /** Resolve the current session's MCP dispatcher at spawn and invocation time. */
   readonly mcpTool?: () => DoomChildSessionTool | undefined;
   readonly historyOwnership?: HistoryOwnership;
@@ -93,8 +102,7 @@ export function resolveChildProviders(
 }
 
 function sessionFile(runtime: DirectHarnessRuntime): string | undefined {
-  const metadata = runtime.session.metadata as unknown as { path?: unknown };
-  return typeof metadata.path === 'string' ? metadata.path : undefined;
+  return runtime.sessionFile;
 }
 
 function childRuntime(
@@ -139,12 +147,20 @@ async function installIntercom(
 ): Promise<void> {
   if (!intercom) return;
   const tool = intercom.bindRuntime(childRuntime(runtime));
-  const adapted = {
-    ...tool,
+  const adapted: DirectHarnessTool = {
+    name: tool.name,
+    description: tool.description,
     parameters: tool.parameters as never,
-    execute: (operationId: string, params: unknown, signal: AbortSignal, onUpdate: unknown) =>
-      tool.execute(operationId, params, signal, onUpdate as never),
-  } as unknown as DirectHarnessTool;
+    execute: async (operationId, params, onUpdate, _toolContext, _invocation, context) => {
+      const result = await tool.execute(
+        operationId,
+        params,
+        context.abortSignal ?? new AbortController().signal,
+        (partial) => onUpdate({ content: partial.content as never, details: partial.details }),
+      );
+      return { content: result.content as never, details: result.details, isError: result.isError };
+    },
+  };
   await runtime.replaceTools([...tools, adapted]);
 }
 
@@ -168,11 +184,19 @@ function adaptNativeTool(tool: NativeCodingTool | DoomChildSessionTool): DirectH
   const prompt = tool as (NativeCodingTool | DoomChildSessionTool) & {
     promptSnippet?: string;
     promptGuidelines?: string[];
+    executionMode?: string;
   };
   return {
-    ...prompt,
+    name: prompt.name,
+    description: prompt.description,
+    ...(prompt.executionMode === 'parallel' || prompt.executionMode === 'sequential'
+      ? { executionMode: prompt.executionMode }
+      : {}),
     label: 'label' in tool ? tool.label : tool.name,
     parameters: tool.parameters as never,
+    ...('prepareArguments' in tool && typeof tool.prepareArguments === 'function'
+      ? { prepareArguments: (args: unknown) => tool.prepareArguments!(args) as never }
+      : {}),
     async execute(toolCallId, parameters, onUpdate, _toolContext, _invocation, context) {
       const execute = tool.execute as (
         id: string,
@@ -265,40 +289,80 @@ async function forkChildJournal(
   branch: string,
   entryId: string | undefined,
   ownership: HistoryOwnership,
+  parentSessionId?: string,
 ): Promise<string> {
-  const directory = path.dirname(path.resolve(sourcePath));
-  const sourceRepository = new SqliteSessionRepo({
-    directory,
-    databasePath: sourcePath,
-    databaseFactory: createNodeSqliteFactory(),
-  });
-  const sources = await sourceRepository.list(undefined, BACKGROUND_CONTEXT);
-  await sourceRepository.close(BACKGROUND_CONTEXT);
-  if (sources.length !== 1)
-    throw new Error('Child source must be an existing SQLite session; import JSONL offline first.');
-  const id = randomUUID();
-  const destination = path.join(directory, `${id}.sqlite`);
-  const lease = await ownership.acquire(destination);
-  const repository = new SqliteSessionRepo({ directory, databaseFactory: createNodeSqliteFactory() });
+  const source = await openReadOnlyDurableStorage(sourcePath);
+  const read = createSession(source);
+  let destination: Awaited<ReturnType<typeof openSqliteSessionStorage>> | undefined;
   try {
-    await lease.assertQuiescent();
-    const fork = await repository.fork(
-      sources[0]!,
+    const navigation = await read.snapshot(DurableNavigationDoc, BACKGROUND_CONTEXT);
+    const selected = navigation?.activeConversationId;
+    if (selected === null || selected === undefined) throw new Error('Child source has no active conversation');
+    const metadata = await read.snapshot(SessionMetadataDoc, BACKGROUND_CONTEXT);
+    if (branch !== (metadata?.laneName ?? 'main')) throw new Error('Child source lane does not exist');
+    const cutoff = entryId === undefined ? undefined : (Number(entryId) as EntryId);
+    if (
+      entryId !== undefined &&
+      (!Number.isSafeInteger(cutoff) || !(await source.entry(selected, cutoff!, BACKGROUND_CONTEXT)))
+    )
+      throw new Error('Child fork entry is not visible in its source conversation');
+    const records: EntryRecord[] = [];
+    let cursor: Cursor | undefined;
+    do {
+      const page = await source.scanEntries(
+        { conversationId: selected, ...(cutoff === undefined ? {} : { maxEntryId: cutoff }) },
+        256,
+        cursor,
+        BACKGROUND_CONTEXT,
+      );
+      records.push(...page.items);
+      cursor = page.next;
+    } while (cursor);
+    records.reverse();
+    const agent =
+      cutoff === undefined
+        ? await read.snapshot(AgentDoc, selected, BACKGROUND_CONTEXT)
+        : await read.snapshotAsOf(AgentDoc, selected, cutoff, BACKGROUND_CONTEXT);
+    destination = await openSqliteSessionStorage(
       {
-        scope: 'branch',
-        branch,
-        id,
-        ...(entryId === undefined ? {} : { entryId }),
+        sessionsRoot: path.dirname(path.dirname(path.resolve(sourcePath))),
+        sessionId: randomUUID(),
+        parentSessionId: parentSessionId ?? (await read.snapshot(SessionIdentityDoc, BACKGROUND_CONTEXT))?.id,
+        historyOwnership: ownership,
       },
       BACKGROUND_CONTEXT,
     );
-    await fork.close(BACKGROUND_CONTEXT);
-    return destination;
+    await destination.session.commit(async (tx) => {
+      const conversation = await tx.createConversation({ ownership: { kind: 'ownerless' } });
+      if (agent) Object.assign(await tx.doc(AgentDoc, conversation.id), agent);
+      (await tx.doc(SessionMetadataDoc)).laneName = branch;
+      const ids = new Map<number, EntryId>();
+      for (const entry of records) {
+        const { id: _id, conversationId: _conversation, byTaskId: _task, head, edits, ...draft } = entry;
+        const appended = await tx.appendEntry(conversation.id, {
+          ...draft,
+          ...(head === undefined ? {} : { head: head === entry.id ? 'self' : ids.get(head) }),
+          ...(edits === undefined
+            ? {}
+            : {
+                edits: edits.map((edit) => {
+                  const target = ids.get(edit.target);
+                  if (target === undefined) throw new Error('Invalid fork context edit');
+                  return { ...edit, target };
+                }),
+              }),
+        });
+        ids.set(entry.id, appended.id);
+      }
+      (await tx.doc(DurableNavigationDoc)).activeConversationId = conversation.id;
+    }, BACKGROUND_CONTEXT);
+    return destination.sessionFile;
   } finally {
-    try {
-      await repository.close(BACKGROUND_CONTEXT);
-    } finally {
-      await lease.release();
+    await read.close(BACKGROUND_CONTEXT);
+    if (destination) {
+      await destination.session.close(BACKGROUND_CONTEXT);
+      await destination.repository.close(BACKGROUND_CONTEXT);
+      await destination.historyLease.release();
     }
   }
 }
@@ -315,6 +379,9 @@ export function createHeadlessChildSessionService(
       if (request.source.kind === 'terminal-pi-fork')
         throw new Error('Headless child sessions do not support terminal Pi sources.');
       const directRequestOptions = composeDirectHarnessRequestOptions(request, options.mcpTool);
+      const fastMode = await options.parentFastMode?.();
+      if (fastMode !== undefined && typeof fastMode !== 'boolean')
+        throw new Error('Parent Fast mode must be a boolean.');
 
       let sessionPath: string | undefined;
       let sessionId: string | undefined;
@@ -328,6 +395,7 @@ export function createHeadlessChildSessionService(
           request.source.branch,
           request.source.entryId,
           ownership,
+          request.parentSessionId || options.parentSessionId,
         );
       } else {
         sessionId = randomUUID();
@@ -350,12 +418,15 @@ export function createHeadlessChildSessionService(
         ...(model === undefined ? {} : { model }),
         ...(thinking === undefined ? {} : { thinkingLevel: thinking as never }),
         ...directRequestOptions,
+        ...(fastMode === undefined ? {} : { initialFastMode: fastMode }),
         historyOwnership: ownership,
       };
 
       let runtime: DirectHarnessRuntime | undefined;
       try {
         runtime = await runtimeFactory(runtimeOptions);
+        if (requestedModel && model) await runtime.setModel(model);
+        if (thinking !== undefined) await runtime.setThinkingLevel(thinking as never);
         await installIntercom(runtime, request.intercom, (runtimeOptions.tools ?? []) as DirectHarnessTool[]);
         const file = sessionFile(runtime);
         return childRuntime(runtime, request.intercom, file ? registerNativeChild(file, runtime) : undefined);

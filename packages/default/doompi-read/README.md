@@ -15,7 +15,7 @@ people and preserves syntax highlighting. Image reads retain Pi's native attachm
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.85.0 and Pi TUI 0.85.0
+- Pi 1.0.0 and Pi TUI 0.85.0
 
 ## Install
 

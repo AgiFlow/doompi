@@ -25,7 +25,7 @@ The root package contains the fixed host foundation. Features named in `.doom/mo
 - Node.js 22.19.0 or newer for the published package
 - Node.js 22.22.1 or newer when contributing from this workspace
 - macOS or Linux on arm64 or x64 for the bundled Runner backend
-- Pi 0.99.1 and Pi TUI 0.99.1 for packages that declare them as peer requirements
+- Pi 1.0.0 and Pi TUI 1.0.0 for packages that declare them as peer requirements
 
 DoomPi is alpha software. Configuration and package boundaries may change between alpha releases.
 
@@ -53,6 +53,12 @@ pi          # run your existing Pi setup for comparison
 `dpi sync` resolves the repository composition, installs required feature packages, and publishes an immutable runtime generation. It provisions every declared layer so a prepared mode switch does not depend on the root package's private dependencies. See [Composition and runtime bundling](bundling.md) for the build and publication model.
 
 `dpi` keeps Pi's existing global and repository settings, then applies the DoomPi extension and theme overlay in memory. It does not persist that overlay.
+
+## Pi 1.0 sessions and Codex Fast
+
+Headless sessions start fresh in Pi 1.0's `durable-v1` storage. Earlier headless sessions cannot be resumed or converted. Their files remain untouched; the cutover does not create backups.
+
+Use `/fast on` or `/fast off` in CLI or server sessions, or the **Fast** switch in the web model picker. Fast requests Codex priority service, which may increase cost, without changing thinking effort. Fresh top-level sessions default to off. New subagents and child sessions inherit the parent's current setting, then keep their own setting across resumes. Other providers never receive DoomPi's priority flag.
 
 ## Where synchronized state lives
 

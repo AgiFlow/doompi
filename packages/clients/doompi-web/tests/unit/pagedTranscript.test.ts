@@ -52,6 +52,31 @@ function fixture() {
   return { transcript, read, entries };
 }
 
+it('publishes Fast only on initialization or an authoritative mode change', () => {
+  const frames: Record<string, unknown>[] = [];
+  const transcript = createPagedTranscript(
+    id,
+    { readTranscriptPage: vi.fn() },
+    (_key, frame) => frames.push(frame),
+    BACKGROUND_CONTEXT,
+  );
+  try {
+    const state = { snapshot: {}, progress: null } as SessionServiceState;
+    transcript.publish(state);
+    transcript.publish(state);
+    transcript.publish({ ...state, snapshot: { ...state.snapshot, fastMode: true } });
+    transcript.publish({ ...state, snapshot: { ...state.snapshot, fastMode: true } });
+    transcript.publish(state);
+    expect(frames).toEqual([
+      { type: 'fast_mode_changed', enabled: false },
+      { type: 'fast_mode_changed', enabled: true },
+      { type: 'fast_mode_changed', enabled: false },
+    ]);
+  } finally {
+    transcript.dispose();
+  }
+});
+
 it('evicts old pages at 500 records and can load evicted newer pages without duplicates', async () => {
   const { transcript, read } = fixture();
   try {
@@ -250,6 +275,7 @@ it('replays projections, context, and live drafts only at the latest page', asyn
     } as unknown as SessionServiceState);
     await transcript.initialize();
     expect(frames.map((frame) => frame.type)).toEqual([
+      'fast_mode_changed',
       'entry_appended',
       'status',
       'message_update',

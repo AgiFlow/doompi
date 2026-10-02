@@ -233,7 +233,10 @@ describe('global remote control', () => {
       cwd: '/repo',
       createdAt: 'now',
       host: {
-        runtime: { exited: new Promise<number>(() => undefined) } as never,
+        runtime: {
+          exited: new Promise<number>(() => undefined),
+          readState: async () => ({ sessionId: 'one', fastMode: false }),
+        } as never,
         host: undefined,
         toolSurface: {
           readSurface: () => ({
@@ -280,6 +283,7 @@ describe('global remote control', () => {
           exited: new Promise<number>((resolve) => {
             exit = resolve;
           }),
+          readState: async () => ({ sessionId: 'failing', fastMode: false }),
           readLifecycle: async () => ({ revision: 0, operation: null, paused: false, queue: [] }),
           submitPrompt,
         } as never,

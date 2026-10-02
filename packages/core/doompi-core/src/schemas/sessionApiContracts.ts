@@ -209,6 +209,7 @@ export const SessionServiceStateSchema = Type.Object({
     phase: Phase,
     model: Model,
     thinkingLevel: Thinking,
+    fastMode: Flag,
     attached: Flag,
     locked: Flag,
     revision: NumberValue,
@@ -274,6 +275,7 @@ export const SessionMethodSchemas = {
   abortOperation: { input: Type.Tuple([Type.Object({ operationId: Text })]) },
   setModel: { input: Type.Tuple([Model]) },
   setThinking: { input: Type.Tuple([Thinking]) },
+  setFastMode: { input: Type.Tuple([Flag]) },
   followUp: { input: Type.Tuple([Message]) },
   enqueueAutomatic: { input: Type.Tuple([Message]), output: Type.Object({ id: Text }) },
   removeQueued: {
@@ -338,6 +340,7 @@ export const SessionMethodSchemas = {
     output: Type.Object({
       model: Optional(Model),
       thinkingLevel: Thinking,
+      fastMode: Flag,
       isStreaming: Flag,
       isCompacting: Flag,
       steeringMode: Type.Union([Type.Literal('all'), Type.Literal('one-at-a-time')]),

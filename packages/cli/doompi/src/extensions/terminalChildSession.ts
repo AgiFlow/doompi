@@ -15,6 +15,8 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { Provider } from '@earendil-works/pi-ai';
 import { getAgentDir, ModelRuntime, type ExtensionAPI, type ModelRegistry } from '@earendil-works/pi-coding-agent';
 
+import { readSessionFastMode } from './fast';
+
 const PACKAGE_SOURCE = '@agimon-ai/doompi/terminal-child-session';
 
 /**
@@ -45,6 +47,10 @@ function terminalChildSessionPlugin(cordis: Context, models: ModelRuntime, sessi
       models,
       providers: () => registeredProviders(extensionContext.modelRegistry),
       defaultModel: () => extensionContext.model,
+      parentFastMode: () => {
+        const currentSession = sessionContext.get(DOOM_CORDIS_SESSION_SERVICE) as DoomCordisSessionService;
+        return readSessionFastMode(currentSession.context.sessionManager);
+      },
       mcpTool: () => sessionContext.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionTool | undefined,
     });
     sessionContext.provide(DOOM_CHILD_SESSION_SERVICE, childSessions.get());

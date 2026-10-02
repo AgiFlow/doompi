@@ -207,7 +207,7 @@ describe('Doom deterministic architecture rules', () => {
   });
 
   it('allows only the declared native persistence and package installation owners', () => {
-    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi' }));
+    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-core' }));
     const owner = write(
       'src/services/layerPackageInstaller/index.ts',
       "import { DefaultPackageManager, SettingsManager } from '@earendil-works/pi-coding-agent'; export const manager = SettingsManager;",
@@ -225,6 +225,30 @@ describe('Doom deterministic architecture rules', () => {
       "import { DefaultPackageManager } from '@earendil-works/pi-coding-agent'; export const manager = DefaultPackageManager;",
     );
     write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
+    expect(serviceBoundary.check?.(owner, root, boundaryContext())).toContain('forbidden dependencies');
+  });
+
+  it('limits durable persistence imports to core owners and required symbols', () => {
+    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-core' }));
+    const owner = write(
+      'src/services/sqliteSessionStorage/index.ts',
+      "import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'; export const open = openNodeSqliteStorage;",
+    );
+    expect(serviceBoundary.check?.(owner, root, boundaryContext())).toBeNull();
+    const unrelated = write('src/services/other/index.ts', fs.readFileSync(owner, 'utf8'));
+    expect(serviceBoundary.check?.(unrelated, root, boundaryContext())).toContain('forbidden dependencies');
+    fs.writeFileSync(owner, "import { Harness } from '@earendil-works/pi-durable'; export const host = Harness;");
+    expect(serviceBoundary.check?.(owner, root, boundaryContext())).toContain('forbidden dependencies');
+    fs.writeFileSync(
+      owner,
+      "import { SqliteSessionRepo } from '@earendil-works/pi-session-backend-sqlite-node'; export const open = SqliteSessionRepo;",
+    );
+    expect(serviceBoundary.check?.(owner, root, boundaryContext())).toContain('forbidden dependencies');
+    fs.writeFileSync(
+      owner,
+      "import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'; export const open = openNodeSqliteStorage;",
+    );
+    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi' }));
     expect(serviceBoundary.check?.(owner, root, boundaryContext())).toContain('forbidden dependencies');
   });
 
@@ -1519,7 +1543,7 @@ describe('Doom deterministic architecture rules', () => {
     it('leaves the host and unranked packages alone', () => {
       const host = manifestFor('@agimon-ai/doompi', {
         '@agimon-ai/doompi-voice': 'workspace:*',
-        '@earendil-works/pi-coding-agent': '0.99.1',
+        '@earendil-works/pi-coding-agent': '1.0.0',
       });
       expect(packageLayerOrder.check?.(host, root, boundaryContext())).toBeNull();
 

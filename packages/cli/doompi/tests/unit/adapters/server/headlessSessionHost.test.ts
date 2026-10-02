@@ -17,9 +17,10 @@ import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import minorModeServerFacet from '@agimon-ai/doompi-minor-mode/extensions/server';
 import { restoreMinorModeSelection } from '@agimon-ai/doompi-minor-mode/projection';
 import profileServerFacet from '@agimon-ai/doompi-profile/extensions/server';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import {
   createAssistantMessageEventStream,
+  getCurrentSystemPrompt,
+  getCurrentTools,
   type AssistantMessage,
   type Models,
   type Model,
@@ -469,12 +470,12 @@ describe('headless startup', () => {
       // built differs from the last one, so the checks below compare the two
       // rather than counting publishes the fixture happens to provoke.
       const contextEntries = async () =>
-        (await session!.runtime.lane.findEntries({ order: 'oldestFirst' }, BACKGROUND_CONTEXT)).filter(
+        (await session!.runtime.readEntries()).entries.filter(
           (entry) => entry.type === 'custom' && entry.customType === 'doom-context',
         );
       const publishedRevision = async (): Promise<number> =>
         ((await contextEntries()).at(-1) as { data?: { revision?: number } } | undefined)?.data?.revision ?? 0;
-      const startupEntries = await session.runtime.lane.findEntries({ order: 'oldestFirst' }, BACKGROUND_CONTEXT);
+      const startupEntries = (await session.runtime.readEntries()).entries;
       const startupContexts = startupEntries.filter(
         (entry) => entry.type === 'custom' && entry.customType === 'doom-context',
       );
@@ -545,17 +546,17 @@ describe('headless startup', () => {
       expect(contextsAfterPrompt).toHaveLength(2);
       expect(contextsAfterPrompt[1]).toMatchObject({ data: { systemPrompt: { stage: 'effective' } } });
       expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({ revision: 2 });
-      expect(streamSimple.mock.calls[0]?.[1].tools?.map((tool) => tool.name)).toEqual(['fixture_tool']);
+      expect(getCurrentTools(streamSimple.mock.calls[0]![1].messages).map((tool) => tool.name)).toEqual([
+        'fixture_tool',
+      ]);
       expect(started).toHaveBeenCalledTimes(1);
       const SKILLS_BLOCK =
         '<available_skills>\n' +
-        '  <skill>\n' +
-        '    <name>fixture-documented-skill</name>\n' +
-        '    <description>Fixture skill the model can select</description>\n' +
-        '    <location>/fixture/SKILL.md</location>\n' +
-        '  </skill>\n' +
+        '<skill><name>fixture-documented-skill</name>' +
+        '<description>Fixture skill the model can select</description>' +
+        '<location>/fixture/SKILL.md</location></skill>\n' +
         '</available_skills>';
-      const firstPrompt = streamSimple.mock.calls[0]?.[1].systemPrompt as string;
+      const firstPrompt = getCurrentSystemPrompt(streamSimple.mock.calls[0]![1].messages) as string;
       // AGENTS.md now reaches a server session, in Pi's own framing, as it always has
       // in the terminal. Ungated, matching Pi: AGENTS.md is not a trust-gated resource.
       expect(firstPrompt).toContain('<project_context>');
@@ -590,7 +591,7 @@ describe('headless startup', () => {
       await expect(session.host!.dispatchCommand('fixture', 'stale')).rejects.toThrow('inactive or unknown');
       expect(executeCommand).toHaveBeenCalledTimes(2);
       await session.runtime.prompt('Disabled');
-      expect(streamSimple.mock.calls[1]?.[1].tools ?? []).toEqual([]);
+      expect(getCurrentTools(streamSimple.mock.calls[1]![1].messages)).toEqual([]);
       await session.runtime.prompt('/mode development');
       expect(session.host!.context.selection.activeLayers).toEqual(['tools']);
       expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({
@@ -600,7 +601,7 @@ describe('headless startup', () => {
       expect(executeCommand).toHaveBeenCalledTimes(3);
       resourceText = 'Updated context';
       await session.runtime.prompt('Reenabled');
-      expect(streamSimple.mock.calls[2]?.[1].systemPrompt).toContain(
+      expect(getCurrentSystemPrompt(streamSimple.mock.calls[2]![1].messages)).toContain(
         'Updated context\n\n[PERSONA] You are operating as the person described below (source: agents/writer).',
       );
       resourceFailure = true;
@@ -609,7 +610,7 @@ describe('headless startup', () => {
       // the throw reached the systemPrompt callback and denied every later request.
       expect(streamSimple).toHaveBeenCalledTimes(4);
       expect(session.canDispatch()).toBe(true);
-      const failedPrompt = streamSimple.mock.calls[3]?.[1].systemPrompt as string;
+      const failedPrompt = getCurrentSystemPrompt(streamSimple.mock.calls[3]![1].messages) as string;
       expect(failedPrompt).not.toContain('Updated context');
       expect(failedPrompt).toContain('Startup context');
       expect(resourceNotices).toHaveBeenCalledWith(expect.stringContaining('Could not read headless resource'));

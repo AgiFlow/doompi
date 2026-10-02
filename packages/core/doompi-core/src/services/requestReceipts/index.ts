@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Session } from '@earendil-works/pi-agent-core';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { setValue, value } from '@earendil-works/pi-agent-core/harness/session';
+import { defineDoc, type JsonObject, type Session } from '@earendil-works/pi-durable';
 
 import type {
   DoomRequestReceipt,
@@ -11,10 +9,15 @@ import type {
   DoomRequestReceipts,
 } from '../../schemas/packageApi';
 import { createHistoryOwnership } from '../historyOwnership';
-import { openSqliteSessionStorage } from '../sqliteSessionStorage';
+import { DURABLE_BACKGROUND_CONTEXT as BACKGROUND_CONTEXT, openSqliteSessionStorage } from '../sqliteSessionStorage';
 
 const RECEIPTS_SESSION_ID = 'request_receipts';
-const RECEIPTS_NAMESPACE = 'doompi.request-receipts';
+const ReceiptsDoc = defineDoc<{ receipts: JsonObject }>({
+  kind: 'doompi.request-receipts',
+  version: 1,
+  scope: 'session',
+  initial: () => ({ receipts: {} }),
+});
 const FINGERPRINT = /^[a-f0-9]{64}$/u;
 const NAMESPACE = /^[a-z][a-z0-9.-]*$/u;
 
@@ -29,7 +32,7 @@ function bounded(value: unknown, maximum: number): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= maximum;
 }
 
-function address(key: DoomRequestReceiptKey): ReturnType<typeof value<StoredReceipt>> {
+function address(key: DoomRequestReceiptKey): string {
   if (
     !bounded(key.namespace, 64) ||
     !NAMESPACE.test(key.namespace) ||
@@ -38,13 +41,13 @@ function address(key: DoomRequestReceiptKey): ReturnType<typeof value<StoredRece
   )
     throw new Error('Invalid request receipt address.');
   // JSON tuple encoding retains exact arbitrary provider IDs, including separators.
-  return value<StoredReceipt>(RECEIPTS_NAMESPACE, JSON.stringify([key.namespace, key.activationId, key.requestId]));
+  return JSON.stringify([key.namespace, key.activationId, key.requestId]);
 }
 
 function storedReceipt(input: unknown, key: DoomRequestReceiptKey): StoredReceipt {
   if (typeof input !== 'object' || input === null || Array.isArray(input))
     throw new Error('Request receipt storage is corrupt.');
-  const stored = input as Partial<StoredReceipt>;
+  const stored = JSON.parse(JSON.stringify(input)) as Partial<StoredReceipt>;
   const receipt = stored.receipt;
   if (
     stored.version !== 1 ||
@@ -103,10 +106,11 @@ export function createRequestReceipts(options: { directory: string }): {
       )
         throw new Error('Invalid request receipt reservation.');
       return operate((storage) =>
-        storage.mutate(async (mutator) => {
-          const existing = await mutator.getValue(receiptAddress, BACKGROUND_CONTEXT);
+        storage.commit(async (mutator) => {
+          const doc = await mutator.doc(ReceiptsDoc);
+          const existing = doc.receipts[receiptAddress];
           if (existing !== undefined) {
-            const prior = storedReceipt(existing.value, request).receipt;
+            const prior = storedReceipt(existing, request).receipt;
             return prior.fingerprint === request.fingerprint &&
               prior.destination === request.destination &&
               prior.transactionId === request.transactionId
@@ -123,7 +127,7 @@ export function createRequestReceipts(options: { directory: string }): {
             transactionId: request.transactionId,
             outcome: 'reserved',
           };
-          await mutator.commit([setValue(receiptAddress, { version: 1, receipt, token })], BACKGROUND_CONTEXT);
+          doc.receipts[receiptAddress] = JSON.parse(JSON.stringify({ version: 1, receipt, token }));
           return { kind: 'reserved' as const, token };
         }, BACKGROUND_CONTEXT),
       );
@@ -131,8 +135,9 @@ export function createRequestReceipts(options: { directory: string }): {
     lookup(key: DoomRequestReceiptKey) {
       const receiptAddress = address(key);
       return operate(async (storage) => {
-        const existing = await storage.getValue(receiptAddress, BACKGROUND_CONTEXT);
-        return existing === undefined ? undefined : storedReceipt(existing.value, key).receipt;
+        const doc = await storage.snapshot(ReceiptsDoc, BACKGROUND_CONTEXT);
+        const existing = doc?.receipts[receiptAddress];
+        return existing === undefined ? undefined : storedReceipt(existing, key).receipt;
       });
     },
     finish(request: DoomRequestReceiptKey & { token: string; outcome: TerminalOutcome }) {
@@ -140,15 +145,16 @@ export function createRequestReceipts(options: { directory: string }): {
       if (!bounded(request.token, 128) || !['admitted', 'rejected', 'uncertain'].includes(request.outcome))
         throw new Error('Invalid request receipt finish.');
       return operate((storage) =>
-        storage.mutate(async (mutator) => {
-          const existing = await mutator.getValue(receiptAddress, BACKGROUND_CONTEXT);
+        storage.commit(async (mutator) => {
+          const doc = await mutator.doc(ReceiptsDoc);
+          const existing = doc.receipts[receiptAddress];
           if (existing === undefined) throw new Error('Request receipt reservation does not exist.');
-          const prior = storedReceipt(existing.value, request);
+          const prior = storedReceipt(existing, request);
           if (prior.token !== request.token) throw new Error('Request receipt token does not match.');
           if (prior.receipt.outcome === request.outcome) return prior.receipt;
           if (prior.receipt.outcome !== 'reserved') throw new Error('Request receipt has already been finished.');
           const receipt: DoomRequestReceipt = { ...prior.receipt, outcome: request.outcome };
-          await mutator.commit([setValue(receiptAddress, { ...prior, receipt })], BACKGROUND_CONTEXT);
+          doc.receipts[receiptAddress] = JSON.parse(JSON.stringify({ ...prior, receipt }));
           return receipt;
         }, BACKGROUND_CONTEXT),
       );

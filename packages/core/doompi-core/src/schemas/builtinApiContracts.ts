@@ -19,7 +19,7 @@ export const builtinApiContract = defineApiContract({
     SealedHttpRequest: SealedHttpRequestSchema,
     SealedHttpResponse: SealedHttpResponseSchema,
   },
-  protocols: { pi: String(PROTOCOL_VERSION), chord: '0.99.1', sealed: '1' },
+  protocols: { pi: String(PROTOCOL_VERSION), chord: '1.0.0', sealed: '1' },
   http: [
     ...headlessHttpContracts,
     ...machineHttpContracts,
