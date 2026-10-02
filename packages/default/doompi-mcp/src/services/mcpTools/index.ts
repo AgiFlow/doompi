@@ -133,6 +133,11 @@ export function createMcpTool(
   tool: CatalogTool,
   isAvailable: McpToolAvailability = ALWAYS_AVAILABLE,
   renderers: McpToolRenderers = {},
+  executeTool?: (
+    tool: CatalogTool,
+    parameters: Record<string, unknown>,
+    signal?: AbortSignal,
+  ) => Promise<CallToolResult>,
 ): PiToolDeclaration {
   return definePiTool({
     name: tool.piName,
@@ -145,9 +150,12 @@ export function createMcpTool(
     parameters: (Object.keys(tool.inputSchema).length > 0 ? tool.inputSchema : ANY_OBJECT_SCHEMA) as TSchema,
     renderShell: 'self',
     ...renderers,
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params, signal) {
       if (!isAvailable(tool)) {
         throw new Error(`MCP tool ${tool.piName} is not available in the current session configuration.`);
+      }
+      if (executeTool) {
+        return toAgentToolResult(tool, await executeTool(tool, (params ?? {}) as Record<string, unknown>, signal));
       }
       const clientManager = clientManagerSource();
       if (!clientManager) {

@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { createHarnessSession } from '@agimon-ai/doompi-config/harnessStore';
 import { DOOM_CHILD_SESSION_MCP_TOOL_SERVICE, type DoomChildSessionTool } from '@agimon-ai/doompi-core/childSession';
+import { CONTEXT_TOOL_WARNINGS_STATUS_KEY, parseContextToolWarnings } from '@agimon-ai/doompi-core/contextApi';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
@@ -256,6 +257,29 @@ describe('MCP server facet contracts', () => {
       { name: 'example', state: 'not-connected' },
       { name: 'pending', state: 'not-connected' },
     ]);
+  });
+
+  it('publishes warning origins without disabling tools, then clears them on session shutdown', async () => {
+    const current = await connected();
+    const warn = mock.options[0]!.onOutputSchemaWarning!;
+    const warning = {
+      serverName: 'example',
+      toolName: 'ping',
+      method: 'tools/list' as const,
+      path: 'outputSchema.type',
+      message: 'Expected an object output schema.',
+    };
+    warn(warning);
+    const warnings = parseContextToolWarnings(current.statuses[CONTEXT_TOOL_WARNINGS_STATUS_KEY]);
+    expect(warnings.mcp_use).toEqual([
+      { source: 'example/ping (tools/list)', path: warning.path, message: warning.message },
+    ]);
+    expect(warnings.example_ping).toEqual(warnings.mcp_use);
+    expect(current.service().snapshot()).toHaveLength(1);
+    expect(current.execution.client.notify).not.toHaveBeenCalled();
+    await current.stop();
+    warn(warning);
+    expect(current.statuses[CONTEXT_TOOL_WARNINGS_STATUS_KEY]).toBeUndefined();
   });
 
   it('publishes the filtered parent MCP dispatcher for child sessions', async () => {

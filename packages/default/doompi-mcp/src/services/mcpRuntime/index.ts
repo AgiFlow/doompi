@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { DoomOAuthRedirect } from '@agimon-ai/doompi-core/packageApi';
 import type {
   ConfigSource,
+  McpOutputSchemaWarning,
   McpServerStateChange,
   McpToolInfo,
   OAuthCallbackSink,
@@ -49,6 +50,7 @@ export interface McpRuntimeOptions {
   callbackServer?: OAuthCallbackSink;
   onAuthorizationUrl?: (url: URL, serverName: string) => void;
   onServerStateChange?: (change: McpServerStateChange) => void;
+  onOutputSchemaWarning?: (warning: McpOutputSchemaWarning) => void;
 }
 
 export interface McpRuntimeHandle {
@@ -189,6 +191,12 @@ export class McpRuntimeOwner {
       definitionsCachePath: cachePath,
       // Never blocking: an unreachable server must not delay Pi's first prompt.
       startupMode: 'background',
+      outputSchemaValidation: {
+        mode: 'warn',
+        onWarning: (warning) => {
+          if (generation === this.generation) options.onOutputSchemaWarning?.(warning);
+        },
+      },
       auth: {
         tokenStore: options.tokenStore,
         onAuthorizationUrl: options.onAuthorizationUrl,

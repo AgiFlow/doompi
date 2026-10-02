@@ -1,3 +1,4 @@
+import type { ContextToolWarning } from '@agimon-ai/doompi-core/contextApi';
 import type { McpStatusSnapshot } from '@agimon-ai/doompi-core/mcpStatus';
 import type { DoomMcpResolvedToolSelection } from '@agimon-ai/doompi-core/mcpToolResolver';
 import type {
@@ -5,7 +6,13 @@ import type {
   DoomToolRestrictionHandle,
   DoomToolSurfaceService,
 } from '@agimon-ai/doompi-core/toolSurface';
-import type { McpClientManagerService, McpServerStateChange, TokenStore } from '@agimon-ai/mcp-proxy';
+import type {
+  McpClientManagerService,
+  McpOutputSchemaWarning,
+  McpServerStateChange,
+  TokenStore,
+} from '@agimon-ai/mcp-proxy';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 
 import { PACKAGE_SOURCE } from '../../constants/piMcp';
 import type { McpResourceView, McpServerView } from '../../types/mcp';
@@ -96,6 +103,8 @@ export class McpSession {
   private readonly browserAuthorizationRequests = new Set<string>();
   /** Explicit session disconnects fence late discovery and stale tool invocations. */
   private readonly disconnectedServers = new Set<string>();
+  /** Bounded, session-local diagnostics. Never tool-result values or cached credentials. */
+  private outputSchemaWarnings: McpOutputSchemaWarning[] = [];
   /** Invalidates deferred startup work when a session reloads or shuts down. */
   private lifecycleGeneration = 0;
   private configurationFingerprint: string | undefined;
@@ -259,6 +268,18 @@ export class McpSession {
     const tool = this.activeToolDefinitions().find((candidate) => candidate.piName === name);
     if (!tool || !this.isToolAvailable(tool))
       throw new Error(`MCP tool ${name} is not available in the current session configuration.`);
+    return toHeadlessToolResult(tool, await this.callTool(tool, parameters, signal));
+  }
+
+  /** Shared raw execution for Pi and headless, before their distinct result conventions. */
+  async callTool(
+    tool: CatalogTool,
+    parameters: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<CallToolResult> {
+    const name = tool.piName;
+    if (!this.isToolAvailable(tool))
+      throw new Error(`MCP tool ${name} is not available in the current session configuration.`);
     const runtime = this.runtime;
     const services = runtime?.getServices();
     if (!runtime || !services) throw new Error(RUNTIME_NOT_STARTED);
@@ -268,12 +289,8 @@ export class McpSession {
     if (!runtime.isCurrent(services) || !this.isToolAvailable(tool))
       throw new Error(`MCP tool ${name} is no longer available in the current session configuration.`);
     const timeout = services.clientManager.getServerRequestTimeout(tool.serverName);
-    const result = await connection.callTool(
-      tool.toolName,
-      parameters,
-      timeout === undefined ? undefined : { timeout },
-    );
-    return toHeadlessToolResult(tool, result);
+    this.clearToolWarnings(tool.serverName, 'tools/call', tool.toolName);
+    return connection.callTool(tool.toolName, parameters, timeout === undefined ? undefined : { timeout });
   }
 
   /**
@@ -312,6 +329,8 @@ export class McpSession {
   async start(): Promise<void> {
     const generation = ++this.lifecycleGeneration;
     this.disconnectedServers.clear();
+    this.outputSchemaWarnings = [];
+    this.emitChange();
     // Explicit disabled and empty Doom projections must not instantiate any
     // runtime collaborator, including the keyring-backed token store.
     if (this.configuredServerNames().length === 0) return;
@@ -336,6 +355,18 @@ export class McpSession {
       tokenStore,
       onAuthorizationUrl: (url, serverName) => this.onAuthorizationUrl(url, serverName, generation),
       onServerStateChange: (change) => this.onServerStateChange(change, generation),
+      onOutputSchemaWarning: (warning) => {
+        if (
+          generation !== this.lifecycleGeneration ||
+          this.disconnectedServers.has(warning.serverName) ||
+          !this.configuredServerNames().includes(warning.serverName)
+        )
+          return;
+        if (this.outputSchemaWarnings.length >= 64) return;
+        if (this.outputSchemaWarnings.some((current) => canonicalJson(current) === canonicalJson(warning))) return;
+        this.outputSchemaWarnings.push(warning);
+        this.emitChange();
+      },
     });
     // Shutdown can land while the proxy package or token store is loading. Make
     // sure that late container cannot survive and mutate a closed Pi session.
@@ -391,6 +422,7 @@ export class McpSession {
       throw error;
     }
     if (generation !== this.lifecycleGeneration) return;
+    this.clearToolWarnings(serverName);
     this.resourceCache.delete(serverName);
     this.authorizationUrls.delete(serverName);
     this.browserAuthorizationRequests.delete(serverName);
@@ -451,6 +483,35 @@ export class McpSession {
       const authorizationUrl = this.authorizationUrls.get(server.name);
       return authorizationUrl ? { ...server, authorizationUrl } : server;
     });
+  }
+
+  /** Both the proxy tool and direct tools point to the same live warning origins. */
+  getToolWarnings(): Readonly<Record<string, readonly ContextToolWarning[]>> {
+    const tools = this.activeToolDefinitions();
+    const entries = tools.flatMap((tool): [string, ContextToolWarning[]][] => {
+      const warnings = this.outputSchemaWarnings
+        .filter((warning) => warning.serverName === tool.serverName && warning.toolName === tool.toolName)
+        .map((warning) => ({
+          source: `${warning.serverName}/${warning.toolName} (${warning.method})`,
+          path: warning.path,
+          message: warning.message,
+        }));
+      return warnings.length === 0 ? [] : [[tool.piName, warnings]];
+    });
+    if (entries.length === 0) return {};
+    return Object.fromEntries([...entries, ['mcp_use', entries.flatMap(([, warnings]) => warnings)]]);
+  }
+
+  private clearToolWarnings(serverName: string, method?: McpOutputSchemaWarning['method'], toolName?: string): void {
+    const remaining = this.outputSchemaWarnings.filter(
+      (warning) =>
+        warning.serverName !== serverName ||
+        (method !== undefined && warning.method !== method) ||
+        (toolName !== undefined && warning.toolName !== toolName),
+    );
+    if (remaining.length === this.outputSchemaWarnings.length) return;
+    this.outputSchemaWarnings = remaining;
+    this.emitChange();
   }
 
   /**
@@ -537,6 +598,7 @@ export class McpSession {
     this.browserAuthorizationRequests.clear();
     this.authorizationUrls.clear();
     this.resourceCache.clear();
+    this.outputSchemaWarnings = [];
     const retiredRuntime = this.runtime;
     this.runtime = undefined;
     await retiredRuntime?.dispose();
@@ -556,6 +618,7 @@ export class McpSession {
    */
   private onServerStateChange(change: McpServerStateChange, generation: number): void {
     if (generation !== this.lifecycleGeneration || this.disconnectedServers.has(change.serverName)) return;
+    if (change.state === 'connecting') this.clearToolWarnings(change.serverName);
     // The flow this URL belonged to is over, one way or the other: a server that
     // reached a terminal state is not still waiting on a redirect.
     if (change.state !== 'connecting' && change.state !== 'needs-auth') {
@@ -568,15 +631,19 @@ export class McpSession {
         ? services.clientManager.ensureConnected(change.serverName).then((connection) => connection.listTools())
         : Promise.resolve([]);
     void tools
-      .catch(() => [])
-      .then((tools) => {
+      .then(
+        (tools) => ({ tools, error: undefined }),
+        () => ({ tools: [], error: `Could not discover tools for MCP server "${change.serverName}".` }),
+      )
+      .then(({ tools, error }) => {
         if (
           generation !== this.lifecycleGeneration ||
           !runtime?.isCurrent(services) ||
           this.disconnectedServers.has(change.serverName)
         )
           return;
-        this.catalog.applyStateChange(change, tools);
+        if (error) this.catalog.addDiagnostic(error);
+        this.catalog.applyStateChange(error ? { ...change, error } : change, tools);
         this.trackTools(this.catalog.allTools());
         this.emitChange();
         this.updateToolVisibility();

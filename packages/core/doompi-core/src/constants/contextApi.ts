@@ -22,3 +22,6 @@ export const NAME_QUERY_PARAM = 'name';
 export const KIND_QUERY_PARAM = 'kind';
 
 export const CONTEXT_DETAIL_VERSION = 1;
+
+/** Plugin-agnostic status payload: a JSON map keyed by registered tool name. */
+export const CONTEXT_TOOL_WARNINGS_STATUS_KEY = 'doom-context-tool-warnings';

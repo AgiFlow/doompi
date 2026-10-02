@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { parseContextToolWarnings } from '../../../src/exports/contextApi';
 import { createContextApi } from '../../../src/server/contextApi';
 import type { ContextDetailFile } from '../../../src/types/contextApi';
 
@@ -84,5 +85,53 @@ describe('the context session API', () => {
     const response = await handler().fetch(new Request('http://session/everything'));
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe('context tool warning wire payload', () => {
+  const warning = { source: 'server/tool (call)', path: 'properties.input.type', message: 'unsupported type' };
+  it('reads origins keyed by registered tool names, including aggregate tools', () => {
+    expect(parseContextToolWarnings(JSON.stringify({ mcp_use: [warning], registered_tool: [warning] }))).toEqual({
+      mcp_use: [warning],
+      registered_tool: [warning],
+    });
+  });
+  it.each([undefined, '', '{', 'null', '[]', '42', '{"tool":{}}', '{"tool":[null]}'])(
+    'ignores malformed data %s',
+    (raw) => {
+      expect(parseContextToolWarnings(raw)).toEqual({});
+    },
+  );
+  it('rejects control characters in keys and every origin field', () => {
+    for (const control of ['\n', '\u0000', '\u007f', '\u0085']) {
+      expect(parseContextToolWarnings(JSON.stringify({ [`tool${control}`]: [warning] }))).toEqual({});
+      for (const field of ['source', 'path', 'message']) {
+        expect(parseContextToolWarnings(JSON.stringify({ tool: [{ ...warning, [field]: control }] }))).toEqual({});
+      }
+    }
+  });
+  it('bounds payloads, map size, warning count and text', () => {
+    expect(parseContextToolWarnings(' '.repeat(1024 * 1024 + 1))).toEqual({});
+    expect(
+      parseContextToolWarnings(
+        JSON.stringify(Object.fromEntries(Array.from({ length: 129 }, (_, i) => [`tool${i}`, []]))),
+      ),
+    ).toEqual({});
+    expect(parseContextToolWarnings(JSON.stringify({ tool: Array.from({ length: 65 }, () => warning) }))).toEqual({});
+    expect(parseContextToolWarnings(JSON.stringify({ ['t'.repeat(513)]: [] }))).toEqual({});
+    for (const [field, limit] of [
+      ['source', 600],
+      ['path', 512],
+      ['message', 512],
+    ] as const) {
+      expect(
+        parseContextToolWarnings(JSON.stringify({ tool: [{ ...warning, [field]: 'x'.repeat(limit + 1) }] })),
+      ).toEqual({});
+    }
+  });
+  it('does not treat special object keys as prototypes', () => {
+    const parsed = parseContextToolWarnings(JSON.stringify({ ['__proto__']: [warning] }));
+    expect(Object.hasOwn(parsed, '__proto__')).toBe(true);
+    expect(parsed['__proto__']).toEqual([warning]);
   });
 });

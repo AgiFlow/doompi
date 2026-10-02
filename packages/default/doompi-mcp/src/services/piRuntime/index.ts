@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { DOOM_CHILD_SESSION_MCP_TOOL_SERVICE } from '@agimon-ai/doompi-core/childSession';
+import { CONTEXT_TOOL_WARNINGS_STATUS_KEY } from '@agimon-ai/doompi-core/contextApi';
 import type { DoomCordisRuntimeService } from '@agimon-ai/doompi-core/cordisHost';
 import {
   DOOM_CORDIS_SESSION_SERVICE,
@@ -95,6 +96,11 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
             const names = servers.map((server) => server.name).join(',');
             context.ui?.setStatus(MCP_STATUS_KEY, names);
             if (context.mode !== 'tui') {
+              const warnings = session.getToolWarnings();
+              context.ui?.setStatus(
+                CONTEXT_TOOL_WARNINGS_STATUS_KEY,
+                Object.keys(warnings).length === 0 ? undefined : JSON.stringify(warnings),
+              );
               context.ui?.setStatus(MCP_SESSION_AUTH_STATUS_KEY, formatMcpSessionAuthStatus(session.getServers()));
             }
           };
@@ -163,7 +169,10 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
             sessionActive = false;
             stopPublishing();
             context.ui?.setStatus(MCP_STATUS_KEY, undefined);
-            if (context.mode !== 'tui') context.ui?.setStatus(MCP_SESSION_AUTH_STATUS_KEY, undefined);
+            if (context.mode !== 'tui') {
+              context.ui?.setStatus(CONTEXT_TOOL_WARNINGS_STATUS_KEY, undefined);
+              context.ui?.setStatus(MCP_SESSION_AUTH_STATUS_KEY, undefined);
+            }
             if (activeContext === context) activeContext = undefined;
             if (!disposed) await session.reconfigure(failClosedSessionConfig(context.cwd));
           };

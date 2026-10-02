@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { loadHarnessState } from '@agimon-ai/doompi-config/harnessStore';
+import { CONTEXT_TOOL_WARNINGS_STATUS_KEY } from '@agimon-ai/doompi-core/contextApi';
 import type {
   DoomHeadlessActivity,
   DoomHeadlessCommand,
@@ -194,6 +195,11 @@ export function createMcpServerRuntime(
             })),
           ),
         );
+        const warnings = session.getToolWarnings();
+        execution.client.setStatus(
+          CONTEXT_TOOL_WARNINGS_STATUS_KEY,
+          Object.keys(warnings).length === 0 ? undefined : JSON.stringify(warnings),
+        );
         for (const diagnostic of session.getDiagnostics()) {
           if (reported.has(diagnostic)) continue;
           reported.add(diagnostic);
@@ -235,6 +241,7 @@ export function createMcpServerRuntime(
           await retiredCleanup?.();
           execution.client.setStatus(MCP_STATUS_KEY, undefined);
           execution.client.setStatus(MCP_SESSION_AUTH_STATUS_KEY, undefined);
+          execution.client.setStatus(CONTEXT_TOOL_WARNINGS_STATUS_KEY, undefined);
         }
       };
     },

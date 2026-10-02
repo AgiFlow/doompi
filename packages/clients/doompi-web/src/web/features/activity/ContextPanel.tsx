@@ -1,4 +1,9 @@
-import type { ContextItemKind } from '@agimon-ai/doompi-core/contextApi';
+import {
+  CONTEXT_TOOL_WARNINGS_STATUS_KEY,
+  parseContextToolWarnings,
+  type ContextToolWarning,
+  type ContextItemKind,
+} from '@agimon-ai/doompi-core/contextApi';
 import { Button, EmptyState } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
 
@@ -35,7 +40,7 @@ const SOURCE_LABEL: Record<ContextItemSource, string> = {
 
 /** The tilde is the whole caveat in one character: this is arithmetic, not a bill. */
 function tokens(value: number | null): string {
-  return value === null ? '—' : `~${value.toLocaleString()}`;
+  return value === null ? '-' : `~${value.toLocaleString()}`;
 }
 
 /**
@@ -69,6 +74,12 @@ export function ContextPanel() {
   const context = useActiveSession((state) => state.context);
   const sessionId = useActiveSessionMeta()?.summary.id ?? null;
   const [target, setTarget] = useState<ItemTarget | null>(null);
+  const [targetSession, setTargetSession] = useState(sessionId);
+  if (targetSession !== sessionId) {
+    setTargetSession(sessionId);
+    setTarget(null);
+  }
+  const warnings = parseContextToolWarnings(statuses[CONTEXT_TOOL_WARNINGS_STATUS_KEY]);
   // The runtime's grouping wins once it arrives; the status line only has to
   // carry the surface until the session has reported its inventory.
   const groups = context ? projectedGroups(context) : contextGroups(statuses, widgets, projection);
@@ -76,7 +87,7 @@ export function ContextPanel() {
   const idle = inactiveTotal(groups);
   const visibleGroups = withoutMcpInventory(groups);
   return (
-    <div data-testid="context-panel" className="flex min-h-0 flex-1 flex-col">
+    <div data-testid="context-panel" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div data-testid="context-scroll" className="min-h-0 flex-1 overflow-y-auto">
         <PluginSurface slot={HOST_SLOTS.context} sessionId={sessionId} />
         {groups.length === 0 ? (
@@ -89,7 +100,12 @@ export function ContextPanel() {
         ) : (
           <div className="flex flex-col">
             {visibleGroups.map((group) => (
-              <ContextGroupView key={`${group.kind}:${group.id}`} group={group} onSelect={setTarget} />
+              <ContextGroupView
+                key={`${group.kind}:${group.id}`}
+                group={group}
+                warnings={warnings}
+                onSelect={setTarget}
+              />
             ))}
           </div>
         )}
@@ -134,7 +150,14 @@ export function ContextPanel() {
         </span>
       </div>
 
-      <ContextItemDialog sessionId={sessionId} target={target} onClose={() => setTarget(null)} />
+      <ContextItemDialog
+        sessionId={sessionId}
+        target={target}
+        warnings={
+          target?.itemKind === 'tool' && Object.hasOwn(warnings, target.name) ? warnings[target.name] : undefined
+        }
+        onClose={() => setTarget(null)}
+      />
     </div>
   );
 }
@@ -144,7 +167,15 @@ function ink(active: boolean): string {
   return active ? 'text-doom-hi' : 'text-doom-faint';
 }
 
-function ContextGroupView({ group, onSelect }: { group: ContextGroup; onSelect: (target: ItemTarget) => void }) {
+function ContextGroupView({
+  group,
+  warnings,
+  onSelect,
+}: {
+  group: ContextGroup;
+  warnings: Readonly<Record<string, readonly ContextToolWarning[]>>;
+  onSelect: (target: ItemTarget) => void;
+}) {
   // A group that reported rows is active when any of them is; one still pending keeps the normal head.
   const groupActive = group.items.length === 0 || group.items.some((item) => item.active);
   return (
@@ -211,6 +242,18 @@ function ContextGroupView({ group, onSelect }: { group: ContextGroup; onSelect: 
                     {item.itemKind === 'skill' ? 'S' : 'T'}
                   </abbr>
                   <span className={`flex-1 truncate text-xs ${ink(item.active)}`}>{item.name}</span>
+                  {item.itemKind === 'tool' &&
+                  Object.hasOwn(warnings, item.name) &&
+                  (warnings[item.name]?.length ?? 0) > 0 ? (
+                    <abbr
+                      data-testid={`context-warning-${item.name}`}
+                      aria-label={`${item.name} has warnings`}
+                      title="warnings: open tool details for origins"
+                      className="shrink-0 text-xs font-bold text-doom-yellow no-underline"
+                    >
+                      !
+                    </abbr>
+                  ) : null}
                   <span
                     title={item.active ? undefined : 'not sent to the model; costs nothing until switched on'}
                     className={`w-14 text-right text-xs ${item.active ? 'text-doom-text' : 'text-doom-faint'}`}
