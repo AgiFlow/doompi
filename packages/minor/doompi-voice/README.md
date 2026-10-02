@@ -84,7 +84,7 @@ Upstream port attribution is in `NOTICE` and `licenses/Codex-Apache-2.0.txt`.
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.85.0
+- Pi 1.0.0
 - A browser with microphone capture and speech synthesis when using `doompi-web`
 - For standalone terminal use on macOS, FFmpeg capture and `say` playback
 - One supported local transcription engine: `whisper-cli`, `whisper`, or `mlx_whisper` (Apple

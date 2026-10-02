@@ -25,6 +25,7 @@
       "./extensions/pi": "tir",
       "./extensions/server": "tir",
       "./extensions/agentModel": "tir",
+      "./extensions/fast": "tir",
       "./extensions/effort": "tir",
       "./extensions/terminalChildSession": "tir",
       "./extensions/ollamaProvider": "tir",
@@ -169,6 +170,11 @@
         "types": "./dist/extensions/agentModel.d.mts",
         "import": "./dist/extensions/agentModel.mjs",
         "require": "./dist/extensions/agentModel.cjs"
+      },
+      "./extensions/fast": {
+        "types": "./dist/extensions/fast.d.mts",
+        "import": "./dist/extensions/fast.mjs",
+        "require": "./dist/extensions/fast.cjs"
       },
       "./extensions/effort": {
         "types": "./dist/extensions/effort.d.mts",

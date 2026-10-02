@@ -29,6 +29,7 @@ export function resolveSessionIdentity(
     if (value !== undefined && !value.startsWith('-')) identity[key] = value;
     else args.push(option, identity[key]);
   }
+  if (!/^[a-zA-Z0-9_-]+$/u.test(identity.sessionId)) throw new Error('Invalid session id.');
   return { agentArgs: args, identity };
 }
 

@@ -1,2400 +1,1690 @@
 import { randomUUID } from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 
-import {
-  AgentHarness,
-  HarnessFault,
-  type AgentHarnessTool,
-  type AgentMessage,
-  type AgentLane,
-  type HarnessEvent,
-} from '@earendil-works/pi-agent-core';
-import { BACKGROUND_CONTEXT, type Context } from '@earendil-works/pi-agent-core/harness/context';
-import {
-  JSONL_STORAGE_VERSION,
-  JsonlSessionRepo,
-  laneState,
-  pendingEntry,
-  setValue,
-  value,
-  type JsonlSessionMetadata,
-  type Session,
-} from '@earendil-works/pi-agent-core/harness/session';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import type { Context, JsonValue } from '@earendil-works/chord';
+import { BACKGROUND_CONTEXT, awaitWithContext, withAbortSignal } from '@earendil-works/chord/context';
 import {
   createModels,
-  createAssistantMessageEventStream,
   getSupportedThinkingLevels,
-  type AssistantMessage,
-  type Api,
-  type ImageContent,
-  type Model,
+  createAssistantMessageEventStream,
+  type AssistantMessageEventStream,
   type Models,
   type MutableModels,
+  type Api,
+  type Model,
+  type ImageContent,
+  type Message,
   type Provider,
-  type Usage,
+  type AssistantMessage,
+  type ToolResultMessage,
 } from '@earendil-works/pi-ai';
+import { getCurrentSystemPrompt, getCurrentTools } from '@earendil-works/pi-ai/utils/transcript';
+import { convertToLlm } from '@earendil-works/pi-coding-agent';
+import {
+  Harness,
+  createRegistry,
+  defineDoc,
+  GenerationTask,
+  ToolTask,
+  CompactionTask,
+  hook,
+  watchEvents,
+  UsageDoc,
+  LiveDoc,
+  AgentDoc,
+  type Conversation,
+  type Cursor,
+  type EntryRecord,
+  type EntryId,
+  type SubmissionId,
+  type HarnessSettings,
+  type ToolRegistration,
+  type AgentEventStream,
+} from '@earendil-works/pi-durable';
+import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node';
 
-import { createHistoryCreationFileSystem } from '../services/historyCreationFileSystem';
-import { preserveHistoryBeforeOpen } from '../services/historyImport';
-import type { HistoryOwnershipLease } from '../services/historyImport';
-import { openSqliteSessionStorage } from '../services/sqliteSessionStorage';
+import { contextTokensOf, contextUsageOf, latestAssistantUsage } from '../services/contextUsage';
+import { initializeDurableNavigation, navigateDurableConversation } from '../services/durableNavigation';
+import { formatSkillsForSystemPrompt } from '../services/piExtensionHost';
+import { openSqliteSessionStorage, SessionIdentityDoc, SessionMetadataDoc } from '../services/sqliteSessionStorage';
+import { projectDurableEntries } from '../services/transcriptPages';
 import type {
-  DirectHarnessEventListener,
-  DirectHarnessFrame,
-  DirectHarnessModel,
-  DirectHarnessLifecycle,
-  DirectHarnessQueuedInput,
   DirectHarnessRuntime,
   DirectHarnessRuntimeOptions,
+  DirectHarnessFrame,
+  DirectHarnessEventListener,
+  DirectHarnessLifecycle,
+  DirectHarnessQueuedInput,
+  Entry,
+  AgentHarnessTool,
+  AgentMessage,
+  HarnessEvent,
 } from '../types/server/directHarnessRuntime';
-import { harnessErrorMessage as errorMessage } from './harnessErrorMessage';
 
-const DEFAULT_LANE = 'main';
-const DEFAULT_SESSION_ROOT = '.pi/sessions';
-const FRAME_ERROR = 'error';
-/** Journaled at every run end, so a reopened session can tell when it last settled. */
 export const AGENT_SETTLED_ENTRY_TYPE = 'doompi.agent-settled';
-const EVENT_TYPES: readonly HarnessEvent['type'][] = [
-  'run_start',
-  'run_resume',
-  'run_suspend',
-  'operation_abort',
-  'run_end',
-  'fault',
-  'handler_error',
-  'turn_start',
-  'turn_end',
-  'retry_scheduled',
-  'retry_start',
-  'retry_end',
-  'message_start',
-  'message_update',
-  'message_end',
-  'tool_start',
-  'tool_update',
-  'tool_end',
-  'entry_added',
-  'queue_update',
-  'value_update',
-  'config_update',
-  'compaction_start',
-  'compaction_end',
-  'navigation_start',
-  'navigation_end',
-  'usage',
-  'lane_created',
-];
-const STORAGE_ERROR_CODES = new Set(['EACCES', 'EBUSY', 'EIO', 'EMFILE', 'ENFILE', 'ENOSPC', 'EPERM', 'EROFS']);
-
-type AnyRecord = Record<string, unknown>;
-type AnySession = Session;
-type AnyModels = Models | MutableModels;
-
-type RetainedInput = Omit<DirectHarnessQueuedInput, 'disposition'> & {
+const LifecycleDoc = defineDoc({
+  kind: 'doompi.server.lifecycle',
+  version: 1,
+  scope: 'session',
+  initial: () => ({ json: '{"revision":0,"paused":false,"queue":[]}' }),
+});
+const FastModeDoc = defineDoc({
+  kind: 'doompi.fast-mode',
+  version: 1,
+  scope: 'session',
+  initial: (): { enabled: boolean } => ({ enabled: false }),
+});
+const CODEX_API = 'openai-codex-responses';
+const CODEX_PROVIDER = 'openai-codex';
+const LabelsDoc = defineDoc({
+  kind: 'doompi.labels',
+  version: 1,
+  scope: 'session',
+  initial: () => ({ labels: {} as Record<string, string> }),
+});
+type Retained = Omit<DirectHarnessQueuedInput, 'disposition'> & {
   disposition: DirectHarnessQueuedInput['disposition'] | 'consumed' | 'removed';
-  message?: AgentMessage;
-  operationId?: string;
-  nativeEntryId?: string;
-  /** A handoff is reserved before the native mutation, and reconciled on reopen. */
-  attemptId?: string;
-};
-
+  attempt?: number;
+  submissionMode?: 'steer' | 'followUp' | 'reject' | 'write';
+} & { submissionId?: number; conversationId?: number; message?: AgentMessage; operationId?: string };
 type LifecycleRecord = {
-  version: 1;
   revision: number;
   paused: boolean;
   abortOperationId?: string;
-  /** A directly accepted user replacement may run while retained inputs stay paused. */
-  userOperationId?: string;
-  queue: RetainedInput[];
+  abortTaskId?: number;
+  queue: Retained[];
 };
 
-const EMPTY_LIFECYCLE: LifecycleRecord = { version: 1, revision: 0, paused: false, queue: [] };
-const RETAINED_RECEIPTS = 128;
-
-function compactLifecycle(record: LifecycleRecord): LifecycleRecord {
-  let receipts = 0;
-  const queue = record.queue
-    .toReversed()
-    .filter((item) => {
-      if (item.disposition !== 'consumed' && item.disposition !== 'removed') return true;
-      receipts += 1;
-      return receipts <= RETAINED_RECEIPTS;
-    })
-    .toReversed()
-    .map((item): RetainedInput =>
-      item.disposition === 'consumed' || item.disposition === 'removed'
-        ? { id: item.id, text: '', delivery: item.delivery, scheduling: item.scheduling, disposition: item.disposition }
-        : item,
-    );
-  return { ...record, queue };
+function nativeId<T extends number>(id: string): T {
+  const value = Number(id);
+  if (!Number.isSafeInteger(value) || value < 0 || String(value) !== id)
+    throw new Error(`Invalid durable identifier: ${id}`);
+  return value as T;
 }
-
-type StorageHandle = {
-  session: AnySession;
-  sessionFile?: string;
-  repository?: { close(context: Context): Promise<void> };
-  environment?: NodeExecutionEnv;
-  historyLease?: HistoryOwnershipLease;
-};
-
-function isRecord(value: unknown): value is AnyRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+function json(value: unknown): JsonValue {
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
+function text(message: string | AgentMessage): string {
+  if (typeof message === 'string') return message;
+  if (!('content' in message))
+    return 'summary' in message ? message.summary : 'output' in message ? message.output : '';
+  return typeof message.content === 'string'
+    ? message.content
+    : message.content.map((p) => (p.type === 'text' ? p.text : '')).join('');
 }
-
-/** Run one prompt and return only the assistant text appended by that prompt. */
-export async function promptForAssistantText(runtime: DirectHarnessRuntime, text: string): Promise<string | undefined> {
-  const previousEntryIds = new Set((await runtime.readEntries()).entries.map((entry) => entry.id));
-  await runtime.prompt(text);
-  const { entries } = await runtime.readEntries();
-  for (let index = entries.length - 1; index >= 0; index--) {
-    const entry = entries[index];
-    if (!entry || previousEntryIds.has(entry.id)) continue;
-    if (entry.type !== 'message' || entry.message.role !== 'assistant') continue;
-    const output = entry.message.content
-      .flatMap((part) => (part.type === 'text' ? [part.text] : []))
-      .join('\n')
-      .trim();
-    return output || undefined;
-  }
-  return undefined;
-}
-
-function modelReference(model: DirectHarnessModel | undefined, models: AnyModels): Model<Api> {
-  if (model !== undefined && 'api' in model) return model;
-  const requested = model;
-  const resolved = requested === undefined ? models.getModels()[0] : models.getModel(requested.provider, requested.id);
-  if (resolved === undefined) {
-    const identity = requested === undefined ? 'the first configured model' : `${requested.provider}/${requested.id}`;
-    throw new Error(`Direct harness could not resolve ${identity}`);
-  }
-  return resolved;
-}
-
-export function readDirectHarnessSessionMetadata(filePath: string): JsonlSessionMetadata {
-  const absolute = fs.realpathSync(filePath);
-  const firstLine = fs.readFileSync(absolute, 'utf8').split('\n', 1)[0];
-  let header: AnyRecord;
-  try {
-    const parsed: unknown = JSON.parse(firstLine ?? '');
-    if (!isRecord(parsed)) throw new Error('header is not an object');
-    header = parsed;
-  } catch (error) {
-    throw new Error(`Invalid JSONL session header: ${absolute}`, { cause: error });
-  }
-  if (header.kind !== 'header' || header.v !== 4)
-    throw new Error(`Session is not an upstream v4 JSONL file: ${absolute}`);
-  const id = stringValue(header.id);
-  const cwd = stringValue(header.cwd);
-  const createdAt = header.createdAt;
-  if (!id || !cwd || typeof createdAt !== 'number' || !Number.isFinite(createdAt)) {
-    throw new Error(`Invalid JSONL session identity: ${absolute}`);
-  }
-  const stat = fs.statSync(absolute);
-  return {
-    id,
-    createdAt,
-    storageVersion: typeof header.storageVersion === 'number' ? header.storageVersion : JSONL_STORAGE_VERSION,
-    cwd,
-    path: absolute,
-    modifiedAt: stat.mtimeMs,
-    ...(typeof header.parentSessionId === 'string' ? { parentSessionId: header.parentSessionId } : {}),
-    ...(typeof header.legacyParentSessionPath === 'string'
-      ? { legacyParentSessionPath: header.legacyParentSessionPath }
-      : {}),
-  };
-}
-
-function isV3File(filePath: string): boolean {
-  let firstLine: string;
-  try {
-    firstLine = fs.readFileSync(path.resolve(filePath), 'utf8').split('\n', 1)[0] ?? '';
-  } catch (error) {
-    if (isRecord(error) && error.code === 'ENOENT') return false;
-    throw error;
-  }
-  try {
-    const header: unknown = JSON.parse(firstLine);
-    return isRecord(header) && header.type === 'session' && header.version === 3;
-  } catch {
-    return false;
-  }
-}
-
-async function acquireHistoryLease(
-  owner: NonNullable<DirectHarnessRuntimeOptions['historyOwnership']>,
-  filePath: string,
-): Promise<HistoryOwnershipLease> {
-  const lease = await owner.acquire(filePath);
-  try {
-    await lease.assertQuiescent();
-    return lease;
-  } catch (error) {
-    await Promise.resolve(lease.release()).catch(() => undefined);
-    throw error;
-  }
-}
-
-async function closeStorage(
-  storage: {
-    session?: AnySession;
-    repository?: { close(context: Context): Promise<void> };
-    environment?: NodeExecutionEnv;
-    historyLease?: HistoryOwnershipLease;
-  },
+/** Compatibility projection keeps protocol identities strings and retains fork ancestry. */
+export async function projectDurableConversationEntries(
+  conversation: Conversation,
   context: Context,
-): Promise<void> {
-  const failures: unknown[] = [];
-  try {
-    await storage.session?.close(context);
-  } catch (error) {
-    failures.push(error);
-  }
-  try {
-    await storage.repository?.close(context);
-  } catch (error) {
-    failures.push(error);
-  }
-  try {
-    await storage.environment?.cleanup(context);
-  } catch (error) {
-    failures.push(error);
-  }
-  try {
-    await storage.historyLease?.release();
-  } catch (error) {
-    failures.push(error);
-  }
-  storage.historyLease = undefined;
-  if (failures.length) throw new AggregateError(failures, 'Direct harness storage cleanup failed');
+): Promise<Entry[]> {
+  const records: EntryRecord[] = [];
+  let cursor: Cursor | undefined;
+  do {
+    const page = await conversation.entries({}, 256, cursor, context);
+    records.push(...page.items);
+    cursor = page.next;
+  } while (cursor);
+  records.reverse();
+  return projectDurableEntries(records);
 }
-
-async function openStorage<TContext extends object | undefined>(
-  options: DirectHarnessRuntimeOptions<TContext>,
-  context: Context,
-): Promise<StorageHandle> {
-  if (options.session !== undefined)
-    return {
-      session: options.session,
-      ...(options.sessionPath === undefined ? {} : { sessionFile: path.resolve(options.sessionPath) }),
-    };
-
-  if (options.storage === 'sqlite') return openSqliteSessionStorage(options, context);
-
-  const sessionPath = options.sessionPath === undefined ? undefined : path.resolve(options.sessionPath);
-  const legacyPath = options.legacySessionPath === undefined ? sessionPath : path.resolve(options.legacySessionPath);
-  let importedPath = sessionPath;
-  if (legacyPath !== undefined && isV3File(legacyPath)) {
-    throw new Error(
-      'Legacy v3 history cannot be opened for writing. Stop Pi, run doompi history-import <v3-source> <v4-destination> --confirm-offline, then open the v4 destination.',
-    );
-  }
-
-  const environment = new NodeExecutionEnv({ cwd: options.cwd });
-  const sessionsRoot = path.resolve(
-    options.sessionsRoot ??
-      (importedPath === undefined ? path.join(options.cwd, DEFAULT_SESSION_ROOT) : path.dirname(importedPath)),
-  );
-  let metadata: JsonlSessionMetadata | undefined;
-  if (importedPath === undefined && options.sessionId !== undefined) {
-    const discovery = new JsonlSessionRepo({ fileSystem: environment, sessionsRoot, now: () => Date.now() });
-    try {
-      metadata = (await discovery.list({ cwd: options.cwd }, context)).find(
-        (candidate) => candidate.id === options.sessionId,
-      );
-      importedPath = metadata?.path;
-    } finally {
-      await discovery.close(context);
-    }
-  }
-
-  let historyLease: HistoryOwnershipLease | undefined;
-  let session: AnySession | undefined;
-  const fileSystem =
-    importedPath === undefined
-      ? createHistoryCreationFileSystem(environment, async (destinationPath) => {
-          const owner = options.historyOwnership;
-          if (owner === undefined) throw new Error('Creating a writable session requires explicit HistoryOwnership');
-          historyLease = await acquireHistoryLease(owner, destinationPath);
-        })
-      : environment;
-  const repository = new JsonlSessionRepo({ fileSystem, sessionsRoot, now: () => Date.now() });
-  try {
-    if (importedPath !== undefined) {
-      const owner = options.historyOwnership;
-      if (owner === undefined) throw new Error('Opening an existing session requires explicit HistoryOwnership');
-      historyLease = await acquireHistoryLease(owner, importedPath);
-      metadata ??= readDirectHarnessSessionMetadata(importedPath);
-      if (options.sessionId !== undefined && options.sessionId !== metadata.id) {
-        throw new Error(`Session id mismatch: expected ${options.sessionId}, found ${metadata.id}`);
-      }
-      await preserveHistoryBeforeOpen(metadata.path, historyLease);
-      session = await repository.open(metadata, context);
-    } else {
-      const owner = options.historyOwnership;
-      if (owner === undefined) throw new Error('Creating a writable session requires explicit HistoryOwnership');
-      const created = await repository.create(
-        {
-          id: options.sessionId,
-          cwd: options.cwd,
-          ...(options.parentSessionId === undefined ? {} : { parentSessionId: options.parentSessionId }),
-        },
-        context,
-      );
-      session = created;
-      importedPath = created.metadata.path;
-      if (historyLease === undefined) throw new Error('New history was not admitted before publication');
-    }
-    return { session, sessionFile: importedPath, repository, environment, historyLease };
-  } catch (error) {
-    await closeStorage({ session, repository, environment, historyLease }, context);
-    throw error;
-  }
-}
-
-/**
- * Merge caller-supplied providers into the registry the harness will use.
- * A pi-ai MutableModels exposes setProvider; a Pi ModelRuntime exposes
- * registerNativeProvider instead, and dropping providers for the latter would
- * silently hide every extension-registered provider from the child harness.
- */
-function mergeProviders(models: AnyModels, providers: readonly Provider[]): void {
-  const mutable = models as Partial<MutableModels> & {
-    registerNativeProvider?: (provider: Provider) => void;
-  };
-  const register =
-    typeof mutable.setProvider === 'function'
-      ? mutable.setProvider.bind(models)
-      : typeof mutable.registerNativeProvider === 'function'
-        ? mutable.registerNativeProvider.bind(models)
-        : undefined;
-  if (register === undefined)
-    throw new Error('Direct harness cannot register providers on the supplied Models registry');
-  for (const provider of providers) register(provider);
-}
-
-function configureModels<TContext extends object | undefined>(
-  options: DirectHarnessRuntimeOptions<TContext>,
-): AnyModels {
-  if (options.models !== undefined) {
-    if (options.providers !== undefined && options.providers.length > 0)
-      mergeProviders(options.models, options.providers);
-    return options.models;
-  }
-  if (options.providers === undefined || options.providers.length === 0) {
-    throw new Error('Direct harness requires a public Models registry or at least one Provider');
-  }
-  const models =
-    options.credentials === undefined ? createModels() : createModels({ credentials: options.credentials });
-  for (const provider of options.providers) models.setProvider(provider);
-  return models;
-}
-
-function textContent(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (!Array.isArray(value)) return '';
-  return value
-    .filter(isRecord)
-    .filter((part) => part.type === 'text')
-    .map((part) => stringValue(part.text) ?? '')
-    .join('');
-}
-
-function queueText(item: unknown): string | undefined {
-  if (!isRecord(item) || item.type !== 'message' || !isRecord(item.message)) return undefined;
-  return textContent(item.message.content);
-}
-
-function mapQueueUpdate(event: AnyRecord): DirectHarnessFrame {
-  const queues = Array.isArray(event.queues) ? event.queues : [];
-  const steering: string[] = [];
-  const followUp: string[] = [];
-  for (const item of queues) {
-    if (!isRecord(item)) continue;
-    const text = queueText(item);
-    if (text === undefined) continue;
-    if (item.kind === 'steer') steering.push(text);
-    else if (item.kind === 'followUp' || item.kind === 'nextRun') followUp.push(text);
-  }
-  return { type: 'queue_update', queues, steering, followUp };
-}
-
-function stateModel(model: unknown): { provider: string; id: string } | undefined {
-  if (!isRecord(model)) return undefined;
-  const provider = stringValue(model.provider);
-  const id = stringValue(model.id) ?? stringValue(model.modelId);
-  return provider && id ? { provider, id } : undefined;
-}
-
-function mapHarnessEvent(event: HarnessEvent): DirectHarnessFrame[] {
-  const value = event as unknown as AnyRecord;
-  switch (event.type) {
-    case 'run_start':
-      return [{ type: 'agent_start', runId: value.runId, startedAt: value.startedAt }];
-    case 'run_resume':
-      return [{ type: 'agent_start', runId: value.runId, resumed: true }];
-    case 'run_suspend':
-      return [{ type: 'run_suspend', runId: value.runId, reason: value.reason, deferred: value.deferred }];
-    case 'operation_abort':
-      return [
-        { type: 'operation_abort', operationId: value.operationId, steer: value.steer, followUp: value.followUp },
-      ];
-    case 'run_end':
-      return [
-        {
-          type: 'agent_end',
-          runId: value.runId,
-          status: value.status,
-          ...(value.error === undefined ? {} : { error: value.error }),
-        },
-        { type: 'agent_settled', runId: value.runId, timestamp: value.endedAt },
-      ];
-    case 'fault':
-      return [{ type: FRAME_ERROR, error: value.message, code: value.code }];
-    case 'handler_error':
-      return [
-        {
-          type: 'handler_error',
-          kind: value.kind,
-          hook: value.hook,
-          event: value.event,
-          error: value.error,
-          stack: value.stack,
-        },
-      ];
-    case 'turn_start':
-      return [{ type: 'turn_start', runId: value.runId, turnId: value.turnId }];
-    case 'turn_end':
-      return [
-        {
-          type: 'turn_end',
-          runId: value.runId,
-          turnId: value.turnId,
-          message: value.message,
-          toolResults: value.toolResults,
-        },
-      ];
-    case 'retry_scheduled':
-      return [
-        {
-          type: 'auto_retry_start',
-          runId: value.runId,
-          attempt: value.attempt,
-          maxAttempts: value.maxAttempts,
-          error: value.errorMessage,
-        },
-      ];
-    case 'retry_start':
-      return [{ type: 'auto_retry_start', runId: value.runId, attempt: value.attempt }];
-    case 'retry_end':
-      return [
-        {
-          type: 'auto_retry_end',
-          runId: value.runId,
-          attempt: value.attempt,
-          success: value.success,
-          error: value.finalError,
-        },
-      ];
-    case 'message_start':
-      return [{ type: 'message_start', runId: value.runId, message: value.message }];
-    case 'message_update':
-      return [
-        {
-          type: 'message_update',
-          runId: value.runId,
-          message: value.message,
-          assistantMessageEvent: value.event,
-          ...(value.frame === undefined ? {} : { assistantMessageFrame: value.frame }),
-        },
-      ];
-    case 'message_end':
-      return [{ type: 'message_end', runId: value.runId, message: value.message, entryId: value.entryId }];
-    case 'tool_start':
-      return [
-        {
-          type: 'tool_execution_start',
-          runId: value.runId,
-          turnId: value.turnId,
-          toolCallId: value.toolCallId,
-          toolName: value.toolName,
-          args: value.args,
-        },
-      ];
-    case 'tool_update':
-      return [
-        {
-          type: 'tool_execution_update',
-          runId: value.runId,
-          turnId: value.turnId,
-          toolCallId: value.toolCallId,
-          toolName: value.toolName,
-          partialResult: value.partialResult,
-        },
-      ];
-    case 'tool_end':
-      return [
-        {
-          type: 'tool_execution_end',
-          runId: value.runId,
-          turnId: value.turnId,
-          toolCallId: value.toolCallId,
-          toolName: value.toolName,
-          result: value.result,
-          isError: value.isError,
-          terminate: value.terminate,
-        },
-      ];
-    case 'entry_added':
-      return [{ type: 'entry_appended', entry: value.entry }];
-    case 'queue_update':
-      return [mapQueueUpdate(value)];
-    case 'value_update':
-      if (value.value === 'session_name') return [{ type: 'session_info_changed', name: value.name }];
-      return [{ type: 'entry_label_changed', targetId: value.targetId, label: value.label }];
-    case 'config_update':
-      if (value.property === 'thinkingLevel') return [{ type: 'thinking_level_changed', level: value.value }];
-      if (value.property === 'model') {
-        const model = stateModel(value.value);
-        return model === undefined
-          ? []
-          : [
-              {
-                type: 'response',
-                command: 'get_state',
-                success: true,
-                data: { model },
-              },
-            ];
-      }
-      return [{ type: 'config_update', property: value.property, value: value.value, previous: value.previous }];
-    case 'compaction_start':
-      return [{ type: 'compaction_start', runId: value.runId, reason: value.reason }];
-    case 'compaction_end':
-      return [
-        {
-          type: 'compaction_end',
-          runId: value.runId,
-          reason: value.reason,
-          status: value.status,
-          entryId: value.entryId,
-        },
-      ];
-    case 'navigation_start':
-      return [{ type: 'navigation_start', runId: value.runId, targetId: value.targetId }];
-    case 'navigation_end':
-      return [{ type: 'navigation_end', runId: value.runId, status: value.status }];
-    case 'usage':
-      return [{ type: 'usage', lane: value.lane, row: value.row, totals: value.totals }];
-    case 'lane_created':
-      return [{ type: 'lane_created', at: value.at }];
-  }
-}
-
-function isStorageFailure(error: unknown): boolean {
-  if (error instanceof HarnessFault) return true;
-  if (isRecord(error) && typeof error.code === 'string' && STORAGE_ERROR_CODES.has(error.code)) return true;
-  return /(?:storage|session|jsonl|journal|commit|mutation).*(?:fail|error|fault|write|invariant)|(?:fail|error|fault|write|invariant).*(?:storage|session|jsonl|journal|commit|mutation)/iu.test(
-    errorMessage(error),
+export async function promptForAssistantText(
+  runtime: DirectHarnessRuntime,
+  prompt: string,
+): Promise<string | undefined> {
+  const previous = new Set((await runtime.readEntries()).entries.map((e) => e.id));
+  await runtime.prompt(prompt);
+  return (
+    (await runtime.readEntries()).entries
+      .toReversed()
+      .filter((e) => !previous.has(e.id))
+      .flatMap((e) => (e.type === 'message' && e.message.role === 'assistant' ? [text(e.message).trim()] : []))[0] ||
+    undefined
   );
 }
 
-function resultError(value: unknown): never {
-  if (isRecord(value) && value.ok === false) throw value.error;
-  throw value;
-}
-
-async function entriesForLane(
-  lane: AgentLane,
-  context: Context,
-): Promise<Awaited<ReturnType<AgentLane['findEntries']>>> {
-  return lane.findEntries({ order: 'oldestFirst' }, context);
-}
-
-/**
- * Creates a same-process AgentHarness and the legacy framed compatibility
- * facade expected by doompi-server. No child process, RPC launcher, or Pi UI
- * runtime is created.
- */
 export async function createDirectHarnessRuntime<TContext extends object | undefined = object | undefined>(
   options: DirectHarnessRuntimeOptions<TContext>,
 ): Promise<DirectHarnessRuntime<TContext>> {
+  if (options.initialFastMode !== undefined && typeof options.initialFastMode !== 'boolean')
+    throw new Error('Initial Fast mode must be a boolean.');
   const context = options.context ?? BACKGROUND_CONTEXT;
-  const laneName = options.lane ?? DEFAULT_LANE;
-  let disposed = false;
-  let disposePromise: Promise<void> | undefined;
-  let storageQuarantined = false;
-  let storageFailure: unknown;
-  let requestPreparationFailure: { error: unknown } | undefined;
-  let turnPreparationFailure: { error: unknown } | undefined;
-  let contextPreparationFailure: { error: unknown } | undefined;
-  let payloadPreparationFailure: { error: unknown } | undefined;
-  let toolsReady = true;
-  let activeToolNames = new Set(options.activeToolNames ?? options.tools?.map((tool) => tool.name) ?? []);
-  const storage = await openStorage(options, context);
-  let models: AnyModels;
-  let harnessResult: Awaited<ReturnType<typeof AgentHarness.create<TContext>>>;
+  if (options.storage === 'jsonl' || options.legacySessionPath !== undefined)
+    throw new Error('Legacy JSONL direct storage is unsupported; use durable-v1 SQLite');
+  if (options.session && !options.durableStorage)
+    throw new Error('A durable Session injection requires its raw durableStorage');
+  const storage = options.durableStorage
+    ? {
+        storage: options.durableStorage,
+        sessionFile: options.sessionPath,
+        historyLease: undefined,
+        repository: undefined,
+      }
+    : await openSqliteSessionStorage(options, context);
+  let startupHarness: Harness | undefined;
   try {
-    const registry = configureModels(options);
-    const dispatchMethods = new Set<PropertyKey>([
-      'stream',
-      'complete',
-      'streamSimple',
-      'completeSimple',
-      'streamDeferred',
-      'fetchDeferred',
-    ]);
-    models = new Proxy(registry, {
+    const registry = createRegistry();
+    const environment = new NodeExecutionEnv({ cwd: options.cwd });
+    let disposed = false;
+    let quarantined = false;
+    let failure: unknown;
+    let preparationFailure: unknown;
+    const terminatingCalls = new Set<string>();
+    let fastMode = false;
+    let resources = options.resources ?? {};
+    let tools = options.tools ?? [];
+    let activeNames = new Set(options.activeToolNames ?? tools.map((t) => t.name));
+    let settings: HarnessSettings = {
+      stream: options.streamOptions,
+      retry: options.retry,
+      compaction: options.compaction,
+      toolExecution: options.toolExecution,
+      steeringMode: options.steeringMode,
+      followUpMode: options.followUpMode,
+    };
+    const listeners = new Set<(frame: DirectHarnessFrame) => void>();
+    const eventListeners = new Set<DirectHarnessEventListener>();
+    const emit = (frame: DirectHarnessFrame) => {
+      for (const listener of listeners) {
+        try {
+          listener(frame);
+        } catch (error) {
+          for (const other of listeners) if (other !== listener) other({ type: 'handler_error', error: String(error) });
+        }
+      }
+    };
+    const writable = async <T>(work: () => Promise<T>): Promise<T> => {
+      if (disposed || quarantined) throw new Error('Direct harness writes are unavailable', { cause: failure });
+      try {
+        await storage.historyLease?.assertQuiescent();
+        return await work();
+      } catch (error) {
+        const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+        if (
+          typeof code === 'string' &&
+          ['EACCES', 'EBUSY', 'EIO', 'EMFILE', 'ENFILE', 'ENOSPC', 'EPERM', 'EROFS'].includes(code)
+        ) {
+          quarantined = true;
+          failure = error;
+          emit({ type: 'error', code: 'storage_quarantined', error: String(error) });
+        }
+        throw error;
+      }
+    };
+    let sourceModels: Models | MutableModels;
+    if (options.models) sourceModels = options.models;
+    else {
+      if (!options.providers?.length) throw new Error('Direct harness requires Models or a Provider');
+      sourceModels = createModels(options.credentials ? { credentials: options.credentials } : undefined);
+    }
+    for (const provider of options.providers ?? []) {
+      const mutable = sourceModels as Partial<MutableModels> & {
+        registerNativeProvider?: (provider: Provider) => void;
+      };
+      const register = mutable.setProvider?.bind(sourceModels) ?? mutable.registerNativeProvider?.bind(sourceModels);
+      if (!register) throw new Error('Models registry cannot register providers');
+      register(provider);
+    }
+    const models = new Proxy(sourceModels, {
       get(target, key) {
         const value: unknown = Reflect.get(target, key, target);
         if (typeof value !== 'function') return value;
-        if (!dispatchMethods.has(key)) return value.bind(target);
+        if (
+          !['stream', 'complete', 'streamSimple', 'completeSimple', 'streamDeferred', 'fetchDeferred'].includes(
+            String(key),
+          )
+        )
+          return value.bind(target);
         return (...args: unknown[]) => {
-          try {
-            if (disposed || storageQuarantined || !toolsReady)
-              throw new Error('Direct harness model dispatch is blocked');
-            if (key !== 'streamDeferred' && key !== 'fetchDeferred') {
-              const request = args[1] as { tools?: readonly { name: string }[] };
-              if (request.tools?.some((tool) => !activeToolNames.has(tool.name))) {
-                throw new Error('Model request contains a tool disabled after generation preparation');
+          if (disposed || quarantined || preparationFailure)
+            throw new Error('Model dispatch unavailable', { cause: preparationFailure });
+          options.guardModelRequest?.();
+          const request = args[1] as { tools?: { name: string }[] };
+          if (
+            !['complete', 'completeSimple'].includes(String(key)) &&
+            request?.tools?.some((t) => !activeNames.has(t.name))
+          )
+            throw new Error('Model request contains disabled tools');
+          const requestOptions = args[2] as Record<string, unknown> | undefined;
+          const usePriority =
+            fastMode &&
+            (args[0] as Model<Api>).api === CODEX_API &&
+            (args[0] as Model<Api>).provider === CODEX_PROVIDER;
+          const originalOnPayload = requestOptions?.onPayload;
+          args[2] = {
+            ...requestOptions,
+            ...(usePriority ? { serviceTier: 'priority' } : {}),
+            onPayload: async (payload: unknown, model: Model<Api>) => {
+              options.guardModelRequest?.();
+              const original =
+                typeof originalOnPayload === 'function' ? await originalOnPayload(payload, model) : undefined;
+              const transformed = original === undefined ? payload : original;
+              const patch = await options.beforePayload?.({ payload: transformed, model }, context);
+              const finalPayload = patch === undefined ? transformed : patch.payload;
+              if (!usePriority) return finalPayload;
+              if (typeof finalPayload !== 'object' || finalPayload === null || Array.isArray(finalPayload))
+                throw new Error('Invalid Codex request payload');
+              return { ...finalPayload, service_tier: 'priority' };
+            },
+          };
+          const dispatched: unknown = Reflect.apply(value, target, args);
+          if (!['stream', 'streamSimple', 'fetchDeferred'].includes(String(key))) return dispatched;
+          const source = dispatched as AssistantMessageEventStream;
+          const output = createAssistantMessageEventStream();
+          const requestedModel = args[0] as Model<Api>;
+          const signal = (args[2] as { signal?: AbortSignal }).signal;
+          let ended = false;
+          let current: AssistantMessage = {
+            role: 'assistant',
+            content: [],
+            api: requestedModel.api,
+            provider: requestedModel.provider,
+            model: requestedModel.id,
+            timestamp: Date.now(),
+            stopReason: 'pending',
+            usage: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+          };
+          const cancel = () => {
+            if (ended) return;
+            ended = true;
+            const cancelled = { ...current, stopReason: 'aborted' as const, errorMessage: 'Agent request aborted' };
+            output.push({ type: 'error', reason: 'aborted', error: cancelled });
+            output.end();
+          };
+          signal?.addEventListener('abort', cancel, { once: true });
+          if (signal?.aborted) cancel();
+          void (async () => {
+            try {
+              for await (const event of source) {
+                if (ended) break;
+                if ('partial' in event) current = event.partial;
+                output.push(event);
               }
+              if (!ended) {
+                ended = true;
+                output.end(await source.result());
+              }
+            } catch (error) {
+              if (!ended) {
+                ended = true;
+                const failed = { ...current, stopReason: 'error' as const, errorMessage: String(error) };
+                output.push({ type: 'error', reason: 'error', error: failed });
+                output.end();
+              }
+            } finally {
+              signal?.removeEventListener('abort', cancel);
             }
-            if (contextPreparationFailure !== undefined) throw contextPreparationFailure.error;
-            if (turnPreparationFailure !== undefined) throw turnPreparationFailure.error;
-            if (requestPreparationFailure !== undefined) throw requestPreparationFailure.error;
-            options.guardModelRequest?.();
-          } catch {
-            // Models reports admission/auth failures as responses, not throws that fault the harness.
-            const model = args[0] as Model<Api>;
-            const blocked: AssistantMessage = {
-              role: 'assistant',
-              content: [],
-              api: model.api,
-              provider: model.provider,
-              model: model.id,
-              timestamp: Date.now(),
-              stopReason: 'error',
-              errorMessage: 'Model request blocked: headless capability preparation is not ready.',
-              usage: {
-                input: 0,
-                output: 0,
-                cacheRead: 0,
-                cacheWrite: 0,
-                totalTokens: 0,
-                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-              },
-            };
-            if (key === 'complete' || key === 'completeSimple' || key === 'fetchDeferred') {
-              return Promise.resolve(blocked);
-            }
-            const stream = createAssistantMessageEventStream();
-            stream.push({ type: 'error', reason: 'error', error: blocked });
-            return stream;
-          }
-          const requestOptions = args[2];
-          if (isRecord(requestOptions) && typeof requestOptions.onPayload === 'function') {
-            const onPayload = requestOptions.onPayload as (payload: unknown, model: Model<Api>) => Promise<unknown>;
-            args[2] = {
-              ...requestOptions,
-              onPayload: async (payload: unknown, requestModel: Model<Api>) => {
-                payloadPreparationFailure = undefined;
-                const transformed = await onPayload(payload, requestModel);
-                const failure = payloadPreparationFailure as { error: unknown } | undefined;
-                if (failure !== undefined) throw failure.error;
-                return transformed;
-              },
-            };
-          }
-          return Reflect.apply(value, target, args);
+          })();
+          return output;
+        };
+      },
+    }) as Models;
+    const resolveToolContext = async (ctx: Context) =>
+      typeof options.toolContext === 'function' ? options.toolContext(ctx) : (options.toolContext as TContext);
+    const nativeTool = (tool: AgentHarnessTool<TContext>): ToolRegistration => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+      constrainedSampling: tool.constrainedSampling,
+      prepareArguments: tool.prepareArguments ? (args) => tool.prepareArguments!(args) : undefined,
+      replay: tool.replay ?? 'unsafe',
+      executionMode: tool.executionMode,
+      async execute(args, api, ctx) {
+        if (!activeNames.has(tool.name)) throw new Error(`Tool '${tool.name}' is no longer active`);
+        const pending = tool.execute(
+          api.callId,
+          args,
+          (partial) => {
+            for (const part of partial.content) if (part.type === 'text') api.output(part.text);
+            if (partial.details !== undefined)
+              void api
+                .details(json(partial.details), ctx)
+                .catch((error) => emit({ type: 'error', error: String(error) }));
+          },
+          await resolveToolContext(ctx),
+          {
+            invocationId: String(api.taskId),
+            operationId: String(api.taskId),
+            turnId: String(api.taskId),
+            getMemo: (name) => api.memo(name, ctx),
+            setMemo: async (name, value) => {
+              if (value === undefined) throw new Error('Durable invocation memos cannot be deleted');
+              await api.memo(name, value, ctx);
+            },
+          },
+          ctx,
+        );
+        const result = await awaitWithContext(pending, ctx);
+        return {
+          content: result.content,
+          isError: result.isError,
+          ...(result.details === undefined ? {} : { details: json(result.details) }),
         };
       },
     });
-    harnessResult = await AgentHarness.create<TContext>(
+    const install = () =>
+      registry.install({
+        name: 'doompi.host',
+        tools: tools.map(nativeTool),
+        sections: [
+          {
+            key: 'doompi',
+            tag: false,
+            async render(_input, ctx) {
+              preparationFailure = undefined;
+              try {
+                const prompt =
+                  typeof options.systemPrompt === 'function'
+                    ? await options.systemPrompt(await resolveToolContext(ctx), ctx)
+                    : (options.systemPrompt ?? '');
+                const skills =
+                  options.systemPrompt === undefined ? formatSkillsForSystemPrompt(resources.skills ?? []) : '';
+                return [prompt, skills].filter(Boolean).join('\n\n');
+              } catch (error) {
+                preparationFailure = error;
+                throw error;
+              }
+            },
+          },
+        ],
+        hooks: [
+          hook(GenerationTask, {
+            async beforeRequest(request, api, ctx) {
+              try {
+                const live = await api.snapshot(LiveDoc, api.conversationId, ctx);
+                const retained = await api.snapshot(LifecycleDoc, ctx);
+                const queue = JSON.parse(retained?.json ?? '{"queue":[]}') as LifecycleRecord;
+                if (
+                  live?.run &&
+                  queue.queue.some(
+                    (item) =>
+                      item.operationId !== undefined &&
+                      item.submissionId !== undefined &&
+                      live.run!.inputs.includes(item.submissionId as SubmissionId) &&
+                      item.operationId !== String(live.run!.inputs[0]),
+                  )
+                )
+                  throw new Error('Steering target changed before model admission');
+                const agent = await conversation.agent(ctx);
+                const model = agent.model ? models.getModel(agent.model.provider, agent.model.modelId) : undefined;
+                await options.beforeModelRequest?.(
+                  { phase: 'turn', model, prompt: [...request.messages], resources },
+                  ctx,
+                );
+                const systemPrompt = getCurrentSystemPrompt(request.messages);
+                const patch = await options.transformContext?.(
+                  { messages: request.messages.filter((m) => m.role !== 'system'), systemPrompt },
+                  ctx,
+                );
+                let messages: Message[] = patch
+                  ? [
+                      {
+                        role: 'system',
+                        content: patch.systemPrompt ?? systemPrompt,
+                        timestamp: Date.now(),
+                        toolsAdded: getCurrentTools(request.messages),
+                      },
+                      ...convertToLlm(patch.messages ?? request.messages.filter((m) => m.role !== 'system')),
+                    ]
+                  : [...request.messages];
+                if (options.toProviderMessages) messages = await options.toProviderMessages(messages, ctx);
+                await options.beforeModelRequest?.({ phase: 'request', model, resources }, ctx);
+                return { messages };
+              } catch (error) {
+                preparationFailure = error;
+                throw error;
+              }
+            },
+          }),
+          hook(ToolTask, {
+            async beforeTool(call, _api, ctx) {
+              const patch = await options.beforeTool?.(
+                { toolCallId: call.id, toolName: call.name, args: call.arguments as Record<string, JsonValue> },
+                ctx,
+              );
+              if (patch?.block?.terminate) terminatingCalls.add(call.id);
+              return patch ? { arguments: patch.args, block: patch.block?.reason } : undefined;
+            },
+            async afterTool(call, result, _api, ctx) {
+              const patch = await options.afterTool?.(
+                {
+                  toolCallId: call.id,
+                  toolName: call.name,
+                  args: call.arguments as Record<string, JsonValue>,
+                  content: result.content ?? [],
+                  details: result.details,
+                  isError: result.isError ?? false,
+                  usage: result.usage,
+                },
+                ctx,
+              );
+              return patch
+                ? {
+                    ...result,
+                    ...patch,
+                    control:
+                      patch.terminate || terminatingCalls.delete(call.id)
+                        ? { ...result.control, terminate: true }
+                        : result.control,
+                  }
+                : terminatingCalls.delete(call.id)
+                  ? { ...result, control: { ...result.control, terminate: true } }
+                  : undefined;
+            },
+          }),
+          hook(CompactionTask, {
+            async beforeCompact(input, _api, ctx) {
+              if (!options.beforeCompaction) return;
+              const entries = projectDurableEntries(input.entries);
+              const patch = await options.beforeCompaction(
+                {
+                  reason: input.reason,
+                  customInstructions: input.instructions,
+                  preparation: {
+                    entries,
+                    messages: [...input.messages],
+                    tokensBefore: 0,
+                    retainedTail: [],
+                    firstKeptEntryId: String(input.firstKept),
+                    messagesToSummarize: [...input.messages],
+                    turnPrefixMessages: [],
+                    isSplitTurn: false,
+                    fileOps: { read: new Set(), written: new Set(), edited: new Set() },
+                    settings: {
+                      enabled: options.compaction?.enabled ?? true,
+                      reserveTokens: options.compaction?.reserveTokens ?? 16384,
+                      keepRecentTokens: options.compaction?.keepRecentTokens ?? 20000,
+                    },
+                  },
+                },
+                ctx,
+              );
+              if (patch?.decline) return { decline: true };
+              if (patch?.compaction) return { summary: patch.compaction.summary };
+              return undefined;
+            },
+          }),
+        ],
+      });
+    install();
+    const harness = await Harness.open(
+      storage.storage,
       {
-        session: storage.session,
         models,
-        model: modelReference(options.model, models),
-        ...(options.thinkingLevel === undefined ? {} : { thinkingLevel: options.thinkingLevel }),
-        ...(options.activeToolNames === undefined ? {} : { activeToolNames: options.activeToolNames }),
-        ...(options.tools === undefined ? {} : { tools: options.tools }),
-        ...(options.resources === undefined ? {} : { resources: options.resources }),
-        ...(options.toolContext === undefined ? {} : { toolContext: options.toolContext }),
-        ...(options.systemPrompt === undefined ? {} : { systemPrompt: options.systemPrompt }),
-        ...(options.streamOptions === undefined ? {} : { streamOptions: options.streamOptions }),
-        ...(options.retry === undefined ? {} : { retry: options.retry }),
-        ...(options.compaction === undefined ? {} : { compaction: options.compaction }),
-        ...(options.steeringMode === undefined ? {} : { steeringMode: options.steeringMode }),
-        ...(options.followUpMode === undefined ? {} : { followUpMode: options.followUpMode }),
-        ...(options.toolExecution === undefined ? {} : { toolExecution: options.toolExecution }),
-        ...(options.toProviderMessages === undefined ? {} : { toProviderMessages: options.toProviderMessages }),
-        ...(options.entryProjectors === undefined ? {} : { entryProjectors: options.entryProjectors }),
+        registry,
+        get settings() {
+          return settings;
+        },
+        env: () => environment,
+        onReport: (error) => emit({ type: 'handler_error', error: String(error) }),
       },
       context,
     );
-  } catch (error) {
-    await closeStorage(storage, context);
-    throw error;
-  }
-  const harness = harnessResult.harness;
-  const sessionId = storage.session.metadata.id;
-  const harnessId = options.harnessId ?? `${sessionId}:${laneName}`;
-  const listeners = new Set<(frame: DirectHarnessFrame) => void>();
-  const lifecycleListeners = new Set<DirectHarnessEventListener>();
-  let resolveExited!: (code: number) => void;
-  const exited = new Promise<number>((resolve) => {
-    resolveExited = resolve;
-  });
-  let exitResolved = false;
-  let lane: AgentLane;
-
-  const emitFrame = (frame: DirectHarnessFrame): void => {
-    for (const listener of Array.from(listeners)) {
-      try {
-        listener(frame);
-      } catch {
-        // Compatibility listeners are observers. One broken client must not fault the engine.
-      }
-    }
-  };
-  const emitLifecycle = async (event: HarnessEvent, eventContext: Context): Promise<void> => {
-    await Promise.all(
-      [...lifecycleListeners].map(async (listener) => {
+    startupHarness = harness;
+    const root = await harness.root(context, {
+      agent: {
+        cwd: options.cwd,
+        ...((options.model ?? models.getModels()[0])
+          ? {
+              model: {
+                provider: (options.model ?? models.getModels()[0]!).provider,
+                modelId: (options.model ?? models.getModels()[0]!).id,
+              },
+            }
+          : {}),
+        ...(options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
+      },
+    });
+    const activeId = await initializeDurableNavigation(harness, root.id, context);
+    let conversation = (await harness.conversation(activeId, context))!;
+    const storedAgent = await harness.snapshot(AgentDoc, conversation.id, context);
+    const initialModel = options.model ?? models.getModels()[0];
+    await conversation.configure(
+      {
+        ...(!storedAgent?.model && initialModel
+          ? { model: { provider: initialModel.provider, modelId: initialModel.id } }
+          : {}),
+        ...(!storedAgent?.thinkingLevel && options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
+        tools: tools.filter((t) => activeNames.has(t.name)).map(nativeTool),
+      },
+      context,
+    );
+    const storedFastMode = await harness.snapshot(FastModeDoc, context);
+    fastMode = storedFastMode?.enabled ?? options.initialFastMode ?? false;
+    const identity = await harness.snapshot(SessionIdentityDoc, context);
+    const sessionId = identity?.id || options.sessionId || randomUUID();
+    await writable(() =>
+      harness.commit(async (tx) => {
+        const identity = await tx.doc(SessionIdentityDoc);
+        if (!identity.id) {
+          identity.id = sessionId;
+          identity.createdAt = Date.now();
+          identity.parentSessionId = options.parentSessionId ?? '';
+        }
+        if (!storedFastMode) {
+          (await tx.doc(FastModeDoc)).enabled = fastMode;
+          if (options.initialFastMode !== undefined)
+            await tx.appendEntry(conversation.id, {
+              kind: 'doompi.fast-mode',
+              data: { version: 1, enabled: fastMode, sessionId },
+            });
+        }
+        const metadata = await tx.doc(SessionMetadataDoc);
+        metadata.workspaceRoot ||= options.cwd;
+        if (options.lane !== undefined) metadata.laneName = options.lane;
+        if (options.sessionName !== undefined) metadata.name = options.sessionName;
+      }, context),
+    );
+    const laneName = options.lane ?? 'main';
+    let resolveExited!: (code: number) => void;
+    const exited = new Promise<number>((resolve) => {
+      resolveExited = resolve;
+    });
+    const readRecord = async (): Promise<LifecycleRecord> =>
+      JSON.parse(
+        (await harness.snapshot(LifecycleDoc, context))?.json ?? '{"revision":0,"paused":false,"queue":[]}',
+      ) as LifecycleRecord;
+    const changeRecord = async <T>(change: (record: LifecycleRecord) => T): Promise<T> =>
+      writable(() =>
+        harness.commit(async (tx) => {
+          const doc = await tx.doc(LifecycleDoc);
+          const record = JSON.parse(doc.json) as LifecycleRecord;
+          const result = change(record);
+          record.revision++;
+          doc.json = JSON.stringify(record);
+          return result;
+        }, context),
+      );
+    let userAdmission = false;
+    const guardUserAdmission = () => {
+      if (userAdmission) throw new Error('A user interruption is already being admitted');
+    };
+    let external: string | undefined;
+    let externalAbort: AbortController | undefined;
+    const execution = async () => {
+      const live = await harness.snapshot(LiveDoc, conversation.id, context);
+      const inspected = await harness.inspect(context);
+      const task = inspected.tasks.find((t) => t.record.conversationId === conversation.id && !t.record.background);
+      return live?.run
+        ? {
+            id: String(live.run.inputs[0]),
+            kind: 'run' as const,
+            status:
+              (await readRecord()).abortOperationId === String(live.run.inputs[0])
+                ? ('aborting' as const)
+                : ('open' as const),
+          }
+        : task
+          ? {
+              id: String(task.record.id),
+              kind: 'compaction' as const,
+              status: task.record.abortRequested ? ('aborting' as const) : ('open' as const),
+            }
+          : external
+            ? { id: external, kind: 'navigation' as const, status: 'open' as const }
+            : settling
+              ? { id: 'settling', kind: 'run' as const, status: 'open' as const }
+              : null;
+    };
+    const readLifecycle = async (): Promise<DirectHarnessLifecycle> => {
+      const record = await readRecord();
+      return {
+        revision: record.revision,
+        paused: record.paused,
+        queue: record.queue
+          .filter(
+            (item): item is Retained & { disposition: DirectHarnessQueuedInput['disposition'] } =>
+              item.disposition !== 'consumed' && item.disposition !== 'removed',
+          )
+          .map(({ submissionId: _s, conversationId: _c, message: _m, operationId: _o, attempt: _a, ...item }) => item),
+        operation: await execution(),
+      };
+    };
+    const publish = async () => emit({ type: 'lifecycle_update', lifecycle: await readLifecycle() });
+    let watcher: AgentEventStream;
+    let eventsSettled = Promise.resolve();
+    let settling = 0;
+    let lastAssistant: AssistantMessage | undefined;
+    let partial: AssistantMessage | undefined;
+    let toolResults: ToolResultMessage[] = [];
+    const deliver = async (event: HarnessEvent, eventContext: Context) => {
+      for (const listener of eventListeners)
         try {
           await listener(event, eventContext);
         } catch (error) {
-          emitFrame({ type: 'handler_error', kind: 'event', event: event.type, error: errorMessage(error) });
+          emit({ type: 'handler_error', error: String(error) });
         }
-      }),
-    );
-  };
-  let settledEvents = Promise.resolve();
-  let toolsThisRun = 0;
-  const deliverHarnessEvent = async (event: HarnessEvent, eventContext: Context): Promise<void> => {
-    if (event.type === 'run_start') toolsThisRun = 0;
-    if (event.type === 'tool_start') toolsThisRun += 1;
-    if (event.type === 'run_end' && options.storage === 'sqlite') {
-      const record = event as unknown as AnyRecord;
-      // The settled marker is bookkeeping. Failing to write it must not stop the lifecycle
-      // and frames below, or the run never reads as settled and the lane stays claimed.
-      try {
-        const latest = await lane.findEntry(
-          { type: 'custom', customType: AGENT_SETTLED_ENTRY_TYPE, order: 'newestFirst' },
-          eventContext,
-        );
-        const data = latest?.type === 'custom' && isRecord(latest.data) ? latest.data : undefined;
-        if (data?.runId !== record.runId)
-          await lane.appendCustomEntry(
-            AGENT_SETTLED_ENTRY_TYPE,
-            { runId: String(record.runId), timestamp: Number(record.endedAt), tools: toolsThisRun },
-            eventContext,
-          );
-      } catch (error) {
-        markStorageFailure(error);
-        emitFrame({ type: FRAME_ERROR, code: 'agent_settled', error: errorMessage(error) });
-      }
-    }
-    await emitLifecycle(event, eventContext);
-    if (event.type === 'fault') markStorageFailure(event);
-    for (const frame of mapHarnessEvent(event)) emitFrame(frame);
-    if (
-      ['run_start', 'run_end', 'operation_abort', 'queue_update', 'compaction_start', 'compaction_end'].includes(
-        event.type,
-      )
-    )
-      void (event.type === 'queue_update' ? reconcileNativeQueue() : publishLifecycle()).catch((error: unknown) =>
-        emitFrame({ type: FRAME_ERROR, code: 'lifecycle_projection', error: errorMessage(error) }),
-      );
-  };
-  const handleHarnessEvent = async (event: HarnessEvent, eventContext: Context): Promise<void> => {
-    if (event.type === 'run_end') {
-      // The native drive still owns the lane while emitting run_end. Release its
-      // callback before settled hooks write history, then drain before acknowledging drive.
-      // A rejected link would poison every later run_end and the await in drive().
-      settledEvents = settledEvents
-        .then(() => deliverHarnessEvent(event, eventContext))
-        .catch((error: unknown) => emitFrame({ type: FRAME_ERROR, code: 'settled_event', error: errorMessage(error) }));
-      return;
-    }
-    await deliverHarnessEvent(event, eventContext);
-  };
-  const unsubscribe = EVENT_TYPES.map((type) => harness.events.on(type, handleHarnessEvent as never));
-
-  const guardLive = (): void => {
-    if (disposed) throw new Error('The direct harness runtime is disposed');
-  };
-  const guardWritable = (): void => {
-    guardLive();
-    if (storageQuarantined)
-      throw new Error(
-        `Direct harness writes are quarantined after a storage failure: ${errorMessage(storageFailure)}`,
-        { cause: storageFailure },
-      );
-  };
-  const markStorageFailure = (error: unknown): void => {
-    if (!isStorageFailure(error)) return;
-    if (!storageQuarantined) storageFailure = error;
-    storageQuarantined = true;
-    emitFrame({ type: FRAME_ERROR, code: 'storage_quarantined', error: errorMessage(error) });
-  };
-  const writable = async <T>(operation: () => Promise<T>): Promise<T> => {
-    guardWritable();
-    try {
-      await storage.historyLease?.assertQuiescent();
-      return await operation();
-    } catch (error) {
-      markStorageFailure(error);
-      throw error;
-    }
-  };
-
-  // DoomPi owns the product queue and cancellation policy. Pi's inbox is an execution
-  // handoff, not a second editable copy of the product queue.
-  const lifecycleAddress = value<LifecycleRecord>('doompi.server.lifecycle', laneName);
-  const readRecord = async (): Promise<LifecycleRecord> => {
-    const stored = await storage.session.getValue(lifecycleAddress, context);
-    if (stored !== undefined && stored.value.version !== 1) throw new Error('Unknown server lifecycle format');
-    return stored?.value ?? EMPTY_LIFECYCLE;
-  };
-  const changeRecord = async <T>(
-    change: (record: LifecycleRecord) => { record: LifecycleRecord; result: T } | { result: T },
-  ): Promise<T> =>
-    writable(() =>
-      storage.session.mutate(async (mutator) => {
-        const stored = await mutator.getValue(lifecycleAddress, context);
-        const current = stored?.value ?? EMPTY_LIFECYCLE;
-        if (current.version !== 1) throw new Error('Unknown server lifecycle format');
-        const decision = change(current);
-        if ('record' in decision) {
-          await mutator.commit(
-            [setValue(lifecycleAddress, compactLifecycle({ ...decision.record, revision: current.revision + 1 }))],
-            context,
-          );
-        }
-        return decision.result;
-      }, context),
-    );
-  let settlingOperationId: string | undefined;
-  let abortingOperationId: string | undefined;
-  const readLifecycle = async (): Promise<DirectHarnessLifecycle> => {
-    const [record, execution] = await Promise.all([readRecord(), lane.inspectExecution(context)]);
-    const current = execution.current;
-    return {
-      revision: Math.max(record.revision, publicationRevision),
-      operation:
-        current === null
-          ? settlingOperationId === undefined
-            ? null
-            : {
-                id: settlingOperationId,
-                kind: 'run',
-                status: abortingOperationId === settlingOperationId ? 'aborting' : 'open',
-              }
-          : {
-              id: current.id,
-              kind: current.kind,
-              status: current.status === 'aborting' || abortingOperationId === current.id ? 'aborting' : 'open',
-            },
-      paused: record.paused,
-      queue: record.queue
-        .filter((item) => item.disposition !== 'consumed' && item.disposition !== 'removed')
-        .map(({ id, text, images, delivery, scheduling, disposition }) => ({
-          id,
-          text,
-          ...(images === undefined ? {} : { images }),
-          delivery,
-          scheduling,
-          disposition: disposition as DirectHarnessQueuedInput['disposition'],
-        })),
     };
-  };
-  let publishingLifecycle = Promise.resolve();
-  let publicationRevision = 0;
-  const publishLifecycle = (): Promise<void> => {
-    const next = publishingLifecycle.then(async () => {
-      if (disposed) return;
-      const lifecycle = await readLifecycle();
-      publicationRevision = Math.max(publicationRevision + 1, lifecycle.revision);
-      emitFrame({ type: 'lifecycle_update', lifecycle: { ...lifecycle, revision: publicationRevision } });
-    });
-    publishingLifecycle = next.catch((error: unknown) => {
-      emitFrame({ type: FRAME_ERROR, code: 'lifecycle_projection', error: errorMessage(error) });
-    }); // a failed projection must not stall later updates
-    return next;
-  };
-  const retainedMessage = (
-    id: string,
-    kind: 'steer' | 'followUp' | 'nextRun',
-    message: AgentMessage,
-  ): RetainedInput => {
-    const content = message.role === 'user' ? message.content : [];
-    const parts = typeof content === 'string' ? [{ type: 'text', text: content }] : content;
-    const text =
-      message.role === 'user'
-        ? parts
-            .map((part) => (part.type === 'text' ? part.text : ''))
-            .filter(Boolean)
-            .join('\n')
-        : '';
-    const images = message.role === 'user' ? parts.filter((part): part is ImageContent => part.type === 'image') : [];
-    return {
-      id,
-      text,
-      ...(images.length === 0 ? {} : { images }),
-      message,
-      delivery: kind,
-      scheduling: 'held',
-      disposition: 'handoff',
-      nativeEntryId: id,
-    };
-  };
-  // Native entries from older sessions and extension/voice callers are adopted by identity,
-  // never copied or enqueued a second time. Pi continues to own their actual handoff.
-  const adoptNativeQueue = async (): Promise<void> => {
-    const changed = await writable(() =>
-      storage.session.mutate(async (mutator) => {
-        const native = await mutator.getValue(laneState(laneName), context);
-        const original = await mutator.getValue(lifecycleAddress, context);
-        const current = original?.value ?? EMPTY_LIFECYCLE;
-        const adopted: RetainedInput[] = [];
-        for (const item of native?.value.inbox ?? []) {
-          if (item.kind !== 'steer' && item.kind !== 'followUp' && item.kind !== 'nextRun') continue;
-          if (current.queue.some((entry) => entry.nativeEntryId === item.entryId || entry.id === item.entryId))
-            continue;
-          const pending = await mutator.getValue(pendingEntry(item.entryId), context);
-          if (pending?.value.type !== 'message')
-            throw new Error(`Native queued input ${item.entryId} has no message payload`);
-          adopted.push(retainedMessage(item.entryId, item.kind, pending.value.payload));
-        }
-        if (adopted.length === 0) return false;
-        await mutator.commit(
-          [
-            setValue(lifecycleAddress, {
-              ...current,
-              revision: current.revision + 1,
-              queue: [...current.queue, ...adopted],
-            }),
-          ],
-          context,
-        );
-        return true;
-      }, context),
-    );
-    if (changed) await publishLifecycle();
-  };
-  const reconcileNativeQueue = async (): Promise<void> => {
-    if (disposed) return;
-    const native = await storage.session.getValue(laneState(laneName), context);
-    const remaining = new Set((native?.value.inbox ?? []).map((entry) => entry.entryId));
-    const record = await readRecord();
-    for (const item of record.queue.filter(
-      (entry) => entry.nativeEntryId !== undefined && !remaining.has(entry.nativeEntryId),
-    )) {
-      if (record.abortOperationId !== undefined) continue;
-      const committed = await storage.session.getEntry(item.nativeEntryId!, context);
-      await changeRecord((current) => ({
-        record: {
-          ...current,
-          queue: current.queue.map((entry) =>
-            entry.id === item.id && entry.nativeEntryId === item.nativeEntryId
-              ? committed !== undefined
-                ? { ...entry, disposition: 'consumed' }
-                : current.paused
-                  ? {
-                      ...entry,
-                      disposition: 'pending',
-                      nativeEntryId: undefined,
-                      delivery: entry.delivery === 'steer' ? 'followUp' : entry.delivery,
-                    }
-                  : { ...entry, disposition: 'uncertain' }
-              : entry,
-          ),
-        },
-        result: undefined,
-      }));
-    }
-    await publishLifecycle();
-  };
-  const unsubscribeHooks: Array<() => void> = [];
-  if (options.transformContext !== undefined) {
-    unsubscribeHooks.push(
-      harness.hooks.on('before_run', () => {
-        contextPreparationFailure = undefined;
-        return undefined;
-      }),
-    );
-  }
-  if (options.beforeModelRequest !== undefined) {
-    unsubscribeHooks.push(
-      harness.hooks.on('before_run', async (event, hookContext) => {
-        turnPreparationFailure = undefined;
-        requestPreparationFailure = undefined;
-        try {
-          await options.beforeModelRequest?.(
-            { phase: 'turn', prompt: event.prompt, resources: event.resources },
-            hookContext,
-          );
-        } catch (error) {
-          turnPreparationFailure = { error };
-          throw error;
-        }
-        return undefined;
-      }),
-      harness.hooks.on('before_request', async (event, hookContext) => {
-        // Upstream catches hook errors. Retain the failure for the Models admission guard.
-        try {
-          await options.beforeModelRequest?.(
-            { phase: 'request', model: event.model, resources: await harness.getResources(hookContext) },
-            hookContext,
-          );
-          requestPreparationFailure = undefined;
-        } catch (error) {
-          requestPreparationFailure = { error };
-          throw error;
-        }
-        return undefined;
-      }),
-    );
-  }
-  if (options.transformContext !== undefined) {
-    unsubscribeHooks.push(
-      harness.hooks.on('transform_context', async (event, hookContext) => {
-        try {
-          return await options.transformContext!(event, hookContext);
-        } catch (error) {
-          // AgentHarness reports and continues after transform errors. Retain the failure so the
-          // public Models boundary blocks provider dispatch instead of admitting untransformed context.
-          contextPreparationFailure = { error };
-          throw error;
-        }
-      }),
-    );
-  }
-  if (options.beforePayload !== undefined) {
-    unsubscribeHooks.push(
-      harness.hooks.on('before_payload', async (event, hookContext) => {
-        try {
-          return await options.beforePayload!(event, hookContext);
-        } catch (error) {
-          // Upstream reports and continues after hook errors. Retain the failure so the Models payload
-          // callback rejects instead of sending the original, untransformed payload.
-          payloadPreparationFailure = { error };
-          throw error;
-        }
-      }),
-    );
-  }
-  if (options.beforeTool !== undefined) {
-    unsubscribeHooks.push(harness.hooks.on('before_tool', options.beforeTool));
-  }
-  if (options.afterTool !== undefined) {
-    unsubscribeHooks.push(harness.hooks.on('after_tool', options.afterTool));
-  }
-  if (options.beforeCompaction !== undefined) {
-    unsubscribeHooks.push(harness.hooks.on('before_compaction', options.beforeCompaction));
-  }
-  try {
-    lane = await harness.lane(laneName, context);
-    if (options.sessionName !== undefined) await writable(() => harness.setName(options.sessionName, context));
-  } catch (error) {
-    for (const unsubscribeHook of unsubscribeHooks) unsubscribeHook();
-    for (const unsubscribeEvent of unsubscribe) unsubscribeEvent();
-    await harness.close(context).catch(() => undefined);
-    await closeStorage(storage, context);
-    throw error;
-  }
-  const settleExit = (code: number): void => {
-    if (exitResolved) return;
-    exitResolved = true;
-    resolveExited(code);
-  };
-
-  let userAdmissionReservation: symbol | undefined;
-  const guardUserAdmission = (): void => {
-    if (userAdmissionReservation !== undefined) throw new Error('A user interruption is already being admitted');
-  };
-  let externalOperationActive = false;
-  let agentOperationsActive = 0;
-  const acquireAgentOperation = (): (() => void) => {
-    guardUserAdmission();
-    if (externalOperationActive) throw new Error('The session is busy with an external tool invocation');
-    agentOperationsActive += 1;
-    let released = false;
-    return () => {
-      if (released) return;
-      released = true;
-      agentOperationsActive -= 1;
-    };
-  };
-  const runAgentOperation = async <T>(operation: () => Promise<T>): Promise<T> => {
-    const release = acquireAgentOperation();
-    try {
-      return await operation();
-    } finally {
-      release();
-    }
-  };
-  const runExternalOperation = async <T>(operation: () => Promise<T>): Promise<T> => {
-    guardWritable();
-    if (externalOperationActive) throw new Error('The session is busy with an external tool invocation');
-    if (agentOperationsActive > 0) throw new Error('The session is busy with an agent operation');
-    externalOperationActive = true;
-    try {
-      const execution = await lane.inspectExecution(context);
-      if (execution.current !== null) throw new Error('The session is busy with an agent operation');
-      return await operation();
-    } finally {
-      externalOperationActive = false;
-      if (drainRequested && !disposed) {
-        drainRequested = false;
-        void drainAutomatic().catch((error: unknown) =>
-          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-        );
-      }
-    }
-  };
-
-  // Serialize only admission/cancellation decisions, never the turn's provider/tool work.
-  // The Session mutation line alone cannot cover the native accept and DoomPi pause commits.
-  let admissionLine = Promise.resolve();
-  const serializeAdmission = async <T>(operation: () => Promise<T>): Promise<T> => {
-    const previous = admissionLine;
-    let release!: () => void;
-    admissionLine = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await previous;
-    try {
-      return await operation();
-    } finally {
-      release();
-    }
-  };
-  let drainingAutomatic = false;
-  let drainRequested = false;
-  const activeDrives = new Map<string, Promise<void>>();
-  const driveOperation = async (operationId: string, pollDeferred = false): Promise<void> => {
-    settlingOperationId = operationId;
-    let failure: unknown;
-    try {
-      const result = await writable(() => lane.drive({ operationId, pollDeferred, waitForRetry: true }, context));
-      if (!result.ok) resultError(result);
-      if (result.value.kind === 'waiting' && result.value.reason === 'retry') {
-        throw new Error(`Direct harness returned an unexpected retry wait for ${operationId}`);
-      }
-    } catch (error) {
-      failure = error;
-    } finally {
-      try {
-        await settledEvents;
-      } catch (error) {
-        if (failure === undefined) failure = error;
-        else emitFrame({ type: FRAME_ERROR, code: 'settled_event', error: errorMessage(error) });
-      }
-      if (settlingOperationId === operationId) settlingOperationId = undefined;
-      if (abortingOperationId === operationId) abortingOperationId = undefined;
-      if (!disposed) {
-        let publicationSucceeded = false;
-        try {
-          await changeRecord((record) =>
-            record.userOperationId === operationId
-              ? { record: { ...record, userOperationId: undefined }, result: undefined }
-              : { result: undefined },
-          );
-          await publishLifecycle();
-          publicationSucceeded = true;
-        } catch (error) {
-          if (failure === undefined) failure = error;
-          // publishLifecycle already reports this secondary failure as a projection frame.
-        }
-        if (publicationSucceeded && !storageQuarantined)
-          void drainAutomatic().catch((error: unknown) =>
-            emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-          );
-      }
-    }
-    if (failure !== undefined) throw failure;
-  };
-  const drive = (operationId: string, pollDeferred = false): Promise<void> => {
-    const settled = driveOperation(operationId, pollDeferred);
-    activeDrives.set(operationId, settled);
-    const release = (): void => {
-      activeDrives.delete(operationId);
-    };
-    void settled.then(release, release);
-    return settled;
-  };
-  // Only this function starts automatic follow-up turns. It never holds the Session mutation
-  // line during provider/tool work; a claim is persisted before native admission.
-  const drainAutomatic = async (): Promise<void> => {
-    if (disposed) return;
-    if (userAdmissionReservation !== undefined) {
-      drainRequested = true;
-      return;
-    }
-    if (drainingAutomatic) {
-      drainRequested = true;
-      return;
-    }
-    drainingAutomatic = true;
-    let releaseAutomatic: (() => void) | undefined;
-    try {
-      while (!disposed) {
-        releaseAutomatic?.();
-        releaseAutomatic = undefined;
-        const execution = await lane.inspectExecution(context);
-        if (execution.current !== null) return;
-        const operationId = randomUUID();
-        const claimed = await changeRecord((record) => {
-          if (userAdmissionReservation !== undefined || record.paused || record.abortOperationId !== undefined)
-            return { result: undefined };
-          const item = record.queue.find(
-            (candidate) =>
-              candidate.disposition === 'pending' &&
-              candidate.scheduling === 'automatic' &&
-              candidate.delivery !== 'steer',
-          );
-          if (!item) return { result: undefined };
-          // Reserve ownership only for runnable work, before persisting its handoff.
-          if (externalOperationActive) {
-            drainRequested = true;
-            return { result: undefined };
+    const attach = async () => {
+      if (watcher) await watcher.stop();
+      watcher = await watchEvents(harness, conversation.id, context);
+      watcher.start(async (events, eventContext) => {
+        for (const event of events) {
+          let mapped: HarnessEvent | undefined;
+          if (['run_start', 'run_end', 'turn_start', 'compaction_start'].includes(event.type))
+            mapped = { type: event.type } as HarnessEvent;
+          if (event.type === 'message_start') {
+            if (event.message.role === 'assistant') partial = structuredClone(event.message);
+            mapped = { type: 'message_start', message: event.message };
           }
-          releaseAutomatic = acquireAgentOperation();
-          return {
-            record: {
-              ...record,
-              queue: record.queue.map((entry) =>
-                entry.id === item.id
-                  ? { ...entry, disposition: 'handoff', operationId, attemptId: randomUUID() }
-                  : entry,
-              ),
-            },
-            result: item,
-          };
-        });
-        if (!claimed) return;
-        await publishLifecycle();
-        try {
-          const message: AgentMessage = claimed.message ?? {
-            role: 'user',
-            content: [
-              ...(claimed.text ? [{ type: 'text' as const, text: claimed.text }] : []),
-              ...(claimed.images ?? []),
-            ],
-            timestamp: Date.now(),
-          };
-          const admitted = await serializeAdmission(async () => {
-            if (userAdmissionReservation !== undefined || (await readRecord()).paused) return undefined;
-            return writable(() => lane.accept({ kind: 'prompt', operationId, prompt: message }, context));
-          });
-          if (!admitted || !admitted.ok) {
-            if (admitted && admitted.error._tag !== 'LaneBusy') resultError(admitted);
-            await changeRecord((record) => ({
-              record: {
-                ...record,
-                queue: record.queue.map((entry) =>
-                  entry.id === claimed.id && entry.operationId === operationId
-                    ? { ...entry, disposition: 'pending', operationId: undefined, attemptId: undefined }
-                    : entry,
-                ),
+          if (event.type === 'message_end' && event.entry.model?.[0]) {
+            const message = event.entry.model[0];
+            if (message.role === 'assistant') lastAssistant = message;
+            if (message.role === 'toolResult') toolResults.push(message);
+            mapped = { type: 'message_end', message, entryId: String(event.entry.id), runId: String(conversation.id) };
+          }
+          if (event.type === 'entry_appended')
+            mapped = { type: 'entry_added', entry: projectDurableEntries([event.entry])[0] };
+          if (event.type === 'tool_execution_start') mapped = { ...event, type: 'tool_start' };
+          if (event.type === 'tool_execution_end') {
+            const result = event.entry?.model?.find((m) => m.role === 'toolResult');
+            mapped = {
+              type: 'tool_end',
+              toolCallId: event.toolCallId,
+              toolName: event.toolName,
+              result: {
+                content: result?.content ?? [],
+                details: result?.details === undefined ? undefined : json(result.details),
               },
-              result: undefined,
-            }));
-            await publishLifecycle();
-            return;
+              isError: result?.isError ?? true,
+            };
           }
-          await changeRecord((record) => ({
-            record: {
-              ...record,
-              queue: record.queue.map((entry) =>
-                entry.id === claimed.id && entry.operationId === operationId
-                  ? { ...entry, disposition: 'consumed' }
-                  : entry,
-              ),
-            },
-            result: undefined,
-          }));
-          await publishLifecycle();
-          await drive(operationId);
-        } catch (error) {
-          // An uncertain handoff is not retried: native admission may have committed before
-          // an I/O or acknowledgement failure. Recovery reconciles it by operation identity.
-          await changeRecord((record) => ({
-            record: {
-              ...record,
-              queue: record.queue.map((entry) =>
-                entry.id === claimed.id && entry.operationId === operationId && entry.disposition === 'handoff'
-                  ? { ...entry, disposition: 'uncertain' }
-                  : entry,
-              ),
-            },
-            result: undefined,
-          }));
-          emitFrame({ type: FRAME_ERROR, code: 'queue_handoff', error: errorMessage(error) });
-          await publishLifecycle();
-        }
-      }
-    } finally {
-      releaseAutomatic?.();
-      drainingAutomatic = false;
-      if (drainRequested && userAdmissionReservation === undefined && !externalOperationActive && !disposed) {
-        drainRequested = false;
-        void drainAutomatic().catch((error: unknown) =>
-          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-        );
-      }
-    }
-  };
-
-  const admitPrompt = async (
-    text: string | AgentMessage,
-    images?: ImageContent[],
-    streamingBehavior?: 'steer' | 'followUp',
-  ): Promise<{ settled: Promise<void> }> => {
-    const execution = await lane.inspectExecution(context);
-    if (execution.current !== null && streamingBehavior !== undefined) {
-      const queued =
-        streamingBehavior === 'steer'
-          ? await writable(() => lane.steer(text, images, context))
-          : await writable(() => lane.followUp(text, images, context));
-      if (!queued.ok) resultError(queued);
-      await adoptNativeQueue();
-      return { settled: Promise.resolve() };
-    }
-    // `images` belongs to the text form of the request only: a composed message already
-    // carries its own content, so the two shapes are separate members of the union.
-    const request =
-      typeof text === 'string'
-        ? ({ kind: 'prompt', prompt: text, ...(images === undefined ? {} : { images }) } as const)
-        : ({ kind: 'prompt', prompt: text } as const);
-    const admission = await serializeAdmission(async () => {
-      guardUserAdmission();
-      const lifecycle = await readRecord();
-      if (lifecycle.paused) {
-        // A person starting a new turn may release an empty pause left by an aborted turn.
-        // Retained inputs (including uncertain handoffs) still require an explicit resume.
-        if (
-          execution.current !== null ||
-          settlingOperationId !== undefined ||
-          lifecycle.queue.some((entry) => entry.disposition !== 'consumed' && entry.disposition !== 'removed')
-        )
-          throw new Error('The agent queue is paused; resume before starting a turn');
-        await changeRecord((record) => {
-          if (record.queue.some((entry) => entry.disposition !== 'consumed' && entry.disposition !== 'removed'))
-            throw new Error('The agent queue is paused; resume before starting a turn');
-          return { record: { ...record, paused: false, abortOperationId: undefined }, result: undefined };
-        });
-        await publishLifecycle();
-      }
-      // Held native follow-ups never wake an idle session. Reattach them only when a
-      // person starts a new turn, preserving their enqueue-only scheduling policy.
-      for (const item of (await readRecord()).queue.filter(
-        (entry) => entry.disposition === 'pending' && entry.scheduling === 'held',
-      )) {
-        await changeRecord((record) => ({
-          record: {
-            ...record,
-            queue: record.queue.map((entry) =>
-              entry.id === item.id ? { ...entry, disposition: 'handoff', attemptId: randomUUID() } : entry,
-            ),
-          },
-          result: undefined,
-        }));
-        try {
-          const queued = await writable(() =>
-            lane.followUp(item.message ?? item.text, item.message ? undefined : item.images, context),
-          );
-          if (!queued.ok) resultError(queued);
-          await changeRecord((record) => ({
-            record: {
-              ...record,
-              queue: record.queue.map((entry) =>
-                entry.id === item.id ? { ...entry, nativeEntryId: queued.value.entryId } : entry,
-              ),
-            },
-            result: undefined,
-          }));
-        } catch (error) {
-          await changeRecord((record) => ({
-            record: {
-              ...record,
-              queue: record.queue.map((entry) =>
-                entry.id === item.id ? { ...entry, disposition: 'uncertain' } : entry,
-              ),
-            },
-            result: undefined,
-          }));
-          await publishLifecycle();
-          throw error;
-        }
-      }
-      return writable(() => lane.accept(request, context));
-    });
-    if (!admission.ok) {
-      // A turn can begin between inspection and admission. Preserve the requested delivery
-      // kind when the lane reports that another operation won the race.
-      if (streamingBehavior !== undefined && admission.error._tag === 'LaneBusy') {
-        const queued = await writable(() =>
-          streamingBehavior === 'steer' ? lane.steer(text, images, context) : lane.followUp(text, images, context),
-        );
-        if (!queued.ok) resultError(queued);
-        await adoptNativeQueue();
-        return { settled: Promise.resolve() };
-      }
-      resultError(admission);
-    }
-    return { settled: drive(admission.value.operationId) };
-  };
-
-  const replaceTools = (tools: AgentHarnessTool<TContext>[]): Promise<void> =>
-    runAgentOperation(async () => {
-      toolsReady = false;
-      await writable(async () => {
-        await harness.setTools(tools, context);
-        await lane.setActiveTools(
-          tools.map((tool) => tool.name),
-          context,
-        );
-        activeToolNames = new Set(tools.map((tool) => tool.name));
-        toolsReady = true;
-      });
-    });
-  const replaceResources = async (resources: Parameters<typeof harness.setResources>[0]): Promise<void> => {
-    await writable(() => harness.setResources(resources, context));
-  };
-  const readResources = async () => {
-    guardLive();
-    return harness.getResources(context);
-  };
-  const appendCustomEntry = async (customType: string, data?: unknown): Promise<string> =>
-    writable(() => lane.appendCustomEntry(customType, data as never, context));
-  const appendMessage = async (message: AgentMessage): Promise<string> =>
-    writable(() => lane.appendMessage(message, context));
-  const setLabel = async (targetId: string, label: string | undefined): Promise<void> =>
-    writable(() => harness.setLabel(targetId, label, context));
-  const recordUsage = async (
-    usage: Usage,
-    options?: { entryId?: string; details?: import('@earendil-works/pi-agent-core').JsonValue },
-  ): Promise<string> => {
-    const result = await writable(() => lane.recordUsage(usage, options, context));
-    if (!result.ok) resultError(result);
-    return result.value.usageId;
-  };
-  const tryDispatchCommand = async (text: string): Promise<boolean> => (await options.dispatchCommand?.(text)) ?? false;
-  const dispatchCommand = (text: string): Promise<boolean> =>
-    runAgentOperation(async () => {
-      guardLive();
-      return tryDispatchCommand(text);
-    });
-  const submitPrompt = async (
-    text: string,
-    images?: ImageContent[],
-    streamingBehavior?: 'steer' | 'followUp',
-  ): Promise<{ settled: Promise<void>; handledCommand?: boolean }> => {
-    const release = acquireAgentOperation();
-    try {
-      if (await tryDispatchCommand(text)) {
-        release();
-        return { settled: Promise.resolve(), handledCommand: true };
-      }
-      const submission = await admitPrompt(text, images, streamingBehavior);
-      void submission.settled.then(release, release);
-      return submission;
-    } catch (error) {
-      release();
-      throw error;
-    }
-  };
-  const prompt = async (text: string, images?: ImageContent[]): Promise<void> => {
-    const submission = await submitPrompt(text, images);
-    await submission.settled;
-  };
-  const admitMessage = async (message: AgentMessage): Promise<{ settled: Promise<void> }> => {
-    const release = acquireAgentOperation();
-    try {
-      const submission = await admitPrompt(message);
-      void submission.settled.then(release, release);
-      return submission;
-    } catch (error) {
-      release();
-      throw error;
-    }
-  };
-  const enqueueAutomatic = async (text: string, images?: ImageContent[]): Promise<{ id: string }> => {
-    if (!text && !images?.length) throw new Error('Queued input must contain text or an image');
-    const id = randomUUID();
-    await changeRecord((record) => ({
-      record: {
-        ...record,
-        queue: [
-          ...record.queue,
-          {
-            id,
-            text,
-            ...(images === undefined ? {} : { images }),
-            delivery: 'followUp',
-            scheduling: 'automatic',
-            disposition: 'pending',
-          },
-        ],
-      },
-      result: undefined,
-    }));
-    await publishLifecycle();
-    void drainAutomatic().catch((error: unknown) =>
-      emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-    );
-    return { id };
-  };
-  const removeQueued = async (id: string): Promise<'removed' | 'in_flight' | 'already_consumed' | 'not_found'> => {
-    const native = (await readRecord()).queue.find((entry) => entry.id === id);
-    if (native?.disposition === 'handoff' && native.nativeEntryId !== undefined) {
-      const cancelled = await writable(() => lane.cancelQueued(native.nativeEntryId!, context));
-      if (!cancelled.ok) resultError(cancelled);
-      if (cancelled.value.kind === 'cancelled') {
-        await changeRecord((record) => ({
-          record: {
-            ...record,
-            queue: record.queue.map((entry) => (entry.id === id ? { ...entry, disposition: 'removed' } : entry)),
-          },
-          result: undefined,
-        }));
-        await publishLifecycle();
-        return 'removed';
-      }
-      await reconcileNativeQueue();
-      return cancelled.value.kind === 'already_consumed' ? 'already_consumed' : 'not_found';
-    }
-    const result = await changeRecord((record) => {
-      const item = record.queue.find((entry) => entry.id === id);
-      if (!item) return { result: 'not_found' as const };
-      if (item.disposition === 'consumed') return { result: 'already_consumed' as const };
-      if (item.disposition === 'removed') return { result: 'removed' as const };
-      if (item.disposition !== 'pending') return { result: 'in_flight' as const };
-      return {
-        record: {
-          ...record,
-          queue: record.queue.map((entry) => (entry.id === id ? { ...entry, disposition: 'removed' } : entry)),
-        },
-        result: 'removed' as const,
-      };
-    });
-    if (result === 'removed') await publishLifecycle();
-    return result;
-  };
-  const deliverPromoted = (id: string, operationId: string): Promise<void> =>
-    serializeAdmission(async () => {
-      const execution = await lane.inspectExecution(context);
-      if (execution.current?.id !== operationId || execution.current.status === 'aborting') {
-        await changeRecord((record) => ({
-          record: {
-            ...record,
-            queue: record.queue.map((entry) =>
-              entry.id === id && entry.operationId === operationId
-                ? { ...entry, delivery: 'followUp', disposition: 'pending', operationId: undefined }
-                : entry,
-            ),
-          },
-          result: undefined,
-        }));
-        await publishLifecycle();
-        void drainAutomatic().catch((error: unknown) =>
-          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-        );
-        return;
-      }
-      const item = (await readRecord()).queue.find((entry) => entry.id === id && entry.operationId === operationId);
-      if (!item || item.disposition !== 'pending') return;
-      const message: AgentMessage = item.message ?? {
-        role: 'user',
-        content: [...(item.text ? [{ type: 'text' as const, text: item.text }] : []), ...(item.images ?? [])],
-        timestamp: Date.now(),
-      };
-      // Reserve the item before crossing the native handoff boundary. Promotion/removal
-      // can no longer claim it once the native mutation may have started.
-      const reserved = await changeRecord((record) => {
-        const current = record.queue.find((entry) => entry.id === id && entry.operationId === operationId);
-        if (!current || current.disposition !== 'pending' || record.paused) return { result: false };
-        return {
-          record: {
-            ...record,
-            queue: record.queue.map((entry) =>
-              entry.id === id ? { ...entry, disposition: 'handoff', attemptId: randomUUID() } : entry,
-            ),
-          },
-          result: true,
-        };
-      });
-      if (!reserved) return;
-      await publishLifecycle();
-      try {
-        const queued = await writable(() => lane.steer(message, undefined, context));
-        if (!queued.ok) resultError(queued);
-        const after = await lane.inspectExecution(context);
-        if (after.current?.id !== operationId || after.current.status === 'aborting') {
-          const cancelled = await writable(() => lane.cancelQueued(queued.value.entryId, context));
-          if (!cancelled.ok) resultError(cancelled);
-          await changeRecord((record) => ({
-            record: {
-              ...record,
-              queue: record.queue.map((entry) =>
-                entry.id === id
-                  ? cancelled.value.kind === 'cancelled'
-                    ? {
-                        ...entry,
-                        delivery: 'followUp',
-                        disposition: 'pending',
-                        operationId: undefined,
-                        attemptId: undefined,
-                      }
-                    : {
-                        ...entry,
-                        disposition: cancelled.value.kind === 'already_consumed' ? 'consumed' : 'uncertain',
-                        nativeEntryId: queued.value.entryId,
-                      }
-                  : entry,
-              ),
-            },
-            result: undefined,
-          }));
-          await publishLifecycle();
-          if (cancelled.value.kind === 'cancelled')
-            void drainAutomatic().catch((error: unknown) =>
-              emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-            );
-          return;
-        }
-        await changeRecord((record) => ({
-          record: {
-            ...record,
-            queue: record.queue.map((entry) =>
-              entry.id === id ? { ...entry, nativeEntryId: queued.value.entryId } : entry,
-            ),
-          },
-          result: undefined,
-        }));
-        await reconcileNativeQueue();
-      } catch (error) {
-        await changeRecord((record) => ({
-          record: {
-            ...record,
-            queue: record.queue.map((entry) =>
-              entry.id === id && entry.disposition === 'handoff' ? { ...entry, disposition: 'uncertain' } : entry,
-            ),
-          },
-          result: undefined,
-        }));
-        await publishLifecycle();
-        emitFrame({ type: FRAME_ERROR, code: 'steer_handoff', error: errorMessage(error) });
-      }
-    });
-  const promoteQueued = async (
-    id: string,
-    operationId?: string,
-  ): Promise<'promoted' | 'in_flight' | 'target_changed' | 'not_found'> => {
-    const submission = await submitUserPrompt('', undefined, { id, operationId });
-    void submission.settled.catch((error: unknown) =>
-      emitFrame({ type: FRAME_ERROR, code: 'user_prompt', error: errorMessage(error) }),
-    );
-    return submission.queueOutcome ?? 'promoted';
-  };
-  const resumeQueue = (): Promise<void> =>
-    serializeAdmission(async () => {
-      guardUserAdmission();
-      const execution = await lane.inspectExecution(context);
-      if (execution.current !== null) throw new Error('Wait for the active turn to settle before resuming the queue');
-      await changeRecord((record) => ({
-        record: {
-          ...record,
-          paused: false,
-          abortOperationId: undefined,
-          queue: record.queue.map((entry) =>
-            entry.disposition === 'pending' && entry.delivery === 'steer'
-              ? { ...entry, delivery: 'followUp', operationId: undefined, scheduling: 'automatic' }
-              : entry,
-          ),
-        },
-        result: undefined,
-      }));
-      await publishLifecycle();
-      void drainAutomatic().catch((error: unknown) =>
-        emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-      );
-    });
-  const steer = (message: string | AgentMessage, images?: ImageContent[], targetOperationId?: string): Promise<void> =>
-    runAgentOperation(async () => {
-      const execution = await lane.inspectExecution(context);
-      const id = randomUUID();
-      const retained =
-        typeof message === 'string'
-          ? { id, text: message, ...(images === undefined ? {} : { images }) }
-          : { ...retainedMessage(id, 'steer', message), id };
-      const target = targetOperationId ?? execution.current?.id;
-      const active =
-        target !== undefined && execution.current?.id === target && execution.current.status !== 'aborting';
-      await changeRecord((record) => ({
-        record: {
-          ...record,
-          queue: [
-            ...record.queue,
-            {
-              ...retained,
-              delivery: active ? 'steer' : 'followUp',
-              scheduling: 'automatic',
-              disposition: 'pending',
-              nativeEntryId: undefined,
-              ...(active ? { operationId: target } : {}),
-            },
-          ],
-        },
-        result: undefined,
-      }));
-      await publishLifecycle();
-      if (active)
-        void deliverPromoted(id, target).catch((error: unknown) =>
-          emitFrame({ type: FRAME_ERROR, code: 'steer_handoff', error: errorMessage(error) }),
-        );
-      else
-        void drainAutomatic().catch((error: unknown) =>
-          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-        );
-    });
-  const followUp = (message: string | AgentMessage, images?: ImageContent[]): Promise<void> =>
-    runAgentOperation(async () => {
-      const result = await writable(() => lane.followUp(message, images, context));
-      if (!result.ok) resultError(result);
-      await adoptNativeQueue();
-    });
-  const nextRun = (message: string | AgentMessage, images?: ImageContent[]): Promise<void> =>
-    runAgentOperation(async () => {
-      const result = await writable(() => lane.nextRun(message, images, context));
-      if (!result.ok) resultError(result);
-      await adoptNativeQueue();
-    });
-  // Cancellation itself. Session teardown calls it directly: an external tool invocation
-  // holds the agent-operation guard, and closing must not wait on or fail because of it.
-  const abortCurrent = async (targetOperationId?: string): Promise<void> => {
-    const execution = await lane.inspectExecution(context);
-    const currentId = execution.current?.id;
-    if (!currentId || (targetOperationId !== undefined && targetOperationId !== currentId)) return;
-    // Serialize handoff and pause. A promoted steer can neither enter the native inbox
-    // between this snapshot and cancellation nor acknowledge without a retained mapping.
-    const paused = await serializeAdmission(async () => {
-      if ((await lane.inspectExecution(context)).current?.id !== currentId) return false;
-      // Commit pause and a complete inbox snapshot before native cancellation deletes payloads.
-      const captured = await writable(() =>
-        storage.session.mutate(async (mutator) => {
-          const stored = await mutator.getValue(lifecycleAddress, context);
-          const record = stored?.value ?? EMPTY_LIFECYCLE;
-          const native = await mutator.getValue(laneState(laneName), context);
-          if (native?.value.currentOperationId !== currentId) return false;
-          const adopted: RetainedInput[] = [];
-          for (const pending of native.value.inbox) {
-            if (pending.kind !== 'steer' && pending.kind !== 'followUp') continue;
-            if (record.queue.some((item) => item.id === pending.entryId || item.nativeEntryId === pending.entryId))
-              continue;
-            const payload = await mutator.getValue(pendingEntry(pending.entryId), context);
-            if (payload?.value.type !== 'message')
-              throw new Error(`Native queued input ${pending.entryId} has no message payload`);
-            adopted.push(retainedMessage(pending.entryId, pending.kind, payload.value.payload));
+          if (event.type === 'turn_end' && lastAssistant) {
+            mapped = { type: 'turn_end', message: lastAssistant, toolResults };
+            toolResults = [];
           }
-          await mutator.commit(
-            [
-              setValue(lifecycleAddress, {
-                ...record,
-                revision: record.revision + 1,
-                paused: true,
-                abortOperationId: currentId,
-                queue: [
-                  ...record.queue.map((entry) =>
-                    entry.disposition === 'pending' && entry.delivery === 'steer'
-                      ? { ...entry, delivery: 'followUp' as const, operationId: undefined }
-                      : entry,
-                  ),
-                  ...adopted,
-                ],
-              }),
-            ],
-            context,
-          );
-          return true;
-        }, context),
-      );
-      if (!captured) return false;
-      abortingOperationId = currentId;
-      await publishLifecycle();
-      return true;
-    });
-    if (!paused) return;
-    const result = await writable(() => lane.requestAbort(currentId, context));
-    if (!result.ok) {
-      if (result.error._tag === 'OperationMismatch') return;
-      resultError(result);
-    }
-    const returned = [
-      ...result.value.steer.map((message) => ({ kind: 'steer' as const, message })),
-      ...result.value.followUp.map((message) => ({ kind: 'followUp' as const, message })),
-    ];
-    const latest = await readRecord();
-    const native = await storage.session.getValue(laneState(laneName), context);
-    const remaining = new Set((native?.value.inbox ?? []).map((item) => item.entryId));
-    const consumed = await Promise.all(
-      latest.queue
-        .filter((item) => item.nativeEntryId !== undefined)
-        .map(async (item) => [item.id, await storage.session.getEntry(item.nativeEntryId!, context)] as const),
-    );
-    const committed = new Set(consumed.filter(([, entry]) => entry !== undefined).map(([id]) => id));
-    const removedUnconsumed = latest.queue.filter(
-      (item) => item.nativeEntryId !== undefined && !remaining.has(item.nativeEntryId) && !committed.has(item.id),
-    );
-    // The native result omits IDs. Match it to the already-retained native inbox by
-    // cardinality and kind, never by text: two identical messages are distinct inputs.
-    const unmatched = {
-      steer: removedUnconsumed.filter((item) => item.delivery === 'steer').length,
-      followUp: removedUnconsumed.filter((item) => item.delivery === 'followUp').length,
-    };
-    const ambiguous =
-      returned.filter(({ kind }) => kind === 'steer').length !== unmatched.steer ||
-      returned.filter(({ kind }) => kind === 'followUp').length !== unmatched.followUp;
-    const extras = returned
-      .filter(({ kind }) => {
-        if (!ambiguous && unmatched[kind] > 0) {
-          unmatched[kind] -= 1;
-          return false;
-        }
-        return true;
-      })
-      .map(({ kind, message }) => ({
-        ...retainedMessage(randomUUID(), kind, message),
-        delivery: kind === 'steer' ? ('followUp' as const) : kind,
-        scheduling: 'held' as const,
-        disposition: 'pending' as const,
-        nativeEntryId: undefined,
-      }));
-    await changeRecord((current) => ({
-      record: {
-        ...current,
-        queue: [
-          ...current.queue.map((item) => {
-            if (item.nativeEntryId === undefined || remaining.has(item.nativeEntryId)) return item;
-            if (committed.has(item.id)) return { ...item, disposition: 'consumed' };
-            return ambiguous
-              ? { ...item, disposition: 'uncertain' }
-              : {
-                  ...item,
-                  disposition: 'pending',
-                  nativeEntryId: undefined,
-                  delivery: item.delivery === 'steer' ? 'followUp' : item.delivery,
-                  scheduling: item.delivery === 'steer' ? 'automatic' : item.scheduling,
+          if (event.type === 'message_update' && partial) {
+            for (const change of event.changes) {
+              if (change.type === 'message') {
+                partial = structuredClone(change.message);
+                continue;
+              }
+              if ('block' in change) {
+                partial.content[change.contentIndex] = structuredClone(change.block);
+                continue;
+              }
+              const block = partial.content[change.contentIndex];
+              if (change.type === 'text_delta' && block?.type === 'text') block.text += change.delta;
+              if (change.type === 'thinking_delta' && block?.type === 'thinking') block.thinking += change.delta;
+              if (
+                change.type === 'text_delta' ||
+                change.type === 'thinking_delta' ||
+                change.type === 'toolcall_delta'
+              ) {
+                const update: HarnessEvent = {
+                  type: 'message_update',
+                  message: structuredClone(partial),
+                  event: {
+                    type: change.type,
+                    contentIndex: change.contentIndex,
+                    delta: change.delta,
+                    partial: structuredClone(partial),
+                  },
                 };
-          }),
-          ...extras,
-        ],
-      },
-      result: undefined,
-    }));
-    await publishLifecycle();
-  };
-  const abort = (targetOperationId?: string): Promise<void> => runAgentOperation(() => abortCurrent(targetOperationId));
-  const interrupt = async (): Promise<void> => {
-    guardLive();
-    await abortCurrent();
-    await lane.waitForIdle(context);
-  };
-  const submitUserPrompt = async (
-    text: string | Extract<AgentMessage, { role: 'user' }>,
-    images?: ImageContent[],
-    selection?: { id: string; operationId?: string },
-  ): Promise<{
-    settled: Promise<void>;
-    handledCommand?: boolean;
-    queueOutcome?: 'in_flight' | 'target_changed' | 'not_found';
-  }> => {
-    if (
-      !selection &&
-      (typeof text === 'string' ? !text && !images?.length : text.role !== 'user' || !text.content.length)
-    )
-      throw new Error('User input must contain text or an image');
-    const release = acquireAgentOperation();
-    const reservation = Symbol('user-admission');
-    const operationId = randomUUID();
-    const attemptId = randomUUID();
-    let selected: RetainedInput | undefined;
-    let ownsReservation = false;
-    let acceptanceAttempted = false;
-    let ownsDrive = false;
-    try {
-      guardWritable();
-      if (!selection && typeof text === 'string' && (await tryDispatchCommand(text)))
-        return { settled: Promise.resolve(), handledCommand: true };
-      const target = await serializeAdmission(async () => {
-        guardUserAdmission();
-        const execution = await lane.inspectExecution(context);
-        if (selection) {
-          const item = (await readRecord()).queue.find((entry) => entry.id === selection.id);
-          if (!item || item.disposition === 'removed' || item.disposition === 'consumed')
-            return { outcome: 'not_found' as const };
-          if (item.disposition !== 'pending') return { outcome: 'in_flight' as const };
-          if (
-            (execution.current?.id ?? undefined) !== selection.operationId ||
-            execution.current?.status === 'aborting'
-          )
-            return { outcome: 'target_changed' as const };
-          if (item.message && item.message.role !== 'user')
-            throw new Error('Only user input can interrupt and respond');
+                emit({ ...update, assistantMessageEvent: update.event });
+                eventsSettled = eventsSettled.then(() => deliver(update, eventContext));
+              }
+            }
+          }
+          if (event.type === 'tool_execution_update')
+            mapped = {
+              type: 'tool_update',
+              toolCallId: event.toolCallId,
+              toolName: event.toolName,
+              partialResult: {
+                content: [
+                  {
+                    type: 'text',
+                    text: event.output ? ('set' in event.output ? event.output.set : (event.output.append ?? '')) : '',
+                  },
+                ],
+                details: event.details,
+              },
+            };
+          if (event.type === 'compaction_end')
+            mapped = {
+              type: 'compaction_end',
+              status: 'completed',
+              reason: event.reason,
+              entryId: (await readEntries()).entries.findLast((e) => e.type === 'compaction')?.id ?? '',
+              error: new Error('Compaction failed'),
+            };
+          if (event.type === 'inbox_update')
+            mapped = { type: 'queue_update', queues: event.items.map((item) => ({ kind: item.mode })) };
+          if (event.type === 'entry_appended') {
+            for (const message of event.entry.model ?? [])
+              if (message.role === 'assistant')
+                eventsSettled = eventsSettled.then(() =>
+                  deliver({ type: 'usage', row: { id: String(event.entry.id), usage: message.usage } }, eventContext),
+                );
+          }
+          if (!mapped) continue;
+          emit({
+            ...mapped,
+            type:
+              mapped.type === 'tool_start'
+                ? 'tool_execution_start'
+                : mapped.type === 'tool_update'
+                  ? 'tool_execution_update'
+                  : mapped.type === 'tool_end'
+                    ? 'tool_execution_end'
+                    : mapped.type === 'entry_added'
+                      ? 'entry_appended'
+                      : mapped.type,
+          });
+          if (mapped.type === 'run_start') emit({ type: 'agent_start' });
+          if (mapped.type === 'run_end') {
+            settling++;
+            eventsSettled = eventsSettled
+              .then(async () => {
+                await reconcile();
+                try {
+                  await writable(() =>
+                    harness.commit(
+                      (tx) =>
+                        tx.appendEntry(conversation.id, {
+                          kind: AGENT_SETTLED_ENTRY_TYPE,
+                          data: {
+                            timestamp: Date.now(),
+                            runId: String(event.type === 'run_end' ? event.inputs[0] : conversation.id),
+                          },
+                        }),
+                      eventContext,
+                    ),
+                  );
+                } catch (error) {
+                  emit({ type: 'error', code: 'agent_settled', error: String(error) });
+                }
+                await deliver(mapped!, eventContext);
+                emit({ type: 'agent_end' });
+                emit({ type: 'agent_settled', timestamp: Date.now() });
+              })
+              .catch((error) => emit({ type: 'error', code: 'settled_event', error: String(error) }))
+              .finally(() => {
+                settling--;
+              });
+          } else eventsSettled = eventsSettled.then(() => deliver(mapped!, eventContext));
         }
-        userAdmissionReservation = reservation;
-        ownsReservation = true;
-        const claimed = await changeRecord<RetainedInput | 'not_found' | 'in_flight' | undefined>((record) => {
-          const item = selection ? record.queue.find((entry) => entry.id === selection.id) : undefined;
-          if (selection && (!item || item.disposition === 'removed' || item.disposition === 'consumed'))
-            return { result: 'not_found' as const };
-          if (selection && item?.disposition !== 'pending') return { result: 'in_flight' as const };
-          return {
-            record: {
-              ...record,
-              userOperationId: operationId,
-              paused: selection ? true : record.paused,
-              queue: record.queue.map((entry) =>
-                entry.id === item?.id
-                  ? { ...entry, delivery: 'followUp', disposition: 'handoff', operationId, attemptId }
-                  : entry,
-              ),
-            },
-            result: item,
-          };
-        });
-        if (typeof claimed === 'string') return { outcome: claimed };
-        selected = claimed;
-        return {
-          currentId: execution.current?.id,
-          settling: activeDrives.get(execution.current?.id ?? settlingOperationId ?? ''),
-        };
       });
-      if ('outcome' in target) return { settled: Promise.resolve(), queueOutcome: target.outcome };
-      if (target.currentId !== undefined) await abortCurrent(target.currentId);
-      await lane.waitForIdle(context);
-      await target.settling?.catch(() => undefined);
-      await settledEvents;
-      const prompt: string | AgentMessage = selected
-        ? (selected.message ?? {
-            role: 'user',
-            content: [
-              ...(selected.text ? [{ type: 'text' as const, text: selected.text }] : []),
-              ...(selected.images ?? []),
-            ],
-            timestamp: Date.now(),
-          })
-        : text;
-      await serializeAdmission(async () => {
-        guardWritable();
-        if (userAdmissionReservation !== reservation) throw new Error('User admission ownership changed');
-        acceptanceAttempted = true;
-        try {
-          const admitted = await writable(() =>
-            lane.accept(
-              typeof prompt === 'string'
-                ? { kind: 'prompt', operationId, prompt, ...(images === undefined ? {} : { images }) }
-                : { kind: 'prompt', operationId, prompt },
+    };
+    await attach();
+    const reconcile = async () => {
+      const record = await readRecord();
+      for (const item of record.queue) {
+        if (item.disposition !== 'handoff' && item.disposition !== 'uncertain') continue;
+        const submission = item.submissionId
+          ? await harness.submission(item.submissionId as SubmissionId, context)
+          : undefined;
+        const status = await submission?.status(context);
+        if (status?.status === 'done' || status?.status === 'placed' || status?.status === 'unanswered')
+          await changeRecord((r) => {
+            const q = r.queue.find((q) => q.id === item.id);
+            if (!q) return;
+            if (status.status === 'unanswered' && status.entry === undefined && r.paused) {
+              q.disposition = 'pending';
+              q.attempt = (q.attempt ?? 0) + 1;
+              delete q.submissionId;
+            } else {
+              q.disposition = 'consumed';
+              q.text = '';
+              delete q.message;
+              delete q.images;
+            }
+            const receipts = r.queue.filter((q) => q.disposition === 'consumed' || q.disposition === 'removed');
+            if (receipts.length > 128) {
+              const expired = new Set(receipts.slice(0, receipts.length - 128).map((q) => q.id));
+              r.queue = r.queue.filter((q) => !expired.has(q.id));
+            }
+          });
+        else if (!status && !handingOff.has(item.id) && !userClaims.has(item.id))
+          await changeRecord((r) => {
+            const q = r.queue.find((q) => q.id === item.id);
+            if (q) q.disposition = 'uncertain';
+          });
+      }
+    };
+    const handingOff = new Set<string>();
+    const userClaims = new Set<string>();
+    let drainPromise: Promise<void> | undefined;
+    const drain = (): Promise<void> =>
+      (drainPromise ??= (async () => {
+        await reconcile();
+        while (!disposed) {
+          const record = await readRecord();
+          if (userAdmission || record.paused || (await execution())) break;
+          const item = record.queue.find((q) => q.disposition === 'pending' && q.scheduling === 'automatic');
+          if (!item) break;
+          const submission = await handoff(item, 'reject');
+          if (!submission) continue;
+          await submission.wait(context);
+          await eventsSettled;
+          await reconcile();
+          await publish();
+        }
+      })().finally(() => {
+        drainPromise = undefined;
+      }));
+    const handoff = async (item: Retained, mode: NonNullable<Retained['submissionMode']>, recovering = false) => {
+      if (handingOff.has(item.id)) return undefined;
+      handingOff.add(item.id);
+      try {
+        const claimed = await changeRecord((r) => {
+          const q = r.queue.find((q) => q.id === item.id);
+          if (!q || (r.paused && !recovering)) return undefined;
+          if (recovering ? q.disposition !== 'handoff' || q.submissionId !== undefined : q.disposition !== 'pending')
+            return undefined;
+          q.disposition = 'handoff';
+          q.conversationId = conversation.id;
+          q.submissionMode = mode;
+          if (item.operationId !== undefined) {
+            q.delivery = item.delivery;
+            q.operationId = item.operationId;
+          }
+          return q;
+        });
+        if (!claimed) return undefined;
+        const content = input(claimed.message ?? claimed.text, claimed.images);
+        const requestId = `${claimed.id}:${claimed.attempt ?? 0}`;
+        const submit = () =>
+          writable(() =>
+            conversation.submit(
+              mode === 'write'
+                ? {
+                    type: 'write',
+                    requestId,
+                    entry: { kind: 'doompi.message', model: [{ role: 'user', content, timestamp: Date.now() }] },
+                  }
+                : { type: 'input', content, whenBusy: mode, requestId },
               context,
             ),
           );
-          if (!admitted.ok) {
-            acceptanceAttempted = false;
-            resultError(admitted);
-          }
+        let submission;
+        try {
+          submission = await submit();
         } catch (error) {
-          // Native acceptance can commit before its acknowledgement is lost. Never repeat it.
-          const execution = await lane.inspectExecution(context);
-          if (execution.current?.id !== operationId && (await lane.getResult(operationId, context)) === undefined)
-            throw error;
+          const accepted = await storage.storage.submissionByRequest(conversation.id, requestId, context);
+          if (!accepted) throw error;
+          submission = await harness.submission(accepted.id, context);
+          if (!submission) throw error;
         }
-        if (selected) {
-          try {
-            await changeRecord((record) => ({
-              record: {
-                ...record,
-                queue: record.queue.map((entry) =>
-                  entry.id === selected!.id && entry.attemptId === attemptId && entry.disposition === 'handoff'
-                    ? { ...entry, disposition: 'consumed' }
-                    : entry,
-                ),
-              },
-              result: undefined,
-            }));
-          } catch (error) {
-            // Admission is established. A receipt failure must not strand the accepted run or retry it.
-            await changeRecord((record) => ({
-              record: {
-                ...record,
-                queue: record.queue.map((entry) =>
-                  entry.id === selected!.id && entry.attemptId === attemptId && entry.disposition === 'handoff'
-                    ? { ...entry, disposition: 'uncertain' }
-                    : entry,
-                ),
-              },
-              result: undefined,
-            })).catch(() => undefined);
-            emitFrame({ type: FRAME_ERROR, code: 'user_prompt_receipt', error: errorMessage(error) });
-          }
-        }
-      });
-      if (userAdmissionReservation === reservation) userAdmissionReservation = undefined;
-      const settled = drive(operationId);
-      ownsDrive = true;
-      void settled.then(release, release);
-      await publishLifecycle();
-      return { settled };
-    } catch (error) {
-      if (selected)
-        await changeRecord((record) => ({
-          record: {
-            ...record,
-            queue: record.queue.map((entry) =>
-              entry.id === selected!.id && entry.attemptId === attemptId && entry.disposition === 'handoff'
-                ? acceptanceAttempted
-                  ? { ...entry, disposition: 'uncertain' }
-                  : selected!
-                : entry,
-            ),
-          },
-          result: undefined,
-        })).catch(() => undefined);
-      throw error;
-    } finally {
-      if (ownsReservation && userAdmissionReservation === reservation) userAdmissionReservation = undefined;
-      if (!ownsDrive) release();
-      if (ownsReservation && drainRequested && !disposed) {
-        drainRequested = false;
-        void drainAutomatic().catch((error: unknown) =>
-          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-        );
+        await changeRecord((r) => {
+          const q = r.queue.find((q) => q.id === item.id);
+          if (q) q.submissionId = submission.id;
+        });
+        await reconcile();
+        await publish();
+        return submission;
+      } finally {
+        handingOff.delete(item.id);
       }
-    }
-  };
-  const compact = (customInstructions?: string): Promise<void> =>
-    runAgentOperation(async () => {
-      const result = await writable(() =>
-        lane.compact(customInstructions === undefined ? undefined : { customInstructions }, context),
-      );
-      if (!result.ok) resultError(result);
-    });
-  const recover = async (): Promise<void> => {
-    await adoptNativeQueue();
-    const record = await readRecord();
-    if (record.abortOperationId !== undefined) {
-      const execution = await lane.inspectExecution(context);
-      if (execution.current?.id === record.abortOperationId) {
-        await abort(record.abortOperationId);
-        const afterAbort = await lane.inspectExecution(context);
-        if (afterAbort.current?.id === record.abortOperationId && afterAbort.current.status !== 'aborting')
-          throw new Error('Cannot resume a turn before its persisted abort intent reaches native cancellation');
-        // An interrupted native drive has no process-local owner. Resume only its
-        // already-cancelled control path to reach terminal cleanup; never regenerate.
-        if (afterAbort.current?.id === record.abortOperationId) {
-          const resumed = await writable(() => lane.resume(context));
-          if (!resumed.ok && resumed.error._tag !== 'NothingToResume') resultError(resumed);
-        }
-      }
-      await changeRecord((current) => ({
-        record: { ...current, abortOperationId: undefined, paused: true },
-        result: undefined,
-      }));
-    }
-    for (const item of (await readRecord()).queue.filter(
-      (entry) =>
-        entry.disposition === 'handoff' &&
-        entry.attemptId !== undefined &&
-        entry.operationId === undefined &&
-        entry.nativeEntryId === undefined,
-    )) {
-      await changeRecord((record) => ({
-        record: {
-          ...record,
-          queue: record.queue.map((entry) => (entry.id === item.id ? { ...entry, disposition: 'uncertain' } : entry)),
-        },
-        result: undefined,
-      }));
-    }
-    const current = await readRecord();
-    for (const item of current.queue.filter(
-      (entry) =>
-        (entry.disposition === 'handoff' || entry.disposition === 'uncertain') && entry.operationId !== undefined,
-    )) {
-      const execution = await lane.inspectExecution(context);
-      const result = await lane.getResult(item.operationId!, context);
-      if (item.delivery !== 'steer' && (execution.current?.id === item.operationId || result !== undefined)) {
-        await changeRecord((record) => ({
-          record: {
-            ...record,
-            queue: record.queue.map((entry) => (entry.id === item.id ? { ...entry, disposition: 'consumed' } : entry)),
-          },
-          result: undefined,
-        }));
-      } else {
-        await changeRecord((record) => ({
-          record: {
-            ...record,
-            queue: record.queue.map((entry) => (entry.id === item.id ? { ...entry, disposition: 'uncertain' } : entry)),
-          },
-          result: undefined,
-        }));
-      }
-    }
-    await reconcileNativeQueue();
-    await publishLifecycle();
-  };
-  const admitResume = async (): Promise<{ resumed: boolean; settled: Promise<void> }> => {
-    const release = acquireAgentOperation();
-    try {
-      await recover();
-      const submission = await serializeAdmission(async () => {
-        guardWritable();
-        guardUserAdmission();
-        const record = await readRecord();
-        const execution = await lane.inspectExecution(context);
-        if (record.paused && record.userOperationId !== execution.current?.id)
-          return { resumed: false, settled: Promise.resolve() };
-        if (execution.current === null) return { resumed: false, settled: Promise.resolve() };
-        // Native resume inspects the persisted operation and then drives it to settlement.
-        // Keep that continuation policy, but expose admission separately to startup.
-        return { resumed: true, settled: drive(execution.current.id, true) };
-      });
-      if (submission.resumed) void submission.settled.then(release, release);
-      else {
-        release();
-        void drainAutomatic().catch((error: unknown) =>
-          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-        );
-      }
-      return submission;
-    } catch (error) {
-      release();
-      throw error;
-    }
-  };
-  const resume = async (): Promise<boolean> => {
-    const submission = await admitResume();
-    await submission.settled;
-    return submission.resumed;
-  };
-  const readState = async (): Promise<Record<string, unknown>> => {
-    const [lifecycle, retained, persisted, stats, thinking] = await Promise.all([
-      readLifecycle(),
-      readRecord(),
-      storage.session.getValue(laneState(laneName), context),
-      storage.session.getStats(context),
-      lane.getThinkingLevel(context),
-    ]);
-    const configuredModel = await lane.getModel(context);
-    const name = await harness.getName(context);
-    return {
-      model: configuredModel === undefined ? undefined : { provider: configuredModel.provider, id: configuredModel.id },
-      thinkingLevel: thinking,
-      isStreaming: lifecycle.operation?.kind === 'run',
-      isCompacting: lifecycle.operation?.kind === 'compaction',
-      ...(lifecycle.operation === null
-        ? {}
-        : { operationId: lifecycle.operation.id, executionStatus: lifecycle.operation.status }),
-      queuePaused: lifecycle.paused,
-      queueRevision: lifecycle.revision,
-      steeringMode: await harness.getSteeringMode(context),
-      followUpMode: await harness.getFollowUpMode(context),
-      sessionFile: storage.sessionFile,
-      sessionId,
-      ...(name === undefined ? {} : { sessionName: name }),
-      autoCompactionEnabled: (await harness.getCompactionSettings(context)).enabled,
-      messageCount: stats.messageCount,
-      pendingMessageCount:
-        lifecycle.queue.length +
-        (persisted?.value.inbox.filter(
-          (entry) =>
-            entry.kind !== 'write' &&
-            !retained.queue.some((item) => item.id === entry.entryId || item.nativeEntryId === entry.entryId),
-        ).length ?? 0),
     };
-  };
-  const readEntries = async () => ({
-    entries: await entriesForLane(lane, context),
-    leafId: await lane.getTipId(context),
-  });
-  const listCommands = () => [...(options.listCommands?.() ?? [])];
-  const setModel = async (model: { provider: string; id: string }): Promise<void> => {
-    if (models.getModel(model.provider, model.id) === undefined)
-      throw new Error(`Model not found: ${model.provider}/${model.id}`);
-    await writable(() => lane.setModel({ provider: model.provider, modelId: model.id }, context));
-  };
-  const availableModels = () => models.getAvailable();
-  const availableThinkingLevels = async () => {
-    const model = await lane.getModel(context);
-    if (!model) throw new Error('No model is selected');
-    return getSupportedThinkingLevels(model);
-  };
-  const setThinkingLevel = (level: Parameters<typeof lane.setThinkingLevel>[0]) =>
-    writable(() => lane.setThinkingLevel(level, context));
-  const setSteeringMode = (mode: Parameters<typeof harness.setSteeringMode>[0]) =>
-    writable(() => harness.setSteeringMode(mode, context));
-  const setFollowUpMode = (mode: Parameters<typeof harness.setFollowUpMode>[0]) =>
-    writable(() => harness.setFollowUpMode(mode, context));
-  const navigateTree = (targetId: string | null, navigationOptions?: Record<string, unknown>) =>
-    runAgentOperation(async () => {
-      const result = await writable(() => lane.navigateTree(targetId, navigationOptions as never, context));
-      if (!result.ok) resultError(result);
-      return {
-        cancelled: result.value.navigation.status !== 'completed',
-        entries: await entriesForLane(lane, context),
-      };
-    });
-  const clearQueue = async () => {
-    await changeRecord((record) => ({
-      record: {
-        ...record,
-        queue: record.queue.map((entry) =>
-          entry.disposition === 'pending' ? { ...entry, disposition: 'removed' } : entry,
-        ),
-      },
-      result: undefined,
-    }));
-    const queued = (await storage.session.getValue(laneState(laneName), context))?.value.inbox ?? [];
-    for (const item of queued) {
-      if (item.kind === 'write') continue;
-      const result = await writable(() => lane.cancelQueued(item.entryId, context));
-      if (!result.ok) resultError(result);
-      if (result.value.kind === 'cancelled')
-        await changeRecord((record) => ({
-          record: {
-            ...record,
-            queue: record.queue.map((entry) =>
-              entry.nativeEntryId === item.entryId ? { ...entry, disposition: 'removed' } : entry,
-            ),
-          },
-          result: undefined,
-        }));
-    }
-    await publishLifecycle();
-    return { steering: [] as never[], followUp: [] as never[] };
-  };
-  const setName = (name: string) => writable(() => harness.setName(name, context));
-  const getSessionStats = () => storage.session.getStats(context);
-  const dispose = (): Promise<void> => {
-    // Preserve the facade's idempotent second-dispose contract even if the first
-    // close reported a failure, while still waiting for a concurrent close to finish.
-    if (disposed)
-      return (
-        disposePromise?.then(
-          () => undefined,
-          () => undefined,
-        ) ?? Promise.resolve()
+    const input = (message: string | AgentMessage, images?: ImageContent[]) => {
+      if (typeof message !== 'string') {
+        if (message.role !== 'user') throw new Error('Only user messages can admit an agent run');
+        return message.content;
+      }
+      return images?.length ? [{ type: 'text' as const, text: message }, ...images] : message;
+    };
+    const enqueue = async (
+      message: string | AgentMessage,
+      images: ImageContent[] | undefined,
+      delivery: Retained['delivery'],
+      scheduling: Retained['scheduling'],
+    ) => {
+      const id = randomUUID();
+      await changeRecord((r) => {
+        r.queue.push({
+          id,
+          text: text(message),
+          ...(images ? { images } : {}),
+          ...(typeof message === 'string' ? {} : { message }),
+          delivery,
+          scheduling,
+          disposition: 'pending',
+        });
+      });
+      await publish();
+      return { id };
+    };
+    const queued = async (
+      message: string | AgentMessage,
+      images: ImageContent[] | undefined,
+      delivery: 'steer' | 'followUp' | 'nextRun',
+    ) => {
+      guardUserAdmission();
+      const { id } = await enqueue(message, images, delivery, delivery === 'steer' ? 'automatic' : 'held');
+      if (delivery !== 'nextRun' && (await execution()))
+        await handoff(
+          (await readRecord()).queue.find((q) => q.id === id)!,
+          delivery,
+        );
+      else if (delivery === 'steer') void drain().catch((error) => emit({ type: 'error', error: String(error) }));
+    };
+    const dispatchCommand = async (value: string) => options.dispatchCommand?.(value) ?? false;
+    const admit = async (message: string | AgentMessage, images?: ImageContent[], mode?: 'steer' | 'followUp') => {
+      guardUserAdmission();
+      if (external) throw new Error('An operation is already running');
+      if (typeof message === 'string' && (await dispatchCommand(message)))
+        return { settled: Promise.resolve(), handledCommand: true };
+      const record = await readRecord();
+      if (record.paused) {
+        if (record.queue.some((q) => q.disposition !== 'consumed' && q.disposition !== 'removed'))
+          throw new Error('The queue is paused');
+        await changeRecord((r) => {
+          r.paused = false;
+          delete r.abortOperationId;
+          delete r.abortTaskId;
+        });
+      }
+      if (!(await execution()))
+        for (const held of (await readRecord()).queue.filter(
+          (q) => q.disposition === 'pending' && q.scheduling === 'held',
+        )) {
+          await handoff(held, 'write');
+        }
+      const { id } = await enqueue(message, images, mode ?? 'nextRun', 'automatic');
+      const submission = await handoff(
+        (await readRecord()).queue.find((q) => q.id === id)!,
+        mode ?? 'reject',
       );
-    disposePromise ??= (async () => {
-      let failure: unknown;
-      try {
-        const execution = await lane.inspectExecution(context);
-        if (execution.current !== null) await abortCurrent(execution.current.id);
-      } catch (error) {
-        failure = error;
-        markStorageFailure(error);
+      if (!submission) return { settled: Promise.resolve() };
+      const settled = (async () => {
+        const status = await submission.wait(context);
+        await eventsSettled;
+        await reconcile();
+        await publish();
+        if (status.status === 'unanswered' && !['aborted', 'withdrawn'].includes(status.reason))
+          throw new Error(`Agent submission failed: ${status.reason}`);
+        await drain();
+      })();
+      void settled.catch((error) => emit({ type: 'error', error: String(error) }));
+      return { settled };
+    };
+    const abort = async (operationId?: string) => {
+      const current = await execution();
+      if (!current || current.id === 'settling' || (operationId && current.id !== operationId)) return;
+      if (current.id === external) {
+        externalAbort?.abort();
+        return;
       }
-      disposed = true;
-      for (const unsubscribeEvent of unsubscribe) unsubscribeEvent();
-      for (const unsubscribeHook of unsubscribeHooks) unsubscribeHook();
+      const live = await harness.snapshot(LiveDoc, conversation.id, context);
+      const taskId = live?.run?.taskId ?? nativeId(current.id);
+      await changeRecord((r) => {
+        r.paused = true;
+        r.abortOperationId = current.id;
+        r.abortTaskId = taskId;
+      });
+      await publish();
+      await writable(async () => {
+        if (current.kind === 'run') await conversation.abort(context);
+        else await harness.abortTask(taskId, context);
+      });
+      await reconcile();
+    };
+    const interrupt = async () => {
+      await abort();
+      await writable(() => conversation.abort(context));
+      await eventsSettled;
+    };
+    const submitUserPrompt = async (
+      message: string | Extract<AgentMessage, { role: 'user' }>,
+      images?: ImageContent[],
+      selection?: { id: string; operationId?: string },
+    ): Promise<{
+      settled: Promise<void>;
+      handledCommand?: boolean;
+      queueOutcome?: 'not_found' | 'in_flight' | 'target_changed';
+    }> => {
+      guardUserAdmission();
+      if (external) throw new Error('An operation is already running');
+      if (!selection && (typeof message === 'string' ? !message && !images?.length : !message.content.length))
+        throw new Error('User input must contain text or an image');
+      if (!selection && typeof message === 'string' && (await dispatchCommand(message)))
+        return { settled: Promise.resolve(), handledCommand: true };
+      guardUserAdmission();
+      userAdmission = true;
+      let claimed: Retained | undefined;
       try {
-        await harness.close(context);
-      } catch (error) {
-        failure ??= error;
-        markStorageFailure(error);
+        const current = await execution();
+        if (selection) {
+          const outcome = await changeRecord((r) => {
+            const q = r.queue.find((q) => q.id === selection.id);
+            if (!q || q.disposition === 'removed' || q.disposition === 'consumed') return 'not_found' as const;
+            if (q.disposition !== 'pending') return 'in_flight' as const;
+            if (current?.id !== selection.operationId || current?.status === 'aborting')
+              return 'target_changed' as const;
+            if (q.message && q.message.role !== 'user') throw new Error('Only user input can interrupt and respond');
+            userClaims.add(q.id);
+            r.paused = true;
+            q.disposition = 'handoff';
+            q.conversationId = conversation.id;
+            q.submissionMode = 'reject';
+            return { ...q };
+          });
+          if (typeof outcome === 'string') return { settled: Promise.resolve(), queueOutcome: outcome };
+          claimed = outcome;
+        }
+        if (current) await abort(current.id);
+        await conversation.waitForIdle(context);
+        await eventsSettled;
+        if (!claimed) {
+          const { id } = await enqueue(message, images, 'nextRun', 'held');
+          claimed = await changeRecord((r) => {
+            const q = r.queue.find((q) => q.id === id);
+            if (!q || q.disposition !== 'pending') throw new Error('User input was removed before admission');
+            q.disposition = 'handoff';
+            q.conversationId = conversation.id;
+            q.submissionMode = 'reject';
+            return { ...q };
+          });
+        }
+        const submission = await handoff(claimed, 'reject', true);
+        if (!submission) throw new Error('User admission ownership changed');
+        const settled = (async () => {
+          const status = await submission.wait(context);
+          await eventsSettled;
+          await reconcile();
+          await publish();
+          if (status.status === 'unanswered' && !['aborted', 'withdrawn'].includes(status.reason))
+            throw new Error(`Agent submission failed: ${status.reason}`);
+          await drain();
+        })();
+        void settled.catch((error) => emit({ type: 'error', code: 'user_prompt', error: String(error) }));
+        await publish();
+        return { settled };
+      } finally {
+        if (claimed) userClaims.delete(claimed.id);
+        if (selection) userClaims.delete(selection.id);
+        userAdmission = false;
       }
+    };
+    const recover = async () => {
+      const r = await readRecord();
+      if (r.abortOperationId) {
+        const task =
+          r.abortTaskId === undefined
+            ? undefined
+            : await harness.getTask(r.abortTaskId as Parameters<typeof harness.getTask>[0], context);
+        if (task && task.state.status !== 'terminal') await conversation.abort(context);
+      }
+      for (const item of r.queue.filter((q) => q.disposition === 'handoff' && !q.submissionId)) {
+        // requestId deduplicates the crash window between native admission and product receipt.
+        if (item.conversationId !== conversation.id) {
+          await changeRecord((record) => {
+            const q = record.queue.find((q) => q.id === item.id);
+            if (q) q.disposition = 'uncertain';
+          });
+          continue;
+        }
+        await handoff(item, item.submissionMode ?? (item.delivery === 'steer' ? 'steer' : 'followUp'), true);
+      }
+      await reconcile();
+      await changeRecord(() => undefined);
+    };
+    const runExternalOperation = async <T>(work: () => Promise<T>): Promise<T> => {
+      guardUserAdmission();
+      if (await execution()) throw new Error('An operation is already running');
+      external = randomUUID();
+      externalAbort = new AbortController();
       try {
-        await closeStorage(storage, context);
-      } catch (error) {
-        failure ??= error;
-        markStorageFailure(error);
+        await publish();
+        return await writable(work);
+      } finally {
+        external = undefined;
+        externalAbort = undefined;
+        await publish();
+        void drain().catch((error) => emit({ type: 'error', error: String(error) }));
       }
-      settleExit(failure === undefined ? 0 : 1);
-      if (failure !== undefined) throw failure;
-    })();
-    return disposePromise;
-  };
-
-  // The owning host explicitly resumes only after its facets and selection gates are ready.
-
-  return {
-    sessionId,
-    laneName,
-    harnessId,
-    completeModel: models.complete?.bind(models),
-    session: storage.session,
-    harness,
-    lane,
-    exited,
-    get storageQuarantined() {
-      return storageQuarantined;
-    },
-    onPresentationFrame(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    onEvent(listener) {
-      lifecycleListeners.add(listener);
-      return () => lifecycleListeners.delete(listener);
-    },
-    stop() {
-      void abort()
-        .catch(() => undefined)
-        .finally(() => dispose().catch(() => undefined));
-    },
-    readState,
-    readLifecycle,
-    enqueueAutomatic,
-    removeQueued,
-    promoteQueued,
-    resumeQueue,
-    recover,
-    readEntries,
-    listCommands,
-    dispatchCommand,
-    setModel,
-    availableModels,
-    availableThinkingLevels,
-    setThinkingLevel,
-    setSteeringMode,
-    setFollowUpMode,
-    navigateTree,
-    clearQueue,
-    setName,
-    getSessionStats,
-    replaceTools,
-    replaceResources,
-    readResources,
-    runExternalOperation,
-    appendCustomEntry,
-    appendMessage,
-    setLabel,
-    recordUsage,
-    submitPrompt,
-    submitUserPrompt,
-    prompt,
-    admitMessage,
-    steer,
-    followUp,
-    nextRun,
-    abort,
-    interrupt,
-    compact,
-    admitResume,
-    resume,
-    dispose,
-  };
+    };
+    const appendEntry = async (entry: Parameters<Conversation['submit']>[0] & { type: 'write' }) => {
+      const submission = await writable(() => conversation.submit(entry, context));
+      const receipt = await submission.wait(context);
+      if (receipt.status !== 'done') throw new Error(`Entry write failed: ${receipt.reason}`);
+      return String(receipt.entry);
+    };
+    const readEntries = async () => {
+      const entries = await projectDurableConversationEntries(conversation, context);
+      return { entries, leafId: entries.at(-1)?.id ?? null };
+    };
+    const getSessionStats = async () => {
+      const { entries } = await readEntries();
+      const messages = entries.flatMap((e) => (e.type === 'message' ? [e.message] : []));
+      const agent = await conversation.agent(context);
+      const selected = agent.model ? models.getModel(agent.model.provider, agent.model.modelId) : undefined;
+      const contextUsage = contextUsageOf(contextTokensOf(latestAssistantUsage(entries)), selected?.contextWindow);
+      const usage = await harness.usage(context);
+      const all = [...Object.values(usage.models), ...Object.values(usage.tools)];
+      const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+      let cost = 0;
+      for (const u of all) {
+        tokens.input += u.input;
+        tokens.output += u.output;
+        tokens.cacheRead += u.cacheRead;
+        tokens.cacheWrite += u.cacheWrite;
+        tokens.total += u.totalTokens;
+        cost += u.cost.total;
+      }
+      return {
+        sessionId,
+        sessionFile: storage.sessionFile,
+        ...(contextUsage === undefined ? {} : { contextUsage }),
+        messageCount: messages.length,
+        totalMessages: messages.length,
+        userMessages: messages.filter((m) => m.role === 'user').length,
+        assistantMessages: messages.filter((m) => m.role === 'assistant').length,
+        toolCalls: messages.flatMap((m) =>
+          m.role === 'assistant' ? m.content.filter((c) => c.type === 'toolCall') : [],
+        ).length,
+        toolResults: messages.filter((m) => m.role === 'toolResult').length,
+        tokens,
+        cost,
+        totalCost: cost,
+        usage: {
+          input: tokens.input,
+          output: tokens.output,
+          cacheRead: tokens.cacheRead,
+          cacheWrite: tokens.cacheWrite,
+          totalTokens: tokens.total,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: cost },
+        },
+      };
+    };
+    let disposePromise: Promise<void> | undefined;
+    const dispose = () =>
+      (disposePromise ??= (async () => {
+        await interrupt();
+        disposed = true;
+        await watcher.stop();
+        await eventsSettled;
+        try {
+          await harness.close(context);
+          await storage.repository?.close(context);
+          await environment.cleanup(context);
+          await storage.historyLease?.release();
+          resolveExited(0);
+        } catch (error) {
+          resolveExited(1);
+          throw error;
+        }
+      })());
+    const recordUsage: DirectHarnessRuntime<TContext>['recordUsage'] = async (usage, usageOptions) => {
+      const entryId = await appendEntry({
+        type: 'write',
+        entry: { kind: 'doompi.usage', data: json({ usage, ...usageOptions }) },
+      });
+      await writable(() =>
+        harness.commit(async (tx) => {
+          const ledger = await tx.doc(UsageDoc, conversation.id);
+          const key = 'doompi/auxiliary';
+          const previous = ledger.models[key];
+          ledger.models[key] = previous
+            ? {
+                ...usage,
+                input: previous.input + usage.input,
+                output: previous.output + usage.output,
+                cacheRead: previous.cacheRead + usage.cacheRead,
+                cacheWrite: previous.cacheWrite + usage.cacheWrite,
+                totalTokens: previous.totalTokens + usage.totalTokens,
+                cost: {
+                  input: previous.cost.input + usage.cost.input,
+                  output: previous.cost.output + usage.cost.output,
+                  cacheRead: previous.cost.cacheRead + usage.cost.cacheRead,
+                  cacheWrite: previous.cost.cacheWrite + usage.cost.cacheWrite,
+                  total: previous.cost.total + usage.cost.total,
+                },
+              }
+            : usage;
+        }, context),
+      );
+      return entryId;
+    };
+    return {
+      sessionId,
+      sessionFile: storage.sessionFile,
+      laneName,
+      harnessId: options.harnessId ?? `${sessionId}:${laneName}`,
+      session: harness,
+      harness,
+      get lane() {
+        return conversation;
+      },
+      exited,
+      get storageQuarantined() {
+        return quarantined;
+      },
+      completeModel: models.complete?.bind(models),
+      onPresentationFrame(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      onEvent(listener) {
+        eventListeners.add(listener);
+        return () => eventListeners.delete(listener);
+      },
+      stop() {
+        void dispose().catch((error) => emit({ type: 'error', error: String(error) }));
+      },
+      readEntries,
+      readLifecycle,
+      dispatchCommand,
+      listCommands: () => [...(options.listCommands?.() ?? [])],
+      async readState() {
+        const lifecycle = await readLifecycle();
+        const agent = await conversation.agent(context);
+        const metadata = await harness.snapshot(SessionMetadataDoc, context);
+        const stats = await getSessionStats();
+        return {
+          sessionId,
+          sessionFile: storage.sessionFile,
+          sessionName: metadata?.name,
+          model: agent.model ? { provider: agent.model.provider, id: agent.model.modelId } : undefined,
+          thinkingLevel: agent.thinkingLevel,
+          isStreaming: lifecycle.operation?.kind === 'run',
+          isCompacting: lifecycle.operation?.kind === 'compaction',
+          operationId: lifecycle.operation?.id,
+          executionStatus: lifecycle.operation?.status,
+          fastMode,
+          queuePaused: lifecycle.paused,
+          queueRevision: lifecycle.revision,
+          steeringMode: settings.steeringMode ?? 'one-at-a-time',
+          followUpMode: settings.followUpMode ?? 'one-at-a-time',
+          autoCompactionEnabled: settings.compaction?.enabled ?? true,
+          messageCount: stats.messageCount,
+          pendingMessageCount: lifecycle.queue.length,
+        };
+      },
+      enqueueAutomatic: async (value, images) => {
+        const result = await enqueue(value, images, 'nextRun', 'automatic');
+        void drain().catch((error) => emit({ type: 'error', error: String(error) }));
+        return result;
+      },
+      async removeQueued(id) {
+        const item = (await readRecord()).queue.find((q) => q.id === id);
+        if (!item) return 'not_found';
+        if (item.disposition === 'consumed') return 'already_consumed';
+        if (item.disposition === 'removed') return 'removed';
+        if (item.submissionId) {
+          const result = await harness.abortSubmission(item.submissionId as SubmissionId, context, conversation.id);
+          if (result === 'already_placed') return 'in_flight';
+          if (result === 'settled') return 'already_consumed';
+        } else if (item.disposition !== 'pending') return 'in_flight';
+        const result = await changeRecord((r) => {
+          const q = r.queue.find((q) => q.id === id);
+          if (!q) return 'not_found' as const;
+          if (q.disposition === 'consumed') return 'already_consumed' as const;
+          if (q.disposition === 'removed') return 'removed' as const;
+          if (q.submissionId !== item.submissionId || (item.submissionId === undefined && q.disposition !== 'pending'))
+            return 'in_flight' as const;
+          q.disposition = 'removed';
+          q.text = '';
+          delete q.message;
+          delete q.images;
+          return 'removed' as const;
+        });
+        await publish();
+        return result;
+      },
+      async promoteQueued(id, operationId) {
+        const result = await submitUserPrompt('', undefined, { id, operationId });
+        return result.queueOutcome ?? 'promoted';
+      },
+      async resumeQueue() {
+        guardUserAdmission();
+        await changeRecord((r) => {
+          r.paused = false;
+          delete r.abortOperationId;
+          delete r.abortTaskId;
+        });
+        await publish();
+        void drain().catch((error) => emit({ type: 'error', error: String(error) }));
+      },
+      recover,
+      async setFastMode(enabled) {
+        if (enabled) {
+          const selected = (await conversation.agent(context)).model;
+          const model = selected ? models.getModel(selected.provider, selected.modelId) : undefined;
+          if (model?.api !== CODEX_API || model.provider !== CODEX_PROVIDER)
+            throw new Error('Fast mode requires an OpenAI Codex model');
+        }
+        await writable(() =>
+          harness.commit(async (tx) => {
+            (await tx.doc(FastModeDoc)).enabled = enabled;
+            await tx.appendEntry(conversation.id, {
+              kind: 'doompi.fast-mode',
+              data: { version: 1, enabled, sessionId },
+            });
+          }, context),
+        );
+        fastMode = enabled;
+        emit({ type: 'fast_mode_changed', enabled });
+      },
+      async setModel(model) {
+        const previous = (await conversation.agent(context)).model;
+        if (!models.getModel(model.provider, model.id))
+          throw new Error(`Model not found: ${model.provider}/${model.id}`);
+        await writable(() =>
+          conversation.configure({ model: { provider: model.provider, modelId: model.id } }, context),
+        );
+        await deliver(
+          {
+            type: 'config_update',
+            property: 'model',
+            value: { provider: model.provider, modelId: model.id },
+            previous,
+          },
+          context,
+        );
+        emit({ type: 'model_select', model });
+      },
+      availableModels: () => models.getAvailable(),
+      async availableThinkingLevels() {
+        const agent = await conversation.agent(context);
+        const model = agent.model ? models.getModel(agent.model.provider, agent.model.modelId) : undefined;
+        if (!model) throw new Error('No model is selected');
+        return getSupportedThinkingLevels(model);
+      },
+      setThinkingLevel: (level) => writable(() => conversation.configure({ thinkingLevel: level }, context)),
+      async setSteeringMode(mode) {
+        settings = { ...settings, steeringMode: mode };
+      },
+      async setFollowUpMode(mode) {
+        settings = { ...settings, followUpMode: mode };
+      },
+      navigateTree: (targetId, navigationOptions) =>
+        runExternalOperation(async () => {
+          try {
+            const expected = conversation.id;
+            if (
+              targetId !== null &&
+              !(await storage.storage.entry(conversation.id, nativeId<EntryId>(targetId), context))
+            )
+              throw new Error('Navigation target is not in the selected conversation');
+            const oldTip = (await readEntries()).leafId;
+            await deliver({ type: 'navigation_start' }, context);
+            emit({ type: 'navigation_start', targetId });
+            let summary = navigationOptions?.summary;
+            if (navigationOptions?.summarize === true && summary === undefined) {
+              const selected = (await conversation.agent(context)).model;
+              const model = selected ? models.getModel(selected.provider, selected.modelId) : undefined;
+              if (!model) throw new Error('No model is selected for navigation summary');
+              const instructions = navigationOptions.customInstructions;
+              if (instructions !== undefined && typeof instructions !== 'string')
+                throw new Error('Navigation instructions must be a string');
+              const base =
+                'Summarize this conversation for continuing work on another branch. Include decisions, progress, remaining work, and essential context. Return only the summary.';
+              const messages: Message[] = [
+                {
+                  role: 'system',
+                  content:
+                    navigationOptions.replaceInstructions === true
+                      ? (instructions ?? base)
+                      : [base, instructions].filter(Boolean).join('\n\n'),
+                  timestamp: Date.now(),
+                },
+                {
+                  role: 'user',
+                  content: JSON.stringify((await conversation.context(context)).messages),
+                  timestamp: Date.now(),
+                },
+              ];
+              await options.beforeModelRequest?.({ phase: 'request', model, prompt: messages, resources }, context);
+              const summaryContext = withAbortSignal(externalAbort!.signal, context);
+              let answer: AssistantMessage;
+              try {
+                answer = await awaitWithContext(
+                  models.complete(model, { messages }, { signal: externalAbort!.signal }),
+                  summaryContext,
+                );
+              } catch (error) {
+                if (externalAbort?.signal.aborted) {
+                  await deliver(
+                    { type: 'navigation_end', status: 'aborted', tipId: oldTip, fromTipId: oldTip },
+                    context,
+                  );
+                  emit({ type: 'navigation_end', status: 'aborted' });
+                  return { cancelled: true, entries: (await readEntries()).entries };
+                }
+                throw error;
+              }
+              if (answer.stopReason === 'error' || answer.stopReason === 'aborted')
+                throw new Error(answer.errorMessage ?? 'Navigation summary failed');
+              summary = text(answer).trim();
+              await recordUsage(answer.usage, { details: { purpose: 'branch_summary' } });
+            }
+            if (externalAbort?.signal.aborted) {
+              await deliver({ type: 'navigation_end', status: 'aborted', tipId: oldTip, fromTipId: oldTip }, context);
+              emit({ type: 'navigation_end', status: 'aborted' });
+              return { cancelled: true, entries: (await readEntries()).entries };
+            }
+            if (summary !== undefined && typeof summary !== 'string')
+              throw new Error('Navigation summary must be a string');
+            const id = await navigateDurableConversation(
+              harness,
+              expected,
+              targetId === null ? null : nativeId<EntryId>(targetId),
+              context,
+              typeof summary === 'string'
+                ? {
+                    summary: {
+                      kind: 'doompi.entry',
+                      data: {
+                        type: 'branch_summary',
+                        summary,
+                        fromId: targetId,
+                        fromHook: navigationOptions?.summarize !== true,
+                      },
+                      model: [
+                        {
+                          role: 'user',
+                          content: `<branch_summary>\n${summary}\n</branch_summary>`,
+                          timestamp: Date.now(),
+                        },
+                      ],
+                    },
+                  }
+                : undefined,
+            );
+            const agent = await conversation.agent(context);
+            conversation = (await harness.conversation(id, context))!;
+            if (targetId === null)
+              await conversation.configure(
+                {
+                  model: agent.model,
+                  thinkingLevel: agent.thinkingLevel,
+                  cwd: agent.cwd,
+                  tools: tools.filter((t) => activeNames.has(t.name)).map(nativeTool),
+                  instructions: agent.instructions,
+                },
+                context,
+              );
+            await attach();
+            const result = await readEntries();
+            if (typeof navigationOptions?.label === 'string' && targetId !== null)
+              await harness.commit(async (tx) => {
+                (await tx.doc(LabelsDoc)).labels[targetId] = navigationOptions.label as string;
+              }, context);
+            for (const entry of result.entries)
+              if (entry.type === 'branch_summary') await deliver({ type: 'entry_added', entry }, context);
+            const event: HarnessEvent = {
+              type: 'navigation_end',
+              status: 'completed',
+              tipId: result.leafId,
+              fromTipId: oldTip,
+            };
+            await deliver(event, context);
+            emit({ ...event });
+            return { cancelled: false, entries: result.entries };
+          } catch (error) {
+            await deliver(
+              {
+                type: 'navigation_end',
+                status: 'failed',
+                tipId: null,
+                fromTipId: null,
+                error: error instanceof Error ? error : new Error(String(error)),
+              },
+              context,
+            );
+            emit({ type: 'navigation_end', status: 'failed', error: String(error) });
+            throw error;
+          }
+        }),
+      async clearQueue() {
+        for (const item of (await readRecord()).queue)
+          if (item.submissionId) await harness.abortSubmission(item.submissionId as SubmissionId, context);
+        await changeRecord((r) => {
+          r.queue = [];
+        });
+        await publish();
+        return { steering: [], followUp: [] };
+      },
+      setName: (name) =>
+        writable(() =>
+          harness.commit(async (tx) => {
+            (await tx.doc(SessionMetadataDoc)).name = name;
+          }, context),
+        ),
+      getSessionStats,
+      async replaceTools(replacement) {
+        tools = replacement;
+        activeNames = new Set(tools.map((t) => t.name));
+        install();
+        await writable(() => conversation.configure({ tools: tools.map(nativeTool) }, context));
+      },
+      async replaceResources(replacement) {
+        resources = replacement;
+        install();
+      },
+      async readResources() {
+        return resources;
+      },
+      runExternalOperation,
+      appendCustomEntry: async (customType, data) =>
+        String(
+          (
+            await writable(() =>
+              conversation.commit(
+                (tx) =>
+                  tx.appendEntry(conversation.id, {
+                    kind: customType,
+                    ...(data === undefined ? {} : { data: json(data) }),
+                    ...(options.entryProjectors?.[customType]
+                      ? {
+                          model: convertToLlm(
+                            options.entryProjectors[customType]({
+                              type: 'custom',
+                              id: '',
+                              parentId: null,
+                              timestamp: Date.now(),
+                              seq: 0,
+                              customType,
+                              ...(data === undefined ? {} : { data: json(data) }),
+                            }),
+                          ),
+                        }
+                      : {}),
+                  }),
+                context,
+              ),
+            )
+          ).id,
+        ),
+      appendMessage: (message) =>
+        appendEntry({
+          type: 'write',
+          entry: {
+            kind: 'doompi.entry',
+            data: json({ type: 'message', message, timestamp: message.timestamp }),
+            model: convertToLlm([message]),
+          },
+        }),
+      setLabel: (targetId, label) =>
+        writable(() =>
+          harness.commit(async (tx) => {
+            const labels = (await tx.doc(LabelsDoc)).labels;
+            if (label === undefined) delete labels[targetId];
+            else labels[targetId] = label;
+          }, context),
+        ),
+      recordUsage,
+      submitPrompt: admit,
+      submitUserPrompt,
+      prompt: async (value, images) => {
+        await (
+          await admit(value, images)
+        ).settled;
+      },
+      admitMessage: (message) => admit(message),
+      steer: (message, images) => queued(message, images, 'steer'),
+      followUp: (message, images) => queued(message, images, 'followUp'),
+      nextRun: (message, images) => queued(message, images, 'nextRun'),
+      abort,
+      interrupt,
+      async compact(instructions) {
+        guardUserAdmission();
+        if (await execution()) throw new Error('An operation is already running');
+        const previous = settings;
+        settings = { ...settings, compaction: { ...settings.compaction, keepRecentTokens: 0 } };
+        try {
+          const task = await writable(() => conversation.compact(instructions, context));
+          const receipt = await harness.waitForTask(task, context);
+          await eventsSettled;
+          if (['failed', 'faulted', 'orphaned'].includes(receipt.state.outcome.status))
+            throw new Error('Compaction failed');
+        } finally {
+          settings = previous;
+        }
+      },
+      async admitResume() {
+        await recover();
+        const resumed = !!(await execution());
+        harness.resume();
+        const settled = (async () => {
+          await conversation.waitForIdle(context);
+          await eventsSettled;
+          await drain();
+        })();
+        void settled.catch((error) => emit({ type: 'error', code: 'resume', error: String(error) }));
+        return { resumed, settled };
+      },
+      async resume() {
+        await recover();
+        const resumed = !!(await execution());
+        harness.resume();
+        if (resumed) {
+          await conversation.waitForIdle(context);
+          await eventsSettled;
+        }
+        void drain().catch((error) => emit({ type: 'error', error: String(error) }));
+        return resumed;
+      },
+      dispose,
+    };
+  } catch (error) {
+    const failures: unknown[] = [error];
+    try {
+      if (startupHarness) await startupHarness.close(context);
+      else await storage.storage.close(context);
+    } catch (closeError) {
+      failures.push(closeError);
+    }
+    try {
+      await storage.repository?.close(context);
+    } catch (closeError) {
+      failures.push(closeError);
+    }
+    try {
+      await storage.historyLease?.release();
+    } catch (closeError) {
+      failures.push(closeError);
+    }
+    if (failures.length > 1) throw new AggregateError(failures, 'Direct harness startup and cleanup failed');
+    throw error;
+  }
 }
-
-export type {
-  DirectHarnessRuntimeOptions,
-  DirectHarnessRuntime,
-  DirectHarnessFrame,
-} from '../types/server/directHarnessRuntime';
+export type { DirectHarnessRuntime, DirectHarnessRuntimeOptions } from '../types/server/directHarnessRuntime';

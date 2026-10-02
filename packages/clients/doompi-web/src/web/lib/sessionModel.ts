@@ -173,6 +173,7 @@ export interface SessionState {
   /** Models the session offered, empty until the picker asks. */
   models: ModelChoice[];
   /** Thinking levels the current model accepts, empty until the picker asks. */
+  fastMode: boolean;
   thinkingLevels: string[];
   dialog: DialogRequest | null;
   /** Latest fire-and-forget editor replacement requested by a session extension. */
@@ -233,6 +234,7 @@ export const initialSessionState: SessionState = {
   agent: null,
   commands: [],
   models: [],
+  fastMode: false,
   thinkingLevels: [],
   dialog: null,
   editorTextRequest: null,
@@ -445,6 +447,7 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
       ...state,
       streaming,
       settled: !streaming,
+      fastMode: data.fastMode === true,
       agent: {
         model,
         provider,
@@ -957,6 +960,9 @@ function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOp
     // applying its configured effort, or the /effort command. state.agent is
     // otherwise written only by a get_state this page asked for, so without
     // this the chip keeps whatever the last request reported.
+    case 'fast_mode_changed':
+      return typeof frame.enabled === 'boolean' ? { ...state, fastMode: frame.enabled } : state;
+
     case 'thinking_level_changed': {
       if (state.agent === null) return state;
       const level = asString(frame.level, state.agent.thinkingLevel);

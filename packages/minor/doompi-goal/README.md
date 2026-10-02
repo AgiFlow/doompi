@@ -12,7 +12,7 @@ is scoped to the repository. Lifecycle tools are private to the checker, never a
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.99.1 and Pi TUI 0.99.1
+- Pi 1.0.0 and Pi TUI 1.0.0
 - The DoomPi background-work coordination service for automatic completion checks. If coordination is missing or unavailable, Goal does not assume the session is idle.
 
 ## Install

@@ -3,7 +3,6 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import type { AgentMessage, Entry, HarnessEvent } from '@earendil-works/pi-agent-core';
 import type { Extension, LoadExtensionsResult, RegisteredTool, SessionEntry } from '@earendil-works/pi-coding-agent';
 import {
   createExtensionRuntime,
@@ -23,6 +22,7 @@ import {
   resolvePiExtensionEntries,
   resolvePiSettingsPackageEntries,
 } from '../../../../src/services/piExtensionHost';
+import type { AgentMessage, Entry, HarnessEvent } from '../../../../src/types/server/directHarnessRuntime';
 import type { DirectHarnessRuntime } from '../../../../src/types/server/directHarnessRuntime';
 
 const CREATED_AT = 1_700_000_000_000;
@@ -48,7 +48,14 @@ function stubRuntime(entries: Entry[], options?: { parentSessionId?: string; fai
   let listener: ((event: HarnessEvent, context: never) => void | Promise<void>) | undefined;
   const readEntries = vi.fn(async () => ({ entries, leafId: entries.at(-1)?.id ?? null }));
   const runtime = {
+    sessionId: 'session-1',
     session: {
+      snapshot: async () => ({
+        id: 'session-1',
+        createdAt: CREATED_AT,
+        parentSessionId: options?.parentSessionId ?? '',
+        workspaceRoot: '/workspace/project',
+      }),
       metadata: {
         id: 'session-1',
         createdAt: CREATED_AT,

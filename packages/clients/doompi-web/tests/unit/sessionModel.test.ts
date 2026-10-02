@@ -1096,3 +1096,20 @@ describe('persona identity attribution', () => {
     expect(state.profileIdentity).toBeNull();
   });
 });
+
+describe('Fast mode state', () => {
+  it('defaults off and uses authoritative state and live updates', () => {
+    expect(initialSessionState.fastMode).toBe(false);
+    const enabled = fold([{ type: 'response', command: 'get_state', success: true, data: { fastMode: true } }]);
+    expect(enabled.fastMode).toBe(true);
+    expect(fold([{ type: 'fast_mode_changed', enabled: false }], enabled).fastMode).toBe(false);
+    expect(fold([{ type: 'response', command: 'get_state', success: true, data: {} }], enabled).fastMode).toBe(false);
+  });
+  it('does not enable on a setter success or error without state confirmation', () => {
+    for (const success of [true, false]) {
+      expect(fold([{ type: 'response', command: 'set_fast_mode', success, error: 'unsupported' }]).fastMode).toBe(
+        false,
+      );
+    }
+  });
+});

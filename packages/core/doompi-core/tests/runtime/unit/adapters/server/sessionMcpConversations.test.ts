@@ -386,8 +386,8 @@ describe('conversation-bound Session MCP routing', () => {
           if (args[0] === 'session_start') armed = true;
           return result;
         });
-        const mutate = host.runtime.session.mutate.bind(host.runtime.session);
-        vi.spyOn(host.runtime.session, 'mutate').mockImplementation(async (...args) => {
+        const mutate = host.runtime.session.commit.bind(host.runtime.session);
+        vi.spyOn(host.runtime.session, 'commit').mockImplementation(async (...args) => {
           if (armed && !blocked) {
             blocked = true;
             enteredRecovery();

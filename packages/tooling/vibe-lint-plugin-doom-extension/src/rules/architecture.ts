@@ -3194,23 +3194,22 @@ function isNamedServiceImport(source: ts.SourceFile, specifier: string, allowed:
 }
 
 const NATIVE_PERSISTENCE_IMPORTS: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
-  'src/services/historyCreationFileSystem/index.ts': { '@earendil-works/pi-agent-core': ['FileError'] },
-  'src/services/jsonlSessionRepo/index.ts': {
-    '@earendil-works/pi-agent-core/node': ['NodeExecutionEnv'],
-    '@earendil-works/pi-agent-core/harness/context': ['BACKGROUND_CONTEXT'],
-    '@earendil-works/pi-agent-core/harness/session': ['JSONL_STORAGE_VERSION', 'JsonlSessionRepo'],
+  'src/services/durableNavigation/index.ts': {
+    '@earendil-works/pi-durable': ['defineDoc'],
   },
-  'src/services/sqliteHistoryImport/index.ts': {
-    '@earendil-works/pi-agent-core/harness/context': ['BACKGROUND_CONTEXT'],
-    '@earendil-works/pi-agent-core/harness/session': ['branchTip', 'value'],
-    '@earendil-works/pi-session-backend-sqlite-node': ['SqliteSessionRepo', 'SqliteStorage', 'createNodeSqliteFactory'],
+  'src/services/requestReceipts/index.ts': {
+    '@earendil-works/pi-durable': ['defineDoc'],
   },
   'src/services/sqliteSessionStorage/index.ts': {
-    '@earendil-works/pi-session-backend-sqlite-node': ['SqliteSessionRepo', 'createNodeSqliteFactory'],
+    '@earendil-works/pi-durable': ['createSession', 'defineDoc'],
+    '@earendil-works/pi-durable/storage/sqlite': ['SqliteStorage'],
+    '@earendil-works/pi-durable/storage/sqlite/node': ['NodeSqliteDatabase', 'openNodeSqliteStorage'],
   },
   'src/services/sqliteTranscriptReader/index.ts': {
-    '@earendil-works/pi-agent-core/harness/session': ['branchTip'],
-    '@earendil-works/pi-session-backend-sqlite-node': ['SqliteSessionRepo', 'SqliteStorage', 'createNodeSqliteFactory'],
+    '@earendil-works/pi-durable': ['createSession'],
+  },
+  'src/services/sqliteSessionHistory/index.ts': {
+    '@earendil-works/pi-durable': ['createSession'],
   },
   'src/services/layerPackageInstaller/index.ts': {
     '@earendil-works/pi-coding-agent': ['DefaultPackageManager', 'SettingsManager'],
@@ -3225,7 +3224,7 @@ function allowedHostServiceImport(
 ): boolean {
   if (specifier === '@earendil-works/pi-coding-agent' && isNamedServiceImport(source, specifier, PI_SERVICE_UTILITIES))
     return true;
-  if (readPackageManifest(configRoot)?.name !== NATIVE_HOST_PACKAGE) return false;
+  if (readPackageManifest(configRoot)?.name !== '@agimon-ai/doompi-core') return false;
   const allowed = NATIVE_PERSISTENCE_IMPORTS[projectPath(filePath, configRoot) ?? '']?.[specifier];
   return allowed !== undefined && isNamedServiceImport(source, specifier, new Set(allowed));
 }

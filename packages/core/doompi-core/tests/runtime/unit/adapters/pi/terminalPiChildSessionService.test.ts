@@ -30,6 +30,7 @@ function request(source: DoomChildSessionRequest['source'], cwd: string): DoomCh
 function fakeRuntime(options: DirectHarnessRuntimeOptions): DirectHarnessRuntime {
   const sessionFile = options.sessionPath;
   return {
+    sessionFile,
     sessionId: 'child-session',
     laneName: 'main',
     harnessId: 'child-session',
@@ -51,6 +52,7 @@ function fakeRuntime(options: DirectHarnessRuntimeOptions): DirectHarnessRuntime
     readEntries: async () => ({ entries: [], leafId: null }),
     listCommands: () => [],
     dispatchCommand: async () => false,
+    setFastMode: async () => undefined,
     setModel: async () => undefined,
     availableModels: async () => [],
     availableThinkingLevels: async () => [],
@@ -119,7 +121,7 @@ function manager(branch: readonly Record<string, unknown>[]): TerminalPiForkSour
 function owner() {
   const releases: ReturnType<typeof vi.fn>[] = [];
   const ownership = {
-    acquire: vi.fn(async () => {
+    acquire: vi.fn(async (_path: string) => {
       const release = vi.fn(async () => undefined);
       releases.push(release);
       return { assertQuiescent: vi.fn(), release };
@@ -133,6 +135,61 @@ beforeEach(() => {
 });
 
 describe('terminal Pi child session provider', () => {
+  it.each([true, false])('projects parent Fast %s into a fresh terminal subagent', async (enabled) => {
+    const snapshots: Array<boolean | undefined> = [];
+    const service = createTerminalPiChildSessionService({
+      cwd: '/tmp',
+      parentFastMode: () => enabled,
+      runtimeFactory: async (options) => {
+        snapshots.push(options.initialFastMode);
+        return fakeRuntime(options);
+      },
+    });
+    try {
+      const child = await service.start(request({ kind: 'fresh' }, '/tmp'));
+      expect(snapshots).toEqual([enabled]);
+      await child.dispose();
+    } finally {
+      await service.close();
+    }
+  });
+
+  it.each([true, false])('projects parent Fast %s once into a terminal child runtime', async (enabled) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-fast-'));
+    tempRoots.push(root);
+    let parentMode = enabled;
+    const snapshots: Array<boolean | undefined> = [];
+    const service = createTerminalPiChildSessionService({
+      cwd: root,
+      sessionsRoot: root,
+      parentFastMode: () => parentMode,
+      runtimeFactory: async (options) => {
+        parentMode = !enabled;
+        snapshots.push(options.initialFastMode);
+        return fakeRuntime(options);
+      },
+    });
+    try {
+      const child = await service.start(
+        request(
+          {
+            kind: 'terminal-pi-fork',
+            sourceSessionId: 'parent-session',
+            sourceLeafId: 'parent-leaf',
+            snapshotJsonl: v3Snapshot(),
+          },
+          root,
+        ),
+      );
+      expect(snapshots).toEqual([enabled]);
+      parentMode = enabled;
+      expect(snapshots).toEqual([enabled]);
+      await child.dispose();
+    } finally {
+      await service.close();
+    }
+  });
+
   it.each(['fresh', 'terminal-pi-fork'] as const)('passes the parent MCP dispatcher to a %s child', async (kind) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-mcp-'));
     tempRoots.push(root);
@@ -229,10 +286,8 @@ describe('terminal Pi child session provider', () => {
     const destination = options?.sessionPath;
     expect(destination).toBeDefined();
     expect(destination).not.toBe(parentPath);
-    expect(JSON.parse(fs.readFileSync(destination!, 'utf8').split('\n', 1)[0]!)).toMatchObject({
-      kind: 'header',
-      v: 4,
-    });
+    expect(fs.readFileSync(destination!).subarray(0, 16).toString()).toBe('SQLite format 3\u0000');
+    expect(path.basename(path.dirname(destination!))).toBe('durable-v1');
     expect(fs.readFileSync(parentPath)).toEqual(original);
     expect(ownership.acquire).toHaveBeenCalledWith(destination);
     expect(ownership.acquire).not.toHaveBeenCalledWith(parentPath);
@@ -402,10 +457,8 @@ describe('terminal Pi child session provider', () => {
 
     const destination = runtimeFactory.mock.calls[0]?.[0].sessionPath;
     expect(destination).toBeDefined();
-    expect(JSON.parse(fs.readFileSync(destination!, 'utf8').split('\n', 1)[0]!)).toMatchObject({
-      kind: 'header',
-      v: 4,
-    });
+    expect(fs.readFileSync(destination!).subarray(0, 16).toString()).toBe('SQLite format 3\u0000');
+    expect(path.basename(path.dirname(destination!))).toBe('durable-v1');
     expect(fs.readdirSync(root).filter((name) => name.endsWith('.lock'))).toEqual([]);
     await handle.dispose();
     await service.close();
@@ -483,11 +536,16 @@ describe('terminal Pi child session provider', () => {
     await service.close();
   });
 
-  it('acquires the destination lease before the staged v3 journal is copied into place', async () => {
+  it('acquires the destination lease before creating the durable SQLite container', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-provider-order-'));
     tempRoots.push(root);
     const { ownership } = owner();
     const copyFileSync = vi.spyOn(fs, 'copyFileSync');
+    const acquire = ownership.acquire.getMockImplementation()!;
+    ownership.acquire.mockImplementation(async (destination) => {
+      expect(fs.existsSync(destination)).toBe(false);
+      return acquire(destination);
+    });
     const runtimeFactory = vi.fn(async (options: DirectHarnessRuntimeOptions) => fakeRuntime(options));
     const service = createTerminalPiChildSessionService({
       cwd: root,
@@ -511,11 +569,9 @@ describe('terminal Pi child session provider', () => {
 
       const destination = runtimeFactory.mock.calls[0]?.[0].sessionPath;
       expect(destination).toBeDefined();
-      const copyIndex = copyFileSync.mock.calls.findIndex((call) => call[1] === destination);
-      expect(copyIndex, 'staged snapshot was never copied to the destination').toBeGreaterThanOrEqual(0);
-      const acquireOrder = ownership.acquire.mock.invocationCallOrder[0];
       expect(ownership.acquire).toHaveBeenCalledExactlyOnceWith(destination);
-      expect(acquireOrder).toBeLessThan(copyFileSync.mock.invocationCallOrder[copyIndex]!);
+      expect(fs.existsSync(destination!)).toBe(true);
+      expect(copyFileSync).not.toHaveBeenCalled();
       await handle.dispose();
       await service.close();
     } finally {

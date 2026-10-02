@@ -81,6 +81,11 @@ describe('resolveSessionIdentity', () => {
     expect(resolved.identity).toEqual({ sessionId: 'given-id', sessionName: 'untitled' });
     expect(resolved.agentArgs).toEqual(['--session-id', 'given-id', '--name', 'untitled']);
   });
+
+  it.each(['../legacy', 'nested/session', 'nested\\session', '', '.'])('rejects unsafe identities: %j', (sessionId) => {
+    expect(() => resolveSessionIdentity([], { ...fallback, sessionId })).toThrow('Invalid session id.');
+    expect(() => resolveSessionIdentity(['--session-id', sessionId], fallback)).toThrow('Invalid session id.');
+  });
 });
 
 describe('relaunchAgentArgs', () => {

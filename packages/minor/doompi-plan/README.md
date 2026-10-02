@@ -15,7 +15,7 @@ rather than preventing one. Plan is not a sandbox or a repository permission bou
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.85.0
+- Pi 1.0.0
 
 ## Install
 

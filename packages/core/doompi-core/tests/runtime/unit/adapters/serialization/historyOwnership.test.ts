@@ -50,17 +50,14 @@ describe('canonical v4 history ownership', () => {
     await expect(createHistoryOwnership().acquire(source)).rejects.toThrow('independent regular file');
   });
 
-  it('preserves exact damaged bytes and provenance before allowing native repair', async () => {
+  it('rejects legacy backup operations without changing damaged bytes', async () => {
     const source = path.join(root, 'session.jsonl');
     const damaged = `${v4Source()}{"truncated":`;
     fs.writeFileSync(source, damaged);
     const lease = await createHistoryOwnership().acquire(source);
     try {
-      const original = await preserveHistoryBeforeOpen(source, lease);
-      fs.writeFileSync(source, v4Source());
-      expect(fs.readFileSync(original, 'utf8')).toBe(damaged);
-      expect(fs.statSync(original).mode & 0o777).toBe(0o600);
-      expect(JSON.parse(fs.readFileSync(`${original}.json`, 'utf8')).source.realPath).toBe(fs.realpathSync(source));
+      await expect(preserveHistoryBeforeOpen(source, lease)).rejects.toThrow('unsupported');
+      expect(fs.readFileSync(source, 'utf8')).toBe(damaged);
     } finally {
       await lease.release();
     }

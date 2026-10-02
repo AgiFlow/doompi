@@ -1,5 +1,4 @@
 import { Context, Service } from '@deepseek-ai/cordis';
-import { formatSkillsForSystemPrompt } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
 
 import {
@@ -28,6 +27,7 @@ import type {
   ContextToolInventory,
   ContextToolSource,
 } from '../../../services/contextProjection';
+import { formatSkillsForSystemPrompt } from '../../../services/piExtensionHost';
 import type { CountTokens } from '../../../services/toolInventory';
 import type {
   HeadlessContextInventory,

@@ -153,6 +153,7 @@ const OWN_ENTRIES = {
   cordisHost: 'cordisHost',
   terminalChildSession: 'terminalChildSession',
   effort: 'effort',
+  fast: 'fast',
   contextCatalog: 'contextCatalog',
   ollamaProvider: 'ollamaProvider',
   transitionCoordinator: 'transitionCoordinator',
@@ -480,6 +481,7 @@ function parentActivation(
     resolve.packageEntry(CORE_PACKAGE_ENTRIES.skill),
     resolve.packageEntry(CORE_PACKAGE_ENTRIES.domain),
     resolve.ownEntry(OWN_ENTRIES.effort),
+    resolve.ownEntry(OWN_ENTRIES.fast),
     // Child sessions are deliberately left out: a subagent thread has no model
     // chip to keep current, so journaling its switches would cost entries no
     // surface reads.

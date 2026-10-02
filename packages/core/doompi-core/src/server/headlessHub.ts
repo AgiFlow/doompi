@@ -1,7 +1,5 @@
 import crypto from 'node:crypto';
 
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-
 import type {
   DoomComputerUseHostBinding,
   DoomDirectEventBus,
@@ -197,9 +195,8 @@ interface StartedChannel {
  */
 async function lastSettledAt(host: HeadlessSessionHost): Promise<string | undefined> {
   try {
-    const entry = await host.runtime.lane.findEntry(
-      { type: 'custom', customType: AGENT_SETTLED_ENTRY_TYPE, order: 'newestFirst' },
-      BACKGROUND_CONTEXT,
+    const entry = (await host.runtime.readEntries()).entries.findLast(
+      (entry) => entry.type === 'custom' && entry.customType === AGENT_SETTLED_ENTRY_TYPE,
     );
     const data = entry?.type === 'custom' ? (entry.data as { timestamp?: unknown } | undefined) : undefined;
     return typeof data?.timestamp === 'number' && Number.isFinite(data.timestamp)

@@ -55,6 +55,7 @@
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "21.2.3",
     "@commitlint/config-nx-scopes": "21.2.3",
+    "@earendil-works/pi-coding-agent": "1.0.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@nx/js": "23.2.1",
     "@smithy/signature-v4": "5.7.3",

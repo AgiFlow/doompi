@@ -39,6 +39,7 @@ import {
   runCommand,
   selectModel,
   selectThinkingLevel,
+  selectFastMode,
   useActiveSession,
 } from '../../stores/sessionStore';
 import { setDockOpen, setDockTab } from '../../stores/uiStore';
@@ -281,15 +282,17 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
  * on request. A pick goes straight to the RPC verbs; the chip updates from the
  * get_state that follows, so it never shows a choice the agent refused.
  */
-function ModelPopup({
+export function ModelPopup({
   agent,
   models,
   levels,
+  fastMode = false,
   onClose,
 }: {
   agent: AgentInfo | null;
   models: ModelChoice[];
   levels: string[];
+  fastMode?: boolean;
   onClose: () => void;
 }) {
   const [filter, setFilter] = useState('');
@@ -382,6 +385,30 @@ function ModelPopup({
           );
         })}
       </PopoverFooter>
+      <PopoverFooter className="justify-start gap-2 py-1.5">
+        <Button
+          variant="ghost"
+          size="xs"
+          role="switch"
+          aria-label="Codex Fast"
+          aria-checked={agent?.provider === 'openai-codex' && fastMode}
+          aria-describedby="codex-fast-description"
+          data-testid="fast-toggle"
+          disabled={agent?.provider !== 'openai-codex'}
+          onClick={() => selectFastMode(!fastMode)}
+          className={cn(
+            'text-xs',
+            agent?.provider === 'openai-codex' && fastMode && 'bg-doom-yellow/25 text-doom-yellow',
+          )}
+        >
+          Fast {agent?.provider === 'openai-codex' && fastMode ? 'on' : 'off'}
+        </Button>
+        <span id="codex-fast-description" className="text-2xs text-doom-dim">
+          {agent?.provider === 'openai-codex'
+            ? 'Priority processing may cost more.'
+            : 'Fast is available only for Codex.'}
+        </span>
+      </PopoverFooter>
     </PopoverContent>
   );
 }
@@ -401,6 +428,7 @@ export function SelectionBar() {
   const stats = useActiveSession((state) => state.stats);
   const liveCost = useActiveSession((state) => state.liveCost);
   const models = useActiveSession((state) => state.models);
+  const fastMode = useActiveSession((state) => state.fastMode);
   const thinkingLevels = useActiveSession((state) => state.thinkingLevels);
   const dialog = useActiveSession((state) => state.dialog);
   const pendingMenu = useStore(menuStore, (state) => state.pending);
@@ -524,7 +552,13 @@ export function SelectionBar() {
           </Button>
         </PopoverTrigger>
         {modelOpen ? (
-          <ModelPopup agent={agent} models={models} levels={thinkingLevels} onClose={() => setModelOpen(false)} />
+          <ModelPopup
+            agent={agent}
+            models={models}
+            levels={thinkingLevels}
+            fastMode={fastMode}
+            onClose={() => setModelOpen(false)}
+          />
         ) : null}
       </Popover>
 

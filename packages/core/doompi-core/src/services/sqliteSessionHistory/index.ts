@@ -1,13 +1,15 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { sessionName, value } from '@earendil-works/pi-agent-core/harness/session';
+import { createSession, type Cursor, type EntryRecord } from '@earendil-works/pi-durable';
+
 import {
-  SqliteSessionRepo,
-  SqliteStorage,
-  createNodeSqliteFactory,
-} from '@earendil-works/pi-session-backend-sqlite-node';
+  DURABLE_DIRECTORY,
+  DURABLE_BACKGROUND_CONTEXT as context,
+  SessionIdentityDoc,
+  SessionMetadataDoc,
+  openReadOnlyDurableStorage,
+} from '../sqliteSessionStorage';
 
 export interface SavedSession {
   id: string;
@@ -69,49 +71,55 @@ export function readSavedExecution(raw: unknown, owner: string): SavedSessionExe
   };
 }
 
-/** Lists private execution records for one admitted workspace. */
+/** Lists only fresh durable containers, never legacy journals. */
 export async function listSavedSessionRecords(
   sessionsRoot: string,
   workspaceRoot: string,
   activeSessionIds: ReadonlySet<string>,
   workspaceId?: string,
 ): Promise<SavedSessionRecord[]> {
-  const factory = createNodeSqliteFactory();
-  const repository = new SqliteSessionRepo({ directory: sessionsRoot, databaseFactory: factory });
-  let sessions: Awaited<ReturnType<typeof repository.list>>;
-  try {
-    sessions = await repository.list(undefined, BACKGROUND_CONTEXT);
-  } finally {
-    await repository.close(BACKGROUND_CONTEXT);
-  }
+  const directory = path.join(sessionsRoot, DURABLE_DIRECTORY);
+  const files = await fs.readdir(directory).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  });
   const result: SavedSessionRecord[] = [];
-  for (const metadata of sessions) {
-    if (activeSessionIds.has(metadata.id)) continue;
-    const database = await factory.openReadOnly(metadata.path);
-    const storage = new SqliteStorage(database, { sessionId: metadata.id });
+  for (const file of files) {
+    if (!/^[a-zA-Z0-9_-]+\.sqlite$/u.test(file)) continue;
+    const id = path.basename(file, '.sqlite');
+    if (activeSessionIds.has(id)) continue;
+    const filePath = path.join(directory, file);
+    const storage = await openReadOnlyDurableStorage(filePath);
+    const session = createSession(storage);
     try {
-      const owner = await storage.getValue(value('doompi.session', 'workspaceRoot'), BACKGROUND_CONTEXT);
-      if (typeof owner?.value !== 'string') continue;
-      const context = await storage.getValue(value('doompi.session', 'execution'), BACKGROUND_CONTEXT);
-      const execution = readSavedExecution(context?.value, owner.value);
-      if (context?.value !== undefined && !execution) continue;
-      if (execution) {
-        if (execution.groupingRoot !== workspaceRoot || (workspaceId && execution.workspaceId !== workspaceId))
-          continue;
-      } else {
-        // Legacy journals have only an execution root. Never infer worktree grouping
-        // or a subdirectory pwd from their parent workspace.
-        if (owner.value !== workspaceRoot) continue;
-      }
-      const [name, entries, stats, file] = await Promise.all([
-        storage.getValue(sessionName, BACKGROUND_CONTEXT),
-        storage.scanEntries({ type: 'message', order: 'asc', limit: 100 }, BACKGROUND_CONTEXT),
-        storage.getStats(BACKGROUND_CONTEXT),
-        fs.stat(metadata.path),
-      ]);
-      const firstUser = entries.find((entry) => entry.type === 'message' && entry.message.role === 'user');
-      const content =
-        firstUser?.type === 'message' && 'content' in firstUser.message ? firstUser.message.content : undefined;
+      const identity = await session.snapshot(SessionIdentityDoc, context);
+      if (!identity || identity.id !== id) throw new Error('Durable session identity mismatch');
+      const metadata = await session.snapshot(SessionMetadataDoc, context);
+      if (!metadata?.workspaceRoot) continue;
+      const execution = readSavedExecution(metadata.execution, metadata.workspaceRoot);
+      if (
+        !execution ||
+        execution.groupingRoot !== workspaceRoot ||
+        (workspaceId && execution.workspaceId !== workspaceId)
+      )
+        continue;
+      const entries = new Map<number, EntryRecord>();
+      let conversationCursor: Cursor | undefined;
+      do {
+        const conversations = await storage.scanConversations({}, 100, conversationCursor, context);
+        for (const conversation of conversations.items) {
+          let cursor: Cursor | undefined;
+          do {
+            const page = await storage.scanEntries({ conversationId: conversation.id }, 100, cursor, context);
+            for (const entry of page.items) entries.set(entry.id, entry);
+            cursor = page.next;
+          } while (cursor);
+        }
+        conversationCursor = conversations.next;
+      } while (conversationCursor);
+      const ordered = [...entries.values()].sort((a, b) => a.id - b.id);
+      const messages = ordered.flatMap((entry) => entry.model ?? []);
+      const content = messages.find((message) => message.role === 'user')?.content;
       const firstMessage =
         typeof content === 'string'
           ? content
@@ -121,31 +129,26 @@ export async function listSavedSessionRecords(
                 .map((part) => part.text)
                 .join('\n')
             : '';
+      const stat = await fs.stat(filePath);
       result.push({
         summary: {
-          id: metadata.id,
-          ...(typeof name?.value === 'string' ? { name: name.value } : {}),
+          id,
+          ...(metadata.name ? { name: metadata.name } : {}),
           firstMessage,
-          createdAt: new Date(metadata.createdAt).toISOString(),
-          updatedAt: file.mtime.toISOString(),
-          messageCount: stats.messageCount,
+          createdAt: new Date(identity.createdAt).toISOString(),
+          updatedAt: stat.mtime.toISOString(),
+          messageCount: messages.length,
         },
-        execution: execution ?? {
-          cwd: workspaceRoot,
-          repoRoot: workspaceRoot,
-          groupingRoot: workspaceRoot,
-          workspaceId: workspaceId ?? '',
-        },
+        execution,
       });
     } finally {
-      await storage.close(BACKGROUND_CONTEXT);
-      database.close();
+      await session.close(context);
     }
   }
-  return result.sort((left, right) => right.summary.updatedAt.localeCompare(left.summary.updatedAt));
+  return result.sort((a, b) => b.summary.updatedAt.localeCompare(a.summary.updatedAt));
 }
 
-/** Public history summaries contain no execution paths or pinned artifacts. */
+/** Public summaries do not expose private execution metadata. */
 export async function listSavedSessions(
   sessionsRoot: string,
   workspaceRoot: string,

@@ -119,7 +119,6 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   const pending = new Map<string, PendingResult[]>();
   const deferredCommands = new Set<string>();
   const entries: Frame[] = [];
-  let usageEntries: unknown[] = [];
   let availableModels: unknown[] = [];
   let stats: Frame = {
     messageCount: 0,
@@ -241,9 +240,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
         customType?: string;
       }) => {
         record({ type: 'get_entries' });
-        const source = (usageEntries.length > 0 ? usageEntries : entries).filter(
-          (entry): entry is Frame => typeof entry === 'object' && entry !== null,
-        );
+        const source = entries.filter((entry): entry is Frame => typeof entry === 'object' && entry !== null);
         const cursor = query.cursor?.seq;
         const filtered = source.filter((entry) => {
           if (query.type !== undefined && entry.type !== query.type) return false;
@@ -482,11 +479,18 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       setStatus: () => undefined,
     },
     session: {
-      entries: async (query) =>
-        (await runtime.lane.findEntries({ ...query, order: 'newestFirst' } as never, {} as never)) as unknown as Record<
+      entries: async (query) => {
+        let entries = (await runtime.readEntries()).entries;
+        if (query?.type) entries = entries.filter((entry) => entry.type === query.type);
+        if (query?.customType) {
+          entries = entries.filter((entry) => entry.type === 'custom' && entry.customType === query.customType);
+        }
+        const newestFirst = entries.toReversed();
+        return (query?.limit === undefined ? newestFirst : newestFirst.slice(0, query.limit)) as unknown as Record<
           string,
           unknown
-        >[],
+        >[];
+      },
       appendCustomEntry: async (type, data) => {
         await runtime.appendCustomEntry(type, data);
       },
@@ -701,29 +705,16 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       };
       const contextUsage = next.contextUsage;
       if (contextUsage === undefined) {
-        usageEntries = [];
         availableModels = [];
         return;
       }
       const model = { provider: 'fixture', id: 'fixture', contextWindow: contextUsage.contextWindow };
       state = { ...state, model };
       availableModels = [model];
-      usageEntries = [
-        {
-          type: 'message',
-          message: {
-            role: 'assistant',
-            usage: {
-              input: contextUsage.tokens,
-              output: 0,
-              cacheRead: 0,
-              cacheWrite: 0,
-              totalTokens: contextUsage.tokens,
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-            },
-          },
-        },
-      ];
+      stats.contextUsage = {
+        ...contextUsage,
+        percent: Math.round((contextUsage.tokens / contextUsage.contextWindow) * 100),
+      };
     },
     waitForAttach: async (timeoutMs = 5000) => {
       if (timeoutMs <= 0) throw new Error('Timed out waiting for the cockpit to attach.');

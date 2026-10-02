@@ -30,7 +30,6 @@ import {
   type ThinkingLevel,
 } from '../exports/sessionProtocol';
 import { createAcpSessionUpdateProjection } from '../services/acpSessionUpdates';
-import { contextTokensOf, contextUsageOf, latestAssistantUsage } from '../services/contextUsage';
 import { createRpcTranscript, type RpcTranscript } from '../services/rpcTranscript';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
 import { createSessionPresentation } from '../services/sessionPresentation';
@@ -53,26 +52,8 @@ type PromptLatency = {
 };
 
 async function sessionStats(runtime: DirectHarnessRuntime, sessionId: string): Promise<SessionStats> {
-  const [stored, state, models] = await Promise.all([
-    runtime.getSessionStats(),
-    runtime.readState(),
-    runtime.availableModels(),
-  ]);
-  // Cost and token totals are maintained by Pi at commit time. Only recent
-  // assistant usage is needed to display context occupancy.
-  const recent = await runtime.lane.findEntries(
-    { type: 'message', order: 'newestFirst', limit: 100 },
-    BACKGROUND_CONTEXT,
-  );
-  // `newestFirst` already reverses the branch, so the first assistant entry is the newest one.
-  const contextTokens = contextTokensOf(latestAssistantUsage([...recent].reverse()));
-  const selected =
-    typeof state.model === 'object' && state.model !== null
-      ? (state.model as { provider?: unknown; id?: unknown })
-      : undefined;
-  const model = models.find((candidate) => candidate.provider === selected?.provider && candidate.id === selected?.id);
-  const contextUsage = contextUsageOf(contextTokens, model?.contextWindow);
-  const sessionFile = typeof state.sessionFile === 'string' ? state.sessionFile : undefined;
+  const stored = await runtime.getSessionStats();
+  const { contextUsage, sessionFile } = stored;
   return {
     sessionId,
     ...(sessionFile === undefined ? {} : { sessionFile }),
@@ -135,12 +116,27 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     return value;
   };
   const state = replicatedState<SessionServiceState>({
-    snapshot: summary(transcript.snapshot()),
+    snapshot: { ...summary(transcript.snapshot()), fastMode: false },
     progress: null,
     updates: [],
     presentation: { revision: 0, dropped: 0, events: [], projections: [] },
   });
+  void options.runtime
+    .readState()
+    .then((runtimeState) => {
+      if (!disposed)
+        state.change(BACKGROUND_CONTEXT, (draft) => {
+          draft.snapshot.fastMode = runtimeState.fastMode === true;
+        });
+    })
+    .catch((error) => {
+      if (!disposed) present({ type: 'error', error: String(error) });
+    });
   const present = (frame: Record<string, unknown>): boolean => {
+    if (frame.type === 'fast_mode_changed' && typeof frame.enabled === 'boolean')
+      state.change(BACKGROUND_CONTEXT, (draft) => {
+        draft.snapshot.fastMode = frame.enabled as boolean;
+      });
     const entry = frame.entry as { seq?: number } | undefined;
     if (frame.type === 'entry_appended' && typeof entry?.seq === 'number')
       frame = {
@@ -237,6 +233,7 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
         if (reduction.snapshot)
           draft.snapshot = {
             ...summary(reduction.snapshot),
+            fastMode: draft.snapshot.fastMode ?? false,
             ...(draft.snapshot.lifecycle === undefined ? {} : { lifecycle: draft.snapshot.lifecycle }),
           };
         if (updates.length > 0) {
@@ -357,7 +354,32 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       const revision = state.value.presentation?.revision ?? 0;
       const drafts = [...inFlight.values()];
       const started = performance.now();
-      const page = await readTranscriptPage(options.runtime, args, generation, context);
+      let snapshot: ReturnType<DirectHarnessRuntime['readEntries']> | undefined;
+      const readEntries = () => (snapshot ??= options.runtime.readEntries());
+      const page = await readTranscriptPage(
+        {
+          sessionId: options.runtime.sessionId,
+          laneName: options.runtime.laneName,
+          lane: {
+            getTipId: async () => (await readEntries()).leafId,
+            findEntries: async (query) => {
+              let entries = (await readEntries()).entries;
+              if (query.type) entries = entries.filter((e) => e.type === query.type);
+              if (query.customType)
+                entries = entries.filter((e) => e.type === 'custom' && e.customType === query.customType);
+              if (query.cursor)
+                entries = entries.filter((e) =>
+                  query.order === 'oldestFirst' ? e.seq > query.cursor!.seq : e.seq < query.cursor!.seq,
+                );
+              if (query.order === 'newestFirst') entries = entries.toReversed();
+              return query.limit === undefined ? entries : entries.slice(0, query.limit);
+            },
+          },
+        },
+        args,
+        generation,
+        context,
+      );
       if (options.telemetry)
         observe(
           options.telemetry.recordEvent('doompi_server.transcript_page', {
@@ -503,6 +525,14 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
         throw new Error('Invalid model');
       await options.runtime.setModel(model);
     },
+    async setFastMode(enabled, context) {
+      guardContext(context);
+      if (typeof enabled !== 'boolean') throw new Error('Invalid fast mode');
+      await options.runtime.setFastMode(enabled);
+      state.change(context, (draft) => {
+        draft.snapshot.fastMode = enabled;
+      });
+    },
     async setThinking(thinkingLevel, context) {
       guardContext(context);
       if (!['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(thinkingLevel))
@@ -588,7 +618,8 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     },
     async getState(context) {
       guardContext(context);
-      return (await options.runtime.readState()) as unknown as SessionStateInfo;
+      const runtimeState = await options.runtime.readState();
+      return { ...runtimeState, fastMode: runtimeState.fastMode === true } as unknown as SessionStateInfo;
     },
     async getSessionStats(context) {
       guardContext(context);

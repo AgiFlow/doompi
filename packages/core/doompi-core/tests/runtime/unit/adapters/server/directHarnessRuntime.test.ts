@@ -1,1523 +1,639 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { gunzipSync, zstdDecompressSync } from 'node:zlib';
 
-import { LaneBusy } from '@earendil-works/pi-agent-core';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import {
-  JsonlSessionRepo,
-  MemorySessionRepo,
-  JSONL_STORAGE_VERSION,
-} from '@earendil-works/pi-agent-core/harness/session';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import {
   createAssistantMessageEventStream,
-  type AssistantMessage,
   type Api,
   type Model,
   type Models,
+  type AssistantMessage,
 } from '@earendil-works/pi-ai';
+import { streamSimple as codexStreamSimple } from '@earendil-works/pi-ai/api/openai-codex-responses';
+import { MemoryStorage } from '@earendil-works/pi-durable';
 import { Type } from 'typebox';
-import { Check } from 'typebox/value';
-import { describe, expect, it, vi, type MockInstance } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { SessionMethodSchemas } from '../../../../../src/schemas/sessionApiContracts';
-import {
-  createDirectHarnessRuntime,
-  promptForAssistantText,
-  readDirectHarnessSessionMetadata,
-} from '../../../../../src/server/directHarnessRuntime';
-import { harnessErrorMessage } from '../../../../../src/server/harnessErrorMessage';
+import { createDirectHarnessRuntime, promptForAssistantText } from '../../../../../src/server/directHarnessRuntime';
 import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../../src/services/historyOwnership';
+import type { DirectHarnessRuntimeOptions } from '../../../../../src/types/server/directHarnessRuntime';
 
 const model: Model<Api> = {
-  id: 'test-model',
-  name: 'Test model',
-  api: 'test-api',
-  provider: 'test-provider',
+  id: 'test',
+  name: 'Test',
+  api: 'test',
+  provider: 'fixture',
   baseUrl: 'http://localhost',
   reasoning: false,
   input: ['text'],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 65_536,
+  contextWindow: 65536,
   maxTokens: 256,
 };
-
-const models = {
-  getModels: () => [model],
-  getModel: (provider: string, id: string) => (provider === model.provider && id === model.id ? model : undefined),
-  getAvailable: async () => [model],
-} as unknown as Models;
-
-describe('direct AgentHarness runtime', () => {
-  it('returns only new assistant text from the prompt it just ran', async () => {
-    const prior = {
-      id: 'prior',
-      type: 'message',
-      message: { role: 'assistant', content: [{ type: 'text', text: 'old' }] },
-    };
-    const user = {
-      id: 'user',
-      type: 'message',
-      message: { role: 'user', content: [{ type: 'text', text: 'question' }] },
-    };
-    const assistant = {
-      id: 'answer',
-      type: 'message',
-      message: {
-        role: 'assistant',
-        content: [{ type: 'text', text: '  first ' }, { type: 'image' }, { type: 'text', text: 'second  ' }],
-      },
-    };
-    const readEntries = vi
-      .fn()
-      .mockResolvedValueOnce({ entries: [prior] })
-      .mockResolvedValueOnce({ entries: [prior, assistant, user] });
-    const prompt = vi.fn(async () => undefined);
-    expect(await promptForAssistantText({ readEntries, prompt } as never, 'ask')).toBe('first \nsecond');
-    expect(prompt).toHaveBeenCalledWith('ask');
-    readEntries.mockResolvedValueOnce({ entries: [prior] }).mockResolvedValueOnce({ entries: [prior, user] });
-    expect(await promptForAssistantText({ readEntries, prompt } as never, 'again')).toBeUndefined();
-    readEntries.mockResolvedValueOnce({ entries: [] }).mockResolvedValueOnce({
-      entries: [{ ...assistant, message: { ...assistant.message, content: [{ type: 'text', text: '   ' }] } }],
-    });
-    expect(await promptForAssistantText({ readEntries, prompt } as never, 'blank')).toBeUndefined();
+const usage = {
+  input: 1,
+  output: 1,
+  cacheRead: 0,
+  cacheWrite: 0,
+  totalTokens: 2,
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+};
+function response(content: AssistantMessage['content'], stopReason: 'stop' | 'toolUse' = 'stop') {
+  const stream = createAssistantMessageEventStream();
+  const message: AssistantMessage = {
+    role: 'assistant',
+    content,
+    api: model.api,
+    provider: model.provider,
+    model: model.id,
+    timestamp: Date.now(),
+    usage,
+    stopReason,
+  };
+  stream.push({ type: 'start', partial: message });
+  stream.push({ type: 'done', reason: stopReason, message });
+  stream.end();
+  return stream;
+}
+async function setup(
+  options: Partial<DirectHarnessRuntimeOptions> = {},
+  answers: ReturnType<typeof response>[] = [response([{ type: 'text', text: 'answer' }])],
+) {
+  const streamSimple = vi.fn<Models['streamSimple']>(() => {
+    const answer = answers.shift();
+    if (!answer) throw new Error('Unexpected model request');
+    return answer;
   });
-
-  it('maps harness lifecycle, configuration, and queue events to presentation frames', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'event-frames-test' }, BACKGROUND_CONTEXT);
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
-    const frames: Record<string, unknown>[] = [];
-    runtime.onPresentationFrame((frame) => frames.push(frame));
-    const events = runtime.harness.events as unknown as {
-      emit(event: Record<string, unknown>, context: typeof BACKGROUND_CONTEXT): Promise<void>;
-    };
+  const models = {
+    getModels: () => [model],
+    getAvailable: async () => [model],
+    getModel: (provider: string, id: string) => (provider === model.provider && id === model.id ? model : undefined),
+    streamSimple,
+    complete: vi.fn(),
+  } as unknown as Models;
+  const storage = new MemoryStorage();
+  const runtime = await createDirectHarnessRuntime({
+    cwd: '/tmp',
+    durableStorage: storage,
+    models,
+    model,
+    compaction: { enabled: false },
+    ...options,
+  });
+  return { runtime, streamSimple, storage, models };
+}
+describe('durable direct runtime', () => {
+  it('submits through durable Harness and projects string protocol IDs', async () => {
+    const { runtime, streamSimple } = await setup();
     try {
-      for (const event of [
-        { type: 'run_resume', runId: 'run' },
-        { type: 'run_suspend', runId: 'run', reason: 'input', deferred: true },
-        { type: 'operation_abort', operationId: 'operation', steer: 1, followUp: 2 },
-        { type: 'retry_scheduled', runId: 'run', attempt: 2, maxAttempts: 3, errorMessage: 'retry' },
-        { type: 'retry_start', runId: 'run', attempt: 2 },
-        { type: 'retry_end', runId: 'run', attempt: 2, success: false, finalError: 'failed' },
-        { type: 'tool_start', runId: 'run', turnId: 'turn', toolCallId: 'call', toolName: 'read', args: {} },
-        { type: 'tool_update', runId: 'run', turnId: 'turn', toolCallId: 'call', toolName: 'read', partialResult: {} },
-        {
-          type: 'tool_end',
-          runId: 'run',
-          turnId: 'turn',
-          toolCallId: 'call',
-          toolName: 'read',
-          result: {},
-          isError: false,
-        },
-        { type: 'value_update', value: 'session_name', name: 'Renamed' },
-        { type: 'value_update', value: 'label', targetId: 'entry', label: 'Reviewed' },
-        { type: 'config_update', property: 'thinkingLevel', value: 'high' },
-        { type: 'config_update', property: 'model', value: { provider: 'test', modelId: 'model' } },
-        { type: 'config_update', property: 'model', value: null },
-        { type: 'config_update', property: 'retry', value: true, previous: false },
-        { type: 'compaction_start', runId: 'run', reason: 'manual' },
-        { type: 'compaction_end', runId: 'run', reason: 'manual', status: 'completed' },
-        { type: 'navigation_start', runId: 'run', targetId: 'entry' },
-        { type: 'navigation_end', runId: 'run', status: 'completed' },
-        { type: 'usage', lane: 'main', row: {}, totals: {} },
-        { type: 'turn_start', runId: 'run', turnId: 'turn' },
-        { type: 'turn_end', runId: 'run', turnId: 'turn', message: {}, toolResults: [] },
-        { type: 'message_start', runId: 'run', message: {} },
-        { type: 'message_update', runId: 'run', message: {}, event: {}, frame: { text: 'partial' } },
-        { type: 'message_end', runId: 'run', message: {}, entryId: 'entry' },
-        { type: 'entry_added', entry: { id: 'entry' } },
-        { type: 'lane_created', at: 1 },
-        { type: 'handler_error', kind: 'event', hook: 'before_run', event: 'run_start', error: 'broken' },
-        {
-          type: 'queue_update',
-          queues: [
-            null,
-            { kind: 'steer', type: 'message', message: { content: 'steer' } },
-            { kind: 'followUp', type: 'message', message: { content: [{ type: 'text', text: 'later' }] } },
-            { kind: 'nextRun', type: 'message', message: { content: [{ type: 'text', text: 'next' }] } },
-            { kind: 'unknown', type: 'message', message: { content: 'ignored' } },
-          ],
-        },
-      ])
-        await events.emit(event, BACKGROUND_CONTEXT);
-      expect(frames.filter((frame) => frame.type !== 'lifecycle_update').map((frame) => frame.type)).toEqual([
-        'agent_start',
-        'run_suspend',
-        'operation_abort',
-        'auto_retry_start',
-        'auto_retry_start',
-        'auto_retry_end',
-        'tool_execution_start',
-        'tool_execution_update',
-        'tool_execution_end',
-        'session_info_changed',
-        'entry_label_changed',
-        'thinking_level_changed',
-        'response',
-        'config_update',
-        'compaction_start',
-        'compaction_end',
-        'navigation_start',
-        'navigation_end',
-        'usage',
-        'turn_start',
-        'turn_end',
-        'message_start',
-        'message_update',
-        'message_end',
-        'entry_appended',
-        'lane_created',
-        'handler_error',
-        'queue_update',
+      expect(await promptForAssistantText(runtime, 'question')).toBe('answer');
+      const entries = (await runtime.readEntries()).entries;
+      expect(entries.filter((e) => e.type === 'message').map((e) => e.message.role)).toEqual([
+        'user',
+        'system',
+        'assistant',
       ]);
-      expect(frames).toContainEqual({
-        type: 'response',
-        command: 'get_state',
-        success: true,
-        data: { model: { provider: 'test', id: 'model' } },
-      });
-      expect(frames).toContainEqual(
-        expect.objectContaining({ type: 'tool_execution_end', toolCallId: 'call', isError: false }),
-      );
-      expect(frames).toContainEqual(
-        expect.objectContaining({ type: 'queue_update', steering: ['steer'], followUp: ['later', 'next'] }),
-      );
-    } finally {
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  it('atomically excludes external tools from agent admissions and command dispatch', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'external-admission-test' }, BACKGROUND_CONTEXT);
-    let releaseCommand: (() => void) | undefined;
-    const commandPending = new Promise<void>((resolve) => {
-      releaseCommand = resolve;
-    });
-    const dispatchCommand = vi.fn(async () => {
-      await commandPending;
-      return true;
-    });
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model, dispatchCommand });
-    try {
-      const command = runtime.submitPrompt('/known');
-      await expect(runtime.runExternalOperation(async () => undefined)).rejects.toThrow('busy with an agent operation');
-      releaseCommand?.();
-      await expect(command).resolves.toMatchObject({ handledCommand: true });
-
-      let releaseExternal: (() => void) | undefined;
-      const externalPending = new Promise<void>((resolve) => {
-        releaseExternal = resolve;
-      });
-      const external = runtime.runExternalOperation(() => externalPending);
-      await Promise.resolve();
-
-      await expect(runtime.submitPrompt('/blocked')).rejects.toThrow('busy with an external tool invocation');
-      await expect(runtime.steer('blocked')).rejects.toThrow('busy with an external tool invocation');
-      await expect(runtime.submitUserPrompt('blocked')).rejects.toThrow('busy with an external tool invocation');
-      await expect(runtime.followUp('blocked')).rejects.toThrow('busy with an external tool invocation');
-      await expect(runtime.nextRun('blocked')).rejects.toThrow('busy with an external tool invocation');
-      expect(dispatchCommand).toHaveBeenCalledOnce();
-
-      releaseExternal?.();
-      await external;
-      await expect(runtime.resume()).resolves.toBe(false);
-    } finally {
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  it.each([false, true])(
-    'retains automatic input during external ownership and wakes once on release (error: %s)',
-    async (fails) => {
-      const repository = new MemorySessionRepo();
-      const session = await repository.create({ id: `external-automatic-${fails}` }, BACKGROUND_CONTEXT);
-      let release!: () => void;
-      let entered!: () => void;
-      const pending = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      const started = new Promise<void>((resolve) => {
-        entered = resolve;
-      });
-      const streamSimple = vi.fn<Models['streamSimple']>(() => {
-        const stream = createAssistantMessageEventStream();
-        const message: AssistantMessage = {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'done' }],
-          api: model.api,
-          provider: model.provider,
-          model: model.id,
-          timestamp: 1,
-          stopReason: 'stop',
-          usage: {
-            input: 1,
-            output: 1,
-            cacheRead: 0,
-            cacheWrite: 0,
-            totalTokens: 2,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-          },
-        };
-        stream.push({ type: 'start', partial: message });
-        stream.push({ type: 'done', reason: 'stop', message });
-        return stream;
-      });
-      const runtime = await createDirectHarnessRuntime({
-        cwd: '/tmp',
-        session,
-        model,
-        models: { ...models, streamSimple } as unknown as Models,
-      });
-      const frames: Record<string, unknown>[] = [];
-      runtime.onPresentationFrame((frame) => frames.push(frame));
-      const external = runtime.runExternalOperation(async () => {
-        entered();
-        await pending;
-        if (fails) throw new Error('external failed');
-      });
-      const outcome = external.catch((error: unknown) => error);
-      try {
-        await started;
-        const { id } = await runtime.enqueueAutomatic('retained automatic');
-        // All memory-repository admission work drains before the next event-loop turn.
-        await new Promise<void>((resolve) => setImmediate(resolve));
-        expect((await runtime.readLifecycle()).queue).toContainEqual(
-          expect.objectContaining({ id, disposition: 'pending' }),
-        );
-        expect(streamSimple).not.toHaveBeenCalled();
-        release();
-        expect(await outcome).toEqual(fails ? new Error('external failed') : undefined);
-        await vi.waitFor(async () => {
-          expect(streamSimple).toHaveBeenCalledOnce();
-          expect(await runtime.readLifecycle()).toMatchObject({ operation: null, queue: [] });
-        });
-        expect(JSON.stringify(streamSimple.mock.calls[0]?.[1].messages)).toContain('retained automatic');
-        expect(frames).not.toContainEqual(expect.objectContaining({ code: 'queue_drain' }));
-      } finally {
-        release();
-        await outcome;
-        await runtime.dispose();
-        await repository.close(BACKGROUND_CONTEXT);
-      }
-    },
-  );
-
-  it.each([false, true])('resumes a persisted run with ownership until settlement (wrapper: %s)', async (wrapper) => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: `positive-resume-${wrapper}` }, BACKGROUND_CONTEXT);
-    let release!: () => void;
-    let entered!: () => void;
-    const pending = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const started = new Promise<void>((resolve) => {
-      entered = resolve;
-    });
-    const streamSimple = vi.fn<Models['streamSimple']>(() => {
-      const stream = createAssistantMessageEventStream();
-      const message: AssistantMessage = {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'resumed' }],
-        api: model.api,
-        provider: model.provider,
-        model: model.id,
-        timestamp: 1,
-        stopReason: 'stop',
-        usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-      };
-      stream.push({ type: 'start', partial: message });
-      entered();
-      void pending.then(() => stream.push({ type: 'done', reason: 'stop', message }));
-      return stream;
-    });
-    const runtime = await createDirectHarnessRuntime({
-      cwd: '/tmp',
-      session,
-      model,
-      models: { ...models, streamSimple } as unknown as Models,
-    });
-    const drive = vi.spyOn(runtime.lane, 'drive');
-    let settled = false;
-    try {
-      const accepted = await runtime.lane.accept(
-        { kind: 'prompt', prompt: 'persisted before drive' },
-        BACKGROUND_CONTEXT,
-      );
-      expect(accepted.ok).toBe(true);
-      let completion: Promise<void | boolean>;
-      if (wrapper) completion = runtime.resume();
-      else {
-        const admission = await runtime.admitResume();
-        expect(admission.resumed).toBe(true);
-        completion = admission.settled;
-      }
-      void completion.then(() => {
-        settled = true;
-      });
-      await started;
-      expect(settled).toBe(false);
-      expect(drive).toHaveBeenCalledWith(
-        expect.objectContaining({ pollDeferred: true, waitForRetry: true }),
-        expect.anything(),
-      );
-      await expect(runtime.runExternalOperation(async () => 'blocked')).rejects.toThrow('busy with an agent operation');
-      release();
-      await expect(completion).resolves.toBe(wrapper ? true : undefined);
-      await expect(runtime.runExternalOperation(async () => 'released')).resolves.toBe('released');
+      expect(entries.every((e) => typeof e.id === 'string')).toBe(true);
       expect(streamSimple).toHaveBeenCalledOnce();
-      expect(await runtime.readLifecycle()).toMatchObject({ operation: null, queue: [] });
-      await expect(runtime.resume()).resolves.toBe(false);
+      expect((await runtime.readState()).isStreaming).toBe(false);
     } finally {
-      release();
       await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
     }
   });
-
-  it('reports an idle lane as having nothing to resume instead of failing', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'resume-idle-test' }, BACKGROUND_CONTEXT);
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+  it('reports latest context occupancy with durable stats, without counting output or older turns', async () => {
+    const { runtime } = await setup();
     try {
-      // Every reopened session calls this, and most of them were idle. A throw
-      // here would make the ordinary case indistinguishable from a real fault.
-      expect(await runtime.resume()).toBe(false);
-    } finally {
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-  it.each(['sessionPath', 'legacySessionPath'] as const)(
-    'rejects implicit v3 migration through %s without changing history',
-    async (input) => {
-      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-offline-startup-'));
-      const sourcePath = path.join(root, 'legacy.jsonl');
-      const source = `${JSON.stringify({ type: 'session', version: 3, id: 'legacy' })}\n`;
-      fs.writeFileSync(sourcePath, source);
-      try {
-        await expect(
-          createDirectHarnessRuntime({
-            cwd: root,
-            models,
-            model,
-            [input]: sourcePath,
-            historyOwnership: createHistoryOwnership({ sourceFormat: 'v3' }),
-          }),
-        ).rejects.toThrow('doompi history-import <v3-source> <v4-destination> --confirm-offline');
-        expect(fs.readFileSync(sourcePath, 'utf8')).toBe(source);
-        expect(fs.readdirSync(root)).toEqual(['legacy.jsonl']);
-      } finally {
-        fs.rmSync(root, { recursive: true, force: true });
-      }
-    },
-  );
-  it.each(['turn', 'request', 'late-tool-removal'] as const)(
-    'blocks %s admission failure and recovers',
-    async (phase) => {
-      const repository = new MemorySessionRepo();
-      const session = await repository.create({ id: `admission-${phase}` }, BACKGROUND_CONTEXT);
-      const streamSimple = vi.fn<Models['streamSimple']>(() => {
-        const stream = createAssistantMessageEventStream();
-        const message: AssistantMessage = {
+      expect(await runtime.getSessionStats()).toMatchObject({
+        contextUsage: { tokens: null, contextWindow: model.contextWindow, percent: null },
+      });
+      for (const input of [50_000, 100]) {
+        await runtime.appendMessage({
           role: 'assistant',
-          content: [{ type: 'text', text: 'ok' }],
+          content: [],
           api: model.api,
           provider: model.provider,
           model: model.id,
           timestamp: Date.now(),
           stopReason: 'stop',
-          usage: {
-            input: 1,
-            output: 1,
-            cacheRead: 0,
-            cacheWrite: 0,
-            totalTokens: 2,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-          },
-        };
-        stream.push({ type: 'start', partial: message });
-        stream.push({ type: 'done', reason: 'stop', message });
-        return stream;
+          usage: { ...usage, input, output: 20, cacheRead: 30, cacheWrite: 10, totalTokens: input + 60 },
+        });
+      }
+      expect(await runtime.getSessionStats()).toMatchObject({
+        contextUsage: { tokens: 140, contextWindow: model.contextWindow, percent: 0 },
       });
-      const tool = {
-        name: 'allowed',
-        label: 'Allowed',
-        description: 'Allowed tool',
-        parameters: Type.Object({}),
-        execute: async () => ({ content: [{ type: 'text' as const, text: 'ok' }], details: undefined }),
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it('passive writes do not wake the model', async () => {
+    const { runtime, streamSimple } = await setup();
+    try {
+      await runtime.appendCustomEntry('fixture', { a: 1 });
+      await runtime.appendMessage({ role: 'user', content: 'passive', timestamp: Date.now() });
+      expect(streamSimple).not.toHaveBeenCalled();
+      expect((await runtime.readEntries()).entries.some((e) => e.type === 'custom' && e.customType === 'fixture')).toBe(
+        true,
+      );
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('registered commands do not admit model work', async () => {
+    const dispatchCommand = vi.fn(async (text: string) => text === '/fixture');
+    const { runtime, streamSimple } = await setup({ dispatchCommand });
+    try {
+      const result = await runtime.submitPrompt('/fixture');
+      await result.settled;
+      expect(result.handledCommand).toBe(true);
+      expect((await runtime.submitUserPrompt('/fixture')).handledCommand).toBe(true);
+      expect(streamSimple).not.toHaveBeenCalled();
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it.each(['context', 'turn', 'request', 'system'] as const)(
+    'fails closed when %s preparation throws despite durable hooks swallowing errors',
+    async (phase) => {
+      let blocked = true;
+      const fail = () => {
+        if (blocked) throw new Error('denied');
       };
-      let failing = true;
-      const runtime = await createDirectHarnessRuntime({
-        cwd: '/tmp',
-        session,
-        models: { ...models, streamSimple } as unknown as Models,
-        model,
-        tools: [tool],
-        async beforeModelRequest(boundary) {
-          if (failing && boundary.phase === phase) throw undefined;
-          if (failing && phase === 'late-tool-removal' && boundary.phase === 'request') {
-            await runtime.replaceTools([]);
-          }
-        },
+      const { runtime, streamSimple } = await setup({
+        transformContext:
+          phase === 'context'
+            ? () => {
+                fail();
+                return undefined;
+              }
+            : undefined,
+        beforeModelRequest:
+          phase === 'turn' || phase === 'request'
+            ? (event) => {
+                if (event.phase === phase) fail();
+              }
+            : undefined,
+        systemPrompt:
+          phase === 'system'
+            ? () => {
+                fail();
+                return 'safe';
+              }
+            : undefined,
       });
       try {
-        await runtime.prompt('blocked').catch(() => undefined);
+        await expect(runtime.prompt('blocked')).rejects.toThrow();
         expect(streamSimple).not.toHaveBeenCalled();
-        failing = false;
-        await runtime.replaceTools([tool]);
-        await runtime.prompt('recovered');
+        blocked = false;
+        await runtime.prompt('allowed');
         expect(streamSimple).toHaveBeenCalledOnce();
-        expect(streamSimple.mock.calls[0]?.[1].tools?.map((entry) => entry.name)).toEqual(['allowed']);
-        await runtime.replaceTools([]);
-        await runtime.prompt('tools removed');
-        expect(streamSimple).toHaveBeenCalledTimes(2);
-        expect(streamSimple.mock.calls[1]?.[1].tools ?? []).toEqual([]);
       } finally {
         await runtime.dispose();
-        await repository.close(BACKGROUND_CONTEXT);
       }
     },
   );
-
-  it('replaces lane activation along with the tool registry without replacing the harness', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'tools-replacement' }, BACKGROUND_CONTEXT);
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
-    const harness = runtime.harness;
-    try {
-      await runtime.replaceTools([
-        {
-          name: 'allowed',
-          label: 'Allowed',
-          description: 'Allowed tool',
-          parameters: Type.Object({}),
-          execute: async () => ({ content: [{ type: 'text', text: 'ok' }], details: undefined }),
-        },
-      ]);
-      await expect(runtime.lane.getActiveTools(BACKGROUND_CONTEXT)).resolves.toEqual(['allowed']);
-      await runtime.replaceTools([]);
-      await expect(runtime.lane.getActiveTools(BACKGROUND_CONTEXT)).resolves.toEqual([]);
-      expect(runtime.harness).toBe(harness);
-    } finally {
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-  it('replaces resources through the public harness and exposes typed state', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'direct-runtime-test' }, BACKGROUND_CONTEXT);
-    const runtime = await createDirectHarnessRuntime({
-      cwd: '/tmp',
-      session,
-      models,
-      model,
-    });
-
-    try {
-      expect(await runtime.readResources()).toEqual({});
-      await runtime.replaceResources({ promptTemplates: [{ name: 'greet', content: 'Hello' }] });
-      await expect(runtime.readResources()).resolves.toMatchObject({
-        promptTemplates: [{ name: 'greet', content: 'Hello' }],
-      });
-
-      const state = await runtime.readState();
-      expect(state).toMatchObject({
-        sessionId: 'direct-runtime-test',
-        model: { provider: 'test-provider', id: 'test-model' },
-      });
-      expect(state).not.toHaveProperty('operationId');
-      expect(state).not.toHaveProperty('executionStatus');
-      expect(Check(SessionMethodSchemas.getState.output, state)).toBe(true);
-    } finally {
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  it('exposes typed session operations without command frames', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'typed-runtime-test' }, BACKGROUND_CONTEXT);
-    const streamSimple = vi.fn<Models['streamSimple']>(() => {
-      const stream = createAssistantMessageEventStream();
-      const message: AssistantMessage = {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'provider response' }],
-        api: model.api,
-        provider: model.provider,
-        model: model.id,
-        timestamp: Date.now(),
-        stopReason: 'stop',
-        usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-      };
-      stream.push({ type: 'start', partial: message });
-      stream.push({ type: 'done', reason: 'stop', message });
-      return stream;
-    });
-    const dispatchCommand = vi.fn(async (text: string) => text.startsWith('/known'));
-    const runtime = await createDirectHarnessRuntime({
-      cwd: '/tmp',
-      session,
-      models: { ...models, streamSimple } as unknown as Models,
-      model,
-      listCommands: () => [{ name: 'known', description: 'Known command' }],
-      dispatchCommand,
-    });
-    const frames: Record<string, unknown>[] = [];
-    runtime.onPresentationFrame((frame) => frames.push(frame));
-    try {
-      expect(runtime.listCommands()).toEqual([{ name: 'known', description: 'Known command' }]);
-      await expect(runtime.availableModels()).resolves.toEqual([model]);
-      await expect(runtime.setModel({ provider: 'missing', id: 'missing' })).rejects.toThrow('Model not found');
-      await runtime.setModel({ provider: model.provider, id: model.id });
-      await runtime.setThinkingLevel('high');
-      await runtime.setSteeringMode('one-at-a-time');
-      await runtime.setFollowUpMode('all');
-      await expect(runtime.appendCustomEntry('typed-test', { value: 1 })).resolves.toEqual(expect.any(String));
-      await expect(
-        runtime.recordUsage({
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        }),
-      ).resolves.toEqual(expect.any(String));
-      await runtime.setName('Typed session');
-      await expect(runtime.readState()).resolves.toMatchObject({ sessionName: 'Typed session', thinkingLevel: 'high' });
-      await expect(runtime.readEntries()).resolves.toMatchObject({ entries: expect.any(Array) });
-      await expect(runtime.clearQueue()).resolves.toEqual({ steering: [], followUp: [] });
-      await runtime.prompt('normal prompt');
-      expect(streamSimple).toHaveBeenCalledOnce();
-      frames.length = 0;
-      await runtime.prompt('/known argument');
-      expect(dispatchCommand).toHaveBeenCalledWith('/known argument');
-      await expect(runtime.dispatchCommand('/known argument')).resolves.toBe(true);
-      await expect(runtime.dispatchCommand('/unknown argument')).resolves.toBe(false);
-      expect(streamSimple).toHaveBeenCalledOnce();
-      expect(frames).not.toContainEqual(expect.objectContaining({ type: 'agent_settled' }));
-    } finally {
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  it('emits a rejected prompt response without dispatching the provider, then recovers', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'admission-protocol-test' }, BACKGROUND_CONTEXT);
-    const streamSimple = vi.fn<Models['streamSimple']>(() => {
-      const stream = createAssistantMessageEventStream();
-      const message: AssistantMessage = {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'recovered' }],
-        api: model.api,
-        provider: model.provider,
-        model: model.id,
-        timestamp: Date.now(),
-        stopReason: 'stop',
-        usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-      };
-      stream.push({ type: 'start', partial: message });
-      stream.push({ type: 'done', reason: 'stop', message });
-      return stream;
-    });
-    let prepared = false;
-    const runtime = await createDirectHarnessRuntime({
-      cwd: '/tmp',
-      session,
-      models: { ...models, streamSimple } as unknown as Models,
-      model,
-      beforeModelRequest: async ({ phase }) => {
-        if (phase === 'turn' && !prepared) throw new Error('capability preparation failed');
-      },
-    });
-    try {
-      await runtime.prompt('blocked');
-      expect(streamSimple).not.toHaveBeenCalled();
-      prepared = true;
-      await runtime.prompt('recovered');
-      expect(streamSimple).toHaveBeenCalledOnce();
-    } finally {
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  it('keeps the model admission guard outside provider dispatch', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'guard-protocol-test' }, BACKGROUND_CONTEXT);
-    const streamSimple = vi.fn<Models['streamSimple']>(() => {
-      const stream = createAssistantMessageEventStream();
-      const message: AssistantMessage = {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'ok' }],
-        api: model.api,
-        provider: model.provider,
-        model: model.id,
-        timestamp: Date.now(),
-        stopReason: 'stop',
-        usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-      };
-      stream.push({ type: 'start', partial: message });
-      stream.push({ type: 'done', reason: 'stop', message });
-      return stream;
-    });
-    let blocked = true;
-    const runtime = await createDirectHarnessRuntime({
-      cwd: '/tmp',
-      session,
-      models: { ...models, streamSimple } as unknown as Models,
-      model,
+  it('revalidates model admission before calling provider', async () => {
+    const { runtime, streamSimple } = await setup({
       guardModelRequest: () => {
-        if (blocked) throw new Error('provider admission blocked');
+        throw new Error('capability unavailable');
       },
     });
     try {
-      await runtime.prompt('guarded');
+      await expect(runtime.prompt('blocked')).rejects.toThrow();
       expect(streamSimple).not.toHaveBeenCalled();
-      blocked = false;
-      await runtime.prompt('allowed');
-      expect(streamSimple).toHaveBeenCalledOnce();
     } finally {
       await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
     }
   });
-
-  it('surfaces typed command catalog failures and recovers for the next call', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'catalog-recovery-test' }, BACKGROUND_CONTEXT);
-    const listCommands = vi
-      .fn<() => []>()
-      .mockImplementationOnce(() => {
-        throw new Error('command catalog unavailable');
-      })
-      .mockReturnValue([]);
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model, listCommands });
-    try {
-      expect(() => runtime.listCommands()).toThrow('command catalog unavailable');
-      expect(runtime.listCommands()).toEqual([]);
-    } finally {
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  it('frames lifecycle observer failures and supports end-of-input shutdown', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'event-recovery-test' }, BACKGROUND_CONTEXT);
-    const streamSimple = vi.fn<Models['streamSimple']>(() => {
-      const stream = createAssistantMessageEventStream();
-      const message: AssistantMessage = {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'event recovery' }],
-        api: model.api,
-        provider: model.provider,
-        model: model.id,
-        timestamp: Date.now(),
-        stopReason: 'stop',
-        usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-      };
-      stream.push({ type: 'start', partial: message });
-      stream.push({ type: 'done', reason: 'stop', message });
-      return stream;
-    });
-    const runtime = await createDirectHarnessRuntime({
-      cwd: '/tmp',
-      session,
-      models: { ...models, streamSimple } as unknown as Models,
-      model,
-    });
-    const frames: Record<string, unknown>[] = [];
-    runtime.onPresentationFrame((frame) => frames.push(frame));
-    let observerFailed = false;
-    const unsubscribe = runtime.onEvent(async (event) => {
-      if (event.type === 'run_start' && !observerFailed) {
-        observerFailed = true;
-        throw new Error('event observer failed');
-      }
-    });
-    try {
-      await runtime.prompt('event recovery');
-      expect(observerFailed).toBe(true);
-      expect(frames).toContainEqual(
-        expect.objectContaining({
-          type: 'handler_error',
-          kind: 'event',
-          event: 'run_start',
-          error: 'event observer failed',
-        }),
-      );
-      unsubscribe();
-      await runtime.dispose();
-      await expect(runtime.exited).resolves.toBe(0);
-    } finally {
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  it('stops an idle runtime and settles its exit promise', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'stop-runtime-test' }, BACKGROUND_CONTEXT);
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
-    try {
-      runtime.stop();
-      await expect(runtime.exited).resolves.toBe(0);
-    } finally {
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  it('closes a created session and releases its lease when harness setup fails', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-direct-runtime-failure-'));
-    const owner = createHistoryOwnership();
-    let destination = '';
-    const acquire = vi.fn(async (filePath: string) => {
-      destination = filePath;
-      return owner.acquire(filePath);
-    });
-    const originalCreate = JsonlSessionRepo.prototype.create;
-    let createdClose: MockInstance<Awaited<ReturnType<JsonlSessionRepo['create']>>['close']> | undefined;
-    const create = vi.spyOn(JsonlSessionRepo.prototype, 'create').mockImplementation(async function (
-      this: JsonlSessionRepo,
-      options,
-      context,
-    ) {
-      const created = await originalCreate.call(this, options, context);
-      createdClose = vi.spyOn(created, 'close');
-      return created;
-    });
-    try {
-      await expect(
-        createDirectHarnessRuntime({
-          cwd: root,
-          sessionsRoot: root,
-          sessionId: 'failed-runtime-creation',
-          historyOwnership: { acquire },
-          models,
-          model: { provider: 'missing', id: 'missing' },
-        }),
-      ).rejects.toThrow('Direct harness could not resolve missing/missing');
-      expect(acquire).toHaveBeenCalledOnce();
-      expect(createdClose?.mock.calls).toHaveLength(1);
-      expect(destination).not.toBe('');
-      expect(fs.existsSync(historyOwnershipLockPath(destination))).toBe(false);
-      const reopened = await owner.acquire(destination);
-      await reopened.release();
-    } finally {
-      create.mockRestore();
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('reopens an existing workspace session when a supervised restart supplies its id', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-direct-runtime-restart-'));
-    const environment = new NodeExecutionEnv({ cwd: root });
-    const repository = new JsonlSessionRepo({ fileSystem: environment, sessionsRoot: root });
-    const source = await repository.create({ id: 'restart-runtime-test', cwd: root }, BACKGROUND_CONTEXT);
-    const sessionPath = source.metadata.path;
-    await source.close(BACKGROUND_CONTEXT);
-    await repository.close(BACKGROUND_CONTEXT);
-    await environment.cleanup(BACKGROUND_CONTEXT);
-
-    const runtime = await createDirectHarnessRuntime({
-      cwd: root,
-      sessionsRoot: root,
-      sessionId: 'restart-runtime-test',
-      historyOwnership: createHistoryOwnership(),
-      models,
-      model,
-    });
-
-    try {
-      expect(runtime.sessionId).toBe('restart-runtime-test');
-      expect(fs.existsSync(sessionPath)).toBe(true);
-    } finally {
-      await runtime.dispose();
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('requires and retains an exclusive lease for an existing v4 session', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-direct-runtime-'));
-    const environment = new NodeExecutionEnv({ cwd: root });
-    const repository = new JsonlSessionRepo({ fileSystem: environment, sessionsRoot: root });
-    const source = await repository.create({ id: 'leased-runtime-test', cwd: root }, BACKGROUND_CONTEXT);
-    const sessionPath = source.metadata.path;
-    await source.close(BACKGROUND_CONTEXT);
-    await repository.close(BACKGROUND_CONTEXT);
-    await environment.cleanup(BACKGROUND_CONTEXT);
-
-    const release = vi.fn();
-    const assertQuiescent = vi.fn();
-    const acquire = vi.fn(async () => ({ assertQuiescent, release }));
-    const runtime = await createDirectHarnessRuntime({
-      cwd: root,
-      sessionPath,
-      historyOwnership: { acquire },
-      models,
-      model,
-    });
-
-    try {
-      expect(acquire).toHaveBeenCalledWith(sessionPath);
-      expect(assertQuiescent).toHaveBeenCalled();
-    } finally {
-      await runtime.dispose();
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-    expect(release).toHaveBeenCalledOnce();
-  });
-  it('validates upstream v4 session metadata before replaying a journal', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-session-metadata-'));
-    const validPath = path.join(root, 'valid.jsonl');
-    const minimalPath = path.join(root, 'minimal.jsonl');
-    fs.writeFileSync(
-      validPath,
-      `${JSON.stringify({
-        kind: 'header',
-        v: 4,
-        id: 'session-id',
-        cwd: root,
-        createdAt: 123,
-        parentSessionId: 'parent-id',
-        legacyParentSessionPath: '/legacy/session.jsonl',
-      })}\n`,
-    );
-    fs.writeFileSync(
-      minimalPath,
-      `${JSON.stringify({ kind: 'header', v: 4, id: 'minimal', cwd: root, createdAt: 456, storageVersion: 7 })}\n`,
-    );
-    try {
-      expect(readDirectHarnessSessionMetadata(validPath)).toMatchObject({
-        id: 'session-id',
-        cwd: root,
-        createdAt: 123,
-        storageVersion: JSONL_STORAGE_VERSION,
-        parentSessionId: 'parent-id',
-        legacyParentSessionPath: '/legacy/session.jsonl',
-        path: fs.realpathSync(validPath),
-        modifiedAt: expect.any(Number),
-      });
-      expect(readDirectHarnessSessionMetadata(minimalPath)).toMatchObject({
-        id: 'minimal',
-        createdAt: 456,
-        storageVersion: 7,
-      });
-
-      const invalidHeaders = [
-        ['malformed', 'not-json', 'Invalid JSONL session header'],
-        ['wrong-kind', JSON.stringify({ kind: 'session', v: 4 }), 'not an upstream v4 JSONL file'],
-        ['wrong-version', JSON.stringify({ kind: 'header', v: 3 }), 'not an upstream v4 JSONL file'],
-        [
-          'invalid-identity',
-          JSON.stringify({ kind: 'header', v: 4, id: '', cwd: root, createdAt: 1 }),
-          'Invalid JSONL session identity',
-        ],
-        [
-          'invalid-created-at',
-          JSON.stringify({ kind: 'header', v: 4, id: 'session', cwd: root, createdAt: null }),
-          'Invalid JSONL session identity',
-        ],
-      ] as const;
-      for (const [name, content, message] of invalidHeaders) {
-        const filePath = path.join(root, `${name}.jsonl`);
-        fs.writeFileSync(filePath, `${content}\n`);
-        expect(() => readDirectHarnessSessionMetadata(filePath)).toThrow(message);
-      }
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('quarantines writes after a journal failure and reports the blocked state', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'quarantined-runtime' }, BACKGROUND_CONTEXT);
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
-    const frames: Record<string, unknown>[] = [];
-    runtime.onPresentationFrame((frame) => frames.push(frame));
-    const append = vi.spyOn(runtime.lane, 'appendCustomEntry').mockImplementation(async () => {
-      throw new Error('journal write failed');
-    });
-    try {
-      await expect(runtime.appendCustomEntry('will-fail')).rejects.toThrow('journal write failed');
-      expect(runtime.storageQuarantined).toBe(true);
-      expect(frames).toContainEqual({ type: 'error', code: 'storage_quarantined', error: 'journal write failed' });
-      await expect(runtime.setName('blocked')).rejects.toThrow('storage failure: journal write failed');
-      expect(append).toHaveBeenCalledOnce();
-    } finally {
-      append.mockRestore();
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  it.each([false, true])('enforces provider stream start before done (start: %s)', async (started) => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: `provider-stream-${started}` }, BACKGROUND_CONTEXT);
-    const response: AssistantMessage = {
-      role: 'assistant',
-      content: [],
-      api: model.api,
-      provider: model.provider,
-      model: model.id,
-      timestamp: Date.now(),
-      stopReason: 'stop',
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  it('executes hooks and tools through durable task APIs', async () => {
+    const execute = vi.fn(async (_id: string, _params: unknown) => ({
+      content: [{ type: 'text' as const, text: 'tool result' }],
+    }));
+    const beforeTool = vi.fn(async () => ({ args: { value: 'patched' } }));
+    const afterTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'hook result' }] }));
+    const { runtime } = await setup(
+      {
+        tools: [{ name: 'fixture', description: 'test', parameters: Type.Object({ value: Type.String() }), execute }],
+        beforeTool,
+        afterTool,
       },
-    };
-    const streamSimple = vi.fn<Models['streamSimple']>(() => {
-      const stream = createAssistantMessageEventStream();
-      if (started) stream.push({ type: 'start', partial: response });
-      stream.push({ type: 'done', reason: 'stop', message: response });
-      return stream;
-    });
-    const runtime = await createDirectHarnessRuntime({
-      cwd: '/tmp',
-      session,
-      model,
-      models: { ...models, streamSimple } as unknown as Models,
-    });
-    const frames: Record<string, unknown>[] = [];
-    runtime.onPresentationFrame((frame) => frames.push(frame));
+      [
+        response([{ type: 'toolCall', id: 'call', name: 'fixture', arguments: { value: 'original' } }], 'toolUse'),
+        response([{ type: 'text', text: 'done' }]),
+      ],
+    );
     try {
-      if (started) {
-        await runtime.prompt('valid empty response');
-        expect(runtime.storageQuarantined).toBe(false);
-        expect(frames.some((frame) => frame.code === 'storage_quarantined')).toBe(false);
-        await runtime.setName('still writable');
-      } else {
-        await expect(runtime.prompt('invalid response')).rejects.toMatchObject({
-          cause: { message: 'Assistant message stream emitted done before start' },
-        });
-        expect(runtime.storageQuarantined).toBe(true);
-        expect(frames).toContainEqual({
-          type: 'error',
-          code: 'storage_quarantined',
-          error: 'AgentHarness storage or invariant fault: Assistant message stream emitted done before start',
-        });
-        await expect(runtime.setName('blocked')).rejects.toMatchObject({
-          cause: { cause: { message: 'Assistant message stream emitted done before start' } },
-        });
-      }
-      expect(streamSimple).toHaveBeenCalledOnce();
+      await runtime.prompt('test');
+      expect(execute).toHaveBeenCalledOnce();
+      expect(execute.mock.calls[0]?.[1]).toEqual({ value: 'patched' });
+      expect(beforeTool).toHaveBeenCalledOnce();
+      expect(afterTool).toHaveBeenCalledOnce();
+      expect(JSON.stringify((await runtime.readEntries()).entries)).toContain('hook result');
     } finally {
-      await runtime.dispose().catch(() => undefined);
-      await repository.close(BACKGROUND_CONTEXT);
+      await runtime.dispose();
     }
   });
-
-  it.each([true, false])(
-    'preserves drive failure when lifecycle publication fails (drive failed: %s)',
-    async (driveFailed) => {
-      const repository = new MemorySessionRepo();
-      const session = await repository.create({ id: `drive-projection-${driveFailed}` }, BACKGROUND_CONTEXT);
-      const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
-      const primary = new Error('primary drive failure');
-      const projection = new Error('secondary lifecycle failure');
-      const frames: Record<string, unknown>[] = [];
-      runtime.onPresentationFrame((frame) => frames.push(frame));
-      let driven = false;
-      const originalInspect = runtime.lane.inspectExecution.bind(runtime.lane);
-      vi.spyOn(runtime.lane, 'inspectExecution').mockImplementation((context) =>
-        driven ? Promise.reject(projection) : originalInspect(context),
-      );
-      vi.spyOn(runtime.lane, 'drive').mockImplementation(async () => {
-        driven = true;
-        if (driveFailed) throw primary;
-        return { ok: true, value: { kind: 'settled', outcome: {} } } as never;
+  it('denied tools never execute', async () => {
+    const execute = vi.fn(async () => ({ content: [] }));
+    const { runtime } = await setup(
+      {
+        tools: [{ name: 'fixture', description: 'test', parameters: Type.Object({}), execute }],
+        beforeTool: () => ({ block: { reason: 'security denial' } }),
+      },
+      [
+        response([{ type: 'toolCall', id: 'call', name: 'fixture', arguments: {} }], 'toolUse'),
+        response([{ type: 'text', text: 'denied' }]),
+      ],
+    );
+    try {
+      await runtime.prompt('test');
+      expect(execute).not.toHaveBeenCalled();
+      expect(JSON.stringify((await runtime.readEntries()).entries)).toContain('security denial');
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('fork navigation retains the abandoned tail and selected configuration', async () => {
+    const { runtime } = await setup({}, [
+      response([{ type: 'text', text: 'first' }]),
+      response([{ type: 'text', text: 'second' }]),
+      response([{ type: 'text', text: 'branch' }]),
+    ]);
+    try {
+      await runtime.prompt('one');
+      const target = (await runtime.readEntries()).leafId!;
+      await runtime.prompt('two');
+      const old = runtime.lane;
+      await runtime.navigateTree(target, { summary: 'summary' });
+      expect(runtime.lane.id).not.toBe(old.id);
+      await runtime.prompt('branch');
+      expect(JSON.stringify((await runtime.readEntries()).entries)).not.toContain('second');
+      expect(JSON.stringify((await old.context(BACKGROUND_CONTEXT)).messages)).toContain('second');
+      expect((await runtime.lane.agent(BACKGROUND_CONTEXT)).model?.modelId).toBe(model.id);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('empty navigation configures a new conversation before follow-up', async () => {
+    const { runtime } = await setup({}, [
+      response([{ type: 'text', text: 'first' }]),
+      response([{ type: 'text', text: 'fresh' }]),
+    ]);
+    try {
+      await runtime.prompt('one');
+      await runtime.navigateTree(null);
+      await runtime.prompt('new');
+      const entries = (await runtime.readEntries()).entries;
+      expect(JSON.stringify(entries)).toContain('fresh');
+      expect(JSON.stringify(entries)).not.toContain('first');
+      expect((await runtime.lane.agent(BACKGROUND_CONTEXT)).model?.modelId).toBe(model.id);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('rejects stale or malformed external navigation IDs', async () => {
+    const { runtime } = await setup();
+    try {
+      await expect(runtime.navigateTree('wrong')).rejects.toThrow('Invalid durable identifier');
+      await expect(runtime.navigateTree('99999')).rejects.toThrow();
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('held next-run inputs stay dormant until an explicit prompt', async () => {
+    const { runtime, streamSimple } = await setup({}, [
+      response([{ type: 'text', text: 'explicit' }]),
+      response([{ type: 'text', text: 'held' }]),
+    ]);
+    try {
+      await runtime.nextRun('held');
+      await runtime.resumeQueue();
+      expect(streamSimple).not.toHaveBeenCalled();
+      expect((await runtime.readLifecycle()).queue[0]?.scheduling).toBe('held');
+      await runtime.prompt('explicit');
+      await vi.waitFor(async () => expect((await runtime.readLifecycle()).queue).toEqual([]));
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('removes pending input without delivering it', async () => {
+    const { runtime, streamSimple } = await setup();
+    try {
+      await runtime.nextRun('held');
+      const id = (await runtime.readLifecycle()).queue[0]!.id;
+      expect(await runtime.removeQueued(id)).toBe('removed');
+      expect(streamSimple).not.toHaveBeenCalled();
+      expect(await runtime.removeQueued(id)).toBe('removed');
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('reports durable usage and idempotently disposes', async () => {
+    const { runtime } = await setup();
+    await runtime.prompt('question');
+    const stats = await runtime.getSessionStats();
+    expect(stats.usage.totalTokens).toBe(2);
+    await runtime.dispose();
+    await runtime.dispose();
+    expect(await runtime.exited).toBe(0);
+  });
+  it.each([undefined, false, true])(
+    'Fast uses real Codex payloads with inherited intent %s',
+    async (initialFastMode) => {
+      const codexModel = {
+        ...model,
+        api: 'openai-codex-responses',
+        provider: 'openai-codex',
+        id: 'gpt-5.4',
+      } as Model<'openai-codex-responses'>;
+      const payloads: Record<string, unknown>[] = [];
+      const token = `header.${Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: 'fixture' } })).toString('base64')}.signature`;
+      const registry = {
+        getModels: () => [codexModel],
+        getAvailable: async () => [codexModel],
+        getModel: () => codexModel,
+        streamSimple: (
+          requested: Model<Api>,
+          request: Parameters<typeof codexStreamSimple>[1],
+          streamOptions: Parameters<Models['streamSimple']>[2],
+        ) =>
+          codexStreamSimple(requested as Model<'openai-codex-responses'>, request, {
+            ...streamOptions,
+            apiKey: token,
+            transport: 'sse',
+            fetch: async (_url, init) => {
+              const body = Buffer.from(await new Response(init?.body).arrayBuffer());
+              const decoded =
+                new Headers(init?.headers).get('content-encoding') === 'gzip'
+                  ? gunzipSync(body).toString()
+                  : new Headers(init?.headers).get('content-encoding') === 'zstd'
+                    ? zstdDecompressSync(body).toString()
+                    : body.toString();
+              payloads.push(JSON.parse(decoded) as Record<string, unknown>);
+              return new Response('fixture capture', { status: 400 });
+            },
+          }),
+      } as unknown as Models;
+      const runtime = await createDirectHarnessRuntime({
+        cwd: '/tmp',
+        durableStorage: new MemoryStorage(),
+        models: registry,
+        model: codexModel,
+        ...(initialFastMode === undefined ? {} : { initialFastMode }),
+        retry: { enabled: false, maxRetries: 0, baseDelayMs: 0 },
+        compaction: { enabled: false },
+        beforePayload: (event) => ({ payload: { ...(event.payload as object), fixture: true } }),
       });
       try {
-        const submission = await runtime.submitPrompt('trigger drive');
-        await expect(submission.settled).rejects.toBe(driveFailed ? primary : projection);
-        expect(frames).toContainEqual({ type: 'error', code: 'lifecycle_projection', error: projection.message });
+        expect((await runtime.readState()).fastMode).toBe(initialFastMode ?? false);
+        await runtime.prompt('default').catch(() => undefined);
+        expect(payloads[0]).toMatchObject({ fixture: true });
+        if (initialFastMode) expect(payloads[0]).toHaveProperty('service_tier', 'priority');
+        else expect(payloads[0]).not.toHaveProperty('service_tier');
+        await runtime.setFastMode(true);
+        await runtime.prompt('priority').catch(() => undefined);
+        expect(payloads[1]).toMatchObject({ fixture: true, service_tier: 'priority' });
+        await runtime.setFastMode(false);
+        await runtime.prompt('disabled').catch(() => undefined);
+        expect(payloads[2]).not.toHaveProperty('service_tier');
       } finally {
-        vi.restoreAllMocks();
-        await runtime.dispose().catch(() => undefined);
-        await repository.close(BACKGROUND_CONTEXT);
+        await runtime.dispose();
       }
     },
   );
-
-  it('formats nested fault causes and aggregate failures without looping', () => {
-    const fault = new Error('root');
-    const aggregate = new AggregateError([new Error('first', { cause: 'detail' }), fault], 'shutdown', {
-      cause: fault,
+  it('rejects Fast enable on non-Codex but always permits disabling', async () => {
+    const { runtime } = await setup();
+    try {
+      await expect(runtime.setFastMode(true)).rejects.toThrow('Codex');
+      await runtime.setFastMode(false);
+      expect((await runtime.readState()).fastMode).toBe(false);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('retains inherited Fast intent for non-Codex children without changing their payloads', async () => {
+    const { runtime, models } = await setup({ initialFastMode: true, sessionId: 'child' });
+    const complete = vi.spyOn(models, 'complete').mockImplementation(async (requested, _request, options) => {
+      expect(await options?.onPayload?.({ messages: [] }, requested)).toEqual({ messages: [] });
+      return response([]).result();
     });
-    fault.cause = aggregate;
-    expect(harnessErrorMessage(aggregate)).toContain('first: detail');
-    expect(harnessErrorMessage(aggregate)).toContain('[repeated error]');
-  });
-
-  it('returns a nonzero exit code when runtime cleanup fails and remains idempotent', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'cleanup-failure-runtime' }, BACKGROUND_CONTEXT);
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
-    vi.spyOn(runtime.harness, 'close').mockRejectedValue(new Error('harness cleanup failed'));
     try {
-      await expect(runtime.dispose()).rejects.toThrow('harness cleanup failed');
-      await expect(runtime.exited).resolves.toBe(1);
-      await expect(runtime.dispose()).resolves.toBeUndefined();
-    } finally {
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-  it('refuses writable session creation without explicit history ownership', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-owner-required-'));
-    try {
-      await expect(
-        createDirectHarnessRuntime({ cwd: root, sessionsRoot: root, sessionId: 'owner-required', models, model }),
-      ).rejects.toThrow('requires explicit HistoryOwnership');
-      expect(fs.readdirSync(root)).toEqual([]);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('rejects an existing session when its identity does not match the requested id', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-session-mismatch-'));
-    const sessionPath = path.join(root, 'session.jsonl');
-    fs.writeFileSync(
-      sessionPath,
-      `${JSON.stringify({ kind: 'header', v: 4, id: 'actual-id', cwd: root, createdAt: 1 })}\n`,
-    );
-    const release = vi.fn();
-    const ownership = { acquire: vi.fn(async () => ({ assertQuiescent: vi.fn(), release })) };
-    try {
-      await expect(
-        createDirectHarnessRuntime({
-          cwd: root,
-          sessionPath,
-          sessionId: 'requested-id',
-          historyOwnership: ownership,
-          models,
-          model,
+      expect((await runtime.readState()).fastMode).toBe(true);
+      expect((await runtime.readEntries()).entries).toContainEqual(
+        expect.objectContaining({
+          customType: 'doompi.fast-mode',
+          data: { version: 1, enabled: true, sessionId: 'child' },
         }),
-      ).rejects.toThrow('Session id mismatch: expected requested-id, found actual-id');
-      expect(release).toHaveBeenCalledOnce();
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('fails before harness creation when no public model registry or provider is configured', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'models-required' }, BACKGROUND_CONTEXT);
-    try {
-      await expect(createDirectHarnessRuntime({ cwd: '/tmp', session, model })).rejects.toThrow(
-        'requires a public Models registry or at least one Provider',
       );
+      await runtime.completeModel!(model, { messages: [] });
+      expect(complete).toHaveBeenCalledOnce();
+      await runtime.setFastMode(false);
+      expect((await runtime.readState()).fastMode).toBe(false);
     } finally {
-      await repository.close(BACKGROUND_CONTEXT);
+      await runtime.dispose();
     }
   });
 
-  it('quarantines the runtime when session cleanup fails during disposal', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'session-cleanup-failure' }, BACKGROUND_CONTEXT);
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
-    vi.spyOn(session, 'close').mockRejectedValue(new Error('session close failed'));
-    try {
-      await expect(runtime.dispose()).rejects.toThrow('session close failed');
-      expect(runtime.storageQuarantined).toBe(true);
-      await expect(runtime.exited).resolves.toBe(1);
-    } finally {
-      await repository.close(BACKGROUND_CONTEXT);
-    }
+  it('rejects invalid inherited Fast intent before opening storage', async () => {
+    await expect(setup({ initialFastMode: 'true' as unknown as boolean })).rejects.toThrow('Initial Fast mode');
   });
 
-  it('registers supplied providers on a registry that only exposes registerNativeProvider', async () => {
-    const registered: unknown[] = [];
-    const runtimeShaped = {
+  it('chains existing payload callbacks and does not override independent non-Codex priority', async () => {
+    const existing = vi.fn(async (payload: unknown) => ({
+      ...(payload as object),
+      original: true,
+      service_tier: 'priority',
+    }));
+    let callback: ((payload: unknown, model: Model<Api>) => Promise<unknown>) | undefined;
+    const complete = vi.fn<Models['complete']>(async (_model, _request, opts) => {
+      callback = opts?.onPayload as typeof callback;
+      return {
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        role: 'assistant',
+        content: [],
+        timestamp: Date.now(),
+        stopReason: 'stop',
+        usage,
+      };
+    });
+    const registry = {
       getModels: () => [model],
-      getModel: (provider: string, id: string) => (provider === model.provider && id === model.id ? model : undefined),
       getAvailable: async () => [model],
-      registerNativeProvider: (provider: unknown) => {
-        registered.push(provider);
-      },
+      getModel: () => model,
+      complete,
     } as unknown as Models;
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'native-provider-merge' }, BACKGROUND_CONTEXT);
     const runtime = await createDirectHarnessRuntime({
       cwd: '/tmp',
-      session,
-      models: runtimeShaped,
-      providers: [{ id: 'anthropic-vertex' } as never],
+      durableStorage: new MemoryStorage(),
+      models: registry,
       model,
+      beforePayload: (event) => ({ payload: { ...(event.payload as object), host: true } }),
     });
     try {
-      expect(registered).toEqual([{ id: 'anthropic-vertex' }]);
+      await runtime.completeModel!(model, { messages: [] }, { onPayload: existing });
+      expect(await callback!({ base: true }, model)).toEqual({
+        base: true,
+        original: true,
+        host: true,
+        service_tier: 'priority',
+      });
+      expect(existing).toHaveBeenCalledOnce();
     } finally {
       await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
     }
   });
-
-  it('prefers setProvider over registerNativeProvider when the registry exposes both', async () => {
-    const setProvider = vi.fn();
-    const registerNativeProvider = vi.fn();
-    const dualShaped = { ...models, setProvider, registerNativeProvider } as unknown as Models;
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'dual-provider-merge' }, BACKGROUND_CONTEXT);
-    const runtime = await createDirectHarnessRuntime({
-      cwd: '/tmp',
-      session,
-      models: dualShaped,
-      providers: [{ id: 'anthropic-vertex' } as never],
-      model,
-    });
+  it('summarizes a rewind through guarded Models and commits the summary to the selected fork', async () => {
+    const { runtime, models, streamSimple } = await setup({}, [
+      response([{ type: 'text', text: 'first' }]),
+      response([{ type: 'text', text: 'abandoned' }]),
+      response([{ type: 'text', text: 'continued' }]),
+    ]);
+    const complete = vi
+      .spyOn(models, 'complete')
+      .mockImplementation(async () => response([{ type: 'text', text: 'retained decisions' }]).result());
     try {
-      expect(setProvider).toHaveBeenCalledExactlyOnceWith({ id: 'anthropic-vertex' });
-      expect(registerNativeProvider).not.toHaveBeenCalled();
+      await runtime.prompt('one');
+      const target = (await runtime.readEntries()).leafId!;
+      await runtime.prompt('two');
+      const branch = await runtime.navigateTree(target, { summarize: true, customInstructions: 'Keep decisions' });
+      expect(complete).toHaveBeenCalledOnce();
+      expect(JSON.stringify(complete.mock.calls[0]?.[1])).toContain('Keep decisions');
+      expect(
+        branch.entries.some((entry) => entry.type === 'branch_summary' && entry.summary === 'retained decisions'),
+      ).toBe(true);
+      expect(JSON.stringify(branch.entries)).not.toContain('abandoned');
+      await runtime.prompt('continue');
+      expect(JSON.stringify(streamSimple.mock.calls[2]?.[1])).toContain('retained decisions');
     } finally {
       await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
     }
   });
-
-  it('rejects providers when the supplied registry cannot register any', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'provider-merge-unsupported' }, BACKGROUND_CONTEXT);
+  it('cancels an asynchronous summary without switching the active conversation', async () => {
+    const { runtime, models } = await setup();
+    let finish!: (message: AssistantMessage) => void;
+    const complete = vi.spyOn(models, 'complete').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    try {
+      await runtime.prompt('one');
+      const original = runtime.lane.id;
+      const target = (await runtime.readEntries()).leafId!;
+      const navigation = runtime.navigateTree(target, { summarize: true });
+      await vi.waitFor(() => expect(complete).toHaveBeenCalledOnce());
+      await runtime.abort((await runtime.readLifecycle()).operation!.id);
+      expect((await navigation).cancelled).toBe(true);
+      expect(runtime.lane.id).toBe(original);
+      finish(await response([{ type: 'text', text: 'late summary' }]).result());
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('releases real SQLite ownership when runtime startup fails and permits retry', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-runtime-startup-'));
+    const historyOwnership = createHistoryOwnership({ sourceFormat: 'sqlite' });
+    const file = path.join(root, 'durable-v1', 'startup.sqlite');
     try {
       await expect(
-        createDirectHarnessRuntime({
-          cwd: '/tmp',
-          session,
-          models,
-          providers: [{ id: 'anthropic-vertex' } as never],
-          model,
-        }),
-      ).rejects.toThrow('cannot register providers on the supplied Models registry');
+        createDirectHarnessRuntime({ cwd: root, sessionsRoot: root, sessionId: 'startup', historyOwnership }),
+      ).rejects.toThrow('Models');
+      expect(fs.existsSync(historyOwnershipLockPath(file))).toBe(false);
+      const fixture = await setup();
+      const { models } = fixture;
+      await fixture.runtime.dispose();
+      const runtime = await createDirectHarnessRuntime({
+        cwd: root,
+        sessionsRoot: root,
+        sessionId: 'startup',
+        historyOwnership,
+        models,
+        model,
+      });
+      await runtime.dispose();
+      expect(fs.existsSync(historyOwnershipLockPath(file))).toBe(false);
     } finally {
-      await repository.close(BACKGROUND_CONTEXT);
+      fs.rmSync(root, { recursive: true, force: true });
     }
   });
-
-  // A streaming behaviour describes how to deliver into a turn that is already running. It must
-  // still wake an idle lane, otherwise a headless caller can only talk to an agent that is busy.
-  it('preserves automatic and held input through abort until explicit resume', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'paused-abort-queue' }, BACKGROUND_CONTEXT);
-    let releaseFirst!: () => void;
-    let firstStarted!: () => void;
-    const firstDone = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
-    const started = new Promise<void>((resolve) => {
-      firstStarted = resolve;
-    });
-    let calls = 0;
-    const streamSimple = vi.fn<Models['streamSimple']>(() => {
-      const stream = createAssistantMessageEventStream();
-      const message: AssistantMessage = {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'done' }],
-        api: model.api,
-        provider: model.provider,
-        model: model.id,
-        timestamp: Date.now(),
-        stopReason: 'stop',
-        usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-      };
-      stream.push({ type: 'start', partial: message });
-      if (++calls === 1) {
-        firstStarted();
-        void firstDone.then(() => stream.push({ type: 'done', reason: 'stop', message }));
-      } else stream.push({ type: 'done', reason: 'stop', message });
-      return stream;
-    });
-    const runtime = await createDirectHarnessRuntime({
-      cwd: '/tmp',
-      session,
-      model,
-      models: { ...models, streamSimple } as unknown as Models,
-    });
+  it('persists inherited Fast independently on reopen and preserves thinking independence', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-runtime-fast-'));
+    const codexModel = { ...model, provider: 'openai-codex', api: 'openai-codex-responses' } as Model<Api>;
+    const registry = {
+      getModels: () => [codexModel],
+      getAvailable: async () => [codexModel],
+      getModel: () => codexModel,
+    } as unknown as Models;
+    const open = (initialFastMode?: boolean) =>
+      createDirectHarnessRuntime({
+        cwd: root,
+        sessionsRoot: root,
+        sessionId: 'fast',
+        historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
+        models: registry,
+        model: codexModel,
+        ...(initialFastMode === undefined ? {} : { initialFastMode }),
+      });
+    let runtime = await open(true);
     try {
-      const first = await runtime.submitPrompt('first');
-      await started;
-      await runtime.followUp('held voice');
-      const { id } = await runtime.enqueueAutomatic('automatic after abort');
-      const { id: removedId } = await runtime.enqueueAutomatic('remove before resume');
-      expect(await runtime.removeQueued(removedId)).toBe('removed');
-      const active = await runtime.readLifecycle();
-      expect(active.operation?.status).toBe('open');
-      expect(active.queue.map((item) => item.text)).toEqual(['held voice', 'automatic after abort']);
-      await runtime.abort(active.operation!.id);
-      await runtime.abort(active.operation!.id);
-      await runtime.abort('old-operation');
-      expect((await runtime.readLifecycle()).paused).toBe(true);
-      releaseFirst();
-      await first.settled.catch(() => undefined);
-      expect((await runtime.readLifecycle()).queue.find((item) => item.id === id)?.disposition).toBe('pending');
-      expect(streamSimple).toHaveBeenCalledTimes(1);
-      await expect(runtime.submitPrompt('must not skip queued work')).rejects.toThrow('queue is paused');
-      expect((await runtime.readLifecycle()).paused).toBe(true);
-      await runtime.resumeQueue();
-      await vi.waitFor(() => expect(streamSimple).toHaveBeenCalledTimes(2));
-      await vi.waitFor(async () => expect((await runtime.readLifecycle()).operation).toBeNull());
-      expect((await runtime.readLifecycle()).queue.some((item) => item.id === id || item.id === removedId)).toBe(false);
-      expect(streamSimple).toHaveBeenCalledTimes(2);
-    } finally {
-      releaseFirst();
+      expect((await runtime.readState()).fastMode).toBe(true);
+      await runtime.setThinkingLevel('high');
       await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  it('allows a prompt to resume an empty paused queue after reopening the runtime', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-empty-paused-'));
-    const environment = new NodeExecutionEnv({ cwd: root });
-    const repository = new JsonlSessionRepo({ fileSystem: environment, sessionsRoot: root });
-    const session = await repository.create({ id: 'empty-paused-abort', cwd: root }, BACKGROUND_CONTEXT);
-    await session.close(BACKGROUND_CONTEXT);
-    await repository.close(BACKGROUND_CONTEXT);
-    await environment.cleanup(BACKGROUND_CONTEXT);
-    let releaseFirst!: () => void;
-    let firstStarted!: () => void;
-    const firstDone = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
-    const started = new Promise<void>((resolve) => {
-      firstStarted = resolve;
-    });
-    let calls = 0;
-    const streamSimple = vi.fn<Models['streamSimple']>(() => {
-      const stream = createAssistantMessageEventStream();
-      const message: AssistantMessage = {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'done' }],
-        api: model.api,
-        provider: model.provider,
-        model: model.id,
-        timestamp: Date.now(),
-        stopReason: 'stop',
-        usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-      };
-      stream.push({ type: 'start', partial: message });
-      if (++calls === 1) {
-        firstStarted();
-        void firstDone.then(() => stream.push({ type: 'done', reason: 'stop', message }));
-      } else stream.push({ type: 'done', reason: 'stop', message });
-      return stream;
-    });
-    const options = {
-      cwd: root,
-      sessionsRoot: root,
-      sessionId: 'empty-paused-abort',
-      historyOwnership: createHistoryOwnership(),
-      model,
-      models: { ...models, streamSimple } as unknown as Models,
-    };
-    let runtime = await createDirectHarnessRuntime(options);
-    try {
-      const first = await runtime.submitPrompt('first');
-      await started;
-      const operationId = (await runtime.readLifecycle()).operation!.id;
-      await runtime.abort(operationId);
-      releaseFirst();
-      await first.settled.catch(() => undefined);
-      expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [] });
+      runtime = await open();
+      expect(await runtime.readState()).toMatchObject({ fastMode: true, thinkingLevel: 'high' });
+      expect(
+        (await runtime.readEntries()).entries.findLast(
+          (entry) => entry.type === 'custom' && entry.customType === 'doompi.fast-mode',
+        ),
+      ).toMatchObject({ data: { enabled: true, sessionId: 'fast' } });
+      await runtime.setFastMode(false);
       await runtime.dispose();
-      runtime = await createDirectHarnessRuntime(options);
-      expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [] });
-      const second = await runtime.submitPrompt('second');
-      await second.settled;
-      expect(streamSimple).toHaveBeenCalledTimes(2);
-      expect(await runtime.readLifecycle()).toMatchObject({ paused: false, queue: [] });
+      runtime = await open(true);
+      expect((await runtime.readState()).fastMode).toBe(false);
+      expect(
+        (await runtime.readEntries()).entries.findLast(
+          (entry) => entry.type === 'custom' && entry.customType === 'doompi.fast-mode',
+        ),
+      ).toMatchObject({ data: { enabled: false, sessionId: 'fast' } });
     } finally {
-      releaseFirst();
       await runtime.dispose();
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
-  it('promotes one queued item by cancelling the active turn and starting a replacement', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'promote-native-steer' }, BACKGROUND_CONTEXT);
-    let releaseFirst!: () => void;
-    let firstStarted!: () => void;
-    const firstDone = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
-    const started = new Promise<void>((resolve) => {
-      firstStarted = resolve;
-    });
-    let calls = 0;
-    const streamSimple = vi.fn<Models['streamSimple']>((_model, _context, options) => {
-      const stream = createAssistantMessageEventStream();
-      const message: AssistantMessage = {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'done' }],
-        api: model.api,
-        provider: model.provider,
-        model: model.id,
-        timestamp: Date.now(),
-        stopReason: 'stop',
-        usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-      };
-      stream.push({ type: 'start', partial: message });
-      if (++calls === 1) {
-        options?.signal?.addEventListener(
-          'abort',
-          () => stream.push({ type: 'error', reason: 'aborted', error: { ...message, stopReason: 'aborted' } }),
-          { once: true },
-        );
-        firstStarted();
-        void firstDone.then(() => stream.push({ type: 'done', reason: 'stop', message }));
-      } else stream.push({ type: 'done', reason: 'stop', message });
-      return stream;
-    });
-    const runtime = await createDirectHarnessRuntime({
-      cwd: '/tmp',
-      session,
-      model,
-      models: { ...models, streamSimple } as unknown as Models,
-    });
+  it('repairs arguments once before durable validation and tool hooks', async () => {
+    const prepareArguments = vi.fn((args: unknown) => ({ value: String((args as { value: unknown }).value) }));
+    const execute = vi.fn(async () => ({ content: [] }));
+    const beforeTool = vi.fn();
+    const { runtime } = await setup(
+      {
+        tools: [
+          {
+            name: 'fixture',
+            description: 'test',
+            parameters: Type.Object({ value: Type.String() }),
+            prepareArguments,
+            execute,
+          },
+        ],
+        beforeTool,
+      },
+      [
+        response([{ type: 'toolCall', id: 'call', name: 'fixture', arguments: { value: 12 } }], 'toolUse'),
+        response([{ type: 'text', text: 'done' }]),
+      ],
+    );
     try {
-      const first = await runtime.submitPrompt('first');
-      await started;
-      const { id } = await runtime.enqueueAutomatic('change direction');
-      const operationId = (await runtime.readLifecycle()).operation!.id;
-      expect(await runtime.promoteQueued(id, operationId)).toBe('promoted');
-      await first.settled.catch(() => undefined);
-      await vi.waitFor(() => expect(streamSimple).toHaveBeenCalledTimes(2));
-      expect(streamSimple).toHaveBeenCalledTimes(2);
-      expect(JSON.stringify(streamSimple.mock.calls[1]?.[1].messages)).toContain('change direction');
-      expect((await runtime.readLifecycle()).queue.some((item) => item.id === id)).toBe(false);
+      await runtime.prompt('repair');
+      expect(prepareArguments).toHaveBeenCalledOnce();
+      expect(beforeTool.mock.calls[0]?.[0].args).toEqual({ value: '12' });
+      expect(execute).toHaveBeenCalledOnce();
     } finally {
-      releaseFirst();
       await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
-    }
-  });
-
-  it('wakes an idle lane and preserves delivery kind through a busy admission race', async () => {
-    const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'admit-streaming-behaviour' }, BACKGROUND_CONTEXT);
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
-    const inspectExecution = vi.spyOn(runtime.lane, 'inspectExecution');
-    const accept = vi.spyOn(runtime.lane, 'accept');
-    const drive = vi.spyOn(runtime.lane, 'drive');
-    const steer = vi.spyOn(runtime.lane, 'steer');
-    const followUp = vi.spyOn(runtime.lane, 'followUp');
-    const busy = () =>
-      new LaneBusy({ lane: 'main', operationId: 'op-live', operationKind: 'run', message: 'lane is busy' });
-    try {
-      steer.mockResolvedValue({ ok: true, value: { entryId: 'queued' } } as never);
-      followUp.mockResolvedValue({ ok: true, value: { entryId: 'follow-up' } } as never);
-      drive.mockResolvedValue({ ok: true, value: { kind: 'completed' } } as never);
-
-      inspectExecution.mockResolvedValueOnce({ current: null } as never);
-      accept.mockResolvedValueOnce({ ok: true, value: { operationId: 'op-1', kind: 'run', startedAt: 1 } } as never);
-      const idle = await runtime.submitPrompt('wake up', undefined, 'steer');
-      await expect(idle.settled).resolves.toBeUndefined();
-      expect(accept).toHaveBeenCalledExactlyOnceWith({ kind: 'prompt', prompt: 'wake up' }, expect.anything());
-      expect(drive).toHaveBeenCalledOnce();
-      expect(steer).not.toHaveBeenCalled();
-
-      inspectExecution.mockResolvedValueOnce({ current: { operationId: 'op-1' } } as never);
-      const running = await runtime.submitPrompt('mid turn', undefined, 'steer');
-      await expect(running.settled).resolves.toBeUndefined();
-      expect(steer).toHaveBeenNthCalledWith(1, 'mid turn', undefined, expect.anything());
-      expect(accept).toHaveBeenCalledOnce();
-      expect(drive).toHaveBeenCalledOnce();
-
-      // Another turn can start between inspection and admission; preserve the requested delivery kind.
-      inspectExecution.mockResolvedValueOnce({ current: null } as never);
-      accept.mockResolvedValueOnce({ ok: false, error: busy() } as never);
-      const raced = await runtime.submitPrompt('raced', undefined, 'steer');
-      await expect(raced.settled).resolves.toBeUndefined();
-      expect(steer).toHaveBeenNthCalledWith(2, 'raced', undefined, expect.anything());
-      expect(drive).toHaveBeenCalledOnce();
-
-      inspectExecution.mockResolvedValueOnce({ current: null } as never);
-      accept.mockResolvedValueOnce({ ok: false, error: busy() } as never);
-      const followUpRace = await runtime.submitPrompt('later', undefined, 'followUp');
-      await expect(followUpRace.settled).resolves.toBeUndefined();
-      expect(followUp).toHaveBeenCalledExactlyOnceWith('later', undefined, expect.anything());
-
-      // Without a streaming behaviour there is nowhere to put the text, so the busy lane still fails.
-      inspectExecution.mockResolvedValueOnce({ current: null } as never);
-      accept.mockResolvedValueOnce({ ok: false, error: busy() } as never);
-      await expect(runtime.submitPrompt('plain')).rejects.toThrow('lane is busy');
-      expect(steer).toHaveBeenCalledTimes(2);
-    } finally {
-      inspectExecution.mockRestore();
-      accept.mockRestore();
-      drive.mockRestore();
-      steer.mockRestore();
-      followUp.mockRestore();
-      await runtime.dispose();
-      await repository.close(BACKGROUND_CONTEXT);
     }
   });
 });

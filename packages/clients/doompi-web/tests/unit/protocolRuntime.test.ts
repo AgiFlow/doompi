@@ -85,6 +85,7 @@ function sessionState() {
       updatedAt: 1,
       model: { provider: 'test', id: 'test' },
       thinkingLevel: 'off',
+      fastMode: false,
       attached: true,
       locked: false,
       revision: 0,

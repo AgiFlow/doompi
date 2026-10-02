@@ -32,7 +32,7 @@ export interface ProtocolRuntime {
   stop(): void;
 }
 
-/** Runs Pi 0.85's routed client and Chord session binding for the visible session. */
+/** Runs Pi 1.0's routed client and Chord session binding for the visible session. */
 export function startProtocolRuntime(
   location: Location = window.location,
   onFrame: (sessionId: string, frame: Record<string, unknown>, replay: boolean) => void = (sessionId, frame, replay) =>

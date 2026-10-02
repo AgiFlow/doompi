@@ -530,7 +530,10 @@ describe('createHeadlessHub', () => {
       customType: 'doompi.agent-settled',
       data: { runId: 'run', timestamp: Date.parse('2026-09-26T10:00:00.000Z'), tools: 0 },
     }));
-    const create = vi.fn(async () => ({ ...reopened, runtime: { ...reopened.runtime, lane: { findEntry } } }));
+    const create = vi.fn(async () => ({
+      ...reopened,
+      runtime: { ...reopened.runtime, readEntries: async () => ({ entries: [await findEntry()], leafId: null }) },
+    }));
     const hub = createHeadlessHub({ manager: { create, closeSession: vi.fn(async () => undefined) } as never });
 
     await hub.create({ sessionId: 'old', workspaceId: 'ws', sessionName: 'Old', cwd: '/repo' } as never);

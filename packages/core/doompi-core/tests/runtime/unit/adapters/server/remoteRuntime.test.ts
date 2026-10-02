@@ -233,7 +233,10 @@ describe('global remote control', () => {
       cwd: '/repo',
       createdAt: 'now',
       host: {
-        runtime: { exited: new Promise<number>(() => undefined) } as never,
+        runtime: {
+          exited: new Promise<number>(() => undefined),
+          readState: async () => ({ sessionId: 'one', fastMode: false }),
+        } as never,
         host: undefined,
         toolSurface: {
           readSurface: () => ({
@@ -280,6 +283,7 @@ describe('global remote control', () => {
           exited: new Promise<number>((resolve) => {
             exit = resolve;
           }),
+          readState: async () => ({ sessionId: 'failing', fastMode: false }),
           readLifecycle: async () => ({ revision: 0, operation: null, paused: false, queue: [] }),
           submitPrompt,
         } as never,
@@ -295,12 +299,10 @@ describe('global remote control', () => {
     let server!: HeadlessServer;
     const control = runtime(async (request) => {
       const source = new URL(request.url);
-      return fetch(new URL(`${source.pathname}${source.search}`, server.url), {
-        method: request.method,
-        headers: request.headers,
-        redirect: 'manual',
-        ...(request.method === 'GET' || request.method === 'HEAD' ? {} : { body: await request.arrayBuffer() }),
-      });
+      return fetch(
+        new URL(`${source.pathname}${source.search}`, server.url),
+        new Request(request, { redirect: 'manual' }),
+      );
     });
     server = await serveHeadlessServer({
       headlessHub: hub,

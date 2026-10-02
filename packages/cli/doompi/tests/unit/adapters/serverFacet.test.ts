@@ -156,6 +156,16 @@ describe('doompiServerFacet headless minor command', () => {
     context.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);
 
     const dispose = await doompiServerFacet.apply(context);
+    expect(command?.name).toBe('fast');
+    const setFastMode = vi.fn(async () => undefined);
+    const fastContext = { session: { setFastMode } } as unknown as DoomHeadlessExecutionContext;
+    await expect(command!.execute('on extra', fastContext)).rejects.toThrow('Usage: /fast');
+    expect(setFastMode).not.toHaveBeenCalled();
+    await command!.execute('on', fastContext);
+    await command!.execute('off', fastContext);
+    expect(setFastMode.mock.calls).toEqual([[true], [false]]);
+    setFastMode.mockRejectedValueOnce(new Error('Account cannot use priority'));
+    await expect(command!.execute('on', fastContext)).rejects.toThrow('Account cannot use priority');
     const commandHandle = headless.registerCommand(headlessMinorModeCommand(catalog));
     expect(command?.name).toBe('minor');
     expect(registered).toEqual([api, sessionFilesApi]);
@@ -175,7 +185,7 @@ describe('doompiServerFacet headless minor command', () => {
 
     await dispose?.();
     commandHandle.dispose();
-    expect(commandDispose).toHaveBeenCalledOnce();
+    expect(commandDispose).toHaveBeenCalledTimes(2);
     expect(apiDispose).toHaveBeenCalledTimes(2);
   });
 });

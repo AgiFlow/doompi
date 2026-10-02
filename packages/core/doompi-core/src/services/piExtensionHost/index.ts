@@ -1,17 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 
-import type {
-  AgentHarnessTool,
-  AgentMessage,
-  CompactionPreparation as HarnessCompactionPreparation,
-  Entry,
-  HarnessEvent,
-  HookMap,
-  JsonValue,
-  Skill,
-  ThinkingLevel,
-} from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, Message, Model } from '@earendil-works/pi-ai';
 import {
   createEventBus,
@@ -61,7 +51,19 @@ import {
 } from '../../services/piSessionEntries';
 import { readSyncRegistration } from '../../services/syncRegistration';
 import type { ToolPromptEntry } from '../../services/toolPrompt';
+import type {
+  AgentHarnessTool,
+  AgentMessage,
+  CompactionPreparation as HarnessCompactionPreparation,
+  Entry,
+  HarnessEvent,
+  HookMap,
+  JsonValue,
+  Skill,
+  ThinkingLevel,
+} from '../../types/server/directHarnessRuntime';
 import type { DirectHarnessRuntime } from '../../types/server/directHarnessRuntime';
+import { SessionIdentityDoc, SessionMetadataDoc } from '../sqliteSessionStorage';
 
 /**
  * Pi entries for this worktree, taken from the validated sync registration.
@@ -182,6 +184,14 @@ export async function preloadPiExtensions(options: {
  * to observe a turn, and the three hooks that let one shape or replace context.
  * Everything else stays undelivered rather than being approximated.
  */
+export function formatSkillsForSystemPrompt(skills: readonly Skill[]): string {
+  const escape = (text: string) =>
+    text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+  const visible = skills.filter((skill) => !skill.disableModelInvocation);
+  return visible.length
+    ? `\n\n<available_skills>\n${visible.map((skill) => `<skill><name>${escape(skill.name)}</name><description>${escape(skill.description)}</description><location>${escape(skill.filePath)}</location></skill>`).join('\n')}\n</available_skills>`
+    : '';
+}
 export interface PiExtensionHostOptions {
   readonly cwd: string;
   readonly agentDir: string;
@@ -319,11 +329,13 @@ async function executePiTool(
   parameters: unknown,
   signal: AbortSignal | undefined,
   onUpdate: ((result: DoomHeadlessToolResult) => void) | undefined,
+  alreadyPrepared = false,
 ): Promise<DoomHeadlessToolResult> {
   const definition = registered.definition;
   // Admission, not visibility. A cached definition must still be active when called.
   if (!isActive(definition.name)) throw new Error(`Tool '${definition.name}' is no longer active`);
-  const prepared = definition.prepareArguments ? definition.prepareArguments(parameters) : parameters;
+  const prepared =
+    !alreadyPrepared && definition.prepareArguments ? definition.prepareArguments(parameters) : parameters;
   const result = await definition.execute(
     toolCallId,
     prepared,
@@ -347,6 +359,7 @@ function toHarnessTool(
     label: definition.label ?? definition.name,
     description: definition.description,
     parameters: definition.parameters,
+    prepareArguments: definition.prepareArguments,
     ...(definition.executionMode === undefined ? {} : { executionMode: definition.executionMode }),
     async execute(toolCallId, parameters, onUpdate, _toolContext, _invocation, context) {
       const result = await executePiTool(
@@ -357,6 +370,7 @@ function toHarnessTool(
         parameters,
         context.abortSignal,
         (partial) => onUpdate({ content: partial.content, details: partial.details }),
+        true,
       );
       // Pi 0.99 lets a tool report failure without throwing. The harness reads a throw as the failed call.
       if (result.isError) {
@@ -536,7 +550,14 @@ export async function createBridgedSessionManager(
   /** The branch the caller has already read, so opening a session scans it once. */
   branchEntries?: readonly Entry[],
 ): Promise<SessionManager> {
-  const metadata = runtime.session.metadata;
+  const identity = await runtime.session.snapshot(SessionIdentityDoc, BACKGROUND_CONTEXT);
+  const storedMetadata = await runtime.session.snapshot(SessionMetadataDoc, BACKGROUND_CONTEXT);
+  const metadata = {
+    id: runtime.sessionId,
+    cwd: storedMetadata?.workspaceRoot || cwd,
+    createdAt: identity?.createdAt ?? Date.now(),
+    parentSessionId: identity?.parentSessionId || undefined,
+  };
   const entries = branchEntries ?? (await runtime.readEntries()).entries;
   const header: PiSessionHeaderInput = {
     id: metadata.id,
@@ -945,7 +966,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
           await runner?.emit({
             type: 'session_compact_failed',
             reason: event.reason,
-            ...(event.status === 'failed' ? { errorMessage: event.error.message } : {}),
+            ...(event.status === 'failed' ? { errorMessage: event.error?.message } : {}),
             aborted: event.status === 'aborted',
             willRetry: event.reason === 'overflow',
             fromExtension,
@@ -954,7 +975,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         }
         // Usage measured against the pre-compaction context no longer describes this one.
         contextTokens = null;
-        const compactionEntry = await piCompactionEntry(event.entryId);
+        const compactionEntry = event.entryId === undefined ? undefined : await piCompactionEntry(event.entryId);
         if (compactionEntry === undefined) return;
         await runner?.emit({
           type: 'session_compact',

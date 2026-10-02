@@ -50,7 +50,7 @@ describe('native request receipt history', () => {
         expect(await first.receipts.reserve({ ...request, fingerprint: 'b'.repeat(64) })).toMatchObject({
           kind: 'conflict',
         });
-        const file = path.join(directory, 'request_receipts.sqlite');
+        const file = path.join(directory, 'durable-v1', 'request_receipts.sqlite');
         expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
       } finally {
         await first.close();

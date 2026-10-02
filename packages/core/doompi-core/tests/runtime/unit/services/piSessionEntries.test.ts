@@ -1,4 +1,3 @@
-import type { AgentMessage, Entry } from '@earendil-works/pi-agent-core';
 import type { CustomEntry, SessionEntry, SessionMessageEntry } from '@earendil-works/pi-coding-agent';
 import { CURRENT_SESSION_VERSION } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
@@ -10,6 +9,7 @@ import {
   toPiSessionEntry,
   toPiSessionHeader,
 } from '../../../../src/services/piSessionEntries';
+import type { AgentMessage, Entry } from '../../../../src/types/server/directHarnessRuntime';
 
 const CREATED_AT = 1_700_000_000_000;
 const CREATED_AT_ISO = '2023-11-14T22:13:20.000Z';

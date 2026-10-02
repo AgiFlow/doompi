@@ -1,15 +1,3 @@
-/**
- * Boundary between the two session record formats DoomPi carries.
- *
- * The headless server persists conversations through the pi-agent-core harness `Session`, whose
- * entries are numbered (`seq`) and timestamped in epoch milliseconds. Pi extensions are instead
- * handed a pi-coding-agent `SessionManager`, whose JSONL records carry no sequence and use ISO
- * timestamps, and whose entry union has five members the harness cannot express natively.
- *
- * This module is the only place that translation happens. It is pure: no IO, no SQLite, no file
- * access, just functions over arrays.
- */
-import type { Entry } from '@earendil-works/pi-agent-core';
 import {
   CURRENT_SESSION_VERSION,
   sessionEntryToContextMessages,
@@ -22,6 +10,19 @@ import {
   type SessionHeader,
   type SessionMessageEntry,
 } from '@earendil-works/pi-coding-agent';
+
+/**
+ * Boundary between the two session record formats DoomPi carries.
+ *
+ * The headless server persists conversations through the pi-agent-core harness `Session`, whose
+ * entries are numbered (`seq`) and timestamped in epoch milliseconds. Pi extensions are instead
+ * handed a pi-coding-agent `SessionManager`, whose JSONL records carry no sequence and use ISO
+ * timestamps, and whose entry union has five members the harness cannot express natively.
+ *
+ * This module is the only place that translation happens. It is pure: no IO, no SQLite, no file
+ * access, just functions over arrays.
+ */
+import type { Entry } from '../../types/server/directHarnessRuntime';
 
 /** Reserved harness `customType` prefix for Pi entry types the harness has no native record for. */
 export const PI_MIRRORED_ENTRY_PREFIX = 'pi.';

@@ -2,13 +2,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { laneConfig, laneState } from '@earendil-works/pi-agent-core/harness/session';
-import { SqliteSessionRepo, createNodeSqliteFactory } from '@earendil-works/pi-session-backend-sqlite-node';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { AgentDoc } from '@earendil-works/pi-durable';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DoomChildSessionRequest } from '../../../../../src/exports/childSession';
 import type { DirectHarnessRuntime, DirectHarnessRuntimeOptions } from '../../../../../src/server/directHarnessRuntime';
+import { DurableNavigationDoc } from '../../../../../src/services/durableNavigation';
+import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
+import { openSqliteSessionStorage } from '../../../../../src/services/sqliteSessionStorage';
 import {
   createHeadlessChildSessionService,
   createHeadlessChildSessionServiceProvider,
@@ -31,6 +33,7 @@ function request(source: DoomChildSessionRequest['source'], cwd = '/tmp'): DoomC
 function fakeRuntime(sessionId: string, filePath?: string): DirectHarnessRuntime {
   return {
     sessionId,
+    sessionFile: filePath,
     laneName: 'main',
     harnessId: sessionId,
     session: { metadata: { path: filePath } } as unknown as DirectHarnessRuntime['session'],
@@ -51,6 +54,7 @@ function fakeRuntime(sessionId: string, filePath?: string): DirectHarnessRuntime
     readEntries: async () => ({ entries: [], leafId: null }),
     listCommands: () => [],
     dispatchCommand: async () => false,
+    setFastMode: async () => undefined,
     setModel: async () => undefined,
     availableModels: async () => [],
     availableThinkingLevels: async () => [],
@@ -90,31 +94,78 @@ function runtimeFactory(runtime: DirectHarnessRuntime) {
 }
 
 async function createSource(root: string): Promise<string> {
-  const repository = new SqliteSessionRepo({ directory: root, databaseFactory: createNodeSqliteFactory() });
-  const session = await repository.create({ id: 'source' }, BACKGROUND_CONTEXT);
-  const main = await session.createBranch('main', null, BACKGROUND_CONTEXT);
-  const message = { role: 'user', content: [{ type: 'text', text: 'source' }] } as Parameters<
-    typeof main.appendMessage
-  >[0];
-  await main.appendMessage(message, BACKGROUND_CONTEXT);
-  await session.setValue(
-    laneConfig('main'),
-    { model: { provider: 'test', modelId: 'test' }, thinkingLevel: 'off', activeToolNames: [] },
+  const opened = await openSqliteSessionStorage(
+    { sessionId: 'source', sessionsRoot: root, historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }) },
     BACKGROUND_CONTEXT,
   );
-  await session.setValue(
-    laneState('main'),
-    { currentOperationId: null, lastOperationId: null, inbox: [] },
-    BACKGROUND_CONTEXT,
-  );
-  const sourcePath = session.metadata.path;
-  await session.close(BACKGROUND_CONTEXT);
-  await repository.close(BACKGROUND_CONTEXT);
-  return sourcePath;
+  await opened.session.commit(async (tx) => {
+    const conversation = await tx.createConversation({ ownership: { kind: 'ownerless' } });
+    await tx.appendEntry(conversation.id, {
+      kind: 'pi.user',
+      model: [{ role: 'user', content: 'source', timestamp: Date.now() }],
+    });
+    Object.assign(await tx.doc(AgentDoc, conversation.id), {
+      model: { provider: 'test', modelId: 'test' },
+      thinkingLevel: 'off',
+      tools: [],
+    });
+    (await tx.doc(DurableNavigationDoc)).activeConversationId = conversation.id;
+  }, BACKGROUND_CONTEXT);
+  await opened.session.close(BACKGROUND_CONTEXT);
+  await opened.repository.close(BACKGROUND_CONTEXT);
+  await opened.historyLease.release();
+  return opened.sessionFile;
 }
 
 describe('headless child session provider', () => {
   beforeEach(() => vi.restoreAllMocks());
+
+  it.each([true, false])('snapshots parent Fast %s for fresh, restored, and forked children', async (enabled) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-child-fast-'));
+    const source = await createSource(root);
+    let parentMode = enabled;
+    const snapshots: Array<boolean | undefined> = [];
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent-session',
+      cwd: root,
+      parentFastMode: () => parentMode,
+      runtimeFactory: async (options) => {
+        parentMode = !parentMode;
+        snapshots.push(options.initialFastMode);
+        return fakeRuntime(`child-${snapshots.length}`);
+      },
+    });
+    try {
+      for (const sourceRequest of [
+        { kind: 'fresh' },
+        { kind: 'v4-restore', sessionFile: source },
+        { kind: 'v4-fork', sessionFile: source, branch: 'main' },
+      ] as DoomChildSessionRequest['source'][]) {
+        parentMode = enabled;
+        const child = await service.start(request(sourceRequest, root));
+        expect(snapshots.at(-1)).toBe(enabled);
+        parentMode = !enabled;
+        expect(snapshots.at(-1)).toBe(enabled);
+        await child.dispose();
+      }
+    } finally {
+      await service.close();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a non-boolean parent preference before child creation', async () => {
+    const factory = runtimeFactory(fakeRuntime('invalid'));
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent-session',
+      cwd: '/tmp',
+      parentFastMode: (() => 'true') as unknown as () => boolean,
+      runtimeFactory: factory,
+    });
+    await expect(service.start(request({ kind: 'fresh' }))).rejects.toThrow('must be a boolean');
+    expect(factory).not.toHaveBeenCalled();
+    await service.close();
+  });
 
   it('creates a fresh child with a new session identity and disposes it once', async () => {
     const runtime = fakeRuntime('fresh-child');
@@ -291,10 +342,17 @@ describe('headless child session provider', () => {
     await (installed!.execute as (...args: unknown[]) => Promise<unknown>)(
       'operation',
       { action: 'members' },
-      new AbortController().signal,
+      () => undefined,
       undefined,
+      {},
+      BACKGROUND_CONTEXT,
     );
-    expect(execute).toHaveBeenCalledWith('operation', { action: 'members' }, expect.any(AbortSignal), undefined);
+    expect(execute).toHaveBeenCalledWith(
+      'operation',
+      { action: 'members' },
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
 
     await handle.dispose();
     await handle.dispose();
@@ -694,7 +752,7 @@ describe('headless child session provider', () => {
     });
     try {
       await expect(
-        service.start(request({ kind: 'v4-fork', sessionFile: sourcePath, branch: 'busy' }, root)),
+        service.start(request({ kind: 'v4-fork', sessionFile: sourcePath, branch: 'main' }, root)),
       ).rejects.toThrow('destination is busy');
       expect(factory).not.toHaveBeenCalled();
       expect(sourceLease.assertQuiescent).not.toHaveBeenCalled();

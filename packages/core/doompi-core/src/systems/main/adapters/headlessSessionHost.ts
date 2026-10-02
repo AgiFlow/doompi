@@ -3,10 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Context as CordisContext } from '@deepseek-ai/cordis';
-import { formatSkillsForSystemPrompt } from '@earendil-works/pi-agent-core';
-import type { AgentHarnessResources, AgentHarnessTool, AgentMessage, HookMap } from '@earendil-works/pi-agent-core';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { value } from '@earendil-works/pi-agent-core/harness/session';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Model, Api, Usage } from '@earendil-works/pi-ai';
 import {
   getAgentDir,
@@ -43,6 +40,7 @@ import { writeContextDetail } from '../../../services/contextDetailStore';
 import { DOOM_CONTEXT_ENTRY_TYPE, projectContext } from '../../../services/contextProjection';
 import { createHeadlessClient } from '../../../services/headlessClient';
 import { createHistoryOwnership } from '../../../services/historyOwnership';
+import { formatSkillsForSystemPrompt } from '../../../services/piExtensionHost';
 import {
   createPiExtensionHost,
   preloadPiExtensions,
@@ -50,8 +48,15 @@ import {
   resolvePiSettingsPackageEntries,
   type PiExtensionHost,
 } from '../../../services/piExtensionHost';
+import { SessionMetadataDoc } from '../../../services/sqliteSessionStorage';
 import { formatToolPrompt, type ToolPromptEntry } from '../../../services/toolPrompt';
 import type { ContextPromptStage } from '../../../types/contextApi';
+import type {
+  AgentHarnessResources,
+  AgentHarnessTool,
+  AgentMessage,
+  HookMap,
+} from '../../../types/server/directHarnessRuntime';
 import type { DirectHarnessRuntime, DirectHarnessRuntimeOptions } from '../../../types/server/directHarnessRuntime';
 import type { SessionFrame } from '../../../types/server/session';
 import type {
@@ -622,6 +627,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   const runtime = await createDirectHarnessRuntime({
     cwd: options.cwd,
     sessionId: options.sessionId,
+    ...(options.initialFastMode === undefined ? {} : { initialFastMode: options.initialFastMode }),
     ...(options.parentSessionId === undefined ? {} : { parentSessionId: options.parentSessionId }),
     storage: 'sqlite',
     historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
@@ -758,10 +764,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   // The runtime already holds the history lease. A storage failure while opening must
   // release it, or every retry of this session id fails on the stale lease.
   const opened = await (async () => {
-    await runtime.session.setValue(value('doompi.session', 'workspaceRoot'), options.repoRoot, BACKGROUND_CONTEXT);
-    await runtime.session.setValue(
-      value('doompi.session', 'execution'),
-      JSON.stringify({
+    await runtime.session.commit(async (tx) => {
+      const metadata = await tx.doc(SessionMetadataDoc);
+      metadata.workspaceRoot = options.repoRoot;
+      metadata.execution = JSON.stringify({
         cwd: options.cwd,
         repoRoot: options.repoRoot,
         workspaceId: options.workspaceId,
@@ -769,18 +775,13 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         parentSessionId: options.parentSessionId,
         sessionProvenance: options.sessionProvenance,
         inheritedArtifact: options.inheritedArtifact,
-      }),
-      BACKGROUND_CONTEXT,
-    );
-
-    const model = await runtime.lane.getModel(BACKGROUND_CONTEXT);
-    const entries = (
-      await Promise.all(
-        [DOOM_CONTEXT_ENTRY_TYPE].map((customType) =>
-          runtime.lane.findEntries({ type: 'custom', customType, order: 'newestFirst', limit: 1 }, BACKGROUND_CONTEXT),
-        ),
-      )
-    ).flat() as unknown as AnyRecord[];
+      });
+    }, BACKGROUND_CONTEXT);
+    const agent = await runtime.lane.agent(BACKGROUND_CONTEXT);
+    const model = agent.model ? modelRuntime.getModel(agent.model.provider, agent.model.modelId) : undefined;
+    const entries = (await runtime.readEntries()).entries
+      .filter((entry) => entry.type === 'custom' && entry.customType === DOOM_CONTEXT_ENTRY_TYPE)
+      .slice(-1) as unknown as AnyRecord[];
     return { model, entries };
   })().catch(async (error: unknown) => {
     await runtime
@@ -873,6 +874,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     sessionsRoot: parsed.sessionDir ?? path.join(agentDir, 'server', 'sessions'),
     models: modelRuntime,
     defaultModel: () => currentModel,
+    parentFastMode: async () => {
+      const state = await runtime.readState();
+      if (typeof state.fastMode !== 'boolean') throw new Error('Parent Fast mode must be a boolean.');
+      return state.fastMode;
+    },
     mcpTool: () => {
       if (disposed || !headlessReady || !headlessHost?.status.ready) return undefined;
       return mcpServiceRoot?.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionTool | undefined;
@@ -951,9 +957,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       },
     },
     session: {
+      setFastMode: (enabled) => runtime.setFastMode(enabled),
       async readModelSettings() {
-        const model = await runtime.lane.getModel(BACKGROUND_CONTEXT);
-        const thinkingLevel = await runtime.lane.getThinkingLevel(BACKGROUND_CONTEXT);
+        const selected = (await runtime.lane.agent(BACKGROUND_CONTEXT)).model;
+        const model = selected ? modelRuntime.getModel(selected.provider, selected.modelId) : undefined;
+        const thinkingLevel = (await runtime.lane.agent(BACKGROUND_CONTEXT)).thinkingLevel;
         return { ...(model ? { model: modelIdentity(model) } : {}), thinkingLevel };
       },
       async setModelSettings(settings) {
@@ -961,21 +969,25 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         if (settings.thinkingLevel !== undefined) await runtime.setThinkingLevel(settings.thinkingLevel);
       },
       async forkSource() {
-        const metadata = runtime.session.metadata as unknown as { path?: unknown };
-        if (typeof metadata.path !== 'string') throw new Error('The parent session has no persisted journal.');
+        const sessionFile = runtime.sessionFile;
+        if (typeof sessionFile !== 'string') throw new Error('The parent session has no persisted journal.');
         const { leafId } = await runtime.readEntries();
         return {
           kind: 'v4-fork' as const,
-          sessionFile: metadata.path,
+          sessionFile,
           branch: runtime.laneName,
           ...(leafId === null ? {} : { entryId: leafId }),
         };
       },
-      entries: async (query) =>
-        (await runtime.lane.findEntries(
-          { ...query, order: query?.limit === undefined ? 'oldestFirst' : 'newestFirst' },
-          BACKGROUND_CONTEXT,
-        )) as unknown as AnyRecord[],
+      entries: async (query) => {
+        let entries = (await runtime.readEntries()).entries.filter(
+          (entry) =>
+            (!query?.type || entry.type === query.type) &&
+            (!query?.customType || (entry.type === 'custom' && entry.customType === query.customType)),
+        );
+        if (query?.limit !== undefined) entries = entries.toReversed().slice(0, query.limit);
+        return entries as unknown as AnyRecord[];
+      },
       async appendCustomEntry(type, data) {
         await runtime.appendCustomEntry(type, data);
       },
@@ -1021,7 +1033,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   const unsubscribePresentation = runtime.onPresentationFrame((frame) => emitTo(listeners, frame));
   const unsubscribeEvents = runtime.onEvent(async (event, _context) => {
     if (event.type === 'config_update' && event.property === 'model') {
-      currentModel = await runtime.lane.getModel(BACKGROUND_CONTEXT);
+      const selected = (await runtime.lane.agent(BACKGROUND_CONTEXT)).model;
+      currentModel = selected ? modelRuntime.getModel(selected.provider, selected.modelId) : undefined;
       if (headlessHost !== undefined && currentModel !== undefined && headlessHost.status.ready) {
         await headlessHost.dispatchHook('model_select', { model: currentModel });
       }

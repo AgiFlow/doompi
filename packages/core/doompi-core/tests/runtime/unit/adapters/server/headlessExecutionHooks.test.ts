@@ -3,7 +3,6 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { Context } from '@deepseek-ai/cordis';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import {
   createAssistantMessageEventStream,
   type AssistantMessage,
@@ -11,6 +10,7 @@ import {
   type Model,
   type Models,
 } from '@earendil-works/pi-ai';
+import { getCurrentSystemPrompt, getCurrentTools } from '@earendil-works/pi-ai/utils/transcript';
 import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
@@ -101,7 +101,11 @@ describe('active headless execution hooks', () => {
         response([{ type: 'text', text: 'recovered' }], 'stop'),
       ];
       const streamSimple = vi.fn<Models['streamSimple']>((_requestedModel, requestContext, streamOptions) => {
-        contexts.push(requestContext as unknown as Record<string, unknown>);
+        contexts.push({
+          ...requestContext,
+          systemPrompt: getCurrentSystemPrompt(requestContext.messages),
+          tools: getCurrentTools(requestContext.messages),
+        } as unknown as Record<string, unknown>);
         payloadCallbacks.push(streamOptions?.onPayload);
         const next = responses.shift();
         if (next === undefined) throw new Error('Test provider ran out of responses');
@@ -307,7 +311,7 @@ describe('active headless execution hooks', () => {
         });
         expect(session.canDispatch()).toBe(true);
 
-        await session.runtime.lane.setModel({ provider: model.provider, modelId: model.id }, BACKGROUND_CONTEXT);
+        await session.runtime.setModel({ provider: model.provider, id: model.id });
         expect(modelSelectEvents).toEqual([{ model }]);
 
         await session.runtime.prompt('allowed');

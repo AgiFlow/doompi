@@ -49,6 +49,7 @@ async function fixture(
     inheritedSelection?: Parameters<typeof createHeadlessSessionHost>[0]['inheritedSelection'];
     streamSimple?: ModelRuntime['streamSimple'];
     allowedTools?: readonly string[];
+    initialFastMode?: boolean;
   } = {},
 ): Promise<{
   host: Awaited<ReturnType<typeof createHeadlessSessionHost>>;
@@ -82,6 +83,7 @@ async function fixture(
     repoRoot: cwd,
     sessionId: 'headless-session-mapping',
     sessionName: 'Headless session mapping',
+    ...(options.initialFastMode === undefined ? {} : { initialFastMode: options.initialFastMode }),
     agentArgs: [],
     environment: {},
     candidates: options.candidates ?? [],
@@ -107,6 +109,16 @@ afterEach(async () => {
 });
 
 describe('session execution controls', () => {
+  it.each([true, false])('seeds the creation Fast snapshot %s', async (initialFastMode) => {
+    const current = await fixture([], { initialFastMode });
+    await expect(current.runtime.readState()).resolves.toMatchObject({ fastMode: initialFastMode });
+  });
+
+  it('defaults a fresh top-level session to Fast off', async () => {
+    const current = await fixture();
+    await expect(current.runtime.readState()).resolves.toMatchObject({ fastMode: false });
+  });
+
   it('renames the durable session through the headless context', async () => {
     const current = await fixture();
 
@@ -651,8 +663,8 @@ describe('MCP execution boundary', () => {
       if (args[0] === 'session_start') armed = true;
       return result;
     });
-    const mutate = current.runtime.session.mutate.bind(current.runtime.session);
-    vi.spyOn(current.runtime.session, 'mutate').mockImplementation(async (...args) => {
+    const mutate = current.runtime.session.commit.bind(current.runtime.session);
+    vi.spyOn(current.runtime.session, 'commit').mockImplementation(async (...args) => {
       if (armed && !blocked) {
         blocked = true;
         entered();
