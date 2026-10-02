@@ -1282,6 +1282,73 @@ describe('packed package identity and closure', () => {
     expect(gate).toBeLessThan(reconcilePublish);
   });
 
+  it.each([
+    { visibleAfter: 12, publishExit: 1, succeeds: true },
+    { visibleAfter: 12, publishExit: 0, succeeds: true },
+    { visibleAfter: 0, publishExit: 0, succeeds: true },
+    { visibleAfter: 100, publishExit: 1, succeeds: false },
+  ])('reconciles availability after $visibleAfter rounds with publish exit $publishExit', async (scenario) => {
+    const workflow = readReleaseWorkflow();
+    const start = workflow.indexOf('- name: Reconcile every release version with the alpha tag');
+    const end = workflow.indexOf('- name: Tag the published versions', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const step = workflow.slice(start, end);
+    const script = step
+      .slice(step.indexOf('        run: |\n') + '        run: |\n'.length)
+      .replace(/^          /gm, '');
+    const root = createTemporaryRoot('release-reconcile');
+    try {
+      // Shell functions shadow every network command. A publish acknowledgement
+      // or staged conflict is not availability, and alpha starts on the old version.
+      const mocks = `
+        round=0
+        node() { printf '@agimon-ai/test\\t0.0.1-alpha.91\\n'; }
+        sleep() { round=$((round + 1)); echo "SLEEP $1"; }
+        pnpm() {
+          echo PUBLISH
+          if [[ "$PUBLISH_EXIT" == 1 ]]; then
+            echo 'HTTP 409 Cannot publish over previously staged version' >&2
+          fi
+          return "$PUBLISH_EXIT"
+        }
+        npm() {
+          if [[ "$1" == view && "$3" == version ]]; then
+            ((round >= VISIBLE_AFTER))
+          elif [[ "$1" == view && "$3" == dist-tags.alpha ]]; then
+            if [[ -f "$RUNNER_TEMP/retagged" ]]; then echo 0.0.1-alpha.91; else echo 0.0.1-alpha.90; fi
+          elif [[ "$1" == dist-tag && "$2" == add ]]; then
+            echo RETAG
+            touch "$RUNNER_TEMP/retagged"
+          else
+            echo "Unexpected npm call: $*" >&2
+            return 2
+          fi
+        }
+      `;
+      const result = await runCommand('bash', ['-c', `${mocks}\n${script}`], REPOSITORY_ROOT, {
+        ...process.env,
+        RUNNER_TEMP: root,
+        NODE_AUTH_TOKEN: 'mock-only',
+        VISIBLE_AFTER: String(scenario.visibleAfter),
+        PUBLISH_EXIT: String(scenario.publishExit),
+      });
+      expect(result.code, result.stderr || result.stdout).toBe(scenario.succeeds ? 0 : 1);
+      expect(result.stdout.match(/^PUBLISH$/gm) ?? []).toHaveLength(scenario.visibleAfter === 0 ? 0 : 1);
+      if (scenario.succeeds) {
+        expect(result.stdout).toContain('Every release version is on the registry under the alpha tag.');
+        expect(result.stdout).toContain('RETAG');
+      } else {
+        expect(result.stdout.match(/^SLEEP 60$/gm)).toHaveLength(30);
+        expect(result.stdout).toContain('1 package(s) missing from the alpha tag after 31 attempts');
+        expect(result.stdout).not.toContain('Every release version is on the registry under the alpha tag.');
+        expect(result.stdout).not.toContain('RETAG');
+      }
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('installs an executable DoomPi command from the packed package', async () => {
     assertConsumerInstall();
     const executable = path.join(consumer.root, 'node_modules/.bin/doompi');

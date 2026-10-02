@@ -1054,7 +1054,29 @@ describe('VoiceOwnershipCoordinator', () => {
     await vi.waitFor(() => expect(delivered).toBeDefined());
     removed.remove('target');
     resolve(acknowledgement(delivered!, true));
-    await expect(publishing).resolves.toBeUndefined();
+    await expect(publishing).resolves.toEqual([]);
+  });
+
+  it('delivers catalogs to healthy participants after an unavailable one fails', async () => {
+    const delivered: string[] = [];
+    const coordinator = new VoiceOwnershipCoordinator(
+      {
+        async send(sessionId, value) {
+          if (sessionId === 'expired') throw new Error('Voice ownership command failed with HTTP 503.');
+          delivered.push(sessionId);
+          return acknowledgement(value, false);
+        },
+      },
+      () => undefined,
+      { now: () => 0, createId: () => 'catalog-command' },
+    );
+    coordinator.update('expired', registration('expired-lease', 'Expired', false));
+    coordinator.update('healthy', registration('healthy-lease', 'Healthy', false));
+
+    const failures = await coordinator.publishCatalogs(['expired', 'healthy']);
+
+    expect(failures.map((failure) => failure.sessionId)).toEqual(['expired']);
+    expect(delivered).toEqual(['healthy']);
   });
 });
 

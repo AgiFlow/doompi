@@ -512,11 +512,11 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${NODE_AUTH_TOKEN}"
-          # npm serves a version it has just accepted from a read path that lags
-          # behind the write path, so the budget has to outlast that lag: a short
-          # one fails the job over a registry that is merely catching up, and
-          # takes the tagging and the latest promotion down with it.
-          readonly RECONCILE_ATTEMPTS=8
+          # The failed alpha.91 run accepted linux-arm64 at 09:55:12, but npm's
+          # version timestamp is 10:08:24. A successful publish only acknowledges
+          # the upload, not registry availability. Allow up to 30 minutes for
+          # processing before failing closed and withholding tags and latest.
+          readonly RECONCILE_ATTEMPTS=31
           readonly RECONCILE_DELAY_SECONDS=60
           readonly PENDING_FILE="${RUNNER_TEMP}/doompi-release-pending.tsv"
           readonly ROUND_FILE="${RUNNER_TEMP}/doompi-release-pending-round.tsv"
@@ -524,19 +524,19 @@ jobs:
           node scripts/list-packages.mjs > "${PENDING_FILE}"
 
           # nx release publish reports success for a project it silently skipped, so every release
-          # version is verified here. The first and last rounds only observe, to let the registry
-          # catch up; the rounds between them publish or retag whatever is still unresolved. A
-          # rejected republish is not fatal: a version npm has staged but not yet served reads as
-          # absent, and only the observation decides the verdict.
+          # version is verified here. Round two publishes unresolved versions once as a fallback
+          # for skipped projects. Do not keep uploading an absent version: npm can already have
+          # staged it for processing and reject the duplicate with HTTP 409. All remaining rounds
+          # observe availability or repair alpha, and only observation decides the verdict.
           for ((attempt = 1; attempt <= RECONCILE_ATTEMPTS; attempt += 1)); do
             : > "${ROUND_FILE}"
             while IFS=$'\t' read -r name version; do
               if ! npm view "${name}@${version}" version --prefer-online > /dev/null 2>&1; then
                 printf '%s\t%s\n' "${name}" "${version}" >> "${ROUND_FILE}"
                 echo "${name}@${version} is absent from the registry (attempt ${attempt}/${RECONCILE_ATTEMPTS})"
-                if ((attempt > 1 && attempt < RECONCILE_ATTEMPTS)); then
+                if ((attempt == 2)); then
                   echo "Publishing ${name}@${version} on its own."
-                  pnpm nx release publish --projects "${name}" --tag alpha || echo "Republish of ${name}@${version} was rejected, the next round re-reads the registry."
+                  pnpm nx release publish --projects "${name}" --tag alpha || echo "Republish of ${name}@${version} was rejected, remaining rounds only re-read the registry."
                 fi
                 continue
               fi
@@ -570,7 +570,7 @@ jobs:
             if npm view "${name}@${version}" version --prefer-online > /dev/null 2>&1; then
               echo "  ${name}@${version} is on the registry but alpha still points at ${alpha:-unavailable}"
             else
-              echo "  ${name}@${version} never reached the registry and alpha points at ${alpha:-unavailable}"
+              echo "  ${name}@${version} is not yet visible on the registry and alpha points at ${alpha:-unavailable}"
             fi
           done < "${PENDING_FILE}"
           exit 1

@@ -32,16 +32,19 @@ function scope(sessionId: string): DoomHubSessionScope {
 
 function createDirectEvents() {
   const listeners = new Map<string, Set<(payload: unknown) => void>>();
+  const latest = new Map<string, unknown>();
   const key = (frameType: string, sessionId: string): string => `${frameType}:${sessionId}`;
   const events: DoomDirectEventBus & { emit(frameType: string, sessionId: string, payload: unknown): void } = {
     publish(frameType, sessionId, payload) {
+      latest.set(key(frameType, sessionId), payload);
       for (const listener of listeners.get(key(frameType, sessionId)) ?? []) listener(payload);
     },
-    subscribe(frameType, sessionId, listener) {
+    subscribe(frameType, sessionId, listener, options) {
       const eventKey = key(frameType, sessionId);
       const current = listeners.get(eventKey) ?? new Set<(payload: unknown) => void>();
       current.add(listener);
       listeners.set(eventKey, current);
+      if (options?.replayLatest && latest.has(eventKey)) listener(latest.get(eventKey));
       return () => {
         current.delete(listener);
         if (current.size === 0) listeners.delete(eventKey);
@@ -49,6 +52,7 @@ function createDirectEvents() {
     },
     close() {
       listeners.clear();
+      latest.clear();
     },
     emit(frameType, sessionId, payload) {
       this.publish(frameType, sessionId, payload);
@@ -399,6 +403,91 @@ describe('voice media hub channels', () => {
     h.emit('source');
     await vi.waitFor(() => expect(h.notices.some((notice) => notice.includes('catalog update failed'))).toBe(true));
     source.close();
+  });
+
+  it('keeps delivering to healthy sessions while backing off an unavailable one', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const h = ownershipHarness({
+      expired: { leaseId: 'lease-expired', label: 'Expired', active: false },
+      source: { leaseId: 'lease-source', label: 'Source', active: true },
+      target: { leaseId: 'lease-target', label: 'Target', active: false },
+    });
+    let expiredAvailable = false;
+    const source = createVoiceOwnershipChannel().start({
+      ...h.host,
+      async requestSessionApi(session, request) {
+        if (session.sessionId === 'expired' && !expiredAvailable) {
+          h.actions.push('expired:unavailable');
+          return Response.json({ error: 'Voice runtime is unavailable.' }, { status: 503 });
+        }
+        return h.host.requestSessionApi(session, request);
+      },
+    });
+    // The expired session registers first, so a fail-fast fan-out would never reach the others.
+    for (const sessionId of ['expired', 'source', 'target']) source.sessionAdded?.(scope(sessionId));
+    for (const sessionId of ['expired', 'source', 'target']) h.emit(sessionId);
+
+    await vi.waitFor(() =>
+      expect(h.states.get('source')?.catalog.map((target) => target.label)).toEqual(['Expired', 'Target']),
+    );
+    expect(h.states.get('target')?.catalog.map((target) => target.label)).toEqual(['Expired']);
+    // Healthy sessions keep syncing every 250 ms; none of those snapshots may retry inside the backoff.
+    for (let sync = 0; sync < 20; sync += 1) {
+      h.emit('source');
+      h.emit('target');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(h.actions.filter((action) => action === 'expired:unavailable')).toHaveLength(1);
+    expect(h.notices.filter((notice) => notice.includes('catalog update failed'))).toHaveLength(1);
+    expect(h.notices[0]).toContain('expired: Voice ownership command failed with HTTP 503.');
+
+    now += 1_000;
+    h.emit('source');
+    await vi.waitFor(() => expect(h.actions.filter((action) => action === 'expired:unavailable')).toHaveLength(2));
+    now += 1_999;
+    h.emit('source');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(h.actions.filter((action) => action === 'expired:unavailable')).toHaveLength(2);
+
+    expiredAvailable = true;
+    now += 1;
+    h.actions.length = 0;
+    h.emit('source');
+    await vi.waitFor(() => expect(h.states.get('expired')?.catalog.map((target) => target.label)).toEqual(['Target']));
+    for (let sync = 0; sync < 5; sync += 1) {
+      h.emit('source');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(h.actions).toEqual(['expired:catalog']);
+    source.close();
+  });
+
+  it('does not renew a stopped runtime from a replayed snapshot', async () => {
+    const h = ownershipHarness({
+      source: { leaseId: 'lease-source', label: 'Source', active: true },
+      stopped: { leaseId: 'lease-stopped', label: 'Stopped', active: false },
+    });
+    const first = createVoiceOwnershipChannel().start(h.host);
+    first.sessionAdded?.(scope('source'));
+    first.sessionAdded?.(scope('stopped'));
+    h.emit('source');
+    h.emit('stopped');
+    await vi.waitFor(() => expect(h.states.get('source')?.catalog.map((target) => target.label)).toEqual(['Stopped']));
+    first.close();
+
+    // The channel restarts; the stopped runtime no longer syncs, only its retained snapshot replays.
+    let coordinator: VoiceOwnershipCoordinator | undefined;
+    const second = createVoiceOwnershipChannel((owner) => {
+      coordinator = owner;
+    }).start(h.host);
+    second.sessionAdded?.(scope('source'));
+    second.sessionAdded?.(scope('stopped'));
+    expect(coordinator!.registration('stopped')).toBeUndefined();
+    h.emit('source');
+    await vi.waitFor(() => expect(h.states.get('source')?.catalog).toEqual([]));
+    expect(coordinator!.registration('source')).toBeDefined();
+    second.close();
   });
 
   it('keeps the ownership route available for command delivery', () => {
