@@ -70,6 +70,7 @@ function fakeRuntime(options: DirectHarnessRuntimeOptions): DirectHarnessRuntime
     setLabel: async () => undefined,
     recordUsage: async () => 'usage',
     submitPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
+    submitUserPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
     admitMessage: vi.fn(async () => ({ settled: Promise.resolve() })),
     prompt: vi.fn(async () => undefined),
     steer: vi.fn(async () => undefined),

@@ -106,6 +106,8 @@ type LifecycleRecord = {
   revision: number;
   paused: boolean;
   abortOperationId?: string;
+  /** A directly accepted user replacement may run while retained inputs stay paused. */
+  userOperationId?: string;
   queue: RetainedInput[];
 };
 
@@ -1112,9 +1114,14 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     resolveExited(code);
   };
 
+  let userAdmissionReservation: symbol | undefined;
+  const guardUserAdmission = (): void => {
+    if (userAdmissionReservation !== undefined) throw new Error('A user interruption is already being admitted');
+  };
   let externalOperationActive = false;
   let agentOperationsActive = 0;
   const acquireAgentOperation = (): (() => void) => {
+    guardUserAdmission();
     if (externalOperationActive) throw new Error('The session is busy with an external tool invocation');
     agentOperationsActive += 1;
     let released = false;
@@ -1170,7 +1177,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   };
   let drainingAutomatic = false;
   let drainRequested = false;
-  const drive = async (operationId: string, pollDeferred = false): Promise<void> => {
+  const activeDrives = new Map<string, Promise<void>>();
+  const driveOperation = async (operationId: string, pollDeferred = false): Promise<void> => {
     settlingOperationId = operationId;
     let failure: unknown;
     try {
@@ -1193,6 +1201,11 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       if (!disposed) {
         let publicationSucceeded = false;
         try {
+          await changeRecord((record) =>
+            record.userOperationId === operationId
+              ? { record: { ...record, userOperationId: undefined }, result: undefined }
+              : { result: undefined },
+          );
           await publishLifecycle();
           publicationSucceeded = true;
         } catch (error) {
@@ -1207,10 +1220,23 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     }
     if (failure !== undefined) throw failure;
   };
+  const drive = (operationId: string, pollDeferred = false): Promise<void> => {
+    const settled = driveOperation(operationId, pollDeferred);
+    activeDrives.set(operationId, settled);
+    const release = (): void => {
+      activeDrives.delete(operationId);
+    };
+    void settled.then(release, release);
+    return settled;
+  };
   // Only this function starts automatic follow-up turns. It never holds the Session mutation
   // line during provider/tool work; a claim is persisted before native admission.
   const drainAutomatic = async (): Promise<void> => {
     if (disposed) return;
+    if (userAdmissionReservation !== undefined) {
+      drainRequested = true;
+      return;
+    }
     if (drainingAutomatic) {
       drainRequested = true;
       return;
@@ -1225,7 +1251,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         if (execution.current !== null) return;
         const operationId = randomUUID();
         const claimed = await changeRecord((record) => {
-          if (record.paused || record.abortOperationId !== undefined) return { result: undefined };
+          if (userAdmissionReservation !== undefined || record.paused || record.abortOperationId !== undefined)
+            return { result: undefined };
           const item = record.queue.find(
             (candidate) =>
               candidate.disposition === 'pending' &&
@@ -1263,7 +1290,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
             timestamp: Date.now(),
           };
           const admitted = await serializeAdmission(async () => {
-            if ((await readRecord()).paused) return undefined;
+            if (userAdmissionReservation !== undefined || (await readRecord()).paused) return undefined;
             return writable(() => lane.accept({ kind: 'prompt', operationId, prompt: message }, context));
           });
           if (!admitted || !admitted.ok) {
@@ -1316,7 +1343,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     } finally {
       releaseAutomatic?.();
       drainingAutomatic = false;
-      if (drainRequested && !externalOperationActive && !disposed) {
+      if (drainRequested && userAdmissionReservation === undefined && !externalOperationActive && !disposed) {
         drainRequested = false;
         void drainAutomatic().catch((error: unknown) =>
           emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
@@ -1347,6 +1374,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         ? ({ kind: 'prompt', prompt: text, ...(images === undefined ? {} : { images }) } as const)
         : ({ kind: 'prompt', prompt: text } as const);
     const admission = await serializeAdmission(async () => {
+      guardUserAdmission();
       const lifecycle = await readRecord();
       if (lifecycle.paused) {
         // A person starting a new turn may release an empty pause left by an aborted turn.
@@ -1668,53 +1696,37 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     });
   const promoteQueued = async (
     id: string,
-    operationId: string,
+    operationId?: string,
   ): Promise<'promoted' | 'in_flight' | 'target_changed' | 'not_found'> => {
-    const execution = await lane.inspectExecution(context);
-    const result = await changeRecord((record) => {
-      const item = record.queue.find((entry) => entry.id === id);
-      if (!item || item.disposition === 'removed' || item.disposition === 'consumed')
-        return { result: 'not_found' as const };
-      if (item.disposition !== 'pending') return { result: 'in_flight' as const };
-      if (record.paused || execution.current?.id !== operationId || execution.current.status === 'aborting')
-        return { result: 'target_changed' as const };
-      return {
+    const submission = await submitUserPrompt('', undefined, { id, operationId });
+    void submission.settled.catch((error: unknown) =>
+      emitFrame({ type: FRAME_ERROR, code: 'user_prompt', error: errorMessage(error) }),
+    );
+    return submission.queueOutcome ?? 'promoted';
+  };
+  const resumeQueue = (): Promise<void> =>
+    serializeAdmission(async () => {
+      guardUserAdmission();
+      const execution = await lane.inspectExecution(context);
+      if (execution.current !== null) throw new Error('Wait for the active turn to settle before resuming the queue');
+      await changeRecord((record) => ({
         record: {
           ...record,
-          queue: record.queue.map((entry) => (entry.id === id ? { ...entry, delivery: 'steer', operationId } : entry)),
+          paused: false,
+          abortOperationId: undefined,
+          queue: record.queue.map((entry) =>
+            entry.disposition === 'pending' && entry.delivery === 'steer'
+              ? { ...entry, delivery: 'followUp', operationId: undefined, scheduling: 'automatic' }
+              : entry,
+          ),
         },
-        result: 'promoted' as const,
-      };
-    });
-    if (result === 'promoted') {
+        result: undefined,
+      }));
       await publishLifecycle();
-      void deliverPromoted(id, operationId).catch((error: unknown) =>
-        emitFrame({ type: FRAME_ERROR, code: 'steer_handoff', error: errorMessage(error) }),
+      void drainAutomatic().catch((error: unknown) =>
+        emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
       );
-    }
-    return result;
-  };
-  const resumeQueue = async (): Promise<void> => {
-    const execution = await lane.inspectExecution(context);
-    if (execution.current !== null) throw new Error('Wait for the active turn to settle before resuming the queue');
-    await changeRecord((record) => ({
-      record: {
-        ...record,
-        paused: false,
-        abortOperationId: undefined,
-        queue: record.queue.map((entry) =>
-          entry.disposition === 'pending' && entry.delivery === 'steer'
-            ? { ...entry, delivery: 'followUp', operationId: undefined, scheduling: 'automatic' }
-            : entry,
-        ),
-      },
-      result: undefined,
-    }));
-    await publishLifecycle();
-    void drainAutomatic().catch((error: unknown) =>
-      emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
-    );
-  };
+    });
   const steer = (message: string | AgentMessage, images?: ImageContent[], targetOperationId?: string): Promise<void> =>
     runAgentOperation(async () => {
       const execution = await lane.inspectExecution(context);
@@ -1895,6 +1907,177 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     await abortCurrent();
     await lane.waitForIdle(context);
   };
+  const submitUserPrompt = async (
+    text: string | Extract<AgentMessage, { role: 'user' }>,
+    images?: ImageContent[],
+    selection?: { id: string; operationId?: string },
+  ): Promise<{
+    settled: Promise<void>;
+    handledCommand?: boolean;
+    queueOutcome?: 'in_flight' | 'target_changed' | 'not_found';
+  }> => {
+    if (
+      !selection &&
+      (typeof text === 'string' ? !text && !images?.length : text.role !== 'user' || !text.content.length)
+    )
+      throw new Error('User input must contain text or an image');
+    const release = acquireAgentOperation();
+    const reservation = Symbol('user-admission');
+    const operationId = randomUUID();
+    const attemptId = randomUUID();
+    let selected: RetainedInput | undefined;
+    let ownsReservation = false;
+    let acceptanceAttempted = false;
+    let ownsDrive = false;
+    try {
+      guardWritable();
+      if (!selection && typeof text === 'string' && (await tryDispatchCommand(text)))
+        return { settled: Promise.resolve(), handledCommand: true };
+      const target = await serializeAdmission(async () => {
+        guardUserAdmission();
+        const execution = await lane.inspectExecution(context);
+        if (selection) {
+          const item = (await readRecord()).queue.find((entry) => entry.id === selection.id);
+          if (!item || item.disposition === 'removed' || item.disposition === 'consumed')
+            return { outcome: 'not_found' as const };
+          if (item.disposition !== 'pending') return { outcome: 'in_flight' as const };
+          if (
+            (execution.current?.id ?? undefined) !== selection.operationId ||
+            execution.current?.status === 'aborting'
+          )
+            return { outcome: 'target_changed' as const };
+          if (item.message && item.message.role !== 'user')
+            throw new Error('Only user input can interrupt and respond');
+        }
+        userAdmissionReservation = reservation;
+        ownsReservation = true;
+        const claimed = await changeRecord<RetainedInput | 'not_found' | 'in_flight' | undefined>((record) => {
+          const item = selection ? record.queue.find((entry) => entry.id === selection.id) : undefined;
+          if (selection && (!item || item.disposition === 'removed' || item.disposition === 'consumed'))
+            return { result: 'not_found' as const };
+          if (selection && item?.disposition !== 'pending') return { result: 'in_flight' as const };
+          return {
+            record: {
+              ...record,
+              userOperationId: operationId,
+              paused: selection ? true : record.paused,
+              queue: record.queue.map((entry) =>
+                entry.id === item?.id
+                  ? { ...entry, delivery: 'followUp', disposition: 'handoff', operationId, attemptId }
+                  : entry,
+              ),
+            },
+            result: item,
+          };
+        });
+        if (typeof claimed === 'string') return { outcome: claimed };
+        selected = claimed;
+        return {
+          currentId: execution.current?.id,
+          settling: activeDrives.get(execution.current?.id ?? settlingOperationId ?? ''),
+        };
+      });
+      if ('outcome' in target) return { settled: Promise.resolve(), queueOutcome: target.outcome };
+      if (target.currentId !== undefined) await abortCurrent(target.currentId);
+      await lane.waitForIdle(context);
+      await target.settling?.catch(() => undefined);
+      await settledEvents;
+      const prompt: string | AgentMessage = selected
+        ? (selected.message ?? {
+            role: 'user',
+            content: [
+              ...(selected.text ? [{ type: 'text' as const, text: selected.text }] : []),
+              ...(selected.images ?? []),
+            ],
+            timestamp: Date.now(),
+          })
+        : text;
+      await serializeAdmission(async () => {
+        guardWritable();
+        if (userAdmissionReservation !== reservation) throw new Error('User admission ownership changed');
+        acceptanceAttempted = true;
+        try {
+          const admitted = await writable(() =>
+            lane.accept(
+              typeof prompt === 'string'
+                ? { kind: 'prompt', operationId, prompt, ...(images === undefined ? {} : { images }) }
+                : { kind: 'prompt', operationId, prompt },
+              context,
+            ),
+          );
+          if (!admitted.ok) {
+            acceptanceAttempted = false;
+            resultError(admitted);
+          }
+        } catch (error) {
+          // Native acceptance can commit before its acknowledgement is lost. Never repeat it.
+          const execution = await lane.inspectExecution(context);
+          if (execution.current?.id !== operationId && (await lane.getResult(operationId, context)) === undefined)
+            throw error;
+        }
+        if (selected) {
+          try {
+            await changeRecord((record) => ({
+              record: {
+                ...record,
+                queue: record.queue.map((entry) =>
+                  entry.id === selected!.id && entry.attemptId === attemptId && entry.disposition === 'handoff'
+                    ? { ...entry, disposition: 'consumed' }
+                    : entry,
+                ),
+              },
+              result: undefined,
+            }));
+          } catch (error) {
+            // Admission is established. A receipt failure must not strand the accepted run or retry it.
+            await changeRecord((record) => ({
+              record: {
+                ...record,
+                queue: record.queue.map((entry) =>
+                  entry.id === selected!.id && entry.attemptId === attemptId && entry.disposition === 'handoff'
+                    ? { ...entry, disposition: 'uncertain' }
+                    : entry,
+                ),
+              },
+              result: undefined,
+            })).catch(() => undefined);
+            emitFrame({ type: FRAME_ERROR, code: 'user_prompt_receipt', error: errorMessage(error) });
+          }
+        }
+      });
+      if (userAdmissionReservation === reservation) userAdmissionReservation = undefined;
+      const settled = drive(operationId);
+      ownsDrive = true;
+      void settled.then(release, release);
+      await publishLifecycle();
+      return { settled };
+    } catch (error) {
+      if (selected)
+        await changeRecord((record) => ({
+          record: {
+            ...record,
+            queue: record.queue.map((entry) =>
+              entry.id === selected!.id && entry.attemptId === attemptId && entry.disposition === 'handoff'
+                ? acceptanceAttempted
+                  ? { ...entry, disposition: 'uncertain' }
+                  : selected!
+                : entry,
+            ),
+          },
+          result: undefined,
+        })).catch(() => undefined);
+      throw error;
+    } finally {
+      if (ownsReservation && userAdmissionReservation === reservation) userAdmissionReservation = undefined;
+      if (!ownsDrive) release();
+      if (ownsReservation && drainRequested && !disposed) {
+        drainRequested = false;
+        void drainAutomatic().catch((error: unknown) =>
+          emitFrame({ type: FRAME_ERROR, code: 'queue_drain', error: errorMessage(error) }),
+        );
+      }
+    }
+  };
   const compact = (customInstructions?: string): Promise<void> =>
     runAgentOperation(async () => {
       const result = await writable(() =>
@@ -1941,7 +2124,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     }
     const current = await readRecord();
     for (const item of current.queue.filter(
-      (entry) => entry.disposition === 'handoff' && entry.operationId !== undefined,
+      (entry) =>
+        (entry.disposition === 'handoff' || entry.disposition === 'uncertain') && entry.operationId !== undefined,
     )) {
       const execution = await lane.inspectExecution(context);
       const result = await lane.getResult(item.operationId!, context);
@@ -1972,8 +2156,11 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       await recover();
       const submission = await serializeAdmission(async () => {
         guardWritable();
-        if ((await readRecord()).paused) return { resumed: false, settled: Promise.resolve() };
+        guardUserAdmission();
+        const record = await readRecord();
         const execution = await lane.inspectExecution(context);
+        if (record.paused && record.userOperationId !== execution.current?.id)
+          return { resumed: false, settled: Promise.resolve() };
         if (execution.current === null) return { resumed: false, settled: Promise.resolve() };
         // Native resume inspects the persisted operation and then drives it to settlement.
         // Keep that continuation policy, but expose admission separately to startup.
@@ -2191,6 +2378,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     setLabel,
     recordUsage,
     submitPrompt,
+    submitUserPrompt,
     prompt,
     admitMessage,
     steer,

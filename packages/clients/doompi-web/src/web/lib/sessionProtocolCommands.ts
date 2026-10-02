@@ -15,6 +15,8 @@ let requestSequence = 0;
 const PARALLEL_COMMANDS = new Set([
   'compact',
   'abort',
+  'steer',
+  'promote_queued',
   'resume_queue',
   'extension_ui_response',
   'get_commands',
@@ -74,7 +76,10 @@ export function bindSessionProtocol(
       case 'remove_queued':
         return service.removeQueued({ id: text(frame.id) }, context);
       case 'promote_queued':
-        return service.promoteQueued({ id: text(frame.id), operationId: text(frame.operationId) }, context);
+        return service.promoteQueued(
+          { id: text(frame.id), ...(frame.operationId === undefined ? {} : { operationId: text(frame.operationId) }) },
+          context,
+        );
       case 'resume_queue':
         return service.resumeQueue(context);
       case 'abort':
@@ -137,7 +142,7 @@ export function bindSessionProtocol(
         acknowledgements.delete(frame.requestId);
       }
     };
-    // Long-running turns must never block the abort or dialog response that can release them.
+    // Long-running work must not block interruption, abort, or a dialog response that can release it.
     if (frame.type === 'prompt') void execute(BACKGROUND_CONTEXT);
     else if (PARALLEL_COMMANDS.has(String(frame.type))) void execute(lifetime.context);
     else settled = settled.then(() => execute(lifetime.context));

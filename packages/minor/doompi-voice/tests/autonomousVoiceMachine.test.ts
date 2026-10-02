@@ -595,7 +595,7 @@ describe('autonomous voice XState lifecycle', () => {
       ...sendTurn,
       revision: 3,
       text: 'first segment second segment',
-      intent: 'queuedFollowUp',
+      intent: 'immediate',
     });
 
     h.actor.send({ type: 'DELIVERY_FAILED', ...sendTurn, revision: 3, code: 'busy race' });

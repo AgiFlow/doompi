@@ -286,7 +286,7 @@ export const SessionMethodSchemas = {
     ]),
   },
   promoteQueued: {
-    input: Type.Tuple([Type.Object({ id: Text, operationId: Text })]),
+    input: Type.Tuple([Type.Object({ id: Text, operationId: Optional(Text) })]),
     output: Type.Union([
       Type.Literal('promoted'),
       Type.Literal('in_flight'),

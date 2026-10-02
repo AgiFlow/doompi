@@ -74,6 +74,111 @@ describe('native Voice session', () => {
     expect(host.context.client.setStatus).toHaveBeenLastCalledWith('doom-voice', undefined);
   });
 
+  it.each([true, false])(
+    'admits authorized voice immediately with cached idle=%s and waits for acknowledgement',
+    async (isIdle) => {
+      const home = await mkdtemp(join(tmpdir(), 'voice-native-admit-'));
+      let acknowledge: () => void = () => undefined;
+      const acknowledgement = new Promise<void>((resolve) => {
+        acknowledge = resolve;
+      });
+      const activity = vi.fn(async () => ({ isIdle }));
+      const admitPrompt = vi.fn(() => acknowledgement);
+      const selection = {
+        majorMode: 'copilot',
+        activeLayers: [],
+        domains: [],
+        state: { 'minor-mode': [] as string[] },
+      };
+      const host = {
+        context: {
+          cwd: home,
+          repoRoot: home,
+          sessionId: 'native-admit',
+          environment: {},
+          selection,
+          client: { notify: vi.fn(), setStatus: vi.fn() },
+          session: { activity, admitPrompt },
+        },
+        assertActive: vi.fn(),
+        changeSelection: vi.fn(async ({ values }: { values: string[] }) => {
+          selection.state['minor-mode'] = values;
+        }),
+        registerTool: vi.fn(() => ({ dispose: vi.fn() })),
+      } as unknown as DoomHeadlessHostService;
+      const broker = new VoiceMediaBroker({
+        directEvents: { publish: vi.fn(), subscribe: () => () => undefined, close() {} },
+        sessionId: 'native-admit',
+        clientConnectWaitMs: 0,
+      });
+      const facet = createVoiceServer(host, broker, home, 'hub');
+      const api = facet.api![0]!.start({} as never);
+      const agent = async (path: string, body: unknown): Promise<Response> =>
+        api.fetch(
+          new Request(`http://voice/live/agent/${path}`, {
+            method: 'POST',
+            headers: { authorization: 'Bearer hub' },
+            body: JSON.stringify(body),
+          }),
+        );
+      try {
+        const route = { activationId: 'activation', routeGeneration: 1, transactionId: 'transaction' };
+        const prepared = (await (await agent('prepare', route)).json()) as { sessionIncarnation: string };
+        const binding = { ...route, sessionIncarnation: prepared.sessionIncarnation };
+        expect(
+          (
+            await agent('select', {
+              ...binding,
+              nativeTransferAllowed: false,
+              catalog: { revision: 'catalog', targets: [] },
+            })
+          ).status,
+        ).toBe(200);
+        expect(
+          (
+            await agent('admit', {
+              ...binding,
+              sessionIncarnation: 'stale',
+              requestId: 'stale',
+              transcript: 'Ignore stale speech.',
+              intent: 'immediate',
+            })
+          ).status,
+        ).toBe(409);
+        expect(admitPrompt).not.toHaveBeenCalled();
+        let responded = false;
+        const response = agent('admit', {
+          ...binding,
+          requestId: 'request',
+          transcript: 'Respond to this speech.',
+          intent: 'immediate',
+        }).then((value) => {
+          responded = true;
+          return value;
+        });
+        await vi.waitFor(() => expect(admitPrompt).toHaveBeenCalledWith('Respond to this speech.', 'interrupt'));
+        expect(activity).not.toHaveBeenCalled();
+        expect(responded).toBe(false);
+        acknowledge();
+        expect(await (await response).json()).toMatchObject({ admitted: true, requestId: 'request' });
+        expect(admitPrompt).toHaveBeenCalledOnce();
+        admitPrompt.mockRejectedValueOnce(new Error('Admission failed.'));
+        const failed = await agent('admit', {
+          ...binding,
+          requestId: 'failed',
+          transcript: 'Keep this speech.',
+          intent: 'immediate',
+        });
+        expect(failed.status).toBe(503);
+        expect(await failed.json()).toMatchObject({ error: 'Native Pi admission is uncertain.' });
+      } finally {
+        acknowledge();
+        await facet.onDispose?.({} as never);
+        await rm(home, { recursive: true, force: true });
+      }
+    },
+  );
+
   // The tools are registered for the whole session and their condition tracks
   // the minor-mode selection, not the controller, so a call can arrive while
   // voice is off. Hiding a tool is not the same as refusing it.

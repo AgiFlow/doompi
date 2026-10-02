@@ -920,7 +920,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.deliver).toHaveBeenCalledOnce();
     expect(h.deliver).toHaveBeenCalledWith(
       'Refactor voice. Keep manual dictation unchanged.',
-      'queuedFollowUp',
+      'immediate',
       deliveryEffect('Refactor voice. Keep manual dictation unchanged.'),
     );
   });
@@ -947,11 +947,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     const retried = await finishTurn(h, 'doom send', 3);
     expect(retried.outcome).toBe('committed');
     expect(h.deliver).toHaveBeenCalledTimes(2);
-    expect(h.deliver).toHaveBeenLastCalledWith(
-      'Retain this draft.',
-      'queuedFollowUp',
-      deliveryEffect('Retain this draft.'),
-    );
+    expect(h.deliver).toHaveBeenLastCalledWith('Retain this draft.', 'immediate', deliveryEffect('Retain this draft.'));
   });
 
   it('keeps an empty composition active until content or explicit cancel', async () => {
@@ -995,11 +991,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
       { transcript: 'update doom pie voice', context: undefined },
       expect.any(AbortSignal),
     );
-    expect(h.deliver).toHaveBeenCalledWith(
-      'update DoomPi voice',
-      'queuedFollowUp',
-      deliveryEffect('update DoomPi voice'),
-    );
+    expect(h.deliver).toHaveBeenCalledWith('update DoomPi voice', 'immediate', deliveryEffect('update DoomPi voice'));
   });
 
   it('rejects a segment that would exceed the bounded composition draft', async () => {

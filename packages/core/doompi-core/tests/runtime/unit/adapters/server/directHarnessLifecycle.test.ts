@@ -12,6 +12,7 @@ import {
   type Model,
   type Models,
 } from '@earendil-works/pi-ai';
+import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createDirectHarnessRuntime } from '../../../../../src/server/directHarnessRuntime';
@@ -50,13 +51,24 @@ function message(text: string): AssistantMessage {
   };
 }
 
-function fixtures() {
+function fixtures(abortAware = false) {
   const repository = new MemorySessionRepo();
   const streams: ReturnType<typeof createAssistantMessageEventStream>[] = [];
-  const streamSimple = vi.fn<Models['streamSimple']>(() => {
+  const streamSimple = vi.fn<Models['streamSimple']>((_model, _context, options) => {
     const stream = createAssistantMessageEventStream();
     stream.push({ type: 'start', partial: message('pending') });
     streams.push(stream);
+    if (abortAware)
+      options?.signal?.addEventListener(
+        'abort',
+        () =>
+          stream.push({
+            type: 'error',
+            reason: 'aborted',
+            error: { ...message('cancelled'), stopReason: 'aborted' },
+          }),
+        { once: true },
+      );
     return stream;
   });
   const models = {
@@ -266,27 +278,313 @@ describe('direct harness durable lifecycle', () => {
     }
   });
 
-  it('removes one pending item without replaying its neighbors and promotes by stable identity', async () => {
-    const { repository, models, streams } = fixtures();
+  it('removes one pending item and interrupts with only the selected stable identity', async () => {
+    const { repository, models, streams } = fixtures(true);
     const session = await repository.create({ id: randomUUID() }, BACKGROUND_CONTEXT);
     const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
     try {
       const active = await runtime.submitPrompt('long');
       await waitFor(() => streams.length === 1);
-      const first = await runtime.enqueueAutomatic('first');
+      const first = await runtime.enqueueAutomatic('same');
       const middle = await runtime.enqueueAutomatic('middle');
-      const last = await runtime.enqueueAutomatic('last');
+      const last = await runtime.enqueueAutomatic('same');
       expect(await runtime.removeQueued(middle.id)).toBe('removed');
-      const id = (await runtime.readLifecycle()).operation?.id;
-      expect(id).toBeTruthy();
-      expect(await runtime.promoteQueued(first.id, id!)).toBe('promoted');
-      await waitFor(async () =>
-        (await runtime.readLifecycle()).queue.some((item) => item.id === first.id && item.delivery === 'steer'),
-      );
-      expect((await runtime.readLifecycle()).queue.map((item) => item.id)).toEqual([first.id, last.id]);
-      await runtime.abort(id);
-      streams[0]!.push({ type: 'done', reason: 'stop', message: message('late') });
+      const id = (await runtime.readLifecycle()).operation!.id;
+      expect(await runtime.promoteQueued(first.id, id)).toBe('promoted');
       await active.settled.catch(() => undefined);
+      await waitFor(() => streams.length === 2);
+      expect((await runtime.readLifecycle()).operation?.id).not.toBe(id);
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [{ id: last.id, text: 'same' }] });
+      expect(await runtime.removeQueued(first.id)).toBe('already_consumed');
+      expect(await runtime.removeQueued(middle.id)).toBe('removed');
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
+      const entries = (await runtime.readEntries()).entries;
+      expect(
+        entries.filter(
+          (entry) =>
+            entry.type === 'message' &&
+            entry.message.role === 'user' &&
+            JSON.stringify(entry.message.content).includes('same'),
+        ),
+      ).toHaveLength(1);
+    } finally {
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+  it('admits immediate user input while preserving paused automatic and held inputs with images', async () => {
+    const { repository, models, streams } = fixtures(true);
+    const session = await repository.create({ id: randomUUID() }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    const image = { type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' };
+    try {
+      const first = await runtime.submitPrompt('long');
+      await waitFor(() => streams.length === 1);
+      await runtime.followUp('held', [image]);
+      const automatic = await runtime.enqueueAutomatic('automatic', [image]);
+      const before = (await runtime.readLifecycle()).queue;
+      const replacement = await runtime.submitUserPrompt('voice now', [image]);
+      await first.settled.catch(() => undefined);
+      await waitFor(() => streams.length === 2);
+      expect(await runtime.readLifecycle()).toMatchObject({
+        paused: true,
+        queue: before.map((entry) => ({ ...entry, disposition: 'pending' })),
+      });
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+      await replacement.settled;
+      const entries = (await runtime.readEntries()).entries;
+      expect(
+        entries.filter(
+          (entry) =>
+            entry.type === 'message' &&
+            entry.message.role === 'user' &&
+            JSON.stringify(entry.message.content).includes('voice now'),
+        ),
+      ).toHaveLength(1);
+      expect(streams).toHaveLength(2);
+      expect((await runtime.readLifecycle()).queue.find((entry) => entry.id === automatic.id)?.images).toEqual([image]);
+      await runtime.resumeQueue();
+      await waitFor(() => streams.length === 3);
+      streams[2]!.push({ type: 'done', reason: 'stop', message: message('resumed') });
+      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
+      expect((await runtime.readLifecycle()).queue).toMatchObject([
+        { text: 'held', scheduling: 'held', images: [image] },
+      ]);
+    } finally {
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+  it('sends one selected paused input from idle and rejects stale active targets', async () => {
+    const { repository, models, streams } = fixtures(true);
+    const session = await repository.create({ id: randomUUID() }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    try {
+      const first = await runtime.submitPrompt('long');
+      await waitFor(() => streams.length === 1);
+      const one = await runtime.enqueueAutomatic('one');
+      const two = await runtime.enqueueAutomatic('two');
+      await runtime.interrupt();
+      await first.settled.catch(() => undefined);
+      expect(await runtime.promoteQueued(one.id, 'stale')).toBe('target_changed');
+      expect(await runtime.promoteQueued(one.id)).toBe('promoted');
+      await waitFor(() => streams.length === 2);
+      expect(await runtime.promoteQueued(two.id)).toBe('target_changed');
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [{ id: two.id }] });
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
+      expect(streams).toHaveLength(2);
+    } finally {
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+  it('blocks competing admissions during cancellation without holding the mutation line', async () => {
+    const { repository, models, streams } = fixtures();
+    const session = await repository.create({ id: randomUUID() }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    try {
+      const first = await runtime.submitPrompt('long');
+      await waitFor(() => streams.length === 1);
+      const replacement = runtime.submitUserPrompt('voice now');
+      await waitFor(async () => (await runtime.readLifecycle()).operation?.status === 'aborting');
+      await expect(runtime.submitPrompt('competitor')).rejects.toThrow('interruption');
+      await expect(runtime.submitUserPrompt('second interruption')).rejects.toThrow('interruption');
+      await expect(runtime.resumeQueue()).rejects.toThrow('interruption');
+      await expect(runtime.compact()).rejects.toThrow('interruption');
+      await expect(runtime.navigateTree(null)).rejects.toThrow('interruption');
+      const retained = await runtime.enqueueAutomatic('retained');
+      expect(await runtime.removeQueued(retained.id)).toBe('removed');
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('late') });
+      await first.settled.catch(() => undefined);
+      const admitted = await replacement;
+      await waitFor(() => streams.length === 2);
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+      await admitted.settled;
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
+    } finally {
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+  it('reconciles a selected native acceptance with a lost acknowledgement without retrying', async () => {
+    const { repository, models, streams } = fixtures(true);
+    const session = await repository.create({ id: randomUUID() }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    try {
+      const first = await runtime.submitPrompt('long');
+      await waitFor(() => streams.length === 1);
+      const selected = await runtime.enqueueAutomatic('selected');
+      const id = (await runtime.readLifecycle()).operation!.id;
+      const accept = runtime.lane.accept.bind(runtime.lane);
+      const spy = vi.spyOn(runtime.lane, 'accept').mockImplementationOnce(async (...args) => {
+        await accept(...args);
+        throw new Error('acknowledgement lost');
+      });
+      expect(await runtime.promoteQueued(selected.id, id)).toBe('promoted');
+      await first.settled.catch(() => undefined);
+      await waitFor(() => streams.length === 2);
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(await runtime.removeQueued(selected.id)).toBe('already_consumed');
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
+      expect(streams).toHaveLength(2);
+    } finally {
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+  it('waits for signal-aware tool cleanup before starting the replacement provider', async () => {
+    const { repository, models, streams } = fixtures();
+    const session = await repository.create({ id: randomUUID() }, BACKGROUND_CONTEXT);
+    let started!: () => void;
+    let cancelled!: () => void;
+    let releaseCleanup!: () => void;
+    const toolStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const toolCancelled = new Promise<void>((resolve) => {
+      cancelled = resolve;
+    });
+    const cleanup = new Promise<void>((resolve) => {
+      releaseCleanup = resolve;
+    });
+    let cleanedUp = false;
+    const runtime = await createDirectHarnessRuntime({
+      cwd: '/tmp',
+      session,
+      models,
+      model,
+      tools: [
+        {
+          name: 'gated',
+          label: 'Gated',
+          description: 'Waits for cancellation',
+          parameters: Type.Object({}),
+          async execute(_id, _args, _update, _toolContext, _invocation, context) {
+            started();
+            await new Promise<void>((resolve) =>
+              context.abortSignal!.addEventListener(
+                'abort',
+                () => {
+                  cancelled();
+                  resolve();
+                },
+                { once: true },
+              ),
+            );
+            await cleanup;
+            cleanedUp = true;
+            return { content: [{ type: 'text', text: 'cleaned up' }], details: undefined };
+          },
+        },
+      ],
+    });
+    try {
+      const first = await runtime.submitPrompt('use tool');
+      await waitFor(() => streams.length === 1);
+      streams[0]!.push({
+        type: 'done',
+        reason: 'toolUse',
+        message: {
+          ...message('tool'),
+          stopReason: 'toolUse',
+          content: [{ type: 'toolCall', id: 'gated-1', name: 'gated', arguments: {} }],
+        },
+      });
+      await toolStarted;
+      const replacement = runtime.submitUserPrompt('answer instead');
+      await toolCancelled;
+      expect(cleanedUp).toBe(false);
+      expect(streams).toHaveLength(1);
+      releaseCleanup();
+      const admitted = await replacement;
+      await first.settled.catch(() => undefined);
+      await waitFor(() => streams.length === 2);
+      expect(cleanedUp).toBe(true);
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+      await admitted.settled;
+    } finally {
+      releaseCleanup();
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+  it('resumes the exact accepted user replacement without unpausing retained inputs', async () => {
+    const { repository, models, streams } = fixtures();
+    const session = await repository.create({ id: randomUUID() }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    try {
+      await session.mutate(async (mutator) => {
+        await mutator.commit(
+          [
+            setValue(value('doompi.server.lifecycle', 'main'), {
+              version: 1,
+              revision: 1,
+              paused: true,
+              userOperationId: 'replacement',
+              queue: [
+                {
+                  id: 'retained',
+                  text: 'later',
+                  delivery: 'followUp',
+                  scheduling: 'automatic',
+                  disposition: 'pending',
+                },
+              ],
+            }),
+          ],
+          BACKGROUND_CONTEXT,
+        );
+      }, BACKGROUND_CONTEXT);
+      const admitted = await runtime.lane.accept(
+        { kind: 'prompt', operationId: 'replacement', prompt: 'voice' },
+        BACKGROUND_CONTEXT,
+      );
+      expect(admitted.ok).toBe(true);
+      const resumed = await runtime.admitResume();
+      expect(resumed.resumed).toBe(true);
+      await waitFor(() => streams.length === 1);
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [{ id: 'retained' }] });
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+      await resumed.settled;
+      expect(streams).toHaveLength(1);
+    } finally {
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+  it('sends only the selected idle automatic input even when its neighbors were unpaused', async () => {
+    const { repository, models, streams } = fixtures();
+    const session = await repository.create({ id: randomUUID() }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    try {
+      await session.mutate(async (mutator) => {
+        await mutator.commit(
+          [
+            setValue(value('doompi.server.lifecycle', 'main'), {
+              version: 1,
+              revision: 1,
+              paused: false,
+              queue: ['selected', 'neighbor'].map((id) => ({
+                id,
+                text: id,
+                delivery: 'followUp',
+                scheduling: 'automatic',
+                disposition: 'pending',
+              })),
+            }),
+          ],
+          BACKGROUND_CONTEXT,
+        );
+      }, BACKGROUND_CONTEXT);
+      expect(await runtime.promoteQueued('selected')).toBe('promoted');
+      await waitFor(() => streams.length === 1);
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [{ id: 'neighbor' }] });
+      expect(streams).toHaveLength(1);
     } finally {
       await runtime.dispose();
       await repository.close(BACKGROUND_CONTEXT);

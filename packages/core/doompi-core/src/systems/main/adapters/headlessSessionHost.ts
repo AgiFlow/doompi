@@ -989,7 +989,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         // followUp stays enqueue-only: voiceServer/index.ts:120 asks for 'followUp' while the agent
         // is idle whenever a capture is queued, and waking a turn there would be unrequested.
         if (delivery === 'followUp') return runtime.followUp(text);
-        const submission = await runtime.submitPrompt(text, undefined, delivery === 'steer' ? 'steer' : undefined);
+        const submission =
+          delivery === 'interrupt'
+            ? await runtime.submitUserPrompt(text)
+            : await runtime.submitPrompt(text, undefined, delivery === 'steer' ? 'steer' : undefined);
         void submission.settled.catch((error: unknown) =>
           client!.client.notify({ body: error instanceof Error ? error.message : String(error), level: 'error' }),
         );

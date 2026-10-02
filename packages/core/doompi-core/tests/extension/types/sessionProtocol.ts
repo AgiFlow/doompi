@@ -40,6 +40,8 @@ void service.followUp(followUp, context);
 void service.rewind(rewind, context);
 void service.extensionUiResponse(response, context);
 void service.clearQueue(context);
+void service.promoteQueued({ id: 'queued' }, context);
+void service.promoteQueued({ id: 'queued', operationId: 'active' }, context);
 void service.getState(context);
 void service.getSessionStats(context);
 void service.getCommands(context);

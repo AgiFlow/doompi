@@ -702,10 +702,27 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       };
       void deliverMessage(custom, sendOptions).catch((error: unknown) => report('send_message', error));
     },
-    sendUserMessage: (content) => {
-      void runtime
-        .prompt(typeof content === 'string' ? content : JSON.stringify(content))
-        .catch((error: unknown) => report('send_user_message', error));
+    sendUserMessage: (content, sendOptions) => {
+      const deliver = async (): Promise<void> => {
+        const text =
+          typeof content === 'string'
+            ? content
+            : content
+                .filter((part) => part.type === 'text')
+                .map((part) => part.text)
+                .join('\n');
+        if (sendOptions?.expandPromptTemplates && (await runtime.dispatchCommand(text))) return;
+        const message: Extract<AgentMessage, { role: 'user' }> = { role: 'user', content, timestamp: Date.now() };
+        if (sendOptions?.deliverAs === 'followUp') return runtime.followUp(message);
+        const submission =
+          sendOptions?.deliverAs === 'steer'
+            ? await runtime.submitUserPrompt(message)
+            : typeof content === 'string'
+              ? await runtime.submitPrompt(content)
+              : await runtime.admitMessage(message);
+        void submission.settled.catch((error: unknown) => report('send_user_message', error));
+      };
+      void deliver().catch((error: unknown) => report('send_user_message', error));
     },
     appendEntry: (customType, data) => {
       void runtime.appendCustomEntry(customType, data).catch((error: unknown) => report('append_entry', error));

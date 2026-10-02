@@ -569,28 +569,62 @@ export async function queueFollowUpWithAck(
   return response.success;
 }
 
-export function clearQueuedMessages(sessionId: string | null = activeSessionId()): void {
-  if (sessionId === null) return;
-  sendFrame(sessionId, clearQueueCommand());
+export async function clearQueuedMessages(sessionId: string | null = activeSessionId()): Promise<void> {
+  if (sessionId === null) throw new Error('The session protocol is not connected.');
+  const response = await sendFrameWithAck(sessionId, clearQueueCommand());
+  if (!response.success) throw new Error(response.error ?? 'Could not clear queued messages.');
 }
 
 /** Requests server-owned removal; the authoritative snapshot removes the row on success. */
-export function deleteQueuedMessage(
+export async function deleteQueuedMessage(
   id: string,
   _knownQueueCount: number,
   sessionId: string | null = activeSessionId(),
-): void {
-  if (sessionId !== null) sendFrame(sessionId, removeQueuedCommand(id));
+): Promise<void> {
+  if (sessionId === null) throw new Error('The session protocol is not connected.');
+  const response = await sendFrameWithAck(sessionId, removeQueuedCommand(id));
+  if (!response.success) throw new Error(response.error ?? 'Could not delete the queued message.');
+  switch (response.data) {
+    case 'removed':
+      return;
+    case 'in_flight':
+      throw new Error('This message is already being delivered and cannot be deleted.');
+    case 'already_consumed':
+      throw new Error('This message has already been sent.');
+    case 'not_found':
+      throw new Error('This message is no longer queued. Refresh the session.');
+    default:
+      throw new Error('Deletion uncertain. Check the queue before trying again.');
+  }
 }
 
-export function promoteQueuedMessage(id: string, sessionId: string | null = activeSessionId()): void {
-  if (sessionId === null) return;
-  const operationId = sessionStoreFor(sessionId).state.lifecycle?.operation?.id;
-  if (operationId !== undefined) sendFrame(sessionId, promoteQueuedCommand(id, operationId));
+/** The caller captures the active target at click time; absent means expected idle. */
+export async function promoteQueuedMessage(
+  id: string,
+  operationId?: string,
+  sessionId: string | null = activeSessionId(),
+): Promise<void> {
+  if (sessionId === null) throw new Error('The session protocol is not connected.');
+  const response = await sendFrameWithAck(sessionId, promoteQueuedCommand(id, operationId));
+  if (!response.success) throw new Error(response.error ?? 'Could not send the queued message.');
+  switch (response.data) {
+    case 'promoted':
+      return;
+    case 'target_changed':
+      throw new Error('The active run changed. Check the session before sending this message.');
+    case 'in_flight':
+      throw new Error('This message is already being delivered.');
+    case 'not_found':
+      throw new Error('This message is no longer queued. Refresh the session.');
+    default:
+      throw new Error('Delivery uncertain. Check the conversation before trying again.');
+  }
 }
 
-export function resumeQueuedMessages(sessionId: string | null = activeSessionId()): void {
-  if (sessionId !== null) sendFrame(sessionId, resumeQueueCommand());
+export async function resumeQueuedMessages(sessionId: string | null = activeSessionId()): Promise<void> {
+  if (sessionId === null) throw new Error('The session protocol is not connected.');
+  const response = await sendFrameWithAck(sessionId, resumeQueueCommand());
+  if (!response.success) throw new Error(response.error ?? 'Could not resume queued messages.');
 }
 
 /**

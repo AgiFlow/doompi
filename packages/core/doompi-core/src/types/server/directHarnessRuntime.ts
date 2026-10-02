@@ -169,7 +169,7 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   readLifecycle(): Promise<DirectHarnessLifecycle>;
   enqueueAutomatic(text: string, images?: ImageContent[]): Promise<{ id: string }>;
   removeQueued(id: string): Promise<'removed' | 'in_flight' | 'already_consumed' | 'not_found'>;
-  promoteQueued(id: string, operationId: string): Promise<'promoted' | 'in_flight' | 'target_changed' | 'not_found'>;
+  promoteQueued(id: string, operationId?: string): Promise<'promoted' | 'in_flight' | 'target_changed' | 'not_found'>;
   resumeQueue(): Promise<void>;
   /** Reconciles persisted cancellation intent before the host resumes an interrupted native drive. */
   recover(): Promise<void>;
@@ -216,6 +216,11 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
     text: string,
     images?: ImageContent[],
     streamingBehavior?: 'steer' | 'followUp',
+  ): Promise<{ settled: Promise<void>; handledCommand?: boolean }>;
+  /** Cancels an active run and directly admits one user message, preserving paused retained inputs. */
+  submitUserPrompt(
+    text: string | Extract<AgentMessage, { role: 'user' }>,
+    images?: ImageContent[],
   ): Promise<{ settled: Promise<void>; handledCommand?: boolean }>;
   prompt(text: string, images?: ImageContent[]): Promise<void>;
   /** Starts a run from an already-composed message, without awaiting the run. */

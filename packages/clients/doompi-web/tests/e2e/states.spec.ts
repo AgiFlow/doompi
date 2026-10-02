@@ -59,6 +59,184 @@ test('views queued follow-ups and can delete the queue', async ({ page, cockpit 
   await expect(page.getByTestId('composer-queued')).toBeHidden();
 });
 
+for (const state of ['idle', 'paused', 'active']) {
+  test(`sends one selected queued message while ${state} and preserves the other`, async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForAttach();
+    cockpit.session.emit({
+      type: 'lifecycle_update',
+      lifecycle: {
+        revision: 5,
+        operation: state === 'active' ? { id: 'clicked-run', kind: 'run', status: 'open' } : null,
+        paused: state === 'paused',
+        queue: [],
+      },
+    });
+    for (const text of ['send this one', 'keep the other']) {
+      await page.getByTestId('composer-input').fill(text);
+      await page.getByTestId('composer-queue').click();
+      await expect(page.getByTestId('composer-input')).toHaveValue('');
+    }
+    await page.getByTestId('composer-queued').click();
+    await expect(page.getByTestId('queue-steer-0')).toHaveText(
+      state === 'active' ? 'interrupt and respond' : 'send now',
+    );
+    await page.getByTestId('queue-steer-0').click();
+    const promoted = await cockpit.session.waitForCommand('promote_queued');
+    expect(promoted.operationId).toBe(state === 'active' ? 'clicked-run' : undefined);
+    expect(typeof promoted.id).toBe('string');
+    await expect(page.getByTestId('queue-sheet-item')).toHaveCount(1);
+    await expect(page.getByTestId('queue-sheet-item')).toContainText('keep the other');
+    await expect(page.getByTestId('entry-user')).toHaveCount(1);
+    await expect(page.getByTestId('entry-user')).toContainText('send this one');
+    await expect(page.getByTestId('queue-resume')).toBeVisible();
+    expect(cockpit.session.received.filter(({ type }) => type === 'promote_queued')).toHaveLength(1);
+    expect(cockpit.session.received.some(({ type }) => type === 'resume_queue' || type === 'remove_queued')).toBe(
+      false,
+    );
+  });
+}
+
+test('keeps a queued row and shows acknowledged deletion failure', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await page.getByTestId('composer-input').fill('keep me on failure');
+  await page.getByTestId('composer-queue').click();
+  await expect(page.getByTestId('composer-queued')).toBeVisible();
+  await page.getByTestId('composer-queued').click();
+  cockpit.session.deferCommand('remove_queued');
+  await page.getByTestId('queue-delete-0').click();
+  await cockpit.session.waitForCommand('remove_queued');
+  await expect(page.getByTestId('queue-delete-0')).toBeDisabled();
+  await expect(page.getByTestId('queue-sheet-item')).toHaveCount(1);
+  cockpit.session.emit({ type: 'response', command: 'remove_queued', success: true, data: 'in_flight' });
+  await expect(page.getByTestId('queue-error')).toContainText('already being delivered');
+  await expect(page.getByTestId('queue-sheet-item')).toHaveCount(1);
+  await expect(page.getByTestId('queue-delete-0')).toBeEnabled();
+});
+
+test('captures the clicked run and explains a raced replacement without resending', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  cockpit.session.emit({
+    type: 'lifecycle_update',
+    lifecycle: {
+      revision: 5,
+      operation: { id: 'clicked-run', kind: 'run', status: 'open' },
+      paused: false,
+      queue: [
+        {
+          id: 'selected',
+          text: 'not for another run',
+          delivery: 'followUp',
+          scheduling: 'automatic',
+          disposition: 'pending',
+        },
+      ],
+    },
+  });
+  await page.getByTestId('composer-queued').click();
+  cockpit.session.deferCommand('promote_queued');
+  await page.getByTestId('queue-steer-0').click();
+  const promoted = await cockpit.session.waitForCommand('promote_queued');
+  expect(promoted).toMatchObject({ id: 'selected', operationId: 'clicked-run' });
+  await expect(page.getByTestId('queue-steer-0')).toBeDisabled();
+  cockpit.session.emit({
+    type: 'lifecycle_update',
+    lifecycle: {
+      revision: 6,
+      operation: { id: 'new-run', kind: 'run', status: 'open' },
+      paused: false,
+      queue: [
+        {
+          id: 'selected',
+          text: 'not for another run',
+          delivery: 'followUp',
+          scheduling: 'automatic',
+          disposition: 'pending',
+        },
+      ],
+    },
+  });
+  cockpit.session.emit({ type: 'response', command: 'promote_queued', success: true, data: 'promoted' });
+  await expect(page.getByTestId('queue-error')).toContainText('active run changed');
+  await expect(page.getByTestId('queue-sheet-item')).toHaveCount(1);
+  await expect(page.getByTestId('entry-user')).toHaveCount(0);
+  expect(cockpit.session.received.filter(({ type }) => type === 'promote_queued')).toHaveLength(1);
+});
+
+test('keeps protected clear-all rows after acknowledgement and closes only after authoritative emptiness', async ({
+  page,
+  cockpit,
+}) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  cockpit.session.emit({
+    type: 'lifecycle_update',
+    lifecycle: {
+      revision: 5,
+      operation: null,
+      paused: true,
+      queue: [
+        { id: 'pending', text: 'clear this', delivery: 'followUp', scheduling: 'automatic', disposition: 'pending' },
+        {
+          id: 'protected',
+          text: 'uncertain delivery',
+          delivery: 'followUp',
+          scheduling: 'automatic',
+          disposition: 'uncertain',
+        },
+      ],
+    },
+  });
+  await page.getByTestId('composer-queued').click();
+  cockpit.session.deferCommand('clear_queue');
+  await page.getByTestId('queue-clear').click();
+  await cockpit.session.waitForCommand('clear_queue');
+  await expect(page.getByTestId('queue-clear')).toBeDisabled();
+  await expect(page.getByTestId('queue-sheet')).toBeVisible();
+  cockpit.session.emit({ type: 'response', command: 'clear_queue', success: false, error: 'Server rejected clear.' });
+  await expect(page.getByTestId('queue-error')).toContainText('Internal server error');
+  await expect(page.getByTestId('queue-sheet-item')).toHaveCount(2);
+  await page.getByTestId('queue-clear').click();
+  await expect(page.getByTestId('queue-sheet-item')).toHaveCount(1);
+  await expect(page.getByTestId('queue-clear-remaining')).toContainText('cannot be cleared');
+  await expect(page.getByTestId('queue-sheet')).toBeVisible();
+  cockpit.session.emit({
+    type: 'lifecycle_update',
+    lifecycle: { revision: 8, operation: null, paused: true, queue: [] },
+  });
+  await expect(page.getByTestId('queue-sheet')).toBeHidden();
+});
+
+test('does not close clear-all when an empty lifecycle arrives before its acknowledgement', async ({
+  page,
+  cockpit,
+}) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await page.getByTestId('composer-input').fill('clear after acknowledgement');
+  await page.getByTestId('composer-queue').click();
+  await expect(page.getByTestId('composer-queued')).toBeVisible();
+  await page.getByTestId('composer-queued').click();
+  cockpit.session.deferCommand('clear_queue');
+  await page.getByTestId('queue-clear').click();
+  await cockpit.session.waitForCommand('clear_queue');
+  cockpit.session.emit({
+    type: 'lifecycle_update',
+    lifecycle: { revision: 5, operation: null, paused: false, queue: [] },
+  });
+  await expect(page.getByTestId('queue-sheet-item')).toHaveCount(0);
+  await expect(page.getByTestId('queue-sheet')).toBeVisible();
+  cockpit.session.emit({
+    type: 'response',
+    command: 'clear_queue',
+    success: true,
+    data: { steering: [], followUp: [] },
+  });
+  await expect(page.getByTestId('queue-sheet')).toBeHidden();
+});
+
 test('keeps queued input visible through abort and resumes only when requested', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

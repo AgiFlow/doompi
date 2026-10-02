@@ -218,6 +218,7 @@ describe('direct AgentHarness runtime', () => {
 
       await expect(runtime.submitPrompt('/blocked')).rejects.toThrow('busy with an external tool invocation');
       await expect(runtime.steer('blocked')).rejects.toThrow('busy with an external tool invocation');
+      await expect(runtime.submitUserPrompt('blocked')).rejects.toThrow('busy with an external tool invocation');
       await expect(runtime.followUp('blocked')).rejects.toThrow('busy with an external tool invocation');
       await expect(runtime.nextRun('blocked')).rejects.toThrow('busy with an external tool invocation');
       expect(dispatchCommand).toHaveBeenCalledOnce();
@@ -1392,7 +1393,7 @@ describe('direct AgentHarness runtime', () => {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
-  it('promotes one queued item into native steering without executing it as a separate turn', async () => {
+  it('promotes one queued item by cancelling the active turn and starting a replacement', async () => {
     const repository = new MemorySessionRepo();
     const session = await repository.create({ id: 'promote-native-steer' }, BACKGROUND_CONTEXT);
     let releaseFirst!: () => void;
@@ -1404,7 +1405,7 @@ describe('direct AgentHarness runtime', () => {
       firstStarted = resolve;
     });
     let calls = 0;
-    const streamSimple = vi.fn<Models['streamSimple']>(() => {
+    const streamSimple = vi.fn<Models['streamSimple']>((_model, _context, options) => {
       const stream = createAssistantMessageEventStream();
       const message: AssistantMessage = {
         role: 'assistant',
@@ -1425,6 +1426,11 @@ describe('direct AgentHarness runtime', () => {
       };
       stream.push({ type: 'start', partial: message });
       if (++calls === 1) {
+        options?.signal?.addEventListener(
+          'abort',
+          () => stream.push({ type: 'error', reason: 'aborted', error: { ...message, stopReason: 'aborted' } }),
+          { once: true },
+        );
         firstStarted();
         void firstDone.then(() => stream.push({ type: 'done', reason: 'stop', message }));
       } else stream.push({ type: 'done', reason: 'stop', message });
@@ -1442,11 +1448,8 @@ describe('direct AgentHarness runtime', () => {
       const { id } = await runtime.enqueueAutomatic('change direction');
       const operationId = (await runtime.readLifecycle()).operation!.id;
       expect(await runtime.promoteQueued(id, operationId)).toBe('promoted');
-      await vi.waitFor(async () =>
-        expect((await runtime.readLifecycle()).queue.find((item) => item.id === id)?.disposition).toBe('handoff'),
-      );
-      releaseFirst();
-      await first.settled;
+      await first.settled.catch(() => undefined);
+      await vi.waitFor(() => expect(streamSimple).toHaveBeenCalledTimes(2));
       expect(streamSimple).toHaveBeenCalledTimes(2);
       expect(JSON.stringify(streamSimple.mock.calls[1]?.[1].messages)).toContain('change direction');
       expect((await runtime.readLifecycle()).queue.some((item) => item.id === id)).toBe(false);

@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands';
+import { requestSessionProtocolFrame, sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands';
 
-vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({ sendSessionProtocolFrame: vi.fn() }));
+vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({
+  requestSessionProtocolFrame: vi.fn(),
+  sendSessionProtocolFrame: vi.fn(),
+}));
 import type { SessionSummary } from '../../src/types/hub';
 import {
   abortCommand,
@@ -17,6 +20,7 @@ import {
   getSessionStatsCommand,
   getStateCommand,
   promptCommand,
+  promoteQueuedCommand,
   setModelCommand,
   setThinkingLevelCommand,
   steerCommand,
@@ -71,6 +75,7 @@ import {
   endSessionReplay,
   dropSessionStore,
   loadModelChoices,
+  promoteQueuedMessage,
   queueFollowUp,
   refreshSessionFacts,
   renameSession,
@@ -136,6 +141,15 @@ beforeEach(() => {
     .mockImplementation((sessionId, frame) => {
       sent.push({ type: 'session_command', sessionId, frame });
     });
+  vi.mocked(requestSessionProtocolFrame)
+    .mockReset()
+    .mockImplementation(async (sessionId, frame) => {
+      sent.push({ type: 'session_command', sessionId, frame });
+      return {
+        success: true,
+        data: frame.type === 'remove_queued' ? 'removed' : frame.type === 'promote_queued' ? 'promoted' : undefined,
+      };
+    });
 });
 
 describe('command builders', () => {
@@ -149,6 +163,12 @@ describe('command builders', () => {
     expect(followUpCommand('look', images)).toEqual({ type: 'follow_up', message: 'look', images });
     expect(abortCommand()).toEqual({ type: 'abort' });
     expect(clearQueueCommand()).toEqual({ type: 'clear_queue' });
+    expect(promoteQueuedCommand('selected')).toEqual({ type: 'promote_queued', id: 'selected' });
+    expect(promoteQueuedCommand('selected', 'active')).toEqual({
+      type: 'promote_queued',
+      id: 'selected',
+      operationId: 'active',
+    });
     expect(getStateCommand()).toEqual({ type: 'get_state' });
     expect(getSessionStatsCommand()).toEqual({ type: 'get_session_stats' });
     expect(getCommandsCommand()).toEqual({ type: 'get_commands' });
@@ -819,7 +839,57 @@ describe('session actions', () => {
     expect(sessionStoreFor('s1').state).toBe(stable);
   });
 
-  it('keeps server queue rows until the server confirms clear', () => {
+  it.each(['in_flight', 'already_consumed', 'not_found', 'unknown'])(
+    'reports deletion outcome %s rather than assuming success',
+    async (outcome) => {
+      vi.mocked(requestSessionProtocolFrame).mockResolvedValueOnce({ success: true, data: outcome });
+      await expect(deleteQueuedMessage('selected', 4, 's1')).rejects.toThrow();
+      expect(requestSessionProtocolFrame).toHaveBeenCalledWith('s1', { type: 'remove_queued', id: 'selected' });
+    },
+  );
+
+  it.each(['target_changed', 'in_flight', 'not_found', 'unknown'])(
+    'reports selected-send outcome %s rather than assuming success',
+    async (outcome) => {
+      vi.mocked(requestSessionProtocolFrame).mockResolvedValueOnce({ success: true, data: outcome });
+      await expect(promoteQueuedMessage('selected', 'clicked-run', 's1')).rejects.toThrow();
+    },
+  );
+
+  it('sends the captured target and never retargets an expected-idle selection', async () => {
+    applySessionLifecycle('s1', {
+      revision: 1,
+      operation: { id: 'new-run', kind: 'run', status: 'open' },
+      paused: true,
+      queue: [],
+    });
+    await promoteQueuedMessage('first', 'clicked-run', 's1');
+    await promoteQueuedMessage('second', undefined, 's1');
+    expect(sent.map(({ frame }) => frame)).toEqual([
+      { type: 'promote_queued', id: 'first', operationId: 'clicked-run' },
+      { type: 'promote_queued', id: 'second' },
+    ]);
+    expect(sessionStoreFor('s1').state.pendingUserEntries).toEqual([]);
+  });
+
+  it('reports failed or uncertain clear acknowledgements without clearing local rows', async () => {
+    applySessionLifecycle('s1', {
+      revision: 1,
+      operation: null,
+      paused: true,
+      queue: [
+        { id: 'protected', text: 'keep', delivery: 'followUp', scheduling: 'automatic', disposition: 'uncertain' },
+      ],
+    });
+    vi.mocked(requestSessionProtocolFrame).mockResolvedValueOnce({
+      success: false,
+      error: 'Delivery uncertain: connection replaced.',
+    });
+    await expect(clearQueuedMessages('s1')).rejects.toThrow('uncertain');
+    expect(sessionStoreFor('s1').state.lifecycle?.queue.map(({ id }) => id)).toEqual(['protected']);
+  });
+
+  it('keeps server queue rows until the server confirms clear', async () => {
     setActiveSession('s1');
     applySessionLifecycle('s1', {
       revision: 1,
@@ -829,14 +899,14 @@ describe('session actions', () => {
         { id: 'server-q1', text: 'later', delivery: 'followUp', scheduling: 'automatic', disposition: 'pending' },
       ],
     });
-    clearQueuedMessages();
+    await clearQueuedMessages();
     expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued')).toHaveLength(1);
     expect(sent.at(-1)?.frame).toEqual({ type: 'clear_queue' });
     applySessionLifecycle('s1', { revision: 2, operation: null, paused: false, queue: [] });
     expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued')).toEqual([]);
   });
 
-  it('removes only the requested server item and preserves duplicate-text identities', () => {
+  it('removes only the requested server item and preserves duplicate-text identities', async () => {
     setActiveSession('s1');
     const images = [{ type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' }];
     applySessionLifecycle('s1', {
@@ -855,7 +925,7 @@ describe('session actions', () => {
         },
       ],
     });
-    deleteQueuedMessage('server-q1', 2);
+    await deleteQueuedMessage('server-q1', 2);
     expect(sent.map((item) => item.frame)).toEqual([{ type: 'remove_queued', id: 'server-q1' }]);
     expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued')).toHaveLength(2);
     applySessionLifecycle('s1', {

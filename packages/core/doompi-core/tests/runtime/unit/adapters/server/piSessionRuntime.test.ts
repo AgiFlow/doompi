@@ -32,6 +32,7 @@ function fixture(telemetry?: ServerTelemetry) {
     clearQueue: vi.fn(async () => ({ steering: [], followUp: [] })),
     navigateTree: vi.fn(async () => ({ cancelled: false, entries: [] })),
     submitPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
+    submitUserPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
     prompt: vi.fn(async () => undefined),
     steer: vi.fn(async () => undefined),
     followUp: vi.fn(async () => undefined),
@@ -153,7 +154,7 @@ describe('typed session runtime controls', () => {
     expect(runtime.state.value.snapshot.lifecycle?.operation?.id).toBe('op-4');
     await runtime.steer('change course', BACKGROUND_CONTEXT);
     await runtime.abortOperation({ operationId: 'op-4' }, BACKGROUND_CONTEXT);
-    expect(direct.steer).toHaveBeenCalledWith('change course', undefined);
+    expect(direct.submitUserPrompt).toHaveBeenCalledWith('change course', undefined);
     expect(direct.abort).toHaveBeenCalledWith('op-4');
 
     await expect(runtime.enqueueAutomatic({ text: 'next' }, BACKGROUND_CONTEXT)).resolves.toEqual({ id: 'queue-1' });
@@ -506,11 +507,14 @@ describe('typed session runtime controls', () => {
         BACKGROUND_CONTEXT,
       );
       await runtime.abort(BACKGROUND_CONTEXT);
-      expect(direct.steer).toHaveBeenCalledWith('steer', [{ type: 'image', data: 'data', mimeType: 'image/png' }]);
+      expect(direct.submitUserPrompt).toHaveBeenCalledWith('steer', [
+        { type: 'image', data: 'data', mimeType: 'image/png' },
+      ]);
       expect(direct.abort).toHaveBeenCalledWith('op-1');
       emit({ type: 'agent_settled' });
       await runtime.steer('idle', BACKGROUND_CONTEXT);
-      expect(direct.enqueueAutomatic).toHaveBeenCalledWith('idle', undefined);
+      expect(direct.submitUserPrompt).toHaveBeenCalledWith('idle', undefined);
+      expect(direct.enqueueAutomatic).not.toHaveBeenCalled();
       await expect(runtime.abort(BACKGROUND_CONTEXT)).resolves.toBeUndefined();
 
       await expect(runtime.setModel(null as never, BACKGROUND_CONTEXT)).rejects.toThrow('Invalid model');

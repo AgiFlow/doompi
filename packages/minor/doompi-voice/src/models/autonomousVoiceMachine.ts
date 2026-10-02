@@ -403,7 +403,7 @@ export const autonomousVoiceMachine = setup({
         turnId: event.turnId,
         revision: event.revision,
         text: event.text,
-        intent: 'queuedFollowUp' as const,
+        intent: 'immediate' as const,
       };
     }),
     requestAcknowledgement: emit(({ context }) => {

@@ -155,6 +155,28 @@ describe('session protocol command lifecycle', () => {
     });
   });
 
+  it('interrupts and promotes without waiting for unrelated short RPC work', async () => {
+    const steer = vi.fn(async () => undefined);
+    const promoteQueued = vi.fn(async () => 'promoted');
+    const release = bindSessionProtocol(
+      's1',
+      service({ getState: () => new Promise(() => undefined), steer, promoteQueued }),
+      vi.fn(),
+    );
+    releases.push(release);
+    sendSessionProtocolFrame('s1', { type: 'get_state' });
+    await expect(requestSessionProtocolFrame('s1', { type: 'steer', message: 'respond now' })).resolves.toEqual({
+      success: true,
+      data: undefined,
+    });
+    await expect(requestSessionProtocolFrame('s1', { type: 'promote_queued', id: 'idle-item' })).resolves.toEqual({
+      success: true,
+      data: 'promoted',
+    });
+    expect(steer).toHaveBeenCalledOnce();
+    expect(promoteQueued).toHaveBeenCalledWith({ id: 'idle-item' }, expect.anything());
+  });
+
   it('sends stable item and target identities in a single promote command', async () => {
     const promoteQueued = vi.fn(async () => 'promoted');
     const release = bindSessionProtocol('s1', service({ promoteQueued }), vi.fn());

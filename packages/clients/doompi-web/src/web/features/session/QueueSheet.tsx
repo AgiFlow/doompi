@@ -9,12 +9,13 @@ import {
   RefreshIcon,
   TrashIcon,
 } from '@agimon-ai/doompi-web-components';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { QueuedEntry } from '../../lib/sessionModel';
 
 export function QueueSheet({
   count,
+  disabled = false,
   entries,
   onClear,
   onDelete,
@@ -24,19 +25,48 @@ export function QueueSheet({
   paused = false,
 }: {
   count: number;
+  disabled?: boolean;
   entries: readonly QueuedEntry[];
-  onClear: () => void;
-  onDelete: (id: string) => void;
-  onPromote?: (id: string) => void;
-  onResume?: () => void;
+  onClear: () => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onPromote?: (id: string, operationId?: string) => Promise<void>;
+  onResume?: () => Promise<void>;
   operationId?: string;
   paused?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<string | null>(null);
+  const pendingAction = useRef<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [clearAcknowledged, setClearAcknowledged] = useState(false);
   const unlisted = Math.max(0, count - entries.length);
   const label = `${String(count)} queued message${count === 1 ? '' : 's'}`;
 
-  if (count === 0 && !paused) return null;
+  // The acknowledgement can precede its lifecycle update. Only both confirm emptiness.
+  if (clearAcknowledged && count === 0) {
+    setClearAcknowledged(false);
+    setOpen(false);
+  }
+
+  const act = async (action: string, command: () => Promise<void>): Promise<void> => {
+    if (disabled || pendingAction.current !== null) return;
+    pendingAction.current = action;
+    setPending(action);
+    setError(null);
+    setClearAcknowledged(false);
+    try {
+      await command();
+      if (action === 'clear') setClearAcknowledged(true);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      pendingAction.current = null;
+      setPending(null);
+    }
+  };
+  const actionDisabled = disabled || pending !== null;
+
+  if (count === 0 && !paused && !open) return null;
 
   return (
     <>
@@ -94,16 +124,21 @@ export function QueueSheet({
                       <p className="mt-1 text-2xs text-doom-red">delivery uncertain; not resending automatically</p>
                     ) : null}
                   </div>
-                  {operationId && !paused && entry.disposition === 'pending' && onPromote ? (
+                  {entry.disposition === 'pending' && onPromote ? (
                     <Button
                       variant="ghost"
                       size="sm"
                       data-testid={`queue-steer-${String(index)}`}
-                      aria-label={`steer queued message ${String(index + 1)}`}
-                      onClick={() => onPromote(entry.id)}
+                      aria-label={`${operationId === undefined ? 'send' : 'interrupt and respond to'} queued message ${String(index + 1)}`}
+                      disabled={actionDisabled}
+                      onClick={() => void act(`send:${entry.id}`, () => onPromote(entry.id, operationId))}
                       className="h-7 shrink-0 text-doom-cyan"
                     >
-                      steer
+                      {pending === `send:${entry.id}`
+                        ? 'sending…'
+                        : operationId === undefined
+                          ? 'send now'
+                          : 'interrupt and respond'}
                     </Button>
                   ) : null}
                   <Button
@@ -116,12 +151,10 @@ export function QueueSheet({
                         ? 'Delivery is uncertain; refresh the session first'
                         : entry.disposition === 'handoff'
                           ? 'This message is already being delivered'
-                          : unlisted > 0
-                            ? 'Wait for the complete queue before deleting one message'
-                            : 'Delete this message'
+                          : 'Delete this message'
                     }
-                    disabled={unlisted > 0 || entry.disposition === 'handoff' || entry.disposition === 'uncertain'}
-                    onClick={() => onDelete(entry.id)}
+                    disabled={actionDisabled || entry.disposition !== 'pending'}
+                    onClick={() => void act(`delete:${entry.id}`, () => onDelete(entry.id))}
                     className="h-7 w-7 shrink-0 text-doom-faint hover:text-doom-red"
                   >
                     <TrashIcon className="h-3.5 w-3.5" />
@@ -139,8 +172,15 @@ export function QueueSheet({
               ) : null}
             </ol>
             {paused && onResume ? (
-              <Button variant="subtle" size="sm" data-testid="queue-resume" className="mt-2 w-full" onClick={onResume}>
-                resume queued messages
+              <Button
+                variant="subtle"
+                size="sm"
+                data-testid="queue-resume"
+                className="mt-2 w-full"
+                disabled={actionDisabled}
+                onClick={() => void act('resume', onResume)}
+              >
+                {pending === 'resume' ? 'resuming…' : 'resume queued messages'}
               </Button>
             ) : null}
             {count > 0 ? (
@@ -149,13 +189,26 @@ export function QueueSheet({
                 size="sm"
                 data-testid="queue-clear"
                 className="mt-2 w-full"
-                onClick={() => {
-                  onClear();
-                  setOpen(false);
-                }}
+                disabled={actionDisabled}
+                onClick={() => void act('clear', onClear)}
               >
-                delete all queued messages
+                {pending === 'clear' ? 'deleting…' : 'delete all queued messages'}
               </Button>
+            ) : null}
+            {pending !== null ? (
+              <p role="status" className="mt-2 text-xs text-doom-faint">
+                waiting for the session to acknowledge this action…
+              </p>
+            ) : null}
+            {error !== null ? (
+              <p role="alert" data-testid="queue-error" className="mt-2 text-xs text-doom-red">
+                {error}
+              </p>
+            ) : clearAcknowledged && count > 0 ? (
+              <p role="status" data-testid="queue-clear-remaining" className="mt-2 text-xs text-doom-faint">
+                Messages remain or await confirmation. Messages being delivered or with uncertain delivery cannot be
+                cleared.
+              </p>
             ) : null}
           </DialogBody>
         </DialogContent>
