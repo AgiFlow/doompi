@@ -1278,7 +1278,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         const agent = await conversation.agent(context);
         const metadata = await harness.snapshot(SessionMetadataDoc, context);
         const stats = await getSessionStats();
-        return {
+        return json({
           sessionId,
           sessionFile: storage.sessionFile,
           sessionName: metadata?.name,
@@ -1296,7 +1296,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           autoCompactionEnabled: settings.compaction?.enabled ?? true,
           messageCount: stats.messageCount,
           pendingMessageCount: lifecycle.queue.length,
-        };
+        }) as Record<string, unknown>;
       },
       enqueueAutomatic: async (value, images) => {
         const result = await enqueue(value, images, 'nextRun', 'automatic');

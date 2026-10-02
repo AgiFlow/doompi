@@ -13,6 +13,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { streamSimple as codexStreamSimple } from '@earendil-works/pi-ai/api/openai-codex-responses';
 import { MemoryStorage } from '@earendil-works/pi-durable';
+import { parseServerMessage } from '@earendil-works/pi-protocol';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -98,6 +99,21 @@ describe('durable direct runtime', () => {
       expect(entries.every((e) => typeof e.id === 'string')).toBe(true);
       expect(streamSimple).toHaveBeenCalledOnce();
       expect((await runtime.readState()).isStreaming).toBe(false);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('returns wire-safe state before the first prompt and after settling', async () => {
+    const { runtime } = await setup();
+    try {
+      const initial = await runtime.readState();
+      expect(initial).toMatchObject({ model: { provider: model.provider, id: model.id }, fastMode: false });
+      expect(() => parseServerMessage({ type: 'response', id: 'initial', ok: true, result: initial })).not.toThrow();
+      await runtime.setName('wire-safe');
+      await promptForAssistantText(runtime, 'question');
+      const settled = await runtime.readState();
+      expect(settled).toMatchObject({ sessionName: 'wire-safe', isStreaming: false, pendingMessageCount: 0 });
+      expect(() => parseServerMessage({ type: 'response', id: 'settled', ok: true, result: settled })).not.toThrow();
     } finally {
       await runtime.dispose();
     }
