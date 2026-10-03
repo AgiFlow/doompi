@@ -6,6 +6,8 @@ import { pathToFileURL } from 'node:url';
 import { doomConfigCandidates } from '@agimon-ai/doompi-config/layeredConfig';
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { optionalPackageEntry } from '@agimon-ai/doompi-core/moduleResolution';
+import { isRecord } from '@agimon-ai/doompi-core/runtimeJson';
+import { parse as parseYaml } from 'yaml';
 
 import { compileExtensionModule, extensionModuleManifestPath } from '../../compiler';
 
@@ -31,17 +33,32 @@ export async function syncHookModules(options: {
   sharedCacheDirectory?: string;
 }): Promise<{ file: string }> {
   const candidates = doomConfigCandidates('hooks.yaml', options.repoRoot, options.homeDirectory);
-  const registryPresent = candidates.some((candidate) => fs.existsSync(candidate.filePath));
+  // Command-only registries predate module compilation and do not require the package.
+  // This is discovery only. The public parser still owns validation and attribution.
+  const hasModuleRows = candidates.some((candidate) => {
+    if (!fs.existsSync(candidate.filePath)) return false;
+    const document: unknown = parseYaml(fs.readFileSync(candidate.filePath, 'utf8'));
+    if (!isRecord(document) || !isRecord(document.groups)) return false;
+    return Object.values(document.groups).some(
+      (group) =>
+        isRecord(group) &&
+        Array.isArray(group.hooks) &&
+        group.hooks.some((row: unknown) => isRecord(row) && isRecord(row.pi) && 'module' in row.pi),
+    );
+  });
   const parserEntry =
     optionalPackageEntry('@agimon-ai/doompi-hook', pathToFileURL(path.join(options.repoRoot, 'package.json')).href) ??
     optionalPackageEntry('@agimon-ai/doompi-hook', import.meta.url);
-  if (registryPresent && !parserEntry)
-    throw new Error('Hook registry requires the installed @agimon-ai/doompi-hook package');
-  const parser = parserEntry
-    ? ((await import(pathToFileURL(parserEntry).href)) as typeof import('@agimon-ai/doompi-hook'))
-    : undefined;
+  if (hasModuleRows && !parserEntry)
+    throw new Error(
+      'Hook module rows require @agimon-ai/doompi-hook. Install it in the repository or select a layer that provides it, then run doompi sync.',
+    );
+  const parser =
+    hasModuleRows && parserEntry
+      ? ((await import(pathToFileURL(parserEntry).href)) as typeof import('@agimon-ai/doompi-hook'))
+      : undefined;
   const read =
-    registryPresent && parser
+    hasModuleRows && parser
       ? await parser
           .createHookDocumentReader({ homeDirectory: options.homeDirectory, warn: () => undefined })
           .registry(options.repoRoot)

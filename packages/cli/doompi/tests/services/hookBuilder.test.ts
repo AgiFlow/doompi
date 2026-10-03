@@ -3,7 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { afterEach, describe, expect, it } from 'vitest';
+import * as moduleResolution from '@agimon-ai/doompi-core/moduleResolution';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { requiredHookGroups, syncHookModules } from '../../src/builders/hooks';
 import { hookModulesAreFresh } from '../../src/composition/syncDrift';
@@ -26,10 +27,32 @@ function fixture() {
   return { repoRoot: root, homeDirectory, config, directory: path.join(root, 'generation') };
 }
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const root of directories.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe('sync hook modules', () => {
+  it('does not require an installed hook package for a command-only registry', async () => {
+    const options = fixture();
+    vi.spyOn(moduleResolution, 'optionalPackageEntry').mockReturnValue(undefined);
+    fs.writeFileSync(
+      path.join(options.repoRoot, '.doom', 'hooks.yaml'),
+      'groups:\n  core:\n    hooks:\n      - event: PreToolUse\n        pi: {command: "echo ok"}\n',
+    );
+    const reference = await syncHookModules(options);
+    expect(JSON.parse(fs.readFileSync(reference.file, 'utf8')).modules).toEqual([]);
+  });
+
+  it('requires the public parser with install guidance only when module rows exist', async () => {
+    const options = fixture();
+    vi.spyOn(moduleResolution, 'optionalPackageEntry').mockReturnValue(undefined);
+    fs.writeFileSync(
+      path.join(options.repoRoot, '.doom', 'hooks.yaml'),
+      'groups:\n  core:\n    hooks:\n      - event: PreToolUse\n        pi: {module: ./hook.ts}\n',
+    );
+    await expect(syncHookModules(options)).rejects.toThrow('Install it in the repository');
+  });
+
   it('takes every mode and admits all when a selected layer leaves hookGroups unset', () => {
     const options = fixture();
     expect([...requiredHookGroups(options.config)!]).toEqual(['active', 'inactive']);
