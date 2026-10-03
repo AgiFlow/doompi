@@ -1,3 +1,17 @@
+## 0.0.1-alpha.95 (2026-10-03)
+
+### 🚀 Features
+
+- compile hook modules and harden session dispatch ([#287](https://github.com/AgiFlow/doompi/pull/287))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.28
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.94 (2026-10-03)
 
 ### 🩹 Fixes
