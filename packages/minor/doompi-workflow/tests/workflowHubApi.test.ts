@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,9 +13,15 @@ import type {
   WorkflowControlResponse,
 } from '../src/types/webWorkflowTerminal';
 
+vi.mock('node:child_process', async (original) => ({
+  ...(await original<typeof import('node:child_process')>()),
+  execFile: vi.fn(),
+}));
+
 const directories: string[] = [];
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true });
 });
 
@@ -433,6 +440,24 @@ describe('workflow hub api: artifacts', () => {
     expect(listed.artifacts[0]?.size).toBe(5);
   });
 
+  it('lazily lists folder children and rejects traversal and external symlinks', async () => {
+    const runDir = runDirectory();
+    fs.mkdirSync(path.join(runDir, 'bin'));
+    fs.writeFileSync(path.join(runDir, 'bin', 'result.md'), 'result');
+    const outside = runDirectory({ 'secret.md': 'secret' });
+    fs.symlinkSync(outside, path.join(runDir, 'escape'));
+    const { app } = api(record(), runDir);
+    const root = (await (await app.request(`${BASE}/artifacts`)).json()) as WorkflowArtifactsResponse;
+    expect(root.artifacts.find((entry) => entry.path === 'bin')?.kind).toBe('directory');
+    expect(root.artifacts.some((entry) => entry.path === 'bin/result.md')).toBe(false);
+    const children = (await (await app.request(`${BASE}/artifacts?directory=bin`)).json()) as WorkflowArtifactsResponse;
+    expect(children.artifacts.map((entry) => entry.path)).toEqual(['bin/result.md']);
+    expect((await app.request(`${BASE}/artifacts?directory=../`)).status).toBe(400);
+    expect((await app.request(`${BASE}/artifacts?directory=escape`)).status).toBe(400);
+    expect((await app.request(`${BASE}/artifacts/escape/secret.md`)).status).toBe(400);
+    expect((await app.request(`${BASE}/artifacts?directory=bin/result.md`)).status).toBe(409);
+  });
+
   it('reads one text artifact with the media type used by its renderer', async () => {
     const { app } = api(record(), runDirectory({ 'post.md': '# title' }));
     const response = await app.request(`${BASE}/artifacts/post.md`);
@@ -525,5 +550,94 @@ describe('workflow hub api: launch', () => {
     const response = await app.request('/launch', LAUNCH);
 
     expect(response.status).toBe(409);
+  });
+});
+
+const LOCAL_CALLER = {
+  'x-doompi-api-caller-locality': 'local',
+  'x-doompi-api-caller-step-up': 'not-required',
+};
+
+describe('workflow hub api: open run directory', () => {
+  it.each(['running', 'completed', 'error'] as const)(
+    'opens the current %s folder without accepting a client path',
+    async (stage) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+      vi.mocked(execFile).mockImplementation(((
+        _file: string,
+        _args: string[],
+        _options: unknown,
+        callback: (error: Error | null, stdout: string, stderr: string) => void,
+      ) => {
+        callback(null, '', '');
+        return {};
+      }) as typeof execFile);
+      const { app, runDir } = api(record({ stage }), runDirectory());
+      const response = await app.request(`${BASE}/open-directory`, {
+        method: 'POST',
+        headers: LOCAL_CALLER,
+        body: JSON.stringify({ path: '/etc' }),
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ opened: true });
+      expect(execFile).toHaveBeenLastCalledWith(
+        '/usr/bin/open',
+        ['-a', 'Finder', runDir],
+        { timeout: 5_000 },
+        expect.any(Function),
+      );
+    },
+  );
+
+  it('refuses remote and unstamped callers before resolving a folder', async () => {
+    const { app, registry } = api();
+    const read = vi.spyOn(registry, 'readRunByKey');
+    for (const headers of [
+      {},
+      {
+        'x-doompi-api-caller-locality': 'remote',
+        'x-doompi-api-caller-device-id': 'device',
+        'x-doompi-api-caller-step-up': 'verified',
+      },
+    ]) {
+      expect((await app.request(`${BASE}/open-directory`, { method: 'POST', headers })).status).toBe(403);
+    }
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('refuses missing and unsafe identities', async () => {
+    const { app } = api();
+    for (const key of ['missing', '..%2Fetc']) {
+      expect(
+        (await app.request(`http://hub/runs/repo/${key}/open-directory`, { method: 'POST', headers: LOCAL_CALLER }))
+          .status,
+      ).toBe(404);
+    }
+  });
+
+  it('reports unsupported platforms and missing directories', async () => {
+    const { app, runDir } = api();
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    expect((await app.request(`${BASE}/open-directory`, { method: 'POST', headers: LOCAL_CALLER })).status).toBe(409);
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    fs.rmSync(runDir, { recursive: true });
+    expect((await app.request(`${BASE}/open-directory`, { method: 'POST', headers: LOCAL_CALLER })).status).toBe(409);
+  });
+
+  it('returns the opener error to the reader', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    vi.mocked(execFile).mockImplementation(((
+      _file: string,
+      _args: string[],
+      _options: unknown,
+      callback: (error: Error | null, stdout: string, stderr: string) => void,
+    ) => {
+      callback(new Error('Finder could not be opened'), '', '');
+      return {};
+    }) as typeof execFile);
+    const { app } = api();
+    const response = await app.request(`${BASE}/open-directory`, { method: 'POST', headers: LOCAL_CALLER });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Finder could not be opened' });
   });
 });

@@ -10,8 +10,9 @@ export type WorkflowStage = 'running' | 'completed' | 'error';
 /** workflow-mcp's terminal outcome for a finished run. */
 export type WorkflowOutcome = 'success' | 'skipped' | 'failed' | 'interrupted';
 
-/** Job and step states as workflow-mcp records them in the progress log. */
+/** Recorded job/step states, plus pending entries from the workflow definition. */
 export type WorkflowProgressState =
+  | 'pending'
   | 'running'
   | 'completed'
   | 'skipped'

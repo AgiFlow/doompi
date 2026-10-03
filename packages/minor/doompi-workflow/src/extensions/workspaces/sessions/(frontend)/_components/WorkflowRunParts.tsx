@@ -35,6 +35,7 @@ import { deleteWorkflowRun, stopWorkflowRun } from '../_lib/terminalApi';
 import { workflowRunIdentity } from '../_lib/workflowActivity';
 
 export const STATE_ICON: Readonly<Record<WorkflowProgressState, { glyph: string; className: string }>> = {
+  pending: { glyph: '○', className: 'text-doom-faint' },
   running: { glyph: '●', className: 'text-doom-blue' },
   resumed: { glyph: '●', className: 'text-doom-blue' },
   completed: { glyph: '✓', className: 'text-doom-green' },
@@ -297,12 +298,14 @@ export function StepRow({
   return (
     <button
       type="button"
+      disabled={step.status === 'pending'}
+      title={`${step.name}: ${step.status}`}
       data-testid={`step-row-${step.name}`}
       data-step-status={step.status}
       data-active={selected}
       onClick={onSelect}
       className={cn(
-        'flex w-full cursor-pointer flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-doom-deep',
+        'flex w-full cursor-pointer flex-col gap-0.5 rounded px-2 py-1.5 text-left enabled:hover:bg-doom-deep disabled:cursor-default',
         selected && 'bg-doom-tint-blue ring-1 ring-inset ring-doom-blue/40',
       )}
     >
@@ -323,7 +326,7 @@ export function StepRow({
           </span>
         )}
         <span className="shrink-0 text-2xs text-doom-faint">
-          {spanDuration(step.startedAt, step.endedAt, now) ?? ''}
+          {step.status === 'pending' ? 'pending' : (spanDuration(step.startedAt, step.endedAt, now) ?? '')}
         </span>
       </span>
       {step.reason === undefined ? null : (

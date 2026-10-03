@@ -217,6 +217,30 @@ describe('workflowRuns', () => {
     expect(workflowPosition(jobs)).toEqual({ job: 'build', step: 'compile', index: 0, total: 1 });
   });
 
+  it('keeps recorded work missing from the plan and marks unstarted steps in skipped jobs as skipped', () => {
+    const plan = [
+      {
+        name: 'build',
+        phase: 'job' as const,
+        status: 'pending' as const,
+        steps: [{ name: 'compile', status: 'pending' as const }],
+      },
+    ];
+    const events = parseWorkflowProgress(
+      [
+        { type: 'job', status: 'skipped', job: 'build', reason: 'condition was false', at: 'now' },
+        { type: 'step', status: 'completed', job: 'legacy', step: 'old step', at: 'now' },
+      ]
+        .map((event) => JSON.stringify(event))
+        .join('\n'),
+    );
+    expect(foldWorkflowProgress(events, plan)).toMatchObject([
+      { name: 'build', status: 'skipped', steps: [{ name: 'compile', status: 'skipped' }] },
+      { name: 'legacy', status: 'completed', steps: [{ name: 'old step', status: 'completed' }] },
+    ]);
+    expect(plan[0]?.steps[0]?.status).toBe('pending');
+  });
+
   it('scopes runs to the session that launched them, never to the repository', () => {
     const record = (env?: Record<string, string>): string =>
       JSON.stringify({

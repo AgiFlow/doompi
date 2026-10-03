@@ -501,7 +501,16 @@ describe('workflow headless facet', () => {
     if (!mode || !activity || !list || !launch || !run || !command || !shutdown)
       throw new Error('Workflow headless registrations were not created');
     expect(list.promptGuidelines?.join(' ')).toContain('not to find an existing run');
-    expect(launch.promptGuidelines?.join(' ')).toContain('not when it finishes');
+    const launchGuidelines = launch.promptGuidelines?.join(' ') ?? '';
+    expect(launch.description).toContain('in-process Pi');
+    expect(launch.description).toContain('command: "pi"');
+    expect(launchGuidelines).toContain('inProcess: true');
+    expect(launchGuidelines).toContain('runner: "codex" does not imply command: "pi"');
+    expect(launchGuidelines).toContain('each step uses its first command');
+    expect(launchGuidelines).toContain(
+      'Only use an external CLI when the user requests it or no in-process option exists',
+    );
+    expect(launchGuidelines).toContain('not when it finishes');
     expect(run.promptGuidelines?.join(' ')).toContain('Do not automatically search CLI commands or filesystem logs');
     expect(run.parameters).toMatchObject({
       properties: {

@@ -1228,11 +1228,16 @@ describe('serveHeadlessServer', () => {
     expect(
       await (await fetch(`${server.url}/api/directories?q=${encodeURIComponent(`${directory}/`)}`, { headers })).json(),
     ).toEqual({ directories: [path.join(directory, 'Alpha'), path.join(directory, 'alpine')] });
-    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(path.join(directory, 'current'));
+    // Always match the known cwd, rather than depending on the random temporary root's name.
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(path.join(directory, 'also-current'));
     try {
       const sibling = await fetch(`${server.url}/api/directories?q=al`, { headers });
       expect(await sibling.json()).toEqual({
-        directories: [path.join(directory, 'Alpha'), path.join(directory, 'alpine')],
+        directories: [
+          path.join(directory, 'also-current'),
+          path.join(directory, 'Alpha'),
+          path.join(directory, 'alpine'),
+        ],
       });
     } finally {
       cwd.mockRestore();

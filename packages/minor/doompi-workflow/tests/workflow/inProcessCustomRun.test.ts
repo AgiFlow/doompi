@@ -105,3 +105,52 @@ describe('an in-process run with a customRun step', () => {
     });
   });
 });
+
+describe('published engine command selection', () => {
+  it.each([
+    { runner: 'codex', command: undefined, piSteps: 1 },
+    { runner: 'codex', command: 'pi', piSteps: 2 },
+    { runner: 'pi', command: undefined, piSteps: 2 },
+    { runner: 'pi', command: 'claude', piSteps: 0 },
+  ])('resolves runner $runner and command $command without provider aliases', async ({ runner, command, piSteps }) => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-workflow-command-selection-'));
+    const workflowPath = path.join(root, 'templates.workflow.yml');
+    fs.writeFileSync(
+      workflowPath,
+      `name: Command selection
+commands:
+  pi:
+    run: echo pi-template {{ prompt | shell }}
+    inProcess: true
+  claude:
+    run: echo external-template {{ prompt | shell }}
+jobs:
+  work:
+    steps:
+      - name: First
+        prompt: First task
+        interactiveRun:
+          - command: pi
+          - command: claude
+      - name: Second
+        prompt: Second task
+        interactiveRun:
+          - command: claude
+          - command: pi
+`,
+    );
+    const feature = createEmbeddedWorkflowFeature({ registry: new WorkflowRegistryService(path.join(root, 'home')) });
+    const result = await feature.createRunService().run({
+      workflowPath,
+      runner,
+      ...(command === undefined ? {} : { command }),
+      workspace: 'command-selection-test',
+      dryRun: true,
+      skipLaunch: true,
+    });
+
+    expect(result.exitCode, result.output).toBe(0);
+    expect(result.output.match(/echo pi-template/g) ?? []).toHaveLength(piSteps);
+    expect(result.output.match(/echo external-template/g) ?? []).toHaveLength(2 - piSteps);
+  });
+});

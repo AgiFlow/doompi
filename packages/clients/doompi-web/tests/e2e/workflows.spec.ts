@@ -14,11 +14,31 @@ const OWNED = { env: { PI_SESSION_ID: 's1' } };
 
 test('shows a running workflow with its jobs, steps, and breadcrumb', async ({ page, cockpit }) => {
   const at = new Date().toISOString();
+  const workflowPath = `${cockpit.workflowHome}/release.workflow.yaml`;
+  fs.mkdirSync(cockpit.workflowHome, { recursive: true });
+  fs.writeFileSync(
+    workflowPath,
+    JSON.stringify({
+      name: 'Release Hardening',
+      jobs: {
+        research: { steps: [{ name: 'map the risk surface', run: 'true' }] },
+        build: {
+          needs: ['research'],
+          steps: [
+            { name: 'resolve inputs', run: 'true' },
+            { name: 'edit src/routes/token.ts', run: 'true' },
+            { name: 'verify build', run: 'true' },
+          ],
+        },
+        publish: { needs: ['build'], steps: [{ name: 'ship release', run: 'true' }] },
+      },
+    }),
+  );
   writeWorkflowRun(cockpit.workflowHome, {
     workspace: 'default',
     stage: 'running',
     runKey: 'release-hardening',
-    record: { ...OWNED, displayName: 'Release Hardening', workflowName: 'Release Hardening' },
+    record: { ...OWNED, workflowPath, displayName: 'Release Hardening', workflowName: 'Release Hardening' },
     progress: [
       { type: 'job', status: 'running', job: 'research', index: 0, total: 3, at },
       { type: 'step', status: 'running', job: 'research', step: 'map the risk surface', at },
@@ -45,9 +65,16 @@ test('shows a running workflow with its jobs, steps, and breadcrumb', async ({ p
   await expect(page.getByTestId('job-row-build')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByTestId('step-row-resolve inputs')).toHaveAttribute('data-step-status', 'completed');
   await expect(page.getByTestId('step-row-edit src/routes/token.ts')).toHaveAttribute('data-active', 'true');
-  // A folded job opens on click.
-  await page.getByTestId('job-row-research').click();
+  await expect(page.getByTestId('job-row-publish')).toHaveAttribute('data-job-status', 'pending');
+  await expect(page.getByTestId('step-row-verify build')).toBeDisabled();
+  await expect(page.getByTestId('step-row-ship release')).toBeVisible();
+  await expect(page.getByTestId('step-row-ship release')).toBeDisabled();
   await expect(page.getByTestId('step-row-map the risk surface')).toHaveAttribute('data-step-status', 'completed');
+  // Every job starts expanded, but can still be folded and reopened.
+  await page.getByTestId('job-row-research').click();
+  await expect(page.getByTestId('step-row-map the risk surface')).toHaveCount(0);
+  await page.getByTestId('job-row-research').click();
+  await expect(page.getByTestId('step-row-map the risk surface')).toBeVisible();
   await expect(page.getByTestId('workflow-dock-artifacts')).toBeVisible();
 
   // The active step opens its own view.
@@ -160,6 +187,53 @@ test('a terminal workflow with a stale running step retains conversation without
   await expect(page.getByTestId('step-conversation-panel')).toBeVisible();
   await expect(page.getByTestId('step-terminal-stage')).toHaveText('error');
   await expect(page.getByTestId('step-steer-composer')).toHaveCount(0);
+});
+
+test('browses nested artifact folders and opens the workflow path with visible Finder errors', async ({
+  page,
+  cockpit,
+}) => {
+  const fixture = { workspace: 'default', stage: 'completed' as const, runKey: 'file-tree' };
+  writeWorkflowRun(cockpit.workflowHome, {
+    ...fixture,
+    record: {
+      ...OWNED,
+      outcome: 'success',
+      finishedAt: new Date().toISOString(),
+      runDirectory: {
+        description: 'Workflow files',
+        entries: [{ path: 'planned/report.md', kind: 'file', description: 'Future output' }],
+      },
+    },
+  });
+  writeWorkflowArtifact(cockpit.workflowHome, fixture, 'reports/nested/notes.md', '# Nested notes');
+  await page.route('**/plugins/workflow/runs/default/file-tree/open-directory', (route) =>
+    route.fulfill({ status: 409, json: { error: 'Finder is unavailable for this test.' } }),
+  );
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await page.getByTestId('dock-tab-workflow').click();
+  await expect(page.getByTestId('artifact-row-reports')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByTestId('artifact-row-reports/nested')).toHaveCount(0);
+  await page.getByTestId('artifact-row-reports').click();
+  await expect(page.getByTestId('artifact-row-reports')).toBeFocused();
+  await page.getByTestId('artifact-row-reports/nested').click();
+  await expect(page.getByTestId('artifact-row-reports/nested/notes.md')).toBeVisible();
+  await page.getByTestId('artifact-row-reports/nested/notes.md').click();
+  await expect(page.getByRole('heading', { name: 'Nested notes' })).toBeVisible();
+  await page.getByTestId('artifact-row-planned').click();
+  await expect(page.getByTestId('artifact-row-planned/report.md')).toBeDisabled();
+  await expect(page.getByTestId('artifacts-pane').getByRole('alert')).toHaveCount(0);
+  await page.getByTestId('workflow-dock').screenshot({ path: test.info().outputPath('artifact-tree.png') });
+  const request = page.waitForRequest(
+    (request) => request.method() === 'POST' && request.url().endsWith('/file-tree/open-directory'),
+  );
+  await page.getByTestId('workflow-open-directory').click();
+  expect((await request).postData()).toBeNull();
+  await expect(page.getByTestId('artifacts-pane').getByRole('alert')).toHaveText(
+    'Finder is unavailable for this test.',
+  );
+  await expect(page.getByTestId('workflow-open-directory')).toBeEnabled();
 });
 
 test('renders Markdown artifacts and explains when an artifact is empty', async ({ page, cockpit }) => {

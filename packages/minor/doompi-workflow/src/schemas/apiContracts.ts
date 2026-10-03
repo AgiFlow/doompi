@@ -145,13 +145,28 @@ export const apiContracts = defineApiContract({
       responses: jsonApiResponses(Type.Object({ deleted: Type.Literal(true) })),
     },
     {
+      id: 'workflow.openRunDirectory',
+      scope,
+      basePath: 'workflow',
+      path: `${root}/open-directory`,
+      method: 'POST',
+      authentication: 'owner',
+      description: 'Open the registered run folder in Finder. Local callers only.',
+      responses: {
+        ...jsonApiResponses(Type.Object({ opened: Type.Literal(true) })),
+        '403': { description: 'Local caller required.', schema: Type.Object({ error: S }) },
+        '409': { description: 'Folder opening unavailable.', schema: Type.Object({ error: S }) },
+      },
+    },
+    {
       id: 'workflow.artifacts',
       scope,
       basePath: 'workflow',
       path: `${root}/artifacts`,
       method: 'GET',
       authentication: 'owner',
-      description: 'List declared and discovered artifacts.',
+      description: 'List declared and discovered artifacts, or immediate children of a directory.',
+      parameters: [{ name: 'directory', in: 'query', required: false, schema: S }],
       responses: jsonApiResponses(
         Type.Object({
           runDir: S,

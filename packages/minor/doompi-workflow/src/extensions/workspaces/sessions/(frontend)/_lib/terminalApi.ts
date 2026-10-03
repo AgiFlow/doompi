@@ -253,14 +253,26 @@ export async function steerStep(
   return { error: 'The workflow hub returned an invalid steer response.' };
 }
 
+/** Opens the current registry folder, never a browser-supplied path. */
+export async function openRunDirectory(
+  workspace: string,
+  runKey: string,
+  sessionId?: string | null,
+): Promise<{ error?: string }> {
+  const result = await scoped(sessionId).openRunDirectory({ params: runParams(workspace, runKey) });
+  if (!result.ok) return { error: messageOf(result, 'The run folder could not be opened in Finder.') };
+  return result.data.opened === true ? {} : { error: 'The workflow hub returned an invalid folder response.' };
+}
+
 export type ArtifactsResult = { artifacts: WorkflowArtifactsResponse } | { error: string };
 
 export async function fetchArtifacts(
   workspace: string,
   runKey: string,
   sessionId?: string | null,
+  directory?: string,
 ): Promise<ArtifactsResult> {
-  const result = await scoped(sessionId).artifacts({ params: runParams(workspace, runKey) });
+  const result = await scoped(sessionId).artifacts({ params: runParams(workspace, runKey), query: { directory } });
   if (!result.ok) return { error: messageOf(result, 'This run has no directory to read.') };
   return { artifacts: result.data };
 }

@@ -2,12 +2,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { createEmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
+
 import {
   completeWorkflowRunView,
   foldWorkflowProgress,
   type ParsedWorkflowRun,
   parseWorkflowProgress,
   parseWorkflowRunRecord,
+  planWorkflowJobs,
   PROGRESS_FILE_NAME,
   resolveWorkflowHome,
   RUN_RECORD_FILE_NAME,
@@ -15,6 +18,8 @@ import {
   WORKFLOW_STAGES,
   WORKSPACES_DIR_NAME,
 } from '../workflowRuns';
+
+const { parser } = createEmbeddedWorkflowFeature();
 
 export interface ReadWorkflowRunsOptions {
   /** Registry home override, primarily for tests. */
@@ -41,7 +46,7 @@ export function readWorkflowRuns(options: ReadWorkflowRunsOptions = {}): ParsedW
   const recordCache = new Map<string, { size: number; mtimeMs: number; value: ParsedWorkflowRun | undefined }>();
   const progressCache = new Map<
     string,
-    { size: number; mtimeMs: number; value: ReturnType<typeof foldWorkflowProgress> }
+    { size: number; mtimeMs: number; value: ReturnType<typeof parseWorkflowProgress> }
   >();
 
   const cachedParse = <T>(
@@ -79,6 +84,21 @@ export function readWorkflowRuns(options: ReadWorkflowRunsOptions = {}): ParsedW
     }
   };
 
+  const plans = new Map<string, ReturnType<typeof planWorkflowJobs>>();
+  const planFor = (workflowPath: string): ReturnType<typeof planWorkflowJobs> => {
+    const cached = plans.get(workflowPath);
+    if (cached !== undefined) return cached;
+    let plan: ReturnType<typeof planWorkflowJobs> = [];
+    try {
+      const workflow = parser.parseWorkflowFile(workflowPath);
+      plan = planWorkflowJobs(workflow, parser.resolveJobOrder(workflow.jobs, null));
+    } catch {
+      // ponytail: old runs have no definition snapshot. Keep recorded progress when the source is gone.
+    }
+    plans.set(workflowPath, plan);
+    return plan;
+  };
+
   const runs: ParsedWorkflowRun[] = [];
   for (const workspace of listDir(workspacesDir)) {
     for (const stage of WORKFLOW_STAGES) {
@@ -89,12 +109,8 @@ export function readWorkflowRuns(options: ReadWorkflowRunsOptions = {}): ParsedW
         const progressPath = path.join(runDir, PROGRESS_FILE_NAME);
         const parsed = cachedParse(recordCache, recordPath, parseWorkflowRunRecord, undefined);
         if (parsed === undefined) continue;
-        const jobs = cachedParse(
-          progressCache,
-          progressPath,
-          (raw) => foldWorkflowProgress(parseWorkflowProgress(raw)),
-          [],
-        );
+        const events = cachedParse(progressCache, progressPath, parseWorkflowProgress, []);
+        const jobs = foldWorkflowProgress(events, planFor(parsed.view.workflowPath));
         runs.push({ ...parsed, view: completeWorkflowRunView(parsed.view, jobs) });
       }
     }

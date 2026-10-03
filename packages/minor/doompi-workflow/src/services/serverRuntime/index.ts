@@ -691,8 +691,11 @@ export function createWorkflowServerRuntime(
         when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: LAUNCH_TOOL,
         label: 'Launch Workflow',
-        description: 'Start a workflow run. A successful launch is not a completed workflow.',
+        description:
+          'Start a workflow run. Prefer in-process Pi execution with command: "pi" when supported; runner: "codex" is not an alias for it. A successful launch is not a completed workflow.',
         promptGuidelines: [
+          'Before launching, inspect the workflow and its imports for commands and interactiveRun choices. Prefer a supported Pi template with inProcess: true, selected explicitly with command: "pi" (or a supported in-process "pi-claude" command when requested). Only use an external CLI when the user requests it or no in-process option exists.',
+          'command selects the exact template. Without it, runner only matches an exact command name; otherwise each step uses its first command. runner: "codex" does not imply command: "pi", so pass command explicitly to avoid switching to "claude" on later steps.',
           'Launch returns when a run starts, not when it finishes. Use the exact run key and separate workspace from its launch result for workflow_run status, not Agiflow project or job identifiers.',
           'Do not relaunch a healthy running workflow merely because it has not completed.',
         ],

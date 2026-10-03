@@ -80,6 +80,28 @@ describe('the workflows plugin surfaces', () => {
     expect(rendered.includes('outline')).toBe(true);
   });
 
+  it('shows completed and upcoming nested steps without requiring a job click', () => {
+    const channel = webPlugin.channels?.find((candidate) => candidate.channel === 'workflow_runs');
+    driveChannel(channel!, 's1', {
+      runs: [
+        {
+          ...run,
+          jobs: [
+            { name: 'pre', phase: 'pre', status: 'completed', steps: [{ name: 'prepare', status: 'completed' }] },
+            ...run.jobs,
+            { name: 'publish', phase: 'job', status: 'pending', steps: [{ name: 'ship', status: 'pending' }] },
+          ],
+        },
+      ],
+    });
+    const rendered = renderPlugin(dockFace()!.panel, slotPropsFixture({ sessionId: 's1' }).props);
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.html).toContain('data-testid="step-row-prepare"');
+    expect(rendered.html).toContain('data-testid="step-row-ship"');
+    expect(rendered.html).toContain('data-job-status="pending"');
+    expect(rendered.html).toContain('disabled="" title="ship: pending"');
+  });
+
   it('keeps the idle activity section available as a workflow launcher', () => {
     const group = webPlugin.activityGroups?.[0];
     const section = activitySection();
