@@ -89,6 +89,92 @@ describe('reduceSession', () => {
     ).toEqual([]);
   });
 
+  it('reconciles a journaled assistant before completion and ignores repeated completion', () => {
+    const message = { role: 'assistant', content: [{ type: 'text', text: 'final' }] };
+    const end = { type: 'message_end', entryId: 'canonical', message };
+    const state = fold([
+      { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'draft' } },
+      { type: 'entry_appended', entry: { type: 'message', id: 'canonical', message } },
+      end,
+    ]);
+    expect(state.entries).toHaveLength(1);
+    expect(assistant(state)).toMatchObject({ id: 'canonical', text: 'final', streaming: false });
+    const newer = reduceSession(state, {
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'new' },
+    });
+    expect(reduceSession(newer, end)).toBe(newer);
+  });
+
+  it.each(['user', 'toolResult'])('does not close an assistant for a %s completion', (role) => {
+    const state = fold([{ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'draft' } }]);
+    expect(reduceSession(state, { type: 'message_end', message: { role, content: 'other' } })).toBe(state);
+  });
+
+  it.each(['message_start', 'message_update'])(
+    'uses aggregate content from %s instead of also applying the delta',
+    (type) => {
+      const state = fold([
+        { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'long draft' } },
+        {
+          type,
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'text', text: 'short' },
+              { type: 'thinking', thinking: 'reason' },
+            ],
+          },
+          assistantMessageEvent: { type: 'text_delta', delta: 'short' },
+        },
+      ]);
+      expect(assistant(state)).toMatchObject({ text: 'short', thinking: 'reason', streaming: true });
+      expect(assistant(reduceSession(state, { type: 'message_end', message: {} }))).toMatchObject({
+        text: 'short',
+        thinking: 'reason',
+        streaming: false,
+      });
+    },
+  );
+
+  it.each(['', []])('treats explicit empty content as authoritative: %j', (content) => {
+    const state = fold([
+      { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'draft' } },
+      { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'reason' } },
+      { type: 'message_end', message: { role: 'assistant', content } },
+    ]);
+    expect(state.entries).toEqual([]);
+  });
+
+  it('matches journal-only tool history after an aggregate placeholder completes', () => {
+    const message = {
+      role: 'assistant',
+      content: [{ type: 'toolCall', id: 'call', name: 'bash', arguments: { command: 'pwd' } }],
+    };
+    const journal = { type: 'entry_appended', entry: { type: 'message', id: 'canonical', message } };
+    const started = fold([{ type: 'message_start', message: { role: 'assistant', content: [] } }]);
+    expect(assistant(started)).toMatchObject({ text: '', thinking: '', streaming: true });
+    const state = fold([journal, { type: 'message_end', entryId: 'canonical', message }], started);
+    expect(state.entries).toEqual(fold([journal]).entries);
+    expect(state.entries.map((entry) => entry.kind)).toEqual(['tool']);
+  });
+
+  it('removes an empty placeholder on completion without content', () => {
+    const state = fold([
+      { type: 'message_update', assistantMessageEvent: { type: 'text_start' } },
+      { type: 'message_end', message: {} },
+    ]);
+    expect(state.entries).toEqual([]);
+  });
+
+  it('preserves thinking-only delta fallback on completion', () => {
+    const state = fold([
+      { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'reason' } },
+      { type: 'message_end', message: {} },
+    ]);
+    expect(assistant(state)).toMatchObject({ text: '', thinking: 'reason', streaming: false });
+  });
+
   it('ignores frames it does not model', () => {
     expect(reduceSession(initialSessionState, { type: 'something_new' })).toBe(initialSessionState);
   });

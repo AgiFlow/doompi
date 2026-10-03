@@ -151,6 +151,140 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
   expect((await renderWork(page)).streaming).toBeGreaterThan(beforeStreamChange.streaming);
 });
 
+async function expectMountedGeometry(page: import('@playwright/test').Page): Promise<void> {
+  await expect
+    .poll(async () =>
+      page
+        .getByTestId('timeline')
+        .locator('[data-index]')
+        .evaluateAll((elements) => {
+          const rows = elements
+            .map((element) => ({
+              index: Number(element.getAttribute('data-index')),
+              rect: element.getBoundingClientRect(),
+              content: element.firstElementChild?.getBoundingClientRect(),
+              padding: parseFloat(getComputedStyle(element).paddingBottom),
+            }))
+            .sort((a, b) => a.index - b.index);
+          if (rows.length < 2) return ['Too few mounted rows'];
+          const errors: string[] = [];
+          for (let index = 0; index < rows.length; index += 1) {
+            const row = rows[index]!;
+            if (!row.content || row.content.height <= 0) errors.push(`Empty row ${row.index}`);
+            else if (Math.abs(row.rect.bottom - row.content.bottom - row.padding) > 1)
+              errors.push(`Internal excess gap in row ${row.index}`);
+            const previous = rows[index - 1];
+            // Only adjacent mounted units: virtualized leading/trailing space is intentional.
+            if (previous && row.index === previous.index + 1 && Math.abs(row.rect.top - previous.rect.bottom) > 1)
+              errors.push(`Overlap or gap between ${previous.index} and ${row.index}`);
+          }
+          return errors;
+        }),
+    )
+    .toEqual([]);
+}
+
+test('journal-first completion and shared settlement keep unique mounted rows', async ({ page, cockpit }) => {
+  const duplicateKeys: string[] = [];
+  page.on('console', (message) => {
+    if (/same key|unique.*key/i.test(message.text())) duplicateKeys.push(message.text());
+  });
+  cockpit.session.replaceEntries(performanceEntries('small'));
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await expect(page.getByTestId('entry-assistant').filter({ hasText: PERFORMANCE_MARKERS.small })).toBeVisible();
+  const message = {
+    id: 'geometry-completion',
+    role: 'assistant',
+    content: [{ type: 'text', text: 'GEOMETRY_COMPLETION\n\n' + 'A tall completed paragraph. '.repeat(80) }],
+  };
+  const runId = 'geometry-run';
+  const completion = { id: message.id, type: 'message', message };
+  const settlement = {
+    id: 'geometry-settlement',
+    type: 'custom',
+    customType: 'doompi.agent-settled',
+    data: { runId, tools: 0 },
+  };
+  // message_end refreshes the paged durable transcript, so its journal must agree.
+  cockpit.session.replaceEntries([...performanceEntries('small'), completion, settlement]);
+  cockpit.session.emit({ type: 'agent_start' });
+  cockpit.session.emit({ type: 'message_start', message: { ...message, content: [] } });
+  cockpit.session.emit({ type: 'entry_appended', entry: { id: message.id, type: 'message', message } });
+  cockpit.session.emit({ type: 'message_end', entryId: message.id, message });
+  cockpit.session.emit({ type: 'message_end', entryId: message.id, message });
+  cockpit.session.emit({
+    type: 'entry_appended',
+    entry: {
+      id: 'geometry-settlement',
+      type: 'custom',
+      customType: 'doompi.agent-settled',
+      data: { runId, tools: 0 },
+    },
+  });
+  cockpit.session.emit({ type: 'agent_settled', runId });
+  await expect(page.getByTestId('entry-assistant').filter({ hasText: 'GEOMETRY_COMPLETION' })).toHaveCount(1);
+  await page.getByTestId('timeline').evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+  });
+  // At the live tail, the shared journal/live run contributes exactly one marker.
+  await expect(page.getByTestId('entry-settled')).toHaveCount(1);
+  await expect(page.getByTestId('entry-settled')).toBeVisible();
+  await expectMountedGeometry(page);
+  expect(duplicateKeys).toEqual([]);
+});
+
+test('aggregate streaming and same durable IDs across sessions remeasure mounted geometry', async ({
+  page,
+  cockpit,
+}) => {
+  const duplicateKeys: string[] = [];
+  page.on('console', (message) => {
+    if (/same key|unique.*key/i.test(message.text())) duplicateKeys.push(message.text());
+  });
+  const short = performanceEntries('small');
+  const tall = short.map((entry) => {
+    const message = entry.message as { role: string; content: unknown[] };
+    return message.role === 'assistant'
+      ? {
+          ...entry,
+          message: {
+            ...message,
+            content: [
+              { type: 'text', text: 'TALL_SESSION\n\n' + 'Different height for the same durable ID. '.repeat(100) },
+            ],
+          },
+        }
+      : entry;
+  });
+  cockpit.sessions[0].replaceEntries(short);
+  cockpit.sessions[1].replaceEntries(tall);
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await expect(page.getByTestId('entry-assistant').filter({ hasText: PERFORMANCE_MARKERS.small })).toBeVisible();
+  await expectMountedGeometry(page);
+  await page.getByTestId('session-card-s2').click();
+  await expect(page.getByTestId('entry-assistant').last()).toContainText('TALL_SESSION');
+  await expectMountedGeometry(page);
+  await page.getByTestId('session-card-s1').click();
+  await expect(page.getByTestId('entry-assistant').last()).toContainText(PERFORMANCE_MARKERS.small);
+  await expectMountedGeometry(page);
+  cockpit.session.emit({ type: 'agent_start' });
+  cockpit.session.emit({ type: 'message_start', message: { id: 'geometry-stream', role: 'assistant', content: [] } });
+  for (const text of ['AGGREGATE_SHORT', '\n\nAGGREGATE_TALL\n\n' + 'Streaming changes row height. '.repeat(100)]) {
+    // The existing fixture supplies both the delta and the accumulated message.
+    cockpit.session.emit({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: text },
+    });
+    await expect(page.getByTestId('entry-assistant').last()).toContainText(text.trim().split('\n')[0]!);
+    await expectMountedGeometry(page);
+  }
+  await expect(page.getByTestId('entry-assistant').last()).toContainText('AGGREGATE_SHORT');
+  expect(duplicateKeys).toEqual([]);
+});
+
 test('serves an opt-in production fixture for Playwriter profiling', async ({ cockpit }) => {
   test.skip(readyFile === undefined, 'Set DOOMPI_PERFORMANCE_READY to hold an isolated profiling server.');
   if (readyFile === undefined) return;

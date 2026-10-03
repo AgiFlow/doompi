@@ -2068,14 +2068,26 @@ describe('serveHeadlessServer', () => {
 
     const abort = new AbortController();
     const events = await fetch(`${server.url}/api/events?token=secret`, { signal: abort.signal });
-    const reader = events.body?.getReader();
-    const first = await reader?.read();
-    expect(Buffer.from(first?.value ?? []).toString()).toContain('sessions_snapshot');
-    channelHost?.publish('one', { updated: true });
-    const live = await reader?.read();
-    expect(Buffer.from(live?.value ?? []).toString()).toContain('channel_frame');
-    abort.abort();
-    await hub.close();
+    const reader = events.body!.getReader();
+    const decoder = new TextDecoder();
+    let received = '';
+    const readEvent = async (name: string) => {
+      // HTTP chunks can split an SSE frame or contain multiple snapshot frames.
+      while (!received.includes(`event: ${name}\n`)) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        received += decoder.decode(chunk.value, { stream: true });
+      }
+      expect(received).toContain(`event: ${name}\n`);
+    };
+    try {
+      await readEvent('sessions_snapshot');
+      channelHost?.publish('one', { updated: true });
+      await readEvent('channel_frame');
+    } finally {
+      abort.abort();
+      await hub.close();
+    }
   });
 
   it('returns opaque JSON failures for malformed channel payloads and backend API errors', async () => {

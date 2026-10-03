@@ -78,8 +78,11 @@ for (const state of ['idle', 'paused', 'active']) {
       await expect(page.getByTestId('composer-input')).toHaveValue('');
     }
     await page.getByTestId('composer-queued').click();
-    await expect(page.getByTestId('queue-steer-0')).toHaveText(
-      state === 'active' ? 'interrupt and respond' : 'send now',
+    await expect(page.getByTestId('queue-steer-0')).toHaveText(state === 'active' ? 'steer' : 'send now');
+    await expect(page.getByTestId('queue-steer-0')).toBeEnabled();
+    await expect(page.getByTestId('queue-steer-0')).toHaveAttribute(
+      'aria-label',
+      `${state === 'active' ? 'steer' : 'send now'} queued message 1`,
     );
     await page.getByTestId('queue-steer-0').click();
     const promoted = await cockpit.session.waitForCommand('promote_queued');
@@ -96,6 +99,25 @@ for (const state of ['idle', 'paused', 'active']) {
     );
   });
 }
+
+test('closes the automatic queue after settled delivery', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  cockpit.session.emit({ type: 'agent_start' });
+  await page.getByTestId('composer-input').fill('automatic user follow-up');
+  await page.getByTestId('composer-queue').click();
+  await expect(page.getByTestId('composer-queued')).toBeVisible();
+  await page.getByTestId('composer-queued').click();
+  await expect(page.getByTestId('queue-steer-0')).toBeEnabled();
+  // The fake runtime does not drain automatically, so publish the settled lifecycle explicitly.
+  cockpit.session.emit({
+    type: 'lifecycle_update',
+    lifecycle: { revision: 100, operation: null, paused: false, queue: [] },
+  });
+  cockpit.session.emit({ type: 'agent_settled' });
+  await expect(page.getByTestId('queue-sheet')).toBeHidden();
+  await expect(page.getByTestId('composer-queued')).toBeHidden();
+});
 
 test('keeps a queued row and shows acknowledged deletion failure', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);

@@ -612,7 +612,7 @@ export async function createBridgedSessionManager(
   };
   bridgedSessionSync.set(manager, {
     append(entry) {
-      if (manager.getEntry(entry.id) !== undefined) return;
+      if (manager.getEntry(resolvePiId(entry.id) ?? entry.id) !== undefined) return;
       if (entry.type === 'custom') {
         const pendingIndex = pendingMirrors.findIndex(
           (pending) =>
@@ -703,11 +703,9 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     message: AgentMessage,
     sendOptions?: { triggerTurn?: boolean; deliverAs?: 'steer' | 'followUp' | 'nextTurn' },
   ): Promise<unknown> => {
-    if (sendOptions?.deliverAs === 'nextTurn') return runtime.nextRun(message);
-    if (currentOperation === 'run' && sendOptions?.triggerTurn !== false) {
-      return sendOptions?.deliverAs === 'followUp' ? runtime.followUp(message) : runtime.steer(message);
-    }
-    if (sendOptions?.triggerTurn === true) return runtime.admitMessage(message);
+    if (sendOptions?.triggerTurn === false) return runtime.appendMessage(message);
+    if (currentOperation === 'run' || sendOptions?.triggerTurn === true || sendOptions?.deliverAs === 'nextTurn')
+      return runtime.submitInternalMessage(message, sendOptions?.deliverAs === 'steer' ? 'steer' : 'followUp');
     return runtime.appendMessage(message);
   };
 
@@ -735,13 +733,10 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
                 .join('\n');
         if (sendOptions?.expandPromptTemplates && (await runtime.dispatchCommand(text))) return;
         const message: Extract<AgentMessage, { role: 'user' }> = { role: 'user', content, timestamp: Date.now() };
-        if (sendOptions?.deliverAs === 'followUp') return runtime.followUp(message);
-        const submission =
-          sendOptions?.deliverAs === 'steer'
-            ? await runtime.submitUserPrompt(message)
-            : typeof content === 'string'
-              ? await runtime.submitPrompt(content)
-              : await runtime.admitMessage(message);
+        const submission = await runtime.submitInternalMessage(
+          message,
+          sendOptions?.deliverAs === 'steer' ? 'steer' : 'followUp',
+        );
         void submission.settled.catch((error: unknown) => report('send_user_message', error));
       };
       void deliver().catch((error: unknown) => report('send_user_message', error));
@@ -955,9 +950,11 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         return;
       }
       case 'run_end':
-        currentOperation = null;
-        await runner?.emit({ type: 'agent_end', messages: runMessages });
-        await runner?.emit({ type: 'agent_settled' });
+        if (!event.successorActive) {
+          currentOperation = null;
+          await runner?.emit({ type: 'agent_end', messages: runMessages });
+          await runner?.emit({ type: 'agent_settled' });
+        }
         runMessages = [];
         turnEntryIds.clear();
         toolArguments.clear();
@@ -1046,8 +1043,15 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   const onHarnessEvent = (event: HarnessEvent): Promise<void> =>
     handleHarnessEvent(event).catch((error: unknown) => report(`event '${event.type}'`, error));
 
-  const transformContext = async (messages: AgentMessage[]): Promise<AgentMessage[]> =>
-    runner === undefined ? messages : runner.emitContext(messages);
+  const transformContext = async (messages: AgentMessage[]): Promise<AgentMessage[]> => {
+    if (runner === undefined) return messages;
+    // Journal publication can trail model admission, so context hooks read the committed branch.
+    const { entries, leafId } = await runtime.readEntries();
+    for (const entry of entries) sessionSync?.append(entry);
+    const leaf = sessionSync?.toPiId(leafId) ?? leafId;
+    if (sessionManager && leaf !== null && sessionManager.getEntry(leaf) !== undefined) sessionManager.branch(leaf);
+    return runner.emitContext(messages);
+  };
 
   const beforeCompaction = async (
     event: HookMap['before_compaction']['event'],

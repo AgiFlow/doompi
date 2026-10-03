@@ -61,6 +61,16 @@ export function toPiSessionEntry(entry: Entry, firstKeptEntryId?: string): Sessi
   };
   switch (entry.type) {
     case 'message': {
+      if (entry.message.role === 'custom') {
+        return {
+          ...base,
+          type: 'custom_message',
+          customType: entry.message.customType,
+          content: entry.message.content,
+          display: entry.message.display,
+          ...(entry.message.details === undefined ? {} : { details: entry.message.details }),
+        };
+      }
       const message: SessionMessageEntry = { ...base, type: 'message', message: entry.message };
       return message;
     }

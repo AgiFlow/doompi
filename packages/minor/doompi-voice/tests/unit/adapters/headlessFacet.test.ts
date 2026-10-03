@@ -156,7 +156,9 @@ describe('native Voice session', () => {
           responded = true;
           return value;
         });
-        await vi.waitFor(() => expect(admitPrompt).toHaveBeenCalledWith('Respond to this speech.', 'interrupt'));
+        await vi.waitFor(() =>
+          expect(admitPrompt).toHaveBeenCalledWith('Respond to this speech.', 'interrupt', 'operator'),
+        );
         expect(activity).not.toHaveBeenCalled();
         expect(responded).toBe(false);
         acknowledge();

@@ -73,6 +73,7 @@ function fakeRuntime(options: DirectHarnessRuntimeOptions): DirectHarnessRuntime
     recordUsage: async () => 'usage',
     submitPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
     submitUserPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
+    submitInternalMessage: vi.fn(async () => ({ settled: Promise.resolve() })),
     admitMessage: vi.fn(async () => ({ settled: Promise.resolve() })),
     prompt: vi.fn(async () => undefined),
     steer: vi.fn(async () => undefined),
@@ -316,7 +317,7 @@ describe('terminal Pi child session provider', () => {
     const runtimeFactory = vi.fn(async (options: DirectHarnessRuntimeOptions) => ({
       ...fakeRuntime(options),
       onEvent,
-      prompt: vi.fn(() => new Promise<void>(() => undefined)),
+      submitInternalMessage: vi.fn(async () => ({ settled: new Promise<void>(() => undefined) })),
     }));
     const service = createTerminalPiChildSessionService({
       cwd: root,
@@ -347,6 +348,13 @@ describe('terminal Pi child session provider', () => {
       {} as never,
     );
 
+    const runtime = await runtimeFactory.mock.results[0]!.value;
+    expect(runtime.submitInternalMessage).toHaveBeenCalledWith('do the thing');
+    await handle.steer('redirect');
+    expect(runtime.submitInternalMessage).toHaveBeenCalledWith('redirect', 'steer');
+    expect(runtime.prompt).not.toHaveBeenCalled();
+    expect(runtime.steer).not.toHaveBeenCalled();
+    expect(runtime.followUp).not.toHaveBeenCalled();
     expect(onEvent).toHaveBeenCalledOnce();
     expect(events.at(-1)).toMatchObject({ state: 'running', cost: 2.5 });
     await handle.dispose();

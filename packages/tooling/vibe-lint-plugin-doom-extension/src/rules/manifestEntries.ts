@@ -1,6 +1,15 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import {
+  defaultPluginId,
+  renderCliEntry,
+  renderServerEntry,
+  renderWebEntry,
+  resolveTarget,
+  scanExtensions,
+} from '@agimon-ai/doompi-build';
+
 const SOURCE_EXTENSION_PATTERN = /\.(?:cts|mts|ts|tsx)$/;
 const RUNTIME_EXTENSION_PATTERN = /\.(?:cjs|js|mjs)$/;
 
@@ -70,4 +79,38 @@ export function hostEntryStems(configRoot: string): Set<string> {
     }
   }
   return new Set(targets.map(runtimeStem).filter((stem): stem is string => stem !== null));
+}
+
+/** Resolve canonical build facades without writing generated output during preflight. */
+export function generatedEntrySource(configRoot: string, entry: string): string | null {
+  const target =
+    entry === 'generated/pi.ts'
+      ? 'cli'
+      : entry === 'generated/server.ts'
+        ? 'server'
+        : entry === 'generated/web.ts'
+          ? 'web'
+          : null;
+  if (!target) return null;
+  const manifest = readPackageManifest(configRoot);
+  if (!manifest?.name) return null;
+  const graph = scanExtensions({ packageDir: configRoot });
+  const resolution = resolveTarget(graph, target);
+  const templateAdmission =
+    target === 'cli' &&
+    graph.entries.some((item) => item.side === 'frontend' && item.surface === 'template' && item.platform === 'web');
+  if (
+    !resolution.contributions.length &&
+    !resolution.escapeHatches.length &&
+    !resolution.roots.length &&
+    !templateAdmission
+  )
+    return null;
+  const render = target === 'cli' ? renderCliEntry : target === 'server' ? renderServerEntry : renderWebEntry;
+  return render(resolution, {
+    packageName: manifest.name,
+    pluginId: defaultPluginId(manifest.name),
+    root: graph.root,
+    entryDir: 'generated',
+  });
 }

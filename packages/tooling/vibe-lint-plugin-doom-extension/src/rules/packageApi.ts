@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
 
+import { generatedEntrySource } from './manifestEntries.js';
 import { normalizeEntry, pluginBlocks, readManifest } from './webPlugin.js';
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
@@ -133,9 +134,9 @@ function serverCompositionViolations(manifest: ServerCompositionManifest, config
   const entry = typeof block.entry === 'string' ? block.entry : undefined;
   if (!isServerEntry(entry)) {
     violations.push(`doompiServer.entry must be one of ${SERVER_ENTRIES.join(' or ')}`);
-  } else if (!hasFile(configRoot, entry.slice(2))) {
+  } else if (!hasFile(configRoot, entry.slice(2)) && !generatedEntrySource(configRoot, entry.slice(2))) {
     violations.push(`doompiServer.entry has no source file: ${entry}`);
-  } else if (!hasDefaultServerExport(configRoot, entry)) {
+  } else if (hasFile(configRoot, entry.slice(2)) && !hasDefaultServerExport(configRoot, entry)) {
     violations.push('doompiServer.entry must export its defineServerPlugin value as default for the server loader');
   }
 

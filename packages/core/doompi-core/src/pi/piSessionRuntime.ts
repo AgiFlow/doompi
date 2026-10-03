@@ -506,8 +506,7 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     async steer(text: string | SessionMessageArgs) {
       requireLive();
       const args = messageArgs(text);
-      const submission = await options.runtime.submitUserPrompt(args.message, args.images);
-      void submission.settled.catch((error: unknown) => present({ type: 'error', error: String(error) }));
+      await options.runtime.steer(args.message, args.images);
     },
     async abort() {
       requireLive();

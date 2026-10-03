@@ -120,8 +120,12 @@ function childRuntime(
       ? {}
       : { readTranscriptPage: (request, signal) => readNativeChildTranscript(file, request, signal) }),
     prompt: (task) => promptForAssistantText(runtime, task),
-    steer: (message) => runtime.steer(message),
-    followUp: (message) => runtime.followUp(message),
+    async steer(message) {
+      await runtime.submitInternalMessage(message, 'steer');
+    },
+    async followUp(message) {
+      await runtime.submitInternalMessage(message, 'followUp');
+    },
     onUsage(listener) {
       return runtime.onEvent((event) => {
         if (event.type !== 'usage') return;

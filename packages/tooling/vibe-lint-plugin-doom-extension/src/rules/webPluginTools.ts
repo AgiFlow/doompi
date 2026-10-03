@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
 
-import { projectPath } from './manifestEntries.js';
+import { generatedEntrySource, projectPath } from './manifestEntries.js';
 import { pluginBlocks, readManifest, readSource, walkSources, WEB_ROOT } from './webPlugin.js';
 
 /**
@@ -307,6 +307,8 @@ function webClaims(configRoot: string): { claimed: Set<string>; hasMatcher: bool
   ]
     .map((filePath) => readSource(filePath))
     .filter((source): source is ts.SourceFile => source !== null);
+  const generated = generatedEntrySource(configRoot, 'generated/web.ts');
+  if (generated) sources.push(ts.createSourceFile('generated/web.ts', generated, ts.ScriptTarget.Latest, true));
   const strings = new Map<string, string>();
   for (const source of sources) for (const [name, value] of stringConstants(source, false)) strings.set(name, value);
   const arrays = new Map<string, string[]>();

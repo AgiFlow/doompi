@@ -87,6 +87,74 @@ async function setup(
   return { runtime, streamSimple, storage, models };
 }
 describe('durable direct runtime', () => {
+  it('forwards aggregate block snapshots to frames and event listeners', async () => {
+    const stream = createAssistantMessageEventStream();
+    const initial: AssistantMessage = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'initial' }],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      timestamp: Date.now(),
+      usage,
+      stopReason: 'stop',
+    };
+    const { runtime } = await setup({}, [stream]);
+    const events: HarnessEvent[] = [];
+    const frames: Record<string, unknown>[] = [];
+    runtime.onEvent((event) => {
+      events.push(event);
+    });
+    runtime.onPresentationFrame((frame) => frames.push(frame));
+    try {
+      const active = await runtime.submitPrompt('stream');
+      stream.push({ type: 'start', partial: initial });
+      await vi.waitFor(() =>
+        expect(events.some((event) => event.type === 'message_start' && event.message.role === 'assistant')).toBe(true),
+      );
+      const partial = { ...initial, content: [{ type: 'text' as const, text: 'whole block' }] };
+      stream.push({ type: 'text_start', contentIndex: 0, partial });
+      await vi.waitFor(() =>
+        expect(
+          events.some(
+            (event) =>
+              event.type === 'message_update' &&
+              event.message.content.some((block) => block.type === 'text' && block.text === 'whole block'),
+          ),
+        ).toBe(true),
+      );
+      expect(frames.some((frame) => frame.type === 'message_update')).toBe(true);
+      const aggregate: AssistantMessage = {
+        ...partial,
+        content: [
+          { type: 'text', text: 'whole message' },
+          { type: 'thinking', thinking: 'reasoning snapshot' },
+          { type: 'toolCall', id: 'snapshot-call', name: 'fixture', arguments: { value: 'snapshot' } },
+        ],
+      };
+      stream.push({ type: 'toolcall_start', contentIndex: 2, partial: aggregate });
+      await vi.waitFor(() =>
+        expect(
+          events.some(
+            (event) =>
+              event.type === 'message_update' &&
+              JSON.stringify(event.message.content) === JSON.stringify(aggregate.content),
+          ),
+        ).toBe(true),
+      );
+      expect(
+        frames.some(
+          (frame) =>
+            frame.type === 'message_update' &&
+            JSON.stringify((frame.message as AssistantMessage).content) === JSON.stringify(aggregate.content),
+        ),
+      ).toBe(true);
+      stream.push({ type: 'done', reason: 'stop', message: partial });
+      await active.settled;
+    } finally {
+      await runtime.dispose();
+    }
+  });
   it('forwards committed model entries and usage before turn end with ancestry', async () => {
     const { runtime } = await setup(
       {
@@ -231,6 +299,10 @@ describe('durable direct runtime', () => {
       await result.settled;
       expect(result.handledCommand).toBe(true);
       expect((await runtime.submitUserPrompt('/fixture')).handledCommand).toBe(true);
+      await runtime.steer('/fixture');
+      expect(dispatchCommand).toHaveBeenCalledTimes(3);
+      await expect(runtime.steer('')).rejects.toThrow('User input must contain text or an image');
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
       expect(streamSimple).not.toHaveBeenCalled();
     } finally {
       await runtime.dispose();
@@ -276,6 +348,173 @@ describe('durable direct runtime', () => {
       }
     },
   );
+  it.each(['idle', 'busy'] as const)(
+    'preserves checkpoint metadata for %s context projection before provider conversion',
+    async (state) => {
+      const pending = createAssistantMessageEventStream();
+      const details = { requestId: 'checkpoint', retainedMessages: [] };
+      const checkpoint = {
+        role: 'custom' as const,
+        customType: 'fixture.checkpoint',
+        content: 'CHECKPOINT_SUMMARY',
+        display: false,
+        details,
+        timestamp: 123,
+      };
+      let projected = false;
+      const { runtime, streamSimple } = await setup(
+        {
+          transformContext: ({ messages }) => {
+            const index = messages.findIndex(
+              (message) => message.role === 'custom' && message.customType === checkpoint.customType,
+            );
+            if (index === -1) return { messages };
+            expect(messages[index]).toEqual(checkpoint);
+            projected = true;
+            return {
+              messages: [
+                {
+                  role: 'compactionSummary',
+                  summary: checkpoint.content,
+                  tokensBefore: 1000,
+                  timestamp: checkpoint.timestamp,
+                },
+                ...messages.slice(index + 1),
+              ],
+            };
+          },
+        },
+        state === 'busy' ? [pending, response([{ type: 'text', text: 'compacted answer' }])] : undefined,
+      );
+      try {
+        if (state === 'busy') {
+          await runtime.submitPrompt('OLD_CONTEXT');
+          await vi.waitFor(() => expect(streamSimple).toHaveBeenCalledOnce());
+          const resumed = await runtime.submitInternalMessage(checkpoint);
+          pending.push({
+            type: 'done',
+            reason: 'stop',
+            message: await response([{ type: 'text', text: 'old answer' }]).result(),
+          });
+          await resumed.settled;
+        } else {
+          await runtime.appendMessage({ role: 'user', content: 'OLD_CONTEXT', timestamp: 1 });
+          await runtime.appendMessage(checkpoint);
+          await (
+            await runtime.submitInternalMessage('resume')
+          ).settled;
+        }
+        expect(projected).toBe(true);
+        const input = JSON.stringify(streamSimple.mock.calls.at(-1)![1]);
+        expect(input).not.toContain('OLD_CONTEXT');
+        expect(input.split('CHECKPOINT_SUMMARY')).toHaveLength(2);
+        expect(input).not.toContain('compactionSummary');
+        expect((await runtime.readLifecycle()).queue).toEqual([]);
+      } finally {
+        await runtime.dispose();
+      }
+    },
+  );
+  it.each(['omit', 'replace'] as const)(
+    'does not restore custom metadata over a native %s context edit',
+    async (action) => {
+      const transformContext = vi.fn<NonNullable<DirectHarnessRuntimeOptions['transformContext']>>(({ messages }) => ({
+        messages,
+      }));
+      const { runtime, streamSimple } = await setup({ transformContext });
+      try {
+        await runtime.appendMessage({
+          role: 'custom',
+          customType: 'fixture.checkpoint',
+          content: 'original marker',
+          display: false,
+          timestamp: 123,
+        });
+        const target = (await runtime.lane.context(BACKGROUND_CONTEXT)).entries.find(
+          (entry) => entry.kind === 'doompi.entry',
+        )!.id;
+        const edit =
+          action === 'omit'
+            ? { target, action }
+            : { target, action, messages: [{ role: 'user' as const, content: 'edited marker', timestamp: 123 }] };
+        await (
+          await runtime.lane.submit(
+            { type: 'write', entry: { kind: 'fixture.edit', edits: [edit] } },
+            BACKGROUND_CONTEXT,
+          )
+        ).wait(BACKGROUND_CONTEXT);
+        await runtime.prompt('resume');
+        expect(
+          transformContext.mock.calls[0]![0].messages.some((message: { role: string }) => message.role === 'custom'),
+        ).toBe(false);
+        const input = JSON.stringify(streamSimple.mock.calls[0]![1]);
+        expect(input).not.toContain('original marker');
+        if (action === 'replace') expect(input).toContain('edited marker');
+      } finally {
+        await runtime.dispose();
+      }
+    },
+  );
+  it('preserves occurrence-specific custom metadata when native contributions are identical', async () => {
+    const user = { role: 'user' as const, content: [{ type: 'text' as const, text: 'same' }], timestamp: 123 };
+    const first = {
+      role: 'custom' as const,
+      content: 'same',
+      customType: 'first',
+      details: { id: 1 },
+      display: false,
+      timestamp: 123,
+    };
+    const second = { ...first, customType: 'second', details: { id: 2 } };
+    const transformContext = vi.fn<NonNullable<DirectHarnessRuntimeOptions['transformContext']>>(({ messages }) => ({
+      messages,
+    }));
+    const { runtime } = await setup({ transformContext });
+    try {
+      for (const message of [user, first, second]) await runtime.appendMessage(message);
+      await runtime.prompt('resume');
+      expect(transformContext.mock.calls[0]![0].messages.slice(0, 3)).toEqual([user, first, second]);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('recovers internal custom metadata from durable receipts after reopening', async () => {
+    const message = {
+      role: 'custom' as const,
+      customType: 'fixture.checkpoint',
+      content: 'checkpoint',
+      details: { requestId: 'persisted' },
+      display: false,
+      timestamp: 123,
+    };
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-runtime-context-'));
+    const transformContext = vi.fn<NonNullable<DirectHarnessRuntimeOptions['transformContext']>>(({ messages }) => ({
+      messages,
+    }));
+    const open = () =>
+      setup({
+        cwd: root,
+        sessionsRoot: root,
+        sessionId: 'context',
+        durableStorage: undefined,
+        historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
+        transformContext,
+      });
+    let { runtime } = await open();
+    try {
+      await (
+        await runtime.submitInternalMessage(message)
+      ).settled;
+      await runtime.dispose();
+      ({ runtime } = await open());
+      await runtime.prompt('resume');
+      expect(transformContext.mock.calls.at(-1)![0].messages).toContainEqual(message);
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
+    } finally {
+      await runtime.dispose();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
   it('revalidates model admission before calling provider', async () => {
     const { runtime, streamSimple } = await setup({
       guardModelRequest: () => {
@@ -384,31 +623,35 @@ describe('durable direct runtime', () => {
       await runtime.dispose();
     }
   });
-  it('held next-run inputs stay dormant until an explicit prompt', async () => {
-    const { runtime, streamSimple } = await setup({}, [
-      response([{ type: 'text', text: 'explicit' }]),
-      response([{ type: 'text', text: 'held' }]),
-    ]);
+  it('automatically starts queued input on an idle agent', async () => {
+    const { runtime, streamSimple } = await setup();
     try {
-      await runtime.nextRun('held');
-      await runtime.resumeQueue();
-      expect(streamSimple).not.toHaveBeenCalled();
-      expect((await runtime.readLifecycle()).queue[0]?.scheduling).toBe('held');
-      await runtime.prompt('explicit');
-      await vi.waitFor(async () => expect((await runtime.readLifecycle()).queue).toEqual([]));
+      await runtime.nextRun('queued');
+      await vi.waitFor(async () => {
+        expect(streamSimple).toHaveBeenCalledOnce();
+        expect((await runtime.readLifecycle()).queue).toEqual([]);
+        expect((await runtime.readLifecycle()).operation).toBeNull();
+      });
+      expect(JSON.stringify(streamSimple.mock.calls[0]![1])).toContain('queued');
     } finally {
       await runtime.dispose();
     }
   });
   it('removes pending input without delivering it', async () => {
-    const { runtime, streamSimple } = await setup();
+    const pending = createAssistantMessageEventStream();
+    const answer = await response([{ type: 'text', text: 'active answer' }]).result();
+    const { runtime, streamSimple } = await setup({}, [pending]);
+    const active = await runtime.submitPrompt('active');
     try {
-      await runtime.nextRun('held');
+      await vi.waitFor(() => expect(streamSimple).toHaveBeenCalledOnce());
+      await runtime.nextRun('queued');
       const id = (await runtime.readLifecycle()).queue[0]!.id;
       expect(await runtime.removeQueued(id)).toBe('removed');
-      expect(streamSimple).not.toHaveBeenCalled();
+      expect(streamSimple).toHaveBeenCalledOnce();
       expect(await runtime.removeQueued(id)).toBe('removed');
     } finally {
+      pending.push({ type: 'done', reason: 'stop', message: answer });
+      await active.settled.catch(() => undefined);
       await runtime.dispose();
     }
   });

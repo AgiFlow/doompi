@@ -44,6 +44,23 @@ describe('Doom deterministic architecture rules', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
+  it('validates missing build-generated Pi facades from routed sources without creating artifacts', () => {
+    const manifest = write(
+      'package.json',
+      JSON.stringify({
+        name: '@agimon-ai/doompi-demo',
+        pi: { extensions: ['./dist/extensions/pi.mjs'] },
+      }),
+    );
+    write('src/extensions/(backend)/tool/hello.cli.ts', 'export default {};');
+    expect(doomCleanArchitectureBoundary.check?.(manifest, root, boundaryContext())).toBeNull();
+    expect(cordisFeaturePlugin.check?.(manifest, root)).toBeNull();
+    expect(fs.existsSync(path.join(root, 'generated'))).toBe(false);
+    fs.rmSync(path.join(root, 'src'), { recursive: true });
+    expect(doomCleanArchitectureBoundary.check?.(manifest, root, boundaryContext())).toContain('has no source entry');
+    expect(cordisFeaturePlugin.check?.(manifest, root)).toContain('must expose a Pi entry');
+  });
+
   function write(relativePath: string, source: string): string {
     const filePath = path.join(root, relativePath);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });

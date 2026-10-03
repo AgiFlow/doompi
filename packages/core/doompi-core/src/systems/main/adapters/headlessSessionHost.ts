@@ -999,20 +999,19 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       async appendCustomEntry(type, data) {
         await runtime.appendCustomEntry(type, data);
       },
-      prompt: (text, delivery) =>
-        delivery === 'steer'
-          ? runtime.steer(text)
-          : delivery === 'followUp'
-            ? runtime.followUp(text)
-            : runtime.prompt(text),
-      async admitPrompt(text, delivery) {
-        // followUp stays enqueue-only: voiceServer/index.ts:120 asks for 'followUp' while the agent
-        // is idle whenever a capture is queued, and waking a turn there would be unrequested.
-        if (delivery === 'followUp') return runtime.followUp(text);
+      async prompt(text, delivery) {
+        await (
+          await runtime.submitInternalMessage(text, delivery === 'steer' ? 'steer' : 'followUp')
+        ).settled;
+      },
+      async admitPrompt(text, delivery, origin) {
+        if (origin === 'operator' && delivery === 'followUp') return runtime.followUp(text);
         const submission =
           delivery === 'interrupt'
             ? await runtime.submitUserPrompt(text)
-            : await runtime.submitPrompt(text, undefined, delivery === 'steer' ? 'steer' : undefined);
+            : origin === 'operator'
+              ? await runtime.submitPrompt(text, undefined, delivery === 'steer' ? 'steer' : undefined)
+              : await runtime.submitInternalMessage(text, delivery === 'steer' ? 'steer' : 'followUp');
         void submission.settled.catch((error: unknown) =>
           client!.client.notify({ body: error instanceof Error ? error.message : String(error), level: 'error' }),
         );
@@ -1047,7 +1046,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         await headlessHost.dispatchHook('model_select', { model: currentModel });
       }
     }
-    const hook = eventHook(event.type);
+    const hook = event.type === 'run_end' && event.successorActive ? undefined : eventHook(event.type);
     if (headlessHost !== undefined && hook !== undefined && headlessHost.status.ready)
       await headlessHost.dispatchHook(hook, event as unknown as AnyRecord);
   });

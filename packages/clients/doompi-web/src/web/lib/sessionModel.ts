@@ -356,14 +356,19 @@ function closeAssistant(state: SessionState, message: unknown): SessionState {
   const index = state.entries.findLastIndex((entry) => entry.kind === 'assistant' && entry.streaming);
   if (index === -1) return state;
   const current = state.entries[index] as AssistantEntry;
-  const finalText = isRecord(message) ? textFromContent(message.content) : '';
+  const content = isRecord(message) ? message.content : undefined;
+  const hasContent = typeof content === 'string' || Array.isArray(content);
   const next: AssistantEntry = {
     ...current,
-    text: finalText.length > current.text.length ? finalText : current.text,
+    text: hasContent ? textFromContent(content) : current.text,
+    thinking: hasContent
+      ? thinkingFromContent(Array.isArray(content) ? content.filter(isRecord) : [])
+      : current.thinking,
     streaming: false,
   };
   const entries = [...state.entries];
-  entries[index] = next;
+  if (next.text || next.thinking) entries[index] = next;
+  else entries.splice(index, 1);
   return { ...state, entries };
 }
 
@@ -705,6 +710,16 @@ function applyJournalMessage(state: SessionState, message: Frame, entryId?: stri
   if (role === 'assistant') {
     const text = textFromContent(content);
     const thinking = thinkingFromContent(content);
+    const draft = state.entries.findLast((item) => item.kind === 'assistant' && item.streaming);
+    if (draft && entryId && !state.entries.some((item) => item.id === entryId)) {
+      state = closeAssistant(state, message);
+      state = {
+        ...state,
+        entries: state.entries.map((item) =>
+          item.id === draft.id ? { ...item, id: entryId, ...(timestamp === undefined ? {} : { timestamp }) } : item,
+        ),
+      };
+    }
     let next =
       (text || thinking) && !state.entries.some((item) => item.id === entryId)
         ? withEntry(state, {
@@ -818,6 +833,7 @@ export function prependHistory(state: SessionState, frames: readonly Frame[], pa
  */
 /** Frames whose only product is a timeline entry the protocol now publishes. */
 const TRANSCRIPT_FRAMES = new Set([
+  'message_start',
   'message_update',
   'message_end',
   'tool_execution_start',
@@ -872,11 +888,26 @@ function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOp
         toolsThisRun: 0,
       };
 
-    case 'message_update':
+    case 'message_start':
+    case 'message_update': {
+      const message = isRecord(frame.message) ? frame.message : undefined;
+      if (message?.role !== undefined && message.role !== 'assistant') return state;
+      if (message && (typeof message.content === 'string' || Array.isArray(message.content))) {
+        const opened = openAssistant(state);
+        return replaceEntry(opened.state, opened.entry.id, {
+          ...opened.entry,
+          text: textFromContent(message.content),
+          thinking: thinkingFromContent(Array.isArray(message.content) ? message.content.filter(isRecord) : []),
+        });
+      }
       return isRecord(frame.assistantMessageEvent) ? applyAssistantDelta(state, frame.assistantMessageEvent) : state;
+    }
 
     case 'message_end': {
+      if (isRecord(frame.message) && frame.message.role !== undefined && frame.message.role !== 'assistant')
+        return state;
       const id = asString(frame.entryId);
+      if (id && state.entries.some((item) => item.id === id)) return state;
       const draft = state.entries.findLast((item) => item.kind === 'assistant' && item.streaming);
       const closed = closeAssistant(state, frame.message);
       if (!id || !draft) return closed;

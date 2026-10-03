@@ -6,6 +6,7 @@ import ts from 'typescript';
 
 import {
   type DoomPackageManifest,
+  generatedEntrySource,
   piDiscoveryEntryStems,
   projectPath,
   readPackageManifest,
@@ -2064,7 +2065,12 @@ function publicFeatureAdapterPaths(configRoot: string): string[] {
     const facadePath = sourceCandidates(facadeStem)
       .map((candidate) => sourcePathForStem(path.join(configRoot, candidate)))
       .find((resolved) => resolved !== undefined && resolved !== null);
-    if (!facadePath) continue;
+    if (!facadePath) {
+      const generated = `generated/${facadeStem.slice('extensions/'.length)}.ts`;
+      if (facadeStem === 'extensions/pi' && generatedEntrySource(configRoot, generated))
+        adapters.add(path.join(configRoot, generated));
+      continue;
+    }
     const facade = readSource(facadePath);
     if (!facade) continue;
     const facadeRelative = projectPath(facadePath, configRoot);
@@ -2464,6 +2470,7 @@ function sourceCandidates(stem: string): string[] {
 }
 
 function sourceTargetExists(configRoot: string, stem: string): boolean {
+  if (stem === 'extensions/pi' && generatedEntrySource(configRoot, 'generated/pi.ts')) return true;
   for (const candidate of sourceCandidates(stem)) {
     for (const extension of SOURCE_TARGET_EXTENSIONS) {
       if (fs.existsSync(path.join(configRoot, `${candidate}${extension}`))) return true;
@@ -3042,7 +3049,10 @@ export const cordisFeaturePlugin: RuleDefinition = {
         return 'A Doom Pi feature package must expose a Pi entry through ./extensions/*.';
       }
       const invalid = adapterPaths.flatMap((adapterPath) => {
-        const sourceFile = readSource(adapterPath);
+        const generated = generatedEntrySource(configRoot, projectPath(adapterPath, configRoot) ?? '');
+        const sourceFile =
+          readSource(adapterPath) ??
+          (generated ? ts.createSourceFile(adapterPath, generated, ts.ScriptTarget.Latest, true) : null);
         if (!sourceFile) return [`${projectPath(adapterPath, configRoot) ?? adapterPath} (missing)`];
         if (!isDoomHost)
           return hasPluginHelperCall(sourceFile, 'definePiExtension')

@@ -106,17 +106,20 @@ export interface DoomHeadlessSession {
   }): readonly Record<string, unknown>[] | Promise<readonly Record<string, unknown>[]>;
   appendCustomEntry(type: string, data: unknown): Promise<void>;
   /**
-   * Delivers and awaits the turn. 'steer' and 'followUp' only enqueue into a running turn; they do
-   * NOT wake an idle agent.
+   * Delivers host-generated input and awaits its turn without using the operator queue.
+   * An idle agent is woken; busy delivery uses Durable steering or follow-up.
    */
   prompt(text: string, delivery?: 'prompt' | 'steer' | 'followUp'): Promise<void>;
   /**
-   * Resolves when accepted by the session, before the agent turn settles. Here 'steer' describes
-   * how to deliver IF a turn is already running; an idle agent is woken either way, matching Pi's
-   * ExtensionAPI.sendMessage({ triggerTurn: true, deliverAs: 'steer' }). 'interrupt' cancels the
-   * active run and directly admits this user input without releasing retained queued work.
+   * Admits host-generated input without awaiting its turn. Internal input never changes the
+   * operator queue. Voice capture can explicitly select operator origin; 'interrupt' cancels
+   * the active run and admits operator input while preserving retained queued work.
    */
-  admitPrompt?(text: string, delivery?: 'prompt' | 'steer' | 'followUp' | 'interrupt'): Promise<void>;
+  admitPrompt?(
+    text: string,
+    delivery?: 'prompt' | 'steer' | 'followUp' | 'interrupt',
+    origin?: 'operator',
+  ): Promise<void>;
   abort(): Promise<void>;
   compact(instructions?: string): Promise<void>;
   activity(): Promise<{ hasPendingMessages: boolean; isIdle: boolean }>;
