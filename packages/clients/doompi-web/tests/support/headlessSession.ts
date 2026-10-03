@@ -693,6 +693,9 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
             ...entries[index],
             id: entryId,
             seq: index < 0 ? entries.length + 1 : entries[index]!.seq,
+            parentId: index < 0 ? (entries.at(-1)?.id ?? null) : (entries[index]!.parentId ?? null),
+            timestamp:
+              typeof message.timestamp === 'number' ? message.timestamp : (entries[index]?.timestamp ?? Date.now()),
             type: 'message',
             message,
           };

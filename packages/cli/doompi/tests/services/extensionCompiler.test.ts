@@ -65,6 +65,51 @@ afterEach(() => {
 });
 
 describe('compiled direct modules', () => {
+  it('bundles the exact authoring import from the CLI installation when absent in the repository', async () => {
+    const directory = temporaryDirectory();
+    const entry = writeModule(
+      directory,
+      'hook',
+      "import {defineDoomHook} from '@agimon-ai/doompi-hook/authoring'; export default defineDoomHook({setup(){return {}}});",
+    );
+    const output = await compileExtensionModule(entry, path.join(directory, 'cache'));
+    expect(readCompiledSource(output)).not.toContain('@agimon-ai/doompi-hook/authoring');
+    const module = (await import(pathToFileURL(output).href)) as { default: { setup(): unknown } };
+    expect(module.default.setup()).toEqual({});
+  });
+
+  it('uses repository authoring resolution ahead of the installed fallback', async () => {
+    const directory = temporaryDirectory();
+    const packageDirectory = path.join(directory, 'node_modules', '@agimon-ai', 'doompi-hook');
+    fs.mkdirSync(packageDirectory, { recursive: true });
+    fs.writeFileSync(
+      path.join(packageDirectory, 'package.json'),
+      JSON.stringify({ name: '@agimon-ai/doompi-hook', type: 'module', exports: { './authoring': './authoring.mjs' } }),
+    );
+    fs.writeFileSync(
+      path.join(packageDirectory, 'authoring.mjs'),
+      'export const defineDoomHook = value => ({...value, repository:true});',
+    );
+    const entry = writeModule(
+      directory,
+      'hook',
+      "import {defineDoomHook} from '@agimon-ai/doompi-hook/authoring'; export default defineDoomHook({setup(){return {}}});",
+    );
+    const output = await compileExtensionModule(entry, path.join(directory, 'cache'));
+    const module = (await import(pathToFileURL(output).href)) as { default: { repository: boolean } };
+    expect(module.default.repository).toBe(true);
+  });
+
+  it('does not apply authoring fallback to other unresolved imports', async () => {
+    const directory = temporaryDirectory();
+    const entry = writeModule(
+      directory,
+      'hook',
+      "import {missing} from '@agimon-ai/doompi-hook/not-authoring'; export default missing;",
+    );
+    await expect(compileExtensionModule(entry, path.join(directory, 'cache'))).rejects.toThrow();
+  });
+
   it.each(['local', 'shared'])('queries the real LogSink worker from a %s cached API module', async (cache) => {
     const directory = temporaryDirectory();
     const entry = writeModule(

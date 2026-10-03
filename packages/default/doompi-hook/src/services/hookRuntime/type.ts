@@ -1,20 +1,26 @@
 import type { DoomConfigContext } from '@agimon-ai/doompi-config/types';
+import type { DoomChildSessionHooks } from '@agimon-ai/doompi-core/childSession';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import type { HookDocumentReader, HookRunner } from '../../types/hooks';
 import type { HookTelemetry } from '../../types/telemetry';
+import type { HookModules } from '../hookModules/type';
+
+export const DOOM_HOOK_SESSION_SERVICE = 'doom/hook-session';
 export interface HookExtensionOptions {
   telemetry?: HookTelemetry;
   runner?: HookRunner;
   documents?: HookDocumentReader;
 }
 
-/** The two collaborators a dispatch needs, both replaceable in tests. */
+/** One host session owns its module registry and lifetime; children borrow only immutable config. */
 export interface HookSession {
   config(): DoomConfigContext;
-  runner: HookRunner;
-  documents: HookDocumentReader;
+  readonly runner: HookRunner;
+  readonly documents: HookDocumentReader;
+  readonly modules: HookModules;
+  readonly signal: AbortSignal;
 }
 
 /** Package-scoped startup ordering supplied by the standard Pi adapter. */
@@ -30,15 +36,22 @@ export interface HookReadinessGate {
 export interface HookRuntime {
   readonly session: HookSession;
   readonly readiness?: HookReadinessGate;
+  readonly childHooks: DoomChildSessionHooks;
   isCurrent(): boolean;
 }
 
 export type HookRuntimeResolver = () => HookRuntime | undefined;
 
 export interface HookRuntimeBinding extends HookRuntime {
-  dispose(): void;
+  dispose(): Promise<void>;
 }
 export interface HookBinding {
   readonly plugin: (this: void, context: Context) => void;
   readonly runtime: HookRuntimeResolver;
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    'doom/hook-session': HookRuntime;
+  }
 }

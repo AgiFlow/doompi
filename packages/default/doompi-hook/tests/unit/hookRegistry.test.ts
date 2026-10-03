@@ -130,3 +130,48 @@ describe('registry selection', () => {
     });
   });
 });
+
+describe('module bindings', () => {
+  it('resolves modules against their declaring layer and retains row attribution', () => {
+    const entries = registryEntries([
+      {
+        registryId: '/personal/hooks.yaml',
+        baseDirectory: '/personal',
+        document: {
+          groups: {
+            guard: {
+              core: true,
+              hooks: [
+                { event: 'PreToolUse', pi: { module: './guard.ts', matcher: 'Bash', order: 2, skipInSubagent: true } },
+              ],
+            },
+          },
+        },
+      },
+    ]);
+    expect(entries[0]).toMatchObject({
+      module: '/personal/guard.ts',
+      registryId: '/personal/hooks.yaml',
+      groupId: 'guard',
+      rowId: '0',
+    });
+    expect(selectRegistryHooks(entries, { event: 'PreToolUse', toolName: 'bash', inSubagent: false })[0]).toMatchObject(
+      { hook: { module: '/personal/guard.ts' }, rowId: '0' },
+    );
+    expect(selectRegistryHooks(entries, { event: 'PreToolUse', inSubagent: true })).toEqual([]);
+  });
+  it.each([
+    { command: 'x', module: 'x.ts' },
+    {},
+    { module: '' },
+    { module: 'x.ts', timeout: 0 },
+    { command: 'x', timeout: Number.NaN },
+  ])('rejects invalid bindings with attribution: %j', (binding) => {
+    const input = {
+      baseDirectory: '/repo',
+      registryId: '/repo/.doom/hooks.yaml',
+      document: { groups: { guard: { hooks: [{ event: 'PreToolUse', pi: binding }] } } },
+    } as unknown as ParsedRegistrySource;
+    expect(() => registryEntries([input])).toThrow('/repo/.doom/hooks.yaml: group guard, row 0, event PreToolUse');
+  });
+});

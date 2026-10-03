@@ -18,6 +18,8 @@ import { createSession, AgentDoc, type Cursor, type EntryRecord, type EntryId } 
 import {
   createDoomChildSessionService,
   type DoomChildSessionIntercom,
+  type DoomChildSessionHooks,
+  type DoomChildSessionHookBinding,
   type DoomChildSessionRequest,
   type DoomChildSessionRuntime,
   type DoomChildSessionService,
@@ -59,6 +61,7 @@ export interface HeadlessChildSessionServiceOptions {
   /** Snapshot the parent preference once per creation, never live-sync child toggles. */
   readonly parentFastMode?: () => boolean | Promise<boolean>;
   /** Resolve the current session's MCP dispatcher at spawn and invocation time. */
+  readonly hooks?: () => DoomChildSessionHooks | undefined;
   readonly mcpTool?: () => DoomChildSessionMcpTool | undefined;
   readonly subscribeMcpTool?: (listener: () => void) => () => void;
   readonly historyOwnership?: HistoryOwnership;
@@ -110,7 +113,7 @@ function sessionFile(runtime: DirectHarnessRuntime): string | undefined {
 function childRuntime(
   runtime: DirectHarnessRuntime,
   intercom?: DoomChildSessionIntercom,
-  release?: () => void,
+  release?: () => void | Promise<void>,
 ): DoomChildSessionRuntime {
   const file = sessionFile(runtime);
   return {
@@ -135,7 +138,7 @@ function childRuntime(
     abort: () => runtime.abort(),
     dispose: async () => {
       try {
-        release?.();
+        await release?.();
       } finally {
         try {
           await runtime.dispose();
@@ -144,6 +147,62 @@ function childRuntime(
         }
       }
     },
+  };
+}
+
+/** Own the hook lifetime independently of the caller's startup signal. */
+export function bindChildHooks(
+  request: DoomChildSessionRequest,
+  hooks: DoomChildSessionHooks | undefined,
+  readRuntime: () => DirectHarnessRuntime | undefined,
+  signal?: AbortSignal,
+): { binding?: DoomChildSessionHookBinding; dispose(): Promise<void> } {
+  const lifetime = new AbortController();
+  const abort = () => lifetime.abort(signal?.reason);
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) abort();
+  const admittedRuntime = () => {
+    lifetime.signal.throwIfAborted();
+    const runtime = readRuntime();
+    if (!runtime) throw new Error('Child hook runtime is not available.');
+    return runtime;
+  };
+  // Copy only data. The borrowed intercom retains its owner and is never frozen.
+  const { intercom, ...data } = request;
+  const freeze = (value: unknown): void => {
+    if (typeof value !== 'object' || value === null) return;
+    for (const child of Object.values(value)) freeze(child);
+    Object.freeze(value);
+  };
+  const snapshot = structuredClone(data);
+  freeze(snapshot);
+  let binding: DoomChildSessionHookBinding | undefined;
+  try {
+    binding = hooks?.bind({
+      request: Object.freeze({ ...snapshot, ...(intercom ? { intercom } : {}) }),
+      sessionId: () => readRuntime()?.sessionId,
+      signal: lifetime.signal,
+      async sendMessage(text, delivery) {
+        await admittedRuntime().submitInternalMessage(text, delivery);
+      },
+      async appendCustomEntry(type, data) {
+        await admittedRuntime().appendCustomEntry(type, data);
+      },
+    });
+  } catch (error) {
+    lifetime.abort();
+    signal?.removeEventListener('abort', abort);
+    throw error;
+  }
+  let disposal: Promise<void> | undefined;
+  return {
+    ...(binding ? { binding } : {}),
+    dispose: () =>
+      (disposal ??= (async () => {
+        lifetime.abort();
+        signal?.removeEventListener('abort', abort);
+        await binding?.dispose();
+      })()),
   };
 }
 
@@ -547,7 +606,13 @@ export function createHeadlessChildSessionService(
       };
 
       let runtime: DirectHarnessRuntime | undefined;
+      let hooks: ReturnType<typeof bindChildHooks> | undefined;
       try {
+        hooks = bindChildHooks(request, options.hooks?.(), () => runtime, signal);
+        if (hooks.binding) {
+          runtimeOptions.beforeTool = hooks.binding.beforeTool;
+          runtimeOptions.afterTool = hooks.binding.afterTool;
+        }
         runtime = await runtimeFactory(runtimeOptions);
         if (requestedModel && model) await runtime.setModel(model);
         if (thinking !== undefined) await runtime.setThinkingLevel(thinking as never);
@@ -555,15 +620,24 @@ export function createHeadlessChildSessionService(
         const releaseMcp = bindChildMcpCatalog(runtime, request, options, runtimeOptions.tools ?? []);
         const file = sessionFile(runtime);
         const releaseNative = file ? registerNativeChild(file, runtime) : undefined;
-        return childRuntime(runtime, request.intercom, () => {
+        return childRuntime(runtime, request.intercom, async () => {
           try {
             releaseMcp();
           } finally {
-            releaseNative?.();
+            try {
+              releaseNative?.();
+            } finally {
+              await hooks?.dispose();
+            }
           }
         });
       } catch (error) {
         const failures: unknown[] = [error];
+        try {
+          await hooks?.dispose();
+        } catch (cleanupError) {
+          failures.push(cleanupError);
+        }
         let closed = false;
         try {
           if (runtime) {

@@ -20,6 +20,8 @@ import { Value } from 'typebox/value';
 import {
   DOOM_CHILD_SESSION_SERVICE,
   DOOM_CHILD_SESSION_MCP_TOOL_SERVICE,
+  DOOM_CHILD_SESSION_HOOKS_SERVICE,
+  type DoomChildSessionHooks,
   type DoomChildSessionMcpTool,
 } from '../../../exports/childSession';
 import type {
@@ -886,6 +888,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           if (name === DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) listener();
         }) ?? (() => undefined)
       );
+    },
+    hooks: () => {
+      if (disposed || !headlessReady || !headlessHost?.status.ready)
+        throw new Error('Headless capabilities are not installed.');
+      return mcpServiceRoot?.get(DOOM_CHILD_SESSION_HOOKS_SERVICE) as DoomChildSessionHooks | undefined;
     },
     mcpTool: () => {
       if (disposed || !headlessReady || !headlessHost?.status.ready) return undefined;

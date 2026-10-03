@@ -49,3 +49,6 @@ export {
 } from '../types/hooks';
 export { HOOK_TELEMETRY_EVENT } from '../constants/telemetry';
 export { type HookTelemetry, type HookTelemetryAttributes, type HookTelemetryEventName } from '../types/telemetry';
+export { createHookModules } from '../services/hookModules';
+export type { HookModules, HookModulesOptions, HookModuleOutcome } from '../services/hookModules/type';
+export type { HookContext, HookNativeEvent, HookModuleResult, HookModuleDescriptor } from '../types/hookModule';

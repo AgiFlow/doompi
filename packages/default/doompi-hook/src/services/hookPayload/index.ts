@@ -8,6 +8,7 @@ export function toolHookPayload(
   hookEventName: string,
   repoRoot: string,
   sessionId: string,
+  identity: { parentSessionId?: string; agent?: string } = {},
 ): HookPayload {
   return {
     session_id: sessionId,
@@ -17,6 +18,8 @@ export function toolHookPayload(
     tool_name: toClaudeToolName(event.toolName),
     tool_input: event.input,
     ...(event.type === TOOL_RESULT_EVENT ? { tool_response: { success: !event.isError, content: event.content } } : {}),
+    ...(identity.parentSessionId === undefined ? {} : { parent_session_id: identity.parentSessionId }),
+    ...(identity.agent === undefined ? {} : { agent_type: identity.agent }),
   };
 }
 

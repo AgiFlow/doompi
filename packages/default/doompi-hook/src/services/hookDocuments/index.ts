@@ -62,7 +62,11 @@ export function createHookDocumentReader(options: HookDocumentReaderOptions = {}
     baseDirectory: string;
   }): Promise<HookDocumentSource | undefined> => {
     try {
-      return { baseDirectory: candidate.baseDirectory, text: await readFile(candidate.filePath) };
+      return {
+        registryId: candidate.filePath,
+        baseDirectory: candidate.baseDirectory,
+        text: await readFile(candidate.filePath),
+      };
     } catch (error) {
       if (isMissingFile(error)) return undefined;
       throw error;
@@ -74,6 +78,7 @@ export function createHookDocumentReader(options: HookDocumentReaderOptions = {}
     if (cachedRegistryKey === key) return cachedRegistryEntries;
     cachedRegistryEntries = registryEntries(
       sources.map((source) => ({
+        registryId: source.registryId,
         baseDirectory: source.baseDirectory,
         document: (parseYaml(source.text) ?? {}) as RegistryDocument,
       })),

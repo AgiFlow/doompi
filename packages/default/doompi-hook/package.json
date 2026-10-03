@@ -50,6 +50,11 @@
       "import": "./dist/apiContracts.mjs",
       "require": "./dist/apiContracts.cjs"
     },
+    "./authoring": {
+      "types": "./dist/authoring.d.mts",
+      "import": "./dist/authoring.mjs",
+      "require": "./dist/authoring.cjs"
+    },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",

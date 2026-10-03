@@ -3,6 +3,8 @@ import path from 'node:path';
 import {
   DOOM_CHILD_SESSION_SERVICE,
   DOOM_CHILD_SESSION_MCP_TOOL_SERVICE,
+  DOOM_CHILD_SESSION_HOOKS_SERVICE,
+  type DoomChildSessionHooks,
   type DoomChildSessionMcpTool,
 } from '@agimon-ai/doompi-core/childSession';
 import {
@@ -55,6 +57,7 @@ function terminalChildSessionPlugin(cordis: Context, models: ModelRuntime, sessi
         sessionContext.on('internal/service', (name) => {
           if (name === DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) listener();
         }),
+      hooks: () => sessionContext.get(DOOM_CHILD_SESSION_HOOKS_SERVICE) as DoomChildSessionHooks | undefined,
       mcpTool: () => sessionContext.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionMcpTool | undefined,
     });
     sessionContext.provide(DOOM_CHILD_SESSION_SERVICE, childSessions.get());

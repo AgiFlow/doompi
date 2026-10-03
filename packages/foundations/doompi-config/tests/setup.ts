@@ -135,6 +135,7 @@ describe('Doom configuration', () => {
         'profileEnvironment',
         'pluginHooks',
         'mcpProjection',
+        'hookModules',
         'packageAttribution',
         'profileIdentity',
         'profileVoice',

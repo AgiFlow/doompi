@@ -45,6 +45,18 @@ function rewriteAsOtherCopy(filePath: string, domains: string[]): void {
 }
 
 describe('the harness store across package copies', () => {
+  it('keeps the hook descriptor in the state file without an environment transport', () => {
+    const environment: NodeJS.ProcessEnv = {};
+    const hookModules = { file: path.join(workDir, 'generation', 'hook-modules.json') };
+    createHarnessSession({ ...readHarnessState({}), hookModules }, { directory: workDir, environment });
+    expect(JSON.stringify(environment)).not.toContain(hookModules.file);
+    expect(environment.DOOMPI_HOOK_MODULES).toBeUndefined();
+    expect(JSON.parse(fs.readFileSync(environment[HARNESS_STATE_POINTER]!, 'utf8')).state.hookModules).toEqual(
+      hookModules,
+    );
+    expect(readHarnessState(environment)).not.toHaveProperty('hookModules');
+  });
+
   it('serves a rewrite of its own file instead of the cached read', () => {
     const state = { ...readHarnessState({}), root: workDir, domains: ['default'] };
     const filePath = createHarnessSession(state, { directory: workDir, environment: process.env });

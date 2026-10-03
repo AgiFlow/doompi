@@ -31,6 +31,7 @@ import { buildHarnessContext } from '../../../builders/cli/harnessContext';
 import { doomPiPackageRoot, writePiExtensionAlias } from '../../../builders/cli/piExtensionAlias';
 import { piExtensionDispatcherIsUpgradeable } from '../../../builders/cli/piExtensionDispatcher';
 import { writeProjectPiSettings } from '../../../builders/cli/projectSettings';
+import { syncHookModules } from '../../../builders/hooks';
 import { syncServerBundle } from '../../../builders/server';
 import { syncMcpBundle } from '../../../builders/server/mcpBundle';
 import { syncWebBundle } from '../../../builders/web';
@@ -458,6 +459,13 @@ async function stageSync(
     const persistedThemePath = path.join(piThemeDirectory(agentDirectory), `${DEFAULT_THEME_NAME}.json`);
     const themePath =
       (commandOptions.settingsMode ?? 'persisted') === 'persisted' ? persistedThemePath : context.defaultThemePath;
+    const hookModules = await syncHookModules({
+      repoRoot: location.root,
+      homeDirectory,
+      config: context.majorModesConfig,
+      directory,
+      sharedCacheDirectory: location.sharedCacheDirectory,
+    });
     const state: SyncState = {
       version: SYNC_STATE_VERSION,
       root: location.root,
@@ -470,6 +478,7 @@ async function stageSync(
       fileState: {
         profileEnvironment: loadHarnessState(context.environment).state.profileEnvironment,
         pluginHooks: context.resources.pluginHooks,
+        hookModules,
         mcpProjection: context.resources.mcpProjection,
       },
       resolved,

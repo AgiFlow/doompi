@@ -169,6 +169,7 @@ export function collectDrift(
   const sharedDrift = readSyncDrift({ repoRoot, environment, homeDirectory: environment.HOME ?? os.homedir() });
   const sharedMessages: Partial<Record<SyncDriftReason, string>> = {
     'never-synced': 'sync registration is missing or invalid',
+    'runtime-stale': 'precompiled runtime or hook modules are missing or stale',
     'code-changed': 'cockpit sources changed since the last sync',
     'cockpit-bundle-missing': 'cockpit bundle is missing',
     'package-apis-missing': 'package API routes are missing',
