@@ -7,7 +7,7 @@ vi.mock('../../src/web/components/PluginSurface', () => ({
 }));
 
 import { Composer } from '../../src/web/features/session/Composer';
-import { resetSessions, setActiveSession } from '../../src/web/stores/sessionsStore';
+import { resetSessions, setActiveSession, sessionsStore } from '../../src/web/stores/sessionsStore';
 import { applySessionLifecycle, dropSessionStore } from '../../src/web/stores/sessionStore';
 
 afterEach(() => {
@@ -22,6 +22,37 @@ describe('Composer plugin actions', () => {
     expect(markup.match(/data-testid="plugin-composer-action"/g)).toHaveLength(1);
     expect(markup).toContain('data-testid="composer-actions"');
     expect(markup).not.toMatch(/data-testid="composer-actions"[^>]*sm:hidden/);
+  });
+
+  it('does not present pending background work as queued messages before lifecycle reconnects', () => {
+    setActiveSession('active-session');
+    sessionsStore.setState((state) => ({
+      ...state,
+      byId: {
+        'active-session': {
+          summary: {
+            id: 'active-session',
+            name: 'session',
+            cwd: '/workspace',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            phase: 'idle',
+            phaseSince: '2026-01-01T00:00:00.000Z',
+            attach: 'attached',
+            pendingMessageCount: 2,
+            everPrompted: true,
+            awaitingInput: false,
+          },
+          attach: 'attached',
+          reason: '',
+          replayed: 0,
+          dropped: 0,
+        },
+      },
+    }));
+
+    const markup = renderToStaticMarkup(createElement(Composer));
+    expect(markup).not.toContain('data-testid="composer-queued"');
   });
 
   it('keeps Abort visible and disabled until the server reports terminal ownership', () => {

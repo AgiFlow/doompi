@@ -669,6 +669,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   let currentOperation: 'run' | 'compaction' | 'navigation' | null = null;
   let nativeQueuedMessages = 0;
   let retainedQueuedMessages = 0;
+  let pendingRead = 0;
   // Durable successors are physical runs within one Pi agent loop. Lifecycle frames can
   // change the current operation between them, so track the logical loop separately.
   let logicalLoopActive = false;
@@ -963,8 +964,14 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         turnIndex += 1;
         return;
       }
-      case 'run_end':
+      case 'run_end': {
         if (event.successorActive) return;
+        // Settlement hooks must see reconciled pending work, not a detached lifecycle snapshot.
+        ++pendingRead;
+        const state = await runtime.readState();
+        // Also fence lifecycle reads started while the authoritative read was in flight.
+        ++pendingRead;
+        if (!shuttingDown) retainedQueuedMessages = Number(state.pendingMessageCount) || 0;
         currentOperation = null;
         if (logicalLoopActive) {
           logicalLoopActive = false;
@@ -975,6 +982,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         turnEntryIds.clear();
         toolArguments.clear();
         return;
+      }
       case 'compaction_start':
         currentOperation = 'compaction';
         return;
@@ -1164,12 +1172,19 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       unsubscribeEvents = runtime.onEvent(onHarnessEvent);
       const initialLifecycle = await runtime.readLifecycle();
       currentOperation = initialLifecycle.operation?.kind ?? null;
-      nativeQueuedMessages = Number((await runtime.readState()).pendingMessageCount) || 0;
-      retainedQueuedMessages = initialLifecycle.queue.length;
+      retainedQueuedMessages = Number((await runtime.readState()).pendingMessageCount) || 0;
       unsubscribeLifecycle = runtime.onPresentationFrame((frame) => {
         if (frame.type !== 'lifecycle_update' || !frame.lifecycle || typeof frame.lifecycle !== 'object') return;
         const lifecycle = frame.lifecycle as Awaited<ReturnType<typeof runtime.readLifecycle>>;
-        retainedQueuedMessages = lifecycle.queue.length;
+        // The visible queue excludes retained nonqueue inputs. Pending checks must
+        // still account for those inputs, including legacy unknown-origin records.
+        const read = ++pendingRead;
+        void runtime
+          .readState()
+          .then((state) => {
+            if (!shuttingDown && read === pendingRead) retainedQueuedMessages = Number(state.pendingMessageCount) || 0;
+          })
+          .catch((error: unknown) => report('pending_messages', error));
         currentOperation = lifecycle.operation?.kind ?? null;
       });
       // Pi opens session-scoped extension services before resource discovery. Doom tool
@@ -1188,6 +1203,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
 
     async shutdown(): Promise<void> {
       shuttingDown = true;
+      pendingRead++;
       unsubscribeEvents?.();
       unsubscribeEvents = undefined;
       unsubscribeLifecycle?.();

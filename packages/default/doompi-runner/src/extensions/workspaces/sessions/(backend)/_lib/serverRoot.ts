@@ -35,9 +35,11 @@ export const createRunnerServerRoot = ({ host, agent, signal }: DoomServerPlugin
         if (!execution.session.admitPrompt) throw new Error('The session cannot admit a runner notification.');
         await execution.session.admitPrompt(content, 'steer');
       } catch (error) {
-        // The runner already finished; a failed wake-up costs the model its
-        // prompt, not the result, so tell the operator instead.
-        await execution.client.notify({ body: String(error), level: 'warning' });
+        // Keep completion ownership with the watcher until admission succeeds.
+        await Promise.resolve()
+          .then(() => execution.client.notify({ body: String(error), level: 'warning' }))
+          .catch(() => undefined);
+        throw error;
       }
     });
   const runtime = createRunnerServerRuntime(dependencies, host.context.directEvents, wakeAgent);

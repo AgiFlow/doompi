@@ -15,6 +15,8 @@ import type { RunnerDependencies } from '../runnerDependencies/type';
 import { formatRunnerFinished } from '../runnerRecord';
 import { presentRunnerRuns } from '../webRunnerRuns';
 
+const COMPLETION_RETRY_MS = 1_000;
+
 export interface RunnerServerRuntime {
   readonly container: RunnerDependencies;
   readonly activity: DoomHeadlessActivity;
@@ -41,6 +43,7 @@ export function createRunnerServerRuntime(
   let unsubscribeWatched: (() => void) | undefined;
   let wakes: Promise<void> = Promise.resolve();
   let closing = false;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
   // The activity is optional and source-gated. The retained facet owns the
   // session runtime, so disabling the activity must not tear down its jobs.
@@ -154,18 +157,36 @@ export function createRunnerServerRuntime(
 
   // Sequenced so two runners exiting in the same tick each wake the agent once.
   const wakeForFinished = (ownedSessionId: string): void => {
+    if (closing) return;
     wakes = wakes
       .then(async () => {
+        if (closing) return;
+        let retry = false;
         // Deleting the entry being visited is safe for a Set iterator.
         for (const id of watched) {
-          const record = await container.runnerRegistry.get(id, ownedSessionId);
           if (closing) return;
-          if (record?.state === 'running') continue;
-          watched.delete(id);
-          // A record swept before it was seen leaves nothing to report.
-          if (record) await wakeAgent?.(formatRunnerFinished(record));
+          try {
+            const record = await container.runnerRegistry.get(id, ownedSessionId);
+            if (closing) return;
+            if (record?.state === 'running') continue;
+            // A record swept before it was seen leaves nothing to report.
+            if (record) await wakeAgent?.(formatRunnerFinished(record));
+            watched.delete(id);
+          } catch (error) {
+            retry = true;
+            process.emitWarning(`Could not report finished runner ${id}: ${String(error)}`);
+          }
+        }
+        if (retry && !closing && retryTimer === undefined) {
+          retryTimer = setTimeout(() => {
+            retryTimer = undefined;
+            wakeForFinished(ownedSessionId);
+          }, COMPLETION_RETRY_MS);
+          retryTimer.unref?.();
         }
         if (watched.size === 0) {
+          clearTimeout(retryTimer);
+          retryTimer = undefined;
           unsubscribeWatched?.();
           unsubscribeWatched = undefined;
         }
@@ -229,11 +250,14 @@ export function createRunnerServerRuntime(
       // Session cleanup completes every runner it stops, and none of those may
       // start a turn in a session that is going away.
       closing = true;
+      clearTimeout(retryTimer);
+      retryTimer = undefined;
       watched.clear();
       unsubscribeWatched?.();
       unsubscribeWatched = undefined;
       unsubscribeRunnerUpdates?.();
       unsubscribeRunnerUpdates = undefined;
+      await wakes;
       await disposeRuntime();
     },
   };

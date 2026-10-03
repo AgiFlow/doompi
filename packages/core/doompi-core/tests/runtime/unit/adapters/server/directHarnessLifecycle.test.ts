@@ -123,6 +123,89 @@ describe('direct harness durable lifecycle', () => {
     }
   });
 
+  it('keeps nonqueue and legacy inputs outside destructive queue controls', async () => {
+    const { repository, models, streams } = fixtures();
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    const Lifecycle = defineDoc({
+      kind: 'doompi.server.lifecycle',
+      version: 1,
+      scope: 'session',
+      initial: () => ({ json: '' }),
+    });
+    try {
+      await runtime.harness.commit(async (tx) => {
+        (await tx.doc(Lifecycle)).json = JSON.stringify({
+          revision: 1,
+          paused: true,
+          queue: [undefined, false, true].map((explicitQueue, index) => ({
+            id: `retained-${index}`,
+            text: `input-${index}`,
+            explicitQueue,
+            delivery: 'nextRun',
+            scheduling: 'automatic',
+            disposition: 'pending',
+          })),
+        });
+      }, BACKGROUND_CONTEXT);
+      expect((await runtime.readLifecycle()).queue).toEqual([
+        { id: 'retained-2', text: 'input-2', delivery: 'nextRun', scheduling: 'automatic', disposition: 'pending' },
+      ]);
+      expect((await runtime.readState()).pendingMessageCount).toBe(3);
+      for (const id of ['retained-0', 'retained-1']) {
+        expect(await runtime.removeQueued(id)).toBe('not_found');
+        expect(await runtime.promoteQueued(id)).toBe('not_found');
+      }
+      await runtime.clearQueue();
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
+      expect((await runtime.readState()).pendingMessageCount).toBe(2);
+      const fresh = await runtime.submitPrompt('fresh Send');
+      await waitFor(() => streams.length === 1);
+      expect((await runtime.readLifecycle()).paused).toBe(true);
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('fresh answer') });
+      await fresh.settled;
+      expect(streams).toHaveLength(1);
+      expect((await runtime.readState()).pendingMessageCount).toBe(2);
+      await runtime.resumeQueue();
+      await waitFor(() => streams.length === 2);
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('legacy answer') });
+      await waitFor(() => streams.length === 3);
+      streams[2]!.push({ type: 'done', reason: 'stop', message: message('nonqueue answer') });
+      await waitFor(async () => (await runtime.readState()).pendingMessageCount === 0);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it('clears only captured eligible inputs and preserves a concurrent enqueue', async () => {
+    const { repository, models, streams } = fixtures();
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let blocked = false;
+    try {
+      await runtime.submitPrompt('active');
+      await waitFor(() => streams.length === 1);
+      await runtime.enqueueAutomatic('captured');
+      const commit = runtime.harness.commit.bind(runtime.harness);
+      vi.spyOn(runtime.harness, 'commit').mockImplementationOnce(async (change, context) => {
+        blocked = true;
+        await gate;
+        return commit(change, context);
+      });
+      const clearing = runtime.clearQueue();
+      await waitFor(() => blocked);
+      const concurrent = await runtime.enqueueAutomatic('concurrent');
+      release();
+      await clearing;
+      expect((await runtime.readLifecycle()).queue).toMatchObject([{ id: concurrent.id, text: 'concurrent' }]);
+    } finally {
+      release();
+      await runtime.dispose();
+    }
+  });
+
   it('delivers internal results without exposing or clearing them through the operator queue', async () => {
     const { repository, models, streams, streamSimple } = fixtures();
     const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
@@ -139,7 +222,7 @@ describe('direct harness durable lifecycle', () => {
     try {
       const active = await runtime.submitPrompt('operator');
       await waitFor(() => streams.length === 1);
-      await runtime.nextRun('operator queued');
+      await runtime.enqueueAutomatic('operator queued');
       const internal = await runtime.submitInternalMessage({
         role: 'custom',
         customType: 'runner-result',
@@ -337,30 +420,36 @@ describe('direct harness durable lifecycle', () => {
     }
   });
 
-  it('internal continuations wake an idle agent without releasing paused operator inputs', async () => {
-    const { repository, models, streams } = fixtures(true);
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
-    try {
-      const active = await runtime.submitPrompt('operator');
-      await waitFor(() => streams.length === 1);
-      await runtime.enqueueAutomatic('operator queued');
-      await runtime.abort();
-      await active.settled;
-      const internal = await runtime.submitInternalMessage('goal continue');
-      await waitFor(() => streams.length === 2);
-      expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [{ text: 'operator queued' }] });
-      streams[1]!.push({ type: 'done', reason: 'stop', message: message('continued') });
-      await internal.settled;
-      expect(await runtime.readLifecycle()).toMatchObject({
-        paused: true,
-        queue: [{ text: 'operator queued' }],
-        operation: null,
-      });
-      expect(streams).toHaveLength(2);
-    } finally {
-      await runtime.dispose();
-    }
-  });
+  it.each(['internal continuation', 'normal Send'] as const)(
+    '%s wakes an idle agent without releasing paused operator inputs',
+    async (source) => {
+      const { repository, models, streams } = fixtures(true);
+      const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+      try {
+        const active = await runtime.submitPrompt('operator');
+        await waitFor(() => streams.length === 1);
+        await runtime.enqueueAutomatic('operator queued');
+        await runtime.abort();
+        await active.settled;
+        const internal =
+          source === 'normal Send'
+            ? await runtime.submitPrompt('fresh operator Send')
+            : await runtime.submitInternalMessage('goal continue');
+        await waitFor(() => streams.length === 2);
+        expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [{ text: 'operator queued' }] });
+        streams[1]!.push({ type: 'done', reason: 'stop', message: message('continued') });
+        await internal.settled;
+        expect(await runtime.readLifecycle()).toMatchObject({
+          paused: true,
+          queue: [{ text: 'operator queued' }],
+          operation: null,
+        });
+        expect(streams).toHaveLength(2);
+      } finally {
+        await runtime.dispose();
+      }
+    },
+  );
 
   it('wakes automatic work after settlement without a prompt waiter', async () => {
     const { repository, models, streams } = fixtures();
@@ -480,15 +569,16 @@ describe('direct harness durable lifecycle', () => {
       await runtime.steer('same');
       await runtime.steer('same');
       const initial = (await runtime.readLifecycle()).queue;
-      expect(initial.map((item) => item.text)).toEqual(['same', 'same']);
-      expect(new Set(initial.map((item) => item.id)).size).toBe(2);
+      expect(initial).toEqual([]);
+      expect((await runtime.readState()).pendingMessageCount).toBe(2);
       await runtime.abort((await runtime.readLifecycle()).operation?.id);
       const after = await runtime.readLifecycle();
       expect(after.paused).toBe(true);
       expect(after.queue.map((item) => item.id)).toEqual(initial.map((item) => item.id));
       streams[0]!.push({ type: 'done', reason: 'stop', message: message('late') });
       await active.settled.catch(() => undefined);
-      expect((await runtime.readLifecycle()).queue.map((item) => item.text)).toEqual(['same', 'same']);
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
+      expect((await runtime.readState()).pendingMessageCount).toBe(2);
     } finally {
       await runtime.dispose();
       await repository.close(BACKGROUND_CONTEXT);
@@ -502,16 +592,15 @@ describe('direct harness durable lifecycle', () => {
       await waitFor(() => streams.length === 1);
       await runtime.followUp('voice');
       await runtime.nextRun('next');
-      expect((await runtime.readLifecycle()).queue).toMatchObject([
-        { text: 'voice', scheduling: 'automatic', disposition: 'pending' },
-        { text: 'next', scheduling: 'automatic', disposition: 'pending' },
-      ]);
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
+      expect((await runtime.readState()).pendingMessageCount).toBe(2);
       expect(streams).toHaveLength(1);
       streams[0]!.push({ type: 'done', reason: 'stop', message: message('first') });
       await waitFor(() => streams.length === 2);
       expect(JSON.stringify(streamSimple.mock.calls[1]![1])).toContain('voice');
       expect(JSON.stringify(streamSimple.mock.calls[1]![1])).not.toContain('next');
-      expect((await runtime.readLifecycle()).queue).toMatchObject([{ text: 'next', disposition: 'pending' }]);
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
+      expect((await runtime.readState()).pendingMessageCount).toBe(1);
       streams[1]!.push({ type: 'done', reason: 'stop', message: message('second') });
       await waitFor(() => streams.length === 3);
       expect(JSON.stringify(streamSimple.mock.calls[2]![1])).toContain('next');
@@ -784,7 +873,7 @@ describe('direct harness durable lifecycle', () => {
     }
   });
 
-  it('claims a pending follow-up before promoting it to steer', async () => {
+  it('claims an explicitly queued input before promoting it to steer', async () => {
     const { repository, models, streams } = fixtures();
     const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
     const gate = { promise: Promise.resolve(), resolve: () => {} };
@@ -795,7 +884,7 @@ describe('direct harness durable lifecycle', () => {
     try {
       await runtime.submitPrompt('active');
       await waitFor(() => streams.length === 1);
-      await runtime.followUp('pending');
+      await runtime.enqueueAutomatic('pending');
       const queued = (await runtime.readLifecycle()).queue[0]!;
       const commit = runtime.harness.commit.bind(runtime.harness);
       vi.spyOn(runtime.harness, 'commit').mockImplementationOnce(async (change, context) => {
@@ -987,7 +1076,7 @@ describe('direct harness durable lifecycle', () => {
     }
   });
 
-  it('does not resurrect fresh user input removed before its admission claim', async () => {
+  it('does not expose fresh user input to queue removal before its admission claim', async () => {
     const { repository, models } = fixtures(true);
     const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
     let release!: () => void;
@@ -1011,11 +1100,11 @@ describe('direct harness durable lifecycle', () => {
       const admitting = runtime.submitUserPrompt('removed');
       void admitting.catch(() => undefined);
       await waitFor(() => blocked);
-      const queued = (await runtime.readLifecycle()).queue[0]!;
-      expect(await runtime.removeQueued(queued.id)).toBe('removed');
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
+      await runtime.clearQueue();
       release();
-      await expect(admitting).rejects.toThrow('removed before admission');
-      expect(submit).not.toHaveBeenCalled();
+      await admitting;
+      expect(submit).toHaveBeenCalledOnce();
     } finally {
       release();
       await runtime.dispose();
@@ -1147,6 +1236,7 @@ describe('direct harness durable lifecycle', () => {
           paused: false,
           queue: ['selected', 'neighbor'].map((id) => ({
             id,
+            explicitQueue: true,
             text: id,
             delivery: 'followUp',
             scheduling: 'automatic',

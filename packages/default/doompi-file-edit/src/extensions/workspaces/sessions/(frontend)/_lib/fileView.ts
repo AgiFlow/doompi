@@ -68,20 +68,18 @@ export function fileTabId(filePath: string): string {
 }
 
 /**
- * Sends a review as one queued message and reports whether it left.
+ * Sends a review as a deferred follow-up and reports whether it left.
  *
- * `enqueue_automatic` rather than `prompt`: a prompt is refused while the agent
- * is mid-turn, and the review would be gone with it. A queued message waits
- * behind the running turn and starts at once when the agent is idle. The
- * sender throws when the session is not connected, and that reason comes back
- * so the caller keeps the comments and says why.
+ * `follow_up` waits behind a running turn and starts when idle, without
+ * treating the review as an explicit Queue action. The sender throws when
+ * disconnected, so the caller keeps the comments and reports the reason.
  */
 export function sendReviewFrame(
   send: (frame: Record<string, unknown>) => void,
   comments: readonly ReviewComment[],
 ): string | undefined {
   try {
-    send({ type: 'enqueue_automatic', message: buildReviewPrompt(comments) });
+    send({ type: 'follow_up', message: buildReviewPrompt(comments) });
     return undefined;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);

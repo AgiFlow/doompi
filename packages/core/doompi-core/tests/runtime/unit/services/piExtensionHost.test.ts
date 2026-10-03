@@ -369,8 +369,10 @@ async function loadedHost(
   onActiveToolsChanged?: () => void,
   handlers: Map<string, unknown> = new Map(),
   onNotice?: (message: string) => void,
+  prepare?: (runtime: DirectHarnessRuntime) => void,
 ) {
   const stub = stubRuntime([]);
+  prepare?.(stub.runtime);
   const preload: LoadExtensionsResult = {
     extensions: [stubExtension(names, handlers)],
     errors: [],
@@ -404,6 +406,140 @@ async function loadedHost(
 }
 
 describe('Pi extension tool surface in the headless host', () => {
+  it('tracks hidden retained pending work and fences late snapshot reads', async () => {
+    const pending = vi.fn();
+    let publish!: Parameters<DirectHarnessRuntime['onPresentationFrame']>[0];
+    let finishOld!: (state: Record<string, unknown>) => void;
+    const old = new Promise<Record<string, unknown>>((resolve) => {
+      finishOld = resolve;
+    });
+    let finishShutdown!: (state: Record<string, unknown>) => void;
+    const shutdownRead = new Promise<Record<string, unknown>>((resolve) => {
+      finishShutdown = resolve;
+    });
+    const { host } = await loadedHost(
+      [],
+      undefined,
+      new Map([
+        [
+          'session_start',
+          [
+            (_event: unknown, context: { hasPendingMessages(): boolean }) => {
+              pending.mockImplementation(() => context.hasPendingMessages());
+            },
+          ],
+        ],
+      ]),
+      undefined,
+      (runtime) => {
+        runtime.readState = vi
+          .fn()
+          .mockResolvedValueOnce({ pendingMessageCount: 2 })
+          .mockReturnValueOnce(old)
+          .mockResolvedValueOnce({ pendingMessageCount: 0 })
+          .mockReturnValueOnce(shutdownRead);
+        runtime.onPresentationFrame = (listener) => {
+          publish = listener;
+          return () => undefined;
+        };
+      },
+    );
+    try {
+      expect(pending()).toBe(true);
+      const frame = { type: 'lifecycle_update', lifecycle: { revision: 1, operation: null, paused: true, queue: [] } };
+      publish(frame);
+      publish(frame);
+      await vi.waitFor(() => expect(pending()).toBe(false));
+      finishOld({ pendingMessageCount: 3 });
+      await Promise.resolve();
+      expect(pending()).toBe(false);
+      publish(frame);
+      await host.shutdown();
+      finishShutdown({ pendingMessageCount: 4 });
+      await Promise.resolve();
+      expect(pending()).toBe(false);
+    } finally {
+      await host.shutdown();
+    }
+  });
+  it('awaits fresh pending state before settlement and ignores an older lifecycle snapshot', async () => {
+    const pending = vi.fn();
+    const ends = vi.fn((_event: unknown, context: { hasPendingMessages(): boolean }) => {
+      expect(context.hasPendingMessages()).toBe(false);
+    });
+    const settled = vi.fn((_event: unknown, context: { hasPendingMessages(): boolean }) => {
+      expect(context.hasPendingMessages()).toBe(false);
+    });
+    let publish!: Parameters<DirectHarnessRuntime['onPresentationFrame']>[0];
+    let finishOld!: (state: Record<string, unknown>) => void;
+    const old = new Promise<Record<string, unknown>>((resolve) => {
+      finishOld = resolve;
+    });
+    let finishFresh!: (state: Record<string, unknown>) => void;
+    const fresh = new Promise<Record<string, unknown>>((resolve) => {
+      finishFresh = resolve;
+    });
+    const readState = vi
+      .fn()
+      .mockResolvedValueOnce({ pendingMessageCount: 1 })
+      .mockReturnValueOnce(old)
+      .mockReturnValueOnce(fresh)
+      .mockReturnValueOnce(old);
+    const { host, emit } = await loadedHost(
+      [],
+      undefined,
+      new Map<string, unknown>([
+        [
+          'session_start',
+          [
+            (_event: unknown, context: { hasPendingMessages(): boolean }) => {
+              pending.mockImplementation(() => context.hasPendingMessages());
+            },
+          ],
+        ],
+        ['agent_end', [ends]],
+        ['agent_settled', [settled]],
+      ]),
+      undefined,
+      (runtime) => {
+        runtime.readState = readState;
+        runtime.onPresentationFrame = (listener) => {
+          publish = listener;
+          return () => undefined;
+        };
+      },
+    );
+    try {
+      await emit({ type: 'run_start', lane: 'main', runId: 'run', startedAt: CREATED_AT });
+      publish({ type: 'lifecycle_update', lifecycle: { revision: 1, operation: null, paused: true, queue: [] } });
+      const ending = emit({
+        type: 'run_end',
+        lane: 'main',
+        runId: 'run',
+        fromTipId: null,
+        tipId: null,
+        endedAt: CREATED_AT,
+        status: 'completed',
+      });
+      await vi.waitFor(() => expect(readState).toHaveBeenCalledTimes(3));
+      // A lifecycle refresh started during settlement must not invalidate its awaited snapshot.
+      publish({ type: 'lifecycle_update', lifecycle: { revision: 2, operation: null, paused: true, queue: [] } });
+      expect(readState).toHaveBeenCalledTimes(4);
+      expect(pending()).toBe(true);
+      expect(ends).not.toHaveBeenCalled();
+      expect(settled).not.toHaveBeenCalled();
+      finishFresh({ pendingMessageCount: 0 });
+      await ending;
+      expect(ends).toHaveBeenCalledTimes(1);
+      expect(settled).toHaveBeenCalledTimes(1);
+      expect(pending()).toBe(false);
+      finishOld({ pendingMessageCount: 1 });
+      await Promise.resolve();
+      expect(pending()).toBe(false);
+    } finally {
+      await host.shutdown();
+    }
+  });
   it('admits extension-generated user and custom content internally with explicit delivery', async () => {
     const { actions, runtime, emit } = await loadedHost([]);
     const content = [

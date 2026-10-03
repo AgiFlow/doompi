@@ -633,6 +633,36 @@ describe('durable direct runtime', () => {
       await runtime.dispose();
     }
   });
+  it.each(['thrown', 'returned'] as const)('continues after a %s recoverable tool failure', async (kind) => {
+    const execute = vi.fn(async () => {
+      if (kind === 'thrown') throw new Error('NOT_FOUND: missing resource');
+      return { content: [{ type: 'text' as const, text: 'NOT_FOUND: missing resource' }], isError: true };
+    });
+    const { runtime, streamSimple } = await setup(
+      { tools: [{ name: 'fixture', description: 'test', parameters: Type.Object({}), execute }] },
+      [
+        response([{ type: 'toolCall', id: 'failed-call', name: 'fixture', arguments: {} }], 'toolUse'),
+        response([{ type: 'text', text: 'Finished after the expected failure' }]),
+      ],
+    );
+    try {
+      await runtime.prompt('test');
+      expect(execute).toHaveBeenCalledOnce();
+      expect(streamSimple).toHaveBeenCalledTimes(2);
+      const entries = (await runtime.readEntries()).entries;
+      expect(entries).toContainEqual(
+        expect.objectContaining({
+          type: 'message',
+          message: expect.objectContaining({ role: 'toolResult', toolCallId: 'failed-call', isError: true }),
+        }),
+      );
+      expect(JSON.stringify(entries)).toContain('NOT_FOUND');
+      expect(JSON.stringify(entries)).toContain('Finished after the expected failure');
+      expect((await runtime.readLifecycle()).operation).toBeNull();
+    } finally {
+      await runtime.dispose();
+    }
+  });
   it('denied tools never execute', async () => {
     const execute = vi.fn(async () => ({ content: [] }));
     const { runtime } = await setup(
@@ -721,7 +751,7 @@ describe('durable direct runtime', () => {
     const active = await runtime.submitPrompt('active');
     try {
       await vi.waitFor(() => expect(streamSimple).toHaveBeenCalledOnce());
-      await runtime.nextRun('queued');
+      await runtime.enqueueAutomatic('queued');
       const id = (await runtime.readLifecycle()).queue[0]!.id;
       expect(await runtime.removeQueued(id)).toBe('removed');
       expect(streamSimple).toHaveBeenCalledOnce();
