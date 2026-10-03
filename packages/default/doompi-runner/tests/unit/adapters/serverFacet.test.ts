@@ -304,6 +304,8 @@ describe('runnerServerFacet', () => {
       expect(harness.execution.session.admitPrompt).toHaveBeenCalledWith(
         expect.stringContaining('Background runner build exited: completed, exit code 0.'),
         'steer',
+        undefined,
+        `runner-finished:${JSON.stringify(['session-a', runner.id])}`,
       );
       await dispose();
     });
@@ -320,6 +322,21 @@ describe('runnerServerFacet', () => {
       await vi.waitFor(() => expect(admit).toHaveBeenCalled());
       await vi.waitFor(() => expect(admit).toHaveBeenCalledTimes(2), { timeout: 2_000 });
       await dispose();
+    });
+
+    it('reuses the completion identity after an ambiguous admission failure', async () => {
+      const { harness, dispose, finish } = await promote();
+      const admit = vi.mocked(harness.execution.session.admitPrompt!);
+      // Acceptance can precede a failed receipt write. The next scan must reuse its identity.
+      admit.mockRejectedValueOnce(new Error('receipt write failed'));
+      try {
+        finish();
+        await vi.waitFor(() => expect(admit).toHaveBeenCalledTimes(2));
+        expect(admit.mock.calls[0]![3]).toBe(`runner-finished:${JSON.stringify(['session-a', runner.id])}`);
+        expect(admit.mock.calls[1]).toEqual(admit.mock.calls[0]);
+      } finally {
+        await dispose();
+      }
     });
 
     it('drains delayed admission before releasing runner resources', async () => {

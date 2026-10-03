@@ -1015,7 +1015,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           )
         ).settled;
       },
-      async admitPrompt(text, delivery, origin) {
+      async admitPrompt(text, delivery, origin, requestId) {
         try {
           if (origin === 'operator' && delivery === 'followUp') return await runtime.followUp(text);
           const submission =
@@ -1023,7 +1023,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
               ? await runtime.submitUserPrompt(text)
               : origin === 'operator'
                 ? await runtime.submitPrompt(text, undefined, delivery === 'steer' ? 'steer' : undefined)
-                : await runtime.submitInternalMessage(text, delivery === 'steer' ? 'steer' : 'followUp');
+                : await runtime.submitInternalMessage(text, delivery === 'steer' ? 'steer' : 'followUp', requestId);
           void submission.settled.catch((error: unknown) =>
             client!.client.notify({ body: error instanceof Error ? error.message : String(error), level: 'error' }),
           );

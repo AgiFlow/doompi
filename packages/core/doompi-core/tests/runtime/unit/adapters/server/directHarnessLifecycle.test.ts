@@ -1534,6 +1534,59 @@ describe('direct harness durable lifecycle', () => {
       }
     },
   );
+  it.each(['active', 'settled'] as const)(
+    'deduplicates internal admission after a receipt write fails with the original run %s',
+    async (phase) => {
+      const { repository, models, streams, streamSimple } = fixtures(true);
+      const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+      const Lifecycle = defineDoc({
+        kind: 'doompi.server.lifecycle',
+        version: 1,
+        scope: 'session',
+        initial: () => ({ json: '' }),
+      });
+      const requestId = 'runner-completion';
+      let rejectReceipt = true;
+      const commit = runtime.harness.commit.bind(runtime.harness);
+      const failure = vi.spyOn(runtime.harness, 'commit').mockImplementation((change, ctx) =>
+        commit(async (tx) => {
+          const result = await change(tx);
+          const record = JSON.parse((await tx.doc(Lifecycle)).json || '{}');
+          if (rejectReceipt && record.internalDeliveries?.[requestId]?.submissionId) {
+            rejectReceipt = false;
+            throw new Error('receipt write failed');
+          }
+          return result;
+        }, ctx),
+      );
+      try {
+        await expect(runtime.submitInternalMessage('runner finished', 'steer', requestId)).rejects.toThrow(
+          'receipt write failed',
+        );
+        await waitFor(() => streams.length === 1);
+        const accepted = await repository.submissionByRequest(runtime.lane.id, requestId, BACKGROUND_CONTEXT);
+        expect(accepted).toBeDefined();
+        if (phase === 'settled') {
+          streams[0]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+          await runtime.lane.waitForIdle(BACKGROUND_CONTEXT);
+        }
+        const retry = await runtime.submitInternalMessage('runner finished', 'steer', requestId);
+        expect((await repository.submissionByRequest(runtime.lane.id, requestId, BACKGROUND_CONTEXT))?.id).toBe(
+          accepted!.id,
+        );
+        if (phase === 'active') streams[0]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+        await retry.settled;
+        expect(streamSimple).toHaveBeenCalledOnce();
+        expect(
+          JSON.stringify((await runtime.lane.context(BACKGROUND_CONTEXT)).messages).split('runner finished'),
+        ).toHaveLength(2);
+        expect((await runtime.readState()).pendingMessageCount).toBe(0);
+      } finally {
+        failure.mockRestore();
+        await runtime.dispose();
+      }
+    },
+  );
   it.each(['abort', 'failure', 'custom abort', 'custom failure'] as const)(
     'reconciles internal delivery after SQLite restart following %s',
     async (outcome) => {

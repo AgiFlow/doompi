@@ -419,10 +419,12 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
    * Admits host-generated input through Durable, never through the operator queue.
    * `nextTurn` stages without writing or waking the agent and returns resolved settled.
    * Only the next ordinary user prompt admission flushes it, not automatic or internal runs.
+   * Reuse requestId to deduplicate retries of steer/followUp admission.
    */
   submitInternalMessage(
     message: string | AgentMessage,
     delivery?: 'steer' | 'followUp' | 'nextTurn',
+    requestId?: string,
   ): Promise<{ settled: Promise<void> }>;
   steer(message: string | AgentMessage, images?: ImageContent[], targetOperationId?: string): Promise<void>;
   followUp(message: string | AgentMessage, images?: ImageContent[]): Promise<void>;

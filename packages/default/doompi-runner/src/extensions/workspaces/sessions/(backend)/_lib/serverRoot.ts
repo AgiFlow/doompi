@@ -27,13 +27,12 @@ export const createRunnerServerRoot = ({ host, agent, signal }: DoomServerPlugin
   const execution = agent?.context;
   const wakeAgent =
     execution &&
-    (async (content: string): Promise<void> => {
+    (async (content: string, requestId: string): Promise<void> => {
       try {
         // 'steer' joins a running turn and starts one on an idle session.
-        // `session.prompt(_, 'steer')` is enqueue-only and would park the
-        // message on an idle lane, which is the bug this exists to fix.
+        // Reuse completion identity across retries and acknowledge admission, not settlement.
         if (!execution.session.admitPrompt) throw new Error('The session cannot admit a runner notification.');
-        await execution.session.admitPrompt(content, 'steer');
+        await execution.session.admitPrompt(content, 'steer', undefined, requestId);
       } catch (error) {
         // Keep completion ownership with the watcher until admission succeeds.
         await Promise.resolve()

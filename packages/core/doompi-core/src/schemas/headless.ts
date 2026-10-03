@@ -129,12 +129,13 @@ export interface DoomHeadlessSession {
    * Admits input without awaiting its turn. Environmental input omits origin and never
    * changes the operator queue. Operator origin uses prompt preflight, including voice
    * capture; 'interrupt' cancels the active run and admits operator input while preserving
-   * retained queued work.
+   * retained queued work. Environmental callers may reuse requestId when retrying the same input.
    */
   admitPrompt?(
     text: string,
     delivery?: 'prompt' | 'steer' | 'followUp' | 'interrupt',
     origin?: 'operator',
+    requestId?: string,
   ): Promise<void>;
   abort(): Promise<void>;
   compact(instructions?: string): Promise<void>;
