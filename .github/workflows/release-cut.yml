@@ -341,13 +341,55 @@ jobs:
   validate-browser-e2e:
     needs: prepare
     if: needs.prepare.outputs.has_release == 'true'
-    name: Browser E2E (${{ matrix.shard }}/16)
+    name: Browser E2E (${{ matrix.shard }}/40)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        shard:
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+          ]
     permissions:
       contents: read
     steps:
@@ -386,7 +428,7 @@ jobs:
         run: pnpm --filter @agimon-ai/doompi-web exec playwright install --with-deps chromium
 
       - name: Drive the cockpit in a browser
-        run: pnpm nx run @agimon-ai/doompi-web:test:e2e -- --shard=${{ matrix.shard }}/16
+        run: pnpm nx run @agimon-ai/doompi-web:test:e2e -- --shard=${{ matrix.shard }}/40
 
       - name: Keep the traces of a failed shard
         if: failure()
