@@ -22,8 +22,36 @@ async function save(root: string, id: string, owner: string, execution: string, 
       doc.workspaceRoot = owner;
       doc.execution = execution;
       doc.name = name;
+      const conversation = await tx.createConversation({ ownership: { kind: 'ownerless' } });
+      await tx.appendEntry(conversation.id, {
+        kind: 'user',
+        model: [{ role: 'user', content: `First request for ${id}`, timestamp: 100 }],
+      });
+      await tx.appendEntry(conversation.id, {
+        kind: 'assistant',
+        model: [
+          {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Saved reply' }],
+            timestamp: 101,
+            api: 'test-api',
+            provider: 'test-provider',
+            model: 'test',
+            stopReason: 'stop',
+            usage: {
+              input: 1,
+              output: 1,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 2,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+          },
+        ],
+      });
     }, context);
   } finally {
+    await opened.session.close(context);
     await opened.repository.close(context);
     await opened.historyLease.release();
   }
@@ -50,7 +78,28 @@ describe('listSavedSessions', () => {
       }
       await fs.writeFile(path.join(directory, 'legacy.sqlite'), 'legacy bytes');
       expect(await listSavedSessions(directory, '/repo', new Set(['active']))).toEqual([
-        expect.objectContaining({ id: 'saved', name: 'saved', firstMessage: '', messageCount: 0 }),
+        expect.objectContaining({
+          id: 'saved',
+          name: 'saved',
+          firstMessage: 'First request for saved',
+          messageCount: 2,
+        }),
+      ]);
+      const closed = await listSavedSessions(directory, '/repo', new Set());
+      expect(closed).toHaveLength(2);
+      expect(closed).toEqual(
+        expect.arrayContaining(
+          ['saved', 'active'].map((id) =>
+            expect.objectContaining({
+              id,
+              firstMessage: `First request for ${id}`,
+              messageCount: 2,
+            }),
+          ),
+        ),
+      );
+      expect(await listSavedSessions(directory, '/other', new Set())).toEqual([
+        expect.objectContaining({ id: 'foreign', messageCount: 2 }),
       ]);
     } finally {
       await fs.rm(directory, { recursive: true, force: true });

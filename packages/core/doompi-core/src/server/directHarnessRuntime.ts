@@ -626,8 +626,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     );
     const storedFastMode = await harness.snapshot(FastModeDoc, context);
     fastMode = storedFastMode?.enabled ?? options.initialFastMode ?? false;
-    const identity = await harness.snapshot(SessionIdentityDoc, context);
-    const sessionId = identity?.id || options.sessionId || randomUUID();
+    const storedIdentity = await harness.snapshot(SessionIdentityDoc, context);
+    const sessionId = storedIdentity?.id || options.sessionId || randomUUID();
     await writable(() =>
       harness.commit(async (tx) => {
         const identity = await tx.doc(SessionIdentityDoc);
@@ -647,7 +647,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         const metadata = await tx.doc(SessionMetadataDoc);
         metadata.workspaceRoot ||= options.cwd;
         if (options.lane !== undefined) metadata.laneName = options.lane;
-        if (options.sessionName !== undefined) metadata.name = options.sessionName;
+        if (!storedIdentity?.id && options.sessionName !== undefined) metadata.name = options.sessionName;
       }, context),
     );
     const laneName = options.lane ?? 'main';
@@ -2076,12 +2076,14 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         await publish();
         return { steering: [], followUp: [] };
       },
-      setName: (name) =>
-        writable(() =>
+      async setName(name) {
+        await writable(() =>
           harness.commit(async (tx) => {
             (await tx.doc(SessionMetadataDoc)).name = name;
           }, context),
-        ),
+        );
+        emit({ type: 'session_info_changed', name });
+      },
       getSessionStats,
       async replaceTools(replacement) {
         tools = replacement;
