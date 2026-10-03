@@ -1,4 +1,6 @@
-import { defineHook } from '@agimon-ai/doompi-core/extensionFile';
+import { defineHook, type WithRoot } from '@agimon-ai/doompi-core/extensionFile';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 
-import { serverHooks } from '../../../../../services/serverHooks';
-export default defineHook(serverHooks[2]!);
+import type { HookServerScope } from '../_lib/serverRoot';
+
+export default defineHook(({ root }: WithRoot<DoomServerPluginContext, HookServerScope>) => root.agentSettled);

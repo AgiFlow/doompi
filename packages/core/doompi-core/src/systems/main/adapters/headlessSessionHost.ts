@@ -1572,17 +1572,21 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           isError: true,
         };
       }
-      const patch = await afterTool(
-        {
-          toolCallId,
-          toolName: invocation.name,
-          args,
-          content: result.content,
-          ...(isJsonValue(result.details) ? { details: result.details } : {}),
-          isError: result.isError === true,
-        },
-        BACKGROUND_CONTEXT,
-      );
+      // A caller-cancelled tool can still settle normally. Do not begin post hooks
+      // for that cancelled operation or replace its already-settled result.
+      const patch = signal?.aborted
+        ? undefined
+        : await afterTool(
+            {
+              toolCallId,
+              toolName: invocation.name,
+              args,
+              content: result.content,
+              ...(isJsonValue(result.details) ? { details: result.details } : {}),
+              isError: result.isError === true,
+            },
+            signal ? withAbortSignal(signal, BACKGROUND_CONTEXT) : BACKGROUND_CONTEXT,
+          );
       const patched = {
         content: patch?.content ?? result.content,
         // A hook that rewrites a result must not leave the original payload available remotely.

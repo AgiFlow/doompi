@@ -1,4 +1,8 @@
-import { DoomHeadlessPromptAdmissionError, type DoomHeadlessExecutionContext, type DoomHeadlessHook } from '@agimon-ai/doompi-core/headless';
+import {
+  DoomHeadlessPromptAdmissionError,
+  type DoomHeadlessExecutionContext,
+  type DoomHeadlessHook,
+} from '@agimon-ai/doompi-core/headless';
 import type { ToolCallEvent, ToolResultEvent } from '@earendil-works/pi-coding-agent';
 
 import { BLOCKED_BY_HOOK, STATUS_PREFIX, SUBAGENT_ENVIRONMENT_FLAG } from '../../constants/hookHandlers';
@@ -22,7 +26,8 @@ function scopeFor(runtime: HookRuntime, execution: DoomHeadlessExecutionContext)
     signal: runtime.session.signal,
     operationSignal: execution.signal,
     async sendMessage(text, delivery) {
-      if (!execution.session.admitPrompt) throw new DoomHeadlessPromptAdmissionError('The session cannot admit a hook prompt.');
+      if (!execution.session.admitPrompt)
+        throw new DoomHeadlessPromptAdmissionError('The session cannot admit a hook prompt.');
       await execution.session.admitPrompt(text, delivery);
     },
     appendCustomEntry: (type, data) => execution.session.appendCustomEntry(type, data),
@@ -41,13 +46,19 @@ export function createServerHooks(resolveRuntime: HookRuntimeResolver) {
       const runtime = resolveRuntime();
       if (!runtime?.isCurrent()) return;
       const scope = scopeFor(runtime, execution);
-      const native = { type: 'tool_call', toolCallId: event.toolCallId, toolName: event.toolName, input: event.args } as ToolCallEvent;
+      const native = {
+        type: 'tool_call',
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        input: event.args,
+      } as ToolCallEvent;
       const key = `${STATUS_PREFIX}:${native.toolCallId}:pre`;
       try {
         const result = await dispatchHooks(runtime.session, scope, {
           eventName: HOOK_EVENT.preToolUse,
           event: native,
-          progress: (index, total) => execution.client.setStatus(key, `Running pre-tool hooks for ${native.toolName} (${index + 1}/${total})...`),
+          progress: (index, total) =>
+            execution.client.setStatus(key, `Running pre-tool hooks for ${native.toolName} (${index + 1}/${total})...`),
         });
         if (result.failures.length > 0) await scope.sendMessage(hookFailureMessage(result.failures), 'steer');
         return result.toolCall?.block
@@ -64,14 +75,25 @@ export function createServerHooks(resolveRuntime: HookRuntimeResolver) {
       await execution.session.appendCustomEntry('doom-hook', hookEntry(event));
       const runtime = resolveRuntime();
       if (!runtime?.isCurrent()) return;
-      const native = { type: 'tool_result', toolCallId: event.toolCallId, toolName: event.toolName,
-        input: event.args, content: event.content, details: event.details, isError: event.isError } as ToolResultEvent;
+      const native = {
+        type: 'tool_result',
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        input: event.args,
+        content: event.content,
+        details: event.details,
+        isError: event.isError,
+      } as ToolResultEvent;
       const key = `${STATUS_PREFIX}:${native.toolCallId}:post`;
       try {
         const result = await dispatchHooks(runtime.session, scopeFor(runtime, execution), {
           eventName: HOOK_EVENT.postToolUse,
           event: native,
-          progress: (index, total) => execution.client.setStatus(key, `Running post-tool hooks for ${native.toolName} (${index + 1}/${total})...`),
+          progress: (index, total) =>
+            execution.client.setStatus(
+              key,
+              `Running post-tool hooks for ${native.toolName} (${index + 1}/${total})...`,
+            ),
         });
         return result.toolResult;
       } finally {
@@ -85,7 +107,9 @@ export function createServerHooks(resolveRuntime: HookRuntimeResolver) {
   };
   const sessionShutdown: DoomHeadlessHook<'session_shutdown'> = {
     event: 'session_shutdown',
-    handle(_event, execution) { execution.client.setStatus('doom-hook', undefined); },
+    handle(_event, execution) {
+      execution.client.setStatus('doom-hook', undefined);
+    },
   };
   return { beforeAgentStart, toolCall, toolResult, agentSettled, sessionShutdown };
 }

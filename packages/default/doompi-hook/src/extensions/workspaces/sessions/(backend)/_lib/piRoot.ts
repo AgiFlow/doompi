@@ -3,7 +3,11 @@ import type { PiPluginContext } from '@agimon-ai/doompi-core/piExtension';
 
 import { createHookHandlers } from '../../../../../services/hookHandlers';
 import { createHookBinding } from '../../../../../services/hookRuntime';
-import { DOOM_HOOK_SESSION_SERVICE, type HookExtensionOptions, type HookRuntime } from '../../../../../services/hookRuntime/type';
+import {
+  DOOM_HOOK_SESSION_SERVICE,
+  type HookExtensionOptions,
+  type HookRuntime,
+} from '../../../../../services/hookRuntime/type';
 
 export const createHookPiRoot = ({ pi, options, context }: PiPluginContext<HookExtensionOptions>) => {
   const binding = createHookBinding(options ?? {});

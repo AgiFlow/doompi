@@ -22,7 +22,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-async function fixture() {
+async function fixture(withHook = false) {
   // Exercise the built host without exporting a production construction API solely for tests.
   const hostModule = (await import(
     new URL('../../../../core/doompi-core/dist/src/systems/main/adapters/headlessSessionHost.mjs', import.meta.url).href
@@ -60,6 +60,7 @@ async function fixture() {
     '@agimon-ai/doompi-help',
     '@agimon-ai/doompi-minor-mode',
     '@fixture/help-contributor',
+    ...(withHook ? ['@agimon-ai/doompi-hook'] : []),
   ].map((packageName) => ({
     packageName,
     entry: './server.ts',
@@ -95,6 +96,12 @@ async function fixture() {
   const helpOwner = context.extend({ [DOOM_HEADLESS_OWNER]: candidates[0]! });
   const closeMinor = await minorModeFacet.apply(minorOwner);
   const closeHelp = await helpServerFacet.apply(helpOwner);
+  const hookModule = withHook
+    ? ((await import(new URL('../../../../default/doompi-hook/dist/extensions/server.mjs', import.meta.url).href)) as {
+        facet: typeof helpServerFacet;
+      })
+    : undefined;
+  const closeHook = await hookModule?.facet.apply(context.extend({ [DOOM_HEADLESS_OWNER]: candidates[3]! }));
   const skillPath = path.join(cwd, 'SKILL.md');
   await writeFile(skillPath, '---\nname: fixture-help\ndescription: Diagnose the fixture\n---\n# Fixture help\n');
   const owner = context.extend({ [DOOM_HEADLESS_OWNER]: candidates[2]! });
@@ -128,6 +135,7 @@ async function fixture() {
     root: context,
     installedPackages: candidates.map((entry) => entry.packageName),
     dispose: async () => {
+      await closeHook?.();
       await closeHelp?.();
       await closeMinor?.();
     },
@@ -137,6 +145,45 @@ async function fixture() {
 }
 
 describe('Help on the real headless host', () => {
+  it('advertises and reads the Hook package authoring skill only while Help is active', async () => {
+    const { current, prompt } = await fixture(true);
+    const host = current.host!;
+    const skillName = 'doompi-author-hook';
+    const source = '@agimon-ai/doompi-hook';
+    expect(current.toolSurface.readSurface().skills.some((skill) => skill.name === skillName)).toBe(false);
+    expect(host.appliedResources.some((resource) => resource.name === skillName)).toBe(false);
+    expect(await prompt()).not.toContain(skillName);
+    expect(host.inspectCapabilities().capabilities.find((entry) => entry.name === skillName)).toMatchObject({
+      source,
+      active: false,
+      reason: 'inactive',
+    });
+
+    await host.dispatchCommand('doom-help', '');
+    const surface = current.toolSurface.readSurface();
+    const skill = surface.skills.find((entry) => entry.name === skillName)!;
+    expect(skill).toBeDefined();
+    expect(host.inspectCapabilities().capabilities.find((entry) => entry.name === skillName)).toMatchObject({
+      source,
+      active: true,
+      discoverable: true,
+    });
+    const resource = host.appliedResources.find((entry) => entry.name === skillName)!;
+    expect(resource.path).toMatch(/doompi-hook\/src\/prompts\/doompi-author-hook\/SKILL\.md$/);
+    expect(await prompt()).toContain(resource.path);
+    const body = await current.toolSurface.readSkill(surface.revision, skill.uri);
+    expect(body).toContain("import { defineDoomHook } from '@agimon-ai/doompi-hook/authoring'");
+    expect(body).toContain('module: .doom/hooks/guard.ts');
+    expect(body).toContain('## Command payloads and decisions');
+    expect(body).toContain('/bin/bash -c');
+    expect(body).toContain('doompi sync');
+
+    await host.dispatchCommand('doom-help', '');
+    expect(current.toolSurface.readSurface().skills.some((entry) => entry.name === skillName)).toBe(false);
+    expect(host.appliedResources.some((entry) => entry.name === skillName)).toBe(false);
+    expect(await prompt()).not.toContain(skillName);
+    await expect(async () => current.toolSurface.readSkill(surface.revision, skill.uri)).rejects.toThrow();
+  });
   it('uses the same toggle path, advertises readable skills, and applies and withdraws contributed tools', async () => {
     const { current, contributor, skillPath, prompt } = await fixture();
     const host = current.host!;

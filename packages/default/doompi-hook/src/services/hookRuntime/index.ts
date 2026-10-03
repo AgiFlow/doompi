@@ -63,11 +63,20 @@ function childHooksFor(parent: HookSession): DoomChildSessionHooks {
       };
       return {
         async beforeTool(event, execution) {
-          const native = { type: 'tool_call', toolCallId: event.toolCallId, toolName: event.toolName, input: event.args } as ToolCallEvent;
-          const result = await dispatchHooks(session, { ...context(), operationSignal: execution.abortSignal }, {
-            eventName: HOOK_EVENT.preToolUse,
-            event: native,
-          });
+          const native = {
+            type: 'tool_call',
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            input: event.args,
+          } as ToolCallEvent;
+          const result = await dispatchHooks(
+            session,
+            { ...context(), operationSignal: execution.abortSignal },
+            {
+              eventName: HOOK_EVENT.preToolUse,
+              event: native,
+            },
+          );
           if (result.failures.length > 0) await scope.sendMessage(hookFailureMessage(result.failures), 'steer');
           return result.toolCall?.block
             ? { block: { reason: result.toolCall.reason ?? 'Blocked by repository hook' } }
@@ -75,18 +84,29 @@ function childHooksFor(parent: HookSession): DoomChildSessionHooks {
         },
         async afterTool(event, execution) {
           const native = {
-            type: 'tool_result', toolCallId: event.toolCallId, toolName: event.toolName,
-            input: event.args, content: event.content, details: event.details, isError: event.isError,
+            type: 'tool_result',
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            input: event.args,
+            content: event.content,
+            details: event.details,
+            isError: event.isError,
           } as ToolResultEvent;
-          const result = await dispatchHooks(session, { ...context(), operationSignal: execution.abortSignal }, {
-            eventName: HOOK_EVENT.postToolUse,
-            event: native,
-          });
-          return result.toolResult ? {
-            content: result.toolResult.content,
-            details: result.toolResult.details as JsonValue | undefined,
-            isError: result.toolResult.isError,
-          } : undefined;
+          const result = await dispatchHooks(
+            session,
+            { ...context(), operationSignal: execution.abortSignal },
+            {
+              eventName: HOOK_EVENT.postToolUse,
+              event: native,
+            },
+          );
+          return result.toolResult
+            ? {
+                content: result.toolResult.content,
+                details: result.toolResult.details as JsonValue | undefined,
+                isError: result.toolResult.isError,
+              }
+            : undefined;
         },
         dispose() {
           disposal ??= (async () => {
@@ -103,11 +123,15 @@ function childHooksFor(parent: HookSession): DoomChildSessionHooks {
 export function createHookRuntime(
   cordis: Context,
   options: HookExtensionOptions,
+  parentContext?: Omit<HookContext, 'signal'>,
   lifetimeSignal?: AbortSignal,
 ): HookRuntimeBinding {
   const controller = new AbortController();
   const signal = lifetimeSignal ? AbortSignal.any([controller.signal, lifetimeSignal]) : controller.signal;
-  const session = createHookSession(() => requireDoomConfigContext(cordis), options, signal);
+  const session: HookSession = {
+    ...createHookSession(() => requireDoomConfigContext(cordis), options, signal),
+    parentContext,
+  };
   let disposal: Promise<void> | undefined;
   let active = true;
   let generation = 0;
@@ -176,12 +200,16 @@ export function createHookRuntime(
   };
 }
 
-export function createHookBinding(options: HookExtensionOptions): HookBinding {
+export function createHookBinding(
+  options: HookExtensionOptions,
+  parentContext?: Omit<HookContext, 'signal'>,
+  lifetimeSignal?: AbortSignal,
+): HookBinding {
   let runtime: HookRuntimeBinding | undefined;
   return {
     plugin(cordis) {
       cordis.inject([DOOM_CONFIG_SERVICE], (configContext) => {
-        const binding = createHookRuntime(configContext, options);
+        const binding = createHookRuntime(configContext, options, parentContext, lifetimeSignal);
         runtime = binding;
         configContext.provide(DOOM_CHILD_SESSION_HOOKS_SERVICE, binding.childHooks);
         configContext.provide(DOOM_HOOK_SESSION_SERVICE, binding);

@@ -3,6 +3,7 @@ import type { DoomChildSessionHooks } from '@agimon-ai/doompi-core/childSession'
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
+import type { HookContext } from '../../types/hookModule';
 import type { HookDocumentReader, HookRunner } from '../../types/hooks';
 import type { HookTelemetry } from '../../types/telemetry';
 import type { HookModules } from '../hookModules/type';
@@ -21,6 +22,7 @@ export interface HookSession {
   readonly documents: HookDocumentReader;
   readonly modules: HookModules;
   readonly signal: AbortSignal;
+  readonly parentContext?: Omit<HookContext, 'signal'>;
 }
 
 /** Package-scoped startup ordering supplied by the standard Pi adapter. */

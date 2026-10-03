@@ -1047,6 +1047,41 @@ describe('Doom deterministic architecture rules', () => {
       expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
     });
 
+    it('accepts only the public bridge server-root accessor without a local inject', () => {
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-hook' }));
+      const consumer = write(
+        'src/services/borrowed/index.ts',
+        `
+        import { DOOM_CORDIS_SERVER_SERVICES as bridgeKey } from '@agimon-ai/doompi-core/cordisHost';
+        import { DOOM_HOOK_SESSION_SERVICE } from './type';
+        export const runtime = context => {
+          const unrelated = map.get();
+          const server = context.get(bridgeKey) as DoomCordisServerServices | undefined;
+          return server?.get(DOOM_HOOK_SESSION_SERVICE);
+        };
+      `,
+      );
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
+      fs.writeFileSync(
+        consumer,
+        `
+        import { DOOM_CORDIS_SERVER_SERVICES as bridgeKey } from 'untrusted-package';
+        import { DOOM_HOOK_SESSION_SERVICE } from './type';
+        export const runtime = context => { const server = context.get(bridgeKey); return server.get(DOOM_HOOK_SESSION_SERVICE); };
+      `,
+      );
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toContain('has no owning');
+      fs.writeFileSync(
+        consumer,
+        `
+        import { DOOM_CORDIS_SERVER_SERVICES } from '@agimon-ai/doompi-core/cordisHost';
+        import { DOOM_HOOK_SESSION_SERVICE } from './type';
+        export const runtime = context => { const server = context; return server.get(DOOM_HOOK_SESSION_SERVICE); };
+      `,
+      );
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toContain('has no owning');
+    });
+
     it('accepts a stable Pi wrapper created and cleared by its owning injected callback', () => {
       const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-hook' }));
       write(

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { replaceDoomConfigContext, requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
 import { createDoomReadinessCoordinator, DOOM_READINESS_SERVICE } from '@agimon-ai/doompi-core/readiness';
@@ -576,6 +577,115 @@ describe('repository hook Pi lifecycle', () => {
     await expect(hookExtension(pi, { runner: stubRunner().runner, documents: documentReader() })).rejects.toThrow(
       'registration boom',
     );
+  });
+  it('shares module state across terminal rows, orders real commands and refreshes after provider reload', async () => {
+    const source = path.join(repoRoot, 'hook.ts');
+    const artifact = path.join(repoRoot, 'hook.mjs');
+    const file = path.join(repoRoot, 'descriptor.json');
+    const log = path.join(repoRoot, 'order.txt');
+    fs.writeFileSync(
+      artifact,
+      `import fs from 'node:fs';
+      const record = text => fs.appendFileSync(${JSON.stringify(log)}, text + '\\n');
+      export default { setup(ctx) {
+        if (ctx.sessionId !== ${JSON.stringify(SESSION_ID)} || ctx.isSubagent) throw new Error('wrong terminal identity');
+        let calls = 0; record('setup');
+        return {
+          session_start() { record('start'); },
+          tool_call(event) { record('module-' + ++calls); event.input.command = 'echo patched'; },
+          tool_result() { record('result-' + calls); return { content: [{type:'text',text:'module result'}], details:{calls} }; },
+          dispose() { record('dispose'); }
+        };
+      }};`,
+    );
+    fs.writeFileSync(file, JSON.stringify({ version: 1, modules: [{ source, artifact, receipt: {}, rows: [] }] }));
+    const command = (label: string) => `printf '%s\\n' '${label}' >> ${JSON.stringify(log)}`;
+    writeRegistry(
+      [
+        'groups:',
+        '  core:',
+        '    core: true',
+        '    hooks:',
+        '      - event: SessionStart',
+        '        pi:',
+        '          module: hook.ts',
+        '  selected:',
+        '    hooks:',
+        '      - event: PreToolUse',
+        '        pi:',
+        '          module: hook.ts',
+        '          order: 0',
+        '      - event: PreToolUse',
+        '        pi:',
+        `          command: ${JSON.stringify(command('registry'))}`,
+        '          order: 1',
+        '      - event: PostToolUse',
+        '        pi:',
+        '          module: hook.ts',
+        '  excluded:',
+        '    hooks:',
+        '      - event: PreToolUse',
+        '        pi:',
+        `          command: ${JSON.stringify(command('wrong-group'))}`,
+      ].join('\n'),
+    );
+    const pluginRoot = path.join(repoRoot, 'plugin');
+    const configPath = path.join(pluginRoot, 'hooks.json');
+    fs.mkdirSync(pluginRoot);
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [{ hooks: [{ command: command('plugin') }] }],
+          PostToolUse: [{ hooks: [{ command: command('plugin-post') }] }],
+        },
+      }),
+    );
+    const harness = {
+      root: repoRoot,
+      hookGroups: ['selected'],
+      hookModules: { file },
+      pluginHooks: [{ pluginRoot, configPath }],
+    };
+    const state = piHarness(harness, { provideConfig: false });
+    await state.provideConfig(harness);
+    sessions.push(state);
+    await hookExtension(state.pi, { documents: documentReader() });
+    await state.handlers.get('session_start')?.({ type: 'session_start' }, state.ctx);
+    const first = toolCall('module-first', 'bash');
+    await state.handlers.get('tool_call')?.(first, state.ctx);
+    expect(first.input.command).toBe('echo patched');
+    expect(await state.handlers.get('tool_result')?.(toolResult('module-first', 'bash'), state.ctx)).toMatchObject({
+      content: [{ type: 'text', text: 'module result' }],
+      details: { calls: 1 },
+    });
+    await state.handlers.get('tool_call')?.(toolCall('module-second', 'bash'), state.ctx);
+    expect(fs.readFileSync(log, 'utf8').trim().split('\n')).toEqual([
+      'setup',
+      'start',
+      'module-1',
+      'registry',
+      'plugin',
+      'result-1',
+      'plugin-post',
+      'module-2',
+      'registry',
+      'plugin',
+    ]);
+    // The dispatcher observes the Config selection a mode change supplies, without reparsing modules.
+    const config = requireDoomConfigContext(state.cordis);
+    replaceDoomConfigContext(state.cordis, { ...config, harness: { ...config.harness, hookGroups: [] } });
+    await state.handlers.get('tool_call')?.(toolCall('module-excluded', 'bash'), state.ctx);
+    expect(fs.readFileSync(log, 'utf8').trim().split('\n').slice(-2)).toEqual(['plugin', 'plugin']);
+    await state.provideConfig(harness);
+    await state.handlers.get('tool_call')?.(toolCall('module-reloaded', 'bash'), state.ctx);
+    expect(fs.readFileSync(log, 'utf8').trim().split('\n').slice(-5)).toEqual([
+      'dispose',
+      'setup',
+      'module-1',
+      'registry',
+      'plugin',
+    ]);
   });
 });
 

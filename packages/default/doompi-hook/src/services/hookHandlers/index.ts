@@ -22,6 +22,7 @@ import type { HookDispatchRequest, HookDispatchResult, HookDispatchScope } from 
 import type { HookRuntimeResolver, HookSession } from '../hookRuntime/type';
 
 function scopeFor(pi: ExtensionAPI, session: HookSession, ctx: ExtensionContext): HookDispatchScope {
+  if (session.parentContext) return { ...session.parentContext, signal: session.signal, operationSignal: ctx.signal };
   return {
     sessionId: ctx.sessionManager.getSessionId(),
     isSubagent: Boolean(process.env[SUBAGENT_ENVIRONMENT_FLAG]),
@@ -31,7 +32,7 @@ function scopeFor(pi: ExtensionAPI, session: HookSession, ctx: ExtensionContext)
     signal: session.signal,
     operationSignal: ctx.signal,
     async sendMessage(text, delivery) {
-      await pi.sendMessage({ customType: CONTEXT_MESSAGE_TYPE, content: text, display: true }, { deliverAs: delivery });
+      pi.sendMessage({ customType: CONTEXT_MESSAGE_TYPE, content: text, display: true }, { deliverAs: delivery });
     },
     async appendCustomEntry(type, data) {
       pi.appendEntry(type, data);
@@ -50,35 +51,52 @@ async function runPiDispatch(
 ): Promise<HookDispatchResult> {
   try {
     const scope = scopeFor(pi, session, ctx);
-    return await dispatchHooks(session, { ...scope, operationSignal: signal ?? scope.operationSignal }, {
-      ...request,
-      progress: (index, total) => {
-        if (ctx.hasUI) ctx.ui.setStatus(statusKey, `${statusLabel} (${index + 1}/${total})...`);
+    return await dispatchHooks(
+      session,
+      { ...scope, operationSignal: signal ?? scope.operationSignal },
+      {
+        ...request,
+        progress: (index, total) => {
+          if (ctx.hasUI) ctx.ui.setStatus(statusKey, `${statusLabel} (${index + 1}/${total})...`);
+        },
       },
-    });
+    );
   } finally {
     if (ctx.hasUI) ctx.ui.setStatus(statusKey, undefined);
   }
 }
 
-function steerHookFailures(pi: ExtensionAPI, failures: ReadonlyArray<HookFailure>): void {
+async function steerHookFailures(
+  pi: ExtensionAPI,
+  session: HookSession,
+  failures: ReadonlyArray<HookFailure>,
+): Promise<void> {
   if (failures.length === 0) return;
-  pi.sendMessage({ customType: FAILURE_MESSAGE_TYPE, content: hookFailureMessage(failures), display: true }, STEER);
+  if (session.parentContext) await session.parentContext.sendMessage(hookFailureMessage(failures), 'steer');
+  else
+    pi.sendMessage({ customType: FAILURE_MESSAGE_TYPE, content: hookFailureMessage(failures), display: true }, STEER);
 }
 
 function createSessionStart(pi: ExtensionAPI, resolveRuntime: HookRuntimeResolver): PiEventHandlers['session_start'] {
   return (event, ctx) => {
     const runtime = resolveRuntime();
-    if (!runtime?.isCurrent() || process.env[SUBAGENT_ENVIRONMENT_FLAG]) return undefined;
+    if (!runtime?.isCurrent() || scopeFor(pi, runtime.session, ctx).isSubagent) return undefined;
     const { session, readiness } = runtime;
     const run = async (signal?: AbortSignal, isReady: () => boolean = () => true): Promise<void> => {
-      const result = await runPiDispatch(pi, session, ctx, { eventName: HOOK_EVENT.sessionStart, event },
-        `${STATUS_PREFIX}:${ctx.sessionManager.getSessionId()}:start`, 'Running session-start hooks', signal);
+      const result = await runPiDispatch(
+        pi,
+        session,
+        ctx,
+        { eventName: HOOK_EVENT.sessionStart, event },
+        `${STATUS_PREFIX}:${ctx.sessionManager.getSessionId()}:start`,
+        'Running session-start hooks',
+        signal,
+      );
       signal?.throwIfAborted();
       if (!runtime.isCurrent() || !isReady()) return;
-      steerHookFailures(pi, result.failures);
+      await steerHookFailures(pi, session, result.failures);
       const context = additionalContextsFrom(result.decisions).join(CONTEXT_SEPARATOR);
-      if (context) pi.sendMessage({ customType: CONTEXT_MESSAGE_TYPE, content: context, display: true }, STEER);
+      if (context) await scopeFor(pi, session, ctx).sendMessage(context, 'steer');
     };
     return readiness ? readiness.start(ctx, run) : run();
   };
@@ -99,10 +117,16 @@ function createToolCall(pi: ExtensionAPI, resolveRuntime: HookRuntimeResolver): 
     // Readiness is a host gate, not an advisory hook error.
     await runtime.readiness?.wait(ctx);
     if (!runtime.isCurrent()) return undefined;
-    const result = await runPiDispatch(pi, runtime.session, ctx, { eventName: HOOK_EVENT.preToolUse, event },
-      `${STATUS_PREFIX}:${event.toolCallId}:pre`, `Running pre-tool hooks for ${event.toolName}`);
+    const result = await runPiDispatch(
+      pi,
+      runtime.session,
+      ctx,
+      { eventName: HOOK_EVENT.preToolUse, event },
+      `${STATUS_PREFIX}:${event.toolCallId}:pre`,
+      `Running pre-tool hooks for ${event.toolName}`,
+    );
     if (!runtime.isCurrent()) return undefined;
-    steerHookFailures(pi, result.failures);
+    await steerHookFailures(pi, runtime.session, result.failures);
     return result.toolCall;
   };
 }
@@ -113,8 +137,14 @@ function createToolResult(pi: ExtensionAPI, resolveRuntime: HookRuntimeResolver)
     if (!runtime?.isCurrent()) return undefined;
     await runtime.readiness?.wait(ctx);
     if (!runtime.isCurrent()) return undefined;
-    const result = await runPiDispatch(pi, runtime.session, ctx, { eventName: HOOK_EVENT.postToolUse, event },
-      `${STATUS_PREFIX}:${event.toolCallId}:post`, `Running post-tool hooks for ${event.toolName}`);
+    const result = await runPiDispatch(
+      pi,
+      runtime.session,
+      ctx,
+      { eventName: HOOK_EVENT.postToolUse, event },
+      `${STATUS_PREFIX}:${event.toolCallId}:post`,
+      `Running post-tool hooks for ${event.toolName}`,
+    );
     if (!runtime.isCurrent()) return undefined;
     return result.toolResult;
   };
@@ -124,16 +154,31 @@ function createAgentSettled(pi: ExtensionAPI, resolveRuntime: HookRuntimeResolve
   let refusals = 0;
   return async (event, ctx) => {
     const runtime = resolveRuntime();
-    if (!runtime?.isCurrent() || process.env[SUBAGENT_ENVIRONMENT_FLAG]) return;
+    if (!runtime?.isCurrent() || scopeFor(pi, runtime.session, ctx).isSubagent) return;
     await runtime.readiness?.wait(ctx);
     if (!runtime.isCurrent()) return;
-    const result = await runPiDispatch(pi, runtime.session, ctx, {
-      eventName: HOOK_EVENT.stop, event, extraPayload: { [STOP_HOOK_ACTIVE_FIELD]: refusals > 0 },
-    }, `${STATUS_PREFIX}:${ctx.sessionManager.getSessionId()}:stop`, 'Running stop hooks');
+    const result = await runPiDispatch(
+      pi,
+      runtime.session,
+      ctx,
+      {
+        eventName: HOOK_EVENT.stop,
+        event,
+        extraPayload: { [STOP_HOOK_ACTIVE_FIELD]: refusals > 0 },
+      },
+      `${STATUS_PREFIX}:${ctx.sessionManager.getSessionId()}:stop`,
+      'Running stop hooks',
+    );
     if (!runtime.isCurrent()) return;
-    if (result.failures.length > 0) pi.sendMessage({
-      customType: FAILURE_MESSAGE_TYPE, content: hookFailureMessage(result.failures), display: true,
-    }, NO_TURN);
+    if (result.failures.length > 0)
+      pi.sendMessage(
+        {
+          customType: FAILURE_MESSAGE_TYPE,
+          content: hookFailureMessage(result.failures),
+          display: true,
+        },
+        NO_TURN,
+      );
     const reason = decisionReason(result.decisions.find(isDenied));
     if (!reason) {
       refusals = 0;
@@ -141,11 +186,14 @@ function createAgentSettled(pi: ExtensionAPI, resolveRuntime: HookRuntimeResolve
     }
     if (refusals >= MAX_STOP_REFUSALS) {
       refusals = 0;
-      pi.sendMessage({
-        customType: FAILURE_MESSAGE_TYPE,
-        content: `A Stop hook refused ${String(MAX_STOP_REFUSALS)} stops in a row, so the agent stops here. Its last reason: ${reason}`,
-        display: true,
-      }, NO_TURN);
+      pi.sendMessage(
+        {
+          customType: FAILURE_MESSAGE_TYPE,
+          content: `A Stop hook refused ${String(MAX_STOP_REFUSALS)} stops in a row, so the agent stops here. Its last reason: ${reason}`,
+          display: true,
+        },
+        NO_TURN,
+      );
       return;
     }
     refusals += 1;
@@ -163,7 +211,7 @@ export function createHookHandlers(pi: ExtensionAPI, resolveRuntime: HookRuntime
     agent_settled: createAgentSettled(pi, resolveRuntime),
     session_shutdown: (_event, ctx) => {
       const current = resolveRuntime();
-      if (!current?.isCurrent() || process.env[SUBAGENT_ENVIRONMENT_FLAG]) return undefined;
+      if (!current?.isCurrent() || scopeFor(pi, current.session, ctx).isSubagent) return undefined;
       shutdown ??= runSessionEndHooks(pi, current.session, ctx);
       return shutdown;
     },
@@ -172,6 +220,12 @@ export function createHookHandlers(pi: ExtensionAPI, resolveRuntime: HookRuntime
 
 /** SessionEnd remains plugin-only and once-only while the session is still usable. */
 export async function runSessionEndHooks(pi: ExtensionAPI, session: HookSession, ctx: ExtensionContext): Promise<void> {
-  await runPiDispatch(pi, session, ctx, { eventName: HOOK_EVENT.sessionEnd },
-    `${STATUS_PREFIX}:${ctx.sessionManager.getSessionId()}:end`, 'Running session-end hooks');
+  await runPiDispatch(
+    pi,
+    session,
+    ctx,
+    { eventName: HOOK_EVENT.sessionEnd },
+    `${STATUS_PREFIX}:${ctx.sessionManager.getSessionId()}:end`,
+    'Running session-end hooks',
+  );
 }

@@ -90,7 +90,7 @@ boilerplate:
 
       The two sides never import each other. Only src/types, src/constants, src/schemas and the generated API contract cross. Inside (backend)/api the tree is the Next.js App Router: the folder path is the route, route.ts is the leaf, HTTP methods are named exports, and [param] is a dynamic segment.
 
-      Lifecycle: construct declarations, register, await onStart, run, abort signal, await onStop, unregister in reverse order, await onDispose. Hooks receive one typed context. onStop runs once the start stage is reached, even if onStart is absent or fails. Factories create state; onStart begins external work.
+      Lifecycle: construct declarations, register, await onStart, run, abort signal, await onStop, unregister in reverse order, await onDispose. Hooks receive one typed context. onStop runs once the start stage is reached, even if onStart is absent or fails. Factories create state; onStart begins external work. Scoped root.cli.ts and root.server.ts factories own shared Cordis services. In headless sessions, blocking tool hooks belong to server facets; Pi bridge lifecycle handlers can borrow server-root services through DOOM_CORDIS_SERVER_SERVICES without a duplicate runtime. Terminal tool hooks remain Pi-owned. Keep lightweight typed authoring helpers in dedicated src/exports subpaths with no host/runtime imports.
 
       Prompts remain published resources under src/prompts, indexed by llms.txt. Run pnpm fixcode, lint, typecheck, tests, build, VibeLint preflight, and npm pack --dry-run.
 features:

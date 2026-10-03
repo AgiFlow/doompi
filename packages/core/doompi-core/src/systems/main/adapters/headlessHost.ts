@@ -634,11 +634,13 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     signal?: AbortSignal,
   ): Promise<unknown[]> {
     this.assertReady();
+    signal?.throwIfAborted();
     const results: unknown[] = [];
     const revision = this.appliedRevision;
     let current = payload;
     for (const hook of this.hooks.filter((entry) => entry.value.event === event)) {
       this.assertReady();
+      signal?.throwIfAborted();
       if (!this.hooks.includes(hook)) continue;
       let result: unknown;
       try {

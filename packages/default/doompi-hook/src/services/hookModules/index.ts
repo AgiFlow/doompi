@@ -19,6 +19,10 @@ interface Instance {
   quarantined: boolean;
   settled: boolean;
   disposed: boolean;
+  hostEffectFailure?: { error: unknown };
+}
+function assertHostEffects(instance: Instance): void {
+  if (instance.hostEffectFailure) throw instance.hostEffectFailure.error;
 }
 const HANDLER_NAMES = ['tool_call', 'tool_result', 'session_start', 'agent_settled', 'dispose'] as const;
 function object(value: unknown): value is Record<string, unknown> {
@@ -149,16 +153,13 @@ export function createHookModules(options: HookModulesOptions = {}): HookModules
         instances.set(key, instance);
       }
       const current = instance;
-      let hostEffectFailed = false;
-      let hostEffectError: unknown;
       const hostContext: HookContext = {
         ...context,
         async sendMessage(text, delivery) {
           try {
             await context.sendMessage(text, delivery);
           } catch (error) {
-            hostEffectFailed = true;
-            hostEffectError = error;
+            current.hostEffectFailure = { error };
             throw error;
           }
         },
@@ -166,8 +167,7 @@ export function createHookModules(options: HookModulesOptions = {}): HookModules
           try {
             await context.appendCustomEntry(type, data);
           } catch (error) {
-            hostEffectFailed = true;
-            hostEffectError = error;
+            current.hostEffectFailure = { error };
             throw error;
           }
         },
@@ -175,6 +175,7 @@ export function createHookModules(options: HookModulesOptions = {}): HookModules
       const run = async (): Promise<HookModuleOutcome> => {
         if (closed || current.quarantined || current.lifetime.signal.aborted)
           return failure(new Error('module quarantined or disposed'));
+        current.hostEffectFailure = undefined;
         current.settled = event.type === 'agent_settled';
         const controller = new AbortController();
         const signal = AbortSignal.any([
@@ -232,12 +233,12 @@ export function createHookModules(options: HookModulesOptions = {}): HookModules
             );
           });
           const result = await Promise.race([operation, aborted]);
-          if (hostEffectFailed) throw hostEffectError;
+          assertHostEffects(current);
           if (!validResult(event.type, result))
             return { failure: { ...failure(new Error('invalid hook result')).failure!, reason: 'invalid_result' } };
           return result === undefined ? {} : { result: result as HookModuleResult };
         } catch (error) {
-          if (hostEffectFailed) throw hostEffectError;
+          assertHostEffects(current);
           if (setup || timedOut || signal.aborted) {
             current.quarantined = true;
             current.lifetime.abort();

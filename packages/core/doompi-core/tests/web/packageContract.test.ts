@@ -33,7 +33,7 @@ describe('core web capability package boundary', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.pi).toBeUndefined();
     expect(manifest.dependencies).toMatchObject({
-      '@tanstack/store': '0.11.1',
+      '@tanstack/store': '0.11.2',
     });
     expect(manifest.devDependencies).not.toHaveProperty('@tanstack/store');
     expect(manifest.peerDependencies).not.toHaveProperty('@tanstack/store');

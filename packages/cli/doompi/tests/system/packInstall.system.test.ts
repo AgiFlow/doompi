@@ -2517,6 +2517,82 @@ describe('RPC-LIFECYCLE installed runtime', () => {
       };
       expect(module.default.setup().tool_call()).toEqual({ block: true, reason: 'packed hook' });
       expect(fs.readFileSync(marker, 'utf8')).toBe('loaded');
+
+      // Packed child binding proof. Real child-runtime execution is covered by the hook integration suite.
+      const hostContracts = (await importInstalledExtension(
+        '@agimon-ai/doompi-core',
+        './cordisHost',
+      )) as typeof import('@agimon-ai/doompi-core/cordisHost');
+      const configContracts = (await importInstalledExtension(
+        '@agimon-ai/doompi-config',
+        './piContext',
+      )) as typeof import('@agimon-ai/doompi-config/piContext');
+      const harnessContracts = (await importInstalledExtension(
+        '@agimon-ai/doompi-config',
+        './harnessState',
+      )) as typeof import('@agimon-ai/doompi-config/harnessState');
+      const childContracts = (await importInstalledExtension(
+        '@agimon-ai/doompi-core',
+        './childSession',
+      )) as typeof import('@agimon-ai/doompi-core/childSession');
+      const hookEntry = await importInstalledExtension('@agimon-ai/doompi-hook', './extensions/pi');
+      const extension = hookEntry.default as (pi: ExtensionAPI) => Promise<void>;
+      const probe = createCallableProbe();
+      const pi = probe.api as ExtensionAPI;
+      const host = await hostContracts.installDoomCordisHost(pi, {
+        mode: 'composed',
+        source: 'packed-hook-child-test',
+      });
+      try {
+        const provider = host.root.plugin((context) => {
+          configContracts.provideDoomConfigContext(context, {
+            settings: { projectTrust: 'ask' },
+            harness: {
+              ...harnessContracts.readHarnessState({}),
+              root: fixture.root,
+              hookGroups: [],
+              hookModules: state.fileState.hookModules,
+            },
+            requiresRelaunch: false,
+          });
+        });
+        await provider;
+        await extension(pi);
+        await host.root.fiber.await();
+        const hooks = host.root.get(
+          childContracts.DOOM_CHILD_SESSION_HOOKS_SERVICE,
+        ) as import('@agimon-ai/doompi-core/childSession').DoomChildSessionHooks;
+        expect(hooks).toBeDefined();
+        const controller = new AbortController();
+        const binding = hooks.bind({
+          request: {
+            runId: 'packed-child',
+            parentSessionId: 'packed-parent',
+            agent: 'worker',
+            task: 'probe',
+            cwd: fixture.root,
+            source: { kind: 'fresh' },
+            scope: { rootSessionId: 'packed-parent', scopeKey: 'packed' },
+            environment: {},
+          },
+          sessionId: () => 'packed-child-session',
+          signal: controller.signal,
+          sendMessage: async () => undefined,
+          appendCustomEntry: async () => undefined,
+        });
+        try {
+          expect(
+            await binding.beforeTool({ toolCallId: 'call', toolName: 'bash', args: { command: 'pwd' } }, {
+              abortSignal: controller.signal,
+            } as never),
+          ).toEqual({ block: { reason: 'packed hook' } });
+        } finally {
+          await binding.dispose();
+        }
+      } finally {
+        await host.shutdown();
+        await probe.shutdown();
+      }
     },
     COLD_SYNC_TIMEOUT_MS,
   );

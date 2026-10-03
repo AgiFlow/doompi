@@ -51,7 +51,7 @@ The Pi host entry is also available at:
 @agimon-ai/{{ packageName | kebabCase }}/extensions/pi
 ```
 
-Source entrypoints live directly in `src/extensions`. Flat `src/exports` modules expose selected services, constants, types, and schemas to other packages. tsdown builds explicit entries from both directories.
+The build generates host entrypoints in `generated/` from named `src/extensions` routes. Pure re-export modules in `src/exports` expose selected public capabilities. Keep typed authoring helpers in a dedicated subpath with no host/runtime imports so repository modules can bundle them cheaply.
 
 ## Structure and lifecycle
 
@@ -61,7 +61,9 @@ Source entrypoints live directly in `src/extensions`. Flat `src/exports` modules
 - `constants/`, `schemas/`, and `types/`: shared metadata, validation, and contracts.
 - Private `_lib/` and `_components/` folders beside routes hold surface-private implementation and are not scanned.
 
-Use a scoped `defineRoot` factory for shared dependencies and lifecycle. Put each tool, command, hook, method, API, resource, and presentation contribution in its own named routed file. Do not use catch-all entries, named exports in routes, or freeform route implementation.
+Use scoped `root.cli.ts` and `root.server.ts` `defineRoot` factories for shared dependencies, Cordis services and lifecycle. Put each tool, command, hook, method, API, resource, and presentation contribution in its own named routed file. Do not use catch-all entries, named exports in routes, or freeform route implementation.
+
+Give each event one owner. In headless sessions, the server facet owns blocking tool hooks; Pi bridge lifecycle handlers can borrow the server root's services through `DOOM_CORDIS_SERVER_SERVICES` rather than creating a duplicate session runtime. Terminal tool hooks remain Pi-owned. Repository TypeScript hook rows use `pi.module` in `.doom/hooks.yaml` and import `@agimon-ai/doompi-hook/authoring`, not an extension entry.
 
 The lifecycle is construct, register, `onStart`, run, `onStop`, unregister, `onDispose`. All hooks are optional and receive one typed context. The helper awaits startup before readiness. Shutdown aborts the context signal, stops work, removes registrations in reverse order, and performs final cleanup. Failed startup awaits rollback. Optional provider replacement rebinds contributions without restarting the plugin. Minor-mode actions are independent of mounting.
 

@@ -525,6 +525,27 @@ const mounts = { global: {} }; export const selected = mounts.global;`,
     expect(providerOwnedPolicy.check?.(path.join(root, 'missing.ts'), root, boundaryContext())).toBeNull();
   });
 
+  it('allows only the hook provider dispatcher to apply native input patches', () => {
+    writeManifest({ name: '@agimon-ai/doompi-hook' });
+    const dispatcher = write(
+      'src/services/hookDispatch/index.ts',
+      "if (event.type === 'tool_call') Object.assign(event.input, patch);",
+    );
+    const consumer = write(
+      'src/services/consumer/index.ts',
+      "if (event.type === 'tool_call') Object.assign(event.input, patch);",
+    );
+    expect(providerOwnedPolicy.check?.(dispatcher, root, boundaryContext())).toBeNull();
+    expect(providerOwnedPolicy.check?.(consumer, root, boundaryContext())).toContain('Do not mutate');
+    const regression = write(
+      'tests/dispatch.test.ts',
+      "if (event.type === 'tool_call') Object.assign(event.input, patch);",
+    );
+    expect(providerOwnedPolicy.check?.(regression, root, boundaryContext())).toBeNull();
+    writeManifest({ name: '@agimon-ai/doompi-example' });
+    expect(providerOwnedPolicy.check?.(dispatcher, root, boundaryContext())).toContain('Do not mutate');
+  });
+
   it('rejects direct setActiveTools calls outside the tool-surface owner', () => {
     writeManifest({ name: '@agimon-ai/doompi-plan' });
     const direct = write('src/services/planMode.ts', 'pi.setActiveTools([...names]);');

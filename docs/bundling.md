@@ -54,6 +54,7 @@ A generation contains more than TUI JavaScript:
 - resolved state and composition fingerprints
 - the bootstrap loaded by Pi
 - runtime bundles and compiler manifests for recorded compositions
+- compiled hook modules, compiler receipts, and a descriptor mapping registry sources/rows to artifacts
 - package resources
 - `server.bundle.json` and built server facets
 - web plugin assets and exported package API contracts when available
@@ -82,6 +83,16 @@ has finished. Synchronization does not automatically prune them.
 The registration is part of the boundary. It pins the repository identity, worktree, DoomPi package root, npm version provenance, API version, Pi entry, state hash, and generation paths. Missing, stale, foreign, traversing, or malformed registrations fail closed. DoomPi does not replace one with a guessed source checkout or another repository's state. Schema-1 registrations without API metadata keep exact npm-version validation until an explicit sync republishes them in the current schema.
 
 Runtime checks hash the recorded bootstrap, bundle, server, contract, and compiler artifact bytes. A package release that supports the same API version can therefore reuse an intact generation even if its producer sources have changed. `doompi sync --check` remains source-sensitive. Run `doompi sync` when you want to refresh the generation.
+
+## Compiled hook modules
+
+Registry `pi` rows declare exactly one of `command` or `module`. Module paths resolve relative to the declaring repository or personal `~/.pi/.doom` root. Authors use the dependency-free `@agimon-ai/doompi-hook/authoring` API. See the [hook authoring contract](../packages/default/doompi-hook/README.md) for handlers, context, command decisions, and event ownership.
+
+Sync compiles core groups plus the union of groups selected by declared modes. If any mode leaves `hookGroups` unset, all groups are compiled. Unset selection means all groups at runtime; explicit `[]` means core only. A module compilation failure prevents publication and preserves the previous generation.
+
+After editing hook modules or their imports, registry rows, or mode selections, run `doompi sync` (or `dpi sync`), check with `doompi sync --check`, then reload or restart the session. Runtime module loading uses descriptor-mapped compiled artifacts, not a live-source fallback. Each binding pins its startup descriptor, including cold lazy imports after configuration replacement. Native children pin their launch selection and modules independently of parent reload or disposal. Sync does not replace modules already bound to a running session.
+
+Generation pinning is an artifact-consistency boundary, not a sandbox. Hook modules execute with host Node.js privileges. Setup state is session-local and calls are serialized, but module globals and external effects are not isolated. Timeouts revoke context effects and quarantine modules; they cannot forcibly terminate arbitrary JavaScript or roll back completed effects.
 
 ## What happens when a selection changes
 

@@ -3,7 +3,13 @@ import type { ToolResultEvent } from '@earendil-works/pi-coding-agent';
 import { BLOCKED_BY_HOOK, CONTEXT_SEPARATOR } from '../../constants/hookHandlers';
 import { HOOK_EVENT } from '../../constants/hooks';
 import type { HookFailure, HookToolEvent, ResolvedHook } from '../../types/hooks';
-import { additionalContextsFrom, decisionReason, hookFailureMessage, isDenied, toolResultMessages } from '../hookDecisions';
+import {
+  additionalContextsFrom,
+  decisionReason,
+  hookFailureMessage,
+  isDenied,
+  toolResultMessages,
+} from '../hookDecisions';
 import { sessionHookPayload, toolHookPayload } from '../hookPayload';
 import { selectRegistryHooks } from '../hookRegistry';
 import type { HookSession } from '../hookRuntime/type';
@@ -15,7 +21,8 @@ function isJson(value: unknown, ancestors = new Set<object>()): boolean {
   if (typeof value === 'number') return Number.isFinite(value);
   if (typeof value !== 'object' || ancestors.has(value)) return false;
   ancestors.add(value);
-  const valid = (Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype) &&
+  const valid =
+    (Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype) &&
     Object.values(value).every((entry) => isJson(entry, ancestors));
   ancestors.delete(value);
   return valid;
@@ -39,9 +46,10 @@ export async function dispatchHooks(
   signal.throwIfAborted();
   const harness = session.config().harness;
   const plugins = await session.documents.plugins(harness.pluginHooks);
-  const registry = request.eventName === HOOK_EVENT.sessionEnd
-    ? { entries: [], failure: undefined }
-    : await session.documents.registry(scope.repoRoot);
+  const registry =
+    request.eventName === HOOK_EVENT.sessionEnd
+      ? { entries: [], failure: undefined }
+      : await session.documents.registry(scope.repoRoot);
   signal.throwIfAborted();
   const event = request.event;
   const toolName = event && 'toolName' in event ? event.toolName : undefined;
@@ -63,7 +71,13 @@ export async function dispatchHooks(
     request.progress?.(index, hooks.length);
     if (row.hook.command === undefined) {
       if (!event) continue;
-      const proposed = structuredClone(event);
+      let proposed: typeof event;
+      try {
+        proposed = structuredClone(event);
+      } catch (error) {
+        failures.push(commandFailure(row, error));
+        continue;
+      }
       const outcome = await session.modules.invoke(row, proposed, scope, scope.operationSignal);
       signal.throwIfAborted();
       if (outcome.failure) {
@@ -73,7 +87,12 @@ export async function dispatchHooks(
       // A failed or late invocation cannot mutate live tool input or output.
       try {
         if (event.type === 'tool_call' && proposed.type === 'tool_call') {
-          if (!proposed.input || Array.isArray(proposed.input) || !isJson(proposed.input)) {
+          if (
+            typeof proposed.input !== 'object' ||
+            proposed.input === null ||
+            Array.isArray(proposed.input) ||
+            !isJson(proposed.input)
+          ) {
             throw new Error('Hook tool input must be a JSON object.');
           }
           const input = structuredClone(proposed.input);
@@ -95,19 +114,24 @@ export async function dispatchHooks(
       }
       continue;
     }
-    const payload = event && 'toolName' in event
-      ? toolHookPayload(event as HookToolEvent, request.eventName, scope.repoRoot, scope.sessionId, {
-          parentSessionId: scope.parentSessionId,
-          agent: scope.agent,
-        })
-      : sessionHookPayload(scope.sessionId, scope.repoRoot);
+    const payload =
+      event && 'toolName' in event
+        ? toolHookPayload(event as HookToolEvent, request.eventName, scope.repoRoot, scope.sessionId, {
+            parentSessionId: scope.parentSessionId,
+            agent: scope.agent,
+          })
+        : sessionHookPayload(scope.sessionId, scope.repoRoot);
     // The catch covers hook execution only. Readiness, host effects and abort errors propagate.
     let outcome;
     try {
-      outcome = await session.runner.run(row.hook, { ...payload, ...request.extraPayload }, {
-        repoRoot: scope.repoRoot,
-        pluginRoot: row.root,
-      });
+      outcome = await session.runner.run(
+        row.hook,
+        { ...payload, ...request.extraPayload },
+        {
+          repoRoot: scope.repoRoot,
+          pluginRoot: row.root,
+        },
+      );
     } catch (error) {
       failures.push(commandFailure(row, error));
       continue;
@@ -118,15 +142,17 @@ export async function dispatchHooks(
     decisions.push(outcome.decision);
     if (event?.type === 'tool_result') {
       const messages = toolResultMessages([outcome.decision]);
-      if (messages.length > 0) event.content = [...event.content, { type: 'text', text: messages.join(CONTEXT_SEPARATOR) }];
+      if (messages.length > 0)
+        event.content = [...event.content, { type: 'text', text: messages.join(CONTEXT_SEPARATOR) }];
       if (isDenied(outcome.decision)) event.isError = true;
       patchedResult ||= messages.length > 0 || isDenied(outcome.decision);
     }
     if (isDenied(outcome.decision)) {
-      if (event?.type === 'tool_call') toolCall = {
-        block: true,
-        reason: decisionReason(outcome.decision) ?? BLOCKED_BY_HOOK,
-      };
+      if (event?.type === 'tool_call')
+        toolCall = {
+          block: true,
+          reason: decisionReason(outcome.decision) ?? BLOCKED_BY_HOOK,
+        };
       break;
     }
   }
@@ -142,10 +168,14 @@ export async function dispatchHooks(
     decisions,
     failures,
     ...(toolCall ? { toolCall } : {}),
-    ...(event?.type === 'tool_result' && patchedResult ? { toolResult: {
-      content: (event as ToolResultEvent).content,
-      details: (event as ToolResultEvent).details,
-      isError: event.isError,
-    } } : {}),
+    ...(event?.type === 'tool_result' && patchedResult
+      ? {
+          toolResult: {
+            content: (event as ToolResultEvent).content,
+            details: (event as ToolResultEvent).details,
+            isError: event.isError,
+          },
+        }
+      : {}),
   };
 }

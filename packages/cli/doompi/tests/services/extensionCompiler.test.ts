@@ -1435,9 +1435,20 @@ describe('compiled extension sets', { timeout: 30_000 }, () => {
         : [];
     // log-sink-mcp owns a worker it finds through import.meta.url, so it stays external and the
     // compiled graph keeps an absolute import into the installed copy, as the Pi set already does.
+    // Resolve from the owning package, whose pnpm peer context may differ from the CLI's copy.
     const retainedRuntimeImports =
       manifest.name === '@agimon-ai/doompi-style-system'
-        ? [fs.realpathSync(fileURLToPath(import.meta.resolve('@agimon-ai/style-system')))]
+        ? [
+            fs.realpathSync(
+              fileURLToPath(
+                execFileSync(
+                  process.execPath,
+                  ['--input-type=module', '-e', 'console.log(import.meta.resolve("@agimon-ai/style-system"))'],
+                  { cwd: packageRoot, encoding: 'utf8' },
+                ).trim(),
+              ),
+            ),
+          ]
         : manifest.name === '@agimon-ai/doompi-log'
           ? [logSinkEsmEntry()]
           : [];

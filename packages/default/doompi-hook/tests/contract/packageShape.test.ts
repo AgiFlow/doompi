@@ -60,13 +60,14 @@ describe('doompi-hook package contract', () => {
     expect(Object.keys(exportsMap)).toEqual([
       '.',
       './apiContracts',
+      './authoring',
       './extensions/pi',
       './extensions/server',
       './package.json',
     ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
-    for (const subpath of ['.', './extensions/pi', './extensions/server']) {
+    for (const subpath of ['.', './authoring', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);

@@ -124,6 +124,18 @@ describe('session module runtime', () => {
     await expect(f.modules.invoke(f.row, f.event, f.context)).rejects.toBe(error);
     await f.modules.dispose();
   });
+  it('propagates retained setup-context effects on later invocations even when caught', async () => {
+    const f = await fixture(
+      `export default {setup(ctx){return {async tool_call(){try{await ctx.sendMessage('hi','steer')}catch{}return {block:true}}}}}`,
+    );
+    expect((await f.modules.invoke(f.row, f.event, f.context)).result).toEqual({ block: true });
+    const error = new Error('later admission failed');
+    vi.mocked(f.context.sendMessage).mockRejectedValueOnce(error);
+    await expect(f.modules.invoke(f.row, f.event, f.context)).rejects.toBe(error);
+    expect((await f.modules.invoke(f.row, f.event, f.context)).result).toEqual({ block: true });
+    await f.modules.dispose();
+  });
+
   it('aborts pending handlers on disposal without accepting late results', async () => {
     const f = await fixture(
       `export default {setup(){return {async tool_call(e,ctx){await new Promise(r=>setTimeout(r,30));await ctx.appendCustomEntry('late',{});return {block:true}}}}}`,
