@@ -1,3 +1,22 @@
+## 0.0.1-alpha.79 (2026-10-03)
+
+### 🩹 Fixes
+
+- preserve conversation history and session names ([#290](https://github.com/AgiFlow/doompi/pull/290))
+- isolate explicit queues and retry runner result admission ([#289](https://github.com/AgiFlow/doompi/pull/289))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.116
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.111
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.112
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.32
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.70
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.78 (2026-10-03)
 
 ### 🚀 Features

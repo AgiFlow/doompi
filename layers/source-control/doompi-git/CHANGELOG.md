@@ -1,3 +1,19 @@
+## 0.0.1-alpha.48 (2026-10-03)
+
+### 🩹 Fixes
+
+- isolate explicit queues and retry runner result admission ([#289](https://github.com/AgiFlow/doompi/pull/289))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.112
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.36
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.70
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.47 (2026-10-03)
 
 ### 🚀 Features
