@@ -1,3 +1,24 @@
+## 0.0.1-alpha.80 (2026-10-03)
+
+### 🩹 Fixes
+
+- show planned workflow steps and artifact folders ([#294](https://github.com/AgiFlow/doompi/pull/294))
+- allow autonomous voice mute during agent turns ([#293](https://github.com/AgiFlow/doompi/pull/293))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.117
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.112
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.113
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.33
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.60
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.94
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.79 (2026-10-03)
 
 ### 🩹 Fixes

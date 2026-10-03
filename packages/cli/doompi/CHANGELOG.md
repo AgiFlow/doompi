@@ -1,3 +1,26 @@
+## 0.0.1-alpha.117 (2026-10-03)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.90
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.79
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.112
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.91
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.113
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.91
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.90
+- Updated @agimon-ai/doompi-plan to 0.0.1-alpha.113
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.91
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.114
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.91
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.97
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.113
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.113
+- Updated @agimon-ai/vibe-lint-plugin-doom-cli to 0.0.1-alpha.32
+
 ## 0.0.1-alpha.116 (2026-10-03)
 
 ### 🩹 Fixes
