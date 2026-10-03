@@ -2084,6 +2084,7 @@ describe('DPI installed experiment runtime', () => {
         fixture.root,
         environment,
         COLD_SYNC_TIMEOUT_MS,
+        'dpi-managed-settings.sync',
       );
       expect(sync.code, sync.stderr || sync.stdout).toBe(0);
       expect(sync.stdout).toContain('Run dpi from the repository root to use it.');
@@ -2093,6 +2094,7 @@ describe('DPI installed experiment runtime', () => {
         fixture.root,
         environment,
         COLD_SYNC_TIMEOUT_MS,
+        'dpi-managed-settings.check',
       );
       expect(check.code, `${check.stderr}\n${check.stdout}`).toBe(0);
       expect(fs.readFileSync(projectSettingsPath, 'utf8')).toBe(projectSettings);
@@ -2156,8 +2158,8 @@ describe('DPI installed experiment runtime', () => {
     const packedB = createConsumerRoot();
     runtimeRoots.push(packedA.root, packedB.root);
     const [installA, installB] = await Promise.all([
-      installLocalPackages(packedA, packedPackages),
-      installLocalPackages(packedB, packedPackages),
+      installLocalPackages(packedA, packedPackages, 'dpi-isolation.repository-a'),
+      installLocalPackages(packedB, packedPackages, 'dpi-isolation.repository-b'),
     ]);
     expect(installA.code, installA.stderr || installA.stdout).toBe(0);
     expect(installB.code, installB.stderr || installB.stdout).toBe(0);
@@ -2196,22 +2198,23 @@ describe('DPI installed experiment runtime', () => {
       '--preset',
       'ollama',
     ];
-    const syncRepository = (consumerRoot: string, root: string, extra: string[] = []) =>
+    const syncRepository = (consumerRoot: string, root: string, timingLabel: string, extra: string[] = []) =>
       runCommand(
         process.execPath,
         [installedDoomPiCli(consumerRoot), 'sync', ...extra, ...syncOptions],
         root,
         environment,
         COLD_SYNC_TIMEOUT_MS,
+        timingLabel,
       );
 
-    const syncA = await syncRepository(packedA.root, fixtureA.root);
+    const syncA = await syncRepository(packedA.root, fixtureA.root, 'dpi-isolation.repository-a.cold-sync');
     expect(syncA.code, syncA.stderr || syncA.stdout).toBe(0);
-    const syncB = await syncRepository(packedB.root, fixtureB.root);
+    const syncB = await syncRepository(packedB.root, fixtureB.root, 'dpi-isolation.repository-b.cold-sync');
     expect(syncB.code, syncB.stderr || syncB.stdout).toBe(0);
     const [overlapA, overlapB] = await Promise.all([
-      syncRepository(packedA.root, fixtureA.root),
-      syncRepository(packedB.root, fixtureB.root),
+      syncRepository(packedA.root, fixtureA.root, 'dpi-isolation.repository-a.overlap-sync'),
+      syncRepository(packedB.root, fixtureB.root, 'dpi-isolation.repository-b.overlap-sync'),
     ]);
     expect(overlapA.code, overlapA.stderr || overlapA.stdout).toBe(0);
     expect(overlapB.code, overlapB.stderr || overlapB.stdout).toBe(0);
@@ -2243,16 +2246,16 @@ describe('DPI installed experiment runtime', () => {
     );
     const registrationBBytes = fs.readFileSync(registrationBPath);
     const stateBBytes = fs.readFileSync(registrationB!.statePath);
-    const repeatedA = await syncRepository(packedA.root, fixtureA.root);
+    const repeatedA = await syncRepository(packedA.root, fixtureA.root, 'dpi-isolation.repository-a.repeat-sync');
     expect(repeatedA.code, repeatedA.stderr || repeatedA.stdout).toBe(0);
     expect(fs.readFileSync(registrationBPath)).toEqual(registrationBBytes);
     expect(fs.readFileSync(registrationB!.statePath)).toEqual(stateBBytes);
 
-    for (const [consumerRoot, root] of [
-      [packedA.root, fixtureA.root],
-      [packedB.root, fixtureB.root],
+    for (const [consumerRoot, root, timingLabel] of [
+      [packedA.root, fixtureA.root, 'dpi-isolation.repository-a.check'],
+      [packedB.root, fixtureB.root, 'dpi-isolation.repository-b.check'],
     ] as const) {
-      const check = await syncRepository(consumerRoot, root, ['--check']);
+      const check = await syncRepository(consumerRoot, root, timingLabel, ['--check']);
       expect(check.code, `${check.stderr}\n${check.stdout}`).toBe(0);
     }
     expect(fs.readFileSync(settingsPath)).toEqual(initOwned.settings);

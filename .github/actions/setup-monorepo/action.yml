@@ -1,6 +1,12 @@
 name: Setup DoomPi monorepo
 description: Install the pinned Node and pnpm toolchain and DoomPi workspace dependencies.
 
+inputs:
+  save-cache:
+    description: Save installation caches from the designated main-branch job.
+    required: false
+    default: "false"
+
 runs:
   using: composite
   steps:
@@ -8,10 +14,11 @@ runs:
     # Install the pinned toolchain directly so self-hosted runners keep working
     # when that service throttles their shared public IP.
     - name: Install Node and pnpm
+      id: toolchain
       shell: bash
       env:
         NODE_VERSION: 22.22.1
-        PNPM_VERSION: 12.3.4
+        PNPM_VERSION: 12.8.1
       run: |
         set -euo pipefail
 
@@ -88,12 +95,17 @@ runs:
 
         node --version
         pnpm --version
+        {
+          echo "node-version=${NODE_VERSION}"
+          echo "pnpm-version=${PNPM_VERSION}"
+        } >> "$GITHUB_OUTPUT"
 
-    - shell: bash
+    - name: Configure the workspace store
+      shell: bash
       run: |
         set -euo pipefail
 
-        STORE_DIR="$GITHUB_WORKSPACE/node_modules/.pnpm-store"
+        STORE_DIR="${RUNNER_TEMP}/pnpm-store"
         {
           echo "PNPM_STORE_DIR=$STORE_DIR"
           echo "npm_config_store_dir=$STORE_DIR"
@@ -105,7 +117,26 @@ runs:
 
         rm -rf node_modules
 
-    - shell: bash
+    - name: Restore the pnpm store
+      id: pnpm-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ env.PNPM_STORE_DIR }}
+        key: ci-pnpm-v1-${{ runner.os }}-${{ runner.arch }}-node-${{ steps.toolchain.outputs.node-version }}-pnpm-${{ steps.toolchain.outputs.pnpm-version }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          ci-pnpm-v1-${{ runner.os }}-${{ runner.arch }}-node-${{ steps.toolchain.outputs.node-version }}-pnpm-${{ steps.toolchain.outputs.pnpm-version }}-
+
+    - name: Restore Runner native payloads
+      id: runner-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          packages/utils/doompi-runner-rmux-*/vendor
+          packages/utils/doompi-runner-rtk-*/vendor
+        key: ci-runner-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/fetch-runner-binaries.mjs') }}
+
+    - name: Install workspace dependencies
+      shell: bash
       run: |
         set -euo pipefail
         pnpm install \
@@ -117,6 +148,24 @@ runs:
         pnpm config get enableGlobalVirtualStore || true
         pnpm config get enable-global-virtual-store || true
         pnpm store path
+
+    - name: Save the pnpm store
+      if: inputs.save-cache == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.pnpm-cache.outputs.cache-hit != 'true'
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ env.PNPM_STORE_DIR }}
+        key: ${{ steps.pnpm-cache.outputs.cache-primary-key }}
+
+    - name: Save Runner native payloads
+      if: inputs.save-cache == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.runner-cache.outputs.cache-hit != 'true'
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          packages/utils/doompi-runner-rmux-*/vendor
+          packages/utils/doompi-runner-rtk-*/vendor
+        key: ${{ steps.runner-cache.outputs.cache-primary-key }}
 
     - name: Verify workspace toolchain
       shell: bash

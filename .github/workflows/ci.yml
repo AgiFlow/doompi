@@ -66,6 +66,8 @@ jobs:
 
       - name: Set up DoomPi workspace
         uses: ./.github/actions/setup-monorepo
+        with:
+          save-cache: ${{ matrix.name == 'Repository checks' && 'true' || 'false' }}
 
       - name: Run ${{ matrix.name }}
         run: ${{ matrix.command }}
@@ -159,8 +161,30 @@ jobs:
       - name: Build the cockpit and the servers it spawns
         run: pnpm cockpit:build
 
+      - name: Determine the installed Playwright version
+        id: playwright-version
+        run: |
+          set -euo pipefail
+          VERSION="$(pnpm --filter @agimon-ai/doompi-web exec node -p "require('@playwright/test/package.json').version")"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Chromium
+        id: chromium-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ci-chromium-v1-${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
+
       - name: Install the Chromium the shard drives
         run: pnpm --filter @agimon-ai/doompi-web exec playwright install --with-deps chromium
+
+      - name: Save Chromium
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.shard == 1 && steps.chromium-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.chromium-cache.outputs.cache-primary-key }}
 
       - name: Drive the cockpit in a browser
         run: pnpm nx run @agimon-ai/doompi-web:test:e2e -- --shard=${{ matrix.shard }}/40
