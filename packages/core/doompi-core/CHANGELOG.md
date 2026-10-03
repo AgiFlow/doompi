@@ -1,3 +1,15 @@
+## 0.0.1-alpha.112 (2026-10-03)
+
+### 🩹 Fixes
+
+- deduplicate runner completion admission ([#291](https://github.com/AgiFlow/doompi/pull/291))
+- preserve conversation history and session names ([#290](https://github.com/AgiFlow/doompi/pull/290))
+- isolate explicit queues and retry runner result admission ([#289](https://github.com/AgiFlow/doompi/pull/289))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.111 (2026-10-03)
 
 ### 🚀 Features
