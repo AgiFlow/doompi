@@ -553,3 +553,114 @@ it('settles native legacy turns after fallback narration without blocking the na
     await rm(home, { recursive: true, force: true });
   }
 });
+
+it('mutes legacy autonomous voice during a busy run without changing ownership or catalog acknowledgement', async () => {
+  const { VOICE_OWNERSHIP_ROUTES, VOICE_OWNERSHIP_PROTOCOL_VERSION, parseVoiceOwnershipSessionSnapshot } =
+    await import('../../../src/types/voiceOwnership');
+  const home = await mkdtemp(join(tmpdir(), 'voice-legacy-busy-'));
+  const state = vi.spyOn(VoiceModeController.prototype, 'state', 'get').mockReturnValue('active');
+  // The legacy worker is not launched by this facet harness. Model its mute state.
+  let muted = false;
+  const muteState = vi.spyOn(VoiceModeController.prototype, 'microphoneMuted', 'get').mockImplementation(() => muted);
+  const muteControl = vi.spyOn(VoiceModeController.prototype, 'setMicrophoneMuted').mockImplementation((value) => {
+    muted = value;
+  });
+  const activity = vi.fn(async () => ({ isIdle: false }));
+  const admitPrompt = vi.fn();
+  const host = {
+    context: {
+      cwd: home,
+      repoRoot: home,
+      sessionId: 'legacy-busy',
+      environment: {},
+      selection: { majorMode: 'copilot', activeLayers: [], domains: [] },
+      client: { notify: vi.fn(), setStatus: vi.fn() },
+      session: { activity, admitPrompt },
+    },
+    assertActive: vi.fn(),
+    changeSelection: vi.fn(),
+    registerTool: vi.fn(() => ({ dispose: vi.fn() })),
+  } as unknown as DoomHeadlessHostService;
+  const broker = new VoiceMediaBroker({
+    directEvents: { publish: vi.fn(), subscribe: () => () => undefined, close() {} },
+    sessionId: 'legacy-busy',
+    clientConnectWaitMs: 0,
+    hubToken: 'hub',
+  });
+  const facet = createVoiceServer(host, broker, home);
+  const api = facet.api![0]!.start({} as never);
+  const ownership = async () => {
+    const response = await broker.fetch(
+      new Request(`http://voice${VOICE_OWNERSHIP_ROUTES.state}`, {
+        headers: { authorization: 'Bearer hub' },
+      }),
+    );
+    const snapshot = parseVoiceOwnershipSessionSnapshot(await response.json());
+    expect(snapshot).toBeDefined();
+    return snapshot!;
+  };
+  try {
+    await facet.onStart?.({} as never);
+    const start = facet.hooks?.find((hook) => hook.event === 'agent_start');
+    expect(start).toBeDefined();
+    await start!.handle({ runId: 'busy-run' } as never, host.context);
+    await vi.waitFor(async () => expect(await ownership()).toMatchObject({ registration: { active: true } }));
+    const catalog = {
+      version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+      commandId: 'busy-catalog',
+      action: 'catalog',
+      catalogRevision: 'legacy-catalog',
+      targets: [{ handle: 'other', label: 'Other agent', order: 1 }],
+    };
+    const ack = await broker.fetch(
+      new Request(`http://voice${VOICE_OWNERSHIP_ROUTES.command}`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer hub' },
+        body: JSON.stringify(catalog),
+      }),
+    );
+    expect(await ack.json()).toMatchObject({ commandId: 'busy-catalog', action: 'catalog', ok: true, active: true });
+    const before = await ownership();
+    expect(before).toMatchObject({
+      catalogRevision: 'legacy-catalog',
+      targets: catalog.targets,
+      acknowledgement: { commandId: 'busy-catalog', ok: true },
+      registration: { active: true },
+    });
+    for (const [index, action] of ['mute', 'unmute', 'mute'].entries()) {
+      const response = await api.fetch(
+        new Request('http://voice/control', {
+          method: 'POST',
+          body: JSON.stringify({ action }),
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ state: 'active', mode: 'legacy', muted: action === 'mute' });
+      expect(await ownership()).toMatchObject({
+        registration: before.registration,
+        catalogRevision: before.catalogRevision,
+        targets: before.targets,
+      });
+      const commandId = `busy-catalog-${String(index)}`;
+      const acknowledgement = await broker.fetch(
+        new Request(`http://voice${VOICE_OWNERSHIP_ROUTES.command}`, {
+          method: 'POST',
+          headers: { authorization: 'Bearer hub' },
+          body: JSON.stringify({ ...catalog, commandId }),
+        }),
+      );
+      expect(acknowledgement.status).toBe(200);
+      expect(await acknowledgement.json()).toMatchObject({ commandId, action: 'catalog', ok: true, active: true });
+    }
+    expect(muteControl.mock.calls).toEqual([[true], [false], [true]]);
+    expect(activity).not.toHaveBeenCalled();
+    expect(admitPrompt).not.toHaveBeenCalled();
+    expect(host.changeSelection).not.toHaveBeenCalled();
+  } finally {
+    await facet.onDispose?.({} as never);
+    state.mockRestore();
+    muteState.mockRestore();
+    muteControl.mockRestore();
+    await rm(home, { recursive: true, force: true });
+  }
+});

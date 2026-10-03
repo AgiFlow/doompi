@@ -44,10 +44,12 @@ function Meter({ tone }: { tone: VoiceTone }) {
  * it out, so listening, hearing, transcribing and narrating each read as
  * themselves rather than as a word tucked inside a chip.
  */
-export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: WebPluginSlotProps) {
+export function VoiceActivitySection({ sessionId, statuses }: WebPluginSlotProps) {
   const view = voiceActivityView(statuses['doom-voice']);
   const [liveStartPending, setLiveStartPending] = useState(false);
   const [liveStartError, setLiveStartError] = useState<string | null>(null);
+  const [microphonePending, setMicrophonePending] = useState(false);
+  const [microphoneError, setMicrophoneError] = useState<string | null>(null);
   const controlGlobalLive = async (action: 'activate' | 'transfer'): Promise<void> => {
     if (sessionId === null || liveStartPending) return;
     setLiveStartPending(true);
@@ -154,10 +156,20 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
     browserState.phase === 'conflict' &&
     view.mode !== 'off';
   const tone: VoiceTone = mediaConflict ? 'attention' : view.tone;
-  const sendCommand = (message: string): void => {
-    if (sessionId !== null) sendSessionFrame(sessionId, { type: 'prompt', message });
+  const toggleAutonomousMicrophone = async (): Promise<void> => {
+    if (sessionId === null || microphonePending) return;
+    setMicrophonePending(true);
+    setMicrophoneError(null);
+    try {
+      const action = view.microphoneMuted ? 'unmute' : 'mute';
+      const result = await voice.session(sessionId).control({ body: { action } });
+      if (!result.ok) throw new Error(result.error || 'Microphone control request failed.');
+    } catch (error) {
+      setMicrophoneError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMicrophonePending(false);
+    }
   };
-  const toggleAutonomousMicrophone = (): void => sendCommand(`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`);
   const showAutonomousMicrophoneControl =
     !mediaConflict && view.mode === 'auto' && view.phase !== 'starting' && view.phase !== 'draining';
   return (
@@ -195,7 +207,8 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
             aria-label={`${view.microphoneMuted ? 'unmute' : 'mute'} autonomous voice microphone`}
             aria-pressed={view.microphoneMuted}
             title={`${view.microphoneMuted ? 'unmute' : 'mute'} autonomous voice microphone`}
-            onClick={toggleAutonomousMicrophone}
+            disabled={sessionId === null || microphonePending}
+            onClick={() => void toggleAutonomousMicrophone()}
           >
             {view.microphoneMuted ? 'unmute' : 'mute'}
           </Button>
@@ -205,6 +218,11 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
       {liveStartError !== null ? (
         <span role="alert" className="text-2xs leading-relaxed text-doom-yellow">
           Live control failed: {liveStartError}
+        </span>
+      ) : null}
+      {microphoneError !== null ? (
+        <span role="alert" className="text-2xs leading-relaxed text-doom-yellow">
+          Microphone control failed: {microphoneError}
         </span>
       ) : null}
       {mediaConflict || view.detail ? (
