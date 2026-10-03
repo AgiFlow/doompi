@@ -12,6 +12,8 @@ packages:
 
 overrides:
   vite: 8.2.2
+  # GHSA-vfj7-8cjw-p6xm: this plugin only uses isMatch, which picomatch provides without braces.
+  "vite-plugin-singlefile@2.3.3>micromatch": "npm:picomatch@4.0.7"
   "axios@1.18.1": 1.20.0
   # Keep source installs aligned with the secure policy written to consumer .pi/npm projects.
   "@hono/node-server@2.0.0 - 2.0.9": "^2.0.10"
