@@ -71,6 +71,23 @@ const buildRunning: WorkflowJobView = {
   ],
 };
 
+const pendingTest: WorkflowJobView = {
+  name: 'test',
+  phase: 'job',
+  status: 'pending',
+  steps: [
+    { name: 'unit tests', status: 'pending' },
+    { name: 'browser tests', status: 'pending' },
+  ],
+};
+
+const pendingRelease: WorkflowJobView = {
+  name: 'release',
+  phase: 'job',
+  status: 'pending',
+  steps: [{ name: 'publish', status: 'pending' }],
+};
+
 const skipped: WorkflowJobView = {
   name: 'release',
   phase: 'job',
@@ -127,7 +144,7 @@ const running = run({
   runKey: 'release-hardening-14',
   displayName: 'release-hardening',
   position: { job: 'build', step: 'edit token.ts', index: 2, total: 4 },
-  jobs: [setup, buildRunning],
+  jobs: [setup, buildRunning, pendingTest, pendingRelease],
 });
 
 const earlier = run({
@@ -228,7 +245,12 @@ const succeeded = run({
   ],
 });
 
-const starting = run({ runKey: 'docs-2', displayName: 'docs-refresh', startedAt: ago(0.2) });
+const starting = run({
+  runKey: 'docs-2',
+  displayName: 'docs-refresh',
+  startedAt: ago(0.2),
+  jobs: [{ name: 'docs', phase: 'job', status: 'pending', steps: [{ name: 'refresh docs', status: 'pending' }] }],
+});
 
 function DockFrame({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -256,7 +278,9 @@ function View({ runs, artifacts }: { runs: WorkflowRunView[]; artifacts?: Workfl
       onSelectRun={noop}
       onOpenStep={noop}
       onDeleted={noop}
-      artifacts={<ArtifactList listing={artifacts} error={undefined} onOpen={noop} />}
+      artifacts={
+        <ArtifactList listing={artifacts} error={undefined} onOpen={noop} onOpenDirectory={async () => ({})} />
+      }
     />
   );
 }
@@ -272,7 +296,7 @@ export default meta;
 export const Playground = {
   render: () => (
     <div className="flex flex-wrap gap-8 bg-doom-bg p-6">
-      <DockFrame label="running · parallel steps · two runs">
+      <DockFrame label="running · complete job and step tree">
         <View runs={[running, earlier]} artifacts={listing(true)} />
       </DockFrame>
       <DockFrame label="failed">

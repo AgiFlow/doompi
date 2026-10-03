@@ -1,9 +1,15 @@
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
+import {
+  doomApiCallerFrom,
+  type DoomApi,
+  type DoomApiContext,
+  type DoomApiHandler,
+} from '@agimon-ai/doompi-core/packageApi';
 import {
   WorkflowRegistryService,
   WorkflowTerminalService as WorkflowTerminalFacade,
@@ -370,18 +376,53 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     return context.json(response);
   });
 
+  app.post(routes.openRunDirectory.path, async (context) => {
+    if (doomApiCallerFrom(context.req.raw.headers)?.locality !== 'local') {
+      return context.json({ error: 'Opening Finder is only available on the host.' }, 403);
+    }
+    const workspace = context.req.param('workspace');
+    const runKey = context.req.param('runKey');
+    const record = await runOf(workspace, runKey);
+    if (record === undefined) return context.json(missing(workspace, runKey), 404);
+    if (process.platform !== 'darwin') {
+      return context.json({ error: 'Finder is only available on macOS.' }, 409);
+    }
+    try {
+      const runDir = path.resolve(registry.runDirectoryFor(record));
+      if (!fs.statSync(runDir).isDirectory()) {
+        return context.json({ error: 'The run directory is not a folder.' }, 409);
+      }
+      await new Promise<void>((resolve, reject) => {
+        execFile('/usr/bin/open', ['-a', 'Finder', runDir], { timeout: 5_000 }, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+      return context.json({ opened: true });
+    } catch (error) {
+      return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
+  });
+
   app.get(routes.artifacts.path, async (context) => {
     const workspace = context.req.param('workspace');
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
     if (record === undefined) return context.json(missing(workspace, runKey), 404);
     const runDir = registry.runDirectoryFor(record);
-    const body: WorkflowArtifactsResponse = {
-      runDir,
-      description: record.runDirectory?.description ?? '',
-      artifacts: readArtifacts(runDir, record),
-    };
-    return context.json(body);
+    const directory = context.req.query('directory') ?? '';
+    const resolved = resolveInside(runDir, directory);
+    if (resolved === undefined) return context.json({ error: 'That folder is not inside this run.' }, 400);
+    try {
+      const body: WorkflowArtifactsResponse = {
+        runDir,
+        description: record.runDirectory?.description ?? '',
+        artifacts: readArtifacts(runDir, record, directory),
+      };
+      return context.json(body);
+    } catch (error) {
+      return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
   });
 
   app.get(routes.artifact.path, async (context) => {
@@ -421,7 +462,21 @@ function resolveInside(runDir: string, requested: string): string | undefined {
   const resolved = path.resolve(runDir, requested);
   const root = path.resolve(runDir);
   if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) return undefined;
-  return resolved;
+  try {
+    const realRoot = fs.realpathSync(root);
+    // Check the nearest existing ancestor too, so pending paths through symlinks stay confined.
+    let ancestor = resolved;
+    while (!fs.existsSync(ancestor)) {
+      const parent = path.dirname(ancestor);
+      if (parent === ancestor) return undefined;
+      ancestor = parent;
+    }
+    const real = fs.realpathSync(ancestor);
+    if (real !== realRoot && !real.startsWith(`${realRoot}${path.sep}`)) return undefined;
+    return resolved;
+  } catch {
+    return undefined; // Missing or inaccessible run roots cannot safely be read.
+  }
 }
 
 /** Size and modification time of one path, or undefined when it is not there. */
@@ -443,10 +498,12 @@ function viewOf(
   runDir: string,
   entry: Omit<WorkflowArtifactView, 'state' | 'size' | 'modifiedAt'>,
 ): WorkflowArtifactView {
-  const stats = statOf(path.join(runDir, entry.path));
+  const target = resolveInside(runDir, entry.path);
+  const stats = target === undefined ? undefined : statOf(target);
   return {
     ...entry,
-    state: stateOf(stats),
+    kind: stats?.isDirectory() ? 'directory' : entry.kind,
+    state: target === undefined ? 'unreadable' : stateOf(stats),
     ...(stats === undefined ? {} : { size: stats.size, modifiedAt: stats.mtime.toISOString() }),
   };
 }
@@ -460,7 +517,7 @@ function viewOf(
  * hidden: the engine's own context.md and progress log are often exactly what a
  * reader is looking for.
  */
-function readArtifacts(runDir: string, record: WorkflowRunRecord): WorkflowArtifactView[] {
+function readArtifacts(runDir: string, record: WorkflowRunRecord, directory = ''): WorkflowArtifactView[] {
   const declared = (record.runDirectory?.entries ?? []).map((entry) =>
     viewOf(runDir, {
       path: entry.path,
@@ -470,18 +527,14 @@ function readArtifacts(runDir: string, record: WorkflowRunRecord): WorkflowArtif
       declared: true,
     }),
   );
-  const claimed = new Set(declared.map((entry) => entry.path));
-  let names: fs.Dirent[];
-  try {
-    names = fs.readdirSync(runDir, { withFileTypes: true });
-  } catch {
-    return declared; // The directory is gone; the declaration is still worth showing.
-  }
+  const children = declared.filter((entry) => path.posix.dirname(entry.path) === (directory || '.'));
+  const claimed = new Set(children.map((entry) => entry.path));
+  const names = fs.readdirSync(path.join(runDir, directory), { withFileTypes: true });
   const found = names
-    .filter((entry) => !claimed.has(entry.name))
+    .filter((entry) => !claimed.has(path.posix.join(directory, entry.name)))
     .map((entry) =>
       viewOf(runDir, {
-        path: entry.name,
+        path: path.posix.join(directory, entry.name),
         kind: entry.isDirectory() ? 'directory' : 'file',
         description: '',
         producedBy: [],
@@ -489,7 +542,7 @@ function readArtifacts(runDir: string, record: WorkflowRunRecord): WorkflowArtif
       }),
     )
     .sort((left, right) => left.path.localeCompare(right.path));
-  return [...declared, ...found];
+  return [...(directory === '' ? declared : children), ...found];
 }
 
 /** Browser content type inferred from a filename without trusting client input. */

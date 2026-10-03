@@ -75,6 +75,78 @@ function runsOf(payload: unknown): Array<Record<string, unknown>> {
 }
 
 describe('the workflows hub channel', () => {
+  it('seeds the full definition and overlays progress without losing future or nested steps', () => {
+    const home = freshHome();
+    const workflowPath = path.join(home, 'release.workflow.yaml');
+    fs.writeFileSync(
+      workflowPath,
+      JSON.stringify({
+        name: 'Release',
+        pre: { steps: [{ name: 'prepare', run: 'true' }] },
+        jobs: {
+          publish: { needs: ['build'], steps: [{ name: 'ship', run: 'true' }] },
+          '.base': { steps: [{ run: 'true' }] },
+          build: {
+            extends: '.base',
+            preJob: { steps: [{ name: 'before build', run: 'true' }] },
+            steps: [{ name: 'checks', parallel: [{ name: 'unit', run: 'true' }, { run: 'true' }] }],
+            postJob: { steps: [{ name: 'after build', run: 'true' }] },
+          },
+        },
+        post: { steps: [{ name: 'cleanup', run: 'true' }] },
+      }),
+    );
+    const at = new Date().toISOString();
+    const fixture = {
+      workspace: 'default',
+      stage: 'running' as const,
+      record: { workflowPath, env: { PI_SESSION_ID: 'owner' } },
+    };
+    writeWorkflowRun(home, { ...fixture, runKey: 'not-started' });
+    writeWorkflowRun(home, {
+      ...fixture,
+      runKey: 'moving',
+      progress: [
+        { type: 'job', status: 'completed', job: 'pre', at },
+        { type: 'step', status: 'completed', job: 'pre', step: 'prepare', at },
+        { type: 'job', status: 'running', job: 'build', index: 0, total: 2, at },
+        {
+          type: 'step',
+          status: 'running',
+          job: 'build',
+          step: 'unit',
+          group: 'checks',
+          ref: { kind: 'session', id: 'child' },
+          at,
+        },
+      ],
+    });
+    const runs = readWorkflowRuns({ homeDir: home });
+    const moving = runs.find((run) => run.view.runKey === 'moving')!.view;
+    expect(moving.jobs.map((job) => [job.name, job.status])).toEqual([
+      ['pre', 'completed'],
+      ['build', 'running'],
+      ['publish', 'pending'],
+      ['post', 'pending'],
+    ]);
+    expect(moving.jobs[1]?.steps).toEqual([
+      { name: 'before build', status: 'pending' },
+      { name: 'step 1', status: 'pending' },
+      { name: 'unit', status: 'running', group: 'checks', ref: { kind: 'session', id: 'child' }, startedAt: at },
+      { name: 'checks 2', status: 'pending', group: 'checks' },
+      { name: 'after build', status: 'pending' },
+    ]);
+    expect(moving.position).toEqual({ job: 'build', step: 'unit', index: 0, total: 2 });
+    expect(
+      runs.find((run) => run.view.runKey === 'not-started')?.view.jobs.every((job) => job.status === 'pending'),
+    ).toBe(true);
+
+    fs.unlinkSync(workflowPath);
+    const fallback = readWorkflowRuns({ homeDir: home }).find((run) => run.view.runKey === 'moving')!.view;
+    expect(fallback.jobs.map((job) => job.name)).toEqual(['pre', 'build']);
+    expect(fallback.jobs[1]?.steps[0]?.ref?.id).toBe('child');
+  });
+
   it('seeds owned runs once and accepts lifecycle updates through direct events', () => {
     const home = freshHome();
     const scope = { sessionId: 'owner', cwd: '/nowhere' };

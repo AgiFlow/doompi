@@ -107,3 +107,8 @@ export interface WorkflowArtifactContentResponse {
   /** True when textual content was longer than the reader's byte budget. */
   truncated: boolean;
 }
+
+/** Acknowledges opening the registered run folder in Finder. */
+export interface WorkflowOpenRunDirectoryResponse {
+  opened: true;
+}

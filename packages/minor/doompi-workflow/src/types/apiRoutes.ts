@@ -6,6 +6,7 @@ import type {
   WorkflowControlResponse,
   WorkflowDeleteResponse,
   WorkflowLaunchResponse,
+  WorkflowOpenRunDirectoryResponse,
   WorkflowSteerResponse,
   WorkflowStopResponse,
 } from './webWorkflowTerminal';
@@ -104,9 +105,15 @@ export default defineApiRoutes({
     path: '/launch',
     response: apiResponse<WorkflowLaunchResponse>(),
   },
+  openRunDirectory: {
+    method: 'POST',
+    path: `${RUN}/open-directory`,
+    response: apiResponse<WorkflowOpenRunDirectoryResponse>(),
+  },
   artifacts: {
     method: 'GET',
     path: `${RUN}/artifacts`,
+    query: ['directory'],
     response: apiResponse<WorkflowArtifactsResponse>(),
   },
   /** One artifact: its metadata and text, or its raw bytes under `raw=1`. */

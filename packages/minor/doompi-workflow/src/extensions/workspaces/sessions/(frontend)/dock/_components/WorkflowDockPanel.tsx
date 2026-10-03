@@ -50,13 +50,6 @@ function activeSteps(run: WorkflowRunView): { job: string; step: WorkflowJobView
   );
 }
 
-/** A job opens by default while it is moving or failed, so the step that needs a look is already showing. */
-function openByDefault(run: WorkflowRunView, job: WorkflowJobView): boolean {
-  if (run.position?.job === job.name) return true;
-  if (ACTIVE_STATES.has(job.status) || job.status === 'failed') return true;
-  return job.steps.some((step) => ACTIVE_STATES.has(step.status) || step.status === 'failed');
-}
-
 function SectionHeading({ label, meta }: { label: string; meta?: string }) {
   return (
     <div className="flex items-center px-4 pb-1 pt-3">
@@ -203,7 +196,7 @@ function JobTree({
       ) : (
         <div className="flex flex-col gap-0.5 px-2">
           {run.jobs.map((job) => {
-            const open = toggled[job.name] ?? openByDefault(run, job);
+            const open = toggled[job.name] ?? true;
             const icon = STATE_ICON[job.status];
             const finished = job.steps.filter(
               (step) => step.status === 'completed' || step.status === 'skipped',
@@ -215,6 +208,7 @@ function JobTree({
                   data-testid={`job-row-${job.name}`}
                   data-job-status={job.status}
                   aria-expanded={open}
+                  title={`${job.name}: ${job.status}`}
                   onClick={() => setToggled((current) => ({ ...current, [job.name]: !open }))}
                   className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-doom-panel"
                 >
@@ -233,9 +227,11 @@ function JobTree({
                     {job.name}
                   </span>
                   <span className="shrink-0 text-2xs text-doom-faint">
-                    {open || job.steps.length === 0
-                      ? (spanDuration(job.startedAt, job.endedAt, now) ?? '')
-                      : `${finished}/${job.steps.length} steps`}
+                    {job.status === 'pending'
+                      ? 'pending'
+                      : open || job.steps.length === 0
+                        ? (spanDuration(job.startedAt, job.endedAt, now) ?? '')
+                        : `${finished}/${job.steps.length} steps`}
                   </span>
                 </button>
                 {open && job.steps.length > 0 ? (
@@ -382,7 +378,12 @@ export function WorkflowDockPanel({ sessionId, openTransientTab }: WebPluginSlot
         if (sessionId !== null) removeRun(sessionId, workflowRunIdentity(run));
       }}
       artifacts={
-        <ArtifactsPane run={run} sessionId={sessionId} onOpen={(path) => openTransientTab(artifactTab(run, path))} />
+        <ArtifactsPane
+          key={`${workflowRunIdentity(run)}/${sessionId}`}
+          run={run}
+          sessionId={sessionId}
+          onOpen={(path) => openTransientTab(artifactTab(run, path))}
+        />
       }
     />
   );

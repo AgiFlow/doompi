@@ -11,7 +11,7 @@
 import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 
 import type { WorkflowRunView } from '../../../../../types/webWorkflows';
-import { ArtifactsPane } from './ArtifactsPane';
+import { ArtifactList, ArtifactsPane } from './ArtifactsPane';
 
 /*
  * The cockpit host resolves which workspace owns a session, and a story has no
@@ -61,5 +61,54 @@ export const Playground = {
         </div>
       </div>
     </div>
+  ),
+};
+
+export const ExpandableFolders = {
+  render: () => (
+    <ArtifactList
+      error={undefined}
+      listing={{
+        runDir: '/runs/release-14',
+        description: 'Run outputs',
+        artifacts: [
+          {
+            path: 'bin',
+            kind: 'directory',
+            description: 'Build outputs',
+            producedBy: ['build'],
+            declared: true,
+            state: 'written',
+          },
+          {
+            path: 'bin/result.md',
+            kind: 'file',
+            description: 'Pending report',
+            producedBy: ['build'],
+            declared: true,
+            state: 'pending',
+          },
+        ],
+      }}
+      onOpen={() => {}}
+      onOpenDirectory={async () => ({})}
+      onLoadDirectory={async () => ({
+        artifacts: {
+          runDir: '/runs/release-14',
+          description: '',
+          artifacts: [
+            {
+              path: 'bin/output.txt',
+              kind: 'file',
+              description: '',
+              producedBy: [],
+              declared: false,
+              state: 'written',
+              size: 12,
+            },
+          ],
+        },
+      })}
+    />
   ),
 };

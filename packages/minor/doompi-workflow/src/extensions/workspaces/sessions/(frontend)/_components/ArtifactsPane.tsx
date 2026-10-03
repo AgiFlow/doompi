@@ -1,6 +1,6 @@
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Badge, Button, EmptyState, Markdown } from '@agimon-ai/doompi-web-components';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import type { WorkflowRunView } from '../../../../../types/webWorkflows';
 import type {
@@ -8,7 +8,7 @@ import type {
   WorkflowArtifactsResponse,
   WorkflowArtifactView,
 } from '../../../../../types/webWorkflowTerminal';
-import { artifactContentUrl, fetchArtifact, fetchArtifacts } from '../_lib/terminalApi';
+import { artifactContentUrl, fetchArtifact, fetchArtifacts, openRunDirectory } from '../_lib/terminalApi';
 
 const TAB_ID_PREFIX = 'workflows-artifact-';
 const BYTES_PER_UNIT = 1024;
@@ -335,13 +335,7 @@ export function ArtifactViewerPanel({
   );
 }
 
-/**
- * The run directory, as the run pane's second tab.
- *
- * The workflow's own declaration leads, in the order it was written and
- * including entries no job has produced yet, because the declaration is what
- * the run is for. What the folder holds besides that follows.
- */
+/** The run's file tree, including declared outputs that have not been written yet. */
 export function ArtifactsPane({
   run,
   sessionId,
@@ -386,62 +380,178 @@ export function ArtifactsPane({
     };
   }, [run.workspace, run.runKey, run.stage, sessionId]);
 
-  return <ArtifactList listing={listing} error={error} onOpen={onOpen} />;
+  return (
+    <ArtifactList
+      listing={listing}
+      error={error}
+      onLoadDirectory={(directory) => fetchArtifacts(run.workspace, run.runKey, sessionId, directory)}
+      onOpen={onOpen}
+      onOpenDirectory={() => openRunDirectory(run.workspace, run.runKey, sessionId)}
+    />
+  );
 }
 
-/**
- * The run directory's listing, as read: declared entries first, in the order the
- * workflow wrote them, then whatever else the folder holds.
- */
+/** Directory-first file tree with declared output metadata and lazy folder reads. */
 export function ArtifactList({
   listing,
   error,
   onOpen,
+  onOpenDirectory,
+  onLoadDirectory,
 }: {
   listing: WorkflowArtifactsResponse | undefined;
   error: string | undefined;
   onOpen: (path: string) => void;
+  onOpenDirectory?: () => Promise<{ error?: string }>;
+  onLoadDirectory?: (path: string) => Promise<{ artifacts: WorkflowArtifactsResponse } | { error: string }>;
 }) {
-  const declared = listing?.artifacts.filter((entry) => entry.declared) ?? [];
-  const found = listing?.artifacts.filter((entry) => !entry.declared) ?? [];
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState<string>();
+  const openDirectory = async (): Promise<void> => {
+    if (onOpenDirectory === undefined || opening) return;
+    setOpening(true);
+    setOpenError(undefined);
+    try {
+      const result = await onOpenDirectory();
+      setOpenError(result.error);
+    } catch {
+      setOpenError('The run folder could not be opened in Finder.');
+    } finally {
+      setOpening(false);
+    }
+  };
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [loaded, setLoaded] = useState<Record<string, WorkflowArtifactView[]>>({});
+  const [folderErrors, setFolderErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState<Set<string>>(new Set());
+  const entries = new Map<string, WorkflowArtifactView>();
+  for (const entry of [...Object.values(loaded).flat(), ...(listing?.artifacts ?? [])]) entries.set(entry.path, entry);
+  for (const entry of entries.values()) {
+    const parts = entry.path.split('/');
+    parts.pop();
+    while (parts.length > 0) {
+      const parent = parts.join('/');
+      if (!entries.has(parent))
+        entries.set(parent, {
+          path: parent,
+          kind: 'directory',
+          description: '',
+          producedBy: [],
+          declared: false,
+          state: entry.state === 'pending' ? 'pending' : 'written',
+        });
+      parts.pop();
+    }
+  }
+  const toggle = async (entry: WorkflowArtifactView): Promise<void> => {
+    const closing = expanded.has(entry.path);
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (closing) next.delete(entry.path);
+      else next.add(entry.path);
+      return next;
+    });
+    if (closing || loading.has(entry.path) || onLoadDirectory === undefined || entry.state === 'pending') return;
+    setLoading((current) => new Set(current).add(entry.path));
+    try {
+      const result = await onLoadDirectory(entry.path);
+      if ('error' in result) setFolderErrors((current) => ({ ...current, [entry.path]: result.error }));
+      else {
+        setLoaded((current) => ({ ...current, [entry.path]: result.artifacts.artifacts }));
+        setFolderErrors((current) => ({ ...current, [entry.path]: '' }));
+      }
+    } catch {
+      setFolderErrors((current) => ({ ...current, [entry.path]: 'The folder cannot be read.' }));
+    } finally {
+      setLoading((current) => {
+        const next = new Set(current);
+        next.delete(entry.path);
+        return next;
+      });
+    }
+  };
 
-  const Row = ({ entry }: { entry: WorkflowArtifactView }) => {
+  const renderRow = (entry: WorkflowArtifactView) => {
     const glyph = STATE_GLYPH[entry.state];
-    const openable = entry.kind === 'file' && entry.state !== 'pending';
+    const openable = entry.kind === 'directory' || entry.state !== 'pending';
     return (
       <button
         type="button"
         data-testid={`artifact-row-${entry.path}`}
         data-artifact-state={entry.state}
         disabled={!openable}
-        onClick={() => onOpen(entry.path)}
+        aria-expanded={entry.kind === 'directory' ? expanded.has(entry.path) : undefined}
+        onClick={() => (entry.kind === 'directory' ? void toggle(entry) : onOpen(entry.path))}
         className={`flex flex-col gap-0.5 px-3 py-1.5 text-left ${openable ? 'cursor-pointer hover:bg-doom-panel' : 'cursor-default'}`}
       >
         <span className="flex min-w-0 items-center gap-2">
-          <span className={`w-3 shrink-0 text-xs ${glyph.className}`}>{glyph.glyph}</span>
+          <span className={`w-3 shrink-0 text-xs ${glyph.className}`}>
+            {entry.kind === 'directory' ? (expanded.has(entry.path) ? '▾' : '▸') : glyph.glyph}
+          </span>
           <span
             title={entry.path}
-            className={`min-w-0 truncate text-xs ${entry.state === 'pending' ? 'text-doom-dim' : 'text-doom-hi'}`}
+            className={`min-w-0 flex-1 truncate text-xs ${entry.state === 'pending' ? 'text-doom-dim' : 'text-doom-hi'}`}
           >
-            {entry.path}
+            {entry.path.split('/').pop()}
+            {entry.kind === 'directory' ? '/' : ''}
           </span>
-          {entry.producedBy.length === 0 ? null : (
-            <Badge size="xs" tone="violet" className="shrink-0">
-              {entry.producedBy.join(', ')}
-            </Badge>
-          )}
-          <span className="min-w-0 flex-1" />
           <span className="shrink-0 text-2xs text-doom-faint">
             {entry.state === 'pending'
-              ? 'not written yet'
-              : [formatSize(entry.size), formatWhen(entry.modifiedAt)].filter(Boolean).join(' · ')}
+              ? 'pending'
+              : entry.kind === 'directory'
+                ? ''
+                : [formatSize(entry.size), formatWhen(entry.modifiedAt)].filter(Boolean).join(' · ')}
           </span>
         </span>
-        {entry.description === '' ? null : (
-          <span className="truncate pl-5 text-2xs text-doom-faint">{entry.description}</span>
-        )}
+        {entry.declared || entry.producedBy.length > 0 || entry.description !== '' ? (
+          <span className="flex min-w-0 items-center gap-1 pl-5 text-2xs text-doom-faint">
+            {entry.declared ? (
+              <Badge size="xs" tone="violet" className="shrink-0">
+                declared
+              </Badge>
+            ) : null}
+            {entry.producedBy.length === 0 ? null : (
+              <span title={entry.producedBy.join(', ')} className="truncate">
+                {entry.producedBy.join(', ')}
+              </span>
+            )}
+            {entry.description === '' ? null : (
+              <span title={entry.description} className="truncate">
+                {entry.description}
+              </span>
+            )}
+          </span>
+        ) : null}
       </button>
     );
+  };
+
+  const renderChildren = (parent: string): ReactNode => {
+    const children = [...entries.values()]
+      .filter((entry) => {
+        const cut = entry.path.lastIndexOf('/');
+        return (cut === -1 ? '' : entry.path.slice(0, cut)) === parent;
+      })
+      .sort(
+        (left, right) =>
+          Number(right.kind === 'directory') - Number(left.kind === 'directory') || left.path.localeCompare(right.path),
+      );
+    return children.map((entry) => (
+      <div key={entry.path} className="flex flex-col">
+        {renderRow(entry)}
+        {entry.kind === 'directory' && expanded.has(entry.path) ? (
+          <div className="ml-3 border-l border-doom-border pl-1">
+            {loading.has(entry.path) ? <span className="px-3 text-xs text-doom-faint">loading…</span> : null}
+            {folderErrors[entry.path] ? (
+              <span role="alert" className="px-3 text-xs text-doom-yellow">
+                {folderErrors[entry.path]}
+              </span>
+            ) : null}
+            {renderChildren(entry.path)}
+          </div>
+        ) : null}
+      </div>
+    ));
   };
 
   return (
@@ -449,29 +559,28 @@ export function ArtifactList({
       {error !== undefined ? (
         <EmptyState className="py-4" title="the run directory cannot be read" description={error} />
       ) : null}
-      {declared.length === 0 && found.length === 0 && error === undefined ? (
+      {entries.size === 0 && error === undefined ? (
         <EmptyState className="py-4" title="nothing in the run directory yet" />
       ) : null}
-      {declared.length === 0 ? null : (
-        <>
-          <span className="px-3 pb-1 pt-2 text-2xs font-bold tracking-wider text-doom-faint">
-            DECLARED · {listing?.description || 'run-directory'}
-          </span>
-          {declared.map((entry) => (
-            <Row key={entry.path} entry={entry} />
-          ))}
-        </>
-      )}
-      {found.length === 0 ? null : (
-        <>
-          <span className="px-3 pb-1 pt-3 text-2xs font-bold tracking-wider text-doom-faint">ALSO IN THE FOLDER</span>
-          {found.map((entry) => (
-            <Row key={entry.path} entry={entry} />
-          ))}
-        </>
+      {listing?.description ? <span className="px-3 py-2 text-2xs text-doom-faint">{listing.description}</span> : null}
+      {renderChildren('')}
+      {openError === undefined ? null : (
+        <span role="alert" className="px-3 text-xs text-doom-yellow">
+          {openError}
+        </span>
       )}
       {listing === undefined ? null : (
-        <span className="truncate px-3 py-2 text-2xs text-doom-faint">{listing.runDir}</span>
+        <button
+          type="button"
+          data-testid="workflow-open-directory"
+          aria-label="Open workflow folder in Finder"
+          title={`${listing.runDir} (open in Finder)`}
+          disabled={opening || onOpenDirectory === undefined}
+          onClick={() => void openDirectory()}
+          className="truncate px-3 py-2 text-left text-2xs text-doom-faint hover:text-doom-hi disabled:cursor-default"
+        >
+          {listing.runDir}
+        </button>
       )}
     </div>
   );

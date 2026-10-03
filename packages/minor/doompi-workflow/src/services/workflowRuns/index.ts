@@ -1,5 +1,7 @@
 import { resolve } from 'node:path';
 
+import type { Step, Workflow } from '@agimon-ai/workflow-mcp';
+
 import { WORKFLOW_LAUNCHER_SESSION_ENV } from '../../constants/workflow';
 import type {
   WorkflowJobPhase,
@@ -258,14 +260,47 @@ function jobPhase(name: string): WorkflowJobPhase {
   return 'job';
 }
 
-/**
- * Folds the event log into the current job tree; later events win, so a job
- * that started and later failed reads as failed. Jobs and steps keep the
- * order of their first appearance.
- */
-export function foldWorkflowProgress(events: readonly WorkflowProgressEvent[]): WorkflowJobView[] {
-  const jobs: WorkflowJobView[] = [];
-  const jobByName = new Map<string, WorkflowJobView>();
+/** Names match the engine's progress log, including unnamed parallel children. */
+function plannedSteps(steps: readonly Step[] = []): WorkflowStepView[] {
+  return steps.flatMap((step, index) => {
+    const name = step.name ?? `step ${index + 1}`;
+    return step.parallel === undefined
+      ? [{ name, status: 'pending' as const }]
+      : step.parallel.map((child, childIndex) => ({
+          name: child.name ?? `${name} ${childIndex + 1}`,
+          status: 'pending' as const,
+          group: name,
+        }));
+  });
+}
+
+/** The whole declared route, before any job or step has emitted progress. */
+export function planWorkflowJobs(workflow: Workflow, order: readonly string[]): WorkflowJobView[] {
+  const jobs: WorkflowJobView[] = order.map((name) => {
+    const job = workflow.jobs[name]!;
+    return {
+      name,
+      phase: 'job',
+      status: 'pending',
+      steps: [...plannedSteps(job.preJob?.steps), ...plannedSteps(job.steps), ...plannedSteps(job.postJob?.steps)],
+    };
+  });
+  if (workflow.pre !== undefined) {
+    jobs.unshift({ name: PHASE_JOB_PRE, phase: 'pre', status: 'pending', steps: plannedSteps(workflow.pre.steps) });
+  }
+  if (workflow.post !== undefined) {
+    jobs.push({ name: PHASE_JOB_POST, phase: 'post', status: 'pending', steps: plannedSteps(workflow.post.steps) });
+  }
+  return jobs;
+}
+
+/** Overlay progress on the plan, retaining recorded jobs and steps absent from the current definition. */
+export function foldWorkflowProgress(
+  events: readonly WorkflowProgressEvent[],
+  plan: readonly WorkflowJobView[] = [],
+): WorkflowJobView[] {
+  const jobs = plan.map((job) => ({ ...job, steps: job.steps.map((step) => ({ ...step })) }));
+  const jobByName = new Map(jobs.map((job) => [job.name, job]));
   for (const event of events) {
     let job = jobByName.get(event.job);
     if (job === undefined) {
@@ -288,6 +323,7 @@ export function foldWorkflowProgress(events: readonly WorkflowProgressEvent[]): 
       continue;
     }
     if (event.step === undefined) continue;
+    if (job.status === 'pending') job.status = event.status;
     let step: WorkflowStepView | undefined = job.steps.find((candidate) => candidate.name === event.step);
     if (step === undefined) {
       step = { name: event.step, status: event.status };
@@ -308,6 +344,13 @@ export function foldWorkflowProgress(events: readonly WorkflowProgressEvent[]): 
     if (event.group !== undefined) step.group = event.group;
     if (event.status === 'running' && step.startedAt === undefined) step.startedAt = event.at;
     if (STEP_TERMINAL_STATES.has(event.status)) step.endedAt = event.at;
+  }
+  for (const job of jobs) {
+    if (job.status === 'skipped') {
+      for (const step of job.steps) {
+        if (step.status === 'pending') step.status = 'skipped';
+      }
+    }
   }
   return jobs;
 }
