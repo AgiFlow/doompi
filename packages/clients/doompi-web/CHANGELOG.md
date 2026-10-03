@@ -1,3 +1,21 @@
+## 0.0.1-alpha.77 (2026-10-03)
+
+### 🩹 Fixes
+
+- reconcile streamed responses and harden session delivery ([#285](https://github.com/AgiFlow/doompi/pull/285))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.114
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.109
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.110
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.68
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.76 (2026-10-03)
 
 ### 🩹 Fixes
