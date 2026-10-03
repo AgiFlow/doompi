@@ -348,6 +348,13 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
   /** Assistant messages still streaming, by message id. */
   const streaming = new Map<string, AssistantTranscriptItem>();
   let activeAssistantId: string | undefined;
+  // Completion identity must survive server projections that retain no history.
+  let lastCompletedAssistant: Pick<AssistantTranscriptItem, 'id' | 'role' | 'timestamp' | 'model'> | undefined;
+  const rememberCompletion = (item: AssistantTranscriptItem | undefined): void => {
+    lastCompletedAssistant = item
+      ? { id: item.id, role: item.role, timestamp: item.timestamp, model: item.model }
+      : undefined;
+  };
   /** Tool calls still running, by tool call id. */
   const running = new Map<string, ToolTranscriptItem>();
 
@@ -392,14 +399,22 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
     };
   };
 
-  const assistantFrom = (message: unknown, id: string): AssistantTranscriptItem => ({
-    id,
-    role: 'assistant',
-    content: assistantContent(isRecord(message) ? message.content : undefined),
-    model: isRecord(message) ? modelRef(message.model ?? snapshot.model) : snapshot.model,
-    status: 'streaming',
-    timestamp: now(),
-  });
+  const assistantFrom = (value: unknown, id?: string): AssistantTranscriptItem => {
+    const message = isRecord(value) ? value : {};
+    const model =
+      typeof message.model === 'string'
+        ? { provider: text(message.provider, snapshot.model.provider), id: message.model }
+        : modelRef(message.model ?? snapshot.model);
+    const timestamp = finiteNumber(message.timestamp) ?? now();
+    return {
+      id: id ?? `assistant-${timestamp}-${model.provider}-${model.id}`,
+      role: 'assistant',
+      content: assistantContent(message.content),
+      model,
+      status: 'streaming',
+      timestamp,
+    };
+  };
 
   return {
     snapshot: () => structuredClone(snapshot),
@@ -448,24 +463,76 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
             return committed ? { snapshot: committed } : {};
           }
           if (message.role !== 'assistant') return {};
-          const id = text(message.id, `assistant-${snapshot.revision}`);
-          const item = assistantFrom(frame.message, id);
+          const item = assistantFrom(message, text(message.id) || undefined);
+          const id = item.id;
+          const previous =
+            streaming.get(activeAssistantId ?? '') ??
+            lastCompletedAssistant ??
+            snapshot.transcript.findLast((entry) => entry.role === 'assistant');
+          const timestamp = finiteNumber(message.timestamp);
+          if (
+            previous?.role === 'assistant' &&
+            ((timestamp === undefined && previous.id === id) ||
+              (timestamp !== undefined &&
+                (previous.timestamp > timestamp ||
+                  (previous.timestamp === timestamp &&
+                    (!message.model || previous.model.id === 'unknown' || previous.model.id === item.model.id)))))
+          )
+            return {};
           streaming.set(id, item);
           activeAssistantId = id;
           return { progress: { type: 'item_started', item } };
         }
         case 'message_update': {
-          const id = text(isRecord(frame.message) ? frame.message.id : undefined, activeAssistantId);
+          const event = isRecord(frame.assistantMessageEvent) ? frame.assistantMessageEvent : undefined;
+          const message = isRecord(frame.message)
+            ? frame.message
+            : isRecord(event?.partial)
+              ? event.partial
+              : undefined;
+          if (message?.role !== undefined && message.role !== 'assistant') return {};
+          const incoming = message
+            ? assistantFrom(message, text(message.id, activeAssistantId) || undefined)
+            : undefined;
+          const id = incoming?.id ?? activeAssistantId ?? '';
           const existing = streaming.get(id);
-          if (!existing) return {};
+          if (
+            !existing &&
+            (message?.role !== 'assistant' ||
+              !Array.isArray(message.content) ||
+              (message.content.length === 0 && event?.type !== 'start'))
+          )
+            return {};
+          const completed = lastCompletedAssistant ?? snapshot.transcript.findLast((item) => item.role === 'assistant');
+          const timestamp = finiteNumber(message?.timestamp);
+          if (
+            !existing &&
+            completed?.role === 'assistant' &&
+            (completed.id === id ||
+              (timestamp !== undefined &&
+                (completed.timestamp > timestamp ||
+                  (completed.timestamp === timestamp &&
+                    (!message?.model || completed.model.id === incoming?.model.id)))))
+          )
+            return {};
           const item: AssistantTranscriptItem = {
-            ...existing,
-            content: isRecord(frame.message)
-              ? assistantContent(frame.message.content)
-              : applyAssistantEvent(existing.content, frame.assistantMessageEvent),
+            ...(existing ?? incoming!),
+            ...(timestamp === undefined ? {} : { timestamp }),
+            ...(message?.model === undefined
+              ? {}
+              : {
+                  model:
+                    typeof message.model === 'string' && message.provider === undefined && existing
+                      ? { provider: existing.model.provider, id: message.model }
+                      : incoming!.model,
+                }),
+            content: Array.isArray(message?.content)
+              ? assistantContent(message.content)
+              : applyAssistantEvent(existing?.content ?? incoming!.content, event),
           };
           streaming.set(id, item);
-          return { progress: { type: 'item_updated', item } };
+          activeAssistantId = id;
+          return { progress: { type: existing ? 'item_updated' : 'item_started', item } };
         }
         case 'message_end': {
           const ended = isRecord(frame.message) ? frame.message : {};
@@ -478,8 +545,21 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
           // A tool result closes here too, but the transcript builds tool items
           // from the execution frames, which carry the call as well as its result.
           if (ended.role !== 'assistant') return {};
-          const id = text(ended.id, activeAssistantId);
-          const started = streaming.get(id) ?? assistantFrom(frame.message, id || `assistant-${snapshot.revision}`);
+          const timestamp = finiteNumber(ended.timestamp);
+          const completed =
+            lastCompletedAssistant?.timestamp === timestamp
+              ? lastCompletedAssistant
+              : snapshot.transcript.findLast((item) => item.role === 'assistant' && item.timestamp === timestamp);
+          const id = text(
+            ended.id,
+            activeAssistantId ?? completed?.id ?? `assistant-${finiteNumber(ended.timestamp) ?? snapshot.revision}`,
+          );
+          if (
+            !streaming.has(id) &&
+            (lastCompletedAssistant?.id === id || snapshot.transcript.some((item) => item.id === id))
+          )
+            return {};
+          const started = streaming.get(id) ?? assistantFrom(frame.message, id);
           streaming.delete(started.id);
           if (activeAssistantId === started.id) activeAssistantId = undefined;
           const message = ended;
@@ -499,6 +579,7 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
                     status: 'complete',
                     stopReason: STOP_REASONS.has(stopReason) ? (stopReason as 'stop' | 'length' | 'toolUse') : 'stop',
                   };
+          rememberCompletion(item);
           return {
             snapshot: append(item),
             progress: { type: 'item_finished', item },
@@ -571,7 +652,9 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
           if (frame.command === 'get_entries' && frame.success === true && isRecord(frame.data)) {
             const branch = activeBranch(frame.data);
             const rebuilt = transcriptFromBranch(branch, snapshot.model, now);
-            return rebuilt ? { snapshot: commit({ transcript: rebuilt }) } : {};
+            if (!rebuilt) return {};
+            rememberCompletion(rebuilt.findLast((item) => item.role === 'assistant'));
+            return { snapshot: commit({ transcript: rebuilt }) };
           }
           if (frame.command !== 'navigate_tree' || frame.success !== true || !isRecord(frame.data)) return {};
           if (frame.data.cancelled === true) return {};
@@ -580,6 +663,7 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
           streaming.clear();
           running.clear();
           activeAssistantId = undefined;
+          rememberCompletion(rebuilt.findLast((item) => item.role === 'assistant'));
           return {
             snapshot: commit({ transcript: rebuilt, queuedSteer: [], queuedSteerCount: 0, phase: 'idle' }),
           };

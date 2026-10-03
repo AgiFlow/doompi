@@ -131,7 +131,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
   };
-  let assistantDraft: { id: string; text: string } | undefined;
+  let assistantDraft: { id?: string; text: string } | undefined;
   let commands = [
     { name: 'mode', description: 'switch the major mode' },
     { name: 'model', description: 'pick the agent model' },
@@ -638,20 +638,26 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
           ? (frame.assistantMessageEvent as Frame)
           : undefined;
       if (frame.type === 'message_update' && assistantEvent !== undefined) {
-        if (assistantDraft === undefined) {
-          assistantDraft = { id: `assistant-${randomUUID()}`, text: '' };
-          for (const listener of listeners)
-            listener({
-              type: 'message_start',
-              message: { id: assistantDraft.id, role: 'assistant', content: [] },
-            });
-        }
         const aggregate =
           typeof frame.message === 'object' && frame.message !== null
             ? (frame.message as Frame)
             : typeof assistantEvent.partial === 'object' && assistantEvent.partial !== null
               ? (assistantEvent.partial as Frame)
               : undefined;
+        if (assistantDraft === undefined) {
+          assistantDraft = {
+            ...(aggregate === undefined
+              ? { id: `assistant-${randomUUID()}` }
+              : typeof aggregate.id === 'string'
+                ? { id: aggregate.id }
+                : {}),
+            text: '',
+          };
+          // Only bare-delta fixtures need a synthetic start. Aggregate fixtures must exercise the missing-start path.
+          if (aggregate === undefined)
+            for (const listener of listeners)
+              listener({ type: 'message_start', message: { id: assistantDraft.id, role: 'assistant', content: [] } });
+        }
         if (aggregate && Array.isArray(aggregate.content))
           assistantDraft.text = aggregate.content
             .filter((block): block is Frame => typeof block === 'object' && block !== null)
@@ -660,7 +666,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
         else if (assistantEvent.type === 'text_delta' && typeof assistantEvent.delta === 'string')
           assistantDraft.text += assistantEvent.delta;
         const message = aggregate ?? {
-          id: assistantDraft.id,
+          ...(assistantDraft.id === undefined ? {} : { id: assistantDraft.id }),
           role: 'assistant',
           content: [{ type: 'text', text: assistantDraft.text }],
         };
@@ -710,9 +716,18 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       if (frame.type === 'agent_settled' && assistantDraft !== undefined) {
         const draft = assistantDraft;
         assistantDraft = undefined;
-        const message = { id: draft.id, role: 'assistant', content: [{ type: 'text', text: draft.text }] };
+        const message = {
+          ...(draft.id === undefined ? {} : { id: draft.id }),
+          role: 'assistant',
+          content: [{ type: 'text', text: draft.text }],
+        };
         if (!entries.some((entry) => JSON.stringify(entry).includes(draft.text)))
-          entries.push({ id: draft.id, seq: entries.length + 1, type: 'message', message });
+          entries.push({
+            id: draft.id ?? `assistant-${randomUUID()}`,
+            seq: entries.length + 1,
+            type: 'message',
+            message,
+          });
         for (const listener of listeners) listener({ type: 'message_end', message });
       }
       for (const listener of listeners) listener(frame);

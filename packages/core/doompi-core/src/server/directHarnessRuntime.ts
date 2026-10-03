@@ -1329,14 +1329,27 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         mode ?? 'reject',
       );
       if (!submission) return { settled: Promise.resolve() };
+      let resolveDelivery!: () => void;
+      const delivered = new Promise<void>((resolve) => {
+        resolveDelivery = resolve;
+      });
+      internalDelivery.set(submission.id, { done: delivered, resolve: resolveDelivery });
+      if (deliveredInputs.has(submission.id)) resolveDelivery();
       const settled = (async () => {
-        const status = await submission.wait(context);
-        await eventsSettled;
-        await reconcile();
-        await publish();
-        if (status.status === 'unanswered' && status.reason !== 'aborted')
-          throw new Error(`Agent submission failed: ${status.reason}`);
-        await drain();
+        try {
+          const status = await submission.wait(context);
+          // A durable receipt can finish before the watcher has queued run_end.
+          // Wait for this input's settlement hooks, not the current event tail.
+          if (status.status === 'done' || status.entry !== undefined) await delivered;
+          await eventsSettled;
+          await reconcile();
+          await publish();
+          if (status.status === 'unanswered' && status.reason !== 'aborted')
+            throw new Error(`Agent submission failed: ${status.reason}`);
+          await drain();
+        } finally {
+          internalDelivery.delete(submission.id);
+        }
       })();
       void settled.catch((error) => emit({ type: 'error', error: String(error) }));
       return { settled };

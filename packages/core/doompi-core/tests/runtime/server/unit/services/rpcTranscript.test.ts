@@ -22,6 +22,21 @@ function apply(subject: RpcTranscript, frames: SessionFrame[]): void {
 }
 
 describe('rpc transcript projection', () => {
+  it('ignores late assistant frames when the server retains no committed history', () => {
+    const subject = createRpcTranscript({ id: 'session', cwd: '/workspace', retainEntries: 0, now: () => 1 });
+    const message = { role: 'assistant', timestamp: 100, model: 'test', content: [{ type: 'text', text: 'Answer' }] };
+    const started = subject.apply({ type: 'message_update', message });
+    expect(started.progress?.type).toBe('item_started');
+    const ended = subject.apply({ type: 'message_end', message });
+    expect(ended.progress).toMatchObject({ type: 'item_finished', item: { id: started.progress!.item.id } });
+    expect(subject.snapshot().transcript).toEqual([]);
+    expect(subject.apply({ type: 'message_start', message: { ...message, content: [] } })).toEqual({});
+    expect(subject.apply({ type: 'message_update', message })).toEqual({});
+    expect(subject.apply({ type: 'message_end', message })).toEqual({});
+    const newer = subject.apply({ type: 'message_start', message: { ...message, timestamp: 101, content: [] } });
+    expect(newer.progress?.type).toBe('item_started');
+    expect(newer.progress?.item.id).not.toBe(started.progress?.item.id);
+  });
   it('restores only the active history branch and preserves a running turn and its queue', () => {
     const subject = transcript();
     subject.apply({ type: 'agent_start' });
@@ -145,6 +160,108 @@ describe('rpc transcript projection', () => {
       content: [{ type: 'text', text: 'hi there' }],
     });
     assertEncodable(ended.snapshot);
+  });
+
+  it('starts from accumulated provider content without a message_start and keeps its identity', () => {
+    const subject = transcript();
+    const message = {
+      role: 'assistant',
+      timestamp: 100,
+      model: 'test',
+      provider: 'provider',
+      content: [{ type: 'text', text: 'Accumulated' }],
+    };
+    const started = subject.apply({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'start', partial: message },
+    });
+    expect(started.progress).toMatchObject({
+      type: 'item_started',
+      item: { timestamp: 100, model: { provider: 'provider', id: 'test' }, content: message.content },
+    });
+    const id = started.progress!.item.id;
+    expect(subject.apply({ type: 'message_start', message: { ...message, content: [] } })).toEqual({});
+    expect(subject.apply({ type: 'message_start', message: { ...message, timestamp: 99, content: [] } })).toEqual({});
+    const updated = subject.apply({
+      type: 'message_update',
+      message: { ...message, content: [{ type: 'text', text: 'Accumulated delta' }] },
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: ' delta' },
+    });
+    expect(updated.progress).toMatchObject({
+      type: 'item_updated',
+      item: { id, content: [{ type: 'text', text: 'Accumulated delta' }] },
+    });
+    const delta = subject.apply({
+      type: 'message_update',
+      message: { role: 'assistant', timestamp: 100, model: 'test' },
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: ' live' },
+    });
+    expect(delta.progress?.item.content).toEqual([{ type: 'text', text: 'Accumulated delta live' }]);
+    expect(delta.progress?.item).toMatchObject({ timestamp: 100, model: { provider: 'provider', id: 'test' } });
+    const ended = subject.apply({
+      type: 'message_end',
+      message: { ...message, content: [{ type: 'text', text: 'Final' }] },
+    });
+    expect(ended.progress).toMatchObject({
+      type: 'item_finished',
+      item: { id, status: 'complete', timestamp: 100, content: [{ type: 'text', text: 'Final' }] },
+    });
+    expect(subject.apply({ type: 'message_start', message: { ...message, content: [] } })).toEqual({});
+    expect(
+      subject.apply({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'start', partial: { ...message, content: [] } },
+      }),
+    ).toEqual({});
+    expect(subject.snapshot().transcript).toHaveLength(1);
+    const newer = subject.apply({ type: 'message_start', message: { ...message, timestamp: 101, content: [] } });
+    expect(newer.progress).toMatchObject({ type: 'item_started', item: { timestamp: 101 } });
+    expect(newer.progress?.item.id).not.toBe(id);
+    assertEncodable(ended.snapshot);
+  });
+
+  it('keeps an identified draft through an id-less late start and completion', () => {
+    const subject = transcript();
+    const message = {
+      role: 'assistant',
+      timestamp: 100,
+      model: 'test',
+      content: [{ type: 'text', text: 'Accumulated' }],
+    };
+    subject.apply({ type: 'message_start', message: { id: 'draft', role: 'assistant', content: [] } });
+    subject.apply({ type: 'message_update', message });
+    expect(subject.apply({ type: 'message_start', message: { ...message, content: [] } })).toEqual({});
+    expect(
+      subject.apply({
+        type: 'message_update',
+        message: { ...message, id: 'draft', content: [{ type: 'text', text: 'Accumulated live' }] },
+      }).progress,
+    ).toMatchObject({ item: { id: 'draft' } });
+    const ended = subject.apply({
+      type: 'message_end',
+      message: { ...message, content: [{ type: 'text', text: 'Final' }] },
+    });
+    expect(ended.progress).toMatchObject({
+      type: 'item_finished',
+      item: { id: 'draft', content: [{ type: 'text', text: 'Final' }] },
+    });
+    expect(subject.apply({ type: 'message_start', message: { ...message, content: [] } })).toEqual({});
+    expect(
+      subject.apply({ type: 'message_end', message: { ...message, content: [{ type: 'text', text: 'Final' }] } }),
+    ).toEqual({});
+    expect(subject.snapshot().transcript).toHaveLength(1);
+  });
+
+  it('does not erase a streaming identified message on a duplicate start without timestamps', () => {
+    const subject = transcript();
+    const message = { id: 'draft', role: 'assistant', content: [{ type: 'text', text: 'Keep' }] };
+    subject.apply({ type: 'message_start', message });
+    expect(subject.apply({ type: 'message_start', message: { ...message, content: [] } })).toEqual({});
+    const updated = subject.apply({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: ' live' },
+    });
+    expect(updated.progress?.item.content).toEqual([{ type: 'text', text: 'Keep live' }]);
   });
 
   it('assembles the delta-only assistant events emitted by current Pi RPC', () => {

@@ -236,6 +236,13 @@ describe('reduceSession', () => {
     expect(overlapping.entries[1]).toMatchObject({ text: 'new', streaming: true });
   });
 
+  it('preserves provider identity during journal reload and ignores a late start', () => {
+    const message = { role: 'assistant', timestamp: 100, model: 'test', content: [{ type: 'text', text: 'Answer' }] };
+    const restored = fold([{ type: 'entry_appended', entry: { id: 'answer', type: 'message', message } }]);
+    expect(assistant(restored)).toMatchObject({ timestamp: 100, model: 'test', text: 'Answer', streaming: false });
+    expect(reduceSession(restored, { type: 'message_start', message: { ...message, content: [] } })).toBe(restored);
+  });
+
   it('ignores frames it does not model', () => {
     expect(reduceSession(initialSessionState, { type: 'something_new' })).toBe(initialSessionState);
   });

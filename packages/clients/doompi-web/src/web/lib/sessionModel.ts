@@ -710,6 +710,8 @@ function applyJournalMessage(state: SessionState, message: Frame, entryId?: stri
   }
 
   if (role === 'assistant') {
+    timestamp ??= asNumber(message.timestamp) ?? undefined;
+    const model = typeof message.model === 'string' ? message.model : undefined;
     const text = textFromContent(content);
     const thinking = thinkingFromContent(content);
     const draft = state.entries.findLast((item) => item.kind === 'assistant' && item.streaming);
@@ -718,7 +720,14 @@ function applyJournalMessage(state: SessionState, message: Frame, entryId?: stri
       state = {
         ...state,
         entries: state.entries.map((item) =>
-          item.id === draft.id ? { ...item, id: entryId, ...(timestamp === undefined ? {} : { timestamp }) } : item,
+          item.id === draft.id
+            ? {
+                ...item,
+                id: entryId,
+                ...(timestamp === undefined ? {} : { timestamp }),
+                ...(model === undefined ? {} : { model }),
+              }
+            : item,
         ),
       };
     }
@@ -728,6 +737,7 @@ function applyJournalMessage(state: SessionState, message: Frame, entryId?: stri
             kind: 'assistant',
             id: entryId ?? `a${state.nextId}`,
             ...(timestamp === undefined ? {} : { timestamp }),
+            ...(model === undefined ? {} : { model }),
             text,
             thinking,
             streaming: false,
