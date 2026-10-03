@@ -30,7 +30,7 @@ export function createRunnerServerRuntime(
   container: RunnerDependencies,
   directEvents: NonNullable<DoomServerHostService['context']['directEvents']>,
   /** Absent when no agent runs in this session, so there is nobody to wake. */
-  wakeAgent?: (content: string) => Promise<void>,
+  wakeAgent?: (content: string, requestId: string) => Promise<void>,
 ): RunnerServerRuntime {
   let sessionId: string | undefined;
   let supervision: Promise<void> | undefined;
@@ -170,7 +170,11 @@ export function createRunnerServerRuntime(
             if (closing) return;
             if (record?.state === 'running') continue;
             // A record swept before it was seen leaves nothing to report.
-            if (record) await wakeAgent?.(formatRunnerFinished(record));
+            if (record)
+              await wakeAgent?.(
+                formatRunnerFinished(record),
+                `runner-finished:${JSON.stringify([ownedSessionId, id])}`,
+              );
             watched.delete(id);
           } catch (error) {
             retry = true;

@@ -1050,11 +1050,13 @@ describe('headless session facet surface', () => {
     await session.admitPrompt!('continue');
     await session.admitPrompt!('result', 'followUp');
     await session.admitPrompt!('redirect', 'steer');
+    await session.admitPrompt!('runner finished', 'steer', undefined, 'runner-completion');
 
     expect(internal.mock.calls).toEqual([
-      ['continue', 'followUp'],
-      ['result', 'followUp'],
-      ['redirect', 'steer'],
+      ['continue', 'followUp', undefined],
+      ['result', 'followUp', undefined],
+      ['redirect', 'steer', undefined],
+      ['runner finished', 'steer', 'runner-completion'],
     ]);
     expect(submit).not.toHaveBeenCalled();
     expect(followUp).not.toHaveBeenCalled();
