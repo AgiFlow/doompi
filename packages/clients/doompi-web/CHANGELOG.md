@@ -1,3 +1,23 @@
+## 0.0.1-alpha.76 (2026-10-03)
+
+### 🩹 Fixes
+
+- reconcile streamed responses and queued session delivery ([#283](https://github.com/AgiFlow/doompi/pull/283))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.113
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.108
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.109
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.29
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.58
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.92
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.75 (2026-10-02)
 
 ### 🩹 Fixes
