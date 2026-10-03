@@ -1954,7 +1954,7 @@ describe('consumer ownership boundaries', () => {
           fs.readFileSync(path.join(coreRoot, 'package.json'), 'utf8'),
         ) as PackageManifest;
         expect(coreManifest.dependencies).toMatchObject({
-          '@tanstack/store': '0.11.1',
+          '@tanstack/store': '0.11.2',
         });
 
         const webEntry = installedPackageEntry(isolatedConsumer.root, '@agimon-ai/doompi-core', './web');
