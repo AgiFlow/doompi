@@ -88,6 +88,8 @@ const LabelsDoc = defineDoc({
 });
 type Retained = Omit<DirectHarnessQueuedInput, 'disposition'> & {
   disposition: DirectHarnessQueuedInput['disposition'] | 'consumed' | 'removed';
+  // Older records have unknown provenance and remain retained, not queue-owned.
+  explicitQueue?: boolean;
   attempt?: number;
   submissionMode?: 'steer' | 'followUp' | 'reject' | 'write';
 } & { submissionId?: number; conversationId?: number; message?: AgentMessage; operationId?: string };
@@ -711,9 +713,19 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         queue: record.queue
           .filter(
             (item): item is Retained & { disposition: DirectHarnessQueuedInput['disposition'] } =>
-              item.disposition !== 'consumed' && item.disposition !== 'removed',
+              item.explicitQueue === true && item.disposition !== 'consumed' && item.disposition !== 'removed',
           )
-          .map(({ submissionId: _s, conversationId: _c, message: _m, operationId: _o, attempt: _a, ...item }) => item),
+          .map(
+            ({
+              explicitQueue: _q,
+              submissionId: _s,
+              conversationId: _c,
+              message: _m,
+              operationId: _o,
+              attempt: _a,
+              ...item
+            }) => item,
+          ),
         operation: await execution(),
       };
     };
@@ -1215,13 +1227,18 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         }
       }));
     };
-    const handoff = async (item: Retained, mode: NonNullable<Retained['submissionMode']>, recovering = false) => {
+    const handoff = async (
+      item: Retained,
+      mode: NonNullable<Retained['submissionMode']>,
+      recovering = false,
+      allowPaused = false,
+    ) => {
       if (handingOff.has(item.id)) return undefined;
       handingOff.add(item.id);
       try {
         const claimed = await changeRecord((r) => {
           const q = r.queue.find((q) => q.id === item.id);
-          if (!q || (r.paused && !recovering)) return undefined;
+          if (!q || (r.paused && !recovering && !allowPaused)) return undefined;
           if (recovering ? q.disposition !== 'handoff' || q.submissionId !== undefined : q.disposition !== 'pending')
             return undefined;
           q.disposition = 'handoff';
@@ -1281,6 +1298,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       images: ImageContent[] | undefined,
       delivery: Retained['delivery'],
       scheduling: Retained['scheduling'],
+      explicitQueue = false,
     ) => {
       const id = randomUUID();
       await changeRecord((r) => {
@@ -1291,6 +1309,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           ...(typeof message === 'string' ? {} : { message }),
           delivery,
           scheduling,
+          explicitQueue,
           disposition: 'pending',
         });
       });
@@ -1313,20 +1332,13 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       if (typeof message === 'string' && (await dispatchCommand(message)))
         return { settled: Promise.resolve(), handledCommand: true };
       const record = await readRecord();
-      if (record.paused) {
-        if (record.queue.some((q) => q.disposition !== 'consumed' && q.disposition !== 'removed'))
-          throw new Error('The queue is paused');
-        await changeRecord((r) => {
-          r.paused = false;
-          delete r.abortOperationId;
-          delete r.abortTaskId;
-        });
-      }
       await flushNextTurn();
       const { id } = await enqueue(message, images, mode ?? 'nextRun', 'automatic');
       const submission = await handoff(
         (await readRecord()).queue.find((q) => q.id === id)!,
         mode ?? 'reject',
+        false,
+        record.paused,
       );
       if (!submission) return { settled: Promise.resolve() };
       let resolveDelivery!: () => void;
@@ -1388,7 +1400,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           const doc = await tx.doc(LifecycleDoc);
           const record = JSON.parse(doc.json) as LifecycleRecord;
           const q = record.queue.find((q) => q.id === selection.id);
-          if (!q) return 'not_found' as const;
+          if (!q || q.explicitQueue !== true) return 'not_found' as const;
           const requestId = `${q.id}:${q.attempt ?? 0}`;
           // An accepted request survives completion/replacement and a lost acknowledgement.
           const accepted = await tx.submissionByRequest(conversation.id, requestId);
@@ -1567,7 +1579,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         if (selection) {
           const outcome = await changeRecord((r) => {
             const q = r.queue.find((q) => q.id === selection.id);
-            if (!q || q.disposition === 'removed' || q.disposition === 'consumed') return 'not_found' as const;
+            if (!q || q.explicitQueue !== true || q.disposition === 'removed' || q.disposition === 'consumed')
+              return 'not_found' as const;
             if (q.disposition !== 'pending') return 'in_flight' as const;
             if (current?.id !== selection.operationId || current?.status === 'aborting')
               return 'target_changed' as const;
@@ -1772,6 +1785,32 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       );
       return entryId;
     };
+    const removeQueued: DirectHarnessRuntime<TContext>['removeQueued'] = async (id) => {
+      const item = (await readRecord()).queue.find((q) => q.id === id);
+      if (!item || item.explicitQueue !== true) return 'not_found';
+      if (item.disposition === 'consumed') return 'already_consumed';
+      if (item.disposition === 'removed') return 'removed';
+      if (item.submissionId) {
+        const result = await harness.abortSubmission(item.submissionId as SubmissionId, context, conversation.id);
+        if (result === 'already_placed') return 'in_flight';
+        if (result === 'settled') return 'already_consumed';
+      } else if (item.disposition !== 'pending') return 'in_flight';
+      const result = await changeRecord((r) => {
+        const q = r.queue.find((q) => q.id === id);
+        if (!q || q.explicitQueue !== true) return 'not_found' as const;
+        if (q.disposition === 'consumed') return 'already_consumed' as const;
+        if (q.disposition === 'removed') return 'removed' as const;
+        if (q.submissionId !== item.submissionId || (item.submissionId === undefined && q.disposition !== 'pending'))
+          return 'in_flight' as const;
+        q.disposition = 'removed';
+        q.text = '';
+        delete q.message;
+        delete q.images;
+        return 'removed' as const;
+      });
+      await publish();
+      return result;
+    };
     return {
       sessionId,
       sessionFile: storage.sessionFile,
@@ -1808,7 +1847,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         const metadata = await harness.snapshot(SessionMetadataDoc, context);
         const stats = await getSessionStats();
         const inbox = await harness.snapshot(InboxDoc, conversation.id, context);
-        const retainedSubmissions = new Set((await readRecord()).queue.map((item) => item.submissionId));
+        const retained = (await readRecord()).queue;
+        const retainedSubmissions = new Set(retained.map((item) => item.submissionId));
         const nativePending =
           inbox?.items.filter((item) => item.mode !== 'write' && !retainedSubmissions.has(item.id)).length ?? 0;
         return json({
@@ -1828,40 +1868,19 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           followUpMode: settings.followUpMode ?? 'one-at-a-time',
           autoCompactionEnabled: settings.compaction?.enabled ?? true,
           messageCount: stats.messageCount,
-          pendingMessageCount: lifecycle.queue.length + nativePending + nextTurnMessages.length + deferredInternalCount,
+          pendingMessageCount:
+            retained.filter((item) => item.disposition !== 'consumed' && item.disposition !== 'removed').length +
+            nativePending +
+            nextTurnMessages.length +
+            deferredInternalCount,
         }) as Record<string, unknown>;
       },
       enqueueAutomatic: async (value, images) => {
-        const result = await enqueue(value, images, 'nextRun', 'automatic');
+        const result = await enqueue(value, images, 'nextRun', 'automatic', true);
         void drain().catch((error) => emit({ type: 'error', error: String(error) }));
         return result;
       },
-      async removeQueued(id) {
-        const item = (await readRecord()).queue.find((q) => q.id === id);
-        if (!item) return 'not_found';
-        if (item.disposition === 'consumed') return 'already_consumed';
-        if (item.disposition === 'removed') return 'removed';
-        if (item.submissionId) {
-          const result = await harness.abortSubmission(item.submissionId as SubmissionId, context, conversation.id);
-          if (result === 'already_placed') return 'in_flight';
-          if (result === 'settled') return 'already_consumed';
-        } else if (item.disposition !== 'pending') return 'in_flight';
-        const result = await changeRecord((r) => {
-          const q = r.queue.find((q) => q.id === id);
-          if (!q) return 'not_found' as const;
-          if (q.disposition === 'consumed') return 'already_consumed' as const;
-          if (q.disposition === 'removed') return 'removed' as const;
-          if (q.submissionId !== item.submissionId || (item.submissionId === undefined && q.disposition !== 'pending'))
-            return 'in_flight' as const;
-          q.disposition = 'removed';
-          q.text = '';
-          delete q.message;
-          delete q.images;
-          return 'removed' as const;
-        });
-        await publish();
-        return result;
-      },
+      removeQueued,
       async promoteQueued(id, operationId) {
         const result = await submitUserPrompt('', undefined, { id, operationId }, 'steer');
         return result.queueOutcome ?? 'promoted';
@@ -2068,11 +2087,10 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           }
         }),
       async clearQueue() {
-        for (const item of (await readRecord()).queue)
-          if (item.submissionId) await harness.abortSubmission(item.submissionId as SubmissionId, context);
-        await changeRecord((r) => {
-          r.queue = [];
-        });
+        const selected = (await readRecord()).queue.filter(
+          (item) => item.explicitQueue === true && item.disposition !== 'consumed' && item.disposition !== 'removed',
+        );
+        for (const item of selected) await removeQueued(item.id);
         await publish();
         return { steering: [], followUp: [] };
       },

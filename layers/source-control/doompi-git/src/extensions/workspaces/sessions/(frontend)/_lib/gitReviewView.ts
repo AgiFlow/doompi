@@ -3,10 +3,9 @@ import type { SessionFrameSender } from '@agimon-ai/doompi-core/web';
 /**
  * Pure wording for what the review tab sends the agent, and the one send.
  *
- * Both messages go as `enqueue_automatic`: the host stores it and starts a turn
- * at once when the agent is idle, or after the current one. A `prompt` frame
- * instead fails while a turn runs, and a review lost to that is the worst kind
- * of lost work.
+ * Both messages go as `follow_up`: the host starts a turn when idle, or after
+ * the current one, without treating a review send as an explicit Queue action.
+ * A `prompt` frame instead fails while a turn runs.
  */
 
 /** The opening line of a review, naming what was reviewed. */
@@ -37,13 +36,12 @@ export function conflictPrompt(branch: string | undefined, conflicts: readonly s
 }
 
 /**
- * Hands one message to the session's queue. Returns the reason it failed, or
- * undefined once the host took it. The sender throws when the session is not
- * connected, which is the only failure a caller can still act on.
+ * Hands one deferred follow-up to the session. Returns the reason it failed,
+ * or undefined once sent. The sender throws when the session is disconnected.
  */
 export function deliverToAgent(send: SessionFrameSender, sessionId: string, message: string): string | undefined {
   try {
-    send(sessionId, { type: 'enqueue_automatic', message });
+    send(sessionId, { type: 'follow_up', message });
     return undefined;
   } catch (error) {
     return error instanceof Error ? error.message : 'The session did not take the message.';

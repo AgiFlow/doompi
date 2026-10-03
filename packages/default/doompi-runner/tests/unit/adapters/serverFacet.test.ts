@@ -281,14 +281,14 @@ describe('runnerServerFacet', () => {
         .tool('bash')
         .execute('call-1', { command: runner.command, background: true }, undefined, undefined, harness.execution);
       await vi.waitFor(() => expect(lifecycleMocks.container.runnerRegistry.get).toHaveBeenCalledOnce());
-      const finish = () => {
-        lifecycleMocks.container.runnerRegistry.get.mockResolvedValueOnce({
+      const finish = (duplicate = true) => {
+        lifecycleMocks.container.runnerRegistry.get.mockResolvedValue({
           ...runner,
           state: 'completed',
           exit: { reason: 'completed', code: 0, signal: null, finishedAt: '2026-08-07T00:00:05.000Z' },
         });
         notifyRegistry();
-        notifyRegistry();
+        if (duplicate) notifyRegistry();
       };
       return { harness, dispose, finish };
     };
@@ -306,6 +306,40 @@ describe('runnerServerFacet', () => {
         'steer',
       );
       await dispose();
+    });
+
+    it.each(['throw', 'reject'])('retries %s admission failures without registry events', async (failure) => {
+      const { harness, dispose, finish } = await promote();
+      const admit = vi.mocked(harness.execution.session.admitPrompt!);
+      admit.mockImplementationOnce(() => {
+        if (failure === 'throw') throw new Error('temporarily unavailable');
+        return Promise.reject(new Error('temporarily unavailable'));
+      });
+      // Only the first scan should run before the independent retry timer.
+      finish(false);
+      await vi.waitFor(() => expect(admit).toHaveBeenCalled());
+      await vi.waitFor(() => expect(admit).toHaveBeenCalledTimes(2), { timeout: 2_000 });
+      await dispose();
+    });
+
+    it('drains delayed admission before releasing runner resources', async () => {
+      const { harness, dispose, finish } = await promote();
+      let accept = (): void => undefined;
+      vi.mocked(harness.execution.session.admitPrompt!).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            accept = resolve;
+          }),
+      );
+      finish();
+      await vi.waitFor(() => expect(harness.execution.session.admitPrompt).toHaveBeenCalledOnce());
+      const closing = dispose();
+      await Promise.resolve();
+      expect(lifecycleMocks.container.runnerRegistry.close).not.toHaveBeenCalled();
+      accept();
+      await closing;
+      expect(harness.execution.session.admitPrompt).toHaveBeenCalledOnce();
+      expect(lifecycleMocks.container.runnerRegistry.close).toHaveBeenCalledOnce();
     });
 
     it('does not start a turn for runners that session cleanup stops', async () => {

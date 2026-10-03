@@ -74,10 +74,10 @@ describe('review messages', () => {
     expect(prompt).toContain('Do not push.');
   });
 
-  it('queues the message, and reports a send the host refused', () => {
+  it('sends a nonqueue follow-up, and reports a send the host refused', () => {
     const send = vi.fn();
     expect(deliverToAgent(send, 's1', 'hello')).toBeUndefined();
-    expect(send).toHaveBeenCalledWith('s1', { type: 'enqueue_automatic', message: 'hello' });
+    expect(send).toHaveBeenCalledWith('s1', { type: 'follow_up', message: 'hello' });
     const refuse = vi.fn(() => {
       throw new Error('The session protocol is not connected.');
     });

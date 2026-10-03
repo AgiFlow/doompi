@@ -91,11 +91,11 @@ describe('fileTabId', () => {
 });
 
 describe('sendReviewFrame', () => {
-  it('queues the review behind a running turn rather than prompting over it', () => {
+  it('defers the review without claiming explicit queue ownership', () => {
     const comments = [comment({ startLine: 12 })];
     const frames: Record<string, unknown>[] = [];
     expect(sendReviewFrame((frame) => frames.push(frame), comments)).toBeUndefined();
-    expect(frames).toEqual([{ type: 'enqueue_automatic', message: buildReviewPrompt(comments) }]);
+    expect(frames).toEqual([{ type: 'follow_up', message: buildReviewPrompt(comments) }]);
   });
 
   it('hands back why the review did not leave, so the caller can keep the comments', () => {

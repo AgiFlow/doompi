@@ -200,10 +200,7 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
 
   const dormant = meta?.summary.dormant === true;
   const attached = !dormant && meta?.attach === 'attached';
-  const queued =
-    lifecycle === null
-      ? Math.max(meta?.summary.pendingMessageCount ?? 0, queuedEntries.length)
-      : lifecycle.queue.length;
+  const queued = lifecycle === null ? queuedEntries.length : lifecycle.queue.length;
 
   // Completion and drag state are transient. The draft and attachments below
   // come from the newly focused session immediately after this reset, so the
