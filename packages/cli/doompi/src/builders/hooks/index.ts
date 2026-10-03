@@ -13,6 +13,23 @@ import { compileExtensionModule, extensionModuleManifestPath } from '../../compi
 
 export const HOOK_MODULES_FILE = 'hook-modules.json';
 
+/** The optional hook package owns parsing; the CLI only consumes this capability. */
+interface HookParserModule {
+  createHookDocumentReader(options: { homeDirectory: string; warn: (message: string) => void }): {
+    registry(repoRoot: string): Promise<{
+      entries: Array<{
+        module?: string;
+        core: boolean;
+        registryId: string;
+        groupId: string;
+        rowId: string;
+        event: string;
+      }>;
+      failure?: { message: string };
+    }>;
+  };
+}
+
 /** Core plus the union of every mode's selection. An unset selection admits all. */
 export function requiredHookGroups(config: MajorModesConfig): Set<string> | undefined {
   const groups = new Set<string>();
@@ -54,9 +71,7 @@ export async function syncHookModules(options: {
       'Hook module rows require @agimon-ai/doompi-hook. Install it in the repository or select a layer that provides it, then run doompi sync.',
     );
   const parser =
-    hasModuleRows && parserEntry
-      ? ((await import(pathToFileURL(parserEntry).href)) as typeof import('@agimon-ai/doompi-hook'))
-      : undefined;
+    hasModuleRows && parserEntry ? ((await import(pathToFileURL(parserEntry).href)) as HookParserModule) : undefined;
   const read =
     hasModuleRows && parser
       ? await parser

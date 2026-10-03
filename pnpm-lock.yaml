@@ -18,6 +18,7 @@ overrides:
   js-yaml@4.0.0 - 4.3.1: ^4.3.2
   js-yaml@5.0.0 - 5.2.1: ^5.2.2
   liquidjs@10.0.0 - 10.27.1: ^10.27.2
+  lodash-es@>=4.0.0 <4.18.0: 4.18.1
   protobufjs@8.0.0 - 8.7.1: ^8.7.2
   smol-toml@0.0.0 - 1.7.0: ^1.7.1
   sharp@0.34.5: 0.35.4
@@ -9521,9 +9522,6 @@ packages:
     engines: {node: '>=16'}
     hasBin: true
 
-  lodash-es@4.17.23:
-    resolution: {integrity: sha512-kVI48u3PZr38HdYz98UmfPnXl2DXrpdctLrFLCd3kOx1xUkOmpFPx7gCWWM5MPkL/fD8zb+Ph0QzjGFs4+hHWg==}
-
   lodash-es@4.18.1:
     resolution: {integrity: sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==}
 
@@ -13043,12 +13041,12 @@ snapshots:
     dependencies:
       '@chevrotain/gast': 11.1.2
       '@chevrotain/types': 11.1.2
-      lodash-es: 4.17.23
+      lodash-es: 4.18.1
 
   '@chevrotain/gast@11.1.2':
     dependencies:
       '@chevrotain/types': 11.1.2
-      lodash-es: 4.17.23
+      lodash-es: 4.18.1
 
   '@chevrotain/regexp-to-ast@11.1.2': {}
 
@@ -16939,7 +16937,7 @@ snapshots:
       '@chevrotain/regexp-to-ast': 11.1.2
       '@chevrotain/types': 11.1.2
       '@chevrotain/utils': 11.1.2
-      lodash-es: 4.17.23
+      lodash-es: 4.18.1
 
   class-variance-authority@0.7.1:
     dependencies:
@@ -18446,8 +18444,6 @@ snapshots:
   liquidjs@10.29.0:
     dependencies:
       commander: 10.0.1
-
-  lodash-es@4.17.23: {}
 
   lodash-es@4.18.1: {}
 
