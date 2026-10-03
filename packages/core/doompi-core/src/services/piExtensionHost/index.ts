@@ -669,6 +669,9 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   let currentOperation: 'run' | 'compaction' | 'navigation' | null = null;
   let nativeQueuedMessages = 0;
   let retainedQueuedMessages = 0;
+  // Durable successors are physical runs within one Pi agent loop. Lifecycle frames can
+  // change the current operation between them, so track the logical loop separately.
+  let logicalLoopActive = false;
   let turnIndex = 0;
   let runMessages: AgentMessage[] = [];
   const turnEntryIds = new Set<string>();
@@ -694,8 +697,9 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   /**
    * Where one custom message goes, following Pi's own order in `sendCustomMessage`.
    *
-   * An explicit `nextTurn` always queues; a running turn takes the message unless the
-   * caller opted out; an idle agent is woken only when the caller asked for a turn.
+   * `nextTurn` is staged before considering triggerTurn, even when it is false.
+   * Otherwise a running turn takes the message unless the caller opted out; an
+   * idle agent is woken only when the caller asked for a turn.
    * Pi's remaining branch, deferring an append made mid-turn, needs no counterpart:
    * the lane already holds a write until the operation reaches a safe commit point.
    */
@@ -703,9 +707,15 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     message: AgentMessage,
     sendOptions?: { triggerTurn?: boolean; deliverAs?: 'steer' | 'followUp' | 'nextTurn' },
   ): Promise<unknown> => {
+    if (sendOptions?.deliverAs === 'nextTurn') return runtime.submitInternalMessage(message, 'nextTurn');
     if (sendOptions?.triggerTurn === false) return runtime.appendMessage(message);
-    if (currentOperation === 'run' || sendOptions?.triggerTurn === true || sendOptions?.deliverAs === 'nextTurn')
-      return runtime.submitInternalMessage(message, sendOptions?.deliverAs === 'steer' ? 'steer' : 'followUp');
+    if (currentOperation === 'run' || sendOptions?.triggerTurn === true)
+      return runtime.submitInternalMessage(
+        message,
+        sendOptions?.deliverAs === 'steer' || (currentOperation === 'run' && sendOptions?.deliverAs === undefined)
+          ? 'steer'
+          : 'followUp',
+      );
     return runtime.appendMessage(message);
   };
 
@@ -724,6 +734,8 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     },
     sendUserMessage: (content, sendOptions) => {
       const deliver = async (): Promise<void> => {
+        if (currentOperation === 'run' && sendOptions?.deliverAs === undefined)
+          throw new Error('sendUserMessage during streaming requires deliverAs: steer or followUp');
         const text =
           typeof content === 'string'
             ? content
@@ -840,6 +852,8 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     switch (event.type) {
       case 'run_start':
         currentOperation = 'run';
+        if (logicalLoopActive) return;
+        logicalLoopActive = true;
         turnIndex = 0;
         runMessages = [];
         turnEntryIds.clear();
@@ -950,8 +964,10 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         return;
       }
       case 'run_end':
-        if (!event.successorActive) {
-          currentOperation = null;
+        if (event.successorActive) return;
+        currentOperation = null;
+        if (logicalLoopActive) {
+          logicalLoopActive = false;
           await runner?.emit({ type: 'agent_end', messages: runMessages });
           await runner?.emit({ type: 'agent_settled' });
         }

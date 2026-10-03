@@ -81,8 +81,22 @@ export function hostEntryStems(configRoot: string): Set<string> {
   return new Set(targets.map(runtimeStem).filter((stem): stem is string => stem !== null));
 }
 
+/** Owned by one rule check, never retained across filesystem changes between checks. */
+export type GeneratedEntryCache = Map<
+  string,
+  {
+    packageName: string;
+    graph: ReturnType<typeof scanExtensions>;
+    sources: Map<string, string | null>;
+  } | null
+>;
+
 /** Resolve canonical build facades without writing generated output during preflight. */
-export function generatedEntrySource(configRoot: string, entry: string): string | null {
+export function generatedEntrySource(
+  configRoot: string,
+  entry: string,
+  cache: GeneratedEntryCache = new Map(),
+): string | null {
   const target =
     entry === 'generated/pi.ts'
       ? 'cli'
@@ -92,9 +106,20 @@ export function generatedEntrySource(configRoot: string, entry: string): string 
           ? 'web'
           : null;
   if (!target) return null;
-  const manifest = readPackageManifest(configRoot);
-  if (!manifest?.name) return null;
-  const graph = scanExtensions({ packageDir: configRoot });
+  const root = path.resolve(configRoot);
+  if (!cache.has(root)) {
+    const manifest = readPackageManifest(root);
+    cache.set(
+      root,
+      manifest?.name
+        ? { packageName: manifest.name, graph: scanExtensions({ packageDir: root }), sources: new Map() }
+        : null,
+    );
+  }
+  const cached = cache.get(root);
+  if (!cached) return null;
+  if (cached.sources.has(entry)) return cached.sources.get(entry) ?? null;
+  const { graph, packageName } = cached;
   const resolution = resolveTarget(graph, target);
   const templateAdmission =
     target === 'cli' &&
@@ -104,13 +129,17 @@ export function generatedEntrySource(configRoot: string, entry: string): string 
     !resolution.escapeHatches.length &&
     !resolution.roots.length &&
     !templateAdmission
-  )
+  ) {
+    cached.sources.set(entry, null);
     return null;
+  }
   const render = target === 'cli' ? renderCliEntry : target === 'server' ? renderServerEntry : renderWebEntry;
-  return render(resolution, {
-    packageName: manifest.name,
-    pluginId: defaultPluginId(manifest.name),
+  const source = render(resolution, {
+    packageName,
+    pluginId: defaultPluginId(packageName),
     root: graph.root,
     entryDir: 'generated',
   });
+  cached.sources.set(entry, source);
+  return source;
 }

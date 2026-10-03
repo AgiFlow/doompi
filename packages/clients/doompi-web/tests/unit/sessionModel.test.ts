@@ -175,6 +175,74 @@ describe('reduceSession', () => {
     expect(assistant(state)).toMatchObject({ text: '', thinking: 'reason', streaming: false });
   });
 
+  it('reconciles presentation-shaped aggregate frames before a delayed message_start', () => {
+    const message = {
+      role: 'assistant',
+      timestamp: 100,
+      model: 'test',
+      content: [
+        { type: 'text', text: 'aggregate' },
+        { type: 'thinking', thinking: 'reason' },
+      ],
+    };
+    const state = fold([
+      { type: 'message_update', assistantMessageEvent: { type: 'start' }, message },
+      { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: ' next' } },
+      { type: 'message_start', message: { ...message, content: [] } },
+    ]);
+    expect(state.entries).toHaveLength(1);
+    expect(assistant(state)).toMatchObject({ text: 'aggregate next', thinking: 'reason', streaming: true });
+  });
+
+  it('uses start.partial aggregate content without appending it twice', () => {
+    const partial = {
+      role: 'assistant',
+      timestamp: 100,
+      content: [
+        { type: 'text', text: 'aggregate' },
+        { type: 'thinking', thinking: 'reason' },
+      ],
+    };
+    const state = fold([
+      { type: 'message_update', assistantMessageEvent: { type: 'start', partial } },
+      { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: ' next' } },
+    ]);
+    expect(assistant(state)).toMatchObject({ text: 'aggregate next', thinking: 'reason', timestamp: 100 });
+  });
+
+  it('ignores delayed and duplicate starts without erasing or reopening the same message', () => {
+    const message = { role: 'assistant', timestamp: 100, model: 'test', content: [] };
+    const start = { type: 'message_start', message };
+    const draft = fold([
+      start,
+      { type: 'message_update', message: { ...message, content: [{ type: 'text', text: 'answer' }] } },
+    ]);
+    expect(reduceSession(draft, start)).toBe(draft);
+    const completed = reduceSession(draft, { type: 'message_end', message: { ...message, content: 'answer' } });
+    expect(reduceSession(completed, start)).toBe(completed);
+    const newer = reduceSession(completed, {
+      type: 'message_start',
+      message: { ...message, timestamp: 200, content: 'new' },
+    });
+    expect(newer.entries).toHaveLength(2);
+    expect(newer.entries[1]).toMatchObject({ text: 'new', streaming: true, timestamp: 200 });
+    expect(reduceSession(newer, start)).toBe(newer);
+    const overlapping = reduceSession(draft, {
+      type: 'message_start',
+      message: { ...message, timestamp: 200, content: 'new' },
+    });
+    expect(overlapping.entries).toHaveLength(2);
+    expect(overlapping.entries[0]).toMatchObject({ text: 'answer', streaming: false });
+    expect(overlapping.entries[1]).toMatchObject({ text: 'new', streaming: true });
+  });
+
+  it('preserves provider identity during journal reload and ignores a late start', () => {
+    const message = { role: 'assistant', timestamp: 100, model: 'test', content: [{ type: 'text', text: 'Answer' }] };
+    const restored = fold([{ type: 'entry_appended', entry: { id: 'answer', type: 'message', message } }]);
+    expect(assistant(restored)).toMatchObject({ timestamp: 100, model: 'test', text: 'Answer', streaming: false });
+    expect(reduceSession(restored, { type: 'message_start', message: { ...message, content: [] } })).toBe(restored);
+  });
+
   it('ignores frames it does not model', () => {
     expect(reduceSession(initialSessionState, { type: 'something_new' })).toBe(initialSessionState);
   });

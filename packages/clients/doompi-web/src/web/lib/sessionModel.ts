@@ -33,6 +33,8 @@ export interface AssistantEntry {
   text: string;
   thinking: string;
   streaming: boolean;
+  /** Provider model, used with the message timestamp to reconcile repeated starts. */
+  model?: string;
   /**
    * The persona active when this message was written.
    *
@@ -708,6 +710,8 @@ function applyJournalMessage(state: SessionState, message: Frame, entryId?: stri
   }
 
   if (role === 'assistant') {
+    timestamp ??= asNumber(message.timestamp) ?? undefined;
+    const model = typeof message.model === 'string' ? message.model : undefined;
     const text = textFromContent(content);
     const thinking = thinkingFromContent(content);
     const draft = state.entries.findLast((item) => item.kind === 'assistant' && item.streaming);
@@ -716,7 +720,14 @@ function applyJournalMessage(state: SessionState, message: Frame, entryId?: stri
       state = {
         ...state,
         entries: state.entries.map((item) =>
-          item.id === draft.id ? { ...item, id: entryId, ...(timestamp === undefined ? {} : { timestamp }) } : item,
+          item.id === draft.id
+            ? {
+                ...item,
+                id: entryId,
+                ...(timestamp === undefined ? {} : { timestamp }),
+                ...(model === undefined ? {} : { model }),
+              }
+            : item,
         ),
       };
     }
@@ -726,6 +737,7 @@ function applyJournalMessage(state: SessionState, message: Frame, entryId?: stri
             kind: 'assistant',
             id: entryId ?? `a${state.nextId}`,
             ...(timestamp === undefined ? {} : { timestamp }),
+            ...(model === undefined ? {} : { model }),
             text,
             thinking,
             streaming: false,
@@ -890,12 +902,33 @@ function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOp
 
     case 'message_start':
     case 'message_update': {
-      const message = isRecord(frame.message) ? frame.message : undefined;
+      const event = isRecord(frame.assistantMessageEvent) ? frame.assistantMessageEvent : undefined;
+      const message = isRecord(frame.message)
+        ? frame.message
+        : event?.type === 'start' && isRecord(event.partial)
+          ? event.partial
+          : undefined;
       if (message?.role !== undefined && message.role !== 'assistant') return state;
+      const timestamp = asNumber(message?.timestamp);
+      const model = typeof message?.model === 'string' ? message.model : undefined;
+      if (type === 'message_start' && timestamp !== null) {
+        const previous = state.entries.findLast((entry) => entry.kind === 'assistant' && entry.timestamp !== undefined);
+        if (previous?.kind === 'assistant' && previous.timestamp !== undefined) {
+          if (
+            previous.timestamp > timestamp ||
+            (previous.timestamp === timestamp && (!model || !previous.model || previous.model === model))
+          )
+            return state;
+          // A newer start belongs to a new bubble, even if completion was delayed.
+          if (previous.streaming && previous.timestamp < timestamp) state = closeAssistant(state, undefined);
+        }
+      }
       if (message && (typeof message.content === 'string' || Array.isArray(message.content))) {
         const opened = openAssistant(state);
         return replaceEntry(opened.state, opened.entry.id, {
           ...opened.entry,
+          ...(timestamp === null ? {} : { timestamp }),
+          ...(model === undefined ? {} : { model }),
           text: textFromContent(message.content),
           thinking: thinkingFromContent(Array.isArray(message.content) ? message.content.filter(isRecord) : []),
         });

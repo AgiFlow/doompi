@@ -270,6 +270,83 @@ describe('durable direct runtime', () => {
     }
   });
 
+  it.each(['failed', 'faulted', 'declined'] as const)(
+    'does not report an older compaction as completed when the next compaction is %s',
+    async (outcome) => {
+      let first = true;
+      const { runtime, models } = await setup({
+        retry: { enabled: false, maxRetries: 0, baseDelayMs: 0 },
+        beforeCompaction: () => {
+          if (first) return { compaction: { summary: 'older summary', tokensBefore: 10, retainedTail: [] } };
+          if (outcome === 'declined') return { decline: true };
+          return undefined;
+        },
+      });
+      const completeSimple = vi.fn<Models['completeSimple']>(async () => {
+        if (outcome === 'faulted') throw new Error('summary provider fault');
+        return {
+          ...(await response([]).result()),
+          stopReason: 'error',
+          errorMessage: 'summary provider failed',
+        };
+      });
+      Object.assign(models, { completeSimple });
+      const events: HarnessEvent[] = [];
+      runtime.onEvent((event) => {
+        events.push(event);
+      });
+      try {
+        await runtime.appendMessage({ role: 'user', content: 'old context', timestamp: 1 });
+        await runtime.appendMessage({ role: 'user', content: 'retained context', timestamp: 2 });
+        await runtime.compact();
+        const older = (await runtime.readEntries()).entries.findLast((entry) => entry.type === 'compaction');
+        expect(older).toBeDefined();
+        await vi.waitFor(() => expect(events.filter((event) => event.type === 'compaction_end')).toHaveLength(1));
+        expect(events.find((event) => event.type === 'compaction_end')).toMatchObject({
+          status: 'completed',
+          entryId: older!.id,
+        });
+        first = false;
+        await runtime.appendMessage({ role: 'user', content: 'new context', timestamp: 3 });
+        if (outcome === 'declined') await runtime.compact();
+        else await expect(runtime.compact()).rejects.toThrow('Compaction failed');
+        await vi.waitFor(() => expect(events.filter((event) => event.type === 'compaction_end')).toHaveLength(2));
+        const ends = events.filter((event) => event.type === 'compaction_end');
+        expect((await runtime.readEntries()).entries.filter((entry) => entry.type === 'compaction')).toEqual([older]);
+        expect.soft(ends[1]).toMatchObject({ status: outcome === 'declined' ? 'aborted' : 'failed', reason: 'manual' });
+        expect.soft(ends[1]?.entryId).toBeUndefined();
+        expect.soft(ends[0]?.error).toBeUndefined();
+        if (outcome === 'declined') {
+          expect(ends[1]?.error).toBeUndefined();
+          expect(completeSimple).not.toHaveBeenCalled();
+        } else {
+          expect(ends[1]?.error).toBeInstanceOf(Error);
+          expect(completeSimple).toHaveBeenCalledOnce();
+        }
+      } finally {
+        await runtime.dispose();
+      }
+    },
+  );
+
+  it('reports empty compaction as aborted without an entry or error', async () => {
+    const { runtime } = await setup();
+    const events: HarnessEvent[] = [];
+    runtime.onEvent((event) => {
+      events.push(event);
+    });
+    try {
+      await runtime.compact();
+      await vi.waitFor(() => expect(events.filter((event) => event.type === 'compaction_end')).toHaveLength(1));
+      const ends = events.filter((event) => event.type === 'compaction_end');
+      expect(ends[0]).toMatchObject({ status: 'aborted', reason: 'manual' });
+      expect(ends[0]?.entryId).toBeUndefined();
+      expect(ends[0]?.error).toBeUndefined();
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it('passive writes publish assistant usage without waking the model', async () => {
     const { runtime, streamSimple } = await setup();
     const events: HarnessEvent[] = [];

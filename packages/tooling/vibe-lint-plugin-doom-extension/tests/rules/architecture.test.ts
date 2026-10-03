@@ -2,8 +2,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import * as build from '@agimon-ai/doompi-build';
 import type { RuleOptions } from '@agimon-ai/vibe-lint';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   compatibilityWrapperOnly,
@@ -41,6 +42,7 @@ describe('Doom deterministic architecture rules', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     fs.rmSync(root, { recursive: true, force: true });
   });
 
@@ -54,7 +56,9 @@ describe('Doom deterministic architecture rules', () => {
     );
     write('src/extensions/(backend)/tool/hello.cli.ts', 'export default {};');
     expect(doomCleanArchitectureBoundary.check?.(manifest, root, boundaryContext())).toBeNull();
+    const scan = vi.spyOn(build, 'scanExtensions');
     expect(cordisFeaturePlugin.check?.(manifest, root)).toBeNull();
+    expect(scan).toHaveBeenCalledTimes(1);
     expect(fs.existsSync(path.join(root, 'generated'))).toBe(false);
     fs.rmSync(path.join(root, 'src'), { recursive: true });
     expect(doomCleanArchitectureBoundary.check?.(manifest, root, boundaryContext())).toContain('has no source entry');

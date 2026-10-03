@@ -6,6 +6,7 @@ import ts from 'typescript';
 
 import {
   type DoomPackageManifest,
+  type GeneratedEntryCache,
   generatedEntrySource,
   piDiscoveryEntryStems,
   projectPath,
@@ -2057,7 +2058,7 @@ function defaultFactorySpecifiers(sourceFile: ts.SourceFile): string[] {
   return [...specifiers];
 }
 
-function publicFeatureAdapterPaths(configRoot: string): string[] {
+function publicFeatureAdapterPaths(configRoot: string, cache: GeneratedEntryCache): string[] {
   const facadeStems = new Set(piDiscoveryEntryStems(configRoot));
 
   const adapters = new Set<string>();
@@ -2067,7 +2068,7 @@ function publicFeatureAdapterPaths(configRoot: string): string[] {
       .find((resolved) => resolved !== undefined && resolved !== null);
     if (!facadePath) {
       const generated = `generated/${facadeStem.slice('extensions/'.length)}.ts`;
-      if (facadeStem === 'extensions/pi' && generatedEntrySource(configRoot, generated))
+      if (facadeStem === 'extensions/pi' && generatedEntrySource(configRoot, generated, cache))
         adapters.add(path.join(configRoot, generated));
       continue;
     }
@@ -3040,16 +3041,21 @@ export const cordisFeaturePlugin: RuleDefinition = {
       piDiscoveryEntryStems(configRoot).size > 0;
     const isDoomHost = manifest?.name === DOOM_PACKAGE_NAME;
     if (!relativePath || (!isFeaturePackage && !isDoomHost)) return null;
+    const generatedEntryCache: GeneratedEntryCache = new Map();
 
     if (relativePath === PACKAGE_MANIFEST_PATH) {
       const adapterPaths = isDoomHost
         ? DOOM_HOST_CORDIS_FEATURE_PATHS.map((entryPath) => path.join(configRoot, entryPath))
-        : publicFeatureAdapterPaths(configRoot);
+        : publicFeatureAdapterPaths(configRoot, generatedEntryCache);
       if (adapterPaths.length === 0) {
         return 'A Doom Pi feature package must expose a Pi entry through ./extensions/*.';
       }
       const invalid = adapterPaths.flatMap((adapterPath) => {
-        const generated = generatedEntrySource(configRoot, projectPath(adapterPath, configRoot) ?? '');
+        const generated = generatedEntrySource(
+          configRoot,
+          projectPath(adapterPath, configRoot) ?? '',
+          generatedEntryCache,
+        );
         const sourceFile =
           readSource(adapterPath) ??
           (generated ? ts.createSourceFile(adapterPath, generated, ts.ScriptTarget.Latest, true) : null);
@@ -3072,7 +3078,7 @@ export const cordisFeaturePlugin: RuleDefinition = {
       DOOM_HOST_CORDIS_FEATURE_PATHS.includes(relativePath as (typeof DOOM_HOST_CORDIS_FEATURE_PATHS)[number]);
     if (
       relativePath !== 'src/extensions/pi.ts' &&
-      !(manifest && publicFeatureAdapterPaths(configRoot).includes(filePath)) &&
+      !(manifest && publicFeatureAdapterPaths(configRoot, generatedEntryCache).includes(filePath)) &&
       !isDoomHostFeature
     )
       return null;

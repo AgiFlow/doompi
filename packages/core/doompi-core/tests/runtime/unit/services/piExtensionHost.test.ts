@@ -73,6 +73,7 @@ function stubRuntime(entries: Entry[], options?: { parentSessionId?: string; fai
     submitPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
     submitInternalMessage: vi.fn(async () => ({ settled: Promise.resolve() })),
     admitMessage: vi.fn(async () => ({ settled: Promise.resolve() })),
+    appendMessage: vi.fn(async () => 'message-1'),
     dispatchCommand: vi.fn(async () => true),
     followUp: vi.fn(async () => undefined),
     steer: vi.fn(async () => undefined),
@@ -367,6 +368,7 @@ async function loadedHost(
   names: readonly string[],
   onActiveToolsChanged?: () => void,
   handlers: Map<string, unknown> = new Map(),
+  onNotice?: (message: string) => void,
 ) {
   const stub = stubRuntime([]);
   const preload: LoadExtensionsResult = {
@@ -385,6 +387,7 @@ async function loadedHost(
     getModel: () => undefined,
     getThinkingLevel: () => 'off',
     client: () => undefined,
+    onNotice,
     ...(onActiveToolsChanged === undefined ? {} : { onActiveToolsChanged }),
   });
   await host.load();
@@ -444,6 +447,68 @@ describe('Pi extension tool surface in the headless host', () => {
     expect(runtime.submitPrompt).not.toHaveBeenCalled();
     expect(runtime.followUp).not.toHaveBeenCalled();
     expect(runtime.steer).not.toHaveBeenCalled();
+  });
+
+  it('defaults streaming custom messages to steer and honors explicit followUp', async () => {
+    const { actions, runtime, emit } = await loadedHost([]);
+    await emit({ type: 'run_start', lane: 'main', runId: 'run-1', startedAt: CREATED_AT });
+    actions.sendMessage({ customType: 'notice', content: 'default', display: true });
+    actions.sendMessage({ customType: 'notice', content: 'follow-up', display: true }, { deliverAs: 'followUp' });
+    await vi.waitFor(() => expect(runtime.submitInternalMessage).toHaveBeenCalledTimes(2));
+    expect(runtime.submitInternalMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ content: 'default' }),
+      'steer',
+    );
+    expect(runtime.submitInternalMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ content: 'follow-up' }),
+      'followUp',
+    );
+  });
+
+  it.each([
+    [false, undefined],
+    [false, false],
+    [false, true],
+    [true, undefined],
+    [true, false],
+    [true, true],
+  ] as const)('forwards nextTurn unchanged (streaming=%s, triggerTurn=%s)', async (streaming, triggerTurn) => {
+    const { actions, runtime, emit } = await loadedHost([]);
+    if (streaming) await emit({ type: 'run_start', lane: 'main', runId: 'run-1', startedAt: CREATED_AT });
+    actions.sendMessage(
+      { customType: 'notice', content: 'staged', display: true },
+      { deliverAs: 'nextTurn', ...(triggerTurn === undefined ? {} : { triggerTurn }) },
+    );
+    await vi.waitFor(() => expect(runtime.submitInternalMessage).toHaveBeenCalledTimes(1));
+    expect(runtime.submitInternalMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'custom', customType: 'notice', content: 'staged', display: true }),
+      'nextTurn',
+    );
+    expect(runtime.appendMessage).not.toHaveBeenCalled();
+    expect(runtime.submitPrompt).not.toHaveBeenCalled();
+    expect(runtime.submitUserPrompt).not.toHaveBeenCalled();
+  });
+
+  it('appends non-nextTurn custom messages when triggerTurn is false', async () => {
+    const { actions, runtime, emit } = await loadedHost([]);
+    await emit({ type: 'run_start', lane: 'main', runId: 'run-1', startedAt: CREATED_AT });
+    actions.sendMessage(
+      { customType: 'notice', content: 'append-only', display: true },
+      { deliverAs: 'followUp', triggerTurn: false },
+    );
+    await vi.waitFor(() => expect(runtime.appendMessage).toHaveBeenCalledTimes(1));
+    expect(runtime.submitInternalMessage).not.toHaveBeenCalled();
+  });
+
+  it('rejects streaming user messages without an explicit delivery mode', async () => {
+    const notice = vi.fn();
+    const { actions, runtime, emit } = await loadedHost([], undefined, new Map(), notice);
+    await emit({ type: 'run_start', lane: 'main', runId: 'run-1', startedAt: CREATED_AT });
+    actions.sendUserMessage('ambiguous');
+    await vi.waitFor(() => expect(notice).toHaveBeenCalledWith(expect.stringContaining('deliverAs')));
+    expect(runtime.submitInternalMessage).not.toHaveBeenCalled();
   });
 
   it('exposes every registered tool until a restriction narrows the set', async () => {
@@ -1239,6 +1304,91 @@ describe('Pi lifecycle events in the headless host', () => {
     expect(turns).toEqual([0, 1]);
     expect(ends).toHaveBeenCalledTimes(1);
     expect(ends.mock.calls[0]?.[0]).toMatchObject({ type: 'agent_end', messages: [first, second] });
+  });
+
+  it('keeps successor runs in one logical loop and resets only after settlement', async () => {
+    const starts = vi.fn();
+    const ends = vi.fn();
+    const settled = vi.fn();
+    const turns = vi.fn();
+    const turnEnds = vi.fn();
+    const { emit } = await loadedHost(
+      [],
+      undefined,
+      new Map<string, unknown>([
+        ['agent_start', [starts]],
+        ['agent_end', [ends]],
+        ['agent_settled', [settled]],
+        ['turn_start', [turns]],
+        ['turn_end', [turnEnds]],
+      ]),
+    );
+    const messages: AgentMessage[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const runId = `run-${index}`;
+      const message: Extract<AgentMessage, { role: 'assistant' }> = {
+        role: 'assistant',
+        content: [{ type: 'text', text: runId }],
+        timestamp: CREATED_AT,
+        api: 'anthropic-messages',
+        provider: 'anthropic',
+        model: 'claude',
+        stopReason: 'stop',
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      };
+      messages.push(message);
+      await emit({ type: 'run_start', lane: 'main', runId, startedAt: CREATED_AT });
+      await emit({ type: 'turn_start', lane: 'main', runId, turnId: runId });
+      await emit({ type: 'message_end', lane: 'main', runId, message });
+      await emit({
+        type: 'entry_added',
+        lane: 'main',
+        entry: messageEntry(runId, message, index === 0 ? null : `run-${index - 1}`),
+      });
+      await emit({ type: 'turn_end', lane: 'main', runId, turnId: runId, message, toolResults: [] });
+      await emit({
+        type: 'run_end',
+        lane: 'main',
+        runId,
+        fromTipId: null,
+        tipId: null,
+        endedAt: CREATED_AT,
+        status: 'completed',
+        successorActive: index < 2,
+      });
+      expect(starts).toHaveBeenCalledTimes(1);
+      expect(ends).toHaveBeenCalledTimes(index < 2 ? 0 : 1);
+      expect(settled).toHaveBeenCalledTimes(index < 2 ? 0 : 1);
+    }
+    expect(turns.mock.calls.map(([event]) => event.turnIndex)).toEqual([0, 1, 2]);
+    expect(turnEnds.mock.calls.map(([event]) => event.turnIndex)).toEqual([0, 1, 2]);
+    expect(ends.mock.calls[0]?.[0]).toEqual({ type: 'agent_end', messages });
+
+    await emit({ type: 'run_start', lane: 'main', runId: 'fresh', startedAt: CREATED_AT });
+    await emit({ type: 'turn_start', lane: 'main', runId: 'fresh', turnId: 'fresh' });
+    const fresh: AgentMessage = { role: 'user', content: 'fresh', timestamp: CREATED_AT };
+    await emit({ type: 'message_end', lane: 'main', runId: 'fresh', message: fresh });
+    await emit({
+      type: 'run_end',
+      lane: 'main',
+      runId: 'fresh',
+      fromTipId: null,
+      tipId: null,
+      endedAt: CREATED_AT,
+      status: 'completed',
+    });
+    expect(starts).toHaveBeenCalledTimes(2);
+    expect(turns.mock.calls.map(([event]) => event.turnIndex)).toEqual([0, 1, 2, 0]);
+    expect(ends).toHaveBeenCalledTimes(2);
+    expect(ends.mock.calls[1]?.[0]).toEqual({ type: 'agent_end', messages: [fresh] });
+    expect(settled).toHaveBeenCalledTimes(2);
   });
 
   it('captures and deduplicates history written by session_start handlers', async () => {

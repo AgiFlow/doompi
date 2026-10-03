@@ -147,6 +147,40 @@ describe('Doom UI rendering', () => {
     expect(unsubscribeState).toHaveBeenCalledOnce();
   });
 
+  it('shows session-owned fast mode beside the model and follows toggles and session switches', () => {
+    let sessionId = 'current';
+    const entries = [
+      { type: 'custom', customType: 'doompi.fast-mode', data: { sessionId: 'parent', enabled: true } },
+      { type: 'custom', customType: 'doompi.fast-mode', data: { enabled: true } },
+    ];
+    const footer = new DoomFooter(
+      { requestRender: vi.fn() } as unknown as TUI,
+      theme,
+      {
+        cwd: '/repo/agirepo',
+        model: { id: 'gpt-6.1-sol' },
+        thinkingLevel: 'medium',
+        getContextUsage: () => ({ percent: 7 }),
+        sessionManager: { getSessionId: () => sessionId, getBranch: () => entries },
+      } as unknown as ExtensionContext,
+      { getGitBranch: () => 'main', onBranchChange: () => () => {} } as unknown as ReadonlyFooterDataProvider,
+      footerStatusRegistry([]),
+      new DoomUiState(),
+    );
+    expect(footer.render(120).join('')).not.toContain('fast');
+    entries.push({ type: 'custom', customType: 'doompi.fast-mode', data: { sessionId, enabled: true } });
+    for (const width of [80, 120]) {
+      expect(footer.render(width).join('')).toContain('gpt-6.1-sol · fast · medium');
+      expectWidth(footer.render(width), width);
+    }
+    entries.push({ type: 'custom', customType: 'doompi.fast-mode', data: { sessionId, enabled: false } });
+    expect(footer.render(120).join('')).not.toContain('fast');
+    entries.push({ type: 'custom', customType: 'doompi.fast-mode', data: { sessionId, enabled: true } });
+    sessionId = 'next';
+    expect(footer.render(120).join('')).not.toContain('fast');
+    footer.dispose();
+  });
+
   it('renders only registered footer contributions with responsive text', () => {
     const footerData = {
       getGitBranch: () => 'main',

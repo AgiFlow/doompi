@@ -93,6 +93,7 @@ export interface HookDecision {
 
 export type HookFailureReason =
   | 'spawn_failed'
+  | 'stdin_failed'
   | 'non_zero_exit'
   | 'timeout'
   | 'invalid_json'

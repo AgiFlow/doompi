@@ -1001,7 +1001,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       },
       async prompt(text, delivery) {
         await (
-          await runtime.submitInternalMessage(text, delivery === 'steer' ? 'steer' : 'followUp')
+          await runtime.submitPrompt(
+            text,
+            undefined,
+            delivery === 'steer' || delivery === 'followUp' ? delivery : undefined,
+          )
         ).settled;
       },
       async admitPrompt(text, delivery, origin) {

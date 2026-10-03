@@ -106,14 +106,16 @@ export interface DoomHeadlessSession {
   }): readonly Record<string, unknown>[] | Promise<readonly Record<string, unknown>[]>;
   appendCustomEntry(type: string, data: unknown): Promise<void>;
   /**
-   * Delivers host-generated input and awaits its turn without using the operator queue.
+   * Delivers operator input through prompt preflight and awaits its turn.
+   * Environmental input uses admitPrompt with origin omitted instead.
    * An idle agent is woken; busy delivery uses Durable steering or follow-up.
    */
   prompt(text: string, delivery?: 'prompt' | 'steer' | 'followUp'): Promise<void>;
   /**
-   * Admits host-generated input without awaiting its turn. Internal input never changes the
-   * operator queue. Voice capture can explicitly select operator origin; 'interrupt' cancels
-   * the active run and admits operator input while preserving retained queued work.
+   * Admits input without awaiting its turn. Environmental input omits origin and never
+   * changes the operator queue. Operator origin uses prompt preflight, including voice
+   * capture; 'interrupt' cancels the active run and admits operator input while preserving
+   * retained queued work.
    */
   admitPrompt?(
     text: string,

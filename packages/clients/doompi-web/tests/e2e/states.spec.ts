@@ -23,6 +23,51 @@ test('marks the end of a run with what it did', async ({ page, cockpit }) => {
   await expect(page.getByTestId('entry-settled')).toContainText('agent settled · 1 tool');
 });
 
+test('renders a delayed aggregate stream without duplicate text or reopening an out-of-order start', async ({
+  page,
+  cockpit,
+}) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  const message = {
+    role: 'assistant',
+    timestamp: 100,
+    model: 'test',
+    content: [{ type: 'text', text: 'Delayed aggregate' }],
+  };
+  const answer = page.getByTestId('entry-assistant');
+  cockpit.session.emit({ type: 'agent_start' });
+  // A late listener first receives accumulated content, not the original message_start.
+  cockpit.session.emit({ type: 'message_update', assistantMessageEvent: { type: 'start', partial: message }, message });
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toHaveText('Delayed aggregate');
+  cockpit.session.emit({
+    type: 'message_update',
+    message: { ...message, content: [{ type: 'text', text: 'Delayed aggregate continues' }] },
+    assistantMessageEvent: { type: 'text_delta', delta: ' continues' },
+  });
+  await expect(answer).toHaveText('Delayed aggregate continues');
+  cockpit.session.emit({ type: 'message_start', message: { ...message, content: [] } });
+  cockpit.session.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: ' live' } });
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toHaveText('Delayed aggregate continues live');
+  cockpit.session.emit({
+    type: 'message_end',
+    entryId: 'delayed-answer',
+    message: { ...message, content: [{ type: 'text', text: 'Final authoritative answer' }] },
+  });
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toHaveText('Final authoritative answer');
+  cockpit.session.emit({ type: 'message_start', message: { ...message, content: [] } });
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toHaveText('Final authoritative answer');
+  cockpit.session.emit({ type: 'agent_settled' });
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toHaveText('Final authoritative answer');
+  await expect(page.getByTestId('entry-settled')).toBeVisible();
+  await expect(page.getByTestId('composer-abort')).toBeHidden();
+});
+
 test('views queued follow-ups and can delete the queue', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

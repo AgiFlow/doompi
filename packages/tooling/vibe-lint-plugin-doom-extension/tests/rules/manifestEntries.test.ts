@@ -2,9 +2,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import * as build from '@agimon-ai/doompi-build';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  type GeneratedEntryCache,
+  generatedEntrySource,
   hostEntryStems,
   piDiscoveryEntryStems,
   projectPath,
@@ -22,12 +25,35 @@ describe('Doom manifest entry helpers', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     fs.rmSync(root, { recursive: true, force: true });
   });
 
   function writeManifest(value: unknown): void {
     fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(value), 'utf8');
   }
+
+  it('shares scans and rendered sources per root only within an explicit check cache, without disk output', () => {
+    writeManifest({ name: '@agimon-ai/doompi-demo' });
+    const sourceDir = path.join(root, 'src/extensions/(backend)/tool');
+    fs.mkdirSync(sourceDir, { recursive: true });
+    fs.writeFileSync(path.join(sourceDir, 'hello.cli.ts'), 'export default {};');
+    const scan = vi.spyOn(build, 'scanExtensions');
+    const render = vi.spyOn(build, 'renderCliEntry');
+    const cache: GeneratedEntryCache = new Map();
+    const source = generatedEntrySource(root, 'generated/pi.ts', cache);
+    expect(source).toContain('definePiExtension');
+    expect(generatedEntrySource(path.join(root, '.'), 'generated/pi.ts', cache)).toBe(source);
+    expect(generatedEntrySource(root, 'generated/server.ts', cache)).toBeNull();
+    expect(generatedEntrySource(root, 'generated/server.ts', cache)).toBeNull();
+    expect(scan).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(generatedEntrySource(sourceDir, 'generated/pi.ts', cache)).toBeNull();
+    fs.rmSync(path.join(root, 'src'), { recursive: true });
+    expect(generatedEntrySource(root, 'generated/pi.ts', new Map())).toBeNull();
+    expect(scan).toHaveBeenCalledTimes(2);
+    expect(fs.readdirSync(root)).toEqual(['package.json']);
+  });
 
   it('normalizes project-relative paths and rejects paths outside the project', () => {
     expect(projectPath(path.join(root, 'src', 'extensions', 'pi.ts'), root)).toBe('src/extensions/pi.ts');

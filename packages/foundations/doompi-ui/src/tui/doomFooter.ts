@@ -118,10 +118,24 @@ export class DoomFooter implements Component {
     const content = [
       ...(beforeModel ? [beforeModel] : []),
       this.theme.fg('warning', model),
+      ...(this.fastModeEnabled() ? [this.theme.fg('success', 'fast')] : []),
       this.theme.fg(this.thinkingColor(thinking), thinking),
       this.theme.fg(this.contextColor(contextPercent), contextUsage),
     ].join(SEGMENT_SEPARATOR);
     return this.theme.bg(TOOL_PENDING_BACKGROUND, ` ${content} `);
+  }
+
+  private fastModeEnabled(): boolean {
+    const sessionManager = this.context.sessionManager;
+    if (!sessionManager) return false;
+    const sessionId = sessionManager.getSessionId();
+    let enabled = false;
+    for (const entry of sessionManager.getBranch()) {
+      if (entry.type !== 'custom' || entry.customType !== 'doompi.fast-mode') continue;
+      const data = entry.data as { enabled?: unknown; sessionId?: unknown } | undefined;
+      if (data?.sessionId === sessionId) enabled = data.enabled === true;
+    }
+    return enabled;
   }
 
   /** Effort rides the theme's rising ramp, from grey at off to red at max. */
