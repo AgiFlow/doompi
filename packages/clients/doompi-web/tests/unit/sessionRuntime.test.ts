@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
+import type { TranscriptPage } from '@agimon-ai/doompi-core/sessionProtocol';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 interface SocketHandlers {
@@ -88,6 +90,7 @@ vi.mock('../../src/pwa/workerClient', () => ({
 import { startSessionRuntime } from '../../src/web/app/sessionRuntime';
 import { onHubConnected } from '../../src/web/lib/transport';
 import { onCaptureStatus, pendingCaptureSessions, submitCapture } from '../../src/web/stores/captureStore';
+import { createPagedTranscript } from '../../src/web/stores/pagedTranscriptStore';
 import { resetSessions, sessionsStore, setActiveSession } from '../../src/web/stores/sessionsStore';
 import {
   applyProtocolTranscript,
@@ -126,6 +129,158 @@ function sessionSubscriptionFrames(): Record<string, unknown>[] {
   return socketState.sent.filter((frame) => frame.type === 'subscribe' || frame.type === 'unsubscribe');
 }
 describe('session runtime backlog publication', () => {
+  it.each(['notice-only', 'empty'] as const)('keeps canonical pages after a delayed %s hub backlog', async (kind) => {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    const sessionId = `paged-backlog-${kind}`;
+    const stop = startSessionRuntime();
+    const message = (id: string, text: string) => ({
+      type: 'message',
+      id,
+      message: { role: 'user', content: text },
+    });
+    const notice = {
+      type: 'custom',
+      id: 'notice-1',
+      customType: 'doom-notification',
+      data: { version: 1, title: 'Done', subtitle: 'Test', body: 'Durable notice', level: 'info' },
+    };
+    const page: TranscriptPage = {
+      entries: [message('canonical-1', 'Canonical'), notice],
+      context: [],
+      drafts: [],
+      generation: 0,
+      revision: 0,
+      startCursor: '1',
+      endCursor: '2',
+      olderCursor: '1',
+      newerCursor: null,
+    };
+    const read = vi.fn().mockResolvedValue(page);
+    const transcript = createPagedTranscript(
+      sessionId,
+      { readTranscriptPage: read },
+      (key, frame, replay) => socketState.presentation?.(key, frame, replay),
+      BACKGROUND_CONTEXT,
+    );
+    try {
+      socketState.handlers?.onFrame({
+        type: 'sessions_snapshot',
+        sessions: [{ id: sessionId, name: kind, createdAt: '1' }],
+      });
+      setActiveSession(sessionId);
+      socketState.handlers?.onFrame({
+        type: 'session_backlog',
+        sessionId,
+        frames: [{ type: 'entry_appended', entry: message('early-hub', 'Early hub history') }],
+        dropped: 0,
+      });
+      expect(sessionStoreFor(sessionId).state.entries).toEqual([expect.objectContaining({ id: 'early-hub' })]);
+      await transcript.initialize();
+      const store = sessionStoreFor(sessionId);
+      const canonical = store.state.entries;
+      expect(canonical).toHaveLength(2);
+      for (let replay = 0; replay < 2; replay++) {
+        socketState.handlers?.onFrame({
+          type: 'session_backlog',
+          sessionId,
+          frames: kind === 'empty' ? [] : [{ type: 'entry_appended', entry: notice }],
+          dropped: 0,
+        });
+        expect(store.state.entries).toEqual(canonical);
+        expect(store.state.restoredIds).toContain('notice-1');
+      }
+      socketState.handlers?.onFrame({
+        type: 'session_backlog',
+        sessionId,
+        frames: [{ type: 'entry_appended', entry: message('hub-only', 'Not canonical') }],
+        dropped: 0,
+      });
+      expect(store.state.entries).toEqual(canonical);
+      // Canonical events must still append, rather than being suppressed as a typed snapshot.
+      transcript.publish({
+        snapshot: {
+          id: sessionId,
+          cwd: '/repo',
+          createdAt: 0,
+          updatedAt: 1,
+          phase: 'idle',
+          model: { provider: 'test-provider', id: 'test' },
+          thinkingLevel: 'medium',
+          fastMode: false,
+          attached: true,
+          locked: false,
+          revision: 1,
+          queuedSteer: [],
+          queuedSteerCount: 0,
+        },
+        progress: null,
+        presentation: {
+          revision: 1,
+          dropped: 0,
+          projections: [],
+          events: [{ sequence: 1, frame: { type: 'entry_appended', entry: message('live-1', 'Live') } }],
+        },
+      });
+      expect(store.state.entries.at(-1)).toMatchObject({ id: 'live-1', text: 'Live' });
+      read.mockResolvedValueOnce({ ...page, entries: [message('older-1', 'Older')], olderCursor: null });
+      expect(requestOlderHistory(sessionId)).toBe(true);
+      await vi.waitFor(() => expect(store.state.entries[0]?.id).toBe('older-1'));
+      expect(read.mock.calls.at(-1)?.[0]).toEqual({ cursor: '1', direction: 'older' });
+      // A new canonical window is replacement, not hub preservation.
+      read.mockResolvedValueOnce({ ...page, entries: [message('replacement-1', 'Replacement')], olderCursor: null });
+      await transcript.initialize();
+      expect(store.state.entries).toEqual([expect.objectContaining({ id: 'replacement-1', text: 'Replacement' })]);
+      read.mockResolvedValueOnce({ ...page, entries: [], olderCursor: null });
+      await transcript.initialize();
+      socketState.handlers?.onFrame({
+        type: 'session_backlog',
+        sessionId,
+        frames: [{ type: 'entry_appended', entry: message('stale-hub', 'Old branch') }],
+        dropped: 0,
+      });
+      expect(store.state.entries).toEqual([]);
+      transcript.dispose();
+      socketState.handlers?.onFrame({
+        type: 'session_backlog',
+        sessionId,
+        frames: [{ type: 'entry_appended', entry: message('fallback-1', 'Fallback') }],
+        dropped: 0,
+      });
+      expect(store.state.entries).toEqual([expect.objectContaining({ id: 'fallback-1', text: 'Fallback' })]);
+    } finally {
+      transcript.dispose();
+      stop();
+      dropSessionStore(sessionId);
+    }
+  });
+  it('uses hub replacement until a canonical page succeeds', async () => {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    const sessionId = 'unready-paged-backlog';
+    const stop = startSessionRuntime();
+    const transcript = createPagedTranscript(
+      sessionId,
+      { readTranscriptPage: vi.fn().mockRejectedValue(new Error('unavailable')) },
+      (key, frame, replay) => socketState.presentation?.(key, frame, replay),
+      BACKGROUND_CONTEXT,
+    );
+    try {
+      await expect(transcript.initialize()).rejects.toThrow('unavailable');
+      applySessionFrame(sessionId, {
+        type: 'entry_appended',
+        entry: {
+          type: 'message',
+          id: 'old',
+          message: { role: 'user', content: 'Old' },
+        },
+      });
+      socketState.handlers?.onFrame({ type: 'session_backlog', sessionId, frames: [], dropped: 0 });
+      expect(sessionStoreFor(sessionId).state.entries).toEqual([]);
+    } finally {
+      transcript.dispose();
+      stop();
+      dropSessionStore(sessionId);
+    }
+  });
   it('does not query session facts before the independent protocol attachment is ready', () => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
     socketState.protocolReady = false;

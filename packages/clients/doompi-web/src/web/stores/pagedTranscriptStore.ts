@@ -221,7 +221,7 @@ export function createPagedTranscript(
     });
     return true;
   };
-  const unbind = bindHistoryReader(sessionId, request);
+  const unbind = bindHistoryReader(sessionId, request, () => pages.length > 0);
   return {
     initialize: () => load('latest'),
     publish(state: SessionServiceState) {
