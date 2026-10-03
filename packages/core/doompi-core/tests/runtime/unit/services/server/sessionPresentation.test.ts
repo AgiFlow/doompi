@@ -57,6 +57,29 @@ describe('session presentation replay', () => {
     ).toBeUndefined();
   });
 
+  it('retains start.partial as an aggregate while keeping ordinary deltas compact', () => {
+    const projection = createSessionPresentation();
+    const partial = {
+      role: 'assistant',
+      timestamp: 100,
+      content: [
+        { type: 'text', text: 'aggregate' },
+        { type: 'thinking', thinking: 'reason' },
+      ],
+    };
+    const state = projection.record({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'start', partial },
+      usage: { cost: { total: 0.07 } },
+    });
+    expect(state?.events[0]?.frame).toEqual({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'start' },
+      message: partial,
+      usage: { cost: { total: 0.07 } },
+    });
+  });
+
   it('keeps in-flight usage while removing the full assistant message', () => {
     const projection = createSessionPresentation();
     const state = projection.record({

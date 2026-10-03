@@ -646,9 +646,20 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
               message: { id: assistantDraft.id, role: 'assistant', content: [] },
             });
         }
-        if (assistantEvent.type === 'text_delta' && typeof assistantEvent.delta === 'string')
+        const aggregate =
+          typeof frame.message === 'object' && frame.message !== null
+            ? (frame.message as Frame)
+            : typeof assistantEvent.partial === 'object' && assistantEvent.partial !== null
+              ? (assistantEvent.partial as Frame)
+              : undefined;
+        if (aggregate && Array.isArray(aggregate.content))
+          assistantDraft.text = aggregate.content
+            .filter((block): block is Frame => typeof block === 'object' && block !== null)
+            .map((block) => (block.type === 'text' && typeof block.text === 'string' ? block.text : ''))
+            .join('');
+        else if (assistantEvent.type === 'text_delta' && typeof assistantEvent.delta === 'string')
           assistantDraft.text += assistantEvent.delta;
-        const message = {
+        const message = aggregate ?? {
           id: assistantDraft.id,
           role: 'assistant',
           content: [{ type: 'text', text: assistantDraft.text }],
@@ -661,6 +672,8 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
           });
         return;
       }
+      // Explicit provider completion supersedes the synthetic delta-only completion.
+      if (frame.type === 'message_end') assistantDraft = undefined;
       if (frame.type === 'agent_start') {
         lifecycle = {
           ...lifecycle,

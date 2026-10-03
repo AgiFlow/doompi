@@ -59,6 +59,8 @@ export function createSessionPresentation() {
           raw = {
             type: 'message_update',
             assistantMessageEvent: delta,
+            // Aggregate starts have no delta to reconstruct their content from.
+            ...(delta.type === 'start' && _partial ? { message: _partial } : {}),
             ...(raw.usage === undefined ? {} : { usage: raw.usage }),
           };
         }

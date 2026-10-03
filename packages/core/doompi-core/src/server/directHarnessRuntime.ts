@@ -30,7 +30,12 @@ import {
   watchEvents,
   UsageDoc,
   LiveDoc,
+  InboxDoc,
   AgentDoc,
+  UserEntry,
+  type Tx,
+  type CompactionResult,
+  type TaskId,
   type Conversation,
   type Cursor,
   type EntryRecord,
@@ -86,12 +91,18 @@ type Retained = Omit<DirectHarnessQueuedInput, 'disposition'> & {
   attempt?: number;
   submissionMode?: 'steer' | 'followUp' | 'reject' | 'write';
 } & { submissionId?: number; conversationId?: number; message?: AgentMessage; operationId?: string };
+type InternalDeliveryRecord = {
+  message: AgentMessage;
+  conversationId: number;
+  submissionId?: number;
+};
 type LifecycleRecord = {
   revision: number;
   paused: boolean;
   abortOperationId?: string;
   abortTaskId?: number;
   queue: Retained[];
+  internalDeliveries?: Record<string, InternalDeliveryRecord>;
 };
 
 function nativeId<T extends number>(id: string): T {
@@ -432,16 +443,43 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
                       typeof data?.inputRequestId === 'string'
                         ? await storage.storage.submissionByRequest(conversation.id, data.inputRequestId, ctx)
                         : undefined;
-                    const target =
-                      receipt && 'entry' in receipt && receipt.entry !== undefined ? receipt.entry : raw.id;
-                    const model = view.entries.find((candidate) => candidate.id === target)?.model;
-                    if (model?.length === 1) customByEntry.set(target, entry.message);
+                    const fallback =
+                      receipt?.status === 'unanswered' &&
+                      !('entry' in receipt && receipt.entry !== undefined) &&
+                      typeof data?.inputRequestId === 'string'
+                        ? await storage.storage.submissionByRequest(
+                            conversation.id,
+                            `${data.inputRequestId}:context`,
+                            ctx,
+                          )
+                        : undefined;
+                    const placed = fallback ?? receipt;
+                    const placedEntry =
+                      placed && 'entry' in placed && placed.entry !== undefined
+                        ? view.entries.find((candidate) => candidate.id === placed.entry)
+                        : undefined;
+                    const target = placedEntry?.edits?.some((edit) => edit.target === raw.id)
+                      ? raw.id
+                      : (placedEntry?.id ?? raw.id);
+                    const contributions =
+                      view.contributions[view.entries.findIndex((candidate) => candidate.id === target)];
+                    const original = placedEntry?.edits?.find(
+                      (edit) => edit.target === raw.id && edit.action === 'replace',
+                    );
+                    const model =
+                      original?.messages ?? view.entries.find((candidate) => candidate.id === target)?.model;
+                    if (
+                      model?.length === 1 &&
+                      contributions?.length === 1 &&
+                      JSON.stringify(model[0]) === JSON.stringify(contributions[0])
+                    )
+                      customByEntry.set(target, entry.message);
                   }
                   for (const [index, raw] of view.entries.entries()) {
                     const custom = customByEntry.get(raw.id);
                     for (const native of view.contributions[index] ?? []) {
                       const key = JSON.stringify(native);
-                      const message = custom && key === JSON.stringify(raw.model?.[0]) ? custom : native;
+                      const message = custom && view.contributions[index]?.length === 1 ? custom : native;
                       const contributions = contextContributions.get(key) ?? [];
                       contributions.push(message);
                       contextContributions.set(key, contributions);
@@ -633,6 +671,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         }, context),
       );
     let userAdmission = false;
+    let userAdmissionSettled: Promise<void> = Promise.resolve();
+    let releaseUserAdmission: (() => void) | undefined;
     const guardUserAdmission = () => {
       if (userAdmission) throw new Error('A user interruption is already being admitted');
     };
@@ -681,6 +721,38 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     let watcher: AgentEventStream;
     let eventsSettled = Promise.resolve();
     let settling = 0;
+    const admittingInternal = new Set<string>();
+    const reconcilingInternal = new Map<string, Promise<void>>();
+    const internalDelivery = new Map<SubmissionId, { done: Promise<void>; resolve: () => void }>();
+    const deliveredInputs = new Set<SubmissionId>();
+    const nextTurnMessages: AgentMessage[] = [];
+    let deferredInternalCount = 0;
+    const flushNextTurn = async () => {
+      const staged = nextTurnMessages.splice(0);
+      for (let index = 0; index < staged.length; index++) {
+        const message = staged[index]!;
+        try {
+          await writable(() =>
+            conversation.submit(
+              {
+                type: 'write',
+                requestId: randomUUID(),
+                entry: {
+                  kind: 'doompi.entry',
+                  data: json({ type: 'message', message }),
+                  model: convertToLlm([message]),
+                },
+              },
+              context,
+            ),
+          );
+        } catch (error) {
+          nextTurnMessages.unshift(...staged.slice(index));
+          throw error;
+        }
+      }
+    };
+    let logicalLoopActive = false;
     let lastAssistant: AssistantMessage | undefined;
     let partial: AssistantMessage | undefined;
     let toolResults: ToolResultMessage[] = [];
@@ -696,6 +768,39 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       if (watcher) await watcher.stop();
       watcher = await watchEvents(harness, conversation.id, context);
       let predecessor = watcher.snapshot.entries.at(-1)?.id;
+      const customSources = new Map<string, AgentMessage>();
+      const generatedSources = new Map<EntryId, AgentMessage | undefined>();
+      const rememberCustom = (raw: EntryRecord) => {
+        const projected = projectDurableEntries([raw])[0];
+        const data = raw.data && typeof raw.data === 'object' && !Array.isArray(raw.data) ? raw.data : undefined;
+        if (
+          projected?.type === 'message' &&
+          projected.message.role === 'custom' &&
+          typeof data?.inputRequestId === 'string'
+        )
+          customSources.set(data.inputRequestId, projected.message);
+      };
+      for (const raw of watcher.snapshot.entries) rememberCustom(raw);
+      for (const requestId of customSources.keys()) {
+        const receipt = await storage.storage.submissionByRequest(conversation.id, requestId, context);
+        if (receipt && receipt.status !== 'queued') customSources.delete(requestId);
+      }
+      const generatedEntrySource = async (raw: EntryRecord, ctx: Context) => {
+        if (generatedSources.has(raw.id)) return generatedSources.get(raw.id);
+        let source: AgentMessage | undefined;
+        if (raw.model?.[0]?.role === 'user')
+          for (const [requestId, custom] of customSources) {
+            const receipt = await storage.storage.submissionByRequest(conversation.id, requestId, ctx);
+            if (receipt && 'entry' in receipt && receipt.entry === raw.id) {
+              source = custom;
+              customSources.delete(requestId);
+              break;
+            }
+          }
+        generatedSources.set(raw.id, source);
+        while (generatedSources.size > 128) generatedSources.delete(generatedSources.keys().next().value!);
+        return source;
+      };
       lastAssistant = undefined;
       partial = undefined;
       toolResults = [];
@@ -708,7 +813,9 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
             toolResults = [];
           }
           if (event.type === 'message_end' || event.type === 'entry_appended') {
+            rememberCustom(event.entry);
             const entry = projectDurableEntries([event.entry])[0];
+            await generatedEntrySource(event.entry, eventContext);
             if (entry) {
               entry.parentId = predecessor === undefined ? null : String(predecessor);
               const added: HarnessEvent = { type: 'entry_added', entry };
@@ -724,7 +831,13 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
             mapped = { type: 'message_start', message: event.message };
           }
           if (event.type === 'message_end' && event.entry.model?.[0]) {
-            const message = event.entry.model[0];
+            const projected = projectDurableEntries([event.entry])[0];
+            if (projected?.type === 'custom' && projected.customType === 'doompi.internal-context') continue;
+            const message =
+              (await generatedEntrySource(event.entry, eventContext)) ??
+              (projected?.type === 'message' && projected.message.role === 'custom'
+                ? projected.message
+                : event.entry.model[0]);
             if (message.role === 'assistant') lastAssistant = message;
             if (message.role === 'toolResult') toolResults.push(message);
             mapped = { type: 'message_end', message, entryId: String(event.entry.id), runId: String(conversation.id) };
@@ -794,14 +907,35 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
                 details: event.details,
               },
             };
-          if (event.type === 'compaction_end')
+          if (event.type === 'compaction_end') {
+            const receipt = await harness.waitForTask(event.taskId as TaskId<CompactionResult>, eventContext);
+            const outcome = receipt.state.outcome;
+            const result = outcome.status === 'completed' ? outcome.result : undefined;
+            const summary = result?.submissionId
+              ? await harness.submission(result.submissionId, eventContext)
+              : undefined;
+            const status = await summary?.status(eventContext);
+            const entryId = result?.entryId ?? (status && 'entry' in status ? status.entry : undefined);
             mapped = {
               type: 'compaction_end',
-              status: 'completed',
+              status:
+                outcome.status === 'completed'
+                  ? result?.entryId !== undefined || result?.submissionId !== undefined
+                    ? 'completed'
+                    : 'aborted'
+                  : outcome.status === 'aborted'
+                    ? 'aborted'
+                    : 'failed',
               reason: event.reason,
-              entryId: (await readEntries()).entries.findLast((e) => e.type === 'compaction')?.id ?? '',
-              error: new Error('Compaction failed'),
+              entryId: entryId === undefined ? undefined : String(entryId),
+              error:
+                outcome.status !== 'completed' && outcome.status !== 'aborted'
+                  ? new Error(
+                      'error' in outcome ? (outcome.error?.message ?? 'Compaction failed') : 'Compaction failed',
+                    )
+                  : undefined,
             };
+          }
           if (event.type === 'inbox_update')
             mapped = { type: 'queue_update', queues: event.items.map((item) => ({ kind: item.mode })) };
           if (event.type === 'message_end') {
@@ -866,6 +1000,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
                 const lifecycle = await readLifecycle();
                 emit({ type: 'lifecycle_update', lifecycle });
                 if (!lifecycle.operation) {
+                  logicalLoopActive = false;
                   emit({ type: 'agent_end', runId: settledEvent.runId });
                   emit({ type: 'agent_settled', ...settledEvent });
                 }
@@ -873,6 +1008,12 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
               .catch((error) => emit({ type: 'error', code: 'settled_event', error: String(error) }))
               .finally(async () => {
                 release();
+                if (event.type === 'run_end')
+                  for (const id of event.inputs) {
+                    deliveredInputs.add(id);
+                    internalDelivery.get(id)?.resolve();
+                  }
+                while (deliveredInputs.size > 128) deliveredInputs.delete(deliveredInputs.values().next().value!);
                 try {
                   await publish();
                 } catch (error) {
@@ -881,23 +1022,135 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
                 // Do not await drain here: drain waits for this settlement chain.
                 void drain().catch((error) => emit({ type: 'error', code: 'drain', error: String(error) }));
               });
-          } else
-            eventsSettled = eventsSettled.then(async () => {
-              publishMapped(mapped!);
-              if (mapped!.type === 'run_start') {
-                emit({ type: 'agent_start' });
-                await publish().catch((error) =>
-                  emit({ type: 'error', code: 'lifecycle_update', error: String(error) }),
-                );
-              }
-              await deliver(mapped!, eventContext);
-            });
+          } else {
+            // Protocol publication must not wait for extension hooks on earlier events.
+            publishMapped(mapped);
+            if (mapped.type === 'run_start') {
+              if (!logicalLoopActive) emit({ type: 'agent_start' });
+              logicalLoopActive = true;
+              void publish().catch((error) => emit({ type: 'error', code: 'lifecycle_update', error: String(error) }));
+            }
+            const delivered = mapped;
+            eventsSettled = eventsSettled.then(() => deliver(delivered, eventContext));
+          }
         }
       });
     };
     await attach();
+    const reconcileInternal = (requestId: string, item: InternalDeliveryRecord): Promise<void> => {
+      const existing = reconcilingInternal.get(requestId);
+      if (existing) return existing;
+      const work = (async () => {
+        if (admittingInternal.has(requestId)) return;
+        const target =
+          item.conversationId === conversation.id
+            ? conversation
+            : await harness.conversation(item.conversationId as typeof conversation.id, context);
+        if (!target) throw new Error('Internal delivery conversation is unavailable');
+        let receipt = await storage.storage.submissionByRequest(target.id, requestId, context);
+        // A failed native run can strand queued inputs. Never withdraw from a surviving run.
+        if (receipt?.status === 'queued' && !(await harness.snapshot(LiveDoc, target.id, context))?.run) {
+          await harness.abortSubmission(receipt.id, context);
+          receipt = await storage.storage.submissionByRequest(target.id, requestId, context);
+        }
+        if (receipt?.status === 'queued') return;
+        if (!receipt || (receipt.status === 'unanswered' && receipt.entry === undefined)) {
+          if ((await harness.snapshot(LiveDoc, target.id, context))?.run) return;
+          let envelope =
+            item.message.role === 'custom'
+              ? await storage.storage.submissionByRequest(target.id, `${requestId}:message`, context)
+              : undefined;
+          if (item.message.role === 'custom' && !envelope) {
+            await (
+              await writable(() =>
+                target.submit(
+                  {
+                    type: 'write',
+                    requestId: `${requestId}:message`,
+                    entry: {
+                      kind: 'doompi.entry',
+                      data: json({
+                        type: 'message',
+                        message: item.message,
+                        timestamp: item.message.timestamp,
+                        inputRequestId: requestId,
+                      }),
+                    },
+                  },
+                  context,
+                ),
+              )
+            ).wait(context);
+            envelope = await storage.storage.submissionByRequest(target.id, `${requestId}:message`, context);
+          }
+          if (envelope?.status === 'queued') {
+            // An idle passive write places surviving queued envelope writes, without admitting input.
+            await (
+              await writable(() =>
+                target.submit(
+                  {
+                    type: 'write',
+                    requestId: `${requestId}:message-placement`,
+                    entry: { kind: 'doompi.internal-delivery' },
+                  },
+                  context,
+                ),
+              )
+            ).wait(context);
+            envelope = await storage.storage.submissionByRequest(target.id, `${requestId}:message`, context);
+          }
+          const envelopeId = envelope && 'entry' in envelope ? envelope.entry : undefined;
+          const draft: Parameters<Conversation['submit']>[0] = {
+            type: 'write',
+            requestId: `${requestId}:context`,
+            entry: {
+              kind: 'doompi.entry',
+              data: json(
+                item.message.role === 'custom'
+                  ? { type: 'custom', customType: 'doompi.internal-context', data: { inputRequestId: requestId } }
+                  : { type: 'message', message: item.message },
+              ),
+              ...(envelopeId === undefined
+                ? { model: convertToLlm([item.message]) }
+                : {
+                    edits: [{ target: envelopeId, action: 'replace' as const, messages: convertToLlm([item.message]) }],
+                  }),
+            },
+          };
+          let fallback;
+          try {
+            fallback = await writable(() => target.submit(draft, context));
+          } catch (error) {
+            const accepted = await storage.storage.submissionByRequest(target.id, `${requestId}:context`, context);
+            fallback = accepted && (await harness.submission(accepted.id, context));
+            if (!fallback) throw error;
+          }
+          if ((await fallback.wait(context)).status !== 'done') throw new Error('Internal context write failed');
+        }
+        await changeRecord((r) => {
+          delete r.internalDeliveries?.[requestId];
+        });
+      })().finally(() => {
+        reconcilingInternal.delete(requestId);
+      });
+      reconcilingInternal.set(requestId, work);
+      return work;
+    };
     const reconcile = async () => {
       const record = await readRecord();
+      // Withdraw all stranded internal inputs before any passive write can flush an idle native inbox.
+      for (const [requestId, item] of Object.entries(record.internalDeliveries ?? {})) {
+        if (admittingInternal.has(requestId)) continue;
+        if ((await harness.snapshot(LiveDoc, item.conversationId as typeof conversation.id, context))?.run) continue;
+        const receipt = await storage.storage.submissionByRequest(
+          item.conversationId as typeof conversation.id,
+          requestId,
+          context,
+        );
+        if (receipt?.status === 'queued') await harness.abortSubmission(receipt.id, context);
+      }
+      for (const [requestId, item] of Object.entries(record.internalDeliveries ?? {}))
+        await reconcileInternal(requestId, item);
       for (const item of record.queue) {
         if (item.disposition !== 'handoff' && item.disposition !== 'uncertain') continue;
         const submission = item.submissionId
@@ -1069,6 +1322,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           delete r.abortTaskId;
         });
       }
+      await flushNextTurn();
       const { id } = await enqueue(message, images, mode ?? 'nextRun', 'automatic');
       const submission = await handoff(
         (await readRecord()).queue.find((q) => q.id === id)!,
@@ -1080,7 +1334,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         await eventsSettled;
         await reconcile();
         await publish();
-        if (status.status === 'unanswered' && !['aborted', 'withdrawn'].includes(status.reason))
+        if (status.status === 'unanswered' && status.reason !== 'aborted')
           throw new Error(`Agent submission failed: ${status.reason}`);
         await drain();
       })();
@@ -1113,6 +1367,135 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       await writable(() => conversation.abort(context));
       await eventsSettled;
     };
+    // Host-owned admission uses only public Tx operations. Target validation and both
+    // lifecycle/native ownership move on the same Session mutation line.
+    const admitSelected = async (selection: { id: string; operationId?: string }, replay = false) =>
+      writable(() =>
+        harness.commit(async (tx: Tx) => {
+          const doc = await tx.doc(LifecycleDoc);
+          const record = JSON.parse(doc.json) as LifecycleRecord;
+          const q = record.queue.find((q) => q.id === selection.id);
+          if (!q) return 'not_found' as const;
+          const requestId = `${q.id}:${q.attempt ?? 0}`;
+          // An accepted request survives completion/replacement and a lost acknowledgement.
+          const accepted = await tx.submissionByRequest(conversation.id, requestId);
+          if (accepted && accepted.type !== 'input')
+            throw new Error(`Request ${requestId} already identifies a submission of type ${accepted.type}`);
+          if (accepted && replay) return accepted.id;
+          if (q.disposition === 'removed' || q.disposition === 'consumed') return 'not_found' as const;
+          if (accepted || q.disposition !== 'pending') return 'in_flight' as const;
+          const live = await tx.doc(LiveDoc, conversation.id);
+          const task = live.run ? await tx.task(live.run.taskId) : undefined;
+          if (
+            (live.run ? String(live.run.inputs[0]) : undefined) !== selection.operationId ||
+            task?.abortRequested ||
+            (live.run && record.abortOperationId === selection.operationId)
+          )
+            return 'target_changed' as const;
+          if (!live.run) {
+            let page = await tx.scanTasks(
+              { conversationId: conversation.id, kind: CompactionTask.definition.name, background: false },
+              128,
+            );
+            while (true) {
+              if (page.items.some((task) => task.state.status !== 'terminal')) return 'target_changed' as const;
+              if (!page.next) break;
+              page = await tx.scanTasks(
+                { conversationId: conversation.id, kind: CompactionTask.definition.name, background: false },
+                128,
+                page.next,
+              );
+            }
+          }
+          const content = input(q.message ?? q.text, q.images);
+          const inbox = await tx.doc(InboxDoc, conversation.id);
+          // Native final boundaries read the active head before any table writes.
+          let head = live.run ? undefined : (await tx.latestHeadMarker(conversation.id))?.head;
+          const now = Date.now();
+          let id: SubmissionId;
+          if (!live.run && inbox.items.length === 0) {
+            const entry = await tx.appendEntry(UserEntry, conversation.id, {
+              model: [{ role: 'user', content, timestamp: now }],
+            });
+            id = (
+              await tx.createSubmission({
+                conversationId: conversation.id,
+                requestId,
+                type: 'input',
+                status: 'placed',
+                entry: entry.id,
+              })
+            ).id;
+            live.run = {
+              taskId: await tx.createTask(
+                GenerationTask,
+                {},
+                { ownership: { kind: 'conversation' }, conversationId: conversation.id },
+              ),
+              inputs: [id],
+            };
+          } else {
+            id = (
+              await tx.createSubmission({ conversationId: conversation.id, requestId, type: 'input', status: 'queued' })
+            ).id;
+            inbox.items.push({ id, mode: 'steer', content: json(content) as typeof content });
+            if (!live.run) {
+              // Preserve native write-first placement, stale heads, queue modes and
+              // positional input order rather than restarting just the selected input.
+              const writes = inbox.items.flatMap((item, index) => (item.mode === 'write' ? [index] : []));
+              const pick = (mode: 'steer' | 'followUp') => {
+                const indexes = inbox.items.flatMap((item, index) => (item.mode === mode ? [index] : []));
+                const queueMode = mode === 'steer' ? settings.steeringMode : settings.followUpMode;
+                return queueMode === 'all' ? indexes : indexes.slice(0, 1);
+              };
+              const users = [...pick('steer'), ...pick('followUp')].sort((a, b) => a - b);
+              for (const index of writes) {
+                const item = inbox.items[index]!;
+                if (item.mode !== 'write') continue;
+                // Public InboxDoc represents native write drafts as JsonObject.
+                const draft = item.entry as unknown as Extract<
+                  Parameters<Conversation['submit']>[0],
+                  { type: 'write' }
+                >['entry'];
+                if (typeof draft.head === 'number' && head !== undefined && draft.head < head) {
+                  tx.settleSubmission(item.id, { status: 'unanswered', reason: 'stale' });
+                  continue;
+                }
+                const entry = await tx.appendEntry(conversation.id, draft);
+                if (draft.head !== undefined) head = draft.head === 'self' ? entry.id : draft.head;
+                tx.placeSubmission(item.id, entry.id);
+              }
+              const inputs: SubmissionId[] = [];
+              for (const index of users) {
+                const item = inbox.items[index]!;
+                if (item.mode === 'write') continue;
+                const entry = await tx.appendEntry(UserEntry, conversation.id, {
+                  model: [{ role: 'user', content: item.content, timestamp: now }],
+                });
+                tx.placeSubmission(item.id, entry.id);
+                inputs.push(item.id);
+              }
+              for (const index of [...writes, ...users].sort((a, b) => b - a)) inbox.items.splice(index, 1);
+              if (inputs.length)
+                live.run = {
+                  taskId: await tx.createTask(
+                    GenerationTask,
+                    {},
+                    { ownership: { kind: 'conversation' }, conversationId: conversation.id },
+                  ),
+                  inputs,
+                };
+            }
+          }
+          q.disposition = 'handoff';
+          q.conversationId = conversation.id;
+          q.submissionMode = 'steer';
+          q.submissionId = id;
+          record.revision++;
+          doc.json = JSON.stringify(record);
+          return id;
+        }, context),
+      );
     const submitUserPrompt = async (
       message: string | Extract<AgentMessage, { role: 'user' }>,
       images?: ImageContent[],
@@ -1131,8 +1514,42 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         return { settled: Promise.resolve(), handledCommand: true };
       guardUserAdmission();
       userAdmission = true;
+      userAdmissionSettled = new Promise<void>((resolve) => {
+        releaseUserAdmission = resolve;
+      });
       let claimed: Retained | undefined;
       try {
+        if (selection && submissionMode === 'steer') {
+          let admitted;
+          try {
+            admitted = await admitSelected(selection);
+          } catch (error) {
+            // Re-enter the line to find an accepted request before rechecking its target.
+            const accepted = await storage.storage.submissionByRequest(
+              conversation.id,
+              `${selection.id}:${(await readRecord()).queue.find((q) => q.id === selection.id)?.attempt ?? 0}`,
+              context,
+            );
+            if (!accepted) throw error;
+            admitted = await admitSelected(selection, true);
+          }
+          if (typeof admitted === 'string') return { settled: Promise.resolve(), queueOutcome: admitted };
+          const submission = await harness.submission(admitted, context);
+          if (!submission) throw new Error('Accepted promotion submission is missing');
+          const settled = (async () => {
+            const status = await submission.wait(context);
+            await eventsSettled;
+            await reconcile();
+            await publish();
+            if (status.status === 'unanswered' && status.reason !== 'aborted')
+              throw new Error(`Agent submission failed: ${status.reason}`);
+            await drain();
+          })();
+          void settled.catch((error) => emit({ type: 'error', code: 'user_prompt', error: String(error) }));
+          await reconcile();
+          await publish();
+          return { settled };
+        }
         const current = await execution();
         if (selection) {
           const outcome = await changeRecord((r) => {
@@ -1157,6 +1574,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           await conversation.waitForIdle(context);
           await eventsSettled;
         }
+        if (!selection) await flushNextTurn();
         if (!claimed) {
           const { id } = await enqueue(
             message,
@@ -1180,7 +1598,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           await eventsSettled;
           await reconcile();
           await publish();
-          if (status.status === 'unanswered' && !['aborted', 'withdrawn'].includes(status.reason))
+          if (status.status === 'unanswered' && status.reason !== 'aborted')
             throw new Error(`Agent submission failed: ${status.reason}`);
           await drain();
         })();
@@ -1191,6 +1609,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         if (claimed) userClaims.delete(claimed.id);
         if (selection) userClaims.delete(selection.id);
         userAdmission = false;
+        releaseUserAdmission?.();
+        releaseUserAdmission = undefined;
       }
     };
     const recover = async () => {
@@ -1374,6 +1794,10 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         const agent = await conversation.agent(context);
         const metadata = await harness.snapshot(SessionMetadataDoc, context);
         const stats = await getSessionStats();
+        const inbox = await harness.snapshot(InboxDoc, conversation.id, context);
+        const retainedSubmissions = new Set((await readRecord()).queue.map((item) => item.submissionId));
+        const nativePending =
+          inbox?.items.filter((item) => item.mode !== 'write' && !retainedSubmissions.has(item.id)).length ?? 0;
         return json({
           sessionId,
           sessionFile: storage.sessionFile,
@@ -1391,7 +1815,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           followUpMode: settings.followUpMode ?? 'one-at-a-time',
           autoCompactionEnabled: settings.compaction?.enabled ?? true,
           messageCount: stats.messageCount,
-          pendingMessageCount: lifecycle.queue.length,
+          pendingMessageCount: lifecycle.queue.length + nativePending + nextTurnMessages.length + deferredInternalCount,
         }) as Record<string, unknown>;
       },
       enqueueAutomatic: async (value, images) => {
@@ -1716,12 +2140,47 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         ).settled;
       },
       admitMessage: (message) => admit(message),
-      submitInternalMessage: async (message, delivery = 'followUp') => {
+      submitInternalMessage: async function submitInternalMessage(
+        message,
+        delivery = 'steer',
+        requestId = randomUUID(),
+      ) {
         if (typeof message !== 'string' && message.role !== 'user' && message.role !== 'custom')
           throw new Error('Internal input must be user or custom message content');
+        if (delivery === 'nextTurn') {
+          nextTurnMessages.push(
+            typeof message === 'string' ? { role: 'user', content: message, timestamp: Date.now() } : message,
+          );
+          return { settled: Promise.resolve() };
+        }
+        const preserved: AgentMessage =
+          typeof message === 'string' ? { role: 'user', content: message, timestamp: Date.now() } : message;
+        const deliveryRecord: InternalDeliveryRecord = { message: preserved, conversationId: conversation.id };
+        if (userAdmission) {
+          deferredInternalCount++;
+          admittingInternal.add(requestId);
+          try {
+            await changeRecord((r) => {
+              (r.internalDeliveries ??= {})[requestId] = deliveryRecord;
+            });
+          } catch (error) {
+            deferredInternalCount--;
+            admittingInternal.delete(requestId);
+            throw error;
+          }
+          const released = userAdmissionSettled;
+          const settled = released.then(async () => {
+            deferredInternalCount--;
+            admittingInternal.delete(requestId);
+            await (
+              await submitInternalMessage(preserved, delivery, requestId)
+            ).settled;
+          });
+          void settled.catch((error) => emit({ type: 'error', code: 'internal_message', error: String(error) }));
+          return { settled };
+        }
         if (external) throw new Error('An operation is already running');
         const content = typeof message === 'string' ? message : message.content;
-        const requestId = randomUUID();
         const submit = async (draft: Parameters<Conversation['submit']>[0] & { requestId: string }) => {
           try {
             return await writable(() => conversation.submit(draft, context));
@@ -1732,26 +2191,54 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
             return submission;
           }
         };
+        admittingInternal.add(requestId);
         // Preserve custom presentation metadata without adding its content twice to model context.
-        const envelope =
-          typeof message !== 'string' && message.role === 'custom'
-            ? await submit({
-                type: 'write',
-                requestId: `${requestId}:message`,
-                entry: {
-                  kind: 'doompi.entry',
-                  data: json({ type: 'message', message, timestamp: message.timestamp, inputRequestId: requestId }),
-                },
-              })
-            : undefined;
-        const submission = await submit({ type: 'input', content, whenBusy: delivery, requestId });
+        let envelope: Awaited<ReturnType<Conversation['submit']>> | undefined;
+        let submission: Awaited<ReturnType<Conversation['submit']>>;
+        try {
+          await changeRecord((r) => {
+            (r.internalDeliveries ??= {})[requestId] = deliveryRecord;
+          });
+          envelope =
+            typeof message !== 'string' && message.role === 'custom'
+              ? await submit({
+                  type: 'write',
+                  requestId: `${requestId}:message`,
+                  entry: {
+                    kind: 'doompi.entry',
+                    data: json({ type: 'message', message, timestamp: message.timestamp, inputRequestId: requestId }),
+                  },
+                })
+              : undefined;
+          submission = await submit({ type: 'input', content, whenBusy: delivery, requestId });
+          await changeRecord((r) => {
+            const item = r.internalDeliveries?.[requestId];
+            if (item) item.submissionId = submission.id;
+          });
+        } finally {
+          admittingInternal.delete(requestId);
+        }
+        let resolveDelivery!: () => void;
+        const delivered = new Promise<void>((resolve) => {
+          resolveDelivery = resolve;
+        });
+        internalDelivery.set(submission.id, { done: delivered, resolve: resolveDelivery });
+        if (deliveredInputs.has(submission.id)) resolveDelivery();
         const settled = (async () => {
-          if (envelope && (await envelope.wait(context)).status !== 'done')
-            throw new Error('Internal message journal write failed');
-          const status = await submission.wait(context);
-          await eventsSettled;
-          if (status.status === 'unanswered' && !['aborted', 'withdrawn'].includes(status.reason))
-            throw new Error(`Internal submission failed: ${status.reason}`);
+          try {
+            const status = await submission.wait(context);
+            if (status.status === 'unanswered' && status.entry === undefined) {
+              await conversation.waitForIdle(context);
+              await reconcileInternal(requestId, deliveryRecord);
+            }
+            if (envelope && (await envelope.wait(context)).status !== 'done')
+              throw new Error('Internal message journal write failed');
+            if (status.status === 'done' || status.entry !== undefined) await delivered;
+            await eventsSettled;
+            await reconcileInternal(requestId, deliveryRecord);
+          } finally {
+            internalDelivery.delete(submission.id);
+          }
         })();
         void settled.catch((error) => emit({ type: 'error', code: 'internal_message', error: String(error) }));
         return { settled };

@@ -24,6 +24,7 @@ import { DOOM_MCP_STATUS_SERVICE } from '../../../../../src/exports/mcpStatus';
 import { DOOM_NOTIFICATION_ENTRY_TYPE } from '../../../../../src/exports/notification';
 import type { DoomServerBundleEntry } from '../../../../../src/exports/serverFacet';
 import * as directHarnessRuntime from '../../../../../src/server/directHarnessRuntime';
+import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 import * as piExtensionHost from '../../../../../src/services/piExtensionHost';
 import { createHeadlessSessionHost } from '../../../../../src/systems/main/adapters/headlessSessionHost';
 
@@ -107,6 +108,311 @@ afterEach(async () => {
   for (const dispose of cleanup.splice(0)) await dispose();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
+});
+
+describe('real host and hub acceptance', () => {
+  async function controlledHost(candidates: DoomServerBundleEntry[] = []) {
+    const streams: ReturnType<typeof createAssistantMessageEventStream>[] = [];
+    const streamSimple = vi.fn<ModelRuntime['streamSimple']>((_model, _context, options) => {
+      const stream = createAssistantMessageEventStream();
+      streams.push(stream);
+      options?.signal?.addEventListener(
+        'abort',
+        () => {
+          stream.push({ type: 'error', reason: 'aborted', error: { ...message(''), stopReason: 'aborted' } });
+          stream.end();
+        },
+        { once: true },
+      );
+      return stream;
+    });
+    const current = await fixture([], { streamSimple, candidates });
+    await current.host.activateFacets({
+      root: current.context,
+      installedPackages: candidates.map(({ packageName }) => packageName),
+      dispose: async () => {},
+    });
+    const hub = createHeadlessHub({ manager: { closeSession: async () => {} } as never });
+    hub.register({
+      id: current.runtime.sessionId,
+      name: 'Acceptance',
+      cwd: current.host.host!.context.cwd,
+      createdAt: new Date(0).toISOString(),
+      host: current.host,
+    });
+    cleanup.push(() => hub.close());
+    function message(text: string): AssistantMessage {
+      return {
+        role: 'assistant',
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        timestamp: 100,
+        stopReason: 'stop',
+        content: [{ type: 'text', text }],
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      };
+    }
+    function finish(index: number, text: string) {
+      const response = message(text);
+      streams[index]!.push({ type: 'done', reason: 'stop', message: response });
+      streams[index]!.end();
+    }
+    return { ...current, hub, streams, streamSimple, message, finish };
+  }
+
+  it('delivers aggregate content to a delayed listener through an actual provider run', async () => {
+    const current = await controlledHost();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    cleanup.unshift(release);
+    let blocked = false;
+    current.runtime.onEvent(async (event) => {
+      if (event.type === 'message_start' && event.message.role === 'assistant') {
+        blocked = true;
+        await gate;
+      }
+    });
+    const admitted = await current.runtime.submitPrompt('Start acceptance');
+    await vi.waitFor(() => expect(current.streams).toHaveLength(1));
+    const frames: Record<string, unknown>[] = [];
+    current.host.onPresentationFrame!((frame) => frames.push(frame));
+    const partial = current.message('Already accumulated');
+    current.streams[0]!.push({ type: 'start', partial });
+    await vi.waitFor(() =>
+      expect(frames).toContainEqual(
+        expect.objectContaining({
+          type: 'message_start',
+          message: expect.objectContaining({ content: partial.content }),
+        }),
+      ),
+    );
+    expect(current.hub.session(current.runtime.sessionId)?.phase).toBe('turn');
+    await vi.waitFor(() => expect(blocked).toBe(true));
+    current.streams[0]!.push({
+      type: 'text_delta',
+      contentIndex: 0,
+      delta: ' later',
+      partial: current.message('Already accumulated later'),
+    });
+    await vi.waitFor(() =>
+      expect(frames).toContainEqual(
+        expect.objectContaining({
+          type: 'message_update',
+          message: expect.objectContaining({ content: [{ type: 'text', text: 'Already accumulated later' }] }),
+        }),
+      ),
+    );
+    expect(frames.findIndex(({ type }) => type === 'message_start')).toBeLessThan(
+      frames.findIndex(({ type }) => type === 'message_update'),
+    );
+    current.finish(0, 'Actual final reply');
+    release();
+    await admitted.settled;
+    await vi.waitFor(() => expect(current.hub.session(current.runtime.sessionId)?.phase).toBe('idle'));
+    const { entries } = await current.runtime.readEntries();
+    expect(entries.filter((entry) => entry.type === 'message' && entry.message.role === 'assistant')).toHaveLength(1);
+  });
+
+  it('delivers busy input at the next boundary and refuses a promotion aimed at the older run', async () => {
+    const current = await controlledHost();
+    const first = await current.runtime.submitPrompt('First run');
+    await vi.waitFor(() => expect(current.streams).toHaveLength(1));
+    const oldOperation = (await current.runtime.readLifecycle()).operation!.id;
+    const busy = await current.runtime.submitInternalMessage('Busy completion');
+    expect((await current.runtime.readLifecycle()).queue).toEqual([]);
+    let busySettled = false;
+    void busy.settled.then(() => {
+      busySettled = true;
+    });
+    expect(busySettled).toBe(false);
+    current.finish(0, 'First boundary');
+    await vi.waitFor(() => expect(current.streams.length).toBeGreaterThanOrEqual(2));
+    current.finish(1, 'Busy boundary');
+    await Promise.all([first.settled, busy.settled]);
+    const next = await current.runtime.submitPrompt('Replacement run');
+    await vi.waitFor(() => expect(current.streams).toHaveLength(3));
+    const queued = await current.runtime.enqueueAutomatic('Not for the replacement');
+    expect((await current.runtime.readLifecycle()).operation?.id).not.toBe(oldOperation);
+    await expect(current.runtime.promoteQueued(queued.id, oldOperation)).resolves.toBe('target_changed');
+    await expect(current.runtime.removeQueued(queued.id)).resolves.toBe('removed');
+    current.finish(2, 'Replacement boundary');
+    await next.settled;
+    await vi.waitFor(async () =>
+      expect(await current.session.activity()).toEqual({ isIdle: true, hasPendingMessages: false }),
+    );
+    const { entries } = await current.runtime.readEntries();
+    const users = entries.filter((entry) => entry.type === 'message' && entry.message.role === 'user');
+    expect(users).toHaveLength(3);
+    expect(current.hub.session(current.runtime.sessionId)?.phase).toBe('idle');
+  });
+
+  it('delivers an environmental completion received during an actual tool round to the next request', async () => {
+    const candidate: DoomServerBundleEntry = {
+      packageName: '@test/acceptance-tool',
+      entry: './server.ts',
+      module: './server.mjs',
+      scopes: ['session'],
+      required: true,
+      owners: [{ majorMode: 'test', layer: 'default' }],
+    };
+    const current = await controlledHost([candidate]);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    cleanup.unshift(release);
+    let started = false;
+    await current.context
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin((context: Context) => {
+        requireDoomHeadlessHost(context).registerTool({
+          name: 'acceptance_tool',
+          description: 'Controlled acceptance tool.',
+          parameters: Type.Object({}),
+          execute: async () => {
+            started = true;
+            await gate;
+            return { content: [{ type: 'text', text: 'Tool completed' }] };
+          },
+        });
+      })
+      .await();
+    const first = await current.runtime.submitPrompt('Execute the acceptance tool');
+    await vi.waitFor(() => expect(current.streams).toHaveLength(1));
+    current.streams[0]!.push({
+      type: 'done',
+      reason: 'toolUse',
+      message: {
+        ...current.message(''),
+        stopReason: 'toolUse',
+        content: [{ type: 'toolCall', id: 'acceptance-call', name: 'acceptance_tool', arguments: {} }],
+      },
+    });
+    current.streams[0]!.end();
+    await vi.waitFor(() => expect(started).toBe(true));
+    const completion = await current.runtime.submitInternalMessage('Environmental tool completion');
+    expect((await current.runtime.readLifecycle()).queue).toEqual([]);
+    expect(current.streams).toHaveLength(1);
+    release();
+    await vi.waitFor(() => expect(current.streams).toHaveLength(2));
+    expect(JSON.stringify(current.streamSimple.mock.calls[1]![1])).toContain('Environmental tool completion');
+    current.finish(1, 'Tool round response');
+    await Promise.all([first.settled, completion.settled]);
+    await vi.waitFor(() => expect(current.hub.session(current.runtime.sessionId)?.phase).toBe('idle'));
+  });
+
+  it('admits one logical internal successor without an operator queue row', async () => {
+    const current = await controlledHost();
+    const frames: Record<string, unknown>[] = [];
+    current.host.onPresentationFrame((frame) => frames.push(frame));
+    const first = await current.runtime.submitPrompt('Initial loop work');
+    await vi.waitFor(() => expect(current.streams).toHaveLength(1));
+    const successor = await current.runtime.submitInternalMessage('One loop successor', 'followUp');
+    expect((await current.runtime.readLifecycle()).queue).toEqual([]);
+    current.finish(0, 'First loop boundary');
+    await vi.waitFor(() => expect(current.streams).toHaveLength(2));
+    current.finish(1, 'Successor loop boundary');
+    await Promise.all([first.settled, successor.settled]);
+    await vi.waitFor(async () =>
+      expect(await current.session.activity()).toEqual({ isIdle: true, hasPendingMessages: false }),
+    );
+    expect(current.streamSimple).toHaveBeenCalledTimes(2);
+    expect(frames.filter(({ type }) => type === 'agent_start')).toHaveLength(1);
+    expect(frames.filter(({ type }) => type === 'agent_end')).toHaveLength(1);
+    expect(frames.filter(({ type }) => type === 'agent_settled')).toHaveLength(1);
+    const { entries } = await current.runtime.readEntries();
+    expect(entries.filter((entry) => entry.type === 'message' && entry.message.role === 'user')).toHaveLength(2);
+    expect((await current.runtime.readLifecycle()).queue).toEqual([]);
+  });
+
+  it.each(['abort', 'failure'] as const)(
+    'preserves internal input once after provider %s without waking another run',
+    async (outcome) => {
+      const current = await controlledHost();
+      const first = await current.runtime.submitPrompt('Interrupted request');
+      void first.settled.catch(() => undefined);
+      await vi.waitFor(() => expect(current.streams).toHaveLength(1));
+      const pending = await current.runtime.submitInternalMessage('Retained internal input', 'followUp');
+      expect((await current.runtime.readState()).pendingMessageCount).toBe(1);
+      expect(await current.session.activity()).toMatchObject({ hasPendingMessages: true });
+      if (outcome === 'abort') await current.runtime.abort();
+      else {
+        current.streams[0]!.push({
+          type: 'error',
+          reason: 'error',
+          error: { ...current.message(''), stopReason: 'error', errorMessage: 'Controlled provider failure' },
+        });
+        current.streams[0]!.end();
+      }
+      await pending.settled;
+      expect(current.streams).toHaveLength(1);
+      expect((await current.runtime.readState()).pendingMessageCount).toBe(0);
+      expect(await current.session.activity()).toEqual({ isIdle: true, hasPendingMessages: false });
+      const recovery = await current.runtime.submitPrompt('Ordinary recovery prompt');
+      await vi.waitFor(() => expect(current.streams).toHaveLength(2));
+      expect(JSON.stringify(current.streamSimple.mock.calls[1]![1]).split('Retained internal input')).toHaveLength(2);
+      current.finish(1, 'Recovered response');
+      await recovery.settled;
+    },
+  );
+
+  it('does not publish an older successful compaction as the result of a failed compaction', async () => {
+    const candidate: DoomServerBundleEntry = {
+      packageName: '@test/acceptance-compaction',
+      entry: './server.ts',
+      module: './server.mjs',
+      scopes: ['session'],
+      required: true,
+      owners: [{ majorMode: 'test', layer: 'default' }],
+    };
+    const current = await controlledHost([candidate]);
+    let attempts = 0;
+    await current.context
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin((context: Context) => {
+        requireDoomHeadlessHost(context).registerHook({
+          event: 'session_before_compact',
+          handle: () => {
+            attempts += 1;
+            if (attempts > 1) throw new Error('Acceptance compaction failed');
+            return { compaction: { summary: 'Older successful summary', tokensBefore: 42, retainedTail: [] } };
+          },
+        });
+      })
+      .await();
+    const first = await current.runtime.submitPrompt('Content to compact');
+    await vi.waitFor(() => expect(current.streams).toHaveLength(1));
+    current.finish(0, 'Compaction source');
+    await first.settled;
+    const frames: Record<string, unknown>[] = [];
+    current.runtime.onEvent((frame) => {
+      frames.push(frame);
+    });
+    await current.runtime.compact();
+    const older = (await current.runtime.readEntries()).entries.filter((entry) => entry.type === 'compaction');
+    expect(older).toHaveLength(1);
+    await current.runtime.appendMessage({
+      role: 'user',
+      content: [{ type: 'text', text: 'New content after older compaction' }],
+      timestamp: 200,
+    });
+    await expect(current.runtime.compact()).rejects.toThrow();
+    await vi.waitFor(() => expect(frames.filter(({ type }) => type === 'compaction_end')).toHaveLength(2));
+    const end = frames.filter(({ type }) => type === 'compaction_end').at(-1)!;
+    expect(end).toMatchObject({ status: 'failed' });
+    expect(end.entryId).toBeUndefined();
+    expect((await current.runtime.readEntries()).entries.filter((entry) => entry.type === 'compaction')).toEqual(older);
+  });
 });
 
 describe('session execution controls', () => {
@@ -648,7 +954,7 @@ describe('headless session facet surface', () => {
     const submitPrompt = vi.spyOn(runtime, 'submitPrompt').mockResolvedValue({ settled: Promise.resolve() });
     const submitUserPrompt = vi.spyOn(runtime, 'submitUserPrompt').mockResolvedValue({ settled: Promise.resolve() });
 
-    // Facet prompt awaits internal settlement without entering the operator queue.
+    // Facet prompts use operator preflight and await settlement.
     await session.prompt('steered', 'steer');
     await session.prompt('queued', 'followUp');
     await session.prompt('plain');
@@ -659,17 +965,60 @@ describe('headless session facet surface', () => {
     await session.admitPrompt!('admitted plain', undefined, 'operator');
     await session.admitPrompt!('interrupt now', 'interrupt', 'operator');
 
-    expect(internal.mock.calls).toEqual([
-      ['steered', 'steer'],
-      ['queued', 'followUp'],
-      ['plain', 'followUp'],
-    ]);
+    expect(internal).not.toHaveBeenCalled();
     expect(steer).not.toHaveBeenCalled();
     expect(followUp).toHaveBeenCalledExactlyOnceWith('admitted follow up');
-    expect(submitPrompt).toHaveBeenNthCalledWith(1, 'admitted steer', undefined, 'steer');
-    expect(submitPrompt).toHaveBeenNthCalledWith(2, 'admitted plain', undefined, undefined);
-    expect(submitPrompt).toHaveBeenCalledTimes(2);
+    expect(submitPrompt.mock.calls).toEqual([
+      ['steered', undefined, 'steer'],
+      ['queued', undefined, 'followUp'],
+      ['plain', undefined, undefined],
+      ['admitted steer', undefined, 'steer'],
+      ['admitted plain', undefined, undefined],
+    ]);
     expect(submitUserPrompt).toHaveBeenCalledExactlyOnceWith('interrupt now');
+  });
+
+  it('dispatches a facet prompt command without admitting a model turn', async () => {
+    const current = await fixture();
+    await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
+    vi.spyOn(current.host.host!, 'listCommands').mockReturnValue([{ name: 'inspect', description: 'Inspect state' }]);
+    const dispatch = vi.spyOn(current.host.host!, 'dispatchCommand').mockResolvedValue(undefined);
+    const internal = vi.spyOn(current.runtime, 'submitInternalMessage');
+    const stream = vi.spyOn(current.runtime, 'completeModel');
+
+    await current.session.prompt('/inspect details');
+
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith('inspect', 'details');
+    expect(internal).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+    expect((await current.runtime.readLifecycle()).queue).toEqual([]);
+  });
+
+  it('propagates operator paused-admission rejection without falling back to internal admission', async () => {
+    const { session, runtime } = await fixture();
+    vi.spyOn(runtime, 'submitPrompt').mockRejectedValue(new Error('The queue is paused'));
+    const internal = vi.spyOn(runtime, 'submitInternalMessage').mockResolvedValue({ settled: Promise.resolve() });
+
+    await expect(session.prompt('ordinary facet input')).rejects.toThrow('The queue is paused');
+    expect(internal).not.toHaveBeenCalled();
+  });
+
+  it('awaits facet prompt settlement and propagates its failure', async () => {
+    const { session, runtime } = await fixture();
+    let rejectSettlement!: (error: Error) => void;
+    const settled = new Promise<void>((_resolve, reject) => {
+      rejectSettlement = reject;
+    });
+    const submit = vi.spyOn(runtime, 'submitPrompt').mockResolvedValue({ settled });
+    const internal = vi.spyOn(runtime, 'submitInternalMessage').mockResolvedValue({ settled: Promise.resolve() });
+    const finished = vi.fn();
+    const pending = session.prompt('ordinary facet input').finally(finished);
+    const result = expect(pending).rejects.toThrow('turn failed');
+    await vi.waitFor(() => expect(submit).toHaveBeenCalledOnce());
+    expect(finished).not.toHaveBeenCalled();
+    rejectSettlement(new Error('turn failed'));
+    await result;
+    expect(internal).not.toHaveBeenCalled();
   });
 
   it('admits default internal continuations without using the operator queue', async () => {

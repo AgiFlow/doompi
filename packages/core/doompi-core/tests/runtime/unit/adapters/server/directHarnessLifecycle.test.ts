@@ -10,12 +10,13 @@ import {
   type Model,
   type Models,
 } from '@earendil-works/pi-ai';
-import { MemoryStorage, createSession, defineDoc } from '@earendil-works/pi-durable';
+import { CompactionTask, InboxDoc, LiveDoc, MemoryStorage, createSession, defineDoc } from '@earendil-works/pi-durable';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createDirectHarnessRuntime } from '../../../../../src/server/directHarnessRuntime';
 import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
+import type { Entry } from '../../../../../src/types/server/directHarnessRuntime';
 
 const model: Model<Api> = {
   id: 'lifecycle-model',
@@ -80,9 +81,61 @@ async function waitFor(condition: () => boolean | Promise<boolean>): Promise<voi
 }
 
 describe('direct harness durable lifecycle', () => {
+  it('publishes streaming frames in order while an extension listener is blocked', async () => {
+    const { repository, models, streams } = fixtures();
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let blocked = false;
+    const frames: string[] = [];
+    runtime.onPresentationFrame((frame) => frames.push(String(frame.type)));
+    runtime.onEvent(async (event) => {
+      if (event.type === 'message_end' && event.message.role === 'assistant' && !blocked) {
+        blocked = true;
+        await gate;
+      }
+    });
+    try {
+      const first = await runtime.submitPrompt('first');
+      await waitFor(() => streams.length === 1);
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('one') });
+      await waitFor(() => blocked);
+      frames.length = 0;
+      const second = await runtime.submitPrompt('second');
+      await waitFor(() => streams.length === 2);
+      await waitFor(
+        async () =>
+          !!(await runtime.harness.snapshot(LiveDoc, runtime.lane.id, BACKGROUND_CONTEXT))?.generation?.message,
+      );
+      streams[1]!.push({ type: 'text_delta', contentIndex: 0, delta: 'streamed', partial: message('streamed') });
+      await vi.waitFor(() => expect(frames).toContain('message_update'));
+      expect(frames.indexOf('message_start')).toBeGreaterThanOrEqual(0);
+      expect(frames.indexOf('message_start')).toBeLessThan(frames.indexOf('message_update'));
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('complete') });
+      release();
+      await first.settled;
+      await second.settled;
+    } finally {
+      release();
+      await runtime.dispose();
+    }
+  });
+
   it('delivers internal results without exposing or clearing them through the operator queue', async () => {
     const { repository, models, streams, streamSimple } = fixtures();
     const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    const ended: unknown[] = [];
+    const customFrames: unknown[] = [];
+    runtime.onPresentationFrame((frame) => {
+      const entry = frame.entry as Entry | undefined;
+      if (frame.type === 'entry_appended' && entry?.type === 'message' && entry.message.role === 'custom')
+        customFrames.push(entry);
+    });
+    runtime.onEvent((event) => {
+      if (event.type === 'message_end') ended.push(event.message);
+    });
     try {
       const active = await runtime.submitPrompt('operator');
       await waitFor(() => streams.length === 1);
@@ -98,6 +151,7 @@ describe('direct harness durable lifecycle', () => {
       expect((await runtime.readLifecycle()).queue.map((item) => item.text)).toEqual(['operator queued']);
       await runtime.clearQueue();
       expect((await runtime.readLifecycle()).queue).toEqual([]);
+      expect((await runtime.readState()).pendingMessageCount).toBe(1);
       streams[0]!.push({ type: 'done', reason: 'stop', message: message('one') });
       await waitFor(() => streams.length === 2);
       const context = JSON.stringify(streamSimple.mock.calls[1]![1]);
@@ -105,6 +159,10 @@ describe('direct harness durable lifecycle', () => {
       streams[1]!.push({ type: 'done', reason: 'stop', message: message('two') });
       await internal.settled;
       await active.settled;
+      expect(customFrames).toHaveLength(1);
+      expect(ended).toContainEqual(
+        expect.objectContaining({ role: 'custom', customType: 'runner-result', details: { runId: 'runner-one' } }),
+      );
       expect((await runtime.readEntries()).entries).toContainEqual(
         expect.objectContaining({
           type: 'message',
@@ -123,6 +181,157 @@ describe('direct harness durable lifecycle', () => {
             entry.type === 'message' && entry.message.role === 'user' && entry.message.content === 'runner finished',
         ),
       ).toBe(true);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it.each(['abort', 'failure', 'custom abort', 'custom failure'] as const)(
+    'preserves unplaced internal input as passive context after %s',
+    async (outcome) => {
+      const { repository, models, streams, streamSimple } = fixtures(true);
+      const contexts: unknown[] = [];
+      const runtime = await createDirectHarnessRuntime({
+        cwd: '/tmp',
+        durableStorage: repository,
+        models,
+        model,
+        transformContext: ({ messages }) => {
+          contexts.push(messages);
+          return { messages };
+        },
+      });
+      try {
+        const active = await runtime.submitPrompt('operator');
+        void active.settled.catch(() => undefined);
+        await waitFor(() => streams.length === 1);
+        const internal = await runtime.submitInternalMessage(
+          outcome.startsWith('custom')
+            ? {
+                role: 'custom',
+                customType: 'result',
+                content: 'durable result',
+                display: true,
+                details: { source: 'tool' },
+                timestamp: 1,
+              }
+            : 'durable result',
+          'followUp',
+        );
+        if (outcome.endsWith('abort')) await runtime.abort();
+        else
+          streams[0]!.push({
+            type: 'error',
+            reason: 'error',
+            error: { ...message('failed'), stopReason: 'error', errorMessage: 'provider failed' },
+          });
+        await expect(internal.settled).resolves.toBeUndefined();
+        expect(streams).toHaveLength(1);
+        expect(JSON.stringify(await runtime.lane.context(BACKGROUND_CONTEXT))).toContain('durable result');
+        if (outcome.startsWith('custom')) {
+          const custom = (await runtime.readEntries()).entries.filter(
+            (entry) =>
+              entry.type === 'message' && entry.message.role === 'custom' && entry.message.customType === 'result',
+          );
+          expect(custom).toHaveLength(1);
+        }
+        const next = await runtime.submitPrompt('ordinary prompt');
+        await waitFor(() => streams.length === 2);
+        expect(JSON.stringify(streamSimple.mock.calls[1]![1]).split('durable result')).toHaveLength(2);
+        if (outcome.startsWith('custom'))
+          expect(contexts.at(-1)).toContainEqual(
+            expect.objectContaining({
+              role: 'custom',
+              customType: 'result',
+              display: true,
+              details: { source: 'tool' },
+            }),
+          );
+        streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+        await next.settled;
+      } finally {
+        await runtime.dispose();
+      }
+    },
+  );
+
+  it('defers internal admission during interruption without blocking the end hook', async () => {
+    const { repository, models, streams, streamSimple } = fixtures(true);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let internal: { settled: Promise<void> } | undefined;
+    runtime.onEvent(async (event) => {
+      if (event.type === 'run_end' && !internal) {
+        internal = await runtime.submitInternalMessage('environmental during interruption');
+        await gate;
+      }
+    });
+    try {
+      const first = await runtime.submitPrompt('first');
+      await waitFor(() => streams.length === 1);
+      const admitting = runtime.submitUserPrompt('fresh operator');
+      await waitFor(() => !!internal);
+      expect(streams).toHaveLength(1);
+      expect((await runtime.readState()).pendingMessageCount).toBe(1);
+      const Lifecycle = defineDoc({
+        kind: 'doompi.server.lifecycle',
+        version: 1,
+        scope: 'session',
+        initial: () => ({ json: '' }),
+      });
+      const persisted = JSON.parse((await runtime.harness.snapshot(Lifecycle, BACKGROUND_CONTEXT))!.json);
+      expect(Object.values(persisted.internalDeliveries ?? {})).toContainEqual(
+        expect.objectContaining({ message: expect.objectContaining({ content: 'environmental during interruption' }) }),
+      );
+      release();
+      const replacement = await admitting;
+      await waitFor(() => streams.length === 2);
+      expect(JSON.stringify(streamSimple.mock.calls[1]![1])).not.toContain('environmental during interruption');
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('operator answer') });
+      await waitFor(() => streams.length === 3);
+      expect(JSON.stringify(streamSimple.mock.calls[2]![1])).toContain('environmental during interruption');
+      streams[2]!.push({ type: 'done', reason: 'stop', message: message('environmental answer') });
+      await internal!.settled;
+      await replacement.settled;
+      await first.settled;
+    } finally {
+      release();
+      await runtime.dispose();
+    }
+  });
+
+  it('holds nextTurn through internal and automatic runs until an ordinary user prompt', async () => {
+    const { repository, models, streams, streamSimple } = fixtures();
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    try {
+      await (
+        await runtime.submitInternalMessage(
+          { role: 'custom', customType: 'deferred', content: 'next user context', display: true, timestamp: 1 },
+          'nextTurn',
+        )
+      ).settled;
+      expect(streams).toHaveLength(0);
+      expect(JSON.stringify((await runtime.readEntries()).entries)).not.toContain('next user context');
+      expect((await runtime.readState()).pendingMessageCount).toBe(1);
+      const internal = await runtime.submitInternalMessage('environmental input');
+      await waitFor(() => streams.length === 1);
+      expect(JSON.stringify(streamSimple.mock.calls[0]![1])).not.toContain('next user context');
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('internal done') });
+      await internal.settled;
+      await runtime.nextRun('automatic input');
+      await waitFor(() => streams.length === 2);
+      expect(JSON.stringify(streamSimple.mock.calls[1]![1])).not.toContain('next user context');
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('automatic done') });
+      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
+      const ordinary = await runtime.submitPrompt('ordinary user');
+      await waitFor(() => streams.length === 3);
+      expect(JSON.stringify(streamSimple.mock.calls[2]![1]).split('next user context')).toHaveLength(2);
+      expect((await runtime.readState()).pendingMessageCount).toBe(0);
+      streams[2]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+      await ordinary.settled;
     } finally {
       await runtime.dispose();
     }
@@ -588,16 +797,17 @@ describe('direct harness durable lifecycle', () => {
       await waitFor(() => streams.length === 1);
       await runtime.followUp('pending');
       const queued = (await runtime.readLifecycle()).queue[0]!;
-      const submit = runtime.lane.submit.bind(runtime.lane);
-      vi.spyOn(runtime.lane, 'submit').mockImplementationOnce(async (draft, context) => {
+      const commit = runtime.harness.commit.bind(runtime.harness);
+      vi.spyOn(runtime.harness, 'commit').mockImplementationOnce(async (change, context) => {
+        const result = await commit(change, context);
         blocked = true;
         await gate.promise;
-        return submit(draft, context);
+        return result;
       });
       expect(queued).toMatchObject({ scheduling: 'automatic', disposition: 'pending' });
       const starting = runtime.promoteQueued(queued.id, (await runtime.readLifecycle()).operation!.id);
       await waitFor(() => blocked);
-      expect(await runtime.removeQueued(queued.id)).toBe('in_flight');
+      expect((await runtime.readLifecycle()).queue).toMatchObject([{ id: queued.id, disposition: 'handoff' }]);
       gate.resolve();
       expect(await starting).toBe('promoted');
       expect((await runtime.readLifecycle()).queue).toMatchObject([{ id: queued.id, disposition: 'handoff' }]);
@@ -822,15 +1032,18 @@ describe('direct harness durable lifecycle', () => {
       await waitFor(() => streams.length === 1);
       const selected = await runtime.enqueueAutomatic('selected');
       const id = (await runtime.readLifecycle()).operation!.id;
-      const accept = runtime.lane.submit.bind(runtime.lane);
-      const spy = vi.spyOn(runtime.lane, 'submit').mockImplementationOnce(async (...args) => {
-        await accept(...args);
+      const commit = runtime.harness.commit.bind(runtime.harness);
+      let accepted = false;
+      vi.spyOn(runtime.harness, 'commit').mockImplementationOnce(async (change, context) => {
+        await commit(change, context);
+        accepted = true;
         throw new Error('acknowledgement lost');
       });
       expect(await runtime.promoteQueued(selected.id, id)).toBe('promoted');
       streams[0]!.push({ type: 'done', reason: 'stop', message: message('boundary') });
       await waitFor(() => streams.length === 2);
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(accepted).toBe(true);
+      await runtime.recover();
       expect(await runtime.removeQueued(selected.id)).toBe('already_consumed');
       streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
       await waitFor(async () => (await runtime.readLifecycle()).operation === null);
@@ -975,4 +1188,477 @@ describe('direct harness durable lifecycle', () => {
       await runtime.dispose();
     }
   });
+  it.each(['completed', 'replaced', 'aborting'] as const)(
+    'keeps selected promotion pending when its native target is %s before admission',
+    async (race) => {
+      const { repository, models, streams } = fixtures();
+      const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let blocked = false;
+      try {
+        await runtime.submitPrompt('active');
+        await waitFor(() => streams.length === 1);
+        const selected = await runtime.enqueueAutomatic('selected-race');
+        const operationId = (await runtime.readLifecycle()).operation!.id;
+        const commit = runtime.harness.commit.bind(runtime.harness);
+        vi.spyOn(runtime.harness, 'commit').mockImplementationOnce(async (change, ctx) => {
+          blocked = true;
+          await gate;
+          return commit(change, ctx);
+        });
+        const promoting = runtime.promoteQueued(selected.id, operationId);
+        await waitFor(() => blocked);
+        if (race === 'completed') {
+          streams[0]!.push({ type: 'done', reason: 'stop', message: message('done') });
+          await runtime.lane.waitForIdle(BACKGROUND_CONTEXT);
+        } else {
+          await runtime.lane.abort(BACKGROUND_CONTEXT);
+          if (race === 'replaced') {
+            await runtime.lane.waitForIdle(BACKGROUND_CONTEXT);
+            await runtime.lane.submit(
+              { type: 'input', content: 'replacement', whenBusy: 'reject' },
+              BACKGROUND_CONTEXT,
+            );
+            await waitFor(() => streams.length === 2);
+          }
+        }
+        release();
+        expect(await promoting).toBe('target_changed');
+        expect((await runtime.readLifecycle()).queue).toMatchObject([{ id: selected.id, disposition: 'pending' }]);
+      } finally {
+        release();
+        await runtime.dispose();
+      }
+    },
+  );
+
+  it('keeps an idle selection pending when a native run starts before its admission commit', async () => {
+    const { repository, models, streams } = fixtures();
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let blocked = false;
+    try {
+      const selected = await runtime.enqueueAutomatic('idle-selection');
+      const commit = runtime.harness.commit.bind(runtime.harness);
+      vi.spyOn(runtime.harness, 'commit').mockImplementationOnce(async (change, ctx) => {
+        blocked = true;
+        await gate;
+        return commit(change, ctx);
+      });
+      const promoting = runtime.promoteQueued(selected.id);
+      await waitFor(() => blocked);
+      await runtime.lane.submit({ type: 'input', content: 'native-active', whenBusy: 'reject' }, BACKGROUND_CONTEXT);
+      await waitFor(() => streams.length === 1);
+      release();
+      expect(await promoting).toBe('target_changed');
+      expect((await runtime.readLifecycle()).queue).toMatchObject([{ id: selected.id, disposition: 'pending' }]);
+    } finally {
+      release();
+      await runtime.dispose();
+    }
+  });
+
+  it.each(['one-at-a-time', 'all'] as const)(
+    'preserves the idle native inbox final boundary in %s mode',
+    async (mode) => {
+      const { repository, models, streams, streamSimple } = fixtures();
+      const runtime = await createDirectHarnessRuntime({
+        cwd: '/tmp',
+        durableStorage: repository,
+        models,
+        model,
+        steeringMode: mode,
+        followUpMode: mode,
+      });
+      try {
+        const selected = await runtime.enqueueAutomatic('selected-after-native');
+        await runtime.harness.commit(async (tx) => {
+          const inbox = await tx.doc(InboxDoc, runtime.lane.id);
+          for (const [content, delivery] of [
+            ['native-steer-first', 'steer'],
+            ['native-steer-second', 'steer'],
+            ['native-follow-first', 'followUp'],
+            ['native-follow-second', 'followUp'],
+          ] as const) {
+            const submission = await tx.createSubmission({
+              conversationId: runtime.lane.id,
+              type: 'input',
+              status: 'queued',
+            });
+            inbox.items.push({ id: submission.id, mode: delivery, content });
+          }
+        }, BACKGROUND_CONTEXT);
+        expect(await runtime.promoteQueued(selected.id)).toBe('promoted');
+        await waitFor(() => streams.length === 1);
+        const first = JSON.stringify(streamSimple.mock.calls[0]![1]);
+        expect(first).toContain('native-steer-first');
+        expect(first).toContain('native-follow-first');
+        expect(first.indexOf('native-steer-first')).toBeLessThan(first.indexOf('native-follow-first'));
+        if (mode === 'all') {
+          expect(first).toContain('native-steer-second');
+          expect(first).toContain('native-follow-second');
+          expect(first).toContain('selected-after-native');
+          expect((await runtime.readLifecycle()).queue).toEqual([]);
+        } else {
+          expect(first).not.toContain('native-steer-second');
+          expect(first).not.toContain('selected-after-native');
+          expect((await runtime.readLifecycle()).queue).toMatchObject([{ id: selected.id, disposition: 'handoff' }]);
+          streams[0]!.push({ type: 'done', reason: 'stop', message: message('first boundary') });
+          await waitFor(() => streams.length === 2);
+          const second = JSON.stringify(streamSimple.mock.calls[1]![1]);
+          expect(second).toContain('native-steer-second');
+          expect(second).toContain('native-follow-second');
+          expect(second).not.toContain('selected-after-native');
+          streams[1]!.push({ type: 'done', reason: 'stop', message: message('second boundary') });
+          await waitFor(() => streams.length === 3);
+          expect(JSON.stringify(streamSimple.mock.calls[2]![1])).toContain('selected-after-native');
+        }
+      } finally {
+        await runtime.dispose();
+      }
+    },
+  );
+
+  it('deduplicates accepted promotion before rechecking a replaced target after lost acknowledgement', async () => {
+    const { repository, models, streams, streamSimple } = fixtures();
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    try {
+      await runtime.submitPrompt('active');
+      await waitFor(() => streams.length === 1);
+      const selected = await runtime.enqueueAutomatic('accepted-once');
+      const operationId = (await runtime.readLifecycle()).operation!.id;
+      const commit = runtime.harness.commit.bind(runtime.harness);
+      vi.spyOn(runtime.harness, 'commit').mockImplementationOnce(async (change, ctx) => {
+        await commit(change, ctx);
+        streams[0]!.push({ type: 'done', reason: 'stop', message: message('boundary') });
+        await waitFor(() => streams.length === 2);
+        streams[1]!.push({ type: 'done', reason: 'stop', message: message('selected done') });
+        await runtime.lane.waitForIdle(BACKGROUND_CONTEXT);
+        await runtime.lane.submit({ type: 'input', content: 'new target', whenBusy: 'reject' }, BACKGROUND_CONTEXT);
+        await waitFor(() => streams.length === 3);
+        throw new Error('acknowledgement lost after replacement');
+      });
+      expect(await runtime.promoteQueued(selected.id, operationId)).toBe('promoted');
+      await runtime.recover();
+      expect(streams).toHaveLength(3);
+      expect(JSON.stringify(streamSimple.mock.calls[2]![1]).split('accepted-once')).toHaveLength(2);
+      const entries = (await runtime.readEntries()).entries;
+      expect(
+        entries.filter(
+          (entry) =>
+            entry.type === 'message' &&
+            entry.message.role === 'user' &&
+            JSON.stringify(entry.message.content).includes('accepted-once'),
+        ),
+      ).toHaveLength(1);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it('places idle native writes before selected input and settles stale heads like a final boundary', async () => {
+    const { repository, models, streams, streamSimple } = fixtures();
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    try {
+      const selected = await runtime.enqueueAutomatic('after-reset');
+      const staleId = await runtime.harness.commit(async (tx) => {
+        const inbox = await tx.doc(InboxDoc, runtime.lane.id);
+        const old = await tx.appendEntry(runtime.lane.id, {
+          kind: 'test.old',
+          model: [{ role: 'user', content: 'old-range', timestamp: 1 }],
+        });
+        const reset = await tx.createSubmission({ conversationId: runtime.lane.id, type: 'write', status: 'queued' });
+        const stale = await tx.createSubmission({ conversationId: runtime.lane.id, type: 'write', status: 'queued' });
+        inbox.items.push({
+          id: reset.id,
+          mode: 'write',
+          entry: { kind: 'test.reset', head: 'self', model: [{ role: 'user', content: 'reset-range', timestamp: 2 }] },
+        });
+        inbox.items.push({ id: stale.id, mode: 'write', entry: { kind: 'test.stale', head: old.id } });
+        return stale.id;
+      }, BACKGROUND_CONTEXT);
+      expect(await runtime.promoteQueued(selected.id)).toBe('promoted');
+      await waitFor(() => streams.length === 1);
+      const first = JSON.stringify(streamSimple.mock.calls[0]![1]);
+      expect(first).not.toContain('old-range');
+      expect(first).toContain('reset-range');
+      expect(first.indexOf('reset-range')).toBeLessThan(first.indexOf('after-reset'));
+      expect(
+        await (await runtime.harness.submission(staleId, BACKGROUND_CONTEXT))!.status(BACKGROUND_CONTEXT),
+      ).toMatchObject({ status: 'unanswered', reason: 'stale' });
+      expect((await runtime.harness.snapshot(InboxDoc, runtime.lane.id, BACKGROUND_CONTEXT))!.items).toEqual([]);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it.each([false, true])(
+    'checks native compaction foreground ownership atomically (background: %s)',
+    async (background) => {
+      const { repository, models } = fixtures();
+      const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let blocked = false;
+      try {
+        const selected = await runtime.enqueueAutomatic('after-compaction');
+        const commit = runtime.harness.commit.bind(runtime.harness);
+        vi.spyOn(runtime.harness, 'commit').mockImplementationOnce(async (change, ctx) => {
+          blocked = true;
+          await gate;
+          return commit(change, ctx);
+        });
+        const promoting = runtime.promoteQueued(selected.id);
+        await waitFor(() => blocked);
+        await commit(
+          (tx) =>
+            tx.createTask(
+              CompactionTask,
+              { reason: 'manual' },
+              {
+                ownership: { kind: 'conversation' },
+                conversationId: runtime.lane.id,
+                background,
+              },
+            ),
+          BACKGROUND_CONTEXT,
+        );
+        release();
+        expect(await promoting).toBe(background ? 'promoted' : 'target_changed');
+        if (!background) {
+          expect((await runtime.readLifecycle()).queue).toMatchObject([{ id: selected.id, disposition: 'pending' }]);
+          expect((await runtime.harness.snapshot(LiveDoc, runtime.lane.id, BACKGROUND_CONTEXT))?.run).toBeUndefined();
+        } else {
+          expect((await runtime.harness.snapshot(LiveDoc, runtime.lane.id, BACKGROUND_CONTEXT))?.run).toBeDefined();
+        }
+      } finally {
+        release();
+        await runtime.dispose();
+      }
+    },
+  );
+  it.each(['abort', 'failure', 'custom abort', 'custom failure'] as const)(
+    'reconciles internal delivery after SQLite restart following %s',
+    async (outcome) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-internal-restart-'));
+      const { models, streams, streamSimple } = fixtures(true);
+      const transformed: unknown[][] = [];
+      const open = () =>
+        createDirectHarnessRuntime({
+          cwd: root,
+          sessionsRoot: root,
+          sessionId: 'internal_restart',
+          storage: 'sqlite' as const,
+          historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
+          models,
+          model,
+          transformContext: async ({ messages }) => {
+            transformed.push(messages);
+            return { messages };
+          },
+        });
+      let runtime = await open();
+      try {
+        const active = await runtime.submitPrompt('operator');
+        void active.settled.catch(() => undefined);
+        await waitFor(() => streams.length === 1);
+        const submit = runtime.lane.submit.bind(runtime.lane);
+        const blocked = vi.spyOn(runtime.lane, 'submit').mockImplementation(async (draft, ctx) => {
+          if (draft.requestId?.endsWith(':context')) throw new Error('Simulated unavailable fallback');
+          return submit(draft, ctx);
+        });
+        const internal = await runtime.submitInternalMessage(
+          outcome.startsWith('custom')
+            ? {
+                role: 'custom',
+                customType: 'restart-result',
+                content: 'restart contribution',
+                display: true,
+                details: { source: 'runner', nested: { receipt: 7 } },
+                timestamp: 1,
+              }
+            : 'restart contribution',
+          'followUp',
+        );
+        void internal.settled.catch(() => undefined);
+        if (outcome.endsWith('abort')) await expect(runtime.abort()).rejects.toThrow('Simulated unavailable fallback');
+        else
+          streams[0]!.push({
+            type: 'error',
+            reason: 'error',
+            error: {
+              ...message('failed'),
+              stopReason: 'error',
+              errorMessage: 'provider failed',
+            },
+          });
+        await expect(internal.settled).rejects.toThrow('Simulated unavailable fallback');
+        await runtime.dispose();
+        blocked.mockRestore();
+        runtime = await open();
+        await runtime.recover();
+        await runtime.recover();
+        expect(streams).toHaveLength(1);
+        expect((await runtime.readLifecycle()).queue).toEqual([]);
+        expect((await runtime.readState()).pendingMessageCount).toBe(0);
+        const view = await runtime.lane.context(BACKGROUND_CONTEXT);
+        expect(JSON.stringify(view.messages).split('restart contribution')).toHaveLength(2);
+        if (outcome.startsWith('custom')) {
+          const entries = (await runtime.readEntries()).entries;
+          expect(entries.filter((e) => e.type === 'message' && e.message.role === 'custom')).toHaveLength(1);
+          const envelope = view.entries.find(
+            (e) => e.kind === 'doompi.entry' && JSON.stringify(e.data).includes('restart-result'),
+          )!;
+          expect(JSON.stringify(view.contributions[view.entries.indexOf(envelope)])).toContain('restart contribution');
+          expect(
+            view.entries.filter((e) => e.model?.some((m) => JSON.stringify(m).includes('restart contribution'))),
+          ).toHaveLength(0);
+        }
+        await runtime.dispose();
+        runtime = await open();
+        await runtime.recover();
+        const next = await runtime.submitPrompt('ordinary user');
+        await waitFor(() => streams.length === 2);
+        expect(JSON.stringify(streamSimple.mock.calls[1]![1]).split('restart contribution')).toHaveLength(2);
+        if (outcome.startsWith('custom'))
+          expect(transformed.at(-1)).toContainEqual(
+            expect.objectContaining({
+              role: 'custom',
+              customType: 'restart-result',
+              details: { source: 'runner', nested: { receipt: 7 } },
+            }),
+          );
+        streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+        await next.settled;
+      } finally {
+        await runtime.dispose();
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each(['before admission', 'stranded queue', 'after context receipt'] as const)(
+    'recovers reconciliation-only records %s without starting an agent',
+    async (phase) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-internal-window-'));
+      const { models, streams } = fixtures();
+      const open = () =>
+        createDirectHarnessRuntime({
+          cwd: root,
+          sessionsRoot: root,
+          sessionId: 'internal_window',
+          storage: 'sqlite' as const,
+          historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
+          models,
+          model,
+        });
+      const Lifecycle = defineDoc({
+        kind: 'doompi.server.lifecycle',
+        version: 1,
+        scope: 'session',
+        initial: () => ({ json: '' }),
+      });
+      let runtime = await open();
+      try {
+        const custom = {
+          role: 'custom' as const,
+          customType: 'window-result',
+          content: 'window contribution',
+          display: true,
+          details: { original: true },
+          timestamp: 1,
+        };
+        if (phase === 'after context receipt') {
+          const envelope = await (
+            await runtime.lane.submit(
+              {
+                type: 'write',
+                requestId: 'window:message',
+                entry: {
+                  kind: 'doompi.entry',
+                  data: { type: 'message', message: custom, inputRequestId: 'window' },
+                },
+              },
+              BACKGROUND_CONTEXT,
+            )
+          ).wait(BACKGROUND_CONTEXT);
+          if (envelope.status !== 'done') throw new Error('Envelope not placed');
+          await (
+            await runtime.lane.submit(
+              {
+                type: 'write',
+                requestId: 'window:context',
+                entry: {
+                  kind: 'doompi.entry',
+                  edits: [
+                    {
+                      target: envelope.entry,
+                      action: 'replace',
+                      messages: [{ role: 'user', content: custom.content, timestamp: 1 }],
+                    },
+                  ],
+                },
+              },
+              BACKGROUND_CONTEXT,
+            )
+          ).wait(BACKGROUND_CONTEXT);
+        }
+        await runtime.harness.commit(async (tx) => {
+          const doc = await tx.doc(Lifecycle);
+          const record = JSON.parse(doc.json || '{"revision":0,"paused":false,"queue":[]}');
+          record.internalDeliveries = { window: { message: custom, conversationId: runtime.lane.id } };
+          if (phase === 'stranded queue') {
+            // Reconstruct the crash window after native admission but before the product receipt.
+            const inbox = await tx.doc(InboxDoc, runtime.lane.id);
+            for (const id of ['window', 'second']) {
+              const submission = await tx.createSubmission({
+                conversationId: runtime.lane.id,
+                requestId: id,
+                type: 'input',
+                status: 'queued',
+              });
+              inbox.items.push({
+                id: submission.id,
+                mode: 'followUp',
+                content: id === 'window' ? custom.content : 'second contribution',
+              });
+              if (id === 'second')
+                record.internalDeliveries.second = {
+                  message: { role: 'user', content: 'second contribution', timestamp: 1 },
+                  conversationId: runtime.lane.id,
+                };
+            }
+          }
+          doc.json = JSON.stringify(record);
+        }, BACKGROUND_CONTEXT);
+        await runtime.dispose();
+        runtime = await open();
+        await runtime.recover();
+        await runtime.recover();
+        expect(streams).toHaveLength(0);
+        expect((await runtime.readState()).pendingMessageCount).toBe(0);
+        expect((await runtime.readLifecycle()).queue).toEqual([]);
+        expect(
+          JSON.stringify((await runtime.lane.context(BACKGROUND_CONTEXT)).messages).split(custom.content),
+        ).toHaveLength(2);
+        if (phase === 'stranded queue')
+          expect(
+            JSON.stringify((await runtime.lane.context(BACKGROUND_CONTEXT)).messages).split('second contribution'),
+          ).toHaveLength(2);
+        expect(
+          (await runtime.readEntries()).entries.filter((e) => e.type === 'message' && e.message.role === 'custom'),
+        ).toHaveLength(1);
+      } finally {
+        await runtime.dispose();
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
 });
