@@ -8,6 +8,7 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 
 import { RmuxBackend } from '@agimon-ai/doompi-runner/rmuxBackend';
 import type { IRunnerPaths } from '@agimon-ai/doompi-runner/runnerPaths';
@@ -125,7 +126,14 @@ export async function runCommand(
   cwd: string,
   environment: NodeJS.ProcessEnv = process.env,
   timeoutMs = COMMAND_TIMEOUT_MS,
+  timingLabel?: string,
 ): Promise<CommandResult> {
+  const startedAt = performance.now();
+  if (timingLabel) {
+    process.stderr.write(
+      `System-test phase: ${JSON.stringify({ phase: timingLabel, status: 'started', cwd })}${NEWLINE}`,
+    );
+  }
   return new Promise<CommandResult>((resolve) => {
     const child = execFileCallback(
       command,
@@ -138,11 +146,23 @@ export async function runCommand(
         killSignal: 'SIGTERM',
       },
       (error, stdout, stderr) => {
-        resolve({
+        const result = {
           code: error && typeof error.code === 'number' ? error.code : error ? 1 : 0,
           stdout,
           stderr: error ? [stderr, error.message].filter(Boolean).join('\n') : stderr,
-        });
+        };
+        if (timingLabel) {
+          process.stderr.write(
+            `System-test phase: ${JSON.stringify({
+              phase: timingLabel,
+              status: 'completed',
+              cwd,
+              elapsedMs: Math.round(performance.now() - startedAt),
+              code: result.code,
+            })}${NEWLINE}`,
+          );
+        }
+        resolve(result);
       },
     );
     child.stdin?.end();
@@ -278,7 +298,12 @@ function linkPackedDependencies(
 export async function installLocalPackages(
   consumer: ConsumerRoot,
   packages: ReadonlyMap<string, PackedPackage>,
+  timingLabel = 'installed package closure',
 ): Promise<CommandResult> {
+  const preparationStartedAt = performance.now();
+  process.stderr.write(
+    `System-test phase: ${JSON.stringify({ phase: `${timingLabel}: prepare tarballs`, status: 'started', cwd: consumer.root })}${NEWLINE}`,
+  );
   const tarballRoot = path.join(consumer.root, 'packed-tarballs');
   fs.mkdirSync(tarballRoot, { recursive: true });
   const tarballs = new Map(
@@ -309,12 +334,23 @@ export async function installLocalPackages(
     if (packResult.code !== 0) throw new Error(`Local tarball creation failed for ${name}: ${packResult.stderr}`);
   }
   writeConsumerDependencies(consumer, tarballs);
+  process.stderr.write(
+    `System-test phase: ${JSON.stringify({
+      phase: `${timingLabel}: prepare tarballs`,
+      status: 'completed',
+      cwd: consumer.root,
+      elapsedMs: Math.round(performance.now() - preparationStartedAt),
+    })}${NEWLINE}`,
+  );
   // Reuse pnpm's content-addressed cache; resolution and node_modules remain isolated in the consumer root.
   // Keep the lockfile inside the throwaway consumer root for deterministic installs.
   const result = await runCommand(
     PNPM_COMMAND,
     ['install', '--no-frozen-lockfile', '--prefer-offline', '--ignore-scripts', '--config.auto-install-peers=false'],
     consumer.root,
+    process.env,
+    COMMAND_TIMEOUT_MS,
+    `${timingLabel}: pnpm install`,
   );
   // pnpm may create workspace metadata when it updates temporary install settings.
   fs.rmSync(path.join(consumer.root, 'pnpm-workspace.yaml'), { force: true });

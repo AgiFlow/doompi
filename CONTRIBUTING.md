@@ -11,7 +11,7 @@ Found a security problem? Keep it out of public issues. Follow
 ## Requirements
 
 Use Node.js 22.22.1 or newer, as required by the workspace `package.json`. To match
-CI exactly, use Node.js 22.22.1 and pnpm 12.3.4. Those CI versions live in the
+CI exactly, use Node.js 22.22.1 and pnpm 12.8.1. Those CI versions live in the
 [workspace setup action](.github/actions/setup-monorepo/action.yml).
 
 ```bash

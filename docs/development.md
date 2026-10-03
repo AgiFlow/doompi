@@ -24,7 +24,7 @@ package boundaries, the required checks, commits, and pull requests.
 ## Local setup
 
 The workspace requires Node.js 22.22.1 or newer. CI uses Node.js 22.22.1 and pnpm
-12.3.4, pinned in the [workspace setup action](../.github/actions/setup-monorepo/action.yml).
+12.8.1, pinned in the [workspace setup action](../.github/actions/setup-monorepo/action.yml).
 Use that toolchain to match CI, then install the workspace:
 
 ```bash
