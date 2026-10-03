@@ -1720,6 +1720,15 @@ describe('conventional Pi discovery', () => {
     expect(result.code, result.stderr || result.stdout).toBe(0);
     expect(result.stdout).toContain('PACKED_MCP_APP_OK');
   });
+  it('loads the packed lightweight hook authoring export without workspace dependencies', async () => {
+    assertConsumerInstall();
+    const module = (await importInstalledExtension('@agimon-ai/doompi-hook', './authoring')) as {
+      defineDoomHook<T>(value: T): T;
+    };
+    const hook = { setup: () => ({}) };
+    expect(module.defineDoomHook(hook)).toBe(hook);
+  });
+
   it('loads Vibe-Lint from npm without adding it to the owned package matrix', async () => {
     assertConsumerInstall();
     expect(PACKAGE_MATRIX.map(({ name }) => name)).not.toContain('@agimon-ai/vibe-lint');
@@ -1945,7 +1954,7 @@ describe('consumer ownership boundaries', () => {
           fs.readFileSync(path.join(coreRoot, 'package.json'), 'utf8'),
         ) as PackageManifest;
         expect(coreManifest.dependencies).toMatchObject({
-          '@tanstack/store': '0.11.1',
+          '@tanstack/store': '0.11.2',
         });
 
         const webEntry = installedPackageEntry(isolatedConsumer.root, '@agimon-ai/doompi-core', './web');
@@ -2453,6 +2462,141 @@ describe('DOOM-PI-LAUNCH installed runtime modes', () => {
 });
 
 describe('RPC-LIFECYCLE installed runtime', () => {
+  it(
+    'compiles packed authoring modules without evaluating them during sync',
+    async () => {
+      assertConsumerInstall();
+      const fixture = createRuntimeFixture();
+      const environment = cleanRuntimeEnvironment(fixture.agentDirectory);
+      environment.DOOMPI_ROOT = fixture.root;
+      await initializePackedIntegration(fixture.root, environment);
+      const marker = path.join(fixture.root, 'module-loaded');
+      fs.writeFileSync(
+        path.join(fixture.root, 'hook.ts'),
+        [
+          "import fs from 'node:fs';",
+          "import {defineDoomHook} from '@agimon-ai/doompi-hook/authoring';",
+          `fs.writeFileSync(${JSON.stringify(marker)}, 'loaded');`,
+          'export default defineDoomHook({setup(){return {tool_call(){return {block:true,reason:"packed hook"}}}}});',
+        ].join('\n'),
+      );
+      fs.writeFileSync(
+        path.join(fixture.root, '.doom', 'hooks.yaml'),
+        'groups:\n  core:\n    core: true\n    hooks:\n      - event: PreToolUse\n        pi: {module: ./hook.ts}\n',
+      );
+      const sync = await runCommand(
+        process.execPath,
+        [
+          installedDoomPiCli(consumer.root),
+          'sync',
+          '--major-mode',
+          RUNTIME_MAJOR_MODE,
+          '--no-domains',
+          '--no-mcp',
+          '--no-agents',
+          '--preset',
+          'ollama',
+        ],
+        fixture.root,
+        environment,
+        COLD_SYNC_TIMEOUT_MS,
+      );
+      expect(sync.code, `${sync.stderr}\n${sync.stdout}`).toBe(0);
+      expect(fs.existsSync(marker)).toBe(false);
+      const homeDirectory = environment.HOME!;
+      const registration = readSyncRegistration(fixture.root, homeDirectory)!;
+      const state = JSON.parse(fs.readFileSync(registration.statePath, 'utf8')) as {
+        fileState: { hookModules: { file: string } };
+      };
+      const descriptor = JSON.parse(fs.readFileSync(state.fileState.hookModules.file, 'utf8')) as {
+        modules: Array<{ artifact: string }>;
+      };
+      expect(descriptor.modules).toHaveLength(1);
+      const module = (await import(pathToFileURL(descriptor.modules[0].artifact).href)) as {
+        default: { setup(): { tool_call(): unknown } };
+      };
+      expect(module.default.setup().tool_call()).toEqual({ block: true, reason: 'packed hook' });
+      expect(fs.readFileSync(marker, 'utf8')).toBe('loaded');
+
+      // Packed child binding proof. Real child-runtime execution is covered by the hook integration suite.
+      const hostContracts = (await importInstalledExtension(
+        '@agimon-ai/doompi-core',
+        './cordisHost',
+      )) as typeof import('@agimon-ai/doompi-core/cordisHost');
+      const configContracts = (await importInstalledExtension(
+        '@agimon-ai/doompi-config',
+        './piContext',
+      )) as typeof import('@agimon-ai/doompi-config/piContext');
+      const harnessContracts = (await importInstalledExtension(
+        '@agimon-ai/doompi-config',
+        './harnessState',
+      )) as typeof import('@agimon-ai/doompi-config/harnessState');
+      const childContracts = (await importInstalledExtension(
+        '@agimon-ai/doompi-core',
+        './childSession',
+      )) as typeof import('@agimon-ai/doompi-core/childSession');
+      const hookEntry = await importInstalledExtension('@agimon-ai/doompi-hook', './extensions/pi');
+      const extension = hookEntry.default as (pi: ExtensionAPI) => Promise<void>;
+      const probe = createCallableProbe();
+      const pi = probe.api as ExtensionAPI;
+      const host = await hostContracts.installDoomCordisHost(pi, {
+        mode: 'composed',
+        source: 'packed-hook-child-test',
+      });
+      try {
+        const provider = host.root.plugin((context) => {
+          configContracts.provideDoomConfigContext(context, {
+            settings: { projectTrust: 'ask' },
+            harness: {
+              ...harnessContracts.readHarnessState({}),
+              root: fixture.root,
+              hookGroups: [],
+              hookModules: state.fileState.hookModules,
+            },
+            requiresRelaunch: false,
+          });
+        });
+        await provider;
+        await extension(pi);
+        await host.root.fiber.await();
+        const hooks = host.root.get(
+          childContracts.DOOM_CHILD_SESSION_HOOKS_SERVICE,
+        ) as import('@agimon-ai/doompi-core/childSession').DoomChildSessionHooks;
+        expect(hooks).toBeDefined();
+        const controller = new AbortController();
+        const binding = hooks.bind({
+          request: {
+            runId: 'packed-child',
+            parentSessionId: 'packed-parent',
+            agent: 'worker',
+            task: 'probe',
+            cwd: fixture.root,
+            source: { kind: 'fresh' },
+            scope: { rootSessionId: 'packed-parent', scopeKey: 'packed' },
+            environment: {},
+          },
+          sessionId: () => 'packed-child-session',
+          signal: controller.signal,
+          sendMessage: async () => undefined,
+          appendCustomEntry: async () => undefined,
+        });
+        try {
+          expect(
+            await binding.beforeTool({ toolCallId: 'call', toolName: 'bash', args: { command: 'pwd' } }, {
+              abortSignal: controller.signal,
+            } as never),
+          ).toEqual({ block: { reason: 'packed hook' } });
+        } finally {
+          await binding.dispose();
+        }
+      } finally {
+        await host.shutdown();
+        await probe.shutdown();
+      }
+    },
+    COLD_SYNC_TIMEOUT_MS,
+  );
+
   it(
     'loads the synced packed package from user settings without an explicit build',
     async () => {

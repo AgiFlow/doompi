@@ -42,7 +42,11 @@ import {
   selectionEnvironment,
   toSelection,
 } from '../../src/cli/commands/sync';
-import { computeMcpSourcesHash, computeServerSourcesHash } from '../../src/composition/syncState';
+import {
+  computeMcpSourcesHash,
+  computeServerSourcesHash,
+  readRegisteredSyncState,
+} from '../../src/composition/syncState';
 import { HARNESS_STATE_POINTER } from '../../src/exports/harnessState';
 import {
   computeInputsHash,
@@ -962,6 +966,53 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     }
   });
 
+  it('publishes hook descriptors and detects imported-file and membership edits', async () => {
+    const root = makeRepository();
+    const environment = environmentFor(root);
+    const registry = path.join(root, '.doom', 'hooks.yaml');
+    fs.writeFileSync(path.join(root, 'value.ts'), 'export const value = 1;');
+    fs.writeFileSync(
+      path.join(root, 'hook.ts'),
+      "import {value} from './value'; export default {setup(){return {value}}};",
+    );
+    fs.writeFileSync(
+      registry,
+      'groups:\n  core:\n    core: true\n    hooks:\n      - event: SessionStart\n        pi: {module: ./hook.ts}\n',
+    );
+    const command = new SyncCommand();
+    await command.execute(['sync'], environment, root, capture().output);
+    const reference = readSyncState(root, homeFor(root))!.fileState.hookModules!;
+    expect(reference.file).toContain('/dist/hooks/hook-modules.json');
+    expect(await command.execute(['sync', '--check'], environment, root, capture().output)).toBe(0);
+    fs.writeFileSync(path.join(root, 'value.ts'), 'export const value = 222;');
+    expect(await command.execute(['sync', '--check'], environment, root, capture().output)).toBe(1);
+    await command.execute(['sync'], environment, root, capture().output);
+    fs.appendFileSync(registry, '      - event: Stop\n        pi: {module: ./hook.ts}\n');
+    expect(await command.execute(['sync', '--check'], environment, root, capture().output)).toBe(1);
+  });
+
+  it('preserves the selected generation on a hook compile failure in an inactive mode', async () => {
+    const root = makeRepository();
+    const environment = environmentFor(root);
+    await new SyncCommand().execute(['sync'], environment, root, capture().output);
+    const location = resolveSyncLocation(root, homeFor(root));
+    const previous = fs.readFileSync(location.registrationPath);
+    const generations = fs.readdirSync(location.generationsDirectory);
+    fs.writeFileSync(
+      path.join(root, '.doom', 'modes.yaml'),
+      'layers:\n  active: {hookGroups: [active]}\n  inactive: {hookGroups: [inactive]}\ndefaultMajorMode: active\nmajorMode:\n  active: [active]\n  inactive: [inactive]\n',
+    );
+    fs.writeFileSync(
+      path.join(root, '.doom', 'hooks.yaml'),
+      'groups:\n  inactive:\n    hooks:\n      - event: PreToolUse\n        pi: {module: ./missing.ts}\n',
+    );
+    await expect(new SyncCommand().execute(['sync'], environment, root, capture().output)).rejects.toThrow(
+      'group inactive, row 0, event PreToolUse',
+    );
+    expect(fs.readFileSync(location.registrationPath)).toEqual(previous);
+    expect(fs.readdirSync(location.generationsDirectory)).toEqual(generations);
+  });
+
   it('preserves the selected generation when server bundle compilation fails', async () => {
     const root = makeRepository();
     const environment = environmentFor(root);
@@ -987,13 +1038,23 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     const root = makeRepository();
     const homeDirectory = homeFor(root);
     const generations: string[] = [];
+    const pinnedRegistrations: NonNullable<ReturnType<typeof readSyncRegistration>>[] = [];
     for (let run = 0; run < 3; run += 1) {
       await new SyncCommand().execute(['sync', '--force'], environmentFor(root), root, capture().output);
       const registration = readSyncRegistration(root, homeDirectory);
-      if (registration) generations.push(registration.generationRoot);
+      if (registration) {
+        generations.push(registration.generationRoot);
+        pinnedRegistrations.push(registration);
+      }
     }
 
     expect(generations).toHaveLength(3);
+    // Headless startup consumes the admitted registration, even after current moves.
+    for (const registration of pinnedRegistrations) {
+      const reference = readRegisteredSyncState(registration, homeDirectory).fileState.hookModules!;
+      expect(reference.file.startsWith(registration.generationRoot)).toBe(true);
+      expect(fs.existsSync(reference.file)).toBe(true);
+    }
     for (const generation of generations) {
       expect(fs.existsSync(generation)).toBe(true);
       expect(fs.existsSync(path.join(generation, 'state.json'))).toBe(true);

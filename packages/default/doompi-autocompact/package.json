@@ -73,7 +73,7 @@
     "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
-    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/cordis": "4.0.4",
     "minimatch": "10.2.6"
   },
   "devDependencies": {

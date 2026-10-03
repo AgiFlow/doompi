@@ -236,6 +236,39 @@ export function mcpBundleIsRuntimeUsable(
   return mcpBundleIsUsable(state, registration, false);
 }
 
+/** Validate hook artifacts and, for sync checks, their complete imported source graph. */
+export function hookModulesAreFresh(
+  state: { fileState: Pick<SyncState['fileState'], 'hookModules'> },
+  generationRoot: string,
+  requireFreshSources = true,
+): boolean {
+  const reference = state.fileState.hookModules;
+  if (!reference) return true;
+  try {
+    const root = fs.realpathSync(generationRoot);
+    const inside = (target: string): boolean => {
+      const relative = path.relative(root, fs.realpathSync(target));
+      return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    };
+    if (!inside(reference.file)) return false;
+    const descriptor = JSON.parse(fs.readFileSync(reference.file, 'utf8')) as {
+      version: number;
+      modules: Array<{ artifact: string; receipt: Record<string, unknown> }>;
+    };
+    if (descriptor.version !== 1 || !Array.isArray(descriptor.modules)) return false;
+    for (const module of descriptor.modules) {
+      if (!inside(module.artifact) || module.receipt.output !== module.artifact) return false;
+      if (!artifactReceiptIsIntact(module.receipt, inside)) return false;
+      const inputs = Array.isArray(module.receipt.inputs) ? module.receipt.inputs.map(parseInputFingerprint) : [];
+      if (inputs.length === 0 || inputs.some((input) => input === undefined)) return false;
+      if (requireFreshSources && !inputsAreFresh(inputs as NonNullable<(typeof inputs)[number]>[])) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Whether this repository is synced for the composition it would launch.
  *
@@ -310,6 +343,7 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
   ) {
     reasons.push('cockpit-bundle-missing');
   }
+  if (!hookModulesAreFresh(state, registration.generationRoot, requireFreshSources)) reasons.push('runtime-stale');
   if (!fs.existsSync(registration.apiDirectory)) reasons.push('package-apis-missing');
   if (
     !(requireFreshSources ? serverBundleIsFresh(state, registration) : serverBundleIsRuntimeUsable(state, registration))

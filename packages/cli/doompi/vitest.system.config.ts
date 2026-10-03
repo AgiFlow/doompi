@@ -14,6 +14,7 @@ const groupedSuites = {
     'DPI installed experiment runtime > initializes, syncs, and launches without persisting its managed settings',
   ],
   '3': [
+    'RPC-LIFECYCLE installed runtime > compiles packed authoring modules without evaluating them during sync',
     'RPC-LIFECYCLE installed runtime > loads the synced packed package from user settings without an explicit build',
     'RPC-LIFECYCLE installed runtime > injects an installed Cordis UI contribution and terminates the wrapped Pi child',
   ],

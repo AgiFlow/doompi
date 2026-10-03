@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DoomChildSessionRequest } from '../../../../../src/exports/childSession';
+import type { DoomChildSessionHookScope, DoomChildSessionRequest } from '../../../../../src/exports/childSession';
 import type { DirectHarnessRuntime, DirectHarnessRuntimeOptions } from '../../../../../src/server/directHarnessRuntime';
 import {
   captureTerminalPiForkSource,
@@ -136,6 +136,98 @@ beforeEach(() => {
 });
 
 describe('terminal Pi child session provider', () => {
+  it.each(['fresh', 'terminal-pi-fork'] as const)('binds hooks before %s runtime startup', async (kind) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-hooks-'));
+    tempRoots.push(root);
+    let scope!: DoomChildSessionHookScope;
+    const dispose = vi.fn(async () => undefined);
+    const beforeTool = vi.fn(async () => ({}));
+    const afterTool = vi.fn(async () => ({}));
+    const hooks = vi.fn(() => ({
+      bind: (bound: DoomChildSessionHookScope) => {
+        scope = bound;
+        return { beforeTool, afterTool, dispose };
+      },
+    }));
+    const service = createTerminalPiChildSessionService({
+      cwd: root,
+      sessionsRoot: root,
+      hooks,
+      runtimeFactory: async (options) => {
+        expect(scope.sessionId()).toBeUndefined();
+        expect(options.beforeTool).toBe(beforeTool);
+        expect(options.afterTool).toBe(afterTool);
+        return fakeRuntime(options);
+      },
+    });
+    expect(hooks).not.toHaveBeenCalled();
+    const source: DoomChildSessionRequest['source'] =
+      kind === 'fresh'
+        ? { kind }
+        : {
+            kind,
+            sourceSessionId: 'parent-session',
+            sourceLeafId: 'parent-leaf',
+            snapshotJsonl: v3Snapshot(),
+          };
+    const handle = await service.start(request(source, root));
+    expect(scope.sessionId()).toBe('child-session');
+    expect(scope.request.source.kind).toBe(kind);
+    await handle.dispose();
+    await service.close();
+    expect(scope.signal.aborted).toBe(true);
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it('awaits terminal fork hook cleanup when runtime startup fails', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-hooks-failed-'));
+    tempRoots.push(root);
+    let scope!: DoomChildSessionHookScope;
+    let release!: () => void;
+    const dispose = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const service = createTerminalPiChildSessionService({
+      cwd: root,
+      sessionsRoot: root,
+      hooks: () => ({
+        bind: (bound) => {
+          scope = bound;
+          return { beforeTool: async () => ({}), afterTool: async () => ({}), dispose };
+        },
+      }),
+      runtimeFactory: async () => {
+        throw new Error('startup failed');
+      },
+    });
+    let settled = false;
+    const starting = service
+      .start(
+        request(
+          {
+            kind: 'terminal-pi-fork',
+            sourceSessionId: 'parent-session',
+            sourceLeafId: 'parent-leaf',
+            snapshotJsonl: v3Snapshot(),
+          },
+          root,
+        ),
+      )
+      .finally(() => {
+        settled = true;
+      });
+    const rejection = expect(starting).rejects.toThrow('startup failed');
+    await vi.waitFor(() => expect(dispose).toHaveBeenCalledOnce());
+    expect(scope.signal.aborted).toBe(true);
+    expect(settled).toBe(false);
+    release();
+    await rejection;
+    await service.close();
+  });
+
   it.each([true, false])('projects parent Fast %s into a fresh terminal subagent', async (enabled) => {
     const snapshots: Array<boolean | undefined> = [];
     const service = createTerminalPiChildSessionService({

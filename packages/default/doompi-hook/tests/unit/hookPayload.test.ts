@@ -32,6 +32,17 @@ describe('hook payloads', () => {
     expect(payload.tool_response).toEqual({ success: false, content: [{ type: 'text' }] });
   });
 
+  it('includes child identity without changing parent payloads', () => {
+    const payload = toolHookPayload(
+      { type: 'tool_call', toolName: 'bash', input: { command: 'pwd' } },
+      'PreToolUse',
+      '/repo',
+      'child-1',
+      { parentSessionId: 'parent-1', agent: 'worker' },
+    );
+    expect(payload).toMatchObject({ session_id: 'child-1', parent_session_id: 'parent-1', agent_type: 'worker' });
+  });
+
   it('gives session lifecycle hooks only where and who', () => {
     expect(sessionHookPayload('session-3', '/repo')).toEqual({ session_id: 'session-3', cwd: '/repo' });
   });

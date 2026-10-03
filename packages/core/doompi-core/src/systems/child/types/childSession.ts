@@ -1,6 +1,28 @@
 import type { Context } from '@deepseek-ai/cordis';
+import type { JsonValue } from '@earendil-works/chord';
 
 import type { TranscriptPage, TranscriptPageRequest } from '../../../schemas/sessionProtocol';
+import type { DirectHarnessRuntimeOptions } from '../../../types/server/directHarnessRuntime';
+
+export const DOOM_CHILD_SESSION_HOOKS_SERVICE = 'doom/child-session-hooks';
+
+export interface DoomChildSessionHookScope {
+  readonly request: DoomChildSessionRequest;
+  sessionId(): string | undefined;
+  readonly signal: AbortSignal;
+  sendMessage(text: string, delivery: 'steer' | 'followUp'): Promise<void>;
+  appendCustomEntry(type: string, data: JsonValue): Promise<void>;
+}
+
+export interface DoomChildSessionHookBinding {
+  readonly beforeTool: NonNullable<DirectHarnessRuntimeOptions['beforeTool']>;
+  readonly afterTool: NonNullable<DirectHarnessRuntimeOptions['afterTool']>;
+  dispose(): Promise<void>;
+}
+
+export interface DoomChildSessionHooks {
+  bind(scope: DoomChildSessionHookScope): DoomChildSessionHookBinding;
+}
 
 export const DOOM_CHILD_SESSION_SERVICE = 'doom/child-session';
 /** Optional session-owned MCP dispatcher. Children borrow it without owning its connections. */
@@ -183,6 +205,7 @@ export interface DoomChildSessionServiceProvider {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     'doom/child-session': DoomChildSessionService;
+    'doom/child-session-hooks': DoomChildSessionHooks;
     'doom/child-session-mcp-tool': DoomChildSessionMcpTool;
   }
 }

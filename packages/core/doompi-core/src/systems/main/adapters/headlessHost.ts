@@ -5,6 +5,7 @@ import {
   DOOM_HEADLESS_HOST_SERVICE,
   DOOM_LOAD_SKILL_TOOL,
   readDoomHeadlessOwner,
+  isDoomHeadlessPromptAdmissionError,
   type DoomHeadlessActivity,
   type DoomHeadlessCommand,
   type DoomHeadlessEventName,
@@ -627,18 +628,27 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     await command.value.execute(args, this.context);
   }
 
-  async dispatchHook(event: DoomHeadlessEventName, payload: Readonly<Record<string, unknown>>): Promise<unknown[]> {
+  async dispatchHook(
+    event: DoomHeadlessEventName,
+    payload: Readonly<Record<string, unknown>>,
+    signal?: AbortSignal,
+  ): Promise<unknown[]> {
     this.assertReady();
+    signal?.throwIfAborted();
     const results: unknown[] = [];
     const revision = this.appliedRevision;
     let current = payload;
     for (const hook of this.hooks.filter((entry) => entry.value.event === event)) {
       this.assertReady();
+      signal?.throwIfAborted();
       if (!this.hooks.includes(hook)) continue;
       let result: unknown;
       try {
-        result = await hook.value.handle(current as never, this.context);
+        result = await hook.value.handle(current as never, signal ? { ...this.context, signal } : this.context);
+        signal?.throwIfAborted();
       } catch (error) {
+        if (isDoomHeadlessPromptAdmissionError(error)) throw error;
+        signal?.throwIfAborted();
         this.options.onError?.(error);
         continue;
       }

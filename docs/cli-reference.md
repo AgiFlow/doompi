@@ -37,6 +37,21 @@ unsupported keys as problems.
 
 Synchronized state is repository- and worktree-scoped under `~/.pi/.doom/sync`. Workspace package manifests live under `<workspace>/.pi/npm`; `--global` uses `~/.pi/.doom/.pi/npm` for promoted published packages. Publication is atomic. DoomPi does not remove old or orphaned generated directories automatically. See [Composition and runtime bundling](bundling.md) for the lifecycle.
 
+### Hook module authoring loop
+
+`doompi sync` and `dpi sync` compile registry module rows into the immutable generation and publish their descriptor and compiler receipts. Sync includes core groups plus the union of mode-selected groups, or all groups if any mode leaves `hookGroups` unset. At runtime, unset selection means all groups; explicit `hookGroups: []` means core only. Compile failures preserve the previous published generation.
+
+After changing `.doom/hooks.yaml`, module sources/imports, or mode selection:
+
+```bash
+doompi sync
+doompi sync --check
+```
+
+Then reload or restart the session and exercise the intended event. Sync alone does not update a running binding. Modules use compiled descriptor mappings with no live-source fallback; even cold imports retain the binding's startup generation. Native children retain their launch modules after parent reload/disposal and run tool rows only, not lifecycle rows.
+
+Module authors should import `defineDoomHook` from `@agimon-ai/doompi-hook/authoring`. Compilation is not sandboxing: hooks execute trusted code with host privileges. See the [hook authoring contract](../packages/default/doompi-hook/README.md) for the full context, serialized session-local setup, timeout/advisory behavior, event ownership, `skipInSubagent`, PreToolUse context blocking, and command Stop's five-refusal cap.
+
 ## Matrix and launch options
 
 The matrix describes the session DoomPi should resolve before Pi starts.

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Context as CordisContext } from '@deepseek-ai/cordis';
-import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context';
 import type { Model, Api, Usage } from '@earendil-works/pi-ai';
 import {
   getAgentDir,
@@ -20,6 +20,8 @@ import { Value } from 'typebox/value';
 import {
   DOOM_CHILD_SESSION_SERVICE,
   DOOM_CHILD_SESSION_MCP_TOOL_SERVICE,
+  DOOM_CHILD_SESSION_HOOKS_SERVICE,
+  type DoomChildSessionHooks,
   type DoomChildSessionMcpTool,
 } from '../../../exports/childSession';
 import type {
@@ -29,7 +31,7 @@ import type {
   DoomHeadlessTool,
   DoomHeadlessToolCompletionRequest,
 } from '../../../exports/headless';
-import { DOOM_LOAD_SKILL_TOOL } from '../../../exports/headless';
+import { DOOM_LOAD_SKILL_TOOL, DoomHeadlessPromptAdmissionError } from '../../../exports/headless';
 import type { DoomSessionContext } from '../../../exports/hubChannel';
 import type { DoomMcpContextSnapshot, DoomMcpSkill, DoomMcpUiResource } from '../../../exports/mcpFacet';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
@@ -568,9 +570,9 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     if (builtSystemPrompt !== undefined) return { text: builtSystemPrompt, stage: 'effective' };
     return { text: composeSystemPrompt(headlessHost.appliedResources), stage: 'base' };
   };
-  const beforeTool: NonNullable<DirectHarnessRuntimeOptions['beforeTool']> = async (event) => {
+  const beforeTool: NonNullable<DirectHarnessRuntimeOptions['beforeTool']> = async (event, context) => {
     if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
-    const patches = await headlessHost.dispatchHook('tool_call', event);
+    const patches = await headlessHost.dispatchHook('tool_call', event, context.abortSignal);
     let args = event.args;
     let block: NonNullable<HookMap['before_tool']['result']>['block'];
     for (const patch of patches) {
@@ -598,11 +600,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       ...(block === undefined ? {} : { block }),
     };
   };
-  const afterTool: NonNullable<DirectHarnessRuntimeOptions['afterTool']> = async (event) => {
+  const afterTool: NonNullable<DirectHarnessRuntimeOptions['afterTool']> = async (event, context) => {
     if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
     const reportedError = reportedToolErrors.delete(event.toolCallId);
     const original = reportedError ? { ...event, isError: true } : event;
-    const patches = await headlessHost.dispatchHook('tool_result', original);
+    const patches = await headlessHost.dispatchHook('tool_result', original, context.abortSignal);
     let content = original.content;
     let details = original.details;
     let isError = original.isError;
@@ -887,6 +889,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         }) ?? (() => undefined)
       );
     },
+    hooks: () => {
+      if (disposed || !headlessReady || !headlessHost?.status.ready)
+        throw new Error('Headless capabilities are not installed.');
+      return mcpServiceRoot?.get(DOOM_CHILD_SESSION_HOOKS_SERVICE) as DoomChildSessionHooks | undefined;
+    },
     mcpTool: () => {
       if (disposed || !headlessReady || !headlessHost?.status.ready) return undefined;
       return mcpServiceRoot?.get(DOOM_CHILD_SESSION_MCP_TOOL_SERVICE) as DoomChildSessionMcpTool | undefined;
@@ -1009,16 +1016,20 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         ).settled;
       },
       async admitPrompt(text, delivery, origin) {
-        if (origin === 'operator' && delivery === 'followUp') return runtime.followUp(text);
-        const submission =
-          delivery === 'interrupt'
-            ? await runtime.submitUserPrompt(text)
-            : origin === 'operator'
-              ? await runtime.submitPrompt(text, undefined, delivery === 'steer' ? 'steer' : undefined)
-              : await runtime.submitInternalMessage(text, delivery === 'steer' ? 'steer' : 'followUp');
-        void submission.settled.catch((error: unknown) =>
-          client!.client.notify({ body: error instanceof Error ? error.message : String(error), level: 'error' }),
-        );
+        try {
+          if (origin === 'operator' && delivery === 'followUp') return await runtime.followUp(text);
+          const submission =
+            delivery === 'interrupt'
+              ? await runtime.submitUserPrompt(text)
+              : origin === 'operator'
+                ? await runtime.submitPrompt(text, undefined, delivery === 'steer' ? 'steer' : undefined)
+                : await runtime.submitInternalMessage(text, delivery === 'steer' ? 'steer' : 'followUp');
+          void submission.settled.catch((error: unknown) =>
+            client!.client.notify({ body: error instanceof Error ? error.message : String(error), level: 'error' }),
+          );
+        } catch (error) {
+          throw new DoomHeadlessPromptAdmissionError(error);
+        }
       },
       abort: () => runtime.abort(),
       compact: (instructions) => runtime.compact(instructions),
@@ -1512,7 +1523,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       const toolCallId = `external-${randomUUID()}`;
       const before = await beforeTool(
         { toolCallId, toolName: invocation.name, args: invocation.arguments as Record<string, JsonValue> },
-        BACKGROUND_CONTEXT,
+        signal ? withAbortSignal(signal, BACKGROUND_CONTEXT) : BACKGROUND_CONTEXT,
       );
       if (before?.block !== undefined) return { content: [{ type: 'text', text: before.block.reason }], isError: true };
       const args = before?.args ?? (invocation.arguments as Record<string, JsonValue>);
@@ -1561,17 +1572,21 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           isError: true,
         };
       }
-      const patch = await afterTool(
-        {
-          toolCallId,
-          toolName: invocation.name,
-          args,
-          content: result.content,
-          ...(isJsonValue(result.details) ? { details: result.details } : {}),
-          isError: result.isError === true,
-        },
-        BACKGROUND_CONTEXT,
-      );
+      // A caller-cancelled tool can still settle normally. Do not begin post hooks
+      // for that cancelled operation or replace its already-settled result.
+      const patch = signal?.aborted
+        ? undefined
+        : await afterTool(
+            {
+              toolCallId,
+              toolName: invocation.name,
+              args,
+              content: result.content,
+              ...(isJsonValue(result.details) ? { details: result.details } : {}),
+              isError: result.isError === true,
+            },
+            signal ? withAbortSignal(signal, BACKGROUND_CONTEXT) : BACKGROUND_CONTEXT,
+          );
       const patched = {
         content: patch?.content ?? result.content,
         // A hook that rewrites a result must not leave the original payload available remotely.

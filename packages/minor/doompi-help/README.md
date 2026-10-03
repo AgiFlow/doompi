@@ -30,7 +30,7 @@ The mode detail reports applied Help skill and diagnostic-tool counts. Pending d
 | `diagnose_setup` | Distribution | Saved configuration, installed packages, and sync drift for the current workspace. |
 | `diagnose_agent` | Log          | Bounded current-session captured failure and token-usage evidence.                 |
 
-Optional owners contribute only when present in the composition. The entry skill `doompi-use-help` routes to configuration, profile, mode, domain, skill, and debugging guidance rather than loading every document eagerly.
+Optional owners contribute only when present in the composition. The entry skill `doompi-use-help` routes to configuration, profile, mode, domain, hook, skill, and debugging guidance rather than loading every document eagerly. When `@agimon-ai/doompi-hook` is loaded, active Help exposes its `doompi-author-hook` skill for creating registry groups, TypeScript modules, and command hooks. Deactivating Help withdraws it from future discovery.
 
 Diagnostics do not install packages, change configuration, authenticate servers, clear logs, or restart processes. Existing approval and permission boundaries apply to repairs. Agent telemetry distinguishes empty or unavailable data from captured evidence and never treats absent records as proof of health.
 

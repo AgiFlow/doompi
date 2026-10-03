@@ -51,10 +51,10 @@ import { createWebCompositions } from '@agimon-ai/doompi-core/webCompositions';
 import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import WebSocket from 'ws';
 
-import { HARNESS_STATE_KEYS, HARNESS_STATE_POINTER } from '../../composition/harnessState';
+import { HARNESS_STATE_KEYS, HARNESS_STATE_POINTER, updateHarnessState } from '../../composition/harnessState';
 import { findRepositoryRoot } from '../../composition/repository';
 import { readSyncDrift } from '../../composition/syncDrift';
-import { readSyncState } from '../../composition/syncState';
+import { readSyncState, readRegisteredSyncState } from '../../composition/syncState';
 import { readRegisteredBootstrapStatus } from '../cli/bootstrapLocator';
 import { buildHarnessContext } from '../cli/harnessContext';
 import { createComputerUseBinding } from './computerUseBinding';
@@ -632,6 +632,9 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         if (!piBootstrap.fresh || piBootstrap.bootstrap === undefined) {
           throw new Error(`The admitted DoomPi bootstrap for generation '${registration.generation}' is unavailable.`);
         }
+        // Read the admitted registration, not the repository's moving current pointer.
+        const hookModules = readRegisteredSyncState(registration, homeDirectory).fileState.hookModules;
+        updateHarnessState({ hookModules }, context.environment);
         return {
           cwd: policyOptions.cwd,
           repoRoot: policyOptions.repoRoot,

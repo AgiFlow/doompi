@@ -812,9 +812,16 @@ export const providerOwnedPolicy: RuleDefinition = {
   rule: 'Consumers register semantic subagent policy and must not mutate foreign tool calls',
   rationale:
     'The Team provider owns tool shapes and policy merging so consumers remain decoupled from implementation details.',
-  check(filePath) {
+  check(filePath, configRoot) {
+    if (!isDoomProductionSource(filePath, configRoot)) return null;
     const text = readText(filePath);
     if (!text) return null;
+    // This provider owns Pi-native events and validates patches before applying them.
+    if (
+      readManifest(path.join(configRoot, PACKAGE_MANIFEST_NAME))?.name === '@agimon-ai/doompi-hook' &&
+      projectPath(filePath, configRoot) === 'src/services/hookDispatch/index.ts'
+    )
+      return null;
     return /['"]tool_call['"]/.test(text) &&
       /(?:event|input)\.(?:input|params)\s*=|Object\.assign\s*\(\s*(?:event|input)/.test(text)
       ? 'Do not mutate foreign tool calls. Register typed subagent policy with the Team provider.'

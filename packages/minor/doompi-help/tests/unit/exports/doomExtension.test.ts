@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -17,7 +17,7 @@ afterEach(async () => {
   for (const close of cleanup.splice(0).reverse()) await close();
 });
 
-async function fixture() {
+async function fixture(withHook = false) {
   const cacheRoot = await mkdtemp(path.join(os.tmpdir(), 'doom-help-pi-'));
   cleanup.push(() => rm(cacheRoot, { recursive: true, force: true }));
   const commands = new Map<string, Parameters<ExtensionAPI['registerCommand']>[1]>();
@@ -58,6 +58,12 @@ async function fixture() {
   } as unknown as ExtensionAPI;
   await installDoomCordisHost(pi, { mode: 'composed', source: 'help-test-host' });
   await helpExtension(pi, { cacheRoot });
+  if (withHook) {
+    const hookModule = (await import(
+      new URL('../../../../../default/doompi-hook/dist/extensions/pi.mjs', import.meta.url).href
+    )) as { default: (pi: ExtensionAPI) => Promise<void> };
+    await hookModule.default(pi);
+  }
   const connection = await connectDoomCordisHost(pi, 'help-test');
   const context = {
     cwd: cacheRoot,
@@ -81,6 +87,46 @@ async function fixture() {
 }
 
 describe('standard Help extension', () => {
+  it('discovers the Hook-owned authoring skill and withdraws it when Help is disabled', async () => {
+    const current = await fixture(true);
+    const service = readDoomHelpService(current.connection.root)!;
+    const skillName = 'doompi-author-hook';
+    const source = '@agimon-ai/doompi-hook';
+    expect(service.listContributions().find((entry) => entry.source === source)).toMatchObject({
+      skills: [expect.objectContaining({ name: skillName })],
+    });
+    expect(service.getSnapshot().skills).toEqual([]);
+    const unbind = service.bindSkillInventory(async () => service.getSnapshot().skills.map((skill) => skill.filePath));
+    try {
+      await current.command.handler('', current.context as Parameters<typeof current.command.handler>[1]);
+      const skill = service.getSnapshot().skills.find((entry) => entry.name === skillName)!;
+      expect(skill).toMatchObject({ name: skillName, source });
+      expect(await service.inspectSkills()).toContainEqual(skill);
+      const wrapper = await readFile(skill.filePath, 'utf8');
+      expect(wrapper).toContain(skillName);
+      const indexPath = JSON.parse(wrapper.match(/Help index at ("[^\n]+")./)![1]!) as string;
+      const referenceBase = JSON.parse(wrapper.match(/against ("[^\n]+")./)![1]!) as string;
+      const index = await readFile(indexPath, 'utf8');
+      const resourceLink = index.match(/\[Author DoomPi hooks\]\(([^)]+)\)/)![1]!;
+      expect(resourceLink).toBe('./src/prompts/doompi-author-hook/SKILL.md');
+      const resourcePath = path.resolve(referenceBase, resourceLink);
+      expect(resourcePath).toMatch(/doompi-hook\/src\/prompts\/doompi-author-hook\/SKILL\.md$/);
+      const body = await readFile(resourcePath, 'utf8');
+      expect(body).toContain("import { defineDoomHook } from '@agimon-ai/doompi-hook/authoring'");
+      expect(body).toContain('module: .doom/hooks/guard.ts');
+      expect(body).toContain('## Command payloads and decisions');
+      expect(body).toContain('/bin/bash -c');
+      expect(body).toContain('doompi sync');
+
+      await current.command.handler('', current.context as Parameters<typeof current.command.handler>[1]);
+      expect(service.getSnapshot().activation).toBe('inactive');
+      expect(service.getSnapshot().skills).toEqual([]);
+      expect(await service.inspectSkills()).toEqual([]);
+    } finally {
+      unbind();
+    }
+  });
+
   it('gates its real diagnostic through activation, ordinary tool composition, and stale execution', async () => {
     const current = await fixture();
     const service = readDoomHelpService(current.connection.root)!;

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { Context } from '@deepseek-ai/cordis';
 import { createAssistantMessageEventStream, type Api, type AssistantMessage, type Model } from '@earendil-works/pi-ai';
@@ -22,7 +23,12 @@ import {
 import type { DoomMcpPluginContext } from '../../../../../src/exports/mcpFacet';
 import { DOOM_MCP_STATUS_SERVICE } from '../../../../../src/exports/mcpStatus';
 import { DOOM_NOTIFICATION_ENTRY_TYPE } from '../../../../../src/exports/notification';
-import type { DoomServerBundleEntry } from '../../../../../src/exports/serverFacet';
+import {
+  createDoomServerHost,
+  DOOM_SERVER_HOST_SERVICE,
+  type DoomServerBundleEntry,
+  type DoomServerFacet,
+} from '../../../../../src/exports/serverFacet';
 import * as directHarnessRuntime from '../../../../../src/server/directHarnessRuntime';
 import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 import * as piExtensionHost from '../../../../../src/services/piExtensionHost';
@@ -52,6 +58,8 @@ async function fixture(
     streamSimple?: ModelRuntime['streamSimple'];
     allowedTools?: readonly string[];
     initialFastMode?: boolean;
+    piExtensionPaths?: string[];
+    onNotice?: (notice: string) => void;
   } = {},
 ): Promise<{
   host: Awaited<ReturnType<typeof createHeadlessSessionHost>>;
@@ -80,6 +88,15 @@ async function fixture(
     streamSimple: options.streamSimple,
   } as unknown as ModelRuntime);
   const context = new Context();
+  const bridge = path.join(agentDir, 'cordis-host.mjs');
+  if (options.piExtensionPaths) {
+    const entry = pathToFileURL(path.resolve(import.meta.dirname, '../../../../../dist/cordisHost.mjs')).href;
+    fs.writeFileSync(
+      bridge,
+      `import {installDoomCordisHost} from ${JSON.stringify(entry)};
+export default async (pi) => { await installDoomCordisHost(pi, {mode: 'composed'}); };`,
+    );
+  }
   const host = await createHeadlessSessionHost({
     cwd,
     repoRoot: cwd,
@@ -90,7 +107,9 @@ async function fixture(
     environment: {},
     candidates: options.candidates ?? [],
     mcpPlugins,
-    piExtensions: false,
+    piExtensions: options.piExtensionPaths !== undefined,
+    piExtensionPaths: options.piExtensionPaths ? [bridge, ...options.piExtensionPaths] : undefined,
+    onNotice: options.onNotice,
     selection: { majorMode: 'test', activeLayers: [], domains: [], state: { 'minor-mode': options.modes ?? [] } },
     ...(options.inheritedSelection ? { inheritedSelection: options.inheritedSelection } : {}),
     ...(options.allowedTools ? { allowedTools: options.allowedTools } : {}),
@@ -1434,6 +1453,7 @@ describe('MCP execution boundary', () => {
     for (const source of ['caller', 'lifecycle'] as const) {
       const current = await remoteFixture();
       const controller = new AbortController();
+      const dispatchHook = vi.spyOn(current.host.host!, 'dispatchHook');
       let received: AbortSignal | undefined;
       current.execute.mockImplementationOnce(async (...args: unknown[]) => {
         received = args[2] as AbortSignal;
@@ -1444,6 +1464,7 @@ describe('MCP execution boundary', () => {
       const result = current.host.mcpSurface.invokeTool({ ...current.invocation, signal: controller.signal });
       if (source === 'lifecycle') await expect(result).rejects.toThrow();
       else await result;
+      expect(dispatchHook.mock.calls.some(([event]) => event === 'tool_result')).toBe(false);
       expect(received).toBeDefined();
       expect(received!.aborted).toBe(true);
       if (source === 'lifecycle') expect(controller.signal.aborted).toBe(false);
@@ -1506,5 +1527,289 @@ describe('MCP execution boundary', () => {
     { toolUri: 'ui://another-package/view.html' },
   ])('rejects invalid or unowned UI registrations: %j', async (ui) => {
     await expect(remoteFixture(undefined, ui)).rejects.toThrow();
+  });
+});
+
+describe('real headless parent hook routing', () => {
+  const hookDist = path.resolve(import.meta.dirname, '../../../../../../../default/doompi-hook/dist');
+  const configDist = path.resolve(import.meta.dirname, '../../../../../../../foundations/doompi-config/dist');
+  const candidate: DoomServerBundleEntry = {
+    packageName: '@agimon-ai/doompi-hook',
+    entry: './generated/server.ts',
+    module: './dist/extensions/server.mjs',
+    scopes: ['session'],
+    required: true,
+    owners: [{ majorMode: 'test', layer: 'default' }],
+  };
+
+  async function parent(
+    moduleBody: string,
+    streamSimple?: ModelRuntime['streamSimple'],
+    mcpPlugins: Parameters<typeof fixture>[0] = [],
+    events = ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
+  ) {
+    const notices: string[] = [];
+    const current = await fixture(mcpPlugins, {
+      onNotice: (notice) => notices.push(notice),
+      candidates: [candidate],
+      piExtensionPaths: [path.join(hookDist, 'extensions/pi.mjs')],
+      streamSimple,
+    });
+    const cwd = current.host.host!.context.cwd;
+    vi.stubEnv('HOME', path.dirname(cwd));
+    const source = path.join(cwd, 'hook.ts');
+    const artifact = path.join(cwd, 'hook.mjs');
+    const descriptor = path.join(cwd, 'modules.json');
+    const log = path.join(cwd, 'proof.jsonl');
+    fs.mkdirSync(path.join(cwd, '.doom'));
+    fs.writeFileSync(
+      artifact,
+      `import fs from 'node:fs';
+const record = (phase, ctx) => fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({phase, sessionId: ctx?.sessionId}) + '\\n');
+export default {setup() { record('setup'); ${moduleBody} }};`,
+    );
+    fs.writeFileSync(descriptor, JSON.stringify({ version: 1, modules: [{ source, artifact }] }));
+    fs.writeFileSync(
+      path.join(cwd, '.doom/hooks.yaml'),
+      `groups:\n  proof:\n    hooks:\n${events
+        .map((event) => `      - event: ${event}\n        pi:\n          module: ${JSON.stringify(source)}`)
+        .join('\n')}\n`,
+    );
+    // Built public entries keep this core test independent of external source tsconfigs.
+    const configEntry = pathToFileURL(path.join(configDist, 'piContext.mjs')).href;
+    const { provideDoomConfigContext } = await import(configEntry);
+    provideDoomConfigContext(current.context, {
+      settings: { projectTrust: 'ask' },
+      harness: { root: cwd, hookModules: { file: descriptor }, pluginHooks: [], hookGroups: ['proof'] },
+      requiresRelaunch: false,
+    });
+    const facetEntry = pathToFileURL(path.join(hookDist, 'extensions/server.mjs')).href;
+    const { default: facet } = (await import(facetEntry)) as { default: DoomServerFacet };
+    const serverHost = createDoomServerHost({
+      scope: 'session',
+      context: { scope: 'session', cwd, onNotice: (notice) => notices.push(notice) },
+    });
+    current.context.provide(DOOM_SERVER_HOST_SERVICE, serverHost);
+    await current.context
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin(facet)
+      .await();
+    const execute = vi.fn<DoomHeadlessTool['execute']>(async () => ({ content: [{ type: 'text', text: 'executed' }] }));
+    await current.context
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin((context: Context) => {
+        requireDoomHeadlessHost(context).registerTool({
+          name: 'parent_probe',
+          description: 'Parent routing probe',
+          parameters: Type.Object({}),
+          execute,
+        });
+      })
+      .await();
+    const rows = (): Array<{ phase: string; sessionId?: string }> =>
+      fs.existsSync(log)
+        ? fs
+            .readFileSync(log, 'utf8')
+            .trim()
+            .split('\n')
+            .map((line) => JSON.parse(line))
+        : [];
+    expect(current.host.canDispatch()).toBe(false);
+    await current.host.activateFacets({
+      root: current.context,
+      installedPackages: [candidate.packageName],
+      dispose: async () => {},
+    });
+    expect(current.host.canDispatch()).toBe(true);
+    expect(notices).toEqual([]);
+    return { ...current, cwd, rows, execute };
+  }
+
+  function appendCommandRows(cwd: string) {
+    const log = path.join(cwd, 'commands.jsonl');
+    const script = path.join(cwd, 'record.cjs');
+    fs.writeFileSync(
+      script,
+      `const fs = require('node:fs'); const payload = JSON.parse(fs.readFileSync(0, 'utf8')); fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(payload) + '\\n');`,
+    );
+    const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(script)}`;
+    fs.appendFileSync(
+      path.join(cwd, '.doom/hooks.yaml'),
+      `${['PreToolUse', 'PostToolUse'].map((event) => `      - event: ${event}\n        pi:\n          command: ${JSON.stringify(command)}`).join('\n')}\n`,
+    );
+    return (): Array<{ hook_event_name: string; tool_name: string; session_id: string }> =>
+      fs.existsSync(log)
+        ? fs
+            .readFileSync(log, 'utf8')
+            .trim()
+            .split('\n')
+            .map((line) => JSON.parse(line))
+        : [];
+  }
+
+  const recordingModule = `return {
+    session_start(event, ctx) { record('start', ctx); },
+    tool_call(event, ctx) { record('pre', ctx); },
+    tool_result(event, ctx) { record('post', ctx); return {content: [{type: 'text', text: 'redacted'}]}; },
+    agent_settled(event, ctx) { record('settled', ctx); },
+    dispose() { record('dispose'); }
+  };`;
+
+  it('shares one module setup across real Pi lifecycle and native tool rows exactly once', async () => {
+    let requests = 0;
+    const streamSimple = vi.fn<ModelRuntime['streamSimple']>(() => {
+      const stream = createAssistantMessageEventStream();
+      const tool = requests++ === 0;
+      const message: AssistantMessage = {
+        role: 'assistant',
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        timestamp: 0,
+        stopReason: tool ? 'toolUse' : 'stop',
+        content: tool
+          ? [{ type: 'toolCall', id: 'parent-call', name: 'parent_probe', arguments: {} }]
+          : [{ type: 'text', text: 'Done' }],
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      };
+      stream.push({ type: 'done', reason: tool ? 'toolUse' : 'stop', message });
+      stream.end();
+      return stream;
+    });
+    const current = await parent(recordingModule, streamSimple);
+    expect(current.rows().map(({ phase }) => phase)).toEqual(['setup', 'start']);
+    const status = current.host.host!.status;
+    const commandRows = appendCommandRows(current.cwd);
+    await current.session.prompt('Run the parent probe');
+    expect(commandRows().map(({ hook_event_name, tool_name }) => [hook_event_name, tool_name])).toEqual([
+      ['PreToolUse', 'parent_probe'],
+      ['PostToolUse', 'parent_probe'],
+    ]);
+    await vi.waitFor(() =>
+      expect(current.rows().map(({ phase }) => phase)).toEqual(['setup', 'start', 'pre', 'post', 'settled']),
+    );
+    expect(current.execute).toHaveBeenCalledOnce();
+    expect(
+      current
+        .rows()
+        .filter(({ sessionId }) => sessionId)
+        .every(({ sessionId }) => sessionId === current.runtime.sessionId),
+    ).toBe(true);
+    const entries = (await current.runtime.readEntries()).entries;
+    expect(entries.find((entry) => entry.type === 'message' && entry.message.role === 'toolResult')).toMatchObject({
+      message: { content: [{ type: 'text', text: 'redacted' }] },
+    });
+    expect(current.host.host!.status).toEqual(status);
+    await current.host.dispose();
+    await current.context.fiber.dispose();
+    expect(current.rows().map(({ phase }) => phase)).toEqual(['setup', 'start', 'pre', 'post', 'settled', 'dispose']);
+  });
+
+  it('dispatches real command rows once on MCP and direct tool surfaces (mocked tool bodies)', async () => {
+    const remote = vi.fn<DoomHeadlessTool['execute']>(async () => ({ content: [{ type: 'text', text: 'remote' }] }));
+    const current = await parent(recordingModule, undefined, [
+      {
+        declaration: {
+          packageName: 'test',
+          entry: './mcp.mjs',
+          module: './mcp.mjs',
+          sha256: '0'.repeat(64),
+          owners: [{ majorMode: 'test', layer: 'default' }],
+        },
+        plugin: {
+          name: 'test',
+          session: {
+            tools: [
+              { name: 'remote_probe', description: 'Remote probe', parameters: Type.Object({}), execute: remote },
+            ],
+          },
+        },
+      },
+    ]);
+    const commandRows = appendCommandRows(current.cwd);
+    for (const [surface, name] of [
+      [current.host.toolSurface, 'parent_probe'],
+      [current.host.mcpSurface, 'remote_probe'],
+    ] as const) {
+      await surface.invokeTool({ revision: surface.readSurface().revision, name, arguments: {} });
+    }
+    const rows = commandRows();
+    expect(rows.map(({ hook_event_name, tool_name }) => [hook_event_name, tool_name])).toEqual([
+      ['PreToolUse', 'parent_probe'],
+      ['PostToolUse', 'parent_probe'],
+      ['PreToolUse', 'remote_probe'],
+      ['PostToolUse', 'remote_probe'],
+    ]);
+    expect(rows.every(({ session_id }) => session_id === current.runtime.sessionId)).toBe(true);
+    expect(current.execute).toHaveBeenCalledOnce();
+    expect(remote).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a live headless host on its startup descriptor before its first lazy module import', async () => {
+    const current = await parent(recordingModule, undefined, [], ['PreToolUse', 'PostToolUse']);
+    expect(current.rows()).toEqual([]);
+    const source = path.join(current.cwd, 'hook.ts');
+    const artifact = path.join(current.cwd, 'replacement.mjs');
+    const file = path.join(current.cwd, 'replacement.json');
+    fs.writeFileSync(artifact, 'export default {setup(){throw new Error("replacement must not load")}}');
+    fs.writeFileSync(file, JSON.stringify({ version: 1, modules: [{ source, artifact }] }));
+    const { requireDoomConfigContext, replaceDoomConfigContext } = await import(
+      pathToFileURL(path.join(configDist, 'piContext.mjs')).href
+    );
+    const config = requireDoomConfigContext(current.context);
+    replaceDoomConfigContext(current.context, { ...config, harness: { ...config.harness, hookModules: { file } } });
+    const surface = current.host.toolSurface.readSurface();
+    expect(
+      await current.host.toolSurface.invokeTool({ revision: surface.revision, name: 'parent_probe', arguments: {} }),
+    ).toMatchObject({
+      content: [{ type: 'text', text: 'redacted' }],
+    });
+    expect(current.rows().map(({ phase }) => phase)).toEqual(['setup', 'pre', 'post']);
+    expect(current.execute).toHaveBeenCalledOnce();
+  });
+
+  it('propagates real admission markers through a module and stops later tool rows (mocked admission rejection)', async () => {
+    const current = await parent(
+      `return { tool_call: async (event, ctx) => { record('pre', ctx); await ctx.sendMessage('continue', 'steer'); record('unreachable'); } };`,
+    );
+    const commandRows = appendCommandRows(current.cwd);
+    // Only the admission failure is doubled. Session wrapping, module dispatch and facet routing are real.
+    vi.spyOn(current.runtime, 'submitInternalMessage').mockRejectedValue(new Error('Queue admission refused'));
+    const surface = current.host.toolSurface.readSurface();
+    await expect(
+      current.host.toolSurface.invokeTool({ revision: surface.revision, name: 'parent_probe', arguments: {} }),
+    ).rejects.toMatchObject({ name: 'DoomHeadlessPromptAdmissionError', message: 'Queue admission refused' });
+    expect(current.execute).not.toHaveBeenCalled();
+    expect(current.rows().map(({ phase }) => phase)).toEqual(['setup', 'pre']);
+    expect(commandRows()).toEqual([]);
+    expect(current.host.canDispatch()).toBe(true);
+  });
+
+  it('cancels an in-flight module using the operation signal without executing the tool', async () => {
+    const current = await parent(
+      `return { tool_call: async (event, ctx) => { record('waiting', ctx); await new Promise((resolve, reject) => ctx.signal.addEventListener('abort', () => reject(ctx.signal.reason), {once: true})); record('unreachable'); } };`,
+    );
+    const controller = new AbortController();
+    const surface = current.host.toolSurface.readSurface();
+    const pending = current.host.toolSurface.invokeTool({
+      revision: surface.revision,
+      name: 'parent_probe',
+      arguments: {},
+      signal: controller.signal,
+    });
+    const rejection = expect(pending).rejects.toThrow('Operation cancelled');
+    await vi.waitFor(() => expect(current.rows().map(({ phase }) => phase)).toContain('waiting'));
+    controller.abort(new Error('Operation cancelled'));
+    await rejection;
+    expect(current.execute).not.toHaveBeenCalled();
+    expect(current.rows().map(({ phase }) => phase)).not.toContain('unreachable');
+    expect(current.host.canDispatch()).toBe(true);
   });
 });

@@ -1,10 +1,10 @@
 # Doom Pi Hook
 
-Claude-Code-compatible repository and plugin hooks for Doom Pi sessions.
+Compiled TypeScript modules and Claude-compatible command hooks for DoomPi sessions.
 
 ## How to author
 
-- [Author DoomPi hooks](./src/prompts/doompi-author-hook/SKILL.md): Create `.doom/hooks.yaml` groups and Claude-compatible hook commands.
+- [Author DoomPi hooks](./src/prompts/doompi-author-hook/SKILL.md): Create `.doom/hooks.yaml` groups, compiled TypeScript modules, and Claude-compatible command hooks.
 
 ## Package reference
 

@@ -1061,6 +1061,14 @@ function setExternalResolver(
       }
       if (specifier.startsWith('./index')) return null;
 
+      if (specifier === '@agimon-ai/doompi-hook/authoring') {
+        const resolved = await this.resolve(specifier, importer, options);
+        if (resolved) return { id: resolved.id, external: false };
+        const installed = optionalPackageEntry(specifier, import.meta.url);
+        if (installed) return { id: installed, external: false };
+        return null;
+      }
+
       const renamed = renameScope(specifier);
       const root = packageRootOf(renamed);
       if (root && HOSTED_PACKAGES.has(root)) {

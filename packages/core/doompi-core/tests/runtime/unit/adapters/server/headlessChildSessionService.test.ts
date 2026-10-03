@@ -9,7 +9,11 @@ import { AgentDoc } from '@earendil-works/pi-durable';
 import { Type } from 'typebox';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DoomChildSessionRequest } from '../../../../../src/exports/childSession';
+import type {
+  DoomChildSessionHookScope,
+  DoomChildSessionHooks,
+  DoomChildSessionRequest,
+} from '../../../../../src/exports/childSession';
 import type { DirectHarnessRuntime, DirectHarnessRuntimeOptions } from '../../../../../src/server/directHarnessRuntime';
 import { DurableNavigationDoc } from '../../../../../src/services/durableNavigation';
 import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
@@ -130,6 +134,184 @@ async function createSource(
 }
 
 describe('headless child session provider', () => {
+  it.each(['fresh', 'v4-restore', 'v4-fork'] as const)(
+    'binds hooks lazily with authoritative %s identity and an immutable request',
+    async (kind) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-child-hooks-'));
+      const sourcePath = kind === 'fresh' ? undefined : await createSource(root);
+      const source: DoomChildSessionRequest['source'] =
+        kind === 'fresh'
+          ? { kind }
+          : kind === 'v4-restore'
+            ? { kind, sessionFile: sourcePath! }
+            : { kind, sessionFile: sourcePath!, branch: 'main' };
+      const runtime = fakeRuntime(`authoritative-${kind}`);
+      let finish!: () => void;
+      runtime.submitInternalMessage = vi.fn(async (_message, delivery) => ({
+        settled: new Promise<void>((resolve) => {
+          if (delivery === undefined) finish = resolve;
+        }),
+      }));
+      let scope!: DoomChildSessionHookScope;
+      const beforeTool = vi.fn(async () => ({ block: { reason: 'denied' } }));
+      const afterTool = vi.fn(async () => ({ isError: true }));
+      let release!: () => void;
+      const dispose = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+      );
+      let current: DoomChildSessionHooks | undefined;
+      const hooks = vi.fn(() => current);
+      const factory = vi.fn(async (options: DirectHarnessRuntimeOptions) => {
+        expect(scope.sessionId()).toBeUndefined();
+        expect(options.beforeTool).toBe(beforeTool);
+        expect(options.afterTool).toBe(afterTool);
+        expect(options.activeToolNames).toEqual(['read']);
+        return runtime;
+      });
+      const provider = createHeadlessChildSessionServiceProvider({
+        parentSessionId: 'parent-session',
+        cwd: root,
+        hooks,
+        runtimeFactory: factory,
+      });
+      expect(hooks).not.toHaveBeenCalled();
+      current = {
+        bind: (bound) => {
+          scope = bound;
+          return { beforeTool, afterTool, dispose };
+        },
+      };
+      const ownedRequest = {
+        ...request(source, root),
+        tools: ['read', 'bash'],
+        capabilityCeiling: { allowedTools: ['read'], denyExtensions: true },
+      };
+      const handle = await provider.get()!.start(ownedRequest);
+      expect(scope.sessionId()).toBe(`authoritative-${kind}`);
+      expect(scope.request.parentSessionId).toBe('parent-session');
+      expect(scope.request.agent).toBe('writer');
+      expect(Object.isFrozen(scope.request)).toBe(true);
+      expect(Object.isFrozen(scope.request.capabilityCeiling?.allowedTools)).toBe(true);
+      ownedRequest.tools.push('write');
+      expect(scope.request.tools).toEqual(['read', 'bash']);
+      await scope.sendMessage('context', 'steer');
+      expect(runtime.submitInternalMessage).toHaveBeenCalledWith('context', 'steer');
+      await scope.appendCustomEntry('hook', { ok: true });
+      const closing = handle.dispose();
+      await vi.waitFor(() => expect(dispose).toHaveBeenCalledOnce());
+      expect(scope.signal.aborted).toBe(true);
+      expect(runtime.dispose).not.toHaveBeenCalled();
+      await expect(scope.sendMessage('late', 'followUp')).rejects.toThrow();
+      await expect(scope.appendCustomEntry('late', null)).rejects.toThrow();
+      release();
+      finish();
+      await closing;
+      await provider.close();
+      expect(dispose).toHaveBeenCalledOnce();
+      expect(runtime.dispose).toHaveBeenCalledOnce();
+      fs.rmSync(root, { recursive: true, force: true });
+    },
+  );
+
+  it('keeps native, borrowed MCP, and intercom calls on the runtime hook boundary', async () => {
+    const runtime = fakeRuntime('hooked-tools');
+    let applied: NonNullable<DirectHarnessRuntimeOptions['tools']> = [];
+    runtime.replaceTools = vi.fn(async (tools) => {
+      applied = tools;
+    });
+    const beforeTool = vi.fn(async (event: Parameters<NonNullable<DirectHarnessRuntimeOptions['beforeTool']>>[0]) => ({
+      args: { ...event.args, hooked: true },
+    }));
+    const afterTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'patched' }] }));
+    const mcpExecute = vi.fn(async () => ({ content: [] }));
+    const intercomExecute = vi.fn(async () => ({ content: [] }));
+    const direct = { name: 'work_search', description: 'Search', parameters: {}, execute: mcpExecute };
+    const mcp = {
+      name: 'mcp',
+      description: 'MCP',
+      parameters: {},
+      execute: mcpExecute,
+      catalog: { snapshot: () => [direct], resolveSelectors: () => ['work_search'], subscribe: () => () => undefined },
+    };
+    let options!: DirectHarnessRuntimeOptions;
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent',
+      cwd: '/tmp',
+      mcpTool: () => mcp,
+      hooks: () => ({ bind: () => ({ beforeTool, afterTool, dispose: async () => undefined }) }),
+      runtimeFactory: async (received) => {
+        options = received;
+        applied = received.tools ?? [];
+        return runtime;
+      },
+    });
+    const handle = await service.start({
+      ...request({ kind: 'fresh' }),
+      tools: ['read', 'mcp'],
+      intercom: {
+        bindRuntime: () => ({ name: 'intercom', description: 'Team', parameters: {}, execute: intercomExecute }),
+      },
+      capabilityCeiling: { allowedTools: ['read', 'mcp'], allowMcpTools: true, denyExtensions: true },
+    });
+    expect(applied.map((tool) => tool.name).sort()).toEqual(['intercom', 'read', 'work_search']);
+    for (const tool of applied) {
+      const event = { toolCallId: tool.name, toolName: tool.name, args: {} };
+      expect(await options.beforeTool!(event, BACKGROUND_CONTEXT)).toEqual({ args: { hooked: true } });
+      expect(
+        await options.afterTool!(
+          {
+            ...event,
+            content: [],
+            isError: false,
+          },
+          BACKGROUND_CONTEXT,
+        ),
+      ).toEqual({ content: [{ type: 'text', text: 'patched' }] });
+    }
+    expect(beforeTool.mock.calls.map(([event]) => event.toolName).sort()).toEqual(['intercom', 'read', 'work_search']);
+    expect(afterTool).toHaveBeenCalledTimes(3);
+    await handle.dispose();
+    await service.close();
+  });
+
+  it('awaits hook cleanup on failed runtime startup and aborts its scope', async () => {
+    let scope!: DoomChildSessionHookScope;
+    let release!: () => void;
+    const dispose = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent',
+      cwd: '/tmp',
+      hooks: () => ({
+        bind: (bound) => {
+          scope = bound;
+          return { beforeTool: async () => ({}), afterTool: async () => ({}), dispose };
+        },
+      }),
+      runtimeFactory: async () => {
+        throw new Error('startup failed');
+      },
+    });
+    let settled = false;
+    const starting = service.start(request({ kind: 'fresh' })).finally(() => {
+      settled = true;
+    });
+    const rejected = expect(starting).rejects.toThrow('startup failed');
+    await vi.waitFor(() => expect(dispose).toHaveBeenCalledOnce());
+    expect(scope.signal.aborted).toBe(true);
+    expect(settled).toBe(false);
+    release();
+    await rejected;
+    await service.close();
+  });
+
   it('emits only the selected work MCP declaration in an actual native child model request', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-child-model-tools-'));
     const model: Model<Api> = {

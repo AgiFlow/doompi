@@ -132,7 +132,7 @@ export interface SyncState {
    * Plugin hooks, the profile's environment defaults, and the neutral MCP
    * projection live in the session state file rather than in variables.
    */
-  fileState: Pick<HarnessState, 'profileEnvironment' | 'pluginHooks'> & {
+  fileState: Pick<HarnessState, 'profileEnvironment' | 'pluginHooks' | 'hookModules'> & {
     mcpProjection: DoomMcpProjection;
   };
   /** Entry name to absolute path, covering every layer, not just the selected mode's. */
@@ -634,6 +634,9 @@ function parseSyncState(source: string, statePath: string, options: ParseSyncSta
         : {},
       pluginHooks: Array.isArray(fileState.pluginHooks) ? (fileState.pluginHooks as HarnessState['pluginHooks']) : [],
       mcpProjection: fileState.mcpProjection,
+      ...(isRecord(fileState.hookModules) && typeof fileState.hookModules.file === 'string'
+        ? { hookModules: { file: fileState.hookModules.file } }
+        : {}),
     },
     resolved: stringRecord(parsed.resolved, 'resolved', statePath),
     compiled,

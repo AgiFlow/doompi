@@ -21,6 +21,8 @@ Use `diagnose_setup` when contributed by the distribution. It checks saved confi
 
 Follow the indicated configuration, profile, major-mode, or domain skill. Read both the personal and repository configuration through authorized tools before proposing changes. Explain source precedence and preserve unrelated settings. A saved change may require a separate authorized reload or selection transition before it affects the session.
 
+When creating or changing hooks, load `doompi-author-hook`, contributed by `@agimon-ai/doompi-hook`. It covers `.doom/hooks.yaml`, group selection, compiled TypeScript modules, command hooks, child behavior, and the sync-then-reload workflow. If it is absent, inspect the hook package's activation and resource availability rather than inventing a hook API.
+
 Configuration edits, package installation, model changes, authentication, permissions, and restarts require the existing approval and execution mechanisms. Present the intended change and verification first. Do not enable a domain, plugin, MCP server, shell, or network permission merely because a diagnostic would be easier with it.
 
 ## Debug an agent or a missing capability

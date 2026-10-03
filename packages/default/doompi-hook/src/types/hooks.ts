@@ -18,16 +18,20 @@ export interface HookCommand {
 }
 
 /** What one registry row declares for the `pi` frontend. */
-export interface RegistryBinding {
+export interface RegistryBindingOptions {
   matcher?: string;
-  command: string;
   timeout?: number;
   skipInSubagent?: boolean;
   order?: number;
 }
 
+export type RegistryBinding = RegistryBindingOptions &
+  ({ command: string; module?: never } | { module: string; command?: never });
+
 /** A registry row plus the group membership used to include or drop it. */
-export interface RegistryEntry extends RegistryBinding {
+export type RegistryEntry = RegistryBinding & {
+  registryId: string;
+  rowId: string;
   event: string;
   order: number;
   /** Declaration order across every source, used as the sort tiebreaker. */
@@ -36,7 +40,7 @@ export interface RegistryEntry extends RegistryBinding {
   core: boolean;
   /** Root of the config that declared the group, exported as CLAUDE_PLUGIN_ROOT. */
   baseDirectory: string;
-}
+};
 
 export interface RegistryGroup {
   core?: boolean;
@@ -50,12 +54,14 @@ export interface RegistryDocument {
 /** One `.doom/hooks.yaml` as read from disk, before it is parsed. */
 export interface HookDocumentSource {
   baseDirectory: string;
+  registryId?: string;
   text: string;
 }
 
 /** One `.doom/hooks.yaml` after parsing, tagged with the root that declared it. */
 export interface ParsedRegistrySource {
   baseDirectory: string;
+  registryId?: string;
   document: RegistryDocument;
 }
 
@@ -76,7 +82,11 @@ export interface PluginHookDocument {
 
 /** A hook command paired with the config root it runs against. */
 export interface ResolvedHook {
-  hook: HookCommand;
+  hook: HookCommand | { module: string; command?: never; timeout?: number };
+  registryId?: string;
+  groupId?: string;
+  rowId?: string;
+  event?: string;
   root: string;
 }
 
@@ -98,7 +108,10 @@ export type HookFailureReason =
   | 'timeout'
   | 'invalid_json'
   | 'registry_read'
-  | 'plugin_config';
+  | 'plugin_config'
+  | 'hook_execution'
+  | 'module_failed'
+  | 'invalid_result';
 
 export interface HookFailure {
   command: string;

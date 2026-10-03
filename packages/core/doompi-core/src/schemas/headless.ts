@@ -11,6 +11,20 @@ import type { DoomServerBundleEntry } from './serverBundle';
 export const DOOM_HEADLESS_HOST_SERVICE = 'doom/headless-host';
 export const DOOM_HEADLESS_OWNER = Symbol.for('doom/headless-owner');
 
+const PROMPT_ADMISSION_ERROR = 'DoomHeadlessPromptAdmissionError';
+
+/** Admission is a host boundary, not an advisory facet-hook failure. */
+export class DoomHeadlessPromptAdmissionError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = PROMPT_ADMISSION_ERROR;
+  }
+}
+
+/** Error identity must survive independently bundled server and extension graphs. */
+export function isDoomHeadlessPromptAdmissionError(error: unknown): boolean {
+  return error instanceof Error && error.name === PROMPT_ADMISSION_ERROR;
+}
 export interface DoomHeadlessSelection {
   readonly majorMode: string;
   readonly activeLayers: readonly string[];
@@ -164,6 +178,8 @@ export interface DoomHeadlessExecutionContext {
   readonly client: DoomHeadlessClient;
   readonly session: DoomHeadlessSession;
   readonly model?: { provider: string; id: string };
+  /** Operation cancellation, supplied only for an active invocation. */
+  readonly signal?: AbortSignal;
   readonly textCompletion?: {
     available(reference: string): boolean;
     complete(

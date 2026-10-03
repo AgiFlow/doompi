@@ -1805,6 +1805,43 @@ function isDirectInjectionUse(node: ts.Node, injection: CordisInjectionFact): bo
   return injection.callback.pos <= node.pos && node.end <= injection.callback.end;
 }
 
+/** The Pi bridge lends a live server-root getter, not an unowned Cordis Context. */
+function headlessServerAccessorBindings(sourceFile: ts.SourceFile): Set<string> {
+  const keys = new Set<string>();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== '@agimon-ai/doompi-core/cordisHost' ||
+      statement.importClause?.isTypeOnly
+    )
+      continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      if (!element.isTypeOnly && (element.propertyName ?? element.name).text === 'DOOM_CORDIS_SERVER_SERVICES')
+        keys.add(element.name.text);
+    }
+  }
+  const accessors = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      const initializer = unwrapArchitectureExpression(node.initializer);
+      if (
+        ts.isCallExpression(initializer) &&
+        methodName(initializer.expression) === 'get' &&
+        initializer.arguments[0] &&
+        ts.isIdentifier(initializer.arguments[0]) &&
+        keys.has(initializer.arguments[0].text)
+      )
+        accessors.add(node.name.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return accessors;
+}
+
 function cordisServiceFacts(
   filePath: string,
   sourceFile: ts.SourceFile,
@@ -1812,6 +1849,7 @@ function cordisServiceFacts(
   owned: OwnedCordisScopes,
 ): CordisServiceFacts {
   const { requiredHelpers, serviceConstants } = cordisImportBindings(sourceFile);
+  const serverAccessors = headlessServerAccessorBindings(sourceFile);
   const injections: CordisInjectionFact[] = [];
   const invalidProviders: string[] = [];
   const uses: CordisServiceUse[] = [];
@@ -1910,7 +1948,8 @@ function cordisServiceFacts(
       const receiver = methodReceiver(node.expression);
       if (method && receiver) {
         const service = cordisServiceExpression(node.arguments[0], serviceConstants);
-        if (method === 'get' && service && !isAccessorDefinition(node)) {
+        const isServerAccessor = ts.isIdentifier(receiver) && serverAccessors.has(receiver.text);
+        if (method === 'get' && service && !isAccessorDefinition(node) && !isServerAccessor) {
           uses.push({
             service,
             filePath,

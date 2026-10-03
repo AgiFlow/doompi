@@ -217,6 +217,8 @@ export interface HarnessState {
   pluginHooks: PluginHookSource[];
   /** File-only authority that the Config core publishes to the session registry. */
   mcpProjection?: DoomMcpProjection;
+  /** Generation-pinned hook descriptor, transported only through the state file. */
+  hookModules?: { file: string };
   mcpConfigPath?: string;
   personaFile?: string;
   /**

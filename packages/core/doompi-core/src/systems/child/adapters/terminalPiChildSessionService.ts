@@ -16,6 +16,7 @@ import { AgentDoc, type EntryId } from '@earendil-works/pi-durable';
 import {
   createDoomChildSessionService,
   type DoomChildSessionIntercom,
+  type DoomChildSessionHooks,
   type DoomChildSessionRuntime,
   type DoomChildSessionService,
   type DoomChildSessionServiceProvider,
@@ -38,6 +39,7 @@ import { openSqliteSessionStorage } from '../../../services/sqliteSessionStorage
 import type { DirectHarnessModel } from '../../../types/server/directHarnessRuntime';
 import {
   composeDirectHarnessRequestOptions,
+  bindChildHooks,
   bindChildMcpCatalog,
   createHeadlessChildSessionService,
   parseChildModelReference,
@@ -59,6 +61,7 @@ export interface TerminalPiChildSessionServiceOptions {
   readonly defaultModel?: () => DirectHarnessModel | undefined;
   /** Snapshot the parent preference once per creation, never live-sync child toggles. */
   readonly parentFastMode?: () => boolean | Promise<boolean>;
+  readonly hooks?: () => DoomChildSessionHooks | undefined;
   readonly mcpTool?: () => DoomChildSessionMcpTool | undefined;
   readonly subscribeMcpTool?: (listener: () => void) => () => void;
   readonly historyOwnership?: HistoryOwnership;
@@ -76,7 +79,7 @@ export interface TerminalPiForkSourceManager {
 function childRuntime(
   runtime: DirectHarnessRuntime,
   intercom?: DoomChildSessionIntercom,
-  release?: () => void,
+  release?: () => void | Promise<void>,
 ): DoomChildSessionRuntime {
   const file = runtime.sessionFile;
   return {
@@ -101,7 +104,7 @@ function childRuntime(
     abort: () => runtime.abort(),
     dispose: async () => {
       try {
-        release?.();
+        await release?.();
       } finally {
         try {
           await runtime.dispose();
@@ -313,6 +316,7 @@ export function createTerminalPiChildSessionService(
     ...(options.parentFastMode === undefined ? {} : { parentFastMode: options.parentFastMode }),
     ...(options.mcpTool === undefined ? {} : { mcpTool: options.mcpTool }),
     ...(options.subscribeMcpTool === undefined ? {} : { subscribeMcpTool: options.subscribeMcpTool }),
+    ...(options.hooks === undefined ? {} : { hooks: options.hooks }),
     historyOwnership: ownership,
     ...(options.now === undefined ? {} : { now: options.now }),
     runtimeFactory,
@@ -346,7 +350,13 @@ export function createTerminalPiChildSessionService(
         historyOwnership: ownership,
       };
       let runtime: DirectHarnessRuntime | undefined;
+      let hooks: ReturnType<typeof bindChildHooks> | undefined;
       try {
+        hooks = bindChildHooks(request, options.hooks?.(), () => runtime, signal);
+        if (hooks.binding) {
+          runtimeOptions.beforeTool = hooks.binding.beforeTool;
+          runtimeOptions.afterTool = hooks.binding.afterTool;
+        }
         runtime = await runtimeFactory(runtimeOptions);
         if (requestedModel && model) await runtime.setModel(model);
         if (thinking !== undefined) await runtime.setThinkingLevel(thinking as never);
@@ -354,19 +364,28 @@ export function createTerminalPiChildSessionService(
         const releaseMcp = bindChildMcpCatalog(runtime, request, options, runtimeOptions.tools ?? []);
         const file = runtime.sessionFile;
         const releaseNative = typeof file === 'string' ? registerNativeChild(file, runtime) : undefined;
-        return childRuntime(runtime, request.intercom, () => {
+        return childRuntime(runtime, request.intercom, async () => {
           try {
             releaseMcp();
           } finally {
-            releaseNative?.();
+            try {
+              releaseNative?.();
+            } finally {
+              await hooks?.dispose();
+            }
           }
         });
       } catch (error) {
         let failure: unknown = error;
         try {
+          await hooks?.dispose();
+        } catch (cleanupError) {
+          failure = new AggregateError([failure, cleanupError], 'Terminal Pi child hook cleanup failed');
+        }
+        try {
           await runtime?.dispose();
         } catch (cleanupError) {
-          failure = new AggregateError([error, cleanupError], 'Terminal Pi child startup cleanup failed');
+          failure = new AggregateError([failure, cleanupError], 'Terminal Pi child startup cleanup failed');
         } finally {
           request.intercom?.dispose?.();
           fs.rmSync(sessionPath, { force: true });
