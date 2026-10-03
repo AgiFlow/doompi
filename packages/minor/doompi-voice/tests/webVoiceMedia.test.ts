@@ -325,7 +325,7 @@ describe('browser voice media', () => {
 
     expect(source).not.toContain("sendCommand('/voice')");
     expect(source).not.toContain('voice-recording-stop');
-    expect(source).toContain("`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`");
+    expect(source).not.toContain('sendSessionFrame');
   });
 
   it('offers explicit global Live start only for an idle session, without changing the legacy mode', async () => {
@@ -371,7 +371,7 @@ describe('browser voice media', () => {
     expect(source).not.toContain("sendSessionFrame(sessionId, { type: 'prompt', message: '/voice-auto");
   });
 
-  it('shows an accessible autonomous microphone toggle only while autonomous voice is applicable', async () => {
+  it('shows an accessible autonomous microphone toggle only while autonomous voice is applicable', () => {
     const active = renderPlugin(
       VoiceActivitySection,
       slotPropsFixture({ statuses: { 'doom-voice': 'voice auto: listening' } }).props,
@@ -392,14 +392,11 @@ describe('browser voice media', () => {
     );
     expect(manual.html).not.toContain('voice-autonomous-microphone-toggle');
 
-    const source = await readFile(
-      new URL(
-        '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection.tsx',
-        import.meta.url,
-      ),
-      'utf8',
+    const withoutSession = renderPlugin(
+      VoiceActivitySection,
+      slotPropsFixture({ sessionId: null, statuses: { 'doom-voice': 'voice auto: listening' } }).props,
     );
-    expect(source).toContain("`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`");
+    expect(withoutSession.html).toContain('disabled=""');
   });
 
   it('shows a browser lease conflict instead of a misleading listening state', () => {

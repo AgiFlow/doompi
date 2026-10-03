@@ -250,3 +250,89 @@ test('cleans up after a failed transcription and retries successfully', async ({
   const sent = await cockpit.session.waitForCommand('prompt');
   expect(sent.message).toBe('existing draft retry transcript');
 });
+
+test('controls autonomous mute while the agent is busy without prompting or aborting', async ({ page, cockpit }) => {
+  const requests: Array<{ url: string; method: string; body: unknown }> = [];
+  let release: (() => void) | undefined;
+  let fail: 'http' | 'network' | undefined;
+  await page.route('**/api/workspaces/*/sessions/*/plugins/voice/control', async (route) => {
+    const request = route.request();
+    requests.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    if (fail === 'network') {
+      await route.abort('failed');
+      return;
+    }
+    await route.fulfill({
+      status: fail ? 503 : 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        fail
+          ? { error: 'microphone control unavailable' }
+          : {
+              state: 'active',
+              mode: 'legacy',
+              manual: 'idle',
+              muted: request.postDataJSON().action === 'mute',
+            },
+      ),
+    });
+  });
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  const publishStatus = (muted: boolean): void =>
+    cockpit.session.emit({
+      type: 'extension_ui_request',
+      id: `mute-status-${muted}`,
+      method: 'setStatus',
+      statusKey: 'doom-voice',
+      statusText: `voice auto: listening${muted ? ' · microphone muted' : ''}`,
+    });
+  publishStatus(false);
+  cockpit.session.emit({ type: 'agent_start' });
+  await expect(page.getByTestId('composer-abort')).toBeVisible();
+  const toggle = page.getByTestId('voice-autonomous-microphone-toggle');
+  await expect(toggle).toHaveAccessibleName('mute autonomous voice microphone');
+  await toggle.click();
+  await expect.poll(() => requests.length).toBe(1);
+  await expect(toggle).toBeDisabled();
+  expect(requests[0]).toMatchObject({ method: 'POST', body: { action: 'mute' } });
+  expect(requests[0]?.url).toContain('/sessions/s1/plugins/voice/control');
+  release?.();
+  publishStatus(true);
+  await expect(toggle).toBeEnabled();
+  await expect(toggle).toHaveAccessibleName('unmute autonomous voice microphone');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+  fail = 'http';
+  await toggle.click();
+  await expect.poll(() => requests.length).toBe(2);
+  await expect(toggle).toBeDisabled();
+  expect(requests[1]).toMatchObject({ method: 'POST', body: { action: 'unmute' } });
+  release?.();
+  await expect(page.getByRole('alert')).toContainText('microphone control unavailable');
+  await expect(toggle).toBeEnabled();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+  fail = undefined;
+  await toggle.click();
+  await expect.poll(() => requests.length).toBe(3);
+  await expect(toggle).toBeDisabled();
+  expect(requests[2]).toMatchObject({ method: 'POST', body: { action: 'unmute' } });
+  release?.();
+  publishStatus(false);
+  await expect(toggle).toBeEnabled();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  fail = 'network';
+  await toggle.click();
+  await expect.poll(() => requests.length).toBe(4);
+  release?.();
+  await expect(page.getByRole('alert')).toContainText('Microphone control request failed.');
+  await expect(toggle).toBeEnabled();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByTestId('composer-abort')).toBeVisible();
+  expect(cockpit.session.received.filter((frame) => frame.type === 'prompt' || frame.type === 'abort')).toEqual([]);
+});
