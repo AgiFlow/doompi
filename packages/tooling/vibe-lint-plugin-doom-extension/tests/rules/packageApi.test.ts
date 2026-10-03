@@ -61,6 +61,25 @@ describe('Doom package API rules', () => {
       expect(packageApiManifest.check?.(manifest, root)).toBeNull();
     });
 
+    it('validates a missing generated server facade only when authored sources produce it', () => {
+      write('src/extensions/(backend)/tool/hello.server.ts', 'export default {};');
+      const manifest = writeManifest({
+        name: '@agimon-ai/doompi-demo',
+        exports: {
+          './extensions/server': {
+            types: './dist/extensions/server.d.mts',
+            import: './dist/extensions/server.mjs',
+            require: './dist/extensions/server.cjs',
+          },
+        },
+        doompiServer: { entry: './generated/server.ts', dist: './dist/extensions/server.mjs', scopes: ['session'] },
+      });
+      expect(packageApiManifest.check?.(manifest, root)).toBeNull();
+      expect(fs.existsSync(path.join(root, 'generated'))).toBe(false);
+      fs.rmSync(path.join(root, 'src'), { recursive: true });
+      expect(packageApiManifest.check?.(manifest, root)).toContain('has no source file');
+    });
+
     it('accepts a direct server extension entry', () => {
       write('src/extensions/server.ts', 'export const serverFacet = {}; export default serverFacet;');
       const manifest = writeManifest({

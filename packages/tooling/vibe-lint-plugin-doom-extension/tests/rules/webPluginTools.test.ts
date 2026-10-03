@@ -40,6 +40,16 @@ describe('web-plugin-tool-renderers', () => {
   const entry = (tools: string, extra = '') =>
     `import { defineWebPlugin } from '${CONTRACTS}';\nexport const webPlugin = defineWebPlugin({ id: 'demo', toolRenderers: [{ tools: ${tools}, ${extra}message: X }] });`;
 
+  it('recognizes renderer names assigned by the routed build without generated files', () => {
+    const file = manifest();
+    write('src/extensions/(backend)/tool/_lib/task.ts', tool('"task"'));
+    write('src/extensions/(frontend)/tool/task.web.tsx', 'export default defineToolRenderer({ message: View });');
+    expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
+    expect(fs.existsSync(path.join(root, 'generated'))).toBe(false);
+    fs.rmSync(path.join(root, 'src/extensions/(frontend)'), { recursive: true });
+    expect(webPluginToolRenderers.check?.(file, root)).toContain('no browser item renders: task');
+  });
+
   it('exempts generic contract helper registration only at its owned controller paths', () => {
     const file = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-core' }));
     write('src/controllers/piExtension.ts', tool('item.name'));

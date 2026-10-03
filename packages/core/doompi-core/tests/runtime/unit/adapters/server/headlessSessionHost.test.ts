@@ -237,7 +237,7 @@ describe('request-private auxiliary model tools', () => {
     const frames: Array<{ type?: string; message?: unknown }> = [];
     current.runtime.onPresentationFrame((frame) => frames.push(frame));
 
-    await current.session.admitPrompt!('Voice transcript');
+    await current.session.admitPrompt!('Voice transcript', undefined, 'operator');
     await vi.waitFor(() => expect(frames).toContainEqual(expect.objectContaining({ type: 'agent_settled' })));
     expect(streamSimple).toHaveBeenCalledOnce();
     expect(frames).toContainEqual(
@@ -642,31 +642,55 @@ describe('headless session facet surface', () => {
 
   it('maps prompt and admitPrompt deliveries onto the runtime', async () => {
     const { session, runtime } = await fixture();
-    const prompt = vi.spyOn(runtime, 'prompt').mockResolvedValue(undefined);
+    const internal = vi.spyOn(runtime, 'submitInternalMessage').mockResolvedValue({ settled: Promise.resolve() });
     const steer = vi.spyOn(runtime, 'steer').mockResolvedValue(undefined);
     const followUp = vi.spyOn(runtime, 'followUp').mockResolvedValue(undefined);
     const submitPrompt = vi.spyOn(runtime, 'submitPrompt').mockResolvedValue({ settled: Promise.resolve() });
     const submitUserPrompt = vi.spyOn(runtime, 'submitUserPrompt').mockResolvedValue({ settled: Promise.resolve() });
 
-    // prompt awaits the turn, so a streaming delivery only enqueues into a running turn.
+    // Facet prompt awaits internal settlement without entering the operator queue.
     await session.prompt('steered', 'steer');
     await session.prompt('queued', 'followUp');
     await session.prompt('plain');
     // admitPrompt returns at admission, and 'steer' also wakes an idle agent.
-    await session.admitPrompt!('admitted steer', 'steer');
-    // followUp stays enqueue-only: voiceServer/index.ts:120 asks for 'followUp' while idle whenever
-    // a capture is queued, so routing it through submitPrompt would start an unrequested turn.
-    await session.admitPrompt!('admitted follow up', 'followUp');
-    await session.admitPrompt!('admitted plain');
-    await session.admitPrompt!('interrupt now', 'interrupt');
+    await session.admitPrompt!('admitted steer', 'steer', 'operator');
+    // Operator follow-up uses the public queue rather than internal admission.
+    await session.admitPrompt!('admitted follow up', 'followUp', 'operator');
+    await session.admitPrompt!('admitted plain', undefined, 'operator');
+    await session.admitPrompt!('interrupt now', 'interrupt', 'operator');
 
-    expect(steer).toHaveBeenCalledExactlyOnceWith('steered');
-    expect(followUp.mock.calls).toEqual([['queued'], ['admitted follow up']]);
-    expect(prompt).toHaveBeenCalledExactlyOnceWith('plain');
+    expect(internal.mock.calls).toEqual([
+      ['steered', 'steer'],
+      ['queued', 'followUp'],
+      ['plain', 'followUp'],
+    ]);
+    expect(steer).not.toHaveBeenCalled();
+    expect(followUp).toHaveBeenCalledExactlyOnceWith('admitted follow up');
     expect(submitPrompt).toHaveBeenNthCalledWith(1, 'admitted steer', undefined, 'steer');
     expect(submitPrompt).toHaveBeenNthCalledWith(2, 'admitted plain', undefined, undefined);
     expect(submitPrompt).toHaveBeenCalledTimes(2);
     expect(submitUserPrompt).toHaveBeenCalledExactlyOnceWith('interrupt now');
+  });
+
+  it('admits default internal continuations without using the operator queue', async () => {
+    const { session, runtime } = await fixture();
+    const internal = vi.spyOn(runtime, 'submitInternalMessage').mockResolvedValue({ settled: Promise.resolve() });
+    const submit = vi.spyOn(runtime, 'submitPrompt');
+    const followUp = vi.spyOn(runtime, 'followUp');
+    const steer = vi.spyOn(runtime, 'steer');
+
+    await session.admitPrompt!('continue');
+    await session.admitPrompt!('result', 'followUp');
+    await session.admitPrompt!('redirect', 'steer');
+
+    expect(internal.mock.calls).toEqual([
+      ['continue', 'followUp'],
+      ['result', 'followUp'],
+      ['redirect', 'steer'],
+    ]);
+    expect(submit).not.toHaveBeenCalled();
+    expect(followUp).not.toHaveBeenCalled();
+    expect(steer).not.toHaveBeenCalled();
   });
 
   it('reports an admitted prompt that fails after admission to the operator', async () => {
@@ -674,7 +698,7 @@ describe('headless session facet surface', () => {
     vi.spyOn(runtime, 'submitPrompt').mockResolvedValue({ settled: Promise.reject(new Error('turn failed')) });
     const appendCustomEntry = vi.spyOn(runtime, 'appendCustomEntry').mockResolvedValue('entry');
 
-    await session.admitPrompt!('admitted');
+    await session.admitPrompt!('admitted', undefined, 'operator');
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(appendCustomEntry).toHaveBeenCalledExactlyOnceWith(

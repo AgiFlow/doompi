@@ -131,7 +131,9 @@ export async function promptForAssistantText(
   prompt: string,
 ): Promise<string | undefined> {
   const previous = new Set((await runtime.readEntries()).entries.map((e) => e.id));
-  await runtime.prompt(prompt);
+  await (
+    await runtime.submitInternalMessage(prompt)
+  ).settled;
   return (
     (await runtime.readEntries()).entries
       .toReversed()
@@ -417,10 +419,40 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
                   ctx,
                 );
                 const systemPrompt = getCurrentSystemPrompt(request.messages);
-                const patch = await options.transformContext?.(
-                  { messages: request.messages.filter((m) => m.role !== 'system'), systemPrompt },
-                  ctx,
-                );
+                const contextContributions = new Map<string, AgentMessage[]>();
+                if (options.transformContext) {
+                  const view = await conversation.context(ctx);
+                  const customByEntry = new Map<number, AgentMessage>();
+                  for (const raw of view.entries) {
+                    const entry = projectDurableEntries([raw])[0];
+                    if (entry?.type !== 'message' || entry.message.role !== 'custom') continue;
+                    const data =
+                      raw.data && typeof raw.data === 'object' && !Array.isArray(raw.data) ? raw.data : undefined;
+                    const receipt =
+                      typeof data?.inputRequestId === 'string'
+                        ? await storage.storage.submissionByRequest(conversation.id, data.inputRequestId, ctx)
+                        : undefined;
+                    const target =
+                      receipt && 'entry' in receipt && receipt.entry !== undefined ? receipt.entry : raw.id;
+                    const model = view.entries.find((candidate) => candidate.id === target)?.model;
+                    if (model?.length === 1) customByEntry.set(target, entry.message);
+                  }
+                  for (const [index, raw] of view.entries.entries()) {
+                    const custom = customByEntry.get(raw.id);
+                    for (const native of view.contributions[index] ?? []) {
+                      const key = JSON.stringify(native);
+                      const message = custom && key === JSON.stringify(raw.model?.[0]) ? custom : native;
+                      const contributions = contextContributions.get(key) ?? [];
+                      contributions.push(message);
+                      contextContributions.set(key, contributions);
+                    }
+                  }
+                }
+                // Restore metadata only for unchanged native contributions, preserving context edits and ordering.
+                const contextMessages = request.messages
+                  .filter((m) => m.role !== 'system')
+                  .map((message) => contextContributions.get(JSON.stringify(message))?.shift() ?? message);
+                const patch = await options.transformContext?.({ messages: contextMessages, systemPrompt }, ctx);
                 let messages: Message[] = patch
                   ? [
                       {
@@ -722,29 +754,25 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
             for (const change of event.changes) {
               if (change.type === 'message') {
                 partial = structuredClone(change.message);
-                continue;
-              }
-              if ('block' in change) {
+              } else if ('block' in change) {
                 partial.content[change.contentIndex] = structuredClone(change.block);
-                continue;
               }
-              const block = partial.content[change.contentIndex];
+              const block = 'contentIndex' in change ? partial.content[change.contentIndex] : undefined;
               if (change.type === 'text_delta' && block?.type === 'text') block.text += change.delta;
               if (change.type === 'thinking_delta' && block?.type === 'thinking') block.thinking += change.delta;
-              if (
-                change.type === 'text_delta' ||
-                change.type === 'thinking_delta' ||
-                change.type === 'toolcall_delta'
-              ) {
+              {
                 const update: HarnessEvent = {
                   type: 'message_update',
                   message: structuredClone(partial),
-                  event: {
-                    type: change.type,
-                    contentIndex: change.contentIndex,
-                    delta: change.delta,
-                    partial: structuredClone(partial),
-                  },
+                  event:
+                    'delta' in change
+                      ? {
+                          type: change.type,
+                          contentIndex: change.contentIndex,
+                          delta: change.delta,
+                          partial: structuredClone(partial),
+                        }
+                      : { type: 'start', partial: structuredClone(partial) },
                 };
                 emit({ ...update, assistantMessageEvent: update.event });
                 eventsSettled = eventsSettled.then(() => deliver(update, eventContext));
@@ -784,22 +812,33 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
                 );
           }
           if (!mapped) continue;
-          emit({
-            ...mapped,
-            type:
-              mapped.type === 'tool_start'
-                ? 'tool_execution_start'
-                : mapped.type === 'tool_update'
-                  ? 'tool_execution_update'
-                  : mapped.type === 'tool_end'
-                    ? 'tool_execution_end'
-                    : mapped.type === 'entry_added'
-                      ? 'entry_appended'
-                      : mapped.type,
-          });
-          if (mapped.type === 'run_start') emit({ type: 'agent_start' });
+          const publishMapped = (event: HarnessEvent) =>
+            emit({
+              ...event,
+              type:
+                event.type === 'tool_start'
+                  ? 'tool_execution_start'
+                  : event.type === 'tool_update'
+                    ? 'tool_execution_update'
+                    : event.type === 'tool_end'
+                      ? 'tool_execution_end'
+                      : event.type === 'entry_added'
+                        ? 'entry_appended'
+                        : event.type,
+            });
           if (mapped.type === 'run_end') {
+            const settledEvent = {
+              runId: String(event.type === 'run_end' ? event.inputs[0] : conversation.id),
+              timestamp: Date.now(),
+            };
             settling++;
+            let released = false;
+            const release = () => {
+              if (!released) {
+                settling--;
+                released = true;
+              }
+            };
             eventsSettled = eventsSettled
               .then(async () => {
                 await reconcile();
@@ -809,10 +848,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
                       (tx) =>
                         tx.appendEntry(conversation.id, {
                           kind: AGENT_SETTLED_ENTRY_TYPE,
-                          data: {
-                            timestamp: Date.now(),
-                            runId: String(event.type === 'run_end' ? event.inputs[0] : conversation.id),
-                          },
+                          data: settledEvent,
                         }),
                       eventContext,
                     ),
@@ -820,15 +856,42 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
                 } catch (error) {
                   emit({ type: 'error', code: 'agent_settled', error: String(error) });
                 }
-                await deliver(mapped!, eventContext);
-                emit({ type: 'agent_end' });
-                emit({ type: 'agent_settled', timestamp: Date.now() });
+                const live = await harness.snapshot(LiveDoc, conversation.id, eventContext);
+                const successorActive = !!live?.run && String(live.run.inputs[0]) !== settledEvent.runId;
+                mapped = { type: 'run_end', runId: settledEvent.runId, successorActive };
+                publishMapped(mapped);
+                await deliver(mapped, eventContext);
+                release();
+                // A settlement hook can admit work after the initial successor check.
+                const lifecycle = await readLifecycle();
+                emit({ type: 'lifecycle_update', lifecycle });
+                if (!lifecycle.operation) {
+                  emit({ type: 'agent_end', runId: settledEvent.runId });
+                  emit({ type: 'agent_settled', ...settledEvent });
+                }
               })
               .catch((error) => emit({ type: 'error', code: 'settled_event', error: String(error) }))
-              .finally(() => {
-                settling--;
+              .finally(async () => {
+                release();
+                try {
+                  await publish();
+                } catch (error) {
+                  emit({ type: 'error', code: 'lifecycle_update', error: String(error) });
+                }
+                // Do not await drain here: drain waits for this settlement chain.
+                void drain().catch((error) => emit({ type: 'error', code: 'drain', error: String(error) }));
               });
-          } else eventsSettled = eventsSettled.then(() => deliver(mapped!, eventContext));
+          } else
+            eventsSettled = eventsSettled.then(async () => {
+              publishMapped(mapped!);
+              if (mapped!.type === 'run_start') {
+                emit({ type: 'agent_start' });
+                await publish().catch((error) =>
+                  emit({ type: 'error', code: 'lifecycle_update', error: String(error) }),
+                );
+              }
+              await deliver(mapped!, eventContext);
+            });
         }
       });
     };
@@ -871,13 +934,18 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     const handingOff = new Set<string>();
     const userClaims = new Set<string>();
     let drainPromise: Promise<void> | undefined;
-    const drain = (): Promise<void> =>
-      (drainPromise ??= (async () => {
+    let drainRequested = false;
+    const drain = (): Promise<void> => {
+      if (drainPromise) {
+        drainRequested = true;
+        return drainPromise;
+      }
+      return (drainPromise ??= (async () => {
         await reconcile();
         while (!disposed) {
           const record = await readRecord();
           if (userAdmission || record.paused || (await execution())) break;
-          const item = record.queue.find((q) => q.disposition === 'pending' && q.scheduling === 'automatic');
+          const item = record.queue.find((q) => q.disposition === 'pending');
           if (!item) break;
           const submission = await handoff(item, 'reject');
           if (!submission) continue;
@@ -888,7 +956,12 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         }
       })().finally(() => {
         drainPromise = undefined;
+        if (drainRequested) {
+          drainRequested = false;
+          void drain().catch((error) => emit({ type: 'error', code: 'drain', error: String(error) }));
+        }
       }));
+    };
     const handoff = async (item: Retained, mode: NonNullable<Retained['submissionMode']>, recovering = false) => {
       if (handingOff.has(item.id)) return undefined;
       handingOff.add(item.id);
@@ -974,16 +1047,11 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     const queued = async (
       message: string | AgentMessage,
       images: ImageContent[] | undefined,
-      delivery: 'steer' | 'followUp' | 'nextRun',
+      delivery: 'followUp' | 'nextRun',
     ) => {
       guardUserAdmission();
-      const { id } = await enqueue(message, images, delivery, delivery === 'steer' ? 'automatic' : 'held');
-      if (delivery !== 'nextRun' && (await execution()))
-        await handoff(
-          (await readRecord()).queue.find((q) => q.id === id)!,
-          delivery,
-        );
-      else if (delivery === 'steer') void drain().catch((error) => emit({ type: 'error', error: String(error) }));
+      await enqueue(message, images, delivery, 'automatic');
+      void drain().catch((error) => emit({ type: 'error', error: String(error) }));
     };
     const dispatchCommand = async (value: string) => options.dispatchCommand?.(value) ?? false;
     const admit = async (message: string | AgentMessage, images?: ImageContent[], mode?: 'steer' | 'followUp') => {
@@ -1001,12 +1069,6 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           delete r.abortTaskId;
         });
       }
-      if (!(await execution()))
-        for (const held of (await readRecord()).queue.filter(
-          (q) => q.disposition === 'pending' && q.scheduling === 'held',
-        )) {
-          await handoff(held, 'write');
-        }
       const { id } = await enqueue(message, images, mode ?? 'nextRun', 'automatic');
       const submission = await handoff(
         (await readRecord()).queue.find((q) => q.id === id)!,
@@ -1055,6 +1117,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       message: string | Extract<AgentMessage, { role: 'user' }>,
       images?: ImageContent[],
       selection?: { id: string; operationId?: string },
+      submissionMode: 'reject' | 'steer' = 'reject',
     ): Promise<{
       settled: Promise<void>;
       handledCommand?: boolean;
@@ -1080,30 +1143,37 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
               return 'target_changed' as const;
             if (q.message && q.message.role !== 'user') throw new Error('Only user input can interrupt and respond');
             userClaims.add(q.id);
-            r.paused = true;
+            if (submissionMode === 'reject') r.paused = true;
             q.disposition = 'handoff';
             q.conversationId = conversation.id;
-            q.submissionMode = 'reject';
+            q.submissionMode = submissionMode;
             return { ...q };
           });
           if (typeof outcome === 'string') return { settled: Promise.resolve(), queueOutcome: outcome };
           claimed = outcome;
         }
-        if (current) await abort(current.id);
-        await conversation.waitForIdle(context);
-        await eventsSettled;
+        if (submissionMode === 'reject') {
+          if (current) await abort(current.id);
+          await conversation.waitForIdle(context);
+          await eventsSettled;
+        }
         if (!claimed) {
-          const { id } = await enqueue(message, images, 'nextRun', 'held');
+          const { id } = await enqueue(
+            message,
+            images,
+            submissionMode === 'steer' ? 'steer' : 'nextRun',
+            submissionMode === 'steer' ? 'automatic' : 'held',
+          );
           claimed = await changeRecord((r) => {
             const q = r.queue.find((q) => q.id === id);
             if (!q || q.disposition !== 'pending') throw new Error('User input was removed before admission');
             q.disposition = 'handoff';
             q.conversationId = conversation.id;
-            q.submissionMode = 'reject';
+            q.submissionMode = submissionMode;
             return { ...q };
           });
         }
-        const submission = await handoff(claimed, 'reject', true);
+        const submission = await handoff(claimed, submissionMode, true);
         if (!submission) throw new Error('User admission ownership changed');
         const settled = (async () => {
           const status = await submission.wait(context);
@@ -1356,7 +1426,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         return result;
       },
       async promoteQueued(id, operationId) {
-        const result = await submitUserPrompt('', undefined, { id, operationId });
+        const result = await submitUserPrompt('', undefined, { id, operationId }, 'steer');
         return result.queueOutcome ?? 'promoted';
       },
       async resumeQueue() {
@@ -1646,7 +1716,51 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         ).settled;
       },
       admitMessage: (message) => admit(message),
-      steer: (message, images) => queued(message, images, 'steer'),
+      submitInternalMessage: async (message, delivery = 'followUp') => {
+        if (typeof message !== 'string' && message.role !== 'user' && message.role !== 'custom')
+          throw new Error('Internal input must be user or custom message content');
+        if (external) throw new Error('An operation is already running');
+        const content = typeof message === 'string' ? message : message.content;
+        const requestId = randomUUID();
+        const submit = async (draft: Parameters<Conversation['submit']>[0] & { requestId: string }) => {
+          try {
+            return await writable(() => conversation.submit(draft, context));
+          } catch (error) {
+            const accepted = await storage.storage.submissionByRequest(conversation.id, draft.requestId, context);
+            const submission = accepted && (await harness.submission(accepted.id, context));
+            if (!submission) throw error;
+            return submission;
+          }
+        };
+        // Preserve custom presentation metadata without adding its content twice to model context.
+        const envelope =
+          typeof message !== 'string' && message.role === 'custom'
+            ? await submit({
+                type: 'write',
+                requestId: `${requestId}:message`,
+                entry: {
+                  kind: 'doompi.entry',
+                  data: json({ type: 'message', message, timestamp: message.timestamp, inputRequestId: requestId }),
+                },
+              })
+            : undefined;
+        const submission = await submit({ type: 'input', content, whenBusy: delivery, requestId });
+        const settled = (async () => {
+          if (envelope && (await envelope.wait(context)).status !== 'done')
+            throw new Error('Internal message journal write failed');
+          const status = await submission.wait(context);
+          await eventsSettled;
+          if (status.status === 'unanswered' && !['aborted', 'withdrawn'].includes(status.reason))
+            throw new Error(`Internal submission failed: ${status.reason}`);
+        })();
+        void settled.catch((error) => emit({ type: 'error', code: 'internal_message', error: String(error) }));
+        return { settled };
+      },
+      steer: async (message, images) => {
+        if (typeof message !== 'string' && message.role !== 'user')
+          throw new Error('Only user messages can steer an agent run');
+        await submitUserPrompt(message, images, undefined, 'steer');
+      },
       followUp: (message, images) => queued(message, images, 'followUp'),
       nextRun: (message, images) => queued(message, images, 'nextRun'),
       abort,

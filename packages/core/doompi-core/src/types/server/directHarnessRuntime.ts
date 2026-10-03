@@ -148,7 +148,8 @@ export interface HookMap {
   };
 }
 export type HarnessEvent = (
-  | { type: 'run_start' | 'run_resume' | 'run_end' | 'turn_start' | 'compaction_start' | 'navigation_start' }
+  | { type: 'run_start' | 'run_resume' | 'turn_start' | 'compaction_start' | 'navigation_start' }
+  | { type: 'run_end'; runId?: string; successorActive?: boolean }
   | { type: 'message_start' | 'message_end'; message: AgentMessage; runId?: string; entryId?: string }
   | {
       type: 'message_update';
@@ -414,6 +415,11 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   prompt(text: string, images?: ImageContent[]): Promise<void>;
   /** Starts a run from an already-composed message, without awaiting the run. */
   admitMessage(message: AgentMessage): Promise<{ settled: Promise<void> }>;
+  /** Admits host-generated input through Durable, never through the operator queue. */
+  submitInternalMessage(
+    message: string | AgentMessage,
+    delivery?: 'steer' | 'followUp',
+  ): Promise<{ settled: Promise<void> }>;
   steer(message: string | AgentMessage, images?: ImageContent[], targetOperationId?: string): Promise<void>;
   followUp(message: string | AgentMessage, images?: ImageContent[]): Promise<void>;
   /** Queues for the run after the current one, rather than into it. */

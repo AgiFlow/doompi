@@ -80,6 +80,147 @@ async function waitFor(condition: () => boolean | Promise<boolean>): Promise<voi
 }
 
 describe('direct harness durable lifecycle', () => {
+  it('delivers internal results without exposing or clearing them through the operator queue', async () => {
+    const { repository, models, streams, streamSimple } = fixtures();
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    try {
+      const active = await runtime.submitPrompt('operator');
+      await waitFor(() => streams.length === 1);
+      await runtime.nextRun('operator queued');
+      const internal = await runtime.submitInternalMessage({
+        role: 'custom',
+        customType: 'runner-result',
+        content: 'runner finished',
+        display: true,
+        details: { runId: 'runner-one' },
+        timestamp: Date.now(),
+      });
+      expect((await runtime.readLifecycle()).queue.map((item) => item.text)).toEqual(['operator queued']);
+      await runtime.clearQueue();
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('one') });
+      await waitFor(() => streams.length === 2);
+      const context = JSON.stringify(streamSimple.mock.calls[1]![1]);
+      expect(context.split('runner finished')).toHaveLength(2);
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('two') });
+      await internal.settled;
+      await active.settled;
+      expect((await runtime.readEntries()).entries).toContainEqual(
+        expect.objectContaining({
+          type: 'message',
+          message: expect.objectContaining({
+            role: 'custom',
+            customType: 'runner-result',
+            content: 'runner finished',
+            display: true,
+            details: { runId: 'runner-one' },
+          }),
+        }),
+      );
+      expect(
+        (await runtime.readEntries()).entries.some(
+          (entry) =>
+            entry.type === 'message' && entry.message.role === 'user' && entry.message.content === 'runner finished',
+        ),
+      ).toBe(true);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it('internal continuations wake an idle agent without releasing paused operator inputs', async () => {
+    const { repository, models, streams } = fixtures(true);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    try {
+      const active = await runtime.submitPrompt('operator');
+      await waitFor(() => streams.length === 1);
+      await runtime.enqueueAutomatic('operator queued');
+      await runtime.abort();
+      await active.settled;
+      const internal = await runtime.submitInternalMessage('goal continue');
+      await waitFor(() => streams.length === 2);
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [{ text: 'operator queued' }] });
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('continued') });
+      await internal.settled;
+      expect(await runtime.readLifecycle()).toMatchObject({
+        paused: true,
+        queue: [{ text: 'operator queued' }],
+        operation: null,
+      });
+      expect(streams).toHaveLength(2);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it('wakes automatic work after settlement without a prompt waiter', async () => {
+    const { repository, models, streams } = fixtures();
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    const frames: Record<string, unknown>[] = [];
+    runtime.onPresentationFrame((frame) => frames.push(frame));
+    try {
+      await runtime.enqueueAutomatic('first');
+      await waitFor(() => streams.length === 1);
+      await runtime.enqueueAutomatic('second');
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('one') });
+      await waitFor(() => streams.length === 2);
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('two') });
+      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
+      await waitFor(() => frames.filter((frame) => frame.type === 'agent_settled').length === 2);
+      const markers = (await runtime.readEntries()).entries.filter(
+        (entry) => entry.type === 'custom' && entry.customType === 'doompi.agent-settled',
+      );
+      expect(markers.map((entry) => entry.type === 'custom' && entry.data)).toEqual(
+        frames.filter((frame) => frame.type === 'agent_settled').map(({ runId, timestamp }) => ({ runId, timestamp })),
+      );
+      expect(frames.filter((frame) => frame.type === 'lifecycle_update').at(-1)).toMatchObject({
+        lifecycle: { operation: null, queue: [] },
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('does not idle a successor admitted while prior event delivery is pending', async () => {
+    const { repository, models, streams } = fixtures();
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let blocked = false;
+    const frames: Record<string, unknown>[] = [];
+    const ends: { successorActive?: boolean }[] = [];
+    runtime.onPresentationFrame((frame) => frames.push(frame));
+    runtime.onEvent((event) => {
+      if (event.type === 'run_end') ends.push(event);
+    });
+    runtime.onEvent(async (event) => {
+      if (event.type === 'message_end' && event.message.role === 'assistant' && !blocked) {
+        blocked = true;
+        await gate;
+      }
+    });
+    try {
+      const first = await runtime.submitPrompt('first');
+      await waitFor(() => streams.length === 1);
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('one') });
+      await waitFor(() => blocked);
+      const second = await runtime.submitPrompt('second');
+      await waitFor(() => streams.length === 2);
+      release();
+      await waitFor(() => ends.length === 1);
+      expect(ends[0]?.successorActive).toBe(true);
+      expect(frames.filter((frame) => frame.type === 'agent_end' || frame.type === 'agent_settled')).toHaveLength(0);
+      expect((await runtime.readLifecycle()).operation).not.toBeNull();
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('two') });
+      await first.settled;
+      await second.settled;
+    } finally {
+      release();
+      await runtime.dispose();
+    }
+  });
+
   it('pauses queued work on abort until explicit resume and then dispatches it once', async () => {
     const { repository, models, streams, streamSimple } = fixtures();
     const session = repository;
@@ -144,27 +285,31 @@ describe('direct harness durable lifecycle', () => {
       await repository.close(BACKGROUND_CONTEXT);
     }
   });
-  it('keeps a held extension follow-up dormant until a later explicit turn', async () => {
-    const { repository, models, streams } = fixtures();
-    const session = repository;
-    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: session, models, model });
+  it('pops queued follow-up and next-run inputs FIFO after normal settlement', async () => {
+    const { repository, models, streams, streamSimple } = fixtures();
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
     try {
       const active = await runtime.submitPrompt('long');
       await waitFor(() => streams.length === 1);
       await runtime.followUp('voice');
-      expect((await runtime.readLifecycle()).queue).toMatchObject([{ text: 'voice', scheduling: 'held' }]);
-      await runtime.abort((await runtime.readLifecycle()).operation?.id);
-      streams[0]!.push({ type: 'done', reason: 'stop', message: message('late') });
-      await active.settled.catch(() => undefined);
-      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
-      expect((await runtime.readLifecycle()).queue).toMatchObject([{ text: 'voice', scheduling: 'held' }]);
-      await runtime.resumeQueue();
+      await runtime.nextRun('next');
+      expect((await runtime.readLifecycle()).queue).toMatchObject([
+        { text: 'voice', scheduling: 'automatic', disposition: 'pending' },
+        { text: 'next', scheduling: 'automatic', disposition: 'pending' },
+      ]);
       expect(streams).toHaveLength(1);
-      const explicit = await runtime.submitPrompt('explicit turn');
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('first') });
       await waitFor(() => streams.length === 2);
-      await waitFor(async () => JSON.stringify((await runtime.readEntries()).entries).includes('voice'));
-      streams[1]!.push({ type: 'done', reason: 'stop', message: message('done') });
-      await explicit.settled.catch(() => undefined);
+      expect(JSON.stringify(streamSimple.mock.calls[1]![1])).toContain('voice');
+      expect(JSON.stringify(streamSimple.mock.calls[1]![1])).not.toContain('next');
+      expect((await runtime.readLifecycle()).queue).toMatchObject([{ text: 'next', disposition: 'pending' }]);
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('second') });
+      await waitFor(() => streams.length === 3);
+      expect(JSON.stringify(streamSimple.mock.calls[2]![1])).toContain('next');
+      streams[2]!.push({ type: 'done', reason: 'stop', message: message('third') });
+      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
+      await active.settled;
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
     } finally {
       await runtime.dispose();
       await repository.close(BACKGROUND_CONTEXT);
@@ -294,6 +439,47 @@ describe('direct harness durable lifecycle', () => {
     }
   });
 
+  it('promotes busy queued work at the native boundary without aborting or pausing automatic neighbors', async () => {
+    const { repository, models, streams, streamSimple } = fixtures(true);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
+    try {
+      const active = await runtime.submitPrompt('active');
+      await waitFor(() => streams.length === 1);
+      const signal = streamSimple.mock.calls[0]![2]!.signal!;
+      const selected = await runtime.enqueueAutomatic('selected-boundary');
+      const neighbor = await runtime.enqueueAutomatic('neighbor-after-complete');
+      const id = (await runtime.readLifecycle()).operation!.id;
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: false });
+      expect(await runtime.promoteQueued(selected.id, id)).toBe('promoted');
+      expect(signal.aborted).toBe(false);
+      expect(streams).toHaveLength(1);
+      expect(await runtime.readLifecycle()).toMatchObject({
+        paused: false,
+        queue: [
+          { id: selected.id, disposition: 'handoff' },
+          { id: neighbor.id, disposition: 'pending' },
+        ],
+      });
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('boundary') });
+      await waitFor(() => streams.length === 2);
+      const boundaryContext = JSON.stringify(streamSimple.mock.calls[1]![1]);
+      expect(boundaryContext.split('selected-boundary')).toHaveLength(2);
+      expect(boundaryContext).not.toContain('neighbor-after-complete');
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('selected answer') });
+      await active.settled;
+      await waitFor(() => streams.length === 3);
+      const neighborContext = JSON.stringify(streamSimple.mock.calls[2]![1]);
+      expect(neighborContext.split('selected-boundary')).toHaveLength(2);
+      expect(neighborContext.split('neighbor-after-complete')).toHaveLength(2);
+      streams[2]!.push({ type: 'done', reason: 'stop', message: message('neighbor answer') });
+      await waitFor(async () => (await runtime.readLifecycle()).operation === null);
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: false, queue: [] });
+      expect(streams).toHaveLength(3);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it('removes one pending item without replaying its neighbors and promotes by stable identity', async () => {
     const { repository, models, streams } = fixtures();
     const session = repository;
@@ -308,10 +494,12 @@ describe('direct harness durable lifecycle', () => {
       const id = (await runtime.readLifecycle()).operation?.id;
       expect(id).toBeTruthy();
       expect(await runtime.promoteQueued(first.id, id!)).toBe('promoted');
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('boundary') });
       await waitFor(() => streams.length === 2);
       expect((await runtime.readLifecycle()).queue.map((item) => item.id)).toEqual([last.id]);
-      await runtime.abort(id);
-      streams[0]!.push({ type: 'done', reason: 'stop', message: message('late') });
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('selected') });
+      await waitFor(() => streams.length === 3);
+      streams[2]!.push({ type: 'done', reason: 'stop', message: message('neighbor') });
       await active.settled.catch(() => undefined);
     } finally {
       await runtime.dispose();
@@ -374,16 +562,21 @@ describe('direct harness durable lifecycle', () => {
       await waitFor(() => blocked);
       expect(await runtime.promoteQueued(queued.id, operationId)).toBe('promoted');
       gate.resolve();
-      expect(await removing).toBe('already_consumed');
+      expect(await removing).toBe('in_flight');
+      expect((await runtime.readLifecycle()).queue).toMatchObject([{ id: queued.id, disposition: 'handoff' }]);
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('boundary') });
+      await waitFor(() => streams.length === 2);
+      expect(await runtime.removeQueued(queued.id)).toBe('already_consumed');
       expect((await runtime.readLifecycle()).queue).toEqual([]);
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
     } finally {
       gate.resolve();
       await runtime.dispose();
     }
   });
 
-  it('claims held writes before submitting them for the next prompt', async () => {
-    const { repository, models } = fixtures();
+  it('claims a pending follow-up before promoting it to steer', async () => {
+    const { repository, models, streams } = fixtures();
     const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
     const gate = { promise: Promise.resolve(), resolve: () => {} };
     gate.promise = new Promise<void>((resolve) => {
@@ -391,7 +584,9 @@ describe('direct harness durable lifecycle', () => {
     });
     let blocked = false;
     try {
-      await runtime.nextRun('held');
+      await runtime.submitPrompt('active');
+      await waitFor(() => streams.length === 1);
+      await runtime.followUp('pending');
       const queued = (await runtime.readLifecycle()).queue[0]!;
       const submit = runtime.lane.submit.bind(runtime.lane);
       vi.spyOn(runtime.lane, 'submit').mockImplementationOnce(async (draft, context) => {
@@ -399,11 +594,18 @@ describe('direct harness durable lifecycle', () => {
         await gate.promise;
         return submit(draft, context);
       });
-      const starting = runtime.submitPrompt('explicit');
+      expect(queued).toMatchObject({ scheduling: 'automatic', disposition: 'pending' });
+      const starting = runtime.promoteQueued(queued.id, (await runtime.readLifecycle()).operation!.id);
       await waitFor(() => blocked);
       expect(await runtime.removeQueued(queued.id)).toBe('in_flight');
       gate.resolve();
-      await starting;
+      expect(await starting).toBe('promoted');
+      expect((await runtime.readLifecycle()).queue).toMatchObject([{ id: queued.id, disposition: 'handoff' }]);
+      expect(await runtime.promoteQueued(queued.id)).toBe('in_flight');
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('boundary') });
+      await waitFor(() => streams.length === 2);
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
     } finally {
       gate.resolve();
       await runtime.dispose();
@@ -441,7 +643,7 @@ describe('direct harness durable lifecycle', () => {
       await repository.close(BACKGROUND_CONTEXT);
     }
   });
-  it('admits immediate user input while preserving paused automatic and held inputs with images', async () => {
+  it('admits immediate user input while preserving paused queued inputs with images', async () => {
     const { repository, models, streams } = fixtures(true);
     const session = repository;
     const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: session, models, model });
@@ -449,7 +651,7 @@ describe('direct harness durable lifecycle', () => {
     try {
       const first = await runtime.submitPrompt('long');
       await waitFor(() => streams.length === 1);
-      await runtime.followUp('held', [image]);
+      await runtime.followUp('follow-up', [image]);
       const automatic = await runtime.enqueueAutomatic('automatic', [image]);
       const before = (await runtime.readLifecycle()).queue;
       const replacement = await runtime.submitUserPrompt('voice now', [image]);
@@ -475,10 +677,10 @@ describe('direct harness durable lifecycle', () => {
       await runtime.resumeQueue();
       await waitFor(() => streams.length === 3);
       streams[2]!.push({ type: 'done', reason: 'stop', message: message('resumed') });
+      await waitFor(() => streams.length === 4);
+      streams[3]!.push({ type: 'done', reason: 'stop', message: message('last') });
       await waitFor(async () => (await runtime.readLifecycle()).operation === null);
-      expect((await runtime.readLifecycle()).queue).toMatchObject([
-        { text: 'held', scheduling: 'held', images: [image] },
-      ]);
+      expect((await runtime.readLifecycle()).queue).toEqual([]);
     } finally {
       await runtime.dispose();
       await repository.close(BACKGROUND_CONTEXT);
@@ -626,13 +828,14 @@ describe('direct harness durable lifecycle', () => {
         throw new Error('acknowledgement lost');
       });
       expect(await runtime.promoteQueued(selected.id, id)).toBe('promoted');
-      await first.settled.catch(() => undefined);
+      streams[0]!.push({ type: 'done', reason: 'stop', message: message('boundary') });
       await waitFor(() => streams.length === 2);
       expect(spy).toHaveBeenCalledTimes(1);
       expect(await runtime.removeQueued(selected.id)).toBe('already_consumed');
       streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
       await waitFor(async () => (await runtime.readLifecycle()).operation === null);
       expect(streams).toHaveLength(2);
+      await first.settled;
     } finally {
       await runtime.dispose();
       await repository.close(BACKGROUND_CONTEXT);
@@ -715,7 +918,7 @@ describe('direct harness durable lifecycle', () => {
     }
   });
 
-  it('sends only the selected idle automatic input even when its neighbors were unpaused', async () => {
+  it('promotes an idle automatic input without pausing its unpaused neighbors', async () => {
     const { repository, models, streams } = fixtures();
     const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', durableStorage: repository, models, model });
     const Lifecycle = defineDoc({
@@ -741,9 +944,12 @@ describe('direct harness durable lifecycle', () => {
       expect(await runtime.promoteQueued('selected')).toBe('promoted');
       await waitFor(() => streams.length === 1);
       streams[0]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+      await waitFor(() => streams.length === 2);
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: false });
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('neighbor answer') });
       await waitFor(async () => (await runtime.readLifecycle()).operation === null);
-      expect(await runtime.readLifecycle()).toMatchObject({ paused: true, queue: [{ id: 'neighbor' }] });
-      expect(streams).toHaveLength(1);
+      expect(await runtime.readLifecycle()).toMatchObject({ paused: false, queue: [] });
+      expect(streams).toHaveLength(2);
     } finally {
       await runtime.dispose();
     }

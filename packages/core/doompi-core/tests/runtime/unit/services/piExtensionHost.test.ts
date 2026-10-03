@@ -43,7 +43,7 @@ interface StubRuntime {
   runtime: DirectHarnessRuntime;
   appended: { customType: string; data: unknown }[];
   emit(event: HarnessEvent): Promise<void>;
-  readEntries: ReturnType<typeof vi.fn>;
+  readEntries: ReturnType<typeof vi.fn<DirectHarnessRuntime['readEntries']>>;
 }
 
 function stubRuntime(entries: Entry[], options?: { parentSessionId?: string; failWrites?: boolean }): StubRuntime {
@@ -71,6 +71,7 @@ function stubRuntime(entries: Entry[], options?: { parentSessionId?: string; fai
     readEntries,
     submitUserPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
     submitPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
+    submitInternalMessage: vi.fn(async () => ({ settled: Promise.resolve() })),
     admitMessage: vi.fn(async () => ({ settled: Promise.resolve() })),
     dispatchCommand: vi.fn(async () => true),
     followUp: vi.fn(async () => undefined),
@@ -400,7 +401,7 @@ async function loadedHost(
 }
 
 describe('Pi extension tool surface in the headless host', () => {
-  it('forwards explicit user delivery options and preserves structured content', async () => {
+  it('admits extension-generated user and custom content internally with explicit delivery', async () => {
     const { actions, runtime, emit } = await loadedHost([]);
     const content = [
       { type: 'text' as const, text: 'voice' },
@@ -408,24 +409,41 @@ describe('Pi extension tool surface in the headless host', () => {
     ];
     actions.sendUserMessage(content, { deliverAs: 'steer' });
     await vi.waitFor(() =>
-      expect(runtime.submitUserPrompt).toHaveBeenCalledWith({ role: 'user', content, timestamp: expect.any(Number) }),
+      expect(runtime.submitInternalMessage).toHaveBeenCalledWith(
+        { role: 'user', content, timestamp: expect.any(Number) },
+        'steer',
+      ),
     );
     expect(runtime.followUp).not.toHaveBeenCalled();
     actions.sendUserMessage('queued', { deliverAs: 'followUp' });
     await vi.waitFor(() =>
-      expect(runtime.followUp).toHaveBeenCalledWith(expect.objectContaining({ role: 'user', content: 'queued' })),
+      expect(runtime.submitInternalMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'user', content: 'queued' }),
+        'followUp',
+      ),
     );
     actions.sendUserMessage('plain');
-    await vi.waitFor(() => expect(runtime.submitPrompt).toHaveBeenCalledWith('plain'));
+    await vi.waitFor(() =>
+      expect(runtime.submitInternalMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'user', content: 'plain' }),
+        'followUp',
+      ),
+    );
     actions.sendUserMessage('/profile selected', { deliverAs: 'followUp', expandPromptTemplates: true });
     await vi.waitFor(() => expect(runtime.dispatchCommand).toHaveBeenCalledWith('/profile selected'));
-    expect(runtime.followUp).toHaveBeenCalledTimes(1);
+    expect(runtime.submitInternalMessage).toHaveBeenCalledTimes(3);
     await emit({ type: 'run_start', lane: 'main', operationId: 'op', runId: 'run', startedAt: Date.now() } as never);
     actions.sendMessage({ customType: 'notice', content: 'custom', display: true }, { deliverAs: 'steer' });
     await vi.waitFor(() =>
-      expect(runtime.steer).toHaveBeenCalledWith(expect.objectContaining({ role: 'custom', content: 'custom' })),
+      expect(runtime.submitInternalMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'custom', content: 'custom' }),
+        'steer',
+      ),
     );
-    expect(runtime.submitUserPrompt).toHaveBeenCalledTimes(1);
+    expect(runtime.submitUserPrompt).not.toHaveBeenCalled();
+    expect(runtime.submitPrompt).not.toHaveBeenCalled();
+    expect(runtime.followUp).not.toHaveBeenCalled();
+    expect(runtime.steer).not.toHaveBeenCalled();
   });
 
   it('exposes every registered tool until a restriction narrows the set', async () => {
@@ -694,6 +712,166 @@ describe('Pi lifecycle events in the headless host', () => {
       },
     ]);
     expect(readEntries).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes checkpoint entries before context hooks without duplicating mirrored state', async () => {
+    let manager: SessionManager | undefined;
+    const hook = vi.fn((_event: unknown, context: { sessionManager: SessionManager }) => {
+      manager = context.sessionManager;
+    });
+    const { host, readEntries } = await loadedHost([], undefined, new Map([['context', [hook]]]));
+    const readOriginal = readEntries.getMockImplementation()!;
+    const checkpoint: Entry = {
+      id: 'checkpoint',
+      parentId: null,
+      seq: 1,
+      timestamp: CREATED_AT,
+      type: 'message',
+      message: {
+        role: 'custom',
+        customType: 'fixture-checkpoint',
+        content: 'summary',
+        display: false,
+        details: { requestId: 'checkpoint-1' },
+        timestamp: CREATED_AT,
+      },
+    };
+    try {
+      // The native commit is visible even while journal event publication is still pending.
+      readEntries.mockResolvedValue({ entries: [checkpoint], leafId: checkpoint.id });
+      await host.transformContext([]);
+      expect(manager!.getBranch()).toContainEqual(
+        expect.objectContaining({ type: 'custom_message', customType: 'fixture-checkpoint' }),
+      );
+      manager!.appendCustomEntry('fixture-state', { ready: true });
+      await vi.waitFor(async () => expect((await readOriginal()).entries).toHaveLength(1));
+      const mirrored = (await readOriginal()).entries as Entry[];
+      readEntries.mockResolvedValue({ entries: [checkpoint, ...mirrored], leafId: mirrored[0]!.id });
+      await host.transformContext([]);
+      await host.transformContext([]);
+      expect(
+        manager!.getBranch().filter((entry) => entry.type === 'custom' && entry.customType === 'fixture-state'),
+      ).toHaveLength(1);
+    } finally {
+      await host.shutdown();
+    }
+  });
+  it('applies custom context checkpoints to real durable model input', async () => {
+    const model: Model<Api> = {
+      id: 'fixture',
+      name: 'Fixture',
+      api: 'anthropic-messages',
+      provider: 'anthropic',
+      baseUrl: 'http://localhost',
+      reasoning: false,
+      input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 65536,
+      maxTokens: 256,
+    };
+    const inputs: unknown[] = [];
+    const answer = {
+      role: 'assistant' as const,
+      content: [{ type: 'text' as const, text: 'done' }],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      stopReason: 'stop' as const,
+      usage: {
+        input: 1,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 2,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      timestamp: CREATED_AT,
+    };
+    const models = {
+      getModels: () => [model],
+      getAvailable: async () => [model],
+      getModel: () => model,
+      streamSimple: (_model: unknown, input: unknown) => {
+        inputs.push(input);
+        const stream = createAssistantMessageEventStream();
+        stream.push({ type: 'start', partial: answer });
+        stream.push({ type: 'done', reason: 'stop', message: answer });
+        stream.end();
+        return stream;
+      },
+      complete: vi.fn(),
+    } as unknown as Models;
+    const contextHook = vi.fn((event: { messages: AgentMessage[] }) => {
+      const index = event.messages.findLastIndex(
+        (message) =>
+          message.role === 'custom' &&
+          message.customType === 'fixture-checkpoint' &&
+          typeof message.details === 'object' &&
+          message.details !== null &&
+          'requestId' in message.details &&
+          message.details.requestId === 'checkpoint-1',
+      );
+      if (index < 0) return undefined;
+      return {
+        messages: [
+          { role: 'compactionSummary', summary: 'compact summary', tokensBefore: 100, timestamp: CREATED_AT },
+          ...event.messages.slice(index + 1),
+        ],
+      };
+    });
+    const preload: LoadExtensionsResult = {
+      extensions: [stubExtension([], new Map([['context', [contextHook]]]))],
+      errors: [],
+      runtime: createExtensionRuntime(),
+    };
+    let host: ReturnType<typeof createPiExtensionHost> | undefined;
+    const runtime = await createDirectHarnessRuntime({
+      cwd: temporaryRoot(),
+      durableStorage: new MemoryStorage(),
+      models,
+      model,
+      compaction: { enabled: false },
+      transformContext: async (event) => ({ messages: await host!.transformContext(event.messages) }),
+    });
+    initTheme(undefined, false);
+    host = createPiExtensionHost({
+      cwd: '/tmp',
+      agentDir: '/tmp/.pi',
+      models: models as unknown as ModelRuntime,
+      settings: SettingsManager.inMemory(),
+      runtime,
+      preload,
+      getModel: () => model,
+      getThinkingLevel: () => 'off',
+      client: () => undefined,
+    });
+    try {
+      await host.load();
+      await runtime.prompt('obsolete history');
+      await runtime.appendMessage({
+        role: 'custom',
+        customType: 'fixture-checkpoint',
+        content: 'checkpoint content',
+        display: false,
+        details: { requestId: 'checkpoint-1' },
+        timestamp: CREATED_AT,
+      });
+      await runtime.prompt('continue');
+      expect(contextHook).toHaveBeenCalledTimes(2);
+      const branch = (
+        contextHook.mock.calls[1] as unknown as [unknown, { sessionManager: SessionManager }]
+      )[1].sessionManager.getBranch();
+      expect(branch).toContainEqual(
+        expect.objectContaining({ type: 'custom_message', customType: 'fixture-checkpoint' }),
+      );
+      expect(JSON.stringify(inputs.at(-1))).toContain('compact summary');
+      expect(JSON.stringify(inputs.at(-1))).toContain('continue');
+      expect(JSON.stringify(inputs.at(-1))).not.toContain('obsolete history');
+      expect(JSON.stringify(inputs.at(-1))).not.toContain('checkpoint content');
+    } finally {
+      await host.shutdown();
+      await runtime.dispose();
+    }
   });
 
   it('resolves turn boundaries against persisted entries when event messages are different objects', async () => {

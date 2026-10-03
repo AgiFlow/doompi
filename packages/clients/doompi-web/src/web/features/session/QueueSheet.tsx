@@ -42,8 +42,13 @@ export function QueueSheet({
   const unlisted = Math.max(0, count - entries.length);
   const label = `${String(count)} queued message${count === 1 ? '' : 's'}`;
 
-  // The acknowledgement can precede its lifecycle update. Only both confirm emptiness.
-  if (clearAcknowledged && count === 0) {
+  // Automatic delivery closes an empty queue, but explicit actions still need acknowledgement.
+  if (
+    count === 0 &&
+    pending === null &&
+    (open || clearAcknowledged) &&
+    (clearAcknowledged || (!paused && error === null))
+  ) {
     setClearAcknowledged(false);
     setOpen(false);
   }
@@ -129,16 +134,12 @@ export function QueueSheet({
                       variant="ghost"
                       size="sm"
                       data-testid={`queue-steer-${String(index)}`}
-                      aria-label={`${operationId === undefined ? 'send' : 'interrupt and respond to'} queued message ${String(index + 1)}`}
+                      aria-label={`${operationId === undefined ? 'send now' : 'steer'} queued message ${String(index + 1)}`}
                       disabled={actionDisabled}
                       onClick={() => void act(`send:${entry.id}`, () => onPromote(entry.id, operationId))}
                       className="h-7 shrink-0 text-doom-cyan"
                     >
-                      {pending === `send:${entry.id}`
-                        ? 'sending…'
-                        : operationId === undefined
-                          ? 'send now'
-                          : 'interrupt and respond'}
+                      {pending === `send:${entry.id}` ? 'sending…' : operationId === undefined ? 'send now' : 'steer'}
                     </Button>
                   ) : null}
                   <Button

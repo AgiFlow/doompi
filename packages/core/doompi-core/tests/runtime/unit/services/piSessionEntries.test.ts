@@ -34,6 +34,31 @@ describe('harness to Pi session entry conversion', () => {
     expect(converted).not.toHaveProperty('seq');
   });
 
+  it('preserves custom messages as Pi custom_message records for context hooks', () => {
+    const details = { requestId: 'checkpoint-1', retainedMessages: [] };
+    const converted = toPiSessionEntry({
+      ...messageEntry,
+      message: {
+        role: 'custom',
+        customType: 'fixture-checkpoint',
+        content: 'summary',
+        display: false,
+        details,
+        timestamp: CREATED_AT,
+      },
+    });
+    expect(converted).toEqual({
+      type: 'custom_message',
+      id: messageEntry.id,
+      parentId: messageEntry.parentId,
+      timestamp: CREATED_AT_ISO,
+      customType: 'fixture-checkpoint',
+      content: 'summary',
+      display: false,
+      details,
+    });
+  });
+
   it('converts epoch milliseconds to the exact ISO timestamp', () => {
     const converted = toPiSessionEntry({ ...messageEntry, timestamp: CREATED_AT + 123 });
 

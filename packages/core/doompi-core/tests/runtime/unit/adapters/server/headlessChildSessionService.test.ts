@@ -80,6 +80,7 @@ function fakeRuntime(sessionId: string, filePath?: string): DirectHarnessRuntime
     recordUsage: async () => 'usage',
     submitPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
     submitUserPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
+    submitInternalMessage: vi.fn(async () => ({ settled: Promise.resolve() })),
     admitMessage: vi.fn(async () => ({ settled: Promise.resolve() })),
     prompt: vi.fn(async () => undefined),
     steer: vi.fn(async () => undefined),
@@ -849,7 +850,7 @@ describe('headless child session provider', () => {
   });
   it('passes explicit child ceilings and default model policy to the direct runtime', async () => {
     const runtime = fakeRuntime('configured', '/tmp/configured.jsonl');
-    runtime.prompt = vi.fn(() => new Promise<void>(() => undefined));
+    runtime.submitInternalMessage = vi.fn(async () => ({ settled: new Promise<void>(() => undefined) }));
     const factory = runtimeFactory(runtime);
     const models = {} as HeadlessChildSessionServiceOptions['models'];
     const provider = createHeadlessChildSessionServiceProvider({
@@ -882,14 +883,16 @@ describe('headless child session provider', () => {
     );
     expect(handle.sessionFile).toBe('/tmp/configured.jsonl');
     await handle.steer('next');
-    expect(runtime.steer).toHaveBeenCalledWith('next');
+    expect(runtime.submitInternalMessage).toHaveBeenCalledWith('next', 'steer');
+    expect(runtime.steer).not.toHaveBeenCalled();
+    expect(runtime.followUp).not.toHaveBeenCalled();
     await handle.stop();
     await provider.close();
   });
 
   it('splits a thinking suffix off the model id and resolves providers per spawn', async () => {
     const runtime = fakeRuntime('suffixed', '/tmp/suffixed.jsonl');
-    runtime.prompt = vi.fn(() => new Promise<void>(() => undefined));
+    runtime.submitInternalMessage = vi.fn(async () => ({ settled: new Promise<void>(() => undefined) }));
     const factory = runtimeFactory(runtime);
     const providers = vi.fn(() => [{ id: 'anthropic-vertex' } as never]);
     const service = createHeadlessChildSessionService({
@@ -919,7 +922,7 @@ describe('headless child session provider', () => {
     'splits the :%s thinking suffix off the child model id',
     async (level) => {
       const runtime = fakeRuntime(`suffix-${level}`, `/tmp/suffix-${level}.jsonl`);
-      runtime.prompt = vi.fn(() => new Promise<void>(() => undefined));
+      runtime.submitInternalMessage = vi.fn(async () => ({ settled: new Promise<void>(() => undefined) }));
       const factory = runtimeFactory(runtime);
       const service = createHeadlessChildSessionService({
         parentSessionId: 'parent-session',
@@ -944,7 +947,7 @@ describe('headless child session provider', () => {
 
   it('keeps a model id that ends in a thinking word without a colon intact', async () => {
     const runtime = fakeRuntime('unsuffixed', '/tmp/unsuffixed.jsonl');
-    runtime.prompt = vi.fn(() => new Promise<void>(() => undefined));
+    runtime.submitInternalMessage = vi.fn(async () => ({ settled: new Promise<void>(() => undefined) }));
     const factory = runtimeFactory(runtime);
     const service = createHeadlessChildSessionService({
       parentSessionId: 'parent-session',
@@ -965,7 +968,7 @@ describe('headless child session provider', () => {
 
   it('omits providers from the runtime options when the per-spawn thunk resolves to none', async () => {
     const runtime = fakeRuntime('no-providers', '/tmp/no-providers.jsonl');
-    runtime.prompt = vi.fn(() => new Promise<void>(() => undefined));
+    runtime.submitInternalMessage = vi.fn(async () => ({ settled: new Promise<void>(() => undefined) }));
     const factory = runtimeFactory(runtime);
     const providers = vi.fn(() => []);
     const service = createHeadlessChildSessionService({
@@ -984,7 +987,7 @@ describe('headless child session provider', () => {
 
   it('keeps an explicit thinking request ahead of the model suffix', async () => {
     const runtime = fakeRuntime('explicit', '/tmp/explicit.jsonl');
-    runtime.prompt = vi.fn(() => new Promise<void>(() => undefined));
+    runtime.submitInternalMessage = vi.fn(async () => ({ settled: new Promise<void>(() => undefined) }));
     const factory = runtimeFactory(runtime);
     const service = createHeadlessChildSessionService({
       parentSessionId: 'parent-session',
