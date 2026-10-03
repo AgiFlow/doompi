@@ -30,6 +30,7 @@ import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 
+import planServerFacet from '../../../../../../minor/doompi-plan/dist/extensions/server.mjs';
 import { publishHeadlessSelectionStatus } from '../../../../src/builders/server/selectionStatus';
 
 function restoreHeadlessSelection(
@@ -171,6 +172,176 @@ describe('headless startup', () => {
       ),
     ).toEqual(fallback);
   });
+  it.each([false, true])(
+    'retains SQLite conversation through real Plan activation and restart (overrides: %s)',
+    async (overrides) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-headless-plan-'));
+      const agent = path.join(root, 'agent');
+      fs.mkdirSync(agent);
+      vi.stubEnv('PI_CODING_AGENT_DIR', agent);
+      fs.mkdirSync(path.join(root, '.doom'));
+      if (overrides)
+        fs.writeFileSync(
+          path.join(root, '.doom/config.yaml'),
+          'modes:\n  planning:\n    main:\n      model: test-provider/planner\n      thinking: high\n',
+        );
+      const planner: Model<Api> = { ...model, id: 'planner', reasoning: true };
+      const chat: Model<Api> = { ...model, reasoning: true };
+      const streamSimple = vi.fn<Models['streamSimple']>((selected) => {
+        const stream = createAssistantMessageEventStream();
+        const message: AssistantMessage = {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Remembered assistant reply' }],
+          api: selected.api,
+          model: selected.id,
+          provider: selected.provider,
+          timestamp: Date.now(),
+          stopReason: 'stop',
+          usage: {
+            input: 1,
+            output: 1,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 2,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+        };
+        stream.push({ type: 'start', partial: message });
+        stream.push({ type: 'done', reason: 'stop', message });
+        return stream;
+      });
+      vi.spyOn(ModelRuntime, 'create').mockResolvedValue({
+        getModel: (_provider: string, id: string) => (id === 'planner' ? planner : chat),
+        getModels: () => [chat, planner],
+        getAvailable: async () => [chat, planner],
+        streamSimple,
+      } as unknown as ModelRuntime);
+      vi.spyOn(SettingsManager, 'create').mockReturnValue(SettingsManager.inMemory());
+      const facets: LoadedServerFacet[] = [
+        ['@agimon-ai/doompi-minor-mode', minorModeServerFacet],
+        ['@agimon-ai/doompi-plan', planServerFacet],
+      ].map(([packageName, facet]) => ({
+        retained: true,
+        initiallyEligible: true,
+        declaration: {
+          packageName: packageName as string,
+          entry: './server.ts',
+          module: './server.mjs',
+          scopes: ['session'],
+          required: true,
+          owners: [{ majorMode: 'copilot', layer: 'default' }],
+        },
+        facet: facet as LoadedServerFacet['facet'],
+      }));
+      const environment = { HOME: root, PI_CODING_AGENT_DIR: agent };
+      let session: Awaited<ReturnType<typeof createHeadlessSessionHost>> | undefined;
+      let apis: Awaited<ReturnType<typeof serveSessionApis>> | undefined;
+      const open = async () => {
+        session = await createHeadlessSessionHost({
+          cwd: root,
+          repoRoot: root,
+          sessionId: 'plan-persistence',
+          sessionName: 'Plan persistence',
+          workspaceId: 'plan-workspace',
+          agentArgs: ['--session-dir', path.join(agent, 'sessions')],
+          environment,
+          candidates: facets.map(({ declaration }) => declaration),
+          selection: { majorMode: 'copilot', activeLayers: [], domains: [], state: { 'minor-mode': [] } },
+        });
+        session.onPresentationFrame((frame) => {
+          if (frame.type === 'extension_ui_request' && frame.method === 'select')
+            session!.respondToExtensionUi({ type: 'extension_ui_response', id: frame.id, value: 'Normal' });
+        });
+        apis = await serveSessionApis({
+          sessionId: 'plan-persistence',
+          cwd: root,
+          environment,
+          hubToken: 'test',
+          apis: [],
+          facets,
+          directEvents: { publish: () => undefined, subscribe: () => () => undefined, close: () => undefined },
+          prepareFacets: session.prepareFacets,
+          activateFacets: session.activateFacets,
+          canDispatch: session.canDispatch,
+          onNotice: vi.fn(),
+        });
+      };
+      try {
+        await open();
+        await session!.runtime.setThinkingLevel('medium');
+        await session!.runtime.prompt('Remember this prior request');
+        const laneId = session!.runtime.lane.id;
+        const file = session!.runtime.sessionFile!;
+        expect(fs.readFileSync(file).subarray(0, 16).toString()).toBe('SQLite format 3\u0000');
+        const prior = (await session!.runtime.readEntries()).entries.filter(
+          (entry) => entry.type === 'message' && ['user', 'assistant'].includes(entry.message.role),
+        );
+        expect(prior).toHaveLength(2);
+        await session!.runtime.prompt('/minor plan activate');
+        expect(session!.host!.context.selection.state?.['minor-mode']).toContain('plan');
+        expect(await session!.host!.context.session.readModelSettings!()).toMatchObject({
+          model: { id: overrides ? 'planner' : 'test' },
+          thinkingLevel: overrides ? 'high' : 'medium',
+        });
+        expect(session!.runtime.lane.id).toBe(laneId);
+        await session!.runtime.prompt('Plan using the prior request');
+        expect(streamSimple.mock.calls[1]![0].id).toBe(overrides ? 'planner' : 'test');
+        expect(JSON.stringify(streamSimple.mock.calls[1]![1].messages)).toContain('Remember this prior request');
+        expect(JSON.stringify(streamSimple.mock.calls[1]![1].messages)).toContain('Remembered assistant reply');
+        const entries = (await session!.runtime.readEntries()).entries;
+        expect(entries).toContainEqual(
+          expect.objectContaining({ customType: 'plan-server-flavor', data: { flavor: 'normal' } }),
+        );
+        const snapshots = entries.filter(
+          (entry) => entry.type === 'custom' && entry.customType === 'plan-server-model-snapshot',
+        );
+        expect(snapshots).toHaveLength(overrides ? 1 : 0);
+        if (overrides)
+          expect(snapshots[0]).toMatchObject({
+            data: { model: { provider: 'test-provider', id: 'test' }, thinkingLevel: 'medium' },
+          });
+        expect(entries).toContainEqual(
+          expect.objectContaining({
+            customType: 'doom-notification',
+            data: expect.objectContaining({ body: 'Plan mode is active with the normal flavor.', level: 'info' }),
+          }),
+        );
+        await session!.dispose();
+        await apis!.close();
+        await open();
+        expect(session!.runtime.sessionId).toBe('plan-persistence');
+        expect(session!.runtime.lane.id).toBe(laneId);
+        expect(session!.runtime.sessionFile).toBe(file);
+        expect((await session!.runtime.readEntries()).entries).toEqual(expect.arrayContaining(prior));
+        expect(session!.host!.context.selection.state?.['minor-mode']).toContain('plan');
+        expect((await session!.runtime.readEntries()).entries).toEqual(expect.arrayContaining(entries));
+        expect(await session!.host!.context.session.readModelSettings!()).toMatchObject({
+          model: { id: overrides ? 'planner' : 'test' },
+          thinkingLevel: overrides ? 'high' : 'medium',
+        });
+        await session!.runtime.prompt('Resume planning with saved context');
+        expect(getCurrentSystemPrompt(streamSimple.mock.calls[2]![1].messages)).toContain('[PLAN MODE ACTIVE: NORMAL]');
+        expect(JSON.stringify(streamSimple.mock.calls[2]![1].messages)).toContain('Remember this prior request');
+        await session!.runtime.prompt('/minor plan deactivate');
+        expect(session!.host!.context.selection.state?.['minor-mode']).not.toContain('plan');
+        expect(await session!.host!.context.session.readModelSettings!()).toMatchObject({
+          model: { id: 'test' },
+          thinkingLevel: 'medium',
+        });
+        await session!.runtime.prompt('Continue with retained context');
+        expect(streamSimple.mock.calls[3]![0].id).toBe('test');
+        expect(JSON.stringify(streamSimple.mock.calls[3]![1].messages)).toContain('Remember this prior request');
+        expect(getCurrentSystemPrompt(streamSimple.mock.calls[3]![1].messages)).not.toContain('[PLAN MODE ACTIVE]');
+        expect(JSON.stringify(streamSimple.mock.calls[3]![1].messages)).toContain('Plan using the prior request');
+      } finally {
+        await session?.dispose();
+        await apis?.close();
+        vi.restoreAllMocks();
+        vi.unstubAllEnvs();
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
   it('installs retained facets into the real API host and changes actual provider tools in place', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-headless-startup-'));
     vi.stubEnv('PI_CODING_AGENT_DIR', path.join(root, 'agent'));

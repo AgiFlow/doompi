@@ -198,8 +198,13 @@ export function startSessionRuntime(): () => void {
   let pendingVoiceTransferTarget: string | undefined;
   let pendingVoiceTransferFocus: Promise<void> | undefined;
   let deferredVoiceOwnershipFrame: Record<string, unknown> | undefined;
-  const applyPresentationFrame = (sessionId: string, frame: Record<string, unknown>, replay: boolean): void => {
-    applySessionFrame(sessionId, frame, { replay });
+  const applyPresentationFrame = (
+    sessionId: string,
+    frame: Record<string, unknown>,
+    replay: boolean,
+    source?: 'hub',
+  ): void => {
+    applySessionFrame(sessionId, frame, { replay, source });
     toolCompletionTabs.apply(sessionId, frame, replay);
     // The direct protocol callback has no hub envelope, but channel demux needs the session identity.
     dispatchChannelFrame({ ...frame, sessionId });
@@ -408,8 +413,8 @@ export function startSessionRuntime(): () => void {
           beginSessionReplay(sessionId);
           try {
             batch(() => {
-              resetSessionStore(sessionId);
-              for (const replayed of frames) applyPresentationFrame(sessionId, replayed, true);
+              resetSessionStore(sessionId, { source: 'hub' });
+              for (const replayed of frames) applyPresentationFrame(sessionId, replayed, true, 'hub');
             });
           } finally {
             endSessionReplay(sessionId);

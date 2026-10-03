@@ -99,7 +99,7 @@ function projectionKey(frame: Record<string, unknown>): { kind: 'status' | 'widg
 export function applySessionFrame(
   sessionId: string,
   frame: Record<string, unknown>,
-  options: { replay?: boolean } = {},
+  options: { replay?: boolean; source?: 'hub' } = {},
 ): void {
   const projection = projectionKey(frame);
   const guard = replayGuards.get(sessionId);
@@ -110,7 +110,8 @@ export function applySessionFrame(
   }
   // The presentation stream owns live and replay projection until the typed session
   // service publishes a snapshot. Once it does, only DoomPi-specific frames reduce here.
-  const transcriptFromProtocol = protocolTranscripts.has(sessionId);
+  const transcriptFromProtocol =
+    protocolTranscripts.has(sessionId) || (options.source === 'hub' && hasReadyHistoryReader(sessionId));
   sessionStoreFor(sessionId).setState((state) => {
     const next = reduceSession(state, frame, { transcriptFromProtocol });
     if (!historyReaders.has(sessionId)) return next;
@@ -147,24 +148,36 @@ interface HistoryState {
 }
 
 const history = new Map<string, HistoryState>();
-const historyReaders = new Map<string, (direction: 'older' | 'newer' | 'latest') => boolean>();
+const historyReaders = new Map<
+  string,
+  {
+    read: (direction: 'older' | 'newer' | 'latest') => boolean;
+    ready: () => boolean;
+  }
+>();
+
+function hasReadyHistoryReader(sessionId: string): boolean {
+  return historyReaders.get(sessionId)?.ready() === true;
+}
 
 export function bindHistoryReader(
   sessionId: string,
   reader: (direction: 'older' | 'newer' | 'latest') => boolean,
+  ready: () => boolean = () => false,
 ): () => void {
-  historyReaders.set(sessionId, reader);
+  const binding = { read: reader, ready };
+  historyReaders.set(sessionId, binding);
   return () => {
-    if (historyReaders.get(sessionId) === reader) historyReaders.delete(sessionId);
+    if (historyReaders.get(sessionId) === binding) historyReaders.delete(sessionId);
   };
 }
 
 export function requestNewerHistory(sessionId: string | null): boolean {
-  return sessionId !== null && (historyReaders.get(sessionId)?.('newer') ?? false);
+  return sessionId !== null && (historyReaders.get(sessionId)?.read('newer') ?? false);
 }
 
 export function requestLatestHistory(sessionId: string | null): boolean {
-  return sessionId !== null && (historyReaders.get(sessionId)?.('latest') ?? false);
+  return sessionId !== null && (historyReaders.get(sessionId)?.read('latest') ?? false);
 }
 const historyStore = new Store<Record<string, HistoryState>>({});
 const NO_HISTORY: HistoryState = { cursor: null, hasMore: true, loading: false, pages: 0 };
@@ -193,7 +206,7 @@ export function useHasOlderHistory(sessionId: string | null): boolean {
 export function requestOlderHistory(sessionId: string | null): boolean {
   if (sessionId === null) return false;
   const reader = historyReaders.get(sessionId);
-  if (reader) return reader('older');
+  if (reader) return reader.read('older');
   const current = historyFor(sessionId);
   if (current.loading || !current.hasMore) return false;
   setHistory(sessionId, { ...current, loading: true });
@@ -384,8 +397,9 @@ export function endSessionReplay(sessionId: string): void {
   replayGuards.delete(sessionId);
 }
 
-export function resetSessionStore(sessionId: string): void {
+export function resetSessionStore(sessionId: string, options: { source?: 'hub' } = {}): void {
   const guard = replayGuards.get(sessionId);
+  const preservePages = options.source === 'hub' && hasReadyHistoryReader(sessionId);
   sessionStoreFor(sessionId).setState((state) => {
     // Transcript pages do not contain facts returned by the session commands.
     // Keep those facts even when their response arrives before a page reload.
@@ -403,6 +417,9 @@ export function resetSessionStore(sessionId: string): void {
         ? {}
         : Object.fromEntries(Object.entries(state.statuses).filter(([key]) => guard.statuses.has(key)));
     const preservedWidgets = guard === undefined ? [] : state.widgets.filter((key) => guard.widgets.has(key));
+    // A bounded hub backlog is not a canonical page. Keep durable entries,
+    // their deduplication ids, and custom projections while replaying hub state.
+    if (preservePages) return { ...state, statuses: preservedStatuses, widgets: preservedWidgets };
     if (!protocolTranscripts.has(sessionId)) {
       return {
         ...reset,
@@ -425,6 +442,7 @@ export function resetSessionStore(sessionId: string): void {
       protocolUserEntryIds: state.protocolUserEntryIds,
     };
   });
+  if (preservePages) return;
   history.delete(sessionId);
   historyStore.setState((state) => {
     const { [sessionId]: _dropped, ...rest } = state;

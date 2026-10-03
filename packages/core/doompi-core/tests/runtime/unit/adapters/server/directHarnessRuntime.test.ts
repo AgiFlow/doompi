@@ -229,6 +229,45 @@ describe('durable direct runtime', () => {
       await runtime.dispose();
     }
   });
+  it('publishes a rename immediately after committing it', async () => {
+    const { runtime } = await setup({ sessionName: 'worktree/child' });
+    try {
+      const frames: unknown[] = [];
+      runtime.onPresentationFrame((frame) => frames.push(frame));
+      await runtime.setName('Renamed child');
+      expect(await runtime.readState()).toMatchObject({ sessionName: 'Renamed child' });
+      expect(frames).toContainEqual({ type: 'session_info_changed', name: 'Renamed child' });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('retains a rename when reopened with the nested worktree creation name', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-runtime-rename-'));
+    const options = {
+      sessionsRoot: root,
+      durableStorage: undefined,
+      historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
+      sessionId: 'nested-worktree',
+      parentSessionId: 'parent-worktree',
+      sessionName: 'worktree/child',
+      cwd: path.join(root, 'parent', 'child'),
+    };
+    let { runtime } = await setup(options);
+    try {
+      await runtime.setName('Renamed child');
+      expect(await runtime.readState()).toMatchObject({ sessionName: 'Renamed child' });
+      await runtime.dispose();
+      ({ runtime } = await setup(options));
+      expect(await runtime.readState()).toMatchObject({ sessionName: 'Renamed child' });
+      await runtime.setName('');
+      await runtime.dispose();
+      ({ runtime } = await setup(options));
+      expect(await runtime.readState()).toMatchObject({ sessionName: '' });
+    } finally {
+      await runtime.dispose();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
   it('returns wire-safe state before the first prompt and after settling', async () => {
     const { runtime } = await setup();
     try {
