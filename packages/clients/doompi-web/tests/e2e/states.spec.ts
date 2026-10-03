@@ -56,7 +56,11 @@ test('renders a delayed aggregate stream without duplicate text or reopening an 
     entryId: 'delayed-answer',
     message: { ...message, content: [{ type: 'text', text: 'Final authoritative answer' }] },
   });
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toHaveText('Final authoritative answer');
   cockpit.session.emit({ type: 'message_start', message: { ...message, content: [] } });
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toHaveText('Final authoritative answer');
   cockpit.session.emit({ type: 'agent_settled' });
   await expect(answer).toHaveCount(1);
   await expect(answer).toHaveText('Final authoritative answer');

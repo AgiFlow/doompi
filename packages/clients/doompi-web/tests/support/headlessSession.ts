@@ -672,8 +672,29 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
           });
         return;
       }
-      // Explicit provider completion supersedes the synthetic delta-only completion.
-      if (frame.type === 'message_end') assistantDraft = undefined;
+      // Explicit provider completion supersedes the synthetic delta-only completion and survives journal reload.
+      if (frame.type === 'message_end' && typeof frame.message === 'object' && frame.message !== null) {
+        const message = frame.message as Frame;
+        if (message.role === 'assistant') {
+          const entryId =
+            typeof frame.entryId === 'string'
+              ? frame.entryId
+              : typeof message.id === 'string'
+                ? message.id
+                : (assistantDraft?.id ?? `assistant-${randomUUID()}`);
+          const index = entries.findIndex((entry) => entry.id === entryId);
+          const entry = {
+            ...entries[index],
+            id: entryId,
+            seq: index < 0 ? entries.length + 1 : entries[index]!.seq,
+            type: 'message',
+            message,
+          };
+          if (index < 0) entries.push(entry);
+          else entries[index] = entry;
+          assistantDraft = undefined;
+        }
+      }
       if (frame.type === 'agent_start') {
         lifecycle = {
           ...lifecycle,

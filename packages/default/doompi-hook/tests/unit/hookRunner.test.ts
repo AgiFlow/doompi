@@ -6,9 +6,11 @@ import { asSpawn, type FakeChild, fakeChild, type FakeChildOutcome } from '../he
 import { recordingTelemetry } from '../helpers/telemetry';
 
 const REPO_ROOT = '/repo';
+const BROKEN_PIPE = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
 
 interface RunnerHarness {
   spawned: Array<{ command: string; options: Record<string, unknown> }>;
+  children: FakeChild[];
   payloads: string[];
   warnings: string[];
   records: ReturnType<typeof recordingTelemetry>['records'];
@@ -17,6 +19,7 @@ interface RunnerHarness {
 
 function harness(outcome: FakeChildOutcome, platform: NodeJS.Platform = 'darwin'): RunnerHarness {
   const spawned: RunnerHarness['spawned'] = [];
+  const children: FakeChild[] = [];
   const payloads: string[] = [];
   const warnings: string[] = [];
   const { telemetry, records } = recordingTelemetry();
@@ -30,10 +33,12 @@ function harness(outcome: FakeChildOutcome, platform: NodeJS.Platform = 'darwin'
         command: (args[1] as string[])[1] ?? '',
         options: args[2] as Record<string, unknown>,
       });
-      return fakeChild(payloads, outcome);
+      const child = fakeChild(payloads, outcome);
+      children.push(child);
+      return child;
     }),
   });
-  return { spawned, payloads, warnings, records, runner };
+  return { spawned, children, payloads, warnings, records, runner };
 }
 
 afterEach(() => {
@@ -49,6 +54,88 @@ describe('bash hook runner', () => {
     expect(state.spawned[0]?.command).toBe('guard');
     expect(state.spawned[0]?.options).toMatchObject({ cwd: REPO_ROOT, detached: true });
     expect(JSON.parse(state.payloads[0] ?? '{}')).toEqual({ session_id: 'session-1' });
+  });
+
+  it('handles a broken pipe emitted while ending stdin without losing the hook decision', async () => {
+    const child = fakeChild([], { stdout: '{"decision":"approve"}\n' });
+    child.stdin.end = () => {
+      child.stdin.emit('error', BROKEN_PIPE);
+    };
+    const runner = createBashHookRunner({ spawn: asSpawn(() => child) });
+
+    await expect(runner.run({ command: 'guard' }, {}, { repoRoot: REPO_ROOT })).resolves.toEqual({
+      decision: { decision: 'approve' },
+    });
+  });
+
+  it('handles asynchronous stdin EPIPE while waiting for the successful hook exit', async () => {
+    const state = harness({ stdout: '{"decision":"block","reason":"no"}\n' });
+    const execution = state.runner.run({ command: 'guard' }, {}, { repoRoot: REPO_ROOT });
+
+    expect(() => state.children[0]?.stdin.emit('error', BROKEN_PIPE)).not.toThrow();
+    expect(await execution).toEqual({ decision: { decision: 'block', reason: 'no' } });
+    expect(state.records).toEqual([]);
+    expect(state.warnings).toEqual([]);
+  });
+
+  it('keeps reporting the failed hook exit when stdin closes early', async () => {
+    const state = harness({ stderr: 'hook dependency missing\n', code: 1 });
+    const execution = state.runner.run({ command: 'guard' }, {}, { repoRoot: REPO_ROOT });
+
+    expect(() => state.children[0]?.stdin.emit('error', BROKEN_PIPE)).not.toThrow();
+    expect((await execution).failure).toEqual({
+      command: 'guard',
+      message: 'hook dependency missing',
+      reason: 'non_zero_exit',
+    });
+    expect(state.records).toHaveLength(1);
+    expect(state.records[0]?.attributes?.['hook.reason']).toBe('non_zero_exit');
+  });
+
+  it.each([{ stdout: '{}\n' }, { error: new Error('spawn unavailable') }])(
+    'handles a late broken pipe after the hook has settled: %j',
+    async (outcome) => {
+      const state = harness(outcome);
+      await state.runner.run({ command: 'guard' }, {}, { repoRoot: REPO_ROOT });
+      const recordsBeforeError = state.records.slice();
+      const warningsBeforeError = state.warnings.slice();
+
+      expect(() => state.children[0]?.stdin.emit('error', BROKEN_PIPE)).not.toThrow();
+      expect(state.records).toEqual(recordsBeforeError);
+      expect(state.warnings).toEqual(warningsBeforeError);
+    },
+  );
+
+  it('reports unexpected stdin errors after the hook exits', async () => {
+    const state = harness({ stdout: '{}\n' });
+    const execution = state.runner.run({ command: 'guard' }, {}, { repoRoot: REPO_ROOT });
+    const error = Object.assign(new Error('write EIO'), { code: 'EIO' });
+
+    expect(() => state.children[0]?.stdin.emit('error', error)).not.toThrow();
+    expect((await execution).failure).toEqual({
+      command: 'guard',
+      message: 'write EIO',
+      reason: 'stdin_failed',
+    });
+    expect(state.records).toEqual([
+      {
+        level: 'error',
+        event: HOOK_TELEMETRY_EVENT.hookFailed,
+        attributes: { 'hook.reason': 'stdin_failed' },
+      },
+    ]);
+    expect(state.warnings[0]).toContain('could not write stdin');
+  });
+
+  it('survives a real hook closing stdin before consuming a large payload', async () => {
+    const runner = createBashHookRunner();
+    const outcome = await runner.run(
+      { command: `exec 0<&-; printf '%s\\n' '{"decision":"approve"}'` },
+      { tool_response: 'x'.repeat(1024 * 1024) },
+      { repoRoot: process.cwd() },
+    );
+
+    expect(outcome).toEqual({ decision: { decision: 'approve' } });
   });
 
   it('exports the repository root and only sets CLAUDE_PLUGIN_ROOT when the hook has one', async () => {

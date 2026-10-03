@@ -7,6 +7,7 @@ import {
   DEFAULT_HOOK_TIMEOUT_SECONDS,
   MILLISECONDS_PER_SECOND,
   PROCESS_NOT_FOUND_ERROR,
+  BROKEN_PIPE_ERROR,
   WINDOWS_PLATFORM,
   UNKNOWN_EXIT_CODE,
   JSON_LINE_START,
@@ -94,6 +95,7 @@ export function createBashHookRunner(options: BashHookRunnerOptions = {}): HookR
         let timedOut = false;
         let childExited = false;
         let timeoutExitCode: number | null = null;
+        let stdinError: Error | undefined;
         let escalationTimer: NodeJS.Timeout | undefined;
 
         const signal = signalOwnedProcess(child.pid, (value) => child.kill(value));
@@ -135,6 +137,12 @@ export function createBashHookRunner(options: BashHookRunnerOptions = {}): HookR
           }, HOOK_TERMINATION_GRACE_MS);
         }, timeoutSeconds * MILLISECONDS_PER_SECOND);
 
+        child.stdin?.on('error', (error: Error) => {
+          // Hooks may exit or close stdin without consuming the entire payload.
+          // Keep this listener through settlement: a pending write can fail later.
+          if (settled || timedOut || errorCode(error) === BROKEN_PIPE_ERROR) return;
+          stdinError = error;
+        });
         child.stdout?.on('data', (chunk: Buffer) => {
           stdout += chunk.toString();
         });
@@ -161,6 +169,12 @@ export function createBashHookRunner(options: BashHookRunnerOptions = {}): HookR
             });
             warn(`[pi-hook] advisory hook failed (${code}): ${hook.command}\n${stderr}`);
             finish({ failure: { command: hook.command, message, reason: 'non_zero_exit' } });
+            return;
+          }
+          if (stdinError) {
+            void telemetry?.recordError(HOOK_TELEMETRY_EVENT.hookFailed, stdinError, { 'hook.reason': 'stdin_failed' });
+            warn(`[pi-hook] advisory hook could not write stdin: ${stdinError.message}\n`);
+            finish({ failure: { command: hook.command, message: stdinError.message, reason: 'stdin_failed' } });
             return;
           }
           const jsonLine = stdout

@@ -14,7 +14,7 @@ export interface FakeChildOutcome {
 export type FakeChild = EventEmitter & {
   stdout: EventEmitter;
   stderr: EventEmitter;
-  stdin: { end(value: string): void };
+  stdin: EventEmitter & { end(value: string): void };
   kill(signal?: NodeJS.Signals): void;
   pid?: number;
 };
@@ -29,7 +29,7 @@ export function fakeChild(payloads: string[], outcome: FakeChildOutcome): FakeCh
   const child = new EventEmitter() as FakeChild;
   child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
-  child.stdin = { end: (value: string) => payloads.push(value) };
+  child.stdin = Object.assign(new EventEmitter(), { end: (value: string) => payloads.push(value) });
   child.kill = () => child.emit('exit', null);
   child.pid = outcome.pid;
   if (!outcome.stalled) {
