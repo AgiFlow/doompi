@@ -25,6 +25,7 @@ const groupedSuites = {
   '5': ['consumer ownership boundaries', 'resources, RMUX, and installed text rendering'],
   '6': [
     'system target and CI gate',
+    'packed system command timing',
     'frozen published package compatibility baseline',
     'a composed session against a scripted model',
     'packed startup input readiness',

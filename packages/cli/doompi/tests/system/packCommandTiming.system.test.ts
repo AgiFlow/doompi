@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { runCommand } from '../system/packHelpers';
+import { runCommand } from './packHelpers';
 
 const TIMING_PREFIX = 'System-test phase: ';
 const COMMAND_TIMEOUT_MS = 5_000;
