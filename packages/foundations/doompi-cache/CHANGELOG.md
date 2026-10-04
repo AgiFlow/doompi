@@ -1,3 +1,21 @@
+## 0.0.1-alpha.80 (2026-10-04)
+
+### 🩹 Fixes
+
+- restore Pi v1 provider cache wiring and request identity ([#299](https://github.com/AgiFlow/doompi/pull/299))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.113
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.114
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.97
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.114
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.79 (2026-10-03)
 
 ### 🧱 Updated Dependencies

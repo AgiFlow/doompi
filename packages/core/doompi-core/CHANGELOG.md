@@ -1,3 +1,22 @@
+## 0.0.1-alpha.114 (2026-10-04)
+
+### 🚀 Features
+
+- support inline MCP Apps and ChatGPT widgets ([#296](https://github.com/AgiFlow/doompi/pull/296))
+
+### 🩹 Fixes
+
+- restore Pi v1 provider cache wiring and request identity ([#299](https://github.com/AgiFlow/doompi/pull/299))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.98
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.61
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.113 (2026-10-03)
 
 ### 🩹 Fixes
