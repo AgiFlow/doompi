@@ -2112,7 +2112,7 @@ describe('DPI installed experiment runtime', () => {
 
       const version = await runCommand(process.execPath, [executable, '--version'], fixture.root, environment);
       expect(version.code, version.stderr || version.stdout).toBe(0);
-      expect(version.stdout.trim()).toBe('1.0.0');
+      expect(version.stdout.trim()).toBe('1.0.2');
 
       const runtime = startRuntime(
         executable,
@@ -2549,7 +2549,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
             settings: { projectTrust: 'ask' },
             harness: {
               ...harnessContracts.readHarnessState({}),
-              root: fixture.root,
+              root: registration.root,
               hookGroups: [],
               hookModules: state.fileState.hookModules,
             },
@@ -2564,6 +2564,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
         ) as import('@agimon-ai/doompi-core/childSession').DoomChildSessionHooks;
         expect(hooks).toBeDefined();
         const controller = new AbortController();
+        const hookFailures: string[] = [];
         const binding = hooks.bind({
           request: {
             runId: 'packed-child',
@@ -2577,15 +2578,20 @@ describe('RPC-LIFECYCLE installed runtime', () => {
           },
           sessionId: () => 'packed-child-session',
           signal: controller.signal,
-          sendMessage: async () => undefined,
+          sendMessage: async (message) => {
+            hookFailures.push(message);
+          },
           appendCustomEntry: async () => undefined,
         });
         try {
-          expect(
-            await binding.beforeTool({ toolCallId: 'call', toolName: 'bash', args: { command: 'pwd' } }, {
+          const decision = await binding.beforeTool(
+            { toolCallId: 'call', toolName: 'bash', args: { command: 'pwd' } },
+            {
               abortSignal: controller.signal,
-            } as never),
-          ).toEqual({ block: { reason: 'packed hook' } });
+            } as never,
+          );
+          expect(hookFailures).toEqual([]);
+          expect(decision).toEqual({ block: { reason: 'packed hook' } });
         } finally {
           await binding.dispose();
         }

@@ -295,6 +295,7 @@ export function createPiTestHost(options: PiTestHostOptions = {}): PiTestHost {
       tools.push(tool as unknown as RegisteredTool);
       if (!activeToolNames.includes(tool.name)) activeToolNames.push(tool.name);
     },
+    registerToolRenderer(): void {},
     registerCommand(name: string, commandOptions: CommandOptions): void {
       commands.push({ name, options: commandOptions });
     },
