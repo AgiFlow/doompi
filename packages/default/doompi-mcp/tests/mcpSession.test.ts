@@ -768,7 +768,82 @@ describe('McpSession', () => {
         content: [{ type: 'text', text: 'ok' }],
         details: { server: 'pencil', tool: 'get_screenshot' },
       });
-      expect(callTool).toHaveBeenCalledWith('get_screenshot', { quality: 'full' }, { timeout: 500 });
+      expect(callTool).toHaveBeenCalledWith(
+        'get_screenshot',
+        { quality: 'full' },
+        { timeout: 500, onResult: expect.any(Function) },
+      );
+    });
+
+    it('captures pre-guard component data and forwards cancellation while keeping the guarded result', async () => {
+      const active = await session(fakePi().pi);
+      active.install();
+      await active.start();
+      listTools.mockResolvedValue([
+        { name: 'get_screenshot', inputSchema: { type: 'object' }, _meta: { ui: { resourceUri: 'ui://canvas' } } },
+      ]);
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(active.activeToolDefinitions()[0]?._meta).toBeDefined());
+      const tool = active.activeToolDefinitions()[0];
+      expect(tool).toBeDefined();
+      if (!tool) return;
+      const controller = new AbortController();
+      const original = {
+        content: [{ type: 'text' as const, text: 'raw' }],
+        structuredContent: { privatePayload: 'x'.repeat(20_000) },
+        _meta: { sentinel: 'private' },
+      };
+      callTool.mockImplementation(
+        async (_name: string, _args: unknown, options: { onResult(value: typeof original): void }) => {
+          options.onResult(original);
+          return { content: [{ type: 'text', text: 'guard summary' }] };
+        },
+      );
+      const result = await active.invokeTool(tool.piName, {}, controller.signal);
+      expect(result.content).toEqual([{ type: 'text', text: 'guard summary' }]);
+      expect(result.details).toMatchObject({ app: { resourceUri: 'ui://canvas', result: original } });
+      expect(callTool).toHaveBeenCalledWith(
+        'get_screenshot',
+        {},
+        expect.objectContaining({ signal: controller.signal, timeout: 500 }),
+      );
+    });
+
+    it('reads only an advertised App resource and rejects a resource answer after runtime retirement', async () => {
+      const active = await session(fakePi().pi);
+      active.install();
+      await active.start();
+      listTools.mockResolvedValue([
+        { name: 'get_screenshot', inputSchema: { type: 'object' }, _meta: { ui: { resourceUri: 'ui://canvas' } } },
+      ]);
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(active.activeToolDefinitions()[0]?._meta).toBeDefined());
+      const resource = {
+        contents: [{ uri: 'ui://canvas', mimeType: 'text/html;profile=mcp-app', text: '<p>App</p>' }],
+      };
+      const readResource = vi.fn().mockResolvedValue(resource);
+      ensureConnected.mockResolvedValue({ callTool, listTools, listResources, readResource });
+      const controller = new AbortController();
+      await expect(active.readAppResource('pencil', 'get_screenshot', 'ui://other')).rejects.toThrow('not available');
+      expect(readResource).not.toHaveBeenCalled();
+      await expect(
+        active.readAppResource('pencil', 'get_screenshot', 'ui://canvas', controller.signal),
+      ).resolves.toEqual(resource);
+      expect(readResource).toHaveBeenCalledWith('ui://canvas', { signal: controller.signal, timeout: 500 });
+      let release: (value: typeof resource) => void = () => {
+        throw new Error('Read has not started');
+      };
+      readResource.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      );
+      const pending = active.readAppResource('pencil', 'get_screenshot', 'ui://canvas');
+      await vi.waitFor(() => expect(readResource).toHaveBeenCalledTimes(2));
+      await active.dispose();
+      release(resource);
+      await expect(pending).rejects.toThrow('retired MCP runtime');
     });
 
     it('rejects tools outside the current session configuration', async () => {

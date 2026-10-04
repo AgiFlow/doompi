@@ -5,8 +5,74 @@ import type { AgentToolResult, ToolDefinition } from '@earendil-works/pi-coding-
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import type { TSchema } from 'typebox';
 
-import type { CatalogTool } from '../../services/mcpCatalog';
-import type { McpResultBlock, McpToolDetails } from '../../types/webMcp';
+import { mcpToolExecutionMetadata, normalizeMcpAppMetadata, type CatalogTool } from '../../services/mcpCatalog';
+import type { McpAppPresentation, McpResultBlock, McpToolDetails } from '../../types/webMcp';
+
+const MAX_APP_RESULT_BYTES = 1024 * 1024;
+const appSnapshots = new WeakMap<CallToolResult, McpAppPresentation>();
+
+/** Clone before output guards can replace structured data or mutate the source. */
+export function captureMcpAppResult(tool: CatalogTool, result: CallToolResult): McpAppPresentation | undefined {
+  const app = normalizeMcpAppMetadata(tool._meta);
+  if (!app.appVisible && !app.resourceUri) return undefined;
+  try {
+    const json = JSON.stringify(result);
+    if (Buffer.byteLength(json, 'utf8') > MAX_APP_RESULT_BYTES) return undefined;
+    return {
+      version: 1,
+      ...(app.resourceUri === undefined ? {} : { resourceUri: app.resourceUri, protocol: app.protocol }),
+      result: JSON.parse(json) as CallToolResult,
+    };
+  } catch {
+    // Non-JSON or oversized results retain their normal text fallback without an App.
+    return undefined;
+  }
+}
+
+/** Historical details are untrusted JSON; reject malformed or unbounded snapshots. */
+export function parseMcpAppSnapshot(value: unknown): McpAppPresentation | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if (
+    record.version !== 1 ||
+    typeof record.result !== 'object' ||
+    record.result === null ||
+    Array.isArray(record.result)
+  )
+    return undefined;
+  if (
+    record.resourceUri !== undefined &&
+    (typeof record.resourceUri !== 'string' ||
+      !record.resourceUri.startsWith('ui://') ||
+      record.resourceUri.length > 8192)
+  )
+    return undefined;
+  if (record.protocol !== undefined && record.protocol !== 'mcp' && record.protocol !== 'openai') return undefined;
+  if ((record.resourceUri === undefined) !== (record.protocol === undefined)) return undefined;
+  const result = record.result as Record<string, unknown>;
+  if (!Array.isArray(result.content) || (result.isError !== undefined && typeof result.isError !== 'boolean'))
+    return undefined;
+  if (
+    result.content.some(
+      (block: unknown) =>
+        typeof block !== 'object' || block === null || !('type' in block) || typeof block.type !== 'string',
+    )
+  )
+    return undefined;
+  try {
+    const json = JSON.stringify(value);
+    if (Buffer.byteLength(json, 'utf8') > MAX_APP_RESULT_BYTES) return undefined;
+    return JSON.parse(json) as McpAppPresentation;
+  } catch {
+    // A non-JSON persisted payload cannot be replayed safely.
+    return undefined;
+  }
+}
+
+/** Associate the original private payload with the guarded result without widening MCP wire output. */
+export function retainMcpAppResult(result: CallToolResult, snapshot: McpAppPresentation | undefined): void {
+  if (snapshot) appSnapshots.set(result, snapshot);
+}
 
 /** Pi requires a schema; a downstream tool that declares none takes any object. */
 const ANY_OBJECT_SCHEMA = { type: 'object', properties: {} };
@@ -98,11 +164,20 @@ export function toHeadlessToolResult(
     (result.structuredContent === undefined ? 'No output.' : JSON.stringify(result.structuredContent));
   const blocks = resultBlocks(result);
   const structured = structuredRecord(result);
+  const app =
+    appSnapshots.get(result) ??
+    (normalizeMcpAppMetadata(tool._meta).resourceUri === undefined ? undefined : captureMcpAppResult(tool, result));
   return {
     content: [{ type: 'text', text }, ...resultImages(result)],
     ...(structured === undefined ? {} : { structuredContent: structured }),
     ...(result.isError === undefined ? {} : { isError: result.isError }),
-    details: { server: tool.serverName, tool: tool.toolName, ...(blocks.length > 0 ? { blocks } : {}) },
+    ...(result._meta === undefined ? {} : { _meta: result._meta }),
+    details: {
+      server: tool.serverName,
+      tool: tool.toolName,
+      ...(blocks.length > 0 ? { blocks } : {}),
+      ...(app === undefined ? {} : { app }),
+    },
   };
 }
 
@@ -148,6 +223,7 @@ export function createMcpTool(
     // Type.Unsafe only brands this runtime JSON Schema object. A type cast keeps
     // cached stub registration from evaluating the whole TypeBox package.
     parameters: (Object.keys(tool.inputSchema).length > 0 ? tool.inputSchema : ANY_OBJECT_SCHEMA) as TSchema,
+    ...(tool._meta === undefined ? {} : { _meta: mcpToolExecutionMetadata(tool) }),
     renderShell: 'self',
     ...renderers,
     async execute(_toolCallId, params, signal) {

@@ -12,16 +12,16 @@ import type {
   McpServerStateChange,
   TokenStore,
 } from '@agimon-ai/mcp-proxy';
-import type { CallToolResult } from '@modelcontextprotocol/server';
+import type { CallToolResult, ReadResourceResult } from '@modelcontextprotocol/server';
 
 import { PACKAGE_SOURCE } from '../../constants/piMcp';
 import type { McpResourceView, McpServerView } from '../../types/mcp';
 import type { McpConfigGroups, McpConfigSource, McpSessionConfig } from '../../types/mcpConfig';
 import { buildMcpConfigGroups } from '../configSources';
 import { readDirectToolFilter } from '../directToolsEnvironment';
-import { type CatalogTool, McpCatalog } from '../mcpCatalog';
+import { type CatalogTool, isModelVisibleMcpTool, McpCatalog, normalizeMcpAppMetadata } from '../mcpCatalog';
 import { type McpRuntimeOwner, readCachedCatalog } from '../mcpRuntime';
-import { toHeadlessToolResult } from '../mcpTools';
+import { captureMcpAppResult, retainMcpAppResult, toHeadlessToolResult } from '../mcpTools';
 import { readSessionConfig } from '../sessionConfig';
 import { mcpToolRestriction } from '../toolVisibility';
 
@@ -62,6 +62,7 @@ function toolRegistrationFingerprint(tool: CatalogTool): string {
     serverName: tool.serverName,
     toolName: tool.toolName,
     inputSchema: tool.inputSchema,
+    _meta: tool._meta,
   });
 }
 
@@ -227,7 +228,7 @@ export class McpSession {
       }
       this.incompatibleNames.add(tool.piName);
       this.catalog.addDiagnostic(
-        `MCP tool "${tool.piName}" changed identity or input schema and is hidden until Pi is relaunched.`,
+        `MCP tool "${tool.piName}" changed identity, App metadata, or input schema and is hidden until Pi is relaunched.`,
       );
     }
   }
@@ -304,7 +305,19 @@ export class McpSession {
       throw new Error(`MCP tool ${name} is no longer available in the current session configuration.`);
     const timeout = services.clientManager.getServerRequestTimeout(tool.serverName);
     this.clearToolWarnings(tool.serverName, 'tools/call', tool.toolName);
-    return connection.callTool(tool.toolName, parameters, timeout === undefined ? undefined : { timeout });
+    let snapshot: ReturnType<typeof captureMcpAppResult>;
+    const result = await connection.callTool(tool.toolName, parameters, {
+      ...(timeout === undefined ? {} : { timeout }),
+      ...(signal === undefined ? {} : { signal }),
+      onResult: (original) => {
+        snapshot = captureMcpAppResult(tool, original);
+      },
+    });
+    signal?.throwIfAborted();
+    if (!runtime.isCurrent(services) || !this.isToolAvailable(tool))
+      throw new Error(`MCP tool ${name} is no longer available in the current session configuration.`);
+    retainMcpAppResult(result, snapshot);
+    return result;
   }
 
   /**
@@ -501,7 +514,7 @@ export class McpSession {
 
   /** Both the proxy tool and direct tools point to the same live warning origins. */
   getToolWarnings(): Readonly<Record<string, readonly ContextToolWarning[]>> {
-    const tools = this.activeToolDefinitions();
+    const tools = this.activeToolDefinitions().filter(isModelVisibleMcpTool);
     const entries = tools.flatMap((tool): [string, ContextToolWarning[]][] => {
       const warnings = this.outputSchemaWarnings
         .filter((warning) => warning.serverName === tool.serverName && warning.toolName === tool.toolName)
@@ -571,6 +584,36 @@ export class McpSession {
     this.catalog.setResourceCount(serverName, resources.length);
     this.emitChange();
     return resources;
+  }
+
+  /** Reads only the resource advertised by a currently admitted tool, on its existing server. */
+  async readAppResource(
+    server: string,
+    tool: string,
+    resourceUri: string,
+    signal?: AbortSignal,
+  ): Promise<ReadResourceResult> {
+    const declaration = this.activeToolDefinitions().find(
+      (candidate) => candidate.serverName === server && candidate.toolName === tool,
+    );
+    if (!declaration || normalizeMcpAppMetadata(declaration._meta).resourceUri !== resourceUri)
+      throw new Error('This App resource is not available in the current session.');
+    const runtime = this.runtime;
+    const services = runtime?.getServices();
+    const generation = this.lifecycleGeneration;
+    if (!runtime || !services) throw new Error(RUNTIME_NOT_STARTED);
+    signal?.throwIfAborted();
+    const connection = await services.clientManager.ensureConnected(server);
+    const check = () => {
+      signal?.throwIfAborted();
+      if (generation !== this.lifecycleGeneration || !runtime.isCurrent(services) || !this.isToolAvailable(declaration))
+        throw new Error('This App resource belongs to a retired MCP runtime.');
+    };
+    check();
+    const options = { timeout: services.clientManager.getServerRequestTimeout(server), signal };
+    const result = await connection.readResource(resourceUri, options);
+    check();
+    return result;
   }
 
   /** Fires whenever the server picture changes. Returns its own disposer. */

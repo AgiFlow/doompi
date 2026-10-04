@@ -17,6 +17,7 @@ import {
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 import type { Context } from '@deepseek-ai/cordis';
 
+import { createMcpAppsService } from '../../../../../services/mcpApps';
 import { mountMcpHeadlessTools } from '../../../../../services/mcpHeadlessTools';
 import { MCP_SESSION_TOOLS_SERVICE } from '../../../../../services/mcpSessionTools';
 import { createMcpServerRuntime } from '../../../../../services/serverRuntime';
@@ -30,6 +31,8 @@ export const createMcpServerRoot = (context?: DoomServerPluginContext) => {
   );
   const generation = `${context?.agent?.context?.sessionId ?? crypto.randomUUID()}:mcp-server`;
   const { session } = runtime;
+  let appHost = context?.agent;
+  const apps = createMcpAppsService(runtime.sessionTools, () => appHost, context?.signal);
   const mountSession = (cordis: Context) => {
     cordis.inject([DOOM_MCP_PROJECTION_RESOLVER_SERVICE], (resolverContext) => {
       resolver = resolverContext.get(DOOM_MCP_PROJECTION_RESOLVER_SERVICE) as DoomMcpProjectionResolverService;
@@ -39,6 +42,7 @@ export const createMcpServerRoot = (context?: DoomServerPluginContext) => {
     });
     cordis.inject([DOOM_HEADLESS_HOST_SERVICE], (hostContext) => {
       const host = hostContext.get(DOOM_HEADLESS_HOST_SERVICE) as DoomHeadlessHostService;
+      appHost = host;
       const registrations = new Map<string, { tool: DoomHeadlessTool; registration: DoomHeadlessRegistration }>();
       const reconcile = () => {
         const tools = runtime.sessionTools.project();
@@ -60,6 +64,7 @@ export const createMcpServerRoot = (context?: DoomServerPluginContext) => {
       const stopSelection = host.subscribeSelection((selection) => runtime.onSelectionChange(selection));
       reconcile();
       return () => {
+        if (appHost === host) appHost = undefined;
         stopTools();
         stopSelection();
         for (const entry of registrations.values()) entry.registration.dispose();
@@ -82,9 +87,10 @@ export const createMcpServerRoot = (context?: DoomServerPluginContext) => {
     });
   };
   return {
-    value: runtime,
+    value: { ...runtime, appMethods: apps.methods },
     activities: runtime.activities,
     services: [mountMcpHeadlessTools(runtime.tools), mountSession],
+    onDispose: apps.dispose,
   };
 };
 export type McpServerScope = Awaited<ReturnType<typeof createMcpServerRoot>>['value'];

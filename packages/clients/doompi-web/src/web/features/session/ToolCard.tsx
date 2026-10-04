@@ -215,7 +215,7 @@ export const ToolCard = memo(function ToolCard({
   slotProps: WebPluginSlotProps;
   statuses: Readonly<Record<string, string>>;
 }) {
-  const renderer = pluginToolRenderer(entry.name, statuses);
+  const renderer = pluginToolRenderer(entry.name, statuses, entry.result?.details);
   const state = toneOf(entry);
   const props = toolMessageProps(slotProps, entry, statuses);
   return (

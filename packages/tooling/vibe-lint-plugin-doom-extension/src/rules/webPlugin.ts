@@ -337,6 +337,12 @@ export const webPluginImportAllowlist: RuleDefinition = {
       ? new Set([...ALLOWED_BARE_SPECIFIERS, CONTRACTS_TESTING_PACKAGE])
       : ALLOWED_BARE_SPECIFIERS;
     for (const specifier of moduleSpecifiers(sourceFile)) {
+      // The conversation host uses browser-only AppBridge with admitted session RPC, not an MCP client.
+      if (
+        specifier === '@modelcontextprotocol/ext-apps/app-bridge' &&
+        readManifest(configRoot)?.name === '@agimon-ai/doompi-mcp'
+      )
+        continue;
       if (specifier.startsWith('.')) {
         const target = relativeTarget(filePath, specifier, configRoot);
         if (

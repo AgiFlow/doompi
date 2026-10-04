@@ -72,6 +72,7 @@ test.beforeAll(async () => {
         '@modelcontextprotocol/client',
         '@modelcontextprotocol/server',
         'zod',
+        'pkce-challenge',
       ],
     },
   });

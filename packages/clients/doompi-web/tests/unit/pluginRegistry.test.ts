@@ -107,6 +107,29 @@ describe('the web plugin registry', () => {
     expect(webPluginDiagnostics()[0]?.message).toContain("tool 'bash' is already provided by 'one'");
   });
 
+  it('passes persisted details to runtime matchers without live statuses and preserves exact claims', () => {
+    const details = { server: 'demo', tool: 'widget' };
+    const seen: unknown[] = [];
+    const historical = {
+      tools: [],
+      matches: (_name: string, _statuses: Readonly<Record<string, string>>, payload?: unknown) => {
+        seen.push(payload);
+        return payload === details;
+      },
+      message: Panel,
+    };
+    const exact = { tools: ['demo_exact'], message: Other };
+    installWebPlugins([
+      defineWebPlugin({ id: 'history', toolRenderers: [historical] }),
+      defineWebPlugin({ id: 'exact', toolRenderers: [exact] }),
+    ]);
+    expect(pluginToolRenderer('demo_widget', {}, details)).toBe(historical);
+    expect(seen).toEqual([details]);
+    expect(pluginToolRenderer('demo_widget')).toBeUndefined();
+    expect(pluginToolRenderer('demo_exact', {}, details)).toBe(exact);
+    expect(seen).toEqual([details, undefined]);
+  });
+
   it('orders dock faces, keeps the first collision, and reserves host faces', () => {
     installWebPlugins([
       defineWebPlugin({ id: 'later', dockFaces: [{ id: 'notes', label: 'notes', order: 20, panel: Other }] }),

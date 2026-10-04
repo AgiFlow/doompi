@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DOOM_HEADLESS_OWNER,
   requireDoomHeadlessHost,
+  toDoomHeadlessToolResult,
   type DoomHeadlessSession,
   type DoomHeadlessTool,
 } from '../../../../../src/exports/headless';
@@ -1242,6 +1243,7 @@ describe('MCP execution boundary', () => {
       content: [{ type: 'text', text: 'sensitive' }],
       structuredContent: { status: 'sensitive' },
       _meta: { displayValue: 'sensitive' },
+      details: { server: 'fixture', app: { result: { _meta: { privateValue: 'sensitive' } } } },
     });
     await expect(current.host.mcpSurface.invokeTool(current.invocation)).resolves.toMatchObject({
       structuredContent: { status: 'sensitive' },
@@ -1254,6 +1256,7 @@ describe('MCP execution boundary', () => {
     expect(result.content).toEqual([{ type: 'text', text: 'redacted' }]);
     expect(result.structuredContent).toBeUndefined();
     expect(result._meta).toBeUndefined();
+    expect(result.details).toEqual({ server: 'fixture' });
   });
 
   it('does not reconcile unchanged inherited defaults at turn admission', async () => {
@@ -1280,6 +1283,147 @@ describe('MCP execution boundary', () => {
     await beforeModelRequest!({ phase: 'turn' } as never, undefined as never);
     expect(current.host.host!.status.requestedRevision).toBe(revision);
     expect(current.host.host!.status.ready).toBe(true);
+  });
+
+  it('settles tool registrations triggered by inherited selection before model admission', async () => {
+    const candidate: DoomServerBundleEntry = {
+      packageName: '@test/selection-tools',
+      entry: './server.ts',
+      module: './server.mjs',
+      scopes: ['session'],
+      required: true,
+      owners: [{ majorMode: 'test', layer: 'default' }],
+    };
+    const createRuntime = vi.spyOn(directHarnessRuntime, 'createDirectHarnessRuntime');
+    const current = await fixture([], {
+      candidates: [candidate],
+      inheritedSelection: () => ({ domains: ['apps'] }),
+    });
+    const beforeModelRequest = createRuntime.mock.calls.at(-1)![0].beforeModelRequest!;
+    await current.context
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin((context: Context) => {
+        const host = requireDoomHeadlessHost(context);
+        let registered = false;
+        return host.subscribeSelection((selection) => {
+          if (registered || !selection.domains.includes('apps')) return;
+          registered = true;
+          host.registerTool({
+            name: 'selected_app_tool',
+            description: 'Selection-owned tool',
+            parameters: Type.Object({}),
+            execute: async () => ({ content: [] }),
+          });
+        });
+      })
+      .await();
+    await current.host.activateFacets({
+      root: current.context,
+      installedPackages: [candidate.packageName],
+      dispose: async () => {},
+    });
+
+    await beforeModelRequest({ phase: 'turn' } as never, undefined as never);
+    expect(current.host.canDispatch()).toBe(true);
+    expect(current.host.toolSurface.readSurface().tools.map((tool) => tool.name)).toContain('selected_app_tool');
+    await expect(current.host.host!.dispatchHook('context', {})).resolves.toEqual([]);
+  });
+
+  it('keeps app-only tools admitted without advertising them to the model', async () => {
+    const candidate: DoomServerBundleEntry = {
+      packageName: '@test/app-surface',
+      entry: './server.ts',
+      module: './server.mjs',
+      scopes: ['session'],
+      required: true,
+      owners: [{ majorMode: 'test', layer: 'default' }],
+    };
+    const current = await fixture([], { candidates: [candidate] });
+    const replaceTools = vi.spyOn(current.runtime, 'replaceTools');
+    const execute = vi.fn<DoomHeadlessTool['execute']>(async () => ({ content: [{ type: 'text', text: 'done' }] }));
+    await current.context
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin((context: Context) => {
+        const host = requireDoomHeadlessHost(context);
+        for (const [name, visibility] of [
+          ['app_action', ['app']],
+          ['ordinary', undefined],
+          ['model_only', ['model']],
+          ['hidden', []],
+        ] as const)
+          host.registerTool({
+            name,
+            description: name,
+            parameters: Type.Object({}),
+            ...(visibility === undefined ? {} : { _meta: { ui: { visibility: [...visibility] } } }),
+            promptGuidelines: [`guidance:${name}`],
+            execute,
+          });
+      })
+      .await();
+    await current.host.activateFacets({
+      root: current.context,
+      installedPackages: [candidate.packageName],
+      dispose: async () => {},
+    });
+    expect(
+      replaceTools.mock.calls
+        .at(-1)![0]
+        .map(({ name }) => name)
+        .sort(),
+    ).toEqual(['model_only', 'ordinary']);
+    const inventory = current.host.host!.getContextInventory();
+    expect(
+      inventory.sources
+        .flatMap(({ tools }) => tools)
+        .map(({ name }) => name)
+        .sort(),
+    ).toEqual(['model_only', 'ordinary']);
+    expect(
+      current.host.host!.inspectCapabilities().capabilities.find(({ name }) => name === 'app_action'),
+    ).toMatchObject({ active: true, discoverable: false });
+    const surface = requireDoomHeadlessHost(current.context).toolSurface!;
+    const snapshot = surface.readSurface();
+    expect(snapshot.tools.find(({ name }) => name === 'app_action')).toMatchObject({
+      _meta: { ui: { visibility: ['app'] } },
+    });
+    const authorize = vi.fn();
+    await surface.invokeTool({ revision: snapshot.revision, name: 'app_action', arguments: {}, authorize });
+    expect(authorize).toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledOnce();
+    await expect(
+      surface.invokeTool({
+        revision: snapshot.revision,
+        name: 'app_action',
+        arguments: {},
+        authorize: () => {
+          throw new Error('denied');
+        },
+      }),
+    ).rejects.toThrow('denied');
+    expect(execute).toHaveBeenCalledOnce();
+    await current.host.host!.changeSelection({ axis: 'majorMode', majorMode: 'other' });
+    await expect(
+      surface.invokeTool({ revision: snapshot.revision, name: 'app_action', arguments: {} }),
+    ).rejects.toThrow();
+  });
+
+  it('preserves component metadata when narrowing a tool result', () => {
+    expect(
+      toDoomHeadlessToolResult({
+        content: [],
+        structuredContent: { visible: true },
+        _meta: { privateValue: 'private' },
+      }),
+    ).toEqual({
+      content: [],
+      details: undefined,
+      structuredContent: { visible: true },
+      _meta: { privateValue: 'private' },
+    });
+    expect(
+      toDoomHeadlessToolResult({ content: [], structuredContent: ['not-an-object'] }).structuredContent,
+    ).toBeUndefined();
   });
 
   it('keeps the remote surface empty without explicit declarations', async () => {

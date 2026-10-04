@@ -5,6 +5,34 @@
  * so they are not repeated here.
  */
 import type { ContextToolWarning } from '@agimon-ai/doompi-core/contextApi';
+import type { CallToolResult } from '@modelcontextprotocol/server';
+
+/** Shared browser/server payload validated by the mcp.apps.open wire schema. */
+export interface McpAppOpenResult {
+  leaseId: string;
+  html: string;
+  resourceUri: string;
+  protocol: 'mcp' | 'openai';
+  resourceMeta: Record<string, unknown>;
+  tool: {
+    name: string;
+    description: string;
+    inputSchema: { type: 'object'; [key: string]: unknown };
+    _meta: Record<string, unknown>;
+  };
+  args: Record<string, unknown>;
+  result: { content: unknown[]; structuredContent?: unknown; _meta?: Record<string, unknown>; isError?: boolean };
+  state: unknown;
+  readOnly: boolean;
+}
+
+/** Private presentation payload, never appended to model content. */
+export interface McpAppPresentation {
+  version: 1;
+  resourceUri?: string;
+  protocol?: 'mcp' | 'openai';
+  result: CallToolResult;
+}
 export type McpResultBlock =
   | { type: 'audio'; data: string; mimeType: string }
   | { type: 'resource_link'; uri: string; name: string; title?: string; description?: string; mimeType?: string }
@@ -16,6 +44,7 @@ export interface McpToolDetails {
   tool: string;
   /** Present only when the downstream result carried something beyond text and images. */
   blocks?: McpResultBlock[];
+  app?: McpAppPresentation;
 }
 
 export const MCP_SESSION_AUTH_STATUS_KEY = 'doom-mcp-session-auth';
@@ -66,6 +95,7 @@ export interface McpSessionToolDetail {
   readonly inputSchema: Record<string, unknown>;
   readonly tokens: number;
   readonly warnings?: readonly ContextToolWarning[];
+  readonly _meta?: Record<string, unknown>;
 }
 
 /** Session route for one reachable tool's description and schema. */

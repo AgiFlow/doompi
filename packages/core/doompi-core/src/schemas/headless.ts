@@ -3,6 +3,7 @@ import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/server';
 import type { Static, TSchema } from 'typebox';
 
+import type { SessionToolSurface } from '../types/server/sessionToolSurface';
 import type { DoomSessionContext } from './hubChannel';
 import type { DoomNotificationRequest } from './notification';
 import type { DoomServerBundleEntry } from './serverBundle';
@@ -69,12 +70,14 @@ export function toDoomHeadlessToolResult(result: {
   readonly content: DoomHeadlessContent[];
   readonly details?: unknown;
   readonly structuredContent?: unknown;
+  readonly _meta?: CallToolResult['_meta'];
   readonly isError?: boolean;
 }): DoomHeadlessToolResult {
   const { structuredContent } = result;
   return {
     content: result.content,
     details: result.details,
+    ...(result._meta === undefined ? {} : { _meta: result._meta }),
     ...(typeof structuredContent === 'object' && structuredContent !== null && !Array.isArray(structuredContent)
       ? { structuredContent: structuredContent as Record<string, unknown> }
       : {}),
@@ -368,6 +371,12 @@ export interface DoomHeadlessCapability {
   readonly reason?: 'inactive' | 'restricted' | 'shadowed' | 'unavailable' | 'not-discoverable';
 }
 
+/** Visibility controls model discovery only, never admission for external execution. */
+export function isDoomHeadlessToolModelVisible(tool: Pick<DoomHeadlessTool, '_meta'>): boolean {
+  const visibility = tool._meta?.ui?.visibility;
+  return visibility === undefined || visibility.includes('model');
+}
+
 export interface DoomHeadlessCapabilitySnapshot {
   readonly revision: number;
   readonly ready: boolean;
@@ -383,6 +392,8 @@ export const DOOM_LOAD_SKILL_TOOL = 'load_skill';
 
 export interface DoomHeadlessHostService {
   readonly context: DoomHeadlessExecutionContext;
+  /** Admitted external execution, sharing native hooks, restrictions and session lifetime. */
+  readonly toolSurface?: Pick<SessionToolSurface, 'readSurface' | 'invokeTool'>;
   /** The instructions of an applied skill by exact name, or undefined when none is applied. */
   readSkill(name: string): string | undefined;
   changeSelection(change: DoomHeadlessSelectionChange): Promise<void>;

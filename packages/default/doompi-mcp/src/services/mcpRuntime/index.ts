@@ -60,6 +60,10 @@ export interface McpRuntimeHandle {
   connectionsSettled: Promise<void>;
 }
 
+const MCP_APP_CLIENT_CAPABILITIES = {
+  extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app', 'text/html+skybridge'] } },
+};
+
 interface DefinitionsCacheFile {
   oneMcpVersion?: string;
   servers?: Record<string, { serverName: string; tools?: McpToolInfo[] }>;
@@ -88,6 +92,8 @@ export function definitionsCachePath(configSources: readonly McpConfigSource[]):
     )
     .update('\0')
     .update(mcpProxyPackage.version)
+    .update('\0')
+    .update(JSON.stringify(MCP_APP_CLIENT_CAPABILITIES))
     .digest('hex');
   return join(homedir(), '.mcp-proxy', `doompi-${digest}.definitions-cache.json`);
 }
@@ -183,17 +189,20 @@ export class McpRuntimeOwner {
     // load the runtime only after session_start has yielded control to Pi.
     const { createProxyContainer } = await import('@agimon-ai/mcp-proxy');
     const cachePath = definitionsCachePath(options.configSources);
-    const services = await createProxyContainer({
+    // Additional optional fields are understood by the forthcoming published
+    // proxy contract; using a variable keeps the current npm pin source-compatible.
+    const containerOptions = {
       configSources: options.configSources.map(toProxyConfigSource),
       workspaceRoot: options.workspaceRoot,
       executionCwd: options.executionCwd,
       environment: options.environment,
       definitionsCachePath: cachePath,
       // Never blocking: an unreachable server must not delay Pi's first prompt.
-      startupMode: 'background',
+      startupMode: 'background' as const,
+      clientCapabilities: MCP_APP_CLIENT_CAPABILITIES,
       outputSchemaValidation: {
-        mode: 'warn',
-        onWarning: (warning) => {
+        mode: 'warn' as const,
+        onWarning: (warning: McpOutputSchemaWarning) => {
           if (generation === this.generation) options.onOutputSchemaWarning?.(warning);
         },
       },
@@ -202,7 +211,8 @@ export class McpRuntimeOwner {
         onAuthorizationUrl: options.onAuthorizationUrl,
         ...(options.callbackServer ? { callbackServer: options.callbackServer } : {}),
       },
-    });
+    };
+    const services = await createProxyContainer(containerOptions);
 
     if (generation !== this.generation) {
       await services.dispose().catch(() => undefined);

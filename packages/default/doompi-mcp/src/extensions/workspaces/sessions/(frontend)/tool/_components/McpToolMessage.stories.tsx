@@ -108,6 +108,34 @@ export const Playground = {
 
       <div className="flex flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">
+          historical widget · text fallback without a live session
+        </span>
+        <McpToolMessage
+          {...props({
+            toolName: 'linear_list_issues',
+            statuses: {},
+            sessionId: null,
+            args: { team: 'doompi' },
+            result: {
+              content: [{ type: 'text', text: SHORT }],
+              details: {
+                server: 'linear',
+                tool: 'list_issues',
+                app: {
+                  version: 1,
+                  resourceUri: 'ui://linear/issues.html',
+                  protocol: 'openai',
+                  result: { content: [], structuredContent: { count: 2 } },
+                },
+              },
+            },
+            output: SHORT,
+          })}
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">
           failed · server the session never named
         </span>
         <McpToolMessage

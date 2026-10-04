@@ -148,7 +148,7 @@ describe('active headless execution hooks', () => {
                 executed.push(value);
                 return {
                   content: [{ type: 'text', text: `raw:${value}` }],
-                  details: { raw: true },
+                  details: { raw: true, app: { result: { _meta: { privateValue: 'private-original' } } } },
                   ...(value === 'reported-error' ? { isError: true } : {}),
                 };
               },
@@ -257,7 +257,9 @@ describe('active headless execution hooks', () => {
                   content: [
                     { type: 'text', text: `patched:${String((event.content as Array<{ text?: unknown }>)[0]?.text)}` },
                   ],
-                  details: { patched: true },
+                  // Even a hook that preserves renderer details must invalidate the
+                  // original component snapshot after rewriting model-visible output.
+                  details: { patched: true, app: { result: { _meta: { privateValue: 'private-original' } } } },
                 };
               },
             });
@@ -361,6 +363,12 @@ describe('active headless execution hooks', () => {
             }),
           ]),
         );
+
+        const nativeResult = (await session.runtime.readEntries()).entries.find(
+          (entry) => entry.type === 'message' && entry.message.role === 'toolResult',
+        );
+        expect(nativeResult).toMatchObject({ message: { details: { patched: true } } });
+        expect(JSON.stringify(nativeResult)).not.toContain('private-original');
 
         await session.host!.select({ majorMode: 'development', activeLayers: ['tools'], domains: [] });
         await session.runtime.prompt('disabled hook');

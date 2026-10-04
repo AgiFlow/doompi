@@ -52,6 +52,7 @@ export function createMcpSessionApi(source: McpSessionApiSource, countTokens: ()
             ...(warnings?.length ? { warnings } : {}),
             ...(tool.description === undefined ? {} : { description: tool.description }),
             inputSchema: tool.inputSchema,
+            ...(tool._meta === undefined ? {} : { _meta: tool._meta }),
             tokens: mcpToolTokens(tool, await countTokens()),
           };
           return json(detail);

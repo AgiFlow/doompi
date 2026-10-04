@@ -21,6 +21,77 @@ export interface CatalogTool {
   inputSchema: Record<string, unknown>;
   annotations?: McpCatalogToolInput['annotations'];
   outputSchema?: McpCatalogToolInput['outputSchema'];
+  _meta?: Record<string, unknown>;
+}
+
+function metadataRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/** Standard fields take precedence, including explicitly invalid fields (fail closed). */
+export function normalizeMcpAppMetadata(meta?: Record<string, unknown>): {
+  resourceUri?: string;
+  protocol?: 'mcp' | 'openai';
+  modelVisible: boolean;
+  appVisible: boolean;
+} {
+  const ui = metadataRecord(meta?.ui);
+  const standardUri = ui && 'resourceUri' in ui ? ui.resourceUri : meta?.['ui/resourceUri'];
+  const legacyUri = meta?.['openai/outputTemplate'];
+  const standard = standardUri !== undefined;
+  const candidate = standard ? standardUri : legacyUri;
+  const resourceUri =
+    typeof candidate === 'string' &&
+    candidate.startsWith('ui://') &&
+    candidate.length <= 8192 &&
+    !Array.from(candidate).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)
+      ? candidate
+      : undefined;
+  const visibility = ui?.visibility;
+  const validVisibility =
+    Array.isArray(visibility) && visibility.every((value) => value === 'model' || value === 'app');
+  const legacy =
+    legacyUri !== undefined ||
+    meta?.['openai/widgetAccessible'] !== undefined ||
+    meta?.['openai/visibility'] !== undefined;
+  const modelVisible =
+    visibility === undefined
+      ? standard || meta?.['openai/visibility'] !== 'private'
+      : validVisibility && visibility.includes('model');
+  const appVisible =
+    visibility === undefined
+      ? standard || !legacy
+        ? true
+        : meta?.['openai/widgetAccessible'] === true
+      : validVisibility && visibility.includes('app');
+  return {
+    ...(resourceUri === undefined ? {} : { resourceUri, protocol: standard ? ('mcp' as const) : ('openai' as const) }),
+    modelVisible,
+    appVisible,
+  };
+}
+
+export function isModelVisibleMcpTool(tool: Pick<CatalogTool, '_meta'>): boolean {
+  return normalizeMcpAppMetadata(tool._meta).modelVisible;
+}
+
+/** Execution projections carry normalized visibility; discovery retains the untouched metadata. */
+export function mcpToolExecutionMetadata(tool: Pick<CatalogTool, '_meta'>): Record<string, unknown> | undefined {
+  if (tool._meta === undefined) return undefined;
+  const normalized = normalizeMcpAppMetadata(tool._meta);
+  return {
+    ...tool._meta,
+    ui: {
+      ...metadataRecord(tool._meta.ui),
+      visibility: [...(normalized.modelVisible ? ['model'] : []), ...(normalized.appVisible ? ['app'] : [])],
+    },
+  };
+}
+
+export function isAppVisibleMcpTool(tool: Pick<CatalogTool, '_meta'>): boolean {
+  return normalizeMcpAppMetadata(tool._meta).appVisible;
 }
 
 export interface CatalogEntry {
@@ -76,6 +147,7 @@ function toCatalogTool(serverName: string, tool: McpCatalogToolInput): CatalogTo
     inputSchema: tool.inputSchema,
     ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
     ...(tool.outputSchema === undefined ? {} : { outputSchema: tool.outputSchema }),
+    ...(tool._meta === undefined ? {} : { _meta: tool._meta }),
   };
 }
 
@@ -247,6 +319,7 @@ export class McpCatalog {
     const resolved: DoomMcpResolvedToolSelection[] = [];
     const seen = new Set<string>();
     for (const tool of this.allTools()) {
+      if (!isModelVisibleMcpTool(tool)) continue;
       const wholeServer = allServers || selectedServers.has(tool.serverName);
       if (!wholeServer && !selectedTools.get(tool.serverName)?.has(tool.toolName)) continue;
       if (seen.has(tool.piName)) continue;
@@ -272,7 +345,7 @@ export class McpCatalog {
       servers: [...this.entries.values()].map((entry) => ({
         name: entry.name,
         state: entry.disabled ? DISABLED : entry.state,
-        tools: entry.tools.map((tool) => tool.piName),
+        tools: entry.tools.filter(isModelVisibleMcpTool).map((tool) => tool.piName),
         resourceCount: entry.resourceCount,
         ...(entry.error ? { error: entry.error } : {}),
       })),
@@ -294,7 +367,8 @@ export class McpCatalog {
         piName: tool.piName,
         toolName: tool.toolName,
         ...(tool.description ? { description: tool.description } : {}),
-        active: !this.directTools || this.directTools.allows(entry.name, tool.toolName),
+        active:
+          isModelVisibleMcpTool(tool) && (!this.directTools || this.directTools.allows(entry.name, tool.toolName)),
       })),
       resourceCount: entry.resourceCount,
       enabled: !entry.disabled,
