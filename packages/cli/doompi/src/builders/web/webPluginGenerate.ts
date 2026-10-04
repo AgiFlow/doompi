@@ -37,7 +37,8 @@ function renderClientModule(
     // sync-generated module lives outside src, is aliased over the committed
     // path, and resolves imports against its real location, so every entry
     // becomes an absolute file URL into the installed packages.
-    const specifier = style === 'relative' ? relativeImport(fromDir, entry) : pathToFileURL(entry).href;
+    const specifier =
+      style === 'relative' ? relativeImport(fromDir, entry) : pathToFileURL(fs.realpathSync(entry)).href;
     lines.push(`import { webPlugin as ${name} } from '${specifier}';`);
   }
   lines.push('', `export const webPlugins: readonly WebPluginDefinition[] = [${names.join(', ')}];`, '');

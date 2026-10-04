@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { writeSyncWebPluginModules } from '../../src/builders/web/webPluginGenerate';
+import { scanWebPlugins } from '../../src/builders/web/webPluginScan';
 
 let cleanups: Array<() => void> = [];
 
@@ -48,6 +50,35 @@ describe('the sync web plugin sources', () => {
     // app.css's relative path points into doompi-web/node_modules, which an install does not have.
     expect(fs.readFileSync(cssModulePath, 'utf8').split('\n')).toEqual(
       expect.arrayContaining([`@source "${path.join(webRoot, 'src', 'web')}";`, `@source "${templateExtensions}";`]),
+    );
+  });
+
+  it('resolves generated plugin imports through installed package symlinks', () => {
+    const { webRoot } = installedWeb();
+    const packageRoot = tempDir('doompi-plugin-package-');
+    const packageEntry = path.join(packageRoot, 'dist/extensions/web.mjs');
+    writePackage(packageRoot, {
+      name: '@agimon-ai/doompi-example',
+      doompiWeb: {
+        pluginId: 'example',
+        client: { entry: './dist/extensions/web.mjs' },
+        scopes: ['session'],
+      },
+    });
+    fs.mkdirSync(path.dirname(packageEntry), { recursive: true });
+    fs.writeFileSync(packageEntry, 'export const webPlugin = {};\n');
+
+    const installRoot = tempDir('doompi-plugin-install-');
+    const packageScope = path.join(installRoot, 'node_modules', '@agimon-ai');
+    fs.mkdirSync(packageScope, { recursive: true });
+    const installedRoot = path.join(packageScope, 'doompi-example');
+    fs.symlinkSync(packageRoot, installedRoot, 'dir');
+
+    const plugins = scanWebPlugins(webRoot, [installedRoot]);
+    const { clientModulePath } = writeSyncWebPluginModules(plugins, tempDir('doompi-generated-'), webRoot);
+    const generated = fs.readFileSync(clientModulePath, 'utf8');
+    expect(generated).toContain(
+      pathToFileURL(fs.realpathSync(path.join(installedRoot, 'dist/extensions/web.mjs'))).href,
     );
   });
 });
