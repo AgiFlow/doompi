@@ -3,6 +3,6 @@ import type { Context } from '@deepseek-ai/cordis';
 export type OptimizerModule = typeof import('#doompi-cache-optimizer-source');
 export interface CacheRuntime {
   readonly plugin: (this: void, context: Context) => void;
-  readonly events: PiEventHandlers;
+  readonly events: Required<Pick<PiEventHandlers, 'session_start' | 'before_provider_request' | 'message_end'>>;
   dispose(): void;
 }

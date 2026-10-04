@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import type { Context, JsonValue } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT, awaitWithContext, withAbortSignal } from '@earendil-works/chord/context';
@@ -266,6 +267,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           const originalOnPayload = requestOptions?.onPayload;
           args[2] = {
             ...requestOptions,
+            sessionId: requestOptions?.sessionId ?? sessionId,
             ...(usePriority ? { serviceTier: 'priority' } : {}),
             onPayload: async (payload: unknown, model: Model<Api>) => {
               options.guardModelRequest?.();
@@ -492,8 +494,14 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
                 const contextMessages = request.messages
                   .filter((m) => m.role !== 'system')
                   .map((message) => contextContributions.get(JSON.stringify(message))?.shift() ?? message);
+                // Snapshot before hooks, which may mutate their input in place.
+                const originalContext = structuredClone(contextMessages);
                 const patch = await options.transformContext?.({ messages: contextMessages, systemPrompt }, ctx);
-                let messages: Message[] = patch
+                const changed =
+                  patch &&
+                  ((patch.systemPrompt !== undefined && patch.systemPrompt !== systemPrompt) ||
+                    (patch.messages !== undefined && !isDeepStrictEqual(patch.messages, originalContext)));
+                let messages: Message[] = changed
                   ? [
                       {
                         role: 'system',
