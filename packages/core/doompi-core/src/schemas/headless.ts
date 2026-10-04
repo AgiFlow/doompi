@@ -304,7 +304,7 @@ export type DoomHeadlessEventName =
   | 'session_compact';
 
 export type DoomHeadlessHookEvent<E extends DoomHeadlessEventName> = E extends 'before_provider_request'
-  ? { lane: string; runId: string; model: { provider: string; id: string }; payload: unknown }
+  ? { lane: string; runId: string; model: { provider: string; id: string; api?: string }; payload: unknown }
   : E extends 'session_before_compact'
     ? { reason: string; preparation: unknown; instructions?: string; customInstructions?: string }
     : E extends 'model_select'

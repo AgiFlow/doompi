@@ -13,14 +13,14 @@ function record(value: unknown): Readonly<Record<string, unknown>> {
 }
 
 function modelIdentity(
-  model: { provider: string; id: string } | undefined,
+  model: { provider: string; id: string; api?: string } | undefined,
   payload: unknown,
 ): PromptCacheModelIdentity {
   const request = record(payload);
   return {
     virtualProvider: model?.provider,
     virtualModel: model?.id,
-    api: typeof request.api === 'string' ? request.api : undefined,
+    api: model?.api,
     wireModel: typeof request.model === 'string' ? request.model : undefined,
   };
 }
@@ -34,7 +34,7 @@ export const cacheHooks: DoomHeadlessHook[] = [
     event: 'before_provider_request',
     handle(event, execution) {
       const payload = record(event.payload);
-      const identity = modelIdentity(execution.model, payload);
+      const identity = modelIdentity(event.model, payload);
       const modelFingerprint = createPromptCacheModelFingerprint(identity, sha256Base64Url);
       const key = createPromptCacheKey(
         cacheNamespace({

@@ -29,44 +29,49 @@ async function fixture() {
   if (!hook) throw new Error('Cache provider hook was not registered');
   const execution = {
     sessionId: 'cache-headless-test',
-    model: { provider: 'openai', id: 'gpt-test' },
+    model: { provider: 'other-provider', id: 'selected-model' },
     selection: { majorMode: 'development', activeLayers: [], domains: [], state: {} },
   } as unknown as DoomHeadlessExecutionContext;
   return { execution, hook };
 }
 
+const model = { provider: 'openai-codex', id: 'gpt-test', api: 'openai-codex-responses' };
 describe('cache headless provider hook', () => {
-  it('wraps an effective cache rewrite as a provider payload patch', async () => {
+  it('rewrites a native request using its model metadata without leaking metadata onto the wire', async () => {
     const { execution, hook } = await fixture();
-    const result = await hook.handle(
-      {
-        lane: 'main',
-        runId: 'run-1',
-        model: { provider: 'openai', id: 'gpt-test' },
-        payload: { api: 'openai-responses', model: 'gpt-test', prompt_cache_key: 'pi-session' },
-      },
-      execution,
-    );
-    expect(result).toMatchObject({
-      payload: {
-        api: 'openai-responses',
-        model: 'gpt-test',
-        prompt_cache_key: expect.stringMatching(/^dpc1_/),
-      },
-    });
+    const payload = { model: 'gpt-test', instructions: 'stable prompt', input: [], prompt_cache_key: 'pi-session' };
+    const event = { lane: 'main', runId: 'run-1', model, payload };
+    const result = await hook.handle(event, execution);
+    expect(result).toEqual({ payload: { ...payload, prompt_cache_key: expect.stringMatching(/^dpc1_/) } });
+    expect(payload.prompt_cache_key).toBe('pi-session');
+    expect(await hook.handle({ ...event, runId: 'run-2' }, execution)).toEqual(result);
+    if (!result) throw new Error('Cache key was not rewritten');
+    expect(await hook.handle({ ...event, payload: result.payload }, execution)).toBeUndefined();
+    expect(await hook.handle(event, { ...execution, sessionId: 'another-session' })).not.toEqual(result);
   });
 
-  it('returns no patch when the provider payload has no replaceable key', async () => {
+  it('returns no patch when the native provider omits its cache key', async () => {
     const { execution, hook } = await fixture();
-    const result = await hook.handle(
-      {
-        lane: 'main',
-        runId: 'run-2',
-        model: { provider: 'openai', id: 'gpt-test' },
-        payload: { api: 'openai-responses', model: 'gpt-test' },
-      },
-      execution,
-    );
-    expect(result).toBeUndefined();
+    expect(
+      await hook.handle({ lane: 'main', runId: 'run-2', model, payload: { model: 'gpt-test' } }, execution),
+    ).toBeUndefined();
   });
+
+  it.each([undefined, 'anthropic-messages', 'unknown-api'])(
+    'does not infer cache capability for %s from the body',
+    async (api) => {
+      const { execution, hook } = await fixture();
+      const requestModel = { ...model, api };
+      const result = await hook.handle(
+        {
+          lane: 'main',
+          runId: 'run-3',
+          model: requestModel,
+          payload: { api: 'openai-codex-responses', model: 'gpt-test', prompt_cache_key: 'pi-session' },
+        },
+        execution,
+      );
+      expect(result).toBeUndefined();
+    },
+  );
 });

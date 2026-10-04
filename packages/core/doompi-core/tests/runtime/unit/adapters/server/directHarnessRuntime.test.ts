@@ -87,6 +87,82 @@ async function setup(
   return { runtime, streamSimple, storage, models };
 }
 describe('durable direct runtime', () => {
+  it('keeps persisted request identity across successive and resumed turns, distinct from children', async () => {
+    const storage = new MemoryStorage();
+    const close = vi.spyOn(storage, 'close').mockResolvedValue(undefined);
+    const first = await setup({ durableStorage: storage, sessionId: 'owner' }, [response([]), response([])]);
+    try {
+      await first.runtime.prompt('one');
+      await first.runtime.prompt('two');
+      expect(first.streamSimple.mock.calls.map((call) => call[2]?.sessionId)).toEqual(['owner', 'owner']);
+    } finally {
+      await first.runtime.dispose();
+    }
+    const resumed = await setup({ durableStorage: storage, sessionId: 'ignored' });
+    const child = await setup({ parentSessionId: 'owner' });
+    try {
+      await resumed.runtime.prompt('resume');
+      await child.runtime.prompt('child');
+      expect(resumed.streamSimple.mock.calls[0]![2]?.sessionId).toBe('owner');
+      expect(child.streamSimple.mock.calls[0]![2]?.sessionId).toEqual(expect.any(String));
+      expect(child.streamSimple.mock.calls[0]![2]?.sessionId).not.toBe('owner');
+    } finally {
+      await resumed.runtime.dispose();
+      await child.runtime.dispose();
+      close.mockRestore();
+      await storage.close(BACKGROUND_CONTEXT);
+    }
+  });
+  it('preserves auxiliary request overrides, retention and payload chaining', async () => {
+    const beforePayload = vi.fn(({ payload }: { payload: unknown }) => ({ payload }));
+    const { runtime, models } = await setup({ sessionId: 'owner', beforePayload });
+    const onPayload = vi.fn(() => ({ changed: true }));
+    try {
+      await runtime.completeModel!(
+        model,
+        { messages: [] },
+        {
+          sessionId: 'auxiliary',
+          cacheRetention: 'none',
+          temperature: 0.25,
+          onPayload,
+        },
+      );
+      const complete = vi.mocked(models.complete);
+      const options = complete.mock.calls[0]![2]!;
+      expect(options).toMatchObject({ sessionId: 'auxiliary', cacheRetention: 'none', temperature: 0.25 });
+      expect(await options.onPayload!({ original: true }, model)).toEqual({ changed: true });
+      expect(onPayload).toHaveBeenCalledOnce();
+      expect(beforePayload).toHaveBeenCalledWith({ payload: { changed: true }, model }, BACKGROUND_CONTEXT);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it.each(['same', 'copy', 'prompt', 'messages'] as const)(
+    'preserves positional messages only for unchanged %s patches',
+    async (kind) => {
+      let native: unknown[] = [];
+      const { runtime, streamSimple } = await setup({
+        systemPrompt: 'original',
+        beforeModelRequest: (event) => {
+          if (event.phase === 'turn') native = structuredClone(event.prompt ?? []);
+        },
+        transformContext: ({ messages, systemPrompt }) => ({
+          messages: kind === 'copy' ? structuredClone(messages) : kind === 'messages' ? [] : messages,
+          systemPrompt: kind === 'prompt' ? 'changed' : systemPrompt,
+        }),
+      });
+      try {
+        await runtime.prompt('question');
+        const actual = streamSimple.mock.calls[0]![1].messages;
+        if (kind === 'same' || kind === 'copy') expect(actual).toEqual(native);
+        else if (kind === 'prompt') expect(actual[0]).toMatchObject({ role: 'system', content: 'changed' });
+        else expect(actual.filter((message) => message.role !== 'system')).toEqual([]);
+      } finally {
+        await runtime.dispose();
+      }
+    },
+  );
   it('forwards aggregate block snapshots to frames and event listeners', async () => {
     const stream = createAssistantMessageEventStream();
     const initial: AssistantMessage = {
@@ -810,9 +886,14 @@ describe('durable direct runtime', () => {
     await runtime.dispose();
     expect(await runtime.exited).toBe(0);
   });
-  it.each([undefined, false, true])(
-    'Fast uses real Codex payloads with inherited intent %s',
-    async (initialFastMode) => {
+  it.each([
+    [undefined, 'short'],
+    [false, 'short'],
+    [true, 'short'],
+    [false, 'none'],
+  ] as const)(
+    'Fast uses real Codex payloads with inherited intent %s and retention %s',
+    async (initialFastMode, cacheRetention) => {
       const codexModel = {
         ...model,
         api: 'openai-codex-responses',
@@ -820,6 +901,7 @@ describe('durable direct runtime', () => {
         id: 'gpt-5.4',
       } as Model<'openai-codex-responses'>;
       const payloads: Record<string, unknown>[] = [];
+      const headers: Headers[] = [];
       const token = `header.${Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: 'fixture' } })).toString('base64')}.signature`;
       const registry = {
         getModels: () => [codexModel],
@@ -842,6 +924,7 @@ describe('durable direct runtime', () => {
                   : new Headers(init?.headers).get('content-encoding') === 'zstd'
                     ? zstdDecompressSync(body).toString()
                     : body.toString();
+              headers.push(new Headers(init?.headers));
               payloads.push(JSON.parse(decoded) as Record<string, unknown>);
               return new Response('fixture capture', { status: 400 });
             },
@@ -852,6 +935,8 @@ describe('durable direct runtime', () => {
         durableStorage: new MemoryStorage(),
         models: registry,
         model: codexModel,
+        sessionId: 'native-owner',
+        streamOptions: { cacheRetention },
         ...(initialFastMode === undefined ? {} : { initialFastMode }),
         retry: { enabled: false, maxRetries: 0, baseDelayMs: 0 },
         compaction: { enabled: false },
@@ -861,6 +946,15 @@ describe('durable direct runtime', () => {
         expect((await runtime.readState()).fastMode).toBe(initialFastMode ?? false);
         await runtime.prompt('default').catch(() => undefined);
         expect(payloads[0]).toMatchObject({ fixture: true });
+        expect(payloads[0]).not.toHaveProperty('api');
+        expect(payloads[0]).not.toHaveProperty('sessionId');
+        if (cacheRetention === 'none') {
+          expect(payloads[0]).not.toHaveProperty('prompt_cache_key');
+          expect(headers[0]!.get('session-id')).toBeNull();
+        } else {
+          expect(payloads[0]).toHaveProperty('prompt_cache_key', 'native-owner');
+          expect(headers[0]!.get('session-id')).toBe('native-owner');
+        }
         if (initialFastMode) expect(payloads[0]).toHaveProperty('service_tier', 'priority');
         else expect(payloads[0]).not.toHaveProperty('service_tier');
         await runtime.setFastMode(true);
