@@ -267,7 +267,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           const originalOnPayload = requestOptions?.onPayload;
           args[2] = {
             ...requestOptions,
-            sessionId: requestOptions?.sessionId ?? sessionId,
+            // Only the public auxiliary completion API may override Doom's persisted identity.
+            sessionId: key === 'complete' ? (requestOptions?.sessionId ?? sessionId) : sessionId,
             ...(usePriority ? { serviceTier: 'priority' } : {}),
             onPayload: async (payload: unknown, model: Model<Api>) => {
               options.guardModelRequest?.();

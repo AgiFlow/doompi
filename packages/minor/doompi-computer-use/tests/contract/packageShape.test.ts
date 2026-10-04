@@ -153,7 +153,7 @@ describe('doompi-computer-use package contract', () => {
   it('pins matching Pi peer and development versions', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.0.0');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.0.0');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.0.2');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.0.2');
   });
 });

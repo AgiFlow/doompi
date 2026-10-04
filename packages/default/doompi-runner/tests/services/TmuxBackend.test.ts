@@ -95,8 +95,11 @@ afterEach(() => {
   startedSockets.clear();
   if (previousTmuxTmpdir === undefined) delete process.env['TMUX_TMPDIR'];
   else process.env['TMUX_TMPDIR'] = previousTmuxTmpdir;
-  fs.rmSync(root, { recursive: true, force: true });
-  fs.rmSync(socketRoot, { recursive: true, force: true });
+  // kill-server can return before the pane's log sink finishes its final
+  // filesystem writes. Retry transient removal races, but still fail cleanup
+  // if the directories cannot be removed within the bounded retry window.
+  fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  fs.rmSync(socketRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe.skipIf(!hasTmux)('TmuxBackend against a real tmux server', () => {

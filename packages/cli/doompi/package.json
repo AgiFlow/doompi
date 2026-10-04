@@ -306,13 +306,13 @@
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
-    "@agimon-ai/log-sink-mcp": "0.30.3",
+    "@agimon-ai/log-sink-mcp": "0.30.6",
     "@deepseek-ai/cordis": "4.0.4",
-    "@earendil-works/chord": "1.0.0",
-    "@earendil-works/pi-agent-core": "1.0.0",
-    "@earendil-works/pi-coding-agent": "1.0.0",
-    "@earendil-works/pi-protocol": "1.0.0",
-    "@earendil-works/pi-server": "1.0.0",
+    "@earendil-works/chord": "1.0.2",
+    "@earendil-works/pi-agent-core": "1.0.2",
+    "@earendil-works/pi-coding-agent": "1.0.2",
+    "@earendil-works/pi-protocol": "1.0.2",
+    "@earendil-works/pi-server": "1.0.2",
     "@hono/node-server": "2.1.3",
     "@simplewebauthn/server": "^14.0.3",
     "@tailwindcss/vite": "4.3.3",
@@ -332,9 +332,9 @@
   "devDependencies": {
     "@agimon-ai/doompi-runner": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-cli": "workspace:*",
-    "@earendil-works/pi-ai": "1.0.0",
-    "@earendil-works/pi-client": "1.0.0",
-    "@earendil-works/pi-tui": "1.0.0",
+    "@earendil-works/pi-ai": "1.0.2",
+    "@earendil-works/pi-client": "1.0.2",
+    "@earendil-works/pi-tui": "1.0.2",
     "@modelcontextprotocol/ext-apps": "2.0.3",
     "@modelcontextprotocol/server": "2.2.0",
     "@playwright/test": "1.63.0",
@@ -347,7 +347,7 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-tui": "1.0.0"
+    "@earendil-works/pi-tui": "1.0.2"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-tui": {

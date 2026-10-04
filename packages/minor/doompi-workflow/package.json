@@ -78,7 +78,7 @@
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
-    "@agimon-ai/workflow-mcp": "0.24.5",
+    "@agimon-ai/workflow-mcp": "0.24.6",
     "@deepseek-ai/cordis": "4.0.4",
     "@modelcontextprotocol/server": "2.2.0",
     "hono": "4.13.11",
@@ -87,8 +87,8 @@
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
-    "@earendil-works/pi-coding-agent": "1.0.0",
-    "@earendil-works/pi-tui": "1.0.0",
+    "@earendil-works/pi-coding-agent": "1.0.2",
+    "@earendil-works/pi-tui": "1.0.2",
     "@tanstack/react-store": "0.11.2",
     "@tanstack/store": "0.11.2",
     "@types/node": "26.6.2",
@@ -102,8 +102,8 @@
     "vitest": "5.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "1.0.0",
-    "@earendil-works/pi-tui": "1.0.0"
+    "@earendil-works/pi-coding-agent": "1.0.2",
+    "@earendil-works/pi-tui": "1.0.2"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

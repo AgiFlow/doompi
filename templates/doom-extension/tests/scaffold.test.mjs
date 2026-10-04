@@ -143,7 +143,7 @@ await test('the base package routes its contributions and generates its host ent
   const routed = [...files.keys()].find((name) => name.includes('(backend)/command/'));
   assert.ok(routed, 'expected a routed command file');
   assert.match(files.get(routed), /defineCommand\(/u);
-  assert.match(files.get(routed), /@agimon-ai\/doompi-core\/extension-file/u);
+  assert.match(files.get(routed), /@agimon-ai\/doompi-core\/extensionFile/u);
 
   assert.ok(files.has('src/services/extensionService/index.ts'));
   assert.ok(files.has('src/services/extensionService/type.ts'));
