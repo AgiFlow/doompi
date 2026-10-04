@@ -1,3 +1,17 @@
+## 0.0.1-alpha.97 (2026-10-04)
+
+### 🚀 Features
+
+- support inline MCP Apps and ChatGPT widgets ([#296](https://github.com/AgiFlow/doompi/pull/296))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.30
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.96 (2026-10-03)
 
 ### 🧱 Updated Dependencies

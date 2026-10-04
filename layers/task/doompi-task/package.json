@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-task",
-  "version": "0.0.1-alpha.113",
+  "version": "0.0.1-alpha.114",
   "description": "Persistent, dependency-aware task graphs and subagent delegation for Pi coding sessions.",
   "keywords": [
     "ai",
