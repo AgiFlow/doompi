@@ -91,7 +91,7 @@ test('marks a failed tool call as an error', async ({ page, cockpit }) => {
   await expect(page.getByTestId('entry-tool')).toHaveAttribute('data-tool-state', 'error');
 });
 
-test('steers instead of prompting while the agent is running', async ({ page, cockpit }) => {
+test('steers a running agent and immediately shows the message in the conversation', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
@@ -103,6 +103,36 @@ test('steers instead of prompting while the agent is running', async ({ page, co
 
   const sent = await cockpit.session.waitForCommand('steer');
   expect(sent.message).toBe('also check the cold start budget');
+  await expect(page.getByTestId('composer-input')).toHaveValue('');
+  await expect(page.getByTestId('entry-user')).toHaveCount(1);
+  await expect(page.getByTestId('entry-user')).toContainText('also check the cold start budget');
+  await expect(page.getByTestId('composer-send')).toHaveText('steer');
+
+  cockpit.session.emit({ type: 'agent_settled' });
+  await expect(page.getByTestId('entry-user')).toHaveCount(1);
+  await expect(page.getByTestId('entry-user')).toContainText('also check the cold start budget');
+});
+
+test('keeps the draft and removes its unconfirmed conversation echo when Steer is rejected', async ({
+  page,
+  cockpit,
+}) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  cockpit.session.emit({ type: 'agent_start' });
+  await expect(page.getByTestId('composer-send')).toHaveText('steer');
+  cockpit.session.deferCommand('steer');
+  await page.getByTestId('composer-input').fill('keep this draft');
+  await page.getByTestId('composer-send').click();
+  await cockpit.session.waitForCommand('steer');
+  await expect(page.getByTestId('entry-user')).toContainText('keep this draft');
+  await expect(page.getByTestId('composer-input')).toHaveValue('keep this draft');
+  await expect(page.getByTestId('composer-send')).toBeDisabled();
+
+  cockpit.session.emit({ type: 'response', command: 'steer', success: false, error: 'Rejected.' });
+  await expect(page.getByTestId('composer-send')).toBeEnabled();
+  await expect(page.getByTestId('composer-input')).toHaveValue('keep this draft');
+  await expect(page.getByTestId('entry-user')).toHaveCount(0);
 });
 
 test('aborts a running turn', async ({ page, cockpit }) => {

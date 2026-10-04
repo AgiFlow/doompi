@@ -558,13 +558,34 @@ export async function submitMessageWithAck(
   const store = sessionStoreFor(sessionId);
   const builtin = builtinCommandFrame(trimmed);
   const active = store.state.lifecycle === null ? store.state.streaming : store.state.lifecycle.operation !== null;
-  const response = await sendFrameWithAck(
-    sessionId,
-    builtin ?? (active ? steerCommand(trimmed, images) : promptCommand(trimmed, images)),
-  );
-  if (!response.success && response.error?.includes('uncertain'))
-    store.setState((state) => reduceSession(state, { type: 'error', message: response.error }));
-  return response.success;
+  const userImages = (builtin ? [] : images)
+    .filter((image) => isSupportedImageMimeType(image.mimeType))
+    .map(({ data, mimeType }) => ({ data, mimeType }));
+  const localId = `u${store.state.nextId}`;
+  // Echo before sending so even an early transcript publication reconciles this row.
+  store.setState((state) => appendUserPrompt(state, trimmed, userImages));
+  let accepted = false;
+  try {
+    const response = await sendFrameWithAck(
+      sessionId,
+      builtin ?? (active ? steerCommand(trimmed, images) : promptCommand(trimmed, images)),
+    );
+    accepted = response.success;
+    if (!accepted && response.error?.includes('uncertain'))
+      store.setState((state) => reduceSession(state, { type: 'error', message: response.error }));
+    return accepted;
+  } finally {
+    if (!accepted)
+      store.setState((state) =>
+        state.pendingUserEntries.some(({ id }) => id === localId)
+          ? {
+              ...state,
+              entries: state.entries.filter(({ id }) => id !== localId),
+              pendingUserEntries: state.pendingUserEntries.filter(({ id }) => id !== localId),
+            }
+          : state,
+      );
+  }
 }
 
 export function rewindToMessage(itemId: string, sessionId: string | null = activeSessionId()): void {

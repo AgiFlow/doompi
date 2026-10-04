@@ -68,6 +68,44 @@ test('renders a delayed aggregate stream without duplicate text or reopening an 
   await expect(page.getByTestId('composer-abort')).toBeHidden();
 });
 
+test('hides the empty queue even when delivery is paused', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await expect(page.getByTestId('composer-queued')).toBeHidden();
+
+  for (const [index, open] of [false, true].entries()) {
+    const lifecycle = {
+      revision: 5 + index * 2,
+      operation: { id: 'running', kind: 'run', status: 'open' },
+      paused: true,
+      queue: [
+        {
+          id: 'queued',
+          text: 'remaining prompt',
+          delivery: 'followUp',
+          scheduling: 'automatic',
+          disposition: 'pending',
+        },
+      ],
+    };
+    cockpit.session.emit({ type: 'lifecycle_update', lifecycle });
+    await expect(page.getByTestId('composer-queued')).toContainText('1 queued message');
+    await expect(page.getByTestId('composer-queued')).toContainText('paused until resumed');
+    if (open) {
+      await page.getByTestId('composer-queued').click();
+      await expect(page.getByTestId('queue-sheet')).toBeVisible();
+    }
+
+    cockpit.session.emit({
+      type: 'lifecycle_update',
+      lifecycle: { ...lifecycle, revision: lifecycle.revision + 1, queue: [] },
+    });
+    await expect(page.getByTestId('composer-queued')).toBeHidden();
+    await expect(page.getByTestId('queue-sheet')).toBeHidden();
+    await expect(page.getByTestId('composer-input')).toBeVisible();
+  }
+});
+
 test('views queued follow-ups and can delete the queue', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
@@ -295,6 +333,7 @@ test('does not close clear-all when an empty lifecycle arrives before its acknow
   });
   await expect(page.getByTestId('queue-sheet-item')).toHaveCount(0);
   await expect(page.getByTestId('queue-sheet')).toBeVisible();
+  await expect(page.getByTestId('composer-queued')).toBeHidden();
   cockpit.session.emit({
     type: 'response',
     command: 'clear_queue',
