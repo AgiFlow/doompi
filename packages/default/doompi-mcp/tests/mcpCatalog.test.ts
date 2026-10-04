@@ -3,11 +3,67 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { DIRECT_TOOLS_ENV } from '../src/schemas/directTools';
 import { readDirectToolFilter } from '../src/services/directToolsEnvironment';
-import { McpCatalog, toPiToolName } from '../src/services/mcpCatalog';
+import {
+  McpCatalog,
+  mcpToolExecutionMetadata,
+  normalizeMcpAppMetadata,
+  toPiToolName,
+} from '../src/services/mcpCatalog';
 
 function mcpTool(name: string, description?: string): McpToolInfo {
   return { name, inputSchema: { type: 'object' }, ...(description ? { description } : {}) };
 }
+
+describe('App metadata and visibility', () => {
+  it('preserves metadata through cached/live discovery but withholds app-only tools from model selectors and status', () => {
+    const catalog = new McpCatalog();
+    const _meta = { ui: { resourceUri: 'ui://view', visibility: ['app'] }, privateDefinition: 'kept' };
+    catalog.seed({ servers: [{ name: 'server', tools: [{ name: 'private', inputSchema: {}, _meta }] }] }, ['server']);
+    expect(catalog.findTool('server_private')?._meta).toEqual(_meta);
+    expect(catalog.activeToolNames()).toEqual(['server_private']);
+    expect(catalog.resolveToolSelectors(['*'])).toEqual([]);
+    expect(catalog.toSnapshot().servers[0]?.tools).toEqual([]);
+    expect(catalog.toView()[0]?.tools[0]?.active).toBe(false);
+    catalog.applyStateChange({ serverName: 'server', state: 'connected' }, [
+      { name: 'private', inputSchema: {}, _meta },
+    ]);
+    expect(catalog.findTool('server_private')?._meta).toEqual(_meta);
+  });
+
+  it('normalizes legacy execution visibility without mutating the raw catalog metadata', () => {
+    const _meta = { 'openai/visibility': 'private', 'openai/widgetAccessible': true };
+    expect(mcpToolExecutionMetadata({ _meta })).toEqual({ ..._meta, ui: { visibility: ['app'] } });
+    expect(_meta).toEqual({ 'openai/visibility': 'private', 'openai/widgetAccessible': true });
+  });
+
+  it('prefers standard fields without widening legacy permissions', () => {
+    expect(
+      normalizeMcpAppMetadata({
+        ui: { resourceUri: 'ui://standard', visibility: ['model'] },
+        'openai/outputTemplate': 'ui://legacy',
+        'openai/widgetAccessible': true,
+      }),
+    ).toEqual({ resourceUri: 'ui://standard', protocol: 'mcp', modelVisible: true, appVisible: false });
+    expect(normalizeMcpAppMetadata({ 'openai/outputTemplate': 'ui://legacy' })).toEqual({
+      resourceUri: 'ui://legacy',
+      protocol: 'openai',
+      modelVisible: true,
+      appVisible: false,
+    });
+    expect(normalizeMcpAppMetadata({ 'ui/resourceUri': 'ui://deprecated' }).protocol).toBe('mcp');
+    expect(
+      normalizeMcpAppMetadata({ ui: { resourceUri: null, visibility: [] }, 'openai/outputTemplate': 'ui://legacy' }),
+    ).toEqual({ modelVisible: false, appVisible: false });
+  });
+  it('fails closed for malformed standard visibility even when legacy callbacks are enabled', () => {
+    for (const visibility of ['model', ['app', 1], ['model', 'unknown'], null]) {
+      expect(normalizeMcpAppMetadata({ ui: { visibility }, 'openai/widgetAccessible': true })).toEqual({
+        modelVisible: false,
+        appVisible: false,
+      });
+    }
+  });
+});
 
 let catalog: McpCatalog;
 

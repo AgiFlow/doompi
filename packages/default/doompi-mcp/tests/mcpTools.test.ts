@@ -4,7 +4,13 @@ import type { CallToolResult } from '@modelcontextprotocol/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { McpCatalog } from '../src/services/mcpCatalog';
-import { createMcpTool, toHeadlessToolResult } from '../src/services/mcpTools';
+import {
+  captureMcpAppResult,
+  createMcpTool,
+  parseMcpAppSnapshot,
+  retainMcpAppResult,
+  toHeadlessToolResult,
+} from '../src/services/mcpTools';
 import { mcpToolRestriction } from '../src/services/toolVisibility';
 import { renderMcpCall, renderMcpResult } from '../src/tui/mcpToolRender';
 
@@ -64,6 +70,61 @@ const screenshotTool = {
   description: 'Capture the canvas',
   inputSchema: { type: 'object', properties: { scale: { type: 'number' } } },
 };
+
+describe('private App results', () => {
+  it('retains a cloned pre-guard payload without changing model content, including data tools without templates', () => {
+    const original: CallToolResult = {
+      content: [{ type: 'text', text: 'model text' }],
+      structuredContent: { large: 'x'.repeat(20_000) },
+      _meta: { privateSentinel: 'component-only' },
+      isError: true,
+    };
+    const snapshot = captureMcpAppResult(screenshotTool, original);
+    const guarded: CallToolResult = { content: [{ type: 'text', text: 'guard summary' }], isError: true };
+    retainMcpAppResult(guarded, snapshot);
+    original._meta = { privateSentinel: 'mutated' };
+    const result = toHeadlessToolResult(screenshotTool, guarded);
+    expect(result.content).toEqual([{ type: 'text', text: 'guard summary' }]);
+    expect(result.isError).toBe(true);
+    expect(result.details.app?.result.structuredContent).toEqual({ large: 'x'.repeat(20_000) });
+    expect(result.details.app?.result._meta).toEqual({ privateSentinel: 'component-only' });
+    expect(result.details.app?.resourceUri).toBeUndefined();
+  });
+
+  it('rejects malformed or oversized historical snapshots', () => {
+    const snapshot = { version: 1, resourceUri: 'ui://view', protocol: 'mcp', result: { content: [] } };
+    expect(parseMcpAppSnapshot(snapshot)).toEqual(snapshot);
+    expect(parseMcpAppSnapshot({ ...snapshot, version: 2 })).toBeUndefined();
+    expect(parseMcpAppSnapshot({ ...snapshot, resourceUri: 'https://foreign' })).toBeUndefined();
+    expect(parseMcpAppSnapshot({ ...snapshot, result: { content: [null] } })).toBeUndefined();
+    expect(
+      parseMcpAppSnapshot({ ...snapshot, result: { content: [{ type: 'text', text: 'x'.repeat(1024 * 1024) }] } }),
+    ).toBeUndefined();
+  });
+
+  it('bounds snapshots and does not capture model-only data tools', () => {
+    expect(
+      captureMcpAppResult(screenshotTool, { content: [{ type: 'text', text: 'x'.repeat(1024 * 1024) }] }),
+    ).toBeUndefined();
+    expect(
+      captureMcpAppResult({ ...screenshotTool, _meta: { ui: { visibility: ['model'] } } }, { content: [] }),
+    ).toBeUndefined();
+  });
+
+  it('preserves standard and legacy presentation references and result metadata', () => {
+    const result = { content: [], _meta: { secret: 'private' } };
+    const standard = toHeadlessToolResult(
+      { ...screenshotTool, _meta: { ui: { resourceUri: 'ui://standard' } } },
+      result,
+    );
+    expect(standard.details.app).toMatchObject({ version: 1, resourceUri: 'ui://standard', protocol: 'mcp', result });
+    expect(standard._meta).toEqual(result._meta);
+    expect(
+      toHeadlessToolResult({ ...screenshotTool, _meta: { 'openai/outputTemplate': 'ui://legacy' } }, result).details
+        .app,
+    ).toMatchObject({ resourceUri: 'ui://legacy', protocol: 'openai' });
+  });
+});
 
 describe('remote MCP result normalization', () => {
   it.each([false, true])('retains structured data and the error flag (%s) with readable fallback text', (isError) => {

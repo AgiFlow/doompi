@@ -12,6 +12,7 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHook,
   type DoomHeadlessHostService,
+  isDoomHeadlessToolModelVisible,
   type DoomHeadlessRegistration,
   type DoomHeadlessResource,
   type DoomHeadlessSelection,
@@ -231,6 +232,10 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     return this.resolvedResources;
   }
 
+  get toolSurface(): DoomHeadlessHostService['toolSurface'] {
+    return this.options.toolSurface?.();
+  }
+
   readSkill(name: string): string | undefined {
     // The last declaration of a name is the one the session uses.
     return this.resolvedResources.findLast((entry) => entry.kind === 'skill' && entry.name === name)?.text;
@@ -242,8 +247,11 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     if (ready) {
       for (const entry of this.kernel.activeValues<Owned<DoomHeadlessTool>>('tools')) {
         const active = this.tools.get(entry.value.name) === entry;
+        const discoverable = active && isDoomHeadlessToolModelVisible(entry.value);
         const reason = active
-          ? undefined
+          ? discoverable
+            ? undefined
+            : 'not-discoverable'
           : !this.matches(entry.value.when)
             ? 'inactive'
             : !this.allowsTool(entry.value.name)
@@ -255,7 +263,7 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
           kind: 'tool',
           when: structuredClone(entry.value.when),
           active,
-          discoverable: active,
+          discoverable,
           ...(reason ? { reason } : {}),
         });
       }
@@ -332,6 +340,7 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     for (const contribution of this.kernel.contributions<Owned<DoomHeadlessTool>>('tools')) {
       if (!currentSources.has(contribution.source)) continue;
       const tool = contribution.value.value;
+      if (!isDoomHeadlessToolModelVisible(tool)) continue;
       const contextAttribution = conditionAttribution(tool.when);
       const entry: ContextToolInventory = {
         name: tool.name,
@@ -564,7 +573,15 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       // actionable failures, and reporting them surfaces one notice per queued contribution.
       if (!this.disposed) this.options.onError?.(error);
     });
-    return result;
+    await result;
+    // Selection listeners can replace tools and enqueue more selections before returning.
+    let pending: Promise<void>;
+    do {
+      pending = this.tail;
+      await pending;
+    } while (pending !== this.tail);
+    if (this.failure !== undefined) throw this.failure;
+    this.assertReady();
   }
 
   private assertReady(): void {

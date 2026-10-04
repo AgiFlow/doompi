@@ -7,6 +7,7 @@ export interface McpCatalogToolInput {
   inputSchema: Record<string, unknown>;
   annotations?: Tool['annotations'];
   outputSchema?: Tool['outputSchema'];
+  _meta?: Record<string, unknown>;
 }
 
 export interface McpCatalogStateChange {

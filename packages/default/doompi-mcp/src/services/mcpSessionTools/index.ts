@@ -1,10 +1,11 @@
 import type { DoomChildSessionMcpCatalog, DoomChildSessionMcpTool } from '@agimon-ai/doompi-core/childSession';
 import type { DoomHeadlessTool, DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
+import type { ReadResourceResult } from '@modelcontextprotocol/server';
 import type { Static, TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 
 import { McpHeadlessToolParameters } from '../../schemas/mcpHeadlessTool';
-import type { CatalogTool } from '../mcpCatalog';
+import { mcpToolExecutionMetadata, type CatalogTool } from '../mcpCatalog';
 import type { McpSession } from '../mcpSession';
 
 export const MCP_SESSION_TOOLS_SERVICE = 'doom/mcp-session-tools';
@@ -17,6 +18,8 @@ export interface McpDirectTool extends DoomHeadlessTool {
 /** Narrow cross-root access to the Pi session's existing upstream MCP runtime. */
 export interface McpSessionToolsService {
   readonly generation: string;
+  runtimeRevision(): number;
+  readAppResource(server: string, tool: string, resourceUri: string, signal?: AbortSignal): Promise<ReadResourceResult>;
   snapshot(): readonly CatalogTool[];
   project(): readonly McpDirectTool[];
   refresh(): void;
@@ -64,6 +67,7 @@ export function createMcpSessionToolsService(
         label: `${definition.serverName}: ${definition.toolName}`,
         description: definition.description ?? `${definition.toolName} on the ${definition.serverName} MCP server.`,
         ...(definition.annotations === undefined ? {} : { annotations: definition.annotations }),
+        ...(definition._meta === undefined ? {} : { _meta: mcpToolExecutionMetadata(definition) }),
         ...(definition.outputSchema === undefined ? {} : { outputSchema: definition.outputSchema }),
         parameters: (Object.keys(definition.inputSchema).length > 0
           ? definition.inputSchema
@@ -98,6 +102,15 @@ export function createMcpSessionToolsService(
   const stopSession = session.onChange(refresh);
   return Object.freeze({
     generation,
+    runtimeRevision: () => session.toolGeneration,
+    readAppResource: async (server: string, tool: string, resourceUri: string, signal?: AbortSignal) => {
+      assertAvailable();
+      if (disposed) throw new Error('The MCP session is no longer available.');
+      const result = await session.readAppResource(server, tool, resourceUri, signal);
+      assertAvailable();
+      if (disposed) throw new Error('The MCP session is no longer available.');
+      return result;
+    },
     snapshot,
     project,
     refresh,

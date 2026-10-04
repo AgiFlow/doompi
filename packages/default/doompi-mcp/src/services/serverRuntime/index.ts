@@ -16,6 +16,7 @@ import { COMMAND_NAME, SERVER_COMMAND_DESCRIPTION } from '../../constants/mcp';
 import { MCP_STATUS_KEY } from '../../constants/piMcp';
 import { McpHeadlessToolParameters } from '../../schemas/mcpHeadlessTool';
 import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../types/webMcp';
+import { isModelVisibleMcpTool } from '../mcpCatalog';
 import { formatStatus } from '../mcpCommand';
 import { McpSession } from '../mcpSession';
 import { createMcpSessionApi } from '../mcpSessionApi';
@@ -259,13 +260,14 @@ export function createMcpServerRuntime(
     assertAvailable();
     const selected = sessionTools
       .snapshot()
+      .filter(isModelVisibleMcpTool)
       .find((candidate) => candidate.serverName === parameters.server && candidate.toolName === parameters.tool);
     if (!selected)
       throw new Error(`MCP tool ${parameters.server}/${parameters.tool} is not available in this session.`);
     return sessionTools.invoke(selected.piName, parameters.arguments ?? {}, signal);
   };
   const childTool = createMcpChildTool(invoke, {
-    snapshot: () => sessionTools.project(),
+    snapshot: () => sessionTools.project().filter(isModelVisibleMcpTool),
     resolveSelectors: (selectors) => sessionTools.resolveSelectors(selectors),
     subscribe: (listener) => sessionTools.onChange(listener),
   });

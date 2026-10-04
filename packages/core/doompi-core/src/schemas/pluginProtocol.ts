@@ -32,6 +32,8 @@ export type DoomPluginDirection = 'client-to-server' | 'server-to-client';
 export interface DoomPluginCaller {
   /** Authenticated connection that owns client capabilities and leases. */
   connectionId?: string;
+  /** Aborted when the authenticated browser connection closes. Never supplied over the wire. */
+  signal?: AbortSignal;
 }
 
 /** Chord method shared by all authenticated Doompi clients. */

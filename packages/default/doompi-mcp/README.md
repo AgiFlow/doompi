@@ -94,6 +94,45 @@ Full schemas cost context tokens. Select domains and child subsets rather than h
 availability or repeating catalogs in prompt prose. Codemode and tool search remain disabled;
 the Pi 1.0.0 source review did not measure savings or justify enabling them.
 
+## Inline Apps (development)
+
+The conversation renderer recognizes standard `_meta.ui.resourceUri`, deprecated
+`ui/resourceUri`, and ChatGPT `openai/outputTemplate` declarations. HTML stays inside
+an opaque, sandboxed inline frame; ordinary text results remain available. Browsers
+without iframe CSP enforcement use the text fallback.
+
+Apps open read-only, including replayed history. Enable interactions to authorize a
+fresh connection-bound lease. Each tool call and attributed follow-up requires host
+confirmation and the existing session admission checks. Calls are limited to current,
+app-visible tools on the original configured server. Visibility is not consent.
+Private result metadata and bounded widget state are not injected into model content.
+Reopening a widget reads its retained result and state, never reruns the original tool.
+
+The ChatGPT adapter implements tool input/output and private metadata globals, globals
+updates, `callTool`, `setWidgetState`, `sendFollowUpMessage`, inline display mode, height,
+close, and confirmed external links. File libraries, checkout, accounts, modal/fullscreen
+modes, stable custom origins, sampling, and automatic model-context updates are unsupported.
+
+The runtime pins published `@agimon-ai/mcp-proxy@0.32.5` for Apps capability
+negotiation, private result capture before output guarding, and upstream request
+cancellation. Model-facing output remains guarded; retained App results are bounded
+separately. No local proxy dependency or spill-file reads are used.
+
+Run from the repository root:
+
+```sh
+pnpm --filter @agimon-ai/doompi-mcp test
+pnpm --filter @agimon-ai/doompi exec playwright test --config playwright.app.config.ts inlineMcpSandbox.spec.ts
+pnpm nx run @agimon-ai/doompi:test:app
+```
+
+The stdio fixture verifies discovery, visibility, resource reads, pre-guard private
+results, and upstream cancellation. Browser tests cover sandbox/bootstrap isolation
+and standalone exported widgets. The production conversation fixture uses an isolated
+home and a local scripted model to verify standard and ChatGPT Apps, confirmed callbacks
+and attributed follow-ups, private metadata exclusion, saved state, read-only replay
+without rerunning tools, and a real DoomPi-exported session widget.
+
 ## Commands
 
 ```text

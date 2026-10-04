@@ -19,6 +19,7 @@ import {
   mcpResultBlocks,
   mcpResultView,
 } from '../_lib/mcpToolMatch';
+import { McpInlineApp } from './McpInlineApp';
 
 const STATUS_TONE: Record<McpStatusTone, StatusTone> = {
   running: 'running',
@@ -84,13 +85,32 @@ function McpBlock({ block }: { block: McpResultBlock }) {
  * collapsed to twelve, then the images Pi carries beside the text, the
  * blocks the adapter put in the details, and one status line in the body.
  */
-export function McpToolMessage({ toolName, args, result, output, running, isError, statuses }: ToolMessageRenderProps) {
+export function McpToolMessage({
+  sessionId,
+  toolCallId,
+  toolName,
+  args,
+  result,
+  output,
+  running,
+  isError,
+  statuses,
+}: ToolMessageRenderProps) {
   const identity =
     mcpIdentityFromDetails(result?.details) ?? matchMcpTool(toolName, statuses) ?? fallbackIdentity(toolName);
   const summary = mcpArgumentSummary(args);
   const collapsed = mcpResultView({ output, expanded: false, isPartial: running, isError });
   const images = mcpImageBlocks(result?.content ?? []);
   const blocks = mcpResultBlocks(result?.details);
+  const details = result?.details;
+  const app = !running && details !== null && typeof details === 'object' && 'app' in details ? details.app : undefined;
+  const hasApp =
+    app !== null &&
+    typeof app === 'object' &&
+    'version' in app &&
+    app.version === 1 &&
+    'resourceUri' in app &&
+    typeof app.resourceUri === 'string';
 
   return (
     <MessageItem tone={toolTone({ running, isError })} expandable={collapsed.status?.tone === 'hint'}>
@@ -107,6 +127,11 @@ export function McpToolMessage({ toolName, args, result, output, running, isErro
                 {summary ? <span className="min-w-0 flex-1 truncate text-doom-faint">· {summary}</span> : null}
               </span>
             </MessageItemHeader>
+            {hasApp ? (
+              <MessageItemBody>
+                <McpInlineApp key={`${sessionId}:${toolCallId}`} sessionId={sessionId} toolCallId={toolCallId} />
+              </MessageItemBody>
+            ) : null}
             {view.lines.length > 0 || view.status !== null || images.length > 0 || blocks.length > 0 ? (
               <MessageItemBody
                 data-testid="tool-result-mcp"

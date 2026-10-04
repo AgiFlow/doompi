@@ -810,10 +810,11 @@ export function pluginFileLinks(): readonly FileLinkSource[] {
 export function pluginToolRenderer(
   toolName: string,
   statuses: Readonly<Record<string, string>> = {},
+  details?: unknown,
 ): ToolRendererContribution | undefined {
   return (
     activeState().toolRenderers.get(toolName) ??
-    activeState().toolMatchers.find((renderer) => renderer.matches?.(toolName, statuses))
+    activeState().toolMatchers.find((renderer) => renderer.matches?.(toolName, statuses, details))
   );
 }
 

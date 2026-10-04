@@ -607,9 +607,14 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
         case 'tool_execution_update': {
           const existing = running.get(text(frame.toolCallId));
           if (!existing) return {};
-          // The partial result is DoomPi's own view of the call in flight, and
-          // `details` is the only field on a tool item the schema leaves open.
-          const item: ToolTranscriptItem = { ...existing, details: normalizeJson(frame.partialResult) };
+          const result = isRecord(frame.partialResult) ? frame.partialResult : {};
+          const item: ToolTranscriptItem = {
+            ...existing,
+            ...(result.content === undefined && result.output === undefined
+              ? {}
+              : { content: plainContent(result.content ?? result.output) }),
+            details: normalizeJson(result.details ?? frame.partialResult),
+          };
           running.set(existing.toolCallId, item);
           return { progress: { type: 'item_updated', item } };
         }
@@ -623,7 +628,7 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
           const item: ToolTranscriptItem = {
             ...existing,
             content: plainContent(result.content ?? result.output),
-            ...(result.details === undefined ? {} : { details: normalizeJson(result.details) }),
+            details: normalizeJson(result.details),
             ...(isError ? { status: 'error', isError: true } : { status: 'complete', isError: false }),
           };
           return { snapshot: append(item), progress: { type: 'item_finished', item } };

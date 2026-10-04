@@ -801,9 +801,10 @@ export interface ToolRendererContribution {
    * Claims a tool named only at runtime (an MCP server's tools) when no
    * plugin lists the name. The session's footer statuses come along so the
    * plugin can read whatever its session half published, such as the server
-   * names; the first renderer to match, in install order, wins.
+   * names; persisted details also identify historical tools after disconnect.
+   * The first renderer to match, in install order, wins.
    */
-  matches?(toolName: string, statuses: Readonly<Record<string, string>>): boolean;
+  matches?(toolName: string, statuses: Readonly<Record<string, string>>, details?: unknown): boolean;
   message: ComponentType<ToolMessageRenderProps>;
   /** A temporary tab to add when a live invocation completes successfully. History and failed calls do not invoke it. */
   completionTab?(event: ToolCompletionEvent): TransientTab | undefined;

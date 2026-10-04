@@ -147,6 +147,18 @@ describe('Doom web plugin rules', () => {
       }
     });
 
+    it('admits only the conversation host browser bridge, never an upstream client or server', () => {
+      write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-mcp' }));
+      const host = write(
+        `${FRONTEND}/tool/_lib/host.ts`,
+        "import { AppBridge } from '@modelcontextprotocol/ext-apps/app-bridge';",
+      );
+      expect(webPluginImportAllowlist.check?.(host, root)).toBeNull();
+      for (const specifier of ['@modelcontextprotocol/client', '@modelcontextprotocol/ext-apps/server']) {
+        const invalid = write(`${FRONTEND}/tool/_lib/invalid.ts`, `import { Client } from '${specifier}';`);
+        expect(webPluginImportAllowlist.check?.(invalid, root)).toContain(specifier);
+      }
+    });
     it('rejects node builtins, other packages, and relative imports outside the browser half and src/types', () => {
       const filePath = write(
         `${FRONTEND}/tab/demo.web.ts`,

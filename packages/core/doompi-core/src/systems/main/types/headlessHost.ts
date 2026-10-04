@@ -1,5 +1,6 @@
 import type {
   DoomHeadlessExecutionContext,
+  DoomHeadlessHostService,
   DoomHeadlessSelection,
   DoomHeadlessTool,
   DoomHeadlessResource,
@@ -24,6 +25,7 @@ export interface HeadlessHostOptions {
   selection: DoomHeadlessSelection;
   selectionOverrides?: readonly ('majorMode' | 'domains' | 'profile')[];
   context(selection: DoomHeadlessSelection): DoomHeadlessExecutionContext;
+  toolSurface?(): DoomHeadlessHostService['toolSurface'];
   applyTools(tools: readonly DoomHeadlessTool[]): void | Promise<void>;
   applyResources(resources: readonly ResolvedHeadlessResource[]): void | Promise<void>;
   resolveSelection?(selection: DoomHeadlessSelection): DoomHeadlessSelection | Promise<DoomHeadlessSelection>;

@@ -31,7 +31,11 @@ import type {
   DoomHeadlessTool,
   DoomHeadlessToolCompletionRequest,
 } from '../../../exports/headless';
-import { DOOM_LOAD_SKILL_TOOL, DoomHeadlessPromptAdmissionError } from '../../../exports/headless';
+import {
+  DOOM_LOAD_SKILL_TOOL,
+  DoomHeadlessPromptAdmissionError,
+  isDoomHeadlessToolModelVisible,
+} from '../../../exports/headless';
 import type { DoomSessionContext } from '../../../exports/hubChannel';
 import type { DoomMcpContextSnapshot, DoomMcpSkill, DoomMcpUiResource } from '../../../exports/mcpFacet';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
@@ -610,13 +614,29 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     let isError = original.isError;
     let usage = original.usage;
     let terminate: boolean | undefined;
+    let resultRewritten = false;
     for (const patch of patches) {
       if (!isRecord(patch)) continue;
-      if (isToolContent(patch.content)) content = patch.content;
-      if ('details' in patch && isJsonValue(patch.details)) details = patch.details;
-      if (typeof patch.isError === 'boolean') isError = patch.isError;
+      if (isToolContent(patch.content)) {
+        content = patch.content;
+        resultRewritten = true;
+      }
+      if ('details' in patch && isJsonValue(patch.details)) {
+        details = patch.details;
+        resultRewritten = true;
+      }
+      if (typeof patch.isError === 'boolean') {
+        isError = patch.isError;
+        resultRewritten = true;
+      }
       if (isUsage(patch.usage)) usage = patch.usage;
       if (typeof patch.terminate === 'boolean') terminate = patch.terminate;
+    }
+    // Component snapshots contain the unguarded private result. A result hook cannot
+    // redact model output while retaining the original payload in the renderer.
+    if (resultRewritten && isRecord(details) && 'app' in details) {
+      const { app: _app, ...redactedDetails } = details;
+      details = redactedDetails;
     }
     return {
       ...(content === event.content ? {} : { content }),
@@ -1203,7 +1223,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
 
   const applyToolSurface = async (tools: readonly HeadlessTool[]): Promise<void> => {
     toolSurfaceReady = false;
-    const facetTools = tools.map((tool) =>
+    const modelTools = tools.filter(isDoomHeadlessToolModelVisible);
+    const facetTools = modelTools.map((tool) =>
       toolAdapter(
         tool.name === DOOM_LOAD_SKILL_TOOL
           ? { ...tool, description: describeLoadSkillTool(tool.description, headlessHost?.appliedResources ?? []) }
@@ -1231,7 +1252,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     const piNames = new Set(piTools.map((tool) => tool.name));
     const nextToolGuidance = [
       ...(piHost?.toolGuidance ?? []).filter((entry) => piNames.has(entry.name)),
-      ...tools.map((tool) => ({
+      ...modelTools.map((tool) => ({
         name: tool.name,
         ...(tool.promptSnippet === undefined ? {} : { promptSnippet: tool.promptSnippet }),
         ...(tool.promptGuidelines === undefined ? {} : { promptGuidelines: tool.promptGuidelines }),
@@ -1258,6 +1279,9 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           label: tool.label ?? tool.name,
           description: tool.description,
           parameters: tool.parameters,
+          ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
+          ...(tool.outputSchema === undefined ? {} : { outputSchema: tool.outputSchema }),
+          ...(tool._meta === undefined ? {} : { _meta: tool._meta }),
         },
         execute: (toolCallId, parameters, signal, onUpdate) =>
           tool.execute(toolCallId, parameters, signal, onUpdate, headlessHost!.context),
@@ -1300,6 +1324,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     });
   };
 
+  let admittedToolSurface: Pick<SessionToolSurface, 'readSurface' | 'invokeTool'> | undefined;
   const prepareFacets = (root: CordisContext): void => {
     mcpServiceRoot = root;
     root.plugin((context) => {
@@ -1328,6 +1353,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     }
     headlessHost = new HeadlessHost(root, {
       candidates: options.candidates,
+      toolSurface: () => admittedToolSurface,
       selection: initialSelection,
       selectionOverrides: [
         ...new Set([
@@ -1647,6 +1673,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       if (skill === undefined) throw new Error('The session skill is not active');
       return skill.content;
     },
+  };
+
+  admittedToolSurface = {
+    readSurface: () => toolSurface.readSurface(),
+    invokeTool: (invocation) => toolSurface.invokeTool(invocation),
   };
 
   const mcpSurface: SessionToolSurface = {

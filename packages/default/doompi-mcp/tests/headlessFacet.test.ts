@@ -160,6 +160,7 @@ async function setup(
   const commands: DoomHeadlessCommand[] = [];
   const tools: DoomHeadlessTool[] = [];
   const registration = () => ({ dispose: vi.fn() });
+  const registerMethod = vi.fn((_definition: { service: string; method: string }) => registration());
   const selectionListeners = new Set<(selection: DoomHeadlessExecutionContext['selection']) => void | Promise<void>>();
   const host = {
     context: execution,
@@ -194,6 +195,7 @@ async function setup(
     scope: 'session',
     context: { workspaceRoot: managed ? root : undefined },
     registerApi: registration,
+    registerMethod,
   });
   context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
   if (resolver) context.provide(DOOM_MCP_PROJECTION_RESOLVER_SERVICE, resolver);
@@ -222,6 +224,7 @@ async function setup(
   return {
     context,
     execution,
+    registerMethod,
     statuses,
     resources,
     command: commands[0]!,
@@ -244,6 +247,18 @@ async function connected() {
 }
 
 describe('MCP server facet contracts', () => {
+  it('mounts every App method through the generated session facet', async () => {
+    const { registerMethod } = await setup();
+    expect(registerMethod.mock.calls.map(([method]) => `${method.service}.${method.method}`)).toEqual([
+      'mcp.apps.open',
+      'mcp.apps.activate',
+      'mcp.apps.callTool',
+      'mcp.apps.setState',
+      'mcp.apps.followUp',
+      'mcp.apps.close',
+    ]);
+  });
+
   it('keeps config out of the prompt and rejects tools before startup', async () => {
     const current = await setup();
     expect(current.resources).toEqual([]);
@@ -357,7 +372,7 @@ describe('MCP server facet contracts', () => {
     await expect(childTool!.execute('child-call', { server: 'example', tool: 'ping' })).resolves.toMatchObject({
       content: [{ text: 'ok' }],
     });
-    expect(mock.callTool).toHaveBeenLastCalledWith('ping', {}, { timeout: 500 });
+    expect(mock.callTool).toHaveBeenLastCalledWith('ping', {}, { timeout: 500, onResult: expect.any(Function) });
 
     await current.command.execute('disconnect example', current.execution);
     await expect(
@@ -386,7 +401,15 @@ describe('MCP server facet contracts', () => {
     expect(tools).toHaveLength(1);
     expect(tools[0]?.name).toBe(current.service().snapshot()[0]?.piName);
     await tools[0]!.execute('call', {}, undefined, undefined, current.execution);
-    expect(mock.callTool).toHaveBeenCalledWith('ping', {}, { timeout: 500 });
+    expect(mock.callTool).toHaveBeenCalledWith(
+      'ping',
+      {},
+      {
+        timeout: 500,
+        onResult: expect.any(Function),
+        signal: expect.any(AbortSignal),
+      },
+    );
     await current.command.execute('disconnect example', current.execution);
     expect(refresh).toHaveBeenCalled();
     expect(current.service().snapshot()).toEqual([]);

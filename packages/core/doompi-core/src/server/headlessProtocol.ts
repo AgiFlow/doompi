@@ -189,6 +189,7 @@ function managementHost(
   return {
     attachClient(presentation) {
       const connectionId = randomUUID();
+      const lifetime = new AbortController();
       const subscriptions = new Set<string>();
       const threadSubscriptions = new Set<string>();
       const state = replicatedState<{ events: ProtocolEvent[] }>({ events: [] });
@@ -344,7 +345,10 @@ function managementHost(
                   call.mount.workspaceId === mount.workspaceId;
             if (!permitted) throw new Error('Plugin is outside this WebSocket scope.');
           }
-          return (await hub.invokePlugin(call, 'client-to-server', { connectionId })) as JsonValue;
+          return (await hub.invokePlugin(call, 'client-to-server', {
+            connectionId,
+            signal: lifetime.signal,
+          })) as JsonValue;
         },
       });
       provider.provide(DoomSessionManagementService, {
@@ -361,6 +365,7 @@ function managementHost(
         release() {
           if (released) return;
           released = true;
+          lifetime.abort();
           stopEvents();
           stopThreadFrames();
           for (const key of threadSubscriptions) {

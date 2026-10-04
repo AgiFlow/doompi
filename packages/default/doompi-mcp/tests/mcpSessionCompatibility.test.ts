@@ -316,11 +316,19 @@ it('keeps same-endpoint accounts independent across concurrent direct calls and 
       expect.arrayContaining([
         expect.objectContaining({
           content: [{ type: 'text', text: 'personal' }],
-          details: { server: 'personal', tool: 'search' },
+          details: {
+            server: 'personal',
+            tool: 'search',
+            app: { version: 1, result: { content: [{ type: 'text', text: 'personal' }] } },
+          },
         }),
         expect.objectContaining({
           content: [{ type: 'text', text: 'work' }],
-          details: { server: 'work', tool: 'search' },
+          details: {
+            server: 'work',
+            tool: 'search',
+            app: { version: 1, result: { content: [{ type: 'text', text: 'work' }] } },
+          },
         }),
       ]),
     );

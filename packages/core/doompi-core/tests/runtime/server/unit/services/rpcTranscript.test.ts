@@ -360,6 +360,41 @@ describe('rpc transcript projection', () => {
     assertEncodable(ended.snapshot);
   });
 
+  it('normalizes partial tool results and clears private details when the final result omits them', () => {
+    const subject = transcript();
+    subject.apply({ type: 'tool_execution_start', toolCallId: 't1', toolName: 'mcp', args: {} });
+    const details = { server: 'demo', tool: 'widget', app: { result: { _meta: { secret: 'private' } } } };
+    const updated = subject.apply({
+      type: 'tool_execution_update',
+      toolCallId: 't1',
+      partialResult: { content: [{ type: 'text', text: 'loading' }], details },
+    });
+    expect(updated.progress).toMatchObject({
+      item: { content: [{ type: 'text', text: 'loading' }], details },
+    });
+    const ended = subject.apply({
+      type: 'tool_execution_end',
+      toolCallId: 't1',
+      result: { content: [{ type: 'text', text: 'guarded' }] },
+    });
+    expect(ended.snapshot?.transcript[0]).toMatchObject({ content: [{ type: 'text', text: 'guarded' }] });
+    expect(JSON.stringify(ended)).not.toContain('private');
+    assertEncodable(ended.snapshot);
+  });
+
+  it('normalizes the legacy output field in partial results', () => {
+    const subject = transcript();
+    subject.apply({ type: 'tool_execution_start', toolCallId: 't1', toolName: 'read', args: {} });
+    const updated = subject.apply({
+      type: 'tool_execution_update',
+      toolCallId: 't1',
+      partialResult: { output: 'loading', details: { lines: 3 } },
+    });
+    expect(updated.progress).toMatchObject({
+      item: { content: [{ type: 'text', text: 'loading' }], details: { lines: 3 } },
+    });
+  });
+
   it('marks a failed tool call as an error', () => {
     const subject = transcript();
     apply(subject, [{ type: 'tool_execution_start', toolCallId: 't1', toolName: 'bash', args: {} }]);
