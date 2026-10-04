@@ -67,10 +67,11 @@ describe('Composer plugin actions', () => {
     expect(aborting).toContain('data-testid="composer-abort"');
     expect(aborting).toContain('aborting…');
     expect(aborting).toMatch(/data-testid="composer-abort"[^>]*disabled|disabled[^>]*data-testid="composer-abort"/);
+    expect(aborting).not.toContain('data-testid="composer-queued"');
 
     applySessionLifecycle('active-session', { revision: 2, operation: null, paused: true, queue: [] });
     const idle = renderToStaticMarkup(createElement(Composer));
     expect(idle).not.toContain('data-testid="composer-abort"');
-    expect(idle).toContain('data-testid="composer-queued"');
+    expect(idle).not.toContain('data-testid="composer-queued"');
   });
 });

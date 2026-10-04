@@ -43,12 +43,7 @@ export function QueueSheet({
   const label = `${String(count)} queued message${count === 1 ? '' : 's'}`;
 
   // Automatic delivery closes an empty queue, but explicit actions still need acknowledgement.
-  if (
-    count === 0 &&
-    pending === null &&
-    (open || clearAcknowledged) &&
-    (clearAcknowledged || (!paused && error === null))
-  ) {
+  if (count === 0 && pending === null && (open || clearAcknowledged) && (clearAcknowledged || error === null)) {
     setClearAcknowledged(false);
     setOpen(false);
   }
@@ -71,31 +66,33 @@ export function QueueSheet({
   };
   const actionDisabled = disabled || pending !== null;
 
-  if (count === 0 && !paused && !open) return null;
+  if (count === 0 && !open) return null;
 
   return (
     <>
-      <Button
-        variant="subtle"
-        size="sm"
-        data-testid="composer-queued"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
-        className="mb-2 h-7 w-full justify-between rounded-md border border-doom-border-soft bg-doom-panel/60 px-2.5 text-xs text-doom-dim hover:text-doom-hi"
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <RefreshIcon className="h-3 w-3 shrink-0 text-doom-cyan" />
-          <span className="font-bold text-doom-hi">{label}</span>
-          <span className="truncate text-doom-faint">
-            {paused ? 'paused until resumed' : 'waiting for the current run'}
+      {count > 0 ? (
+        <Button
+          variant="subtle"
+          size="sm"
+          data-testid="composer-queued"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen(true)}
+          className="mb-2 h-7 w-full justify-between rounded-md border border-doom-border-soft bg-doom-panel/60 px-2.5 text-xs text-doom-dim hover:text-doom-hi"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <RefreshIcon className="h-3 w-3 shrink-0 text-doom-cyan" />
+            <span className="font-bold text-doom-hi">{label}</span>
+            <span className="truncate text-doom-faint">
+              {paused ? 'paused until resumed' : 'waiting for the current run'}
+            </span>
           </span>
-        </span>
-        <span className="flex shrink-0 items-center gap-1 text-doom-faint">
-          view queue
-          <ChevronUpIcon className="h-3 w-3" />
-        </span>
-      </Button>
+          <span className="flex shrink-0 items-center gap-1 text-doom-faint">
+            view queue
+            <ChevronUpIcon className="h-3 w-3" />
+          </span>
+        </Button>
+      ) : null}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
@@ -197,19 +194,19 @@ export function QueueSheet({
               </Button>
             ) : null}
             {pending !== null ? (
-              <p role="status" className="mt-2 text-xs text-doom-faint">
+              <output className="mt-2 block text-xs text-doom-faint">
                 waiting for the session to acknowledge this action…
-              </p>
+              </output>
             ) : null}
             {error !== null ? (
               <p role="alert" data-testid="queue-error" className="mt-2 text-xs text-doom-red">
                 {error}
               </p>
             ) : clearAcknowledged && count > 0 ? (
-              <p role="status" data-testid="queue-clear-remaining" className="mt-2 text-xs text-doom-faint">
+              <output data-testid="queue-clear-remaining" className="mt-2 block text-xs text-doom-faint">
                 Messages remain or await confirmation. Messages being delivered or with uncertain delivery cannot be
                 cleared.
-              </p>
+              </output>
             ) : null}
           </DialogBody>
         </DialogContent>

@@ -89,6 +89,7 @@ import {
   rewindToMessage,
   sessionStoreFor,
   submitMessage,
+  submitMessageWithAck,
 } from '../../src/web/stores/sessionStore';
 import {
   dropThreads,
@@ -201,6 +202,101 @@ describe('transcript ownership', () => {
 
     expect(sessionStoreFor('s1').state.entries).toEqual([
       expect.objectContaining({ kind: 'assistant', text: 'live fallback' }),
+    ]);
+  });
+
+  it.each([false, true])('echoes acknowledged submissions until published while active=%s', async (active) => {
+    const images = [{ type: 'image' as const, data: 'bG9jYWw=', mimeType: 'image/png' }];
+    const userImages = [{ data: 'bG9jYWw=', mimeType: 'image/png' }];
+    applyProtocolTranscript('s1', [], active);
+    applySessionLifecycle('s1', {
+      revision: 1,
+      operation: active ? { id: 'running', kind: 'run', status: 'open' } : null,
+      paused: false,
+      queue: [],
+    });
+
+    await expect(submitMessageWithAck('  stay visible  ', images, 's1')).resolves.toBe(true);
+    expect(requestSessionProtocolFrame).toHaveBeenLastCalledWith('s1', {
+      type: active ? 'steer' : 'prompt',
+      message: 'stay visible',
+      images,
+    });
+    const localId = sessionStoreFor('s1').state.entries[0]?.id;
+    expect(localId).toBeDefined();
+    applyProtocolTranscript('s1', [], active);
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      { kind: 'user', id: localId, text: 'stay visible', images: userImages },
+    ]);
+
+    const published = { kind: 'user' as const, id: 'published-1', text: 'stay visible', images: userImages };
+    applyProtocolTranscript('s1', [published], active);
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      { kind: 'user', id: localId, text: 'stay visible', images: userImages },
+    ]);
+    expect(sessionStoreFor('s1').state.pendingUserEntries).toEqual([]);
+
+    await submitMessageWithAck('stay visible', images, 's1');
+    const secondId = sessionStoreFor('s1').state.entries[1]?.id;
+    expect(secondId).toBeDefined();
+    expect(secondId).not.toBe(localId);
+    applyProtocolTranscript('s1', [published, { ...published, id: 'published-2' }], active);
+    expect(sessionStoreFor('s1').state.entries.map(({ id }) => id)).toEqual([localId, secondId]);
+    expect(sessionStoreFor('s1').state.pendingUserEntries).toEqual([]);
+  });
+
+  it('reconciles a transcript published before the submission acknowledgement', async () => {
+    applyProtocolTranscript('s1', [], true);
+    let localId: string | undefined;
+    vi.mocked(requestSessionProtocolFrame).mockImplementationOnce(async () => {
+      localId = sessionStoreFor('s1').state.entries[0]?.id;
+      applyProtocolTranscript('s1', [{ kind: 'user', id: 'published', text: 'say it once' }], true);
+      return { success: true };
+    });
+
+    await expect(submitMessageWithAck('say it once', [], 's1')).resolves.toBe(true);
+    expect(localId).toBeDefined();
+    expect(sessionStoreFor('s1').state.entries).toEqual([{ kind: 'user', id: localId, text: 'say it once' }]);
+    expect(sessionStoreFor('s1').state.pendingUserEntries).toEqual([]);
+  });
+
+  it.each(['rejected', 'uncertain', 'thrown'])(
+    'removes only the unconfirmed echo when a submission is %s',
+    async (failure) => {
+      await submitMessageWithAck('accepted', [], 's1');
+      vi.mocked(requestSessionProtocolFrame).mockImplementationOnce(async () => {
+        expect(sessionStoreFor('s1').state.entries).toEqual([
+          expect.objectContaining({ kind: 'user', text: 'accepted' }),
+          expect.objectContaining({ kind: 'user', text: 'retry me' }),
+        ]);
+        if (failure === 'thrown') throw new Error('Connection failed.');
+        return { success: false, error: failure === 'uncertain' ? 'Delivery uncertain.' : 'Rejected.' };
+      });
+
+      const submission = submitMessageWithAck('retry me', [], 's1');
+      if (failure === 'thrown') await expect(submission).rejects.toThrow('Connection failed.');
+      else await expect(submission).resolves.toBe(false);
+      expect(sessionStoreFor('s1').state.entries.filter(({ kind }) => kind === 'user')).toEqual([
+        expect.objectContaining({ text: 'accepted' }),
+      ]);
+      expect(sessionStoreFor('s1').state.pendingUserEntries).toEqual([expect.objectContaining({ text: 'accepted' })]);
+      if (failure === 'uncertain')
+        expect(sessionStoreFor('s1').state.entries).toContainEqual(
+          expect.objectContaining({ kind: 'notice', text: 'Delivery uncertain.' }),
+        );
+    },
+  );
+
+  it('keeps a server-published message when its acknowledgement is uncertain', async () => {
+    applyProtocolTranscript('s1', [], true);
+    vi.mocked(requestSessionProtocolFrame).mockImplementationOnce(async () => {
+      applyProtocolTranscript('s1', [{ kind: 'user', id: 'published', text: 'already delivered' }], true);
+      return { success: false, error: 'Delivery uncertain.' };
+    });
+
+    await expect(submitMessageWithAck('already delivered', [], 's1')).resolves.toBe(false);
+    expect(sessionStoreFor('s1').state.entries.filter(({ kind }) => kind === 'user')).toEqual([
+      expect.objectContaining({ text: 'already delivered' }),
     ]);
   });
 
