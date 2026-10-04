@@ -112,6 +112,39 @@ afterEach(async () => {
 });
 
 describe('repository hook Pi lifecycle', () => {
+  it.each(['SessionStart', 'PreToolUse'])(
+    'blocks startup and tools when a %s module was never synced',
+    async (event) => {
+      writeRegistry(
+        `groups:\n  safety:\n    core: true\n    hooks:\n      - event: ${event}\n        pi: {module: ./guard.mts}\n`,
+      );
+      const state = await session({});
+      await expect(state.handlers.get('session_start')?.({}, state.ctx)).rejects.toThrow('Run doompi sync');
+      await expect(state.handlers.get('before_agent_start')?.({}, state.ctx)).rejects.toThrow('restart or reopen');
+      expect(await state.handlers.get('tool_call')?.(toolCall('blocked', 'bash'), state.ctx)).toMatchObject({
+        block: true,
+        reason: expect.stringContaining('Run doompi sync'),
+      });
+      state.pi.sendMessage = () => {
+        throw new Error('prompt admission unavailable');
+      };
+      expect(await state.handlers.get('tool_call')?.(toolCall('still-blocked', 'bash'), state.ctx)).toMatchObject({
+        block: true,
+      });
+      expect(state.calls).toEqual([]);
+    },
+  );
+
+  it('does not require artifacts for unselected and skipped module rows', async () => {
+    writeRegistry(
+      'groups:\n  other:\n    hooks:\n      - event: PreToolUse\n        pi: {module: ./unselected.mts}\n  selected:\n    hooks:\n      - event: PreToolUse\n        pi: {module: ./parent-only.mts, skipInSubagent: true}\n',
+    );
+    process.env.PI_SUBAGENT_CHILD = 'true';
+    const state = await session({ hookGroups: ['selected'] });
+    await expect(state.handlers.get('before_agent_start')?.({}, state.ctx)).resolves.toBeUndefined();
+    expect(await state.handlers.get('tool_call')?.(toolCall('allowed', 'bash'), state.ctx)).toBeUndefined();
+  });
+
   it('registers every lifecycle event this package observes', async () => {
     const state = await session({});
 

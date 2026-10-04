@@ -57,6 +57,7 @@ import { readSyncDrift } from '../../composition/syncDrift';
 import { readSyncState, readRegisteredSyncState } from '../../composition/syncState';
 import { readRegisteredBootstrapStatus } from '../cli/bootstrapLocator';
 import { buildHarnessContext } from '../cli/harnessContext';
+import { validateHookModules } from '../hooks';
 import { createComputerUseBinding } from './computerUseBinding';
 import { createDefaultWorkspaceFolder } from './defaultWorkspace';
 import { ensureGlobalLogSink } from './logSink';
@@ -777,16 +778,34 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       };
 
       if (!options.noSession) {
+        const initialOptions = resolveHarnessOptions({
+          args: resolved.agentArgs,
+          cwd: baseCwd,
+          environment: baseEnvironment,
+        });
+        const initialWorkspace = await admitWorkspace(initialOptions.repoRoot);
+        if (!isMemberCheckout(initialOptions.repoRoot, initialWorkspace)) {
+          const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: initialWorkspace.root };
+          for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete syncEnvironment[key];
+          await syncWorkspace(initialWorkspace.root, syncEnvironment);
+        }
+        const initialRegistration = readSyncRegistration(initialWorkspace.root, homeDirectory);
+        if (initialRegistration === undefined)
+          throw new Error(`Run the scoped DoomPi sync for '${initialWorkspace.root}' before opening it.`);
         harnessContext = await buildHarnessContext(
           resolveHarnessOptions({ args: resolved.agentArgs, cwd: baseCwd, environment: baseEnvironment }),
           harnessTelemetry,
         );
         const activeHarnessContext = harnessContext;
         try {
-          const initialWorkspace = await admitWorkspace(harnessContext.options.repoRoot);
-          const initialRegistration = readSyncRegistration(initialWorkspace.root, homeDirectory);
-          if (initialRegistration === undefined)
-            throw new Error(`Run the scoped DoomPi sync for '${initialWorkspace.root}' before opening it.`);
+          if (harnessContext.options.hooks)
+            await validateHookModules({
+              repoRoot: harnessContext.options.repoRoot,
+              homeDirectory,
+              hookGroups: harnessContext.hookGroups,
+              descriptor: readRegisteredSyncState(initialRegistration, homeDirectory).fileState.hookModules,
+              isSubagent: Boolean(baseEnvironment.PI_SUBAGENT_CHILD),
+            });
           const initialBundle = await loadComposition(
             harnessContext.options.repoRoot,
             'session',
@@ -904,6 +923,24 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
                   .find((candidate) => candidate.id === inheritedWorkspaceId && candidate.available !== false);
           if (workspace === undefined) throw new Error('The session workspace is unavailable.');
           const member = isMemberCheckout(request.cwd, workspace);
+          const registration = await resolveSessionArtifact({
+            member,
+            pinned: pinnedArtifact,
+            parent: parentArtifact,
+            workspace: () => readSyncRegistration(workspace.root, homeDirectory),
+            synchronize: async () => {
+              const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: workspace.root };
+              for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)])
+                delete syncEnvironment[key];
+              await syncWorkspace(workspace.root, syncEnvironment);
+            },
+            prepareCurrent: async () => {
+              const current = readSyncRegistration(workspace.root, homeDirectory);
+              if (current === undefined)
+                throw new Error(`Run the scoped DoomPi sync for '${workspace.root}' before opening it.`);
+              return current;
+            },
+          });
           const childContext = await buildHarnessContext(
             resolveHarnessOptions({
               args: ['--cwd', request.cwd, ...childIdentity.agentArgs, ...explicit.args],
@@ -914,18 +951,14 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             harnessTelemetry,
           );
           try {
-            const registration = await resolveSessionArtifact({
-              member,
-              pinned: pinnedArtifact,
-              parent: parentArtifact,
-              workspace: () => readSyncRegistration(workspace.root, homeDirectory),
-              prepareCurrent: async () => {
-                const current = readSyncRegistration(workspace.root, homeDirectory);
-                if (current === undefined)
-                  throw new Error(`Run the scoped DoomPi sync for '${workspace.root}' before opening it.`);
-                return current;
-              },
-            });
+            if (childContext.options.hooks)
+              await validateHookModules({
+                repoRoot: childContext.options.repoRoot,
+                homeDirectory,
+                hookGroups: childContext.hookGroups,
+                descriptor: readRegisteredSyncState(registration, homeDirectory).fileState.hookModules,
+                isSubagent: Boolean(childEnvironment.PI_SUBAGENT_CHILD),
+              });
             const bundle = await loadComposition(
               childContext.options.repoRoot,
               'session',

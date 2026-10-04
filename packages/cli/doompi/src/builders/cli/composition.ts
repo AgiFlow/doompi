@@ -16,6 +16,7 @@ import {
   readHarnessState,
   updateHarnessState,
 } from '../../composition/harnessState';
+import { resolveDoomConfigurationRoot } from '../../composition/repository';
 import {
   computeInputsHash,
   createMapResolvers,
@@ -24,6 +25,7 @@ import {
   type SyncState,
 } from '../../composition/syncState';
 import type { HarnessPreset } from '../../composition/types/harness';
+import { validateHookModules } from '../hooks';
 import { findSyncedRoot, readBundleStatus } from './bootstrapLocator';
 import { COMPOSED_ENV, EXTERNAL_EXTENSIONS_ENV, MUTE_ENV } from './compositionState';
 import { PERSONA_ENTRY, packageAttribution, resolveExtensionComposition } from './extensionAssembler';
@@ -52,6 +54,7 @@ const DOMAIN_APPLY_MODULE = '@agimon-ai/doompi-domain/apply';
 const SELECTION_SWITCH_MODULE = '@agimon-ai/doompi-config/selectionSwitch';
 const NOT_SYNCED = 'doompi is configured for Pi but this repository was never synced. Run doompi sync.';
 const UNUSABLE_STATE_MESSAGE = 'doompi could not read its synchronized state. Run doompi sync.';
+const HOOK_STARTUP_RECOVERY = 'Run doompi sync, then restart or reopen this session.';
 const TIMING_ENABLED = process.env.DOOMPI_TIMING === ENABLED_FLAG || process.env.PI_TIMING === ENABLED_FLAG;
 
 export const DOOM_FLAGS = {
@@ -391,69 +394,105 @@ export async function composeDoomSession(pi: ExtensionAPI, options: ComposeOptio
   const environment = options.environment ?? process.env;
   const problems: string[] = [];
   const homeDirectory = environment.HOME ?? os.homedir();
-  const repoRoot = findSyncedRoot(options.cwd ?? process.cwd(), homeDirectory);
-  if (!repoRoot) return { problems: [NOT_SYNCED], stale: false, loaded: [] };
-
-  let state: SyncState | undefined;
+  if (environment[EXTERNAL_EXTENSIONS_ENV] === ENABLED_FLAG) return { problems: [], stale: false, loaded: [] };
+  let repoRoot: string | undefined;
+  let requiredHooks: boolean | undefined;
+  const failedStartup = async (reason: string): Promise<ComposeOutcome> => {
+    if (requiredHooks === undefined) {
+      try {
+        const harness = loadHarnessState(environment).state;
+        requiredHooks =
+          harness.hooks &&
+          (await validateHookModules({
+            repoRoot: repoRoot ?? resolveDoomConfigurationRoot(options.cwd ?? process.cwd(), homeDirectory),
+            homeDirectory,
+            hookGroups: harness.hookGroups,
+            descriptor: harness.hookModules,
+            isSubagent: Boolean(environment.PI_SUBAGENT_CHILD),
+          }));
+      } catch (error) {
+        requiredHooks = true;
+        problems.push(message(error));
+      }
+    }
+    if (requiredHooks) {
+      if (!reason.endsWith(HOOK_STARTUP_RECOVERY)) reason += `\n${HOOK_STARTUP_RECOVERY}`;
+      pi.on('before_agent_start', () => {
+        throw new Error(reason);
+      });
+      pi.on('tool_call', () => ({ block: true, reason }));
+    }
+    return { problems: [...problems, reason], stale: false, loaded: [] };
+  };
   try {
-    state = readSyncState(repoRoot, homeDirectory);
-  } catch (error) {
-    return { problems: [message(error)], stale: false, loaded: [] };
-  }
-  if (!state) return { problems: [NOT_SYNCED], stale: false, loaded: [] };
+    repoRoot = findSyncedRoot(options.cwd ?? process.cwd(), homeDirectory);
+    if (!repoRoot) return failedStartup(NOT_SYNCED);
+    const state = readSyncState(repoRoot, homeDirectory);
+    if (!state) return failedStartup(NOT_SYNCED);
 
-  const argv = options.argv ?? process.argv.slice(2);
-  // The launcher and Doom Team children compose the set themselves and pass it
-  // in, so this entry has nothing left to do but stay out of the way.
-  if (
-    environment[EXTERNAL_EXTENSIONS_ENV] === ENABLED_FLAG ||
-    extensionsProvidedExternally(argv, { ...state.resolved, ...state.bundles })
-  ) {
-    return { problems: [], stale: false, loaded: [] };
-  }
+    const argv = options.argv ?? process.argv.slice(2);
+    // The launcher and Doom Team children compose the set themselves and pass it
+    // in, so this entry has nothing left to do but stay out of the way.
+    if (extensionsProvidedExternally(argv, { ...state.resolved, ...state.bundles })) {
+      return { problems: [], stale: false, loaded: [] };
+    }
 
-  configurePreset({ preset: state.selection.preset as HarnessPreset, piArgs: [] }, environment);
+    configurePreset({ preset: state.selection.preset as HarnessPreset, piArgs: [] }, environment);
 
-  // Only the first load opens a session. A reload finds the pointer this set
-  // and reads the file back, which is what carries a live /domains or /profile
-  // switch across the reload instead of resetting it to what sync pinned.
-  if (!alreadyComposed(environment)) {
-    environment[COMPOSED_ENV] = ENABLED_FLAG;
-    await startSyncedSession(state, repoRoot, environment);
-    const flags = readStartupFlags(argv);
-    if (flags.mute) environment[MUTE_ENV] = ENABLED_FLAG;
-    await applyStartupFlags(flags, loadMajorModesConfig(repoRoot, homeDirectory, environment), repoRoot, problems);
-  }
+    // Only the first load opens a session. A reload finds the pointer this set
+    // and reads the file back, which is what carries a live /domains or /profile
+    // switch across the reload instead of resetting it to what sync pinned.
+    if (!alreadyComposed(environment)) {
+      environment[COMPOSED_ENV] = ENABLED_FLAG;
+      await startSyncedSession(state, repoRoot, environment);
+      const flags = readStartupFlags(argv);
+      if (flags.mute) environment[MUTE_ENV] = ENABLED_FLAG;
+      await applyStartupFlags(flags, loadMajorModesConfig(repoRoot, homeDirectory, environment), repoRoot, problems);
+    }
 
-  let loadPlan: ComposedRuntimeLoadPlan;
-  try {
+    const harness = loadHarnessState(environment).state;
+    requiredHooks = harness.hooks;
+    if (harness.hooks)
+      requiredHooks = await validateHookModules({
+        repoRoot,
+        homeDirectory,
+        hookGroups: harness.hookGroups,
+        descriptor: harness.hookModules,
+        isSubagent: Boolean(environment.PI_SUBAGENT_CHILD),
+      });
+
     // Read back through the store rather than from this process: the startup
     // flags may have switched the layer or the domains a moment ago, and the
     // environment being managed is not always this process's own.
-    loadPlan = await composeRuntimeLoadPlan(state, loadHarnessState(environment).state, environment);
-  } catch (error) {
-    return { problems: [...problems, message(error)], stale: false, loaded: [] };
-  }
+    const loadPlan = await composeRuntimeLoadPlan(state, loadHarnessState(environment).state, environment);
 
-  const selectedBundle = state.bundles?.[loadPlan.fingerprint];
-  if (selectedBundle) {
-    try {
-      const status = readBundleStatus(repoRoot, loadPlan.fingerprint, homeDirectory);
-      if (!status.fresh || status.bundle !== selectedBundle) {
-        return { problems: [...problems, UNUSABLE_STATE_MESSAGE], stale: false, loaded: [] };
+    const selectedBundle = state.bundles?.[loadPlan.fingerprint];
+    if (selectedBundle) {
+      try {
+        const status = readBundleStatus(repoRoot, loadPlan.fingerprint, homeDirectory);
+        if (!status.fresh || status.bundle !== selectedBundle) {
+          return failedStartup(UNUSABLE_STATE_MESSAGE);
+        }
+      } catch {
+        return failedStartup(UNUSABLE_STATE_MESSAGE);
       }
-    } catch {
-      return { problems: [...problems, UNUSABLE_STATE_MESSAGE], stale: false, loaded: [] };
     }
-  }
 
-  const loaded = await loadComposedExtensions(pi, loadPlan.entries, problems);
-  return {
-    problems,
-    stale:
-      computeInputsHash(repoRoot, state.selection, homeDirectory, environment) !== state.inputsHash ||
-      (loadHarnessState(environment).state.majorMode === state.selection.majorMode &&
-        loadPlan.fingerprint !== state.compositionFingerprint),
-    loaded,
-  };
+    const loaded = await loadComposedExtensions(pi, loadPlan.entries, problems);
+    if (requiredHooks && loaded.length !== loadPlan.entries.length)
+      return {
+        ...(await failedStartup(`Required hooks could not be loaded. ${HOOK_STARTUP_RECOVERY}`)),
+        loaded,
+      };
+    return {
+      problems,
+      stale:
+        computeInputsHash(repoRoot, state.selection, homeDirectory, environment) !== state.inputsHash ||
+        (loadHarnessState(environment).state.majorMode === state.selection.majorMode &&
+          loadPlan.fingerprint !== state.compositionFingerprint),
+      loaded,
+    };
+  } catch (error) {
+    return failedStartup(message(error));
+  }
 }

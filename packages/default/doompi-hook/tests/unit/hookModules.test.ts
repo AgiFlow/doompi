@@ -37,9 +37,44 @@ async function fixture(body: string) {
     toolName: 'bash',
     input: { command: 'true' },
   } as HookNativeEvent;
-  return { modules, row, context, event };
+  return { modules, row, context, event, source };
 }
 describe('session module runtime', () => {
+  it('validates compiled artifacts without importing or setting up the module', async () => {
+    const { modules, row, context, source } = await fixture('throw new Error("must not import")');
+    await expect(modules.validate([{ ...row, module: source }])).resolves.toBeUndefined();
+    expect(context.appendCustomEntry).not.toHaveBeenCalled();
+    await modules.dispose();
+  });
+
+  it.each(['unbound', 'absent', 'empty', 'invalid', 'artifact'])(
+    'rejects a %s descriptor or artifact before execution',
+    async (kind) => {
+      const { row, context, source } = await fixture('throw new Error("must not import")');
+      const file = path.join(context.cwd, 'startup.json');
+      if (kind === 'empty') await fs.writeFile(file, JSON.stringify({ version: 1, modules: [] }));
+      if (kind === 'invalid') await fs.writeFile(file, '{');
+      if (kind === 'artifact')
+        await fs.writeFile(
+          file,
+          JSON.stringify({
+            version: 1,
+            modules: [{ source, artifact: path.join(context.cwd, 'missing.mjs') }],
+          }),
+        );
+      const modules = createHookModules({ descriptor: kind === 'unbound' ? undefined : { file } });
+      await expect(modules.validate([{ ...row, module: source }])).rejects.toThrow('Run doompi sync');
+      await expect(modules.validate([{ ...row, module: source }])).rejects.toThrow('row 0, event PreToolUse');
+      await modules.dispose();
+    },
+  );
+
+  it('does not require a descriptor for a command-only selection', async () => {
+    const modules = createHookModules();
+    await expect(modules.validate([])).resolves.toBeUndefined();
+    await modules.dispose();
+  });
+
   it('sets up lazily once across rows, serializes calls and isolates session state', async () => {
     const { modules, row, context, event } = await fixture(
       `export default {setup(ctx) { let count=0; ctx.appendCustomEntry('setup',{}); return {async tool_call(){ const next=++count; await new Promise(r=>setTimeout(r,5)); return {reason:String(next)}; },dispose(){ctx.appendCustomEntry('disposed',{}).catch(()=>{});} }; }};`,

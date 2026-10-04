@@ -6,11 +6,13 @@ import { PassThrough } from 'node:stream';
 
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/logSinkTelemetry';
+import * as moduleResolution from '@agimon-ai/doompi-core/moduleResolution';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LaunchCommand } from '../../src/cli/commands/launch';
+import { loadHarnessState, updateHarnessState } from '../../src/composition/harnessState';
+import * as syncState from '../../src/composition/syncState';
 import type { HarnessContext } from '../../src/exports/harnessContext';
-
 const spawnMock = vi.hoisted(() => vi.fn());
 const runtimeBundleMocks = vi.hoisted(() => ({
   buildRuntimeBundle: vi.fn(),
@@ -134,6 +136,62 @@ describe('LaunchCommand.execute', () => {
       cleanup: async () => {},
     } as unknown as HarnessContext;
   }
+
+  it('does not spawn Pi with a required module missing from the descriptor', async () => {
+    vi.spyOn(moduleResolution, 'optionalPackageEntry').mockReturnValue(
+      path.resolve(__dirname, '../../../../default/doompi-hook/src/exports/index.ts'),
+    );
+    fs.writeFileSync(
+      path.join(repoRoot, '.doom', 'hooks.yaml'),
+      'groups:\n  core:\n    core: true\n    hooks:\n      - event: SessionStart\n        pi: {module: ./guard.mts}\n',
+    );
+    await expect(
+      new LaunchCommand().execute(createContext({ hooks: true, homeDirectory: repoRoot }), createTelemetry()),
+    ).rejects.toThrow('Run doompi sync');
+    expect(spawnMock).not.toHaveBeenCalled();
+    expect(runtimeBundleMocks.createRuntimeExtensionPlan).not.toHaveBeenCalled();
+  });
+
+  it('does not consult compiled hook state when hooks are disabled', async () => {
+    const readState = vi.spyOn(syncState, 'readSyncState').mockReturnValue(undefined);
+    const child = new FakeChild(false);
+    spawnMock.mockReturnValue(child);
+    const launching = new LaunchCommand().execute(createContext({ hooks: false }), createTelemetry());
+    await waitForSpawn();
+    child.emit('exit', 0, null);
+    expect(await launching).toBe(0);
+    expect(readState).not.toHaveBeenCalled();
+  });
+  it.each([false, true])(
+    'passes a validated descriptor to Pi without rebinding inherited hooks (inherited: %s)',
+    async (inherited) => {
+      vi.spyOn(moduleResolution, 'optionalPackageEntry').mockReturnValue(
+        path.resolve(__dirname, '../../../../default/doompi-hook/src/exports/index.ts'),
+      );
+      const file = path.join(repoRoot, 'descriptor.json');
+      const source = path.join(repoRoot, 'guard.mts');
+      const artifact = path.join(repoRoot, 'guard.mjs');
+      fs.writeFileSync(artifact, 'throw new Error("must not evaluate")');
+      fs.writeFileSync(file, JSON.stringify({ version: 1, modules: [{ source, artifact }] }));
+      fs.writeFileSync(
+        path.join(repoRoot, '.doom', 'hooks.yaml'),
+        'groups:\n  core:\n    core: true\n    hooks:\n      - event: PreToolUse\n        pi: {module: ./guard.mts}\n',
+      );
+      const readState = vi.spyOn(syncState, 'readSyncState').mockReturnValue({
+        fileState: { hookModules: inherited ? undefined : { file } },
+      } as syncState.SyncState);
+      const child = new FakeChild(false);
+      spawnMock.mockReturnValue(child);
+      const context = createContext({ hooks: true, homeDirectory: repoRoot });
+      if (inherited) updateHarnessState({ hookModules: { file } }, context.environment);
+      const launching = new LaunchCommand().execute(context, createTelemetry());
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      child.emit('exit', 0, null);
+      expect(await launching).toBe(0);
+      expect(loadHarnessState(context.environment).state.hookModules).toEqual({ file });
+      if (inherited) expect(readState).not.toHaveBeenCalled();
+    },
+  );
 
   it('spawns Pi with the assembled extensions and returns its exit code', async () => {
     const child = new FakeChild(false);
