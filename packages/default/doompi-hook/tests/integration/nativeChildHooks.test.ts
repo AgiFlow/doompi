@@ -226,6 +226,18 @@ else if (payload.tool_input.command.includes('denied.txt')) console.log(JSON.str
 }
 
 describe.each(['headless', 'terminal'])('%s native child hooks with real direct runtime', (adapter) => {
+  it.each(['SessionStart', 'PreToolUse'])('blocks native bash when a required %s module is unsynced', async (event) => {
+    registry([`      - event: ${event}\n        pi: {module: ./missing.mts}`]);
+    hooks();
+    const fixture = deterministicModels();
+    const children = service(adapter, fixture);
+    const handle = await children.start(request(adapter, 'unsynced', 'touch forbidden.txt'));
+    fixture.release();
+    await completed(handle);
+    expect(fs.existsSync(path.join(root, 'forbidden.txt'))).toBe(false);
+    expect(fixture.results.join('')).toContain('Run doompi sync');
+  });
+
   it('uses authoritative isolated child identity, registry then plugin order, post appends, and no lifecycle hooks', async () => {
     const recorder = commandHooks();
     registry([

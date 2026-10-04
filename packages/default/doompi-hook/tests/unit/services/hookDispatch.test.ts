@@ -18,6 +18,7 @@ function fixture(rows: NonNullable<RegistryGroup['hooks']>, plugins: PluginHookD
   const invoke = vi.fn<HookSession['modules']['invoke']>().mockResolvedValue({});
   const session: HookSession = {
     config: () => ({ settings: { projectTrust: 'ask' }, harness: readHarnessState({}), requiresRelaunch: false }),
+    prepare: vi.fn().mockResolvedValue(undefined),
     signal: new AbortController().signal,
     runner: { run },
     documents: {
@@ -31,7 +32,7 @@ function fixture(rows: NonNullable<RegistryGroup['hooks']>, plugins: PluginHookD
       }),
       plugins: async () => ({ documents: plugins, failures: [] }),
     },
-    modules: { invoke, dispose: vi.fn() },
+    modules: { validate: vi.fn().mockResolvedValue(undefined), invoke, dispose: vi.fn() },
   };
   const scope: HookDispatchScope = {
     sessionId: 'child-1',

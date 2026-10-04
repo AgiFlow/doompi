@@ -9,6 +9,9 @@ export interface HookModuleOutcome {
   failure?: HookFailure;
 }
 export interface HookModules {
+  validate(
+    rows: readonly (Pick<ResolvedHook, 'registryId' | 'groupId' | 'rowId' | 'event'> & { module?: string })[],
+  ): Promise<void>;
   invoke(
     row: ResolvedHook,
     event: HookNativeEvent,

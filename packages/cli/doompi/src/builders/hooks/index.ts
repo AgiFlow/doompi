@@ -13,18 +13,25 @@ import { compileExtensionModule, extensionModuleManifestPath } from '../../compi
 
 export const HOOK_MODULES_FILE = 'hook-modules.json';
 
+interface HookRegistryRow {
+  module?: string;
+  core: boolean;
+  skipInSubagent?: boolean;
+  registryId: string;
+  groupId: string;
+  rowId: string;
+  event: string;
+}
+
 /** The optional hook package owns parsing; the CLI only consumes this capability. */
 interface HookParserModule {
+  createHookModules(options: { descriptor?: { file: string } }): {
+    validate(rows: readonly HookRegistryRow[]): Promise<void>;
+    dispose(): Promise<void>;
+  };
   createHookDocumentReader(options: { homeDirectory: string; warn: (message: string) => void }): {
     registry(repoRoot: string): Promise<{
-      entries: Array<{
-        module?: string;
-        core: boolean;
-        registryId: string;
-        groupId: string;
-        rowId: string;
-        event: string;
-      }>;
+      entries: HookRegistryRow[];
       failure?: { message: string };
     }>;
   };
@@ -41,14 +48,7 @@ export function requiredHookGroups(config: MajorModesConfig): Set<string> | unde
   return groups;
 }
 
-/** Bundles hook exports without importing or invoking repository code. */
-export async function syncHookModules(options: {
-  repoRoot: string;
-  homeDirectory: string;
-  config: MajorModesConfig;
-  directory: string;
-  sharedCacheDirectory?: string;
-}): Promise<{ file: string }> {
+async function hookParser(options: { repoRoot: string; homeDirectory: string }): Promise<HookParserModule | undefined> {
   const candidates = doomConfigCandidates('hooks.yaml', options.repoRoot, options.homeDirectory);
   // Command-only registries predate module compilation and do not require the package.
   // This is discovery only. The public parser still owns validation and attribution.
@@ -70,14 +70,52 @@ export async function syncHookModules(options: {
     throw new Error(
       'Hook module rows require @agimon-ai/doompi-hook. Install it in the repository or select a layer that provides it, then run doompi sync.',
     );
-  const parser =
-    hasModuleRows && parserEntry ? ((await import(pathToFileURL(parserEntry).href)) as HookParserModule) : undefined;
-  const read =
-    hasModuleRows && parser
-      ? await parser
-          .createHookDocumentReader({ homeDirectory: options.homeDirectory, warn: () => undefined })
-          .registry(options.repoRoot)
-      : { entries: [] };
+  return hasModuleRows && parserEntry
+    ? ((await import(pathToFileURL(parserEntry).href)) as HookParserModule)
+    : undefined;
+}
+
+/** Validate the selected compiled hooks without importing repository code. */
+export async function validateHookModules(options: {
+  repoRoot: string;
+  homeDirectory: string;
+  hookGroups?: readonly string[];
+  descriptor?: { file: string };
+  isSubagent?: boolean;
+}): Promise<boolean> {
+  const parser = await hookParser(options);
+  if (!parser) return false;
+  const read = await parser
+    .createHookDocumentReader({ homeDirectory: options.homeDirectory, warn: () => undefined })
+    .registry(options.repoRoot);
+  if (read.failure) throw new Error(read.failure.message);
+  const allowed = options.hookGroups === undefined ? undefined : new Set(options.hookGroups);
+  const rows = read.entries
+    .filter((row) => row.core || !allowed || allowed.has(row.groupId))
+    .filter((row) => !(options.isSubagent && row.skipInSubagent));
+  const modules = parser.createHookModules({ descriptor: options.descriptor });
+  try {
+    await modules.validate(rows);
+    return rows.some((row) => row.module !== undefined);
+  } finally {
+    await modules.dispose();
+  }
+}
+
+/** Bundles hook exports without importing or invoking repository code. */
+export async function syncHookModules(options: {
+  repoRoot: string;
+  homeDirectory: string;
+  config: MajorModesConfig;
+  directory: string;
+  sharedCacheDirectory?: string;
+}): Promise<{ file: string }> {
+  const parser = await hookParser(options);
+  const read = parser
+    ? await parser
+        .createHookDocumentReader({ homeDirectory: options.homeDirectory, warn: () => undefined })
+        .registry(options.repoRoot)
+    : { entries: [] };
   if ('failure' in read && read.failure) throw new Error(read.failure.message);
   const groups = requiredHookGroups(options.config);
   const sources = new Map<string, Array<{ registry: string; groupId: string; rowId: string; event: string }>>();

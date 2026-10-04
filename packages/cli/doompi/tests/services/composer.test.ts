@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
+import * as moduleResolution from '@agimon-ai/doompi-core/moduleResolution';
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/syncLocation';
 import {
   DOOMPI_API_VERSION,
@@ -16,7 +17,7 @@ import { extensionToolSource } from '@agimon-ai/doompi-ui/extensionName';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { acquireCompositionClaim } from '../../src/builders/cli/compositionState';
+import { acquireCompositionClaim, EXTERNAL_EXTENSIONS_ENV } from '../../src/builders/cli/compositionState';
 import {
   assembleExtensions,
   PERSONA_ENTRY,
@@ -744,7 +745,58 @@ describe('extensionsProvidedExternally', () => {
 });
 
 describe('composeDoomSession', () => {
-  it('loads nothing when the launcher already supplied the same extensions', async () => {
+  it.each(['descriptor', 'extension', 'state', 'generation', 'unsynced'])(
+    'keeps an explicit tool block when required hooks cannot be admitted (failure: %s)',
+    async (kind) => {
+      const compiled = kind === 'extension';
+      vi.spyOn(moduleResolution, 'optionalPackageEntry').mockReturnValue(
+        path.resolve(__dirname, '../../../../default/doompi-hook/src/exports/index.ts'),
+      );
+      const root = makeRoot();
+      fs.mkdirSync(path.join(root, '.doom'));
+      fs.writeFileSync(path.join(root, '.doom', 'modes.yaml'), 'layers: {}\nmajorMode:\n  dev: []\n');
+      fs.writeFileSync(
+        path.join(root, '.doom', 'hooks.yaml'),
+        'groups:\n  core:\n    core: true\n    hooks:\n      - event: PreToolUse\n        pi: {module: ./guard.mts}\n',
+      );
+      const state = syncedState(root, { env: { DOOMPI_ROOT: root } });
+      if (compiled) {
+        const artifact = writeExtensionModule(root, 'guard', 'throw new Error("must not import");');
+        const file = path.join(root, 'hook-modules.json');
+        fs.writeFileSync(
+          file,
+          JSON.stringify({ version: 1, modules: [{ source: path.join(root, 'guard.mts'), artifact }] }),
+        );
+        state.fileState.hookModules = { file };
+        const entry = writeExtensionModule(
+          root,
+          'unloadable',
+          'export default () => { throw new Error("hook extension unavailable"); };',
+        );
+        for (const key of Object.keys(state.resolved)) state.resolved[key] = entry;
+      }
+      const homeDirectory = kind === 'unsynced' ? path.join(root, 'home') : await writeRegisteredState(root, state);
+      fs.mkdirSync(homeDirectory, { recursive: true });
+      const location = resolveSyncLocation(root, homeDirectory);
+      if (kind === 'generation') fs.rmSync(location.directory, { recursive: true, force: true });
+      if (kind === 'state')
+        fs.writeFileSync(path.join(syncGenerationDirectory(location, 'test-generation'), 'state.json'), '{');
+      const on = vi.fn();
+      const outcome = await composeDoomSession({ on } as unknown as ExtensionAPI, {
+        cwd: root,
+        argv: [],
+        environment: { HOME: homeDirectory },
+      });
+      expect(outcome.loaded).toEqual([]);
+      const toolGate = on.mock.calls.find(([event]) => event === 'tool_call')?.[1];
+      expect(toolGate?.()).toEqual({ block: true, reason: expect.stringContaining('Run doompi sync') });
+      expect(outcome.problems.join('')).toContain(compiled ? 'Required hooks could not be loaded' : 'Run doompi sync');
+      const agentGate = on.mock.calls.find(([event]) => event === 'before_agent_start')?.[1];
+      expect(() => agentGate?.()).toThrow('Run doompi sync');
+    },
+  );
+
+  it.each([false, true])('stands down for an externally admitted composition (explicit flag: %s)', async (explicit) => {
     const root = makeRoot();
     fs.mkdirSync(path.join(root, '.doom'), { recursive: true });
     fs.writeFileSync(path.join(root, '.doom', 'modes.yaml'), 'layers: {}\nmajorMode:\n  dev: []\n');
@@ -754,23 +806,31 @@ describe('composeDoomSession', () => {
       env: { DOOMPI_ROOT: root },
     });
     const homeDirectory = await writeRegisteredState(root, state);
+    if (explicit) {
+      const location = resolveSyncLocation(root, homeDirectory);
+      fs.writeFileSync(path.join(syncGenerationDirectory(location, 'test-generation'), 'state.json'), '{');
+    }
     const registerCommand = vi.fn();
-
     const outcome = await composeDoomSession({ registerCommand } as unknown as ExtensionAPI, {
       cwd: root,
-      argv: ['--extension', entry],
-      environment: { HOME: homeDirectory },
+      argv: explicit ? [] : ['--extension', entry],
+      environment: { HOME: homeDirectory, ...(explicit ? { [EXTERNAL_EXTENSIONS_ENV]: '1' } : {}) },
     });
-
     expect(outcome.loaded).toEqual([]);
     expect(outcome.problems).toEqual([]);
     expect(registerCommand).not.toHaveBeenCalled();
   });
 
-  it('asks for a sync instead of loading anything when the repository has no state', async () => {
+  it('leaves command-only startup advisory when the repository has no state', async () => {
     const pi = { registerFlag: vi.fn(), on: vi.fn() } as unknown as ExtensionAPI;
-
-    const outcome = await composeDoomSession(pi, { cwd: makeRoot(), argv: [], environment: {} });
+    const root = makeRoot();
+    fs.mkdirSync(path.join(root, '.doom'));
+    fs.writeFileSync(
+      path.join(root, '.doom', 'hooks.yaml'),
+      'groups:\n  core:\n    core: true\n    hooks:\n      - event: PreToolUse\n        pi: {command: "echo ok"}\n',
+    );
+    const outcome = await composeDoomSession(pi, { cwd: root, argv: [], environment: { HOME: root } });
+    expect(pi.on).not.toHaveBeenCalled();
 
     expect(outcome.loaded).toEqual([]);
     expect(outcome.problems).toEqual([

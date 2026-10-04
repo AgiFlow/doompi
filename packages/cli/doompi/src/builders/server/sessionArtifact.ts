@@ -40,9 +40,13 @@ export async function resolveSessionArtifact(input: {
   readonly pinned?: SyncRegistration;
   readonly parent?: SyncRegistration;
   readonly workspace?: () => SyncRegistration | undefined;
+  readonly synchronize?: () => Promise<void>;
   readonly prepareCurrent: () => Promise<SyncRegistration>;
 }): Promise<SyncRegistration> {
-  if (!input.member) return input.prepareCurrent();
+  if (!input.member) {
+    await input.synchronize?.();
+    return input.prepareCurrent();
+  }
   const artifact = input.pinned ?? input.parent ?? input.workspace?.();
   if (artifact === undefined) throw new Error('A member checkout requires its workspace compiled artifact.');
   return artifact;

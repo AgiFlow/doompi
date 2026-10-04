@@ -18,6 +18,7 @@ export interface HookExtensionOptions {
 /** One host session owns its module registry and lifetime; children borrow only immutable config. */
 export interface HookSession {
   config(): DoomConfigContext;
+  prepare(isSubagent?: boolean): Promise<void>;
   readonly runner: HookRunner;
   readonly documents: HookDocumentReader;
   readonly modules: HookModules;

@@ -8,6 +8,47 @@ function registration(generation: string): SyncRegistration {
 }
 
 describe('resolveSessionArtifact', () => {
+  it('waits for synchronization before reading the current generation of an admitted workspace', async () => {
+    let current = registration('stale');
+    let finish: (() => void) | undefined;
+    const synchronize = vi.fn(async () => {
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      current = registration('fresh');
+    });
+    const prepareCurrent = vi.fn(async () => current);
+    const opening = resolveSessionArtifact({ member: false, synchronize, prepareCurrent });
+    expect(prepareCurrent).not.toHaveBeenCalled();
+    finish!();
+    expect(await opening).toBe(current);
+    expect(current.generation).toBe('fresh');
+    expect(prepareCurrent).toHaveBeenCalledOnce();
+  });
+
+  it('never admits the old generation after sync fails', async () => {
+    const prepareCurrent = vi.fn().mockResolvedValue(registration('stale'));
+    await expect(
+      resolveSessionArtifact({
+        member: false,
+        synchronize: async () => {
+          throw new Error('compilation failed');
+        },
+        prepareCurrent,
+      }),
+    ).rejects.toThrow('compilation failed');
+    expect(prepareCurrent).not.toHaveBeenCalled();
+  });
+
+  it('never synchronizes or changes a pinned member generation', async () => {
+    const pinned = registration('pinned');
+    const synchronize = vi.fn();
+    const prepareCurrent = vi.fn();
+    await expect(resolveSessionArtifact({ member: true, pinned, synchronize, prepareCurrent })).resolves.toBe(pinned);
+    expect(synchronize).not.toHaveBeenCalled();
+    expect(prepareCurrent).not.toHaveBeenCalled();
+  });
+
   it('inherits the live parent generation without preparing the worktree', async () => {
     const parent = registration('parent');
     const prepareCurrent = vi.fn().mockResolvedValue(registration('child'));

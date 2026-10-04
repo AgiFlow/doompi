@@ -129,6 +129,22 @@ export function createHookModules(options: HookModulesOptions = {}): HookModules
     };
   }
   return {
+    async validate(rows): Promise<void> {
+      for (const row of rows) {
+        if (!row.module) continue;
+        try {
+          const artifact = (await artifacts()).get(row.module);
+          if (!artifact) throw new Error('module missing from descriptor');
+          const stat = await fs.stat(artifact);
+          if (!stat.isFile()) throw new Error(`hook artifact is not a file: ${artifact}`);
+        } catch (cause) {
+          throw new Error(
+            `${row.registryId ?? ''}: group ${row.groupId ?? ''}, row ${row.rowId ?? ''}, event ${row.event ?? ''}, module ${row.module}: ${cause instanceof Error ? cause.message : String(cause)}. Run doompi sync, then restart or reopen this session.`,
+            { cause },
+          );
+        }
+      }
+    },
     async invoke(row, event, context, operationSignal): Promise<HookModuleOutcome> {
       const source = 'module' in row.hook ? row.hook.module : undefined;
       const failure = (error: unknown, timeout = false): HookModuleOutcome => ({

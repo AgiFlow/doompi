@@ -28,12 +28,30 @@ export function createHookSession(
   // stubbed session never touches the telemetry backend.
   let telemetry = options.telemetry;
   const requireTelemetry = (): HookTelemetry => (telemetry ??= createHookTelemetry());
+  const modules = createHookModules({ descriptor: config().harness.hookModules });
+  const documents = options.documents ?? createHookDocumentReader({ telemetry: requireTelemetry() });
+  let preparation: Promise<void> | undefined;
   return {
     config,
     signal,
-    modules: createHookModules({ descriptor: config().harness.hookModules }),
+    modules,
+    prepare(isSubagent = false) {
+      preparation ??= (async () => {
+        const harness = config().harness;
+        if (harness.hooks === false) return;
+        const registry = await documents.registry(harness.root ?? process.cwd());
+        // Registry read failures keep their existing advisory dispatch policy.
+        if (registry.failure) return;
+        const allowed = harness.hookGroups === undefined ? undefined : new Set(harness.hookGroups);
+        const rows = registry.entries
+          .filter((row) => row.core || !allowed || allowed.has(row.groupId))
+          .filter((row) => !(isSubagent && row.skipInSubagent));
+        await modules.validate(rows);
+      })();
+      return preparation;
+    },
     runner: options.runner ?? createBashHookRunner({ telemetry: requireTelemetry() }),
-    documents: options.documents ?? createHookDocumentReader({ telemetry: requireTelemetry() }),
+    documents,
   };
 }
 
@@ -63,6 +81,7 @@ function childHooksFor(parent: HookSession): DoomChildSessionHooks {
       };
       return {
         async beforeTool(event, execution) {
+          await session.prepare(true);
           const native = {
             type: 'tool_call',
             toolCallId: event.toolCallId,
@@ -135,6 +154,7 @@ export function createHookRuntime(
   let disposal: Promise<void> | undefined;
   let active = true;
   let generation = 0;
+  let startup: Promise<void> | undefined;
   let readiness:
     | {
         readonly sessionManager: object;
@@ -147,7 +167,11 @@ export function createHookRuntime(
       const ownGeneration = ++generation;
       const isCurrent = (): boolean => active && ownGeneration === generation;
       const coordinator = readDoomReadinessCoordinator(cordis);
-      if (!coordinator) return operation(new AbortController().signal, isCurrent);
+      if (!coordinator) {
+        startup = operation(new AbortController().signal, isCurrent);
+        void startup.catch(() => undefined);
+        return startup;
+      }
 
       const previous = readiness;
       const readinessOperation = (async (): Promise<void> => {
@@ -165,6 +189,7 @@ export function createHookRuntime(
       })();
       // Config's coordinator owns the single user-facing failure notification.
       void readinessOperation.catch(() => undefined);
+      startup = readinessOperation;
       readiness = {
         sessionManager: context.sessionManager,
         coordinator,
@@ -173,6 +198,8 @@ export function createHookRuntime(
       return undefined;
     },
     async wait(context: ExtensionContext): Promise<void> {
+      await session.prepare(Boolean(session.parentContext?.isSubagent));
+      await startup;
       const current = readiness;
       if (!current) return;
       if (current.sessionManager !== context.sessionManager) {

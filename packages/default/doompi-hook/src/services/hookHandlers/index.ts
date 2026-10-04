@@ -83,6 +83,7 @@ function createSessionStart(pi: ExtensionAPI, resolveRuntime: HookRuntimeResolve
     if (!runtime?.isCurrent() || scopeFor(pi, runtime.session, ctx).isSubagent) return undefined;
     const { session, readiness } = runtime;
     const run = async (signal?: AbortSignal, isReady: () => boolean = () => true): Promise<void> => {
+      await session.prepare();
       const result = await runPiDispatch(
         pi,
         session,
@@ -106,6 +107,9 @@ function createBeforeAgentStart(resolveRuntime: HookRuntimeResolver): PiEventHan
   return async (_event, ctx) => {
     const runtime = resolveRuntime();
     if (!runtime?.isCurrent()) return;
+    await runtime.session.prepare(
+      runtime.session.parentContext?.isSubagent ?? Boolean(process.env[SUBAGENT_ENVIRONMENT_FLAG]),
+    );
     await runtime.readiness?.wait(ctx);
   };
 }
@@ -115,7 +119,18 @@ function createToolCall(pi: ExtensionAPI, resolveRuntime: HookRuntimeResolver): 
     const runtime = resolveRuntime();
     if (!runtime?.isCurrent()) return undefined;
     // Readiness is a host gate, not an advisory hook error.
-    await runtime.readiness?.wait(ctx);
+    try {
+      await runtime.session.prepare(scopeFor(pi, runtime.session, ctx).isSubagent);
+      await runtime.readiness?.wait(ctx);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      try {
+        pi.sendMessage({ customType: FAILURE_MESSAGE_TYPE, content: reason, display: true }, STEER);
+      } catch {
+        // The tool block still carries recovery when prompt admission is unavailable.
+      }
+      return { block: true, reason };
+    }
     if (!runtime.isCurrent()) return undefined;
     const result = await runPiDispatch(
       pi,

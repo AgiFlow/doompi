@@ -4,9 +4,9 @@ import path from 'node:path';
 
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import * as moduleResolution from '@agimon-ai/doompi-core/moduleResolution';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { requiredHookGroups, syncHookModules } from '../../src/builders/hooks';
+import { requiredHookGroups, syncHookModules, validateHookModules } from '../../src/builders/hooks';
 import { hookModulesAreFresh } from '../../src/composition/syncDrift';
 
 const directories: string[] = [];
@@ -26,12 +26,73 @@ function fixture() {
   };
   return { repoRoot: root, homeDirectory, config, directory: path.join(root, 'generation') };
 }
+beforeEach(() => {
+  vi.spyOn(moduleResolution, 'optionalPackageEntry').mockReturnValue(
+    path.resolve(__dirname, '../../../../default/doompi-hook/src/exports/index.ts'),
+  );
+});
 afterEach(() => {
   vi.restoreAllMocks();
   for (const root of directories.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe('sync hook modules', () => {
+  it('preflights new module rows against the pinned descriptor without evaluating source', async () => {
+    const options = fixture();
+    const registry = path.join(options.repoRoot, '.doom', 'hooks.yaml');
+    const reference = await syncHookModules(options);
+    fs.writeFileSync(
+      registry,
+      'groups:\n  core:\n    core: true\n    hooks:\n      - event: PreToolUse\n        pi: {module: ./guard.ts}\n',
+    );
+    fs.writeFileSync(
+      path.join(options.repoRoot, 'guard.ts'),
+      'throw new Error("must not evaluate"); export default {setup(){return {}}}',
+    );
+    await expect(validateHookModules({ ...options, descriptor: reference })).rejects.toThrow(
+      'module missing from descriptor',
+    );
+    const repaired = await syncHookModules(options);
+    await expect(validateHookModules({ ...options, descriptor: repaired })).resolves.toBe(true);
+    fs.unlinkSync(JSON.parse(fs.readFileSync(repaired.file, 'utf8')).modules[0].artifact);
+    await expect(validateHookModules({ ...options, descriptor: repaired })).rejects.toThrow('Run doompi sync');
+  });
+
+  it('leaves unselected modules alone but always checks core module rows', async () => {
+    const options = fixture();
+    const registry = path.join(options.repoRoot, '.doom', 'hooks.yaml');
+    fs.writeFileSync(
+      registry,
+      'groups:\n  excluded:\n    hooks:\n      - event: PreToolUse\n        pi: {module: ./missing.ts}\n',
+    );
+    await expect(validateHookModules({ ...options, hookGroups: [] })).resolves.toBe(false);
+    fs.writeFileSync(
+      registry,
+      'groups:\n  excluded:\n    core: true\n    hooks:\n      - event: PreToolUse\n        pi: {module: ./missing.ts}\n',
+    );
+    await expect(validateHookModules({ ...options, hookGroups: [] })).rejects.toThrow('module missing from descriptor');
+  });
+
+  it('does not require parent-only artifacts for subagent admission', async () => {
+    const options = fixture();
+    fs.writeFileSync(
+      path.join(options.repoRoot, '.doom', 'hooks.yaml'),
+      'groups:\n  core:\n    core: true\n    hooks:\n      - event: PreToolUse\n        pi: {module: ./parent-only.ts, skipInSubagent: true}\n',
+    );
+    await expect(validateHookModules({ ...options, isSubagent: true })).resolves.toBe(false);
+    await expect(validateHookModules(options)).rejects.toThrow('module missing from descriptor');
+  });
+
+  it('does not require an installed hook package to preflight command-only rows', async () => {
+    const options = fixture();
+    vi.spyOn(moduleResolution, 'optionalPackageEntry').mockReturnValue(undefined);
+    fs.writeFileSync(
+      path.join(options.repoRoot, '.doom', 'hooks.yaml'),
+      'groups:\n  core:\n    hooks:\n      - event: PreToolUse\n        pi: {command: "echo ok"}\n',
+    );
+    await expect(validateHookModules(options)).resolves.toBe(false);
+  });
+
   it('does not require an installed hook package for a command-only registry', async () => {
     const options = fixture();
     vi.spyOn(moduleResolution, 'optionalPackageEntry').mockReturnValue(undefined);

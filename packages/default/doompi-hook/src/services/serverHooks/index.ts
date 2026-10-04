@@ -38,7 +38,11 @@ function scopeFor(runtime: HookRuntime, execution: DoomHeadlessExecutionContext)
 export function createServerHooks(resolveRuntime: HookRuntimeResolver) {
   const beforeAgentStart: DoomHeadlessHook<'before_agent_start'> = {
     event: 'before_agent_start',
-    handle: (event, execution) => execution.session.appendCustomEntry('doom-hook', hookEntry(event)),
+    async handle(event, execution) {
+      const runtime = resolveRuntime();
+      if (runtime?.isCurrent()) await runtime.session.prepare(scopeFor(runtime, execution).isSubagent);
+      await execution.session.appendCustomEntry('doom-hook', hookEntry(event));
+    },
   };
   const toolCall: DoomHeadlessHook<'tool_call'> = {
     event: 'tool_call',
@@ -46,6 +50,11 @@ export function createServerHooks(resolveRuntime: HookRuntimeResolver) {
       const runtime = resolveRuntime();
       if (!runtime?.isCurrent()) return;
       const scope = scopeFor(runtime, execution);
+      try {
+        await runtime.session.prepare(scope.isSubagent);
+      } catch (error) {
+        return { block: { reason: error instanceof Error ? error.message : String(error) } };
+      }
       const native = {
         type: 'tool_call',
         toolCallId: event.toolCallId,

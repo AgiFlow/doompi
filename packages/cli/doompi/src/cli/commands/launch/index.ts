@@ -1,3 +1,5 @@
+import os from 'node:os';
+
 import { piCliPath } from '@agimon-ai/doompi-core/moduleResolution';
 import { isRecord } from '@agimon-ai/doompi-core/runtimeJson';
 import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/runtimeLogSinkTelemetry';
@@ -6,7 +8,10 @@ import spawn from 'cross-spawn';
 import { LAUNCHER_COMPOSITION_REQUEST_ENV } from '../../../builders/cli/constants';
 import type { HarnessContext } from '../../../builders/cli/harnessContext';
 import { resolveLaunchPlan } from '../../../builders/cli/launchPlan';
+import { validateHookModules } from '../../../builders/hooks';
+import { loadHarnessState, updateHarnessState } from '../../../composition/harnessState';
 import { hasProjectTrustOption } from '../../../composition/projectTrust';
+import { readSyncState } from '../../../composition/syncState';
 import type { HarnessOptions } from '../../../composition/types/harness';
 import { BaseCommand } from '../baseCommand';
 import { forwardSignals, waitForExit } from '../compat/providers/process';
@@ -90,6 +95,20 @@ async function readStdin(): Promise<string> {
  */
 export async function runLaunch(context: HarnessContext, telemetry: HarnessTelemetry): Promise<number> {
   const { options } = context;
+  if (options.hooks) {
+    const hookModules =
+      loadHarnessState(context.environment).state.hookModules ??
+      readSyncState(options.configRoot ?? options.repoRoot, options.homeDirectory ?? context.environment.HOME)
+        ?.fileState.hookModules;
+    await validateHookModules({
+      repoRoot: options.repoRoot,
+      homeDirectory: options.homeDirectory ?? context.environment.HOME ?? os.homedir(),
+      hookGroups: context.hookGroups,
+      descriptor: hookModules,
+      isSubagent: Boolean(context.environment.PI_SUBAGENT_CHILD),
+    });
+    updateHarnessState({ hookModules }, context.environment);
+  }
   // A caller that owns this process's lifetime, such as doompi-server, asks
   // for a composition record so a mode switch reloads in place instead of
   // needing a new process. Absent, the session composes as it always has.
