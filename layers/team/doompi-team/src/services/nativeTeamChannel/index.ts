@@ -195,7 +195,7 @@ function validateTask(task: TeamTaskMetadata | undefined): TeamTaskMetadata | un
   return { id, subject };
 }
 
-function parseTeamToolParams(raw: unknown): TeamToolParams {
+export function parseTeamToolParams(raw: unknown): TeamToolParams {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw invalidRequest('Intercom params must be an object.', 'Use one documented intercom action shape.');
   }
@@ -243,7 +243,7 @@ function parseTeamToolParams(raw: unknown): TeamToolParams {
   };
 }
 
-function validateMessage(message: string | undefined): string {
+export function validateMessage(message: string | undefined): string {
   const normalized = message?.trim();
   if (!normalized) {
     throw invalidRequest('message is required for intercom communication.', 'Provide a nonblank message.');

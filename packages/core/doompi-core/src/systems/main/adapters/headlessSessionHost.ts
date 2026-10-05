@@ -492,6 +492,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
 
   const reportedToolErrors = new Set<string>();
   let promptPreparationFailed = false;
+  let promptPreparationError: unknown;
   let headlessReady = false;
   // Guidance for the tools currently applied, refreshed by applyTools so a mode
   // switch adds and removes its tools' prompt text with the tools themselves.
@@ -667,6 +668,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       if (phase === 'turn' && options.inheritedSelection) {
         await headlessHost.inheritSelection(await options.inheritedSelection());
       }
+      await headlessHost.settled();
     },
     transformContext: async (event) => {
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
@@ -738,6 +740,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       let stage = 'resources';
       try {
         if (!headlessHost) throw new Error('Headless capabilities are not installed.');
+        // ponytail: changes during resource reads still fail closed. Add a typed retry only if reproduced.
+        await headlessHost.settled();
         let prompt = composeSystemPrompt(await headlessHost.readResources());
         stage = 'before_agent_start hooks';
         const patches = await headlessHost.dispatchHook('before_agent_start', { systemPrompt: prompt });
@@ -747,6 +751,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           }
         }
         promptPreparationFailed = false;
+        promptPreparationError = undefined;
         // The panel follows what was sent, so a prompt that changed mid-session
         // republishes rather than waiting for the next selection change. Awaited
         // here, on the same stage that already journals a selection inherited
@@ -765,6 +770,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       } catch (error) {
         // A throwing system-prompt callback faults the upstream harness. Deny at model admission instead.
         promptPreparationFailed = true;
+        promptPreparationError = error;
         // Diagnostic delivery must not delay or reject prompt preparation.
         observe(
           Promise.resolve().then(() =>
@@ -794,7 +800,14 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       return true;
     },
     guardModelRequest: () => {
-      if (!headlessReady || promptPreparationFailed || !headlessHost?.status.ready)
+      if (promptPreparationFailed)
+        throw new Error(
+          `Headless capability preparation is not ready: ${harnessErrorMessage(promptPreparationError)}`,
+          {
+            cause: promptPreparationError,
+          },
+        );
+      if (!headlessReady || !headlessHost?.status.ready)
         throw new Error('Headless capability preparation is not ready.');
     },
   });

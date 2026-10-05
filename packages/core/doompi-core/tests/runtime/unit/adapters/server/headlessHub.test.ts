@@ -303,6 +303,12 @@ describe('createHeadlessHub', () => {
     childCommunication.onPeerReady(() => undefined);
     foreignCommunication.onPeerReady(() => undefined);
 
+    const lateParentReady = vi.fn();
+    const lateChildReady = vi.fn();
+    parentCommunication.onPeerReady(lateParentReady);
+    childCommunication.onPeerReady(lateChildReady);
+    expect(lateParentReady.mock.calls).toEqual([['child']]);
+    expect(lateChildReady.mock.calls).toEqual([['parent']]);
     expect(parentCommunication.publish('child', 'authenticated', { value: 1 })).toBe(true);
     expect(received).toHaveBeenCalledWith('parent', { value: 1 });
     expect(foreignCommunication.publish('child', 'authenticated', { value: 2 })).toBe(false);

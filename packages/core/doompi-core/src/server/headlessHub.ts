@@ -419,6 +419,10 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
         if (!record.ready) {
           record.ready = true;
           announceCommunicationReady(sessionId);
+        } else {
+          for (const [peerSessionId, peer] of communicationEndpoints) {
+            if (peer.ready && canCommunicate(sessionId, peerSessionId)) listener(peerSessionId);
+          }
         }
         return () => readyListeners.delete(listener);
       },

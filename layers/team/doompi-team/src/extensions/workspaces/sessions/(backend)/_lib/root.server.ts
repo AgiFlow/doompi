@@ -5,7 +5,7 @@ import { defineRoot } from '@agimon-ai/doompi-core/extensionFile';
 import type { DoomHeadlessActivity } from '@agimon-ai/doompi-core/headless';
 import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hubChannel';
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
-import { provideBackgroundWorkService } from '@agimon-ai/doompi-session';
+import { provideBackgroundWorkService, readDoomSessionDelivery } from '@agimon-ai/doompi-session';
 import type { Context } from '@deepseek-ai/cordis';
 
 import { DOOM_SUBAGENT_POLICY_SERVICE } from '../../../../../schemas/subagentPolicy';
@@ -146,6 +146,8 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
     throw new Error('Team headless facet requires host-owned direct events.');
   }
   const execution = host.context;
+  const sessionPeers = new Set<string>();
+  const stopPeerDiscovery = serverHost.context.sessionCommunication?.onPeerReady((id) => sessionPeers.add(id));
   const runtime = createTeamExtensionRuntime(undefined, {
     environment: serverHost.context.environment,
     childSessions: { get: () => readDoomChildSessionService(context) },
@@ -253,6 +255,14 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
       )) as NativeTeamTransport['sendUserMessage'],
   };
   const channel = runtime.teamChannel.createHeadlessRuntime(transport);
+  const intercom = createHeadlessIntercomTool(channel, {
+    sessionId: execution.sessionId,
+    peers: () =>
+      [...sessionPeers].filter(
+        (id) => serverHost.context.sessionService?.canCommunicate?.(execution.sessionId, id) === true,
+      ),
+    delivery: () => readDoomSessionDelivery(context),
+  });
   const serverService = (ctx: Context) => {
     ctx.plugin((providerContext) => {
       const availableModels = execution.model ? [toModelInfo(execution.model)] : [];
@@ -325,6 +335,7 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
       jobs,
       bridge,
       channel,
+      intercom,
       directEvents,
       environment: serverHost.context.environment,
     },
@@ -333,7 +344,7 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
         if (readDoomBackgroundWorkService(context) === undefined) provideBackgroundWorkService(context);
       },
       serverService,
-      mountMcpTools([createHeadlessIntercomTool(channel), createHeadlessSubagentTool(runtime, execution)]),
+      mountMcpTools([intercom, createHeadlessSubagentTool(runtime, execution)]),
     ],
     activities: [activity],
     // Mirrors `root.cli.ts`, which starts the scheduler in its own `onStart`.
@@ -347,6 +358,8 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
     async onDispose() {
       disposing = true;
       activityAttached = false;
+      stopPeerDiscovery?.();
+      sessionPeers.clear();
       execution.client.setStatus(TEAM_COST_STATUS, undefined);
       channel.dispose();
       runtime.completionNotifier.dispose();

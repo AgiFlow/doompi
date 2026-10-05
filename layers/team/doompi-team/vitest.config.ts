@@ -27,6 +27,12 @@ export default defineConfig({
   },
   resolve: {
     alias: [
+      {
+        find: '@agimon-ai/doompi-core/server',
+        replacement: fileURLToPath(
+          new URL('../../../packages/core/doompi-core/src/exports/server.ts', import.meta.url),
+        ),
+      },
       { find: '@agimon-ai/doompi-ui/doomOverlay', replacement: `${doomUiExports}doomOverlay.ts` },
       { find: /^@agimon-ai\/doompi-ui\/(.*)$/, replacement: `${doomUiExports}$1.ts` },
     ],

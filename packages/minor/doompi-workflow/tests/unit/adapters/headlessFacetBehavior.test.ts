@@ -891,6 +891,19 @@ describe('workflow headless facet', () => {
   it('runs a launch another session hands it through its own API mount', async () => {
     const test = await fixture();
     try {
+      workflowWatcher.records = [
+        {
+          piSessionId: 'workflow-headless-test',
+          view: {
+            runKey: 'handed-run',
+            workspace: '/tmp',
+            stage: 'running',
+            startedAt: new Date().toISOString(),
+            jobs: [],
+          },
+        },
+      ];
+      test.backgroundUpdate.mockClear();
       embeddedFeature.run.mockImplementationOnce((parameters) => {
         parameters?.onRegistered?.({
           runKey: 'handed-run',
@@ -913,6 +926,12 @@ describe('workflow headless facet', () => {
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ text: expect.stringContaining('Run key: handed-run') });
+      await vi.waitFor(() =>
+        expect(test.backgroundProvider()?.listActiveWork()).toEqual([
+          { id: '/tmp/handed-run', sessionId: 'workflow-headless-test' },
+        ]),
+      );
+      expect(test.backgroundUpdate).toHaveBeenCalled();
       expect(embeddedFeature.run).toHaveBeenLastCalledWith(
         expect.objectContaining({
           env: expect.objectContaining({ PI_SESSION_ID: 'workflow-headless-test' }),
@@ -991,6 +1010,23 @@ describe('workflow headless facet', () => {
         await vi.waitFor(() => expect(test.backgroundUpdate.mock.calls.length).toBeGreaterThan(calls));
       }
       await stop();
+    } finally {
+      await test.close?.();
+    }
+  });
+
+  it('keeps monitor cleanup when its refresh coalesces into a launcher publication', async () => {
+    const test = await fixture();
+    try {
+      workflowWatcher.records = [];
+      await test.activities[0]!.start(test.execution);
+      const disposalCount = embeddedFeature.control.dispose.mock.calls.length;
+      test.backgroundUpdate.mockClear();
+      await test.commands[0]!.execute('build', test.execution);
+      await test.modes[0]!.handleAction('deactivate', {}, operation(test.execution));
+      embeddedFeature.emit('runFinished');
+      await vi.waitFor(() => expect(embeddedFeature.control.dispose).toHaveBeenCalledTimes(disposalCount + 1));
+      expect(test.backgroundUpdate).toHaveBeenCalledOnce();
     } finally {
       await test.close?.();
     }
