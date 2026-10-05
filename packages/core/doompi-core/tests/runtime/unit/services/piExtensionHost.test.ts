@@ -196,6 +196,47 @@ describe('resolvePiSettingsPackageEntries', () => {
     expect(existsSync(path.join(agentDir, 'npm'))).toBe(false);
   });
 
+  it('starts vanilla Pi extensions without requiring a Doom Cordis host', async () => {
+    const { cwd, agentDir, packageEntry } = writeSettingsFixture();
+    const started = path.join(agentDir, 'started');
+    writeFileSync(
+      packageEntry,
+      PROVIDER_EXTENSION.replace(
+        '  pi.registerProvider',
+        `  pi.on('session_start', async () => {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(${JSON.stringify(started)}, 'started');
+  });
+  pi.registerProvider`,
+      ),
+    );
+    const models = await ModelRuntime.create({
+      authPath: path.join(agentDir, 'auth.json'),
+      modelsPath: path.join(agentDir, 'models.json'),
+      refreshOnCreate: false,
+    });
+    const preload = await preloadPiExtensions({ cwd, agentDir, models, extensionPaths: [packageEntry] });
+    initTheme(undefined, false);
+    const host = createPiExtensionHost({
+      cwd,
+      agentDir,
+      models,
+      settings: SettingsManager.inMemory(),
+      runtime: stubRuntime([]).runtime,
+      preload,
+      getModel: () => undefined,
+      getThinkingLevel: () => 'off',
+      client: () => undefined,
+    });
+    try {
+      await host.load();
+      expect(existsSync(started)).toBe(true);
+      expect(host.getService('doom/runtime')).toBeUndefined();
+    } finally {
+      await host.shutdown();
+    }
+  });
+
   it('registers a settings package provider on the model runtime', async () => {
     const { cwd, agentDir } = writeSettingsFixture();
     const models = await ModelRuntime.create({

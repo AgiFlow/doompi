@@ -1190,8 +1190,10 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       // Pi opens session-scoped extension services before resource discovery. Doom tool
       // restrictions depend on the same ordering.
       if (preload.events !== undefined) {
-        cordisConnection = await connectDoomCordisHost({ events: preload.events }, 'headless-pi-extension-host');
-        if (options.serverServices !== undefined) {
+        cordisConnection = await connectDoomCordisHost({ events: preload.events }, 'headless-pi-extension-host', {
+          optional: true,
+        });
+        if (cordisConnection !== undefined && options.serverServices !== undefined) {
           if (options.serverServices.sessionId !== runtime.sessionId)
             throw new Error('Server services belong to a different session');
           cordisConnection.root.provide(DOOM_CORDIS_SERVER_SERVICES, options.serverServices);

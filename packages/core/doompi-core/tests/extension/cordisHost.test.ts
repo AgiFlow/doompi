@@ -147,6 +147,9 @@ describe('Doom Cordis host contract', () => {
     await expect(connectDoomCordisHost(second.pi, '@test/duplicate')).rejects.toThrow(
       'Multiple Doom Cordis hosts answered',
     );
+    await expect(connectDoomCordisHost(second.pi, '@test/duplicate', { optional: true })).rejects.toThrow(
+      'Multiple Doom Cordis hosts answered',
+    );
     releaseDuplicate();
     await duplicateRoot.fiber.dispose();
     await controller.shutdown();
@@ -161,6 +164,9 @@ describe('Doom Cordis host contract', () => {
       });
     });
     await expect(connectDoomCordisHost(second.pi, '@test/invalid')).rejects.toThrow('not a Cordis Context');
+    await expect(connectDoomCordisHost(second.pi, '@test/invalid', { optional: true })).rejects.toThrow(
+      'not a Cordis Context',
+    );
     release();
   });
 
@@ -279,6 +285,16 @@ describe('Doom Cordis host contract', () => {
     expect(bus.listenerCount(DOOM_CORDIS_HOST_QUERY_CHANNEL)).toBe(1);
     await host.dispatch({ type: 'session_shutdown', reason: 'quit' });
     expect(bus.listenerCount(DOOM_CORDIS_HOST_QUERY_CHANNEL)).toBe(0);
+    await controller.shutdown();
+  });
+
+  it('allows optional discovery only when no Doom host was installed', async () => {
+    const { pi } = testPi(new TestBus());
+    await expect(connectDoomCordisHost(pi, '@test/vanilla', { optional: true })).resolves.toBeUndefined();
+    const controller = await installDoomCordisHost(pi, { mode: 'composed' });
+    const connection = await connectDoomCordisHost(pi, '@test/composed', { optional: true });
+    expect(connection?.root).toBe(controller.root);
+    await connection?.dispose();
     await controller.shutdown();
   });
 

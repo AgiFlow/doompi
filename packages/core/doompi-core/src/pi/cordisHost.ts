@@ -297,13 +297,27 @@ export async function installDoomCordisHost(
 }
 
 /** Resolves the composed host installed by the canonical runtime. */
+export function connectDoomCordisHost(
+  pi: Pick<ExtensionAPI, 'events'>,
+  source: string,
+): Promise<DoomCordisHostConnection>;
+export function connectDoomCordisHost(
+  pi: Pick<ExtensionAPI, 'events'>,
+  source: string,
+  options: { readonly optional: true },
+): Promise<DoomCordisHostConnection | undefined>;
 export async function connectDoomCordisHost(
   pi: Pick<ExtensionAPI, 'events'>,
   source: string,
-): Promise<DoomCordisHostConnection> {
+  options?: { readonly optional: true },
+): Promise<DoomCordisHostConnection | undefined> {
   const responder = exactlyOneHost(discoverHosts(pi, source), source);
-  if (!responder)
+  if (!responder) {
+    // Vanilla Pi plugins do not install a Doom host. Optional discovery permits only
+    // that absence, never an invalid or ambiguous responder.
+    if (options?.optional) return undefined;
     throw new Error('The composed Doom Cordis host is unavailable. Ensure cordisHost is the first extension.');
+  }
   await responder.ready;
   return responder.acquire();
 }
