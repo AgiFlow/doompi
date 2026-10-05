@@ -1,3 +1,13 @@
+## 0.0.1-alpha.117 (2026-10-05)
+
+### 🩹 Fixes
+
+- **doompi-web:** let the backend decide the web template without waiting for sessions ([#314](https://github.com/AgiFlow/doompi/pull/314))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.116 (2026-10-05)
 
 ### 🩹 Fixes

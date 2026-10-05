@@ -1,3 +1,18 @@
+## 0.0.1-alpha.118 (2026-10-05)
+
+### 🚀 Features
+
+- **doompi-style-system:** replace three-column browser with folder, component and tag comboboxes ([#313](https://github.com/AgiFlow/doompi/pull/313))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.117
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.75
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.117 (2026-10-05)
 
 ### 🧱 Updated Dependencies
