@@ -20,6 +20,11 @@ export const Playground = {
             statuses={{}}
           />
           <ToolCard
+            entry={{ ...storyTool, id: 'hook', toolCallId: 'hook', output: '', result: null, running: true }}
+            slotProps={slotProps}
+            statuses={{ 'repository-hooks:hook:post': 'Running post-tool hooks for bash (1/2)...' }}
+          />
+          <ToolCard
             entry={{
               ...storyTool,
               id: 'failed',
