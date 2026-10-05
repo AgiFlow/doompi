@@ -9,9 +9,37 @@ import type {
   StoryPreviewMetadataRequest,
 } from '../../types/previewApi';
 import { StoryPreviewService } from '../storyPreview';
+import { StyleSystemCatalogService } from '../styleSystemCatalog';
 
 export function createPreviewApi(workspaceRoot: string, previews = new StoryPreviewService(workspaceRoot)): Hono {
   const app = new Hono();
+  const catalog = new StyleSystemCatalogService(workspaceRoot);
+
+  app.post(routes.catalog.path, async (context) => {
+    let request: unknown;
+    try {
+      request = await context.req.json();
+    } catch {
+      return context.json({ error: 'The catalog request body is not JSON.' }, 400);
+    }
+    if (
+      request === null ||
+      typeof request !== 'object' ||
+      Array.isArray(request) ||
+      Object.keys(request).some((key) => key !== 'refresh') ||
+      ('refresh' in request && typeof request.refresh !== 'boolean')
+    ) {
+      return context.json({ error: 'Catalog requests accept only an optional boolean refresh.' }, 400);
+    }
+    try {
+      return context.json(await catalog.read(request));
+    } catch (reason) {
+      return context.json(
+        { error: reason instanceof Error ? reason.message : 'Unable to discover the style system.' },
+        400,
+      );
+    }
+  });
 
   app.post(routes.metadata.path, async (context) => {
     let request: StoryPreviewMetadataRequest;

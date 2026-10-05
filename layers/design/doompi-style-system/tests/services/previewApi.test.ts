@@ -17,6 +17,28 @@ afterEach(() => {
 });
 
 describe('story preview API', () => {
+  it('validates catalog requests and returns metadata without building', async () => {
+    const app = createPreviewApi(root);
+    for (const body of ['{', 'null', '[]', '{"refresh":"yes"}', '{"path":"../outside"}']) {
+      expect(
+        (
+          await app.request('/catalog', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body,
+          })
+        ).status,
+      ).toBe(400);
+    }
+    const response = await app.request('/catalog', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ projects: [], components: [], diagnostics: [], truncated: false });
+  });
+
   it('rejects malformed JSON without invoking the bundler', async () => {
     const response = await createPreviewApi(root).request('/build', {
       method: 'POST',

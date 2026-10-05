@@ -1,12 +1,23 @@
 export const STYLE_SYSTEM_PREVIEW_BASE_PATH = 'style-system-preview';
 
+export interface StoryPreviewSelection {
+  appPath: string;
+  storyExport: string;
+  snapshot?: boolean;
+}
+
 export interface StoryPreviewSeed {
+  appPath?: string;
+  storyPath?: string;
+  storyExport?: string;
+  snapshot?: boolean;
   source?: {
     path: string;
     hasUnsavedChanges: boolean;
     kind?: string;
     revision?: number;
     sourceSha256?: string;
+    preview?: StoryPreviewSelection;
   };
 }
 

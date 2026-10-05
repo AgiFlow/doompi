@@ -1,8 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { parseAuthorPreviewAction } from '../../src/types/authorPreview';
+import { parseAuthorOpenSourceAction, parseAuthorPreviewAction } from '../../src/types/authorPreview';
 
 const createTab = vi.fn();
+
+describe('parseAuthorOpenSourceAction', () => {
+  it.each([null, {}, { version: 2, createTab }, { version: 1, createTab: true }])(
+    'rejects invalid actions',
+    (input) => {
+      expect(parseAuthorOpenSourceAction(input)).toBeNull();
+    },
+  );
+  it('accepts the explicit Author handoff', () => {
+    const action = { version: 1, createTab } as const;
+    expect(parseAuthorOpenSourceAction(action)).toBe(action);
+  });
+});
 
 describe('parseAuthorPreviewAction', () => {
   it.each([

@@ -2,7 +2,10 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AuthorDocumentPanel } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
+import {
+  AuthorDocumentPanel,
+  authorOpenSourceAction,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
 import { multiRegionCaptureProvider } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCapture';
 import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 import { AuthorFeedbackControls } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorFeedbackControls';
@@ -113,6 +116,35 @@ describe('Author annotation sidebar', () => {
       sourceSha256: 'sha',
     });
     expect(createTab).not.toHaveBeenCalled();
+  });
+
+  it('opens the handed-off exact project and export in the embedded preview', () => {
+    const props = setup();
+    const path = 'Button.stories.tsx';
+    workspace.putAuthorDocument('s', { path, kind: 'story-preview', sourceSha256: 'sha' });
+    const preview = { appPath: 'apps/native', storyExport: 'Disabled', snapshot: true };
+    authorOpenSourceAction.createTab({ sessionId: 's', path, preview });
+    const embeddedPanel = () => null;
+    props.slotData = (() => [
+      {
+        pluginId: 'style-system',
+        id: 'preview',
+        data: {
+          version: 1,
+          label: 'Preview',
+          createTab: vi.fn(),
+          embeddedPanel,
+        },
+      },
+    ]) as unknown as WebPluginSlotProps['slotData'];
+    const element = AuthorDocumentPanel({ ...props, path });
+    const controls = nodes((element.type as (props: unknown) => ReactNode)(element.props));
+    expect(
+      controls.find((node) => node.props['data-testid'] === 'author-story-preview-toggle')?.props['aria-pressed'],
+    ).toBe(true);
+    const embedded = controls.find((node) => node.type === embeddedPanel);
+    expect(embedded).toBeDefined();
+    expect((embedded?.props as { source?: { preview?: unknown } } | undefined)?.source?.preview).toEqual(preview);
   });
 
   it("shows only the open document's requests, and every request when no document is open", () => {

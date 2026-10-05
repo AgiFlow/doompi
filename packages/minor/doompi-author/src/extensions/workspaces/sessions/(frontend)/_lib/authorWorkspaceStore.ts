@@ -1,5 +1,6 @@
 import { defineGlobalStore } from '@agimon-ai/doompi-core/web';
 
+import type { AuthorPreviewSelection } from '../../../../../types/authorPreview';
 import type {
   AuthorAnnotation,
   AuthorAnnotationCandidate,
@@ -46,6 +47,7 @@ export interface AuthorSessionWorkspace {
   focusedDocument?: AuthorFocusedDocument;
   annotationsByDocument: Readonly<Record<string, AuthorDocumentAnnotationCollection>>;
   toolsByDocument: Readonly<Record<string, AuthorToolMode>>;
+  previewSelections?: Readonly<Record<string, AuthorPreviewSelection>>;
   videoSeekRequest?: { path: string; generation: number; timeSeconds: number; sequence: number };
   requests: readonly AuthorRequestRecord[];
 }
@@ -259,6 +261,20 @@ export function seekAuthorVideo(sessionId: string, path: string, timeSeconds: nu
 
 export function authorToolMode(sessionId: string | null, path: string): AuthorToolMode {
   return authorSessionWorkspace(sessionId).toolsByDocument[normalizeAuthorPath(path)] ?? 'select';
+}
+
+export function setAuthorPreviewSelection(
+  sessionId: string,
+  path: string,
+  preview: AuthorPreviewSelection | undefined,
+): void {
+  const normalized = normalizeAuthorPath(path);
+  updateSession(sessionId, (session) => {
+    const selections = { ...session.previewSelections };
+    if (preview === undefined) delete selections[normalized];
+    else selections[normalized] = { ...preview };
+    return { ...session, previewSelections: selections };
+  });
 }
 
 export function setAuthorToolMode(sessionId: string, path: string, tool: AuthorToolMode): void {

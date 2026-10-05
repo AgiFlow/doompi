@@ -1,12 +1,32 @@
 import type { SlotDeclaration, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import type { ComponentType } from 'react';
 
+export interface AuthorPreviewSelection {
+  appPath: string;
+  storyExport: string;
+  snapshot?: boolean;
+}
+
+export interface AuthorOpenSourceAction {
+  version: 1;
+  createTab(input: { sessionId: string; path: string; preview?: AuthorPreviewSelection }): TransientTab;
+}
+
+export function parseAuthorOpenSourceAction(input: unknown): AuthorOpenSourceAction | null {
+  if (typeof input !== 'object' || input === null) return null;
+  const candidate = input as Record<string, unknown>;
+  return candidate.version === 1 && typeof candidate.createTab === 'function'
+    ? (candidate as unknown as AuthorOpenSourceAction)
+    : null;
+}
+
 export interface AuthorPreviewActionSource {
   path: string;
   hasUnsavedChanges: boolean;
   kind?: string;
   revision?: number;
   sourceSha256?: string;
+  preview?: AuthorPreviewSelection;
 }
 
 export interface AuthorPreviewAnnotationLocation {

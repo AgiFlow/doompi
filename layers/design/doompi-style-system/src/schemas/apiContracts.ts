@@ -8,6 +8,57 @@ export const apiContracts = defineApiContract({
   dynamic: [],
   http: [
     {
+      id: 'style-system-preview.catalog',
+      scope: 'session',
+      basePath: 'style-system-preview',
+      path: '/catalog',
+      method: 'POST',
+      authentication: 'owner',
+      description: 'Discover style-system configurations and story metadata without rendering workspace components.',
+      body: {
+        required: true,
+        contentType: 'application/json',
+        schema: Type.Object({ refresh: Type.Optional(Type.Boolean()) }, { additionalProperties: false }),
+      },
+      responses: jsonApiResponses(
+        Type.Object({
+          projects: Type.Array(
+            Type.Object({
+              appPath: StringSchema,
+              configPath: StringSchema,
+              preset: Type.Optional(StringSchema),
+              bundler: Type.Optional(StringSchema),
+              settings: Type.Record(Type.String(), Type.Unknown()),
+              provenance: Type.Object({
+                presets: Type.Array(StringSchema),
+                projectConfigPath: Type.Optional(StringSchema),
+              }),
+              error: Type.Optional(StringSchema),
+            }),
+          ),
+          components: Type.Array(
+            Type.Object({
+              storyPath: StringSchema,
+              title: StringSchema,
+              tags: Type.Array(StringSchema),
+              exports: Type.Array(Type.Object({ exportName: StringSchema, label: Type.Optional(StringSchema) })),
+              projectPath: Type.Optional(StringSchema),
+              shared: Type.Boolean(),
+            }),
+          ),
+          workspace: Type.Optional(
+            Type.Object({
+              configPath: StringSchema,
+              settings: Type.Record(Type.String(), Type.Unknown()),
+              sharedComponentTags: Type.Array(StringSchema),
+            }),
+          ),
+          diagnostics: Type.Array(Type.Object({ path: StringSchema, message: StringSchema })),
+          truncated: Type.Boolean(),
+        }),
+      ),
+    },
+    {
       id: 'style-system-preview.metadata',
       scope: 'session',
       basePath: 'style-system-preview',
