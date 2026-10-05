@@ -694,6 +694,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               ),
             };
           },
+          telemetry,
           onNotice: notice,
         };
       };

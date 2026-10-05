@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { DOOM_HEADLESS_HOST_SERVICE, requireDoomHeadlessHost } from '../../../../../src/exports/headless';
 import type { LoadedServerFacet } from '../../../../../src/exports/serverFacet';
 import { serveSessionApis } from '../../../../../src/server/packageApiServer';
+import type { ServerTelemetry } from '../../../../../src/services/serverTelemetry';
 import { createHeadlessSessionHost } from '../../../../../src/systems/main/adapters/headlessSessionHost';
 
 const model: Model<Api> = {
@@ -278,6 +279,7 @@ describe('active headless execution hooks', () => {
       vi.spyOn(ModelRuntime, 'create').mockResolvedValue(runtime);
       vi.spyOn(SettingsManager, 'create').mockReturnValue(SettingsManager.inMemory());
       const onNotice = vi.fn();
+      const recordError = vi.fn<ServerTelemetry['recordError']>(async () => undefined);
 
       let session: Awaited<ReturnType<typeof createHeadlessSessionHost>> | undefined;
       let apis: Awaited<ReturnType<typeof serveSessionApis>> | undefined;
@@ -292,6 +294,7 @@ describe('active headless execution hooks', () => {
           candidates: [facet.declaration],
           selection: { majorMode: 'development', activeLayers: ['tools'], domains: ['hooks'], state: {} },
           onNotice,
+          telemetry: { recordError },
         });
         apis = await serveSessionApis({
           sessionId: 'headless-hooks-test',
@@ -432,6 +435,80 @@ describe('active headless execution hooks', () => {
         await expect(
           session.toolSurface.invokeTool({ revision: surface.revision, name: 'fixture_tool', arguments: {} }),
         ).rejects.toThrow("Invalid arguments for tool 'fixture_tool'");
+
+        const providerCalls = streamSimple.mock.calls.length;
+        onNotice.mockClear();
+        onNotice.mockImplementation(() => {
+          throw new Error('Unexpected prompt preparation notice');
+        });
+        recordError.mockClear();
+        const resourceFailure = new Error('Selection changed while reading resources');
+        const readResources = vi.spyOn(session.host!, 'readResources').mockRejectedValueOnce(resourceFailure);
+        await expect(session.runtime.prompt('failed prompt resources')).rejects.toThrow(
+          'Agent submission failed: faulted',
+        );
+        expect(recordError).toHaveBeenNthCalledWith(
+          1,
+          'doompi_server.system_prompt_preparation_failed',
+          resourceFailure,
+          { session_id: session.runtime.sessionId, stage: 'resources' },
+          { includeException: true },
+        );
+        expect(onNotice).not.toHaveBeenCalled();
+        expect(streamSimple).toHaveBeenCalledTimes(providerCalls);
+        expect(session.canDispatch()).toBe(false);
+
+        const hookFailure = new Error('Selection changed while preparing the system prompt');
+        const originalDispatchHook = session.host!.dispatchHook.bind(session.host!);
+        const dispatchHook = vi
+          .spyOn(session.host!, 'dispatchHook')
+          .mockImplementation(async (event, input, signal) => {
+            if (event === 'before_agent_start') throw hookFailure;
+            return originalDispatchHook(event, input, signal);
+          });
+        await expect(session.runtime.prompt('failed prompt hooks')).rejects.toThrow('Agent submission failed: faulted');
+        expect(recordError).toHaveBeenNthCalledWith(
+          2,
+          'doompi_server.system_prompt_preparation_failed',
+          hookFailure,
+          { session_id: session.runtime.sessionId, stage: 'before_agent_start hooks' },
+          { includeException: true },
+        );
+        expect(onNotice).not.toHaveBeenCalled();
+        expect(streamSimple).toHaveBeenCalledTimes(providerCalls);
+        dispatchHook.mockRestore();
+
+        for (const report of [
+          () => {
+            throw new Error('Telemetry failed synchronously');
+          },
+          async () => {
+            throw new Error('Telemetry failed asynchronously');
+          },
+          () => new Promise<void>(() => undefined),
+        ]) {
+          recordError.mockImplementationOnce(report);
+          readResources.mockRejectedValueOnce(resourceFailure);
+          await expect(session.runtime.prompt('failed prompt diagnostics')).rejects.toThrow(
+            'Agent submission failed: faulted',
+          );
+          expect(recordError).toHaveBeenLastCalledWith(
+            'doompi_server.system_prompt_preparation_failed',
+            resourceFailure,
+            { session_id: session.runtime.sessionId, stage: 'resources' },
+            { includeException: true },
+          );
+          expect(onNotice).not.toHaveBeenCalled();
+          expect(streamSimple).toHaveBeenCalledTimes(providerCalls);
+          expect(session.canDispatch()).toBe(false);
+        }
+        readResources.mockRestore();
+        onNotice.mockReset();
+
+        streamSimple.mockReturnValueOnce(response([{ type: 'text', text: 'preparation recovered' }], 'stop'));
+        await session.runtime.prompt('recovered prompt preparation');
+        expect(streamSimple).toHaveBeenCalledTimes(providerCalls + 1);
+        expect(session.canDispatch()).toBe(true);
 
         vi.spyOn(session.runtime, 'replaceTools').mockRejectedValueOnce(new Error('replacement failed'));
         const applyTools = (
