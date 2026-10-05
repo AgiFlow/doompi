@@ -48,6 +48,7 @@ export function createRunnerServerRuntime(
   // The activity is optional and source-gated. The retained facet owns the
   // session runtime, so disabling the activity must not tear down its jobs.
   const ensureSession = (requestedSessionId: string): Promise<void> => {
+    if (closing) return Promise.reject(new Error('Runner runtime is closing.'));
     if (sessionId !== undefined && sessionId !== requestedSessionId) {
       throw new Error(`Runner runtime belongs to session ${sessionId}.`);
     }
@@ -63,10 +64,21 @@ export function createRunnerServerRuntime(
         rmuxBackend: container.rmuxBackend,
         processControl: container.processControl,
         currentHostPid: process.pid,
-        startup: true,
+        startup: false,
+        active: await container.runnerRegistry.listBySession(requestedSessionId),
       });
       for (const error of reconciled.errors) process.emitWarning(error);
-    })();
+      if (!closing) {
+        unsubscribeRunnerUpdates ??= container.runnerRegistry.subscribe(
+          () => requestPublish(requestedSessionId),
+          requestedSessionId,
+        );
+        requestPublish(requestedSessionId);
+      }
+    })().catch((error: unknown) => {
+      supervision = undefined;
+      throw error;
+    });
     return supervision;
   };
 
@@ -139,19 +151,21 @@ export function createRunnerServerRuntime(
   let publishAgain = false;
   let unsubscribeRunnerUpdates: (() => void) | undefined;
   const requestPublish = (ownedSessionId: string): void => {
+    if (closing) return;
     publishAgain = true;
     if (publishInFlight !== undefined) return;
     publishInFlight = (async () => {
       do {
         publishAgain = false;
         await publishRuns(ownedSessionId);
-      } while (publishAgain);
+      } while (publishAgain && !closing);
     })()
       .catch((error: unknown) => {
         process.emitWarning(`Could not schedule runner state publication: ${String(error)}`);
       })
       .finally(() => {
         publishInFlight = undefined;
+        if (publishAgain) requestPublish(ownedSessionId);
       });
   };
 
@@ -215,15 +229,8 @@ export function createRunnerServerRuntime(
     name: 'runner',
     start: async (executionContext: DoomHeadlessExecutionContext) => {
       await ensureSession(executionContext.sessionId);
-      const unsubscribe = container.runnerRegistry.subscribe(
-        () => requestPublish(executionContext.sessionId),
-        executionContext.sessionId,
-      );
-      unsubscribeRunnerUpdates = unsubscribe;
       requestPublish(executionContext.sessionId);
       return () => {
-        unsubscribe();
-        if (unsubscribeRunnerUpdates === unsubscribe) unsubscribeRunnerUpdates = undefined;
         // Let the next optional activation reconcile again, while keeping
         // the retained runtime and all child job supervisors alive.
         supervision = undefined;
@@ -262,6 +269,7 @@ export function createRunnerServerRuntime(
       unsubscribeRunnerUpdates?.();
       unsubscribeRunnerUpdates = undefined;
       await wakes;
+      await publishInFlight;
       await disposeRuntime();
     },
   };

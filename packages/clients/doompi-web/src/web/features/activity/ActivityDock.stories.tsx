@@ -2,6 +2,7 @@ import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 
 import { StoryFrame, seedStorySession } from '../../components/Story.fixture.tsx';
 import { installWebPlugins, resetWebPlugins } from '../../lib/pluginRegistry.ts';
+import { markSocketClosed } from '../../stores/sessionsStore.ts';
 import { setDockTab } from '../../stores/uiStore.ts';
 import { ActivityDock } from './ActivityDock.tsx';
 import { seedContextStory } from './context.fixture.ts';
@@ -32,6 +33,13 @@ export const Playground = {
     ]);
     setDockTab('activity');
     return dock();
+  },
+};
+export const Offline = {
+  render: () => {
+    const view = Playground.render();
+    markSocketClosed();
+    return view;
   },
 };
 export const Context = {

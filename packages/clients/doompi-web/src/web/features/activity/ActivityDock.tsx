@@ -38,6 +38,9 @@ export function ActivityDock({
   mcp?: SessionMcpViewState;
 }) {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
+  const connection = useStore(sessionsStore, (state) =>
+    state.activeId === null ? undefined : state.byId[state.activeId],
+  );
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
   const slotProps = usePluginSlotProps(activeId, onOpenContent);
@@ -106,6 +109,14 @@ export function ActivityDock({
       ) : (
         <>
           <div data-testid="activity-scroll" className="min-h-0 flex-1 overflow-y-auto">
+            {connection?.attach === 'offline' ? (
+              <output
+                data-testid="activity-offline"
+                className="block border-b border-doom-border-soft px-4 py-3 text-xs text-doom-dim"
+              >
+                {connection.reason || 'reconnecting'}
+              </output>
+            ) : null}
             {compositionState.phase === 'error' ? (
               <div
                 data-testid="activity-error"

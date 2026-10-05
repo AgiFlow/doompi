@@ -27,6 +27,7 @@ import { nativeRunProjection } from '../../../src/services/nativeRunProjection';
 import { sessionScopeDir } from '../../../src/services/sessionPaths';
 import * as runtimeModule from '../../../src/services/teamRuntime';
 import type { TeamExtensionRuntime } from '../../../src/services/teamRuntime';
+import { SUBAGENT_RUNS_TYPE } from '../../../src/types/webSubagents';
 import { TEST_SESSION_SCOPE } from '../../support/sessionScope';
 
 async function fixture(options: { serverHost?: unknown } = {}) {
@@ -270,11 +271,37 @@ describe('teamHeadlessFacet', () => {
       expect(test.client.setStatus).toHaveBeenLastCalledWith('doom-team-cost', '2.5');
       await activityStop?.();
       activityStop = undefined;
+      const publish = test.serverHost.context.directEvents.publish;
+      publish.mockClear();
       test.runtime.asyncJobTracker.upsertExternal(test.sessionId, scope, { ...status, cost: 2.5, updatedAt: 3 });
+      expect(publish).toHaveBeenLastCalledWith(SUBAGENT_RUNS_TYPE, test.sessionId, {
+        runs: [
+          expect.objectContaining({ runId: 'cost-run', state: 'done', lastUpdate: 3 }),
+          expect.objectContaining({ runId: 'native-run', state: 'running', lastUpdate: 3 }),
+        ],
+      });
+      publish.mockClear();
+      const completedNativeProjection = { ...updatedNativeProjection, status: 'completed', updatedAt: 4 };
+      nativeRunProjection.publish(test.sessionId, completedNativeProjection);
+      expect(publish).toHaveBeenCalledExactlyOnceWith(SUBAGENT_RUNS_TYPE, test.sessionId, {
+        runs: [
+          expect.objectContaining({ runId: 'cost-run', state: 'done', lastUpdate: 3 }),
+          expect.objectContaining({ runId: 'native-run', state: 'done', lastUpdate: 4 }),
+        ],
+      });
       expect(test.client.setStatus).toHaveBeenLastCalledWith('doom-team-cost', undefined);
 
       activityStop = await test.activities[0]!.start(test.execution);
       expect(test.client.setStatus).toHaveBeenLastCalledWith('doom-team-cost', '3.75');
+      await activityStop?.();
+      activityStop = undefined;
+      publish.mockClear();
+      await test.dispose();
+      expect(publish).not.toHaveBeenCalled();
+      test.runtime.asyncJobTracker.upsertExternal(test.sessionId, scope, { ...status, updatedAt: 5 });
+      nativeRunProjection.publish(test.sessionId, { ...completedNativeProjection, updatedAt: 5 });
+      expect(publish).not.toHaveBeenCalled();
+      nativeRunProjection.dispose(test.sessionId);
     } finally {
       await activityStop?.();
       await test.dispose();

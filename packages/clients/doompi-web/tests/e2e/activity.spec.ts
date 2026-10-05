@@ -47,6 +47,32 @@ test('shows a retry state when composition delivery fails before the Activity do
   await expect(page.getByTestId('activity-workflow-launch')).toBeVisible();
 });
 
+test('keeps last-known activity visible while the bridge reconnects', async ({ page, cockpit }) => {
+  let disconnected = false;
+  const closeSockets: Array<() => Promise<void>> = [];
+  await page.routeWebSocket(/.*/, async (socket) => {
+    if (disconnected) {
+      await socket.close();
+      return;
+    }
+    socket.connectToServer();
+    closeSockets.push(() => socket.close());
+  });
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  cockpit.session.emit(status('doom-runner-runners'));
+  await expect(page.getByTestId('activity-runners')).toBeVisible();
+  await expect(page.getByTestId('activity-offline')).toBeHidden();
+
+  disconnected = true;
+  await Promise.all(closeSockets.map((close) => close()));
+  await expect(page.getByTestId('activity-offline')).toContainText('The cockpit lost its bridge.');
+  await expect(page.getByTestId('activity-runners')).toBeVisible();
+
+  disconnected = false;
+  await expect(page.getByTestId('activity-offline')).toBeHidden();
+});
+
 test('keeps the workflow launcher available before any package reports work', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

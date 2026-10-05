@@ -11,6 +11,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { facet as runnerServerFacet } from '../../../generated/server';
 import { RUNNER_SERVER_SCOPE_SERVICE } from '../../../src/extensions/workspaces/sessions/(backend)/_lib/serverRoot';
+import type { RunnerDependencies } from '../../../src/services/runnerDependencies/type';
+import { createRunnerServerRuntime } from '../../../src/services/runnerServerRuntime';
 
 const lifecycleMocks = vi.hoisted(() => {
   const container = {
@@ -18,7 +20,7 @@ const lifecycleMocks = vi.hoisted(() => {
     paths: { setSessionId: vi.fn() },
     lifeline: { arm: vi.fn(async () => '/tmp/runner-lifeline.sock'), dispose: vi.fn() },
     runnerRegistry: {
-      listBySession: vi.fn(async () => [
+      listBySession: vi.fn(async (_sessionId: string) => [
         {
           id: 'runner-a',
           name: 'server',
@@ -219,7 +221,17 @@ describe('runnerServerFacet', () => {
     expect(lifecycleMocks.container.paths.setSessionId.mock.invocationCallOrder[0]).toBeLessThan(
       lifecycleMocks.container.lifeline.arm.mock.invocationCallOrder[0]!,
     );
+    expect(lifecycleMocks.reconcileActiveRunners).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startup: false,
+        active: await lifecycleMocks.container.runnerRegistry.listBySession('session-a'),
+      }),
+    );
+    const notifyRegistry = lifecycleMocks.container.runnerRegistry.subscribe.mock.calls[0]![0];
     await firstStop();
+    const publications = vi.mocked(harness.directEvents.publish).mock.calls.length;
+    notifyRegistry();
+    await vi.waitFor(() => expect(harness.directEvents.publish).toHaveBeenCalledTimes(publications + 1));
 
     expect(lifecycleMocks.stopRunnerProcess).not.toHaveBeenCalled();
     expect(lifecycleMocks.container.ptyHost.disposeAll).not.toHaveBeenCalled();
@@ -227,6 +239,7 @@ describe('runnerServerFacet', () => {
     expect(lifecycleMocks.container.runnerRegistry.close).not.toHaveBeenCalled();
 
     const secondStop = await activity.start(harness.execution);
+    expect(lifecycleMocks.container.runnerRegistry.subscribe).toHaveBeenCalledOnce();
     expect(lifecycleMocks.createContainer).toHaveBeenCalledOnce();
     expect(lifecycleMocks.createContainer).toHaveBeenCalledWith({
       cwd: '/repo',
@@ -242,6 +255,85 @@ describe('runnerServerFacet', () => {
     expect(lifecycleMocks.container.ptyHost.disposeAll).toHaveBeenCalledOnce();
     expect(lifecycleMocks.container.lifeline.dispose).toHaveBeenCalledOnce();
     expect(lifecycleMocks.container.runnerRegistry.close).toHaveBeenCalledOnce();
+  });
+
+  describe('retained publication lifecycle', () => {
+    const runtimeHarness = () => {
+      const events: DoomDirectEventBus = {
+        publish: vi.fn(),
+        subscribe: vi.fn(() => () => undefined),
+        close: vi.fn(),
+      };
+      const runtime = createRunnerServerRuntime(lifecycleMocks.container as unknown as RunnerDependencies, events);
+      return { runtime, events };
+    };
+
+    it('publishes without activity activation and releases its feed only on disposal', async () => {
+      const unsubscribe = vi.fn();
+      lifecycleMocks.container.runnerRegistry.subscribe.mockReturnValueOnce(unsubscribe);
+      const { runtime, events } = runtimeHarness();
+      await runtime.ensureSession('session-a');
+      await vi.waitFor(() => expect(events.publish).toHaveBeenCalled());
+      const notify = lifecycleMocks.container.runnerRegistry.subscribe.mock.calls[0]![0];
+      vi.mocked(events.publish).mockClear();
+      notify();
+      await vi.waitFor(() => expect(events.publish).toHaveBeenCalledOnce());
+      await runtime.dispose();
+      expect(unsubscribe).toHaveBeenCalledOnce();
+      vi.mocked(events.publish).mockClear();
+      notify();
+      await expect(runtime.ensureSession('session-a')).rejects.toThrow('closing');
+      expect(events.publish).not.toHaveBeenCalled();
+      expect(lifecycleMocks.container.runnerRegistry.subscribe).toHaveBeenCalledOnce();
+    });
+
+    it('allows an explicit retry after failed initialization', async () => {
+      const { runtime } = runtimeHarness();
+      lifecycleMocks.container.lifeline.arm.mockRejectedValueOnce(new Error('arm failed'));
+      await expect(runtime.ensureSession('session-a')).rejects.toThrow('arm failed');
+      expect(lifecycleMocks.container.runnerRegistry.subscribe).not.toHaveBeenCalled();
+      await runtime.ensureSession('session-a');
+      expect(lifecycleMocks.container.lifeline.arm).toHaveBeenCalledTimes(2);
+      expect(lifecycleMocks.container.runnerRegistry.subscribe).toHaveBeenCalledOnce();
+      await runtime.dispose();
+    });
+
+    it('does not resurrect publication when initialization finishes during disposal', async () => {
+      const { runtime, events } = runtimeHarness();
+      let arm = (_path: string): void => undefined;
+      lifecycleMocks.container.lifeline.arm.mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            arm = resolve;
+          }),
+      );
+      const initialization = runtime.ensureSession('session-a');
+      const disposal = runtime.dispose();
+      arm('/tmp/lifeline');
+      await initialization;
+      await disposal;
+      expect(lifecycleMocks.container.runnerRegistry.subscribe).not.toHaveBeenCalled();
+      expect(events.publish).not.toHaveBeenCalled();
+      expect(lifecycleMocks.container.runnerRegistry.close).toHaveBeenCalledOnce();
+    });
+
+    it('drains publication before closing the registry', async () => {
+      const { runtime } = runtimeHarness();
+      let finish = (): void => undefined;
+      lifecycleMocks.container.runnerRegistry.listAll.mockImplementationOnce(
+        () =>
+          new Promise<[]>((resolve) => {
+            finish = () => resolve([]);
+          }),
+      );
+      await runtime.ensureSession('session-a');
+      const disposal = runtime.dispose();
+      await Promise.resolve();
+      expect(lifecycleMocks.container.runnerRegistry.close).not.toHaveBeenCalled();
+      finish();
+      await disposal;
+      expect(lifecycleMocks.container.runnerRegistry.close).toHaveBeenCalledOnce();
+    });
   });
 
   describe('background runner wake-up', () => {
@@ -262,6 +354,7 @@ describe('runnerServerFacet', () => {
     const promote = async () => {
       const harness = headlessFacetContext();
       let notifyRegistry = (): void => undefined;
+      lifecycleMocks.container.runnerRegistry.subscribe.mockImplementationOnce(() => () => undefined);
       lifecycleMocks.container.runnerRegistry.subscribe.mockImplementationOnce((listener) => {
         notifyRegistry = listener;
         return () => undefined;
