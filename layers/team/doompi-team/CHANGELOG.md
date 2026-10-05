@@ -1,3 +1,26 @@
+## 0.0.1-alpha.115 (2026-10-05)
+
+### 🩹 Fixes
+
+- **doompi-workflow:** preserve failures and enable owner recovery delegation ([#308](https://github.com/AgiFlow/doompi/pull/308))
+- **doompi-runner:** retain activity snapshots across lifecycle changes ([#306](https://github.com/AgiFlow/doompi/pull/306))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.81
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.114
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.115
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.39
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.99
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.115
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.62
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.114 (2026-10-04)
 
 ### 🧱 Updated Dependencies

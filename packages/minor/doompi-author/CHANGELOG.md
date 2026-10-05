@@ -1,3 +1,22 @@
+## 0.0.1-alpha.53 (2026-10-05)
+
+### 🚀 Features
+
+- add style system browser and Author preview handoff ([#303](https://github.com/AgiFlow/doompi/pull/303))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.115
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.62
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.98
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.115
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.52 (2026-10-04)
 
 ### 🧱 Updated Dependencies
