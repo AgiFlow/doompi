@@ -51,10 +51,10 @@
   },
   "devDependencies": {
     "@agimon-ai/vibe-lint": "0.0.1-alpha.53",
-    "@types/node": "26.6.2",
-    "@vitest/coverage-v8": "5.0.1",
+    "@types/node": "26.6.4",
+    "@vitest/coverage-v8": "5.0.3",
     "tsdown": "0.23.0",
-    "vitest": "5.0.1"
+    "vitest": "5.0.3"
   },
   "peerDependencies": {
     "@agimon-ai/vibe-lint": "0.0.1-alpha.53"
