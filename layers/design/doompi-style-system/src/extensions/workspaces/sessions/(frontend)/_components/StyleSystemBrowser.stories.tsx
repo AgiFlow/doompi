@@ -52,14 +52,14 @@ const catalog: StyleSystemCatalogView = {
 
 export const Playground = {
   render: () => (
-    <div className="h-screen bg-doom-bg">
+    <div className="flex h-screen w-screen bg-doom-bg">
       <StyleSystemBrowser {...slotPropsFixture({ sessionId: 'style-system-story' }).props} initialCatalog={catalog} />
     </div>
   ),
 };
 export const Empty = {
   render: () => (
-    <div className="h-screen bg-doom-bg">
+    <div className="flex h-screen w-screen bg-doom-bg">
       <StyleSystemBrowser
         {...slotPropsFixture({ sessionId: 'style-system-empty' }).props}
         initialCatalog={{ projects: [], components: [], diagnostics: [], truncated: false }}
@@ -69,7 +69,7 @@ export const Empty = {
 };
 export const PartialError = {
   render: () => (
-    <div className="h-screen bg-doom-bg">
+    <div className="flex h-screen w-screen bg-doom-bg">
       <StyleSystemBrowser
         {...slotPropsFixture({ sessionId: 'style-system-error' }).props}
         initialCatalog={{
