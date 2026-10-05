@@ -560,6 +560,43 @@ describe('createHeadlessHub', () => {
     await hub.close();
   });
 
+  it.each([false, true])('rolls back partial registration even if channel cleanup fails (%s)', async (failStop) => {
+    const closeSession = vi.fn(async () => undefined);
+    const stopPresentation = vi.fn();
+    const create = vi.fn(async () => ({ ...host().host, onPresentationFrame: () => stopPresentation }));
+    const notices: string[] = [];
+    const hub = createHeadlessHub({
+      manager: { create, closeSession } as never,
+      onNotice: (notice) => notices.push(notice),
+    });
+    const sessionAdded = vi.fn((): void => {
+      throw new Error('channel startup failed');
+    });
+    hub.registerChannel({
+      frameType: 'updates',
+      start: () => ({
+        payloadFor: () => undefined,
+        sessionAdded,
+        sessionRemoved: () => {
+          if (failStop) throw new Error('channel stop failed');
+        },
+        close: () => undefined,
+      }),
+    });
+    const options = { sessionId: 'retry', sessionName: 'Retry', cwd: '/repo' } as never;
+
+    await expect(hub.create(options)).rejects.toThrow('channel startup failed');
+    expect(closeSession).toHaveBeenCalledWith('retry');
+    expect(hub.session('retry')).toBeUndefined();
+    expect(hub.runtime('retry')).toBeUndefined();
+    expect(hub.snapshot()).toEqual([]);
+    expect(stopPresentation).toHaveBeenCalledOnce();
+    expect(notices).toEqual(failStop ? [expect.stringContaining('channel stop failed')] : []);
+    sessionAdded.mockImplementation(() => undefined);
+    await expect(hub.create(options)).resolves.toMatchObject({ id: 'retry' });
+    await hub.close();
+  });
+
   it('closes the host it built when registration is refused', async () => {
     let hub!: ReturnType<typeof createHeadlessHub>;
     const closeSession = vi.fn(async () => undefined);

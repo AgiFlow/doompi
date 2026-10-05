@@ -645,15 +645,19 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     if (cleanup !== undefined) subscriptions.delete(cleanup);
     communicationEndpoints.get(sessionId)?.endpoint.close();
     // Let scoped sources dispatch their final stop while the live-session boundary still admits it.
-    for (const { source } of selectedChannels(current)) source.sessionRemoved?.(sessionId);
-    options.computerUse?.forgetSession?.(sessionId);
-    sessions.delete(sessionId);
-    activities.delete(sessionId);
-    sessionCleanups.delete(sessionId);
-    presentationCleanups.get(sessionId)?.();
-    presentationCleanups.delete(sessionId);
-    avatarIcons.delete(sessionId);
-    directEvents.clearSession?.(sessionId);
+    try {
+      for (const { source } of selectedChannels(current)) source.sessionRemoved?.(sessionId);
+      options.computerUse?.forgetSession?.(sessionId);
+    } finally {
+      // A failing external stop must not leave a closed host registered.
+      sessions.delete(sessionId);
+      activities.delete(sessionId);
+      sessionCleanups.delete(sessionId);
+      presentationCleanups.get(sessionId)?.();
+      presentationCleanups.delete(sessionId);
+      avatarIcons.delete(sessionId);
+      directEvents.clearSession?.(sessionId);
+    }
     emit({ kind: 'removed', sessionId, ...(closeOptions?.keepDormant === true ? { dormant: true as const } : {}) });
   };
 
@@ -1051,6 +1055,15 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       try {
         register(session);
       } catch (error) {
+        // Registration can fail after publishing the host into the session map.
+        // Roll back only our host, never a different session that owns this id.
+        if (sessions.get(id)?.host === host) {
+          try {
+            unregisterSession(id);
+          } catch (cleanupError) {
+            options.onNotice?.(`Session '${id}' registration rollback failed: ${String(cleanupError)}`);
+          }
+        }
         // The hub closed, or a racing create took the id, while this host was starting.
         await Promise.resolve(options.manager.closeSession(id)).catch((closeError: unknown) =>
           options.onNotice?.(`Session '${id}' could not be closed after a failed registration: ${String(closeError)}`),
