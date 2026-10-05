@@ -5,6 +5,7 @@ import { leaderGroup } from '../../src/web/lib/leaderTree';
 import {
   activateWebPluginSession,
   activityGroupSlot,
+  bindSessionWebWorkspace,
   dispatchChannelFrame,
   dropPluginSessionData,
   HOST_SLOTS,
@@ -843,6 +844,86 @@ describe('the web plugin registry', () => {
     installSessionWebPlugins('late', [defineWebPlugin({ id: 'late', channels: [itemsChannel(log, 'late_items')] })]);
 
     expect(log).toEqual(['apply:late_items:late:latest']);
+  });
+
+  it('retains unclaimed snapshots through incomplete installs and replaces only the latest type', () => {
+    const log: string[] = [];
+    installSessionWebPlugins('late', []);
+    for (const item of ['first', 'latest'])
+      expect(dispatchChannelFrame({ type: 'one', sessionId: 'late', payload: { items: [item] } })).toBe(false);
+    dispatchChannelFrame({ type: 'two', sessionId: 'late', payload: { items: ['two'] } });
+    installSessionWebPlugins('late', []);
+    const one = defineWebPlugin({ id: 'one', channels: [itemsChannel(log, 'one')] });
+    installSessionWebPlugins('late', [one]);
+    installSessionWebPlugins('late', [one, defineWebPlugin({ id: 'two', channels: [itemsChannel(log, 'two')] })]);
+    expect(log).toEqual(['apply:one:late:latest', 'apply:two:late:two']);
+  });
+
+  it.each(['workspace', 'bind', 'global'])('replays pending snapshots on %s composition rebuilds', (scope) => {
+    const log: string[] = [];
+    installSessionWebPlugins('late', []);
+    if (scope === 'workspace') bindSessionWebWorkspace('late', 'repo');
+    dispatchChannelFrame({ type: 'late_items', sessionId: 'late', payload: { items: ['snapshot'] } });
+    dispatchChannelFrame({ type: 'late_items', sessionId: 'other', payload: { items: ['other'] } });
+    const channels = [itemsChannel(log, 'late_items')];
+    if (scope === 'global') installGlobalWebPlugins([{ id: 'late', global: { channels } }]);
+    else {
+      installWorkspaceWebPlugins('repo', [{ id: 'late', workspace: { channels } }]);
+      if (scope === 'bind') bindSessionWebWorkspace('late', 'repo');
+    }
+    expect(log).toEqual(['apply:late_items:late:snapshot']);
+  });
+
+  it('does not buffer protocol events or allow them to evict channel snapshots', () => {
+    const log: string[] = [];
+    installSessionWebPlugins('late', []);
+    dispatchChannelFrame({ type: 'snapshot', sessionId: 'late', payload: { items: ['saved'] } });
+    for (let i = 0; i < 100; i++) dispatchChannelFrame({ type: `event_${i}`, sessionId: 'late', items: ['event'] });
+    const parse = (input: unknown) => {
+      log.push(`parse:${String(input)}`);
+      return null;
+    };
+    installSessionWebPlugins('late', [
+      {
+        id: 'late',
+        channels: [
+          itemsChannel(log, 'snapshot'),
+          defineSessionChannel({ channel: 'event_99', parse, apply() {}, drop() {} }),
+        ],
+      },
+    ]);
+    expect(log).toEqual(['apply:snapshot:late:saved']);
+  });
+
+  it('caps pending channel types at 64 without evicting for latest replacement', () => {
+    const log: string[] = [];
+    installSessionWebPlugins('late', []);
+    for (let i = 0; i < 64; i++)
+      dispatchChannelFrame({ type: `channel_${i}`, sessionId: 'late', payload: { items: ['first'] } });
+    dispatchChannelFrame({ type: 'channel_63', sessionId: 'late', payload: { items: ['latest'] } });
+    dispatchChannelFrame({ type: 'channel_64', sessionId: 'late', payload: { items: ['new'] } });
+    installSessionWebPlugins('late', [
+      { id: 'late', channels: [0, 1, 63, 64].map((i) => itemsChannel(log, `channel_${i}`)) },
+    ]);
+    expect(log).toEqual(['apply:channel_1:late:first', 'apply:channel_63:late:latest', 'apply:channel_64:late:new']);
+  });
+
+  it.each(['drop', 'remove'])('clears pending snapshots on %s teardown', (action) => {
+    const log: string[] = [];
+    installSessionWebPlugins('late', []);
+    dispatchChannelFrame({ type: 'late_items', sessionId: 'late', payload: { items: ['old'] } });
+    if (action === 'drop') dropPluginSessionData('late');
+    else removeSessionWebPlugins('late');
+    installSessionWebPlugins('late', [{ id: 'late', channels: [itemsChannel(log, 'late_items')] }]);
+    expect(log).toEqual([]);
+  });
+
+  it('drops stale channels before replaying newly claimed snapshots', () => {
+    const log: string[] = [];
+    installSessionWebPlugins('late', [{ id: 'old', channels: [itemsChannel(log, 'old')] }]);
+    dispatchChannelFrame({ type: 'new', sessionId: 'late', payload: { items: ['saved'] } });
+    installSessionWebPlugins('late', [{ id: 'new', channels: [itemsChannel(log, 'new')] }]);
+    expect(log).toEqual(['drop:old:late', 'apply:new:late:saved']);
   });
 
   it('notifies contribution readers when the active session registry changes', () => {

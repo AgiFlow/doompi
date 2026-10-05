@@ -166,8 +166,9 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
   const childCosts = new Map<string, number>();
   let costText: string | undefined;
   let activityAttached = false;
+  let disposing = false;
   const publishRunSnapshot = (): void => {
-    if (activityAttached) publishRuns(directEvents, execution.sessionId, jobs.list(), nativeRuns);
+    if (!disposing) publishRuns(directEvents, execution.sessionId, jobs.list(), nativeRuns);
   };
   const publishCost = (force = false): void => {
     costText = updateTeamCost(execution.client, jobs.list(), nativeRuns, childCosts, costText, activityAttached, force);
@@ -344,6 +345,7 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
       runtime.pollScheduler.start();
     },
     async onDispose() {
+      disposing = true;
       activityAttached = false;
       execution.client.setStatus(TEAM_COST_STATUS, undefined);
       channel.dispose();

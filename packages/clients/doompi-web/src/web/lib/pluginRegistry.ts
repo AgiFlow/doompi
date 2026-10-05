@@ -197,12 +197,21 @@ export function webTemplateCatalog(mount?: WebPluginMount): WebTemplateCatalog {
 }
 
 function rebuildSession(sessionId: string): RegistryState {
+  const previous = sessionStates.get(sessionId);
   const workspaceId = sessionWorkspaces.get(sessionId);
   const workspace = workspaceId === undefined ? undefined : workspaceStates.get(workspaceId);
   const state = buildWebPluginState(
     mergeScopedPlugins(defaultState.plugins, workspace?.plugins ?? [], sessionPlugins.get(sessionId) ?? []),
   );
   sessionStates.set(sessionId, state);
+  // Drop stale stores before replay, since replacement channels may share a store.
+  for (const [type, channel] of previous?.channels.entries() ?? [])
+    if (state.channels.get(type) !== channel) channel.drop(sessionId);
+  const pending = pendingSessionFrames.get(sessionId);
+  if (pending !== undefined) {
+    for (const [type, frame] of pending) if (dispatchFrameToState(state, frame)) pending.delete(type);
+    if (pending.size === 0) pendingSessionFrames.delete(sessionId);
+  }
   return state;
 }
 
@@ -637,19 +646,11 @@ export function resetWebPlugins(): void {
 
 /** Installs or atomically replaces one session's independently synchronized plugin definitions. */
 export function installSessionWebPlugins(sessionId: string, plugins: readonly WebPluginDefinition[]): void {
-  const previous = sessionStates.get(sessionId);
   sessionPlugins.set(
     sessionId,
     plugins.flatMap((plugin) => (plugin.session === undefined ? [plugin] : pluginsAtScope([plugin], 'session'))),
   );
-  const state = rebuildSession(sessionId);
-  for (const [type, channel] of previous?.channels.entries() ?? [])
-    if (state.channels.get(type) !== channel) channel.drop(sessionId);
-  const pending = pendingSessionFrames.get(sessionId);
-  if (pending !== undefined) {
-    pendingSessionFrames.delete(sessionId);
-    for (const frame of pending.values()) dispatchFrameToState(state, frame);
-  }
+  rebuildSession(sessionId);
   if (sessionId === activeSessionId) emitRegistryChange();
 }
 
@@ -844,8 +845,11 @@ function dispatchFrameToState(state: RegistryState, frame: Record<string, unknow
 export function dispatchChannelFrame(frame: Record<string, unknown>): boolean {
   if (typeof frame.type !== 'string' || typeof frame.sessionId !== 'string') return false;
   const state = sessionStates.get(frame.sessionId);
-  if (state !== undefined) return dispatchFrameToState(state, frame);
-  if (activeSessionId === null) return dispatchFrameToState(defaultState, frame);
+  if (state !== undefined) {
+    if (dispatchFrameToState(state, frame)) return true;
+  } else if (activeSessionId === null) return dispatchFrameToState(defaultState, frame);
+  // Channel envelopes carry payload; protocol events do not and must not accumulate.
+  if (!Object.hasOwn(frame, 'payload')) return false;
   const pending = pendingSessionFrames.get(frame.sessionId) ?? new Map<string, Record<string, unknown>>();
   if (!pending.has(frame.type) && pending.size >= MAX_PENDING_CHANNEL_TYPES) {
     const oldest = pending.keys().next().value as string | undefined;
