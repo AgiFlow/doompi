@@ -1,7 +1,7 @@
-import { TooltipProvider } from '@agimon-ai/doompi-web-components';
+import { Button, TooltipProvider } from '@agimon-ai/doompi-web-components';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog';
 import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog';
@@ -57,42 +57,63 @@ declare module '@tanstack/react-router' {
 
 export function Providers() {
   const remoteStatus = useStore(remoteAccessStore, (state) => state.view?.status);
+  const [connection, setConnection] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
-    // The channel first: a socket opened before it is established would send
-    // its first frames in the clear, and on loopback this resolves immediately
-    // to no channel at all.
+    // Restore before mounting any API consumers, not just before opening sockets.
     let stopRuntime: (() => void) | undefined;
     let stopPlugins: (() => void) | undefined;
     let cancelled = false;
-    void restoreSealedSession().then(() => {
-      if (cancelled) return;
-      stopPlugins = startSessionWebPluginRuntime({
-        sendSessionFrame: sendFrame,
-        sendHubFrame,
-        invokeServerMethod,
-        onHubConnected,
-        acquireModelContext,
-        onComposerSubmitted,
-        onCaptureStatus,
+    const stop = () => {
+      stopPlugins?.();
+      stopPlugins = undefined;
+      stopRuntime?.();
+      stopRuntime = undefined;
+      disposeModelContextAdapter();
+    };
+    void restoreSealedSession()
+      .then((restored) => {
+        if (cancelled) return;
+        if (!restored && !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) {
+          setConnection('error');
+          return;
+        }
+        stopPlugins = startSessionWebPluginRuntime({
+          sendSessionFrame: sendFrame,
+          sendHubFrame,
+          invokeServerMethod,
+          onHubConnected,
+          acquireModelContext,
+          onComposerSubmitted,
+          onCaptureStatus,
+        });
+        stopRuntime = startSessionRuntime();
+        setConnection('ready');
+        // Read initial state; the loopback host checks for pairing requests below.
+        void refreshRemoteState();
+        void restoreLivePushRegistration();
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        stop();
+        console.error('Cockpit connection failed.', error);
+        setConnection('error');
       });
-      stopRuntime = startSessionRuntime();
-      // Read initial state; the loopback host checks for pairing requests below.
-      void refreshRemoteState();
-      void restoreLivePushRegistration();
-    });
     return () => {
       cancelled = true;
-      stopPlugins?.();
-      stopRuntime?.();
-      disposeModelContextAdapter();
+      stop();
     };
   }, []);
 
   useEffect(() => {
     // The process-local remote runtime does not yet bridge its host-only pairing
     // event into the hub socket. Only the loopback host needs this pending queue.
-    if (remoteStatus !== 'on' || !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return;
+    if (
+      connection !== 'ready' ||
+      remoteStatus !== 'on' ||
+      !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)
+    )
+      return;
     let fetching = false;
     const timer = setInterval(() => {
       if (fetching) return;
@@ -102,7 +123,33 @@ export function Providers() {
       });
     }, PAIRING_STATE_POLL_MS);
     return () => clearInterval(timer);
-  }, [remoteStatus]);
+  }, [connection, remoteStatus]);
+
+  if (connection !== 'ready') {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-doom-bg p-5 text-base text-doom-text">
+        {connection === 'loading' ? (
+          <p role="status" data-testid="connection-loading" className="text-doom-dim">
+            Connecting to DoomPi…
+          </p>
+        ) : (
+          <>
+            <p role="alert" data-testid="connection-error">
+              Could not establish a connection to DoomPi. Reload or sign in again.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <Button variant="outline" onClick={() => location.reload()}>
+                Reload
+              </Button>
+              <a href="/pair" className="text-doom-blue underline">
+                Sign in or pair again
+              </a>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>

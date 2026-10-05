@@ -54,6 +54,7 @@ import {
   resolvePiSettingsPackageEntries,
   type PiExtensionHost,
 } from '../../../services/piExtensionHost';
+import { observe } from '../../../services/serverTelemetry';
 import { SessionMetadataDoc } from '../../../services/sqliteSessionStorage';
 import { formatToolPrompt, type ToolPromptEntry } from '../../../services/toolPrompt';
 import type { ContextPromptStage } from '../../../types/contextApi';
@@ -84,6 +85,7 @@ type CompactResult = NonNullable<NonNullable<HookMap['before_compaction']['resul
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 const EXTERNAL_OPERATION = 'external';
+const PROMPT_PREPARATION_FAILED_EVENT = 'doompi_server.system_prompt_preparation_failed';
 
 interface AppliedSessionTool {
   readonly descriptor: SessionToolDescriptor;
@@ -733,9 +735,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       return piHost?.beforeCompaction(event);
     },
     systemPrompt: async () => {
+      let stage = 'resources';
       try {
         if (!headlessHost) throw new Error('Headless capabilities are not installed.');
         let prompt = composeSystemPrompt(await headlessHost.readResources());
+        stage = 'before_agent_start hooks';
         const patches = await headlessHost.dispatchHook('before_agent_start', { systemPrompt: prompt });
         for (const patch of patches) {
           if (patch && typeof patch === 'object' && 'systemPrompt' in patch && typeof patch.systemPrompt === 'string') {
@@ -758,9 +762,20 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           }
         }
         return prompt;
-      } catch {
+      } catch (error) {
         // A throwing system-prompt callback faults the upstream harness. Deny at model admission instead.
         promptPreparationFailed = true;
+        // Diagnostic delivery must not delay or reject prompt preparation.
+        observe(
+          Promise.resolve().then(() =>
+            options.telemetry?.recordError(
+              PROMPT_PREPARATION_FAILED_EVENT,
+              error,
+              { session_id: options.sessionId, stage },
+              { includeException: true },
+            ),
+          ),
+        );
         return '';
       }
     },

@@ -1,3 +1,6 @@
+import { createHostHandshake, type SealedChannel } from '@agimon-ai/doompi-web-security/node';
+import type { Page } from '@playwright/test';
+
 import { expect, test } from '../support/cockpit';
 
 const TUNNEL_HOST = 'calm-river-1234.trycloudflare.com';
@@ -183,6 +186,164 @@ test('the container switch is off by default and asks for a workspace before it 
   await expect(page.getByTestId('sandbox-workspace-add')).toBeDisabled();
   await page.getByTestId('sandbox-workspace-input').fill('/repo');
   await expect(page.getByTestId('sandbox-workspace-add')).toBeEnabled();
+});
+
+const REMOTE_ORIGIN = 'https://doompi.test';
+
+/** Browser startup against a controlled secure origin, not a real tunnel integration. */
+async function remoteStartup(page: Page, localUrl: string, rememberKey: boolean | string = true) {
+  const host = createHostHandshake();
+  const channels = new Map<string, SealedChannel>();
+  const registrations: string[] = [];
+  const plaintextRequests: string[] = [];
+  const sealedTargets: string[] = [];
+  const sockets: string[] = [];
+  await page.addInitScript(
+    ({ publicKey, remember }) => {
+      if (remember) sessionStorage.setItem('doompi.channelKey', typeof remember === 'string' ? remember : publicKey);
+      else sessionStorage.removeItem('doompi.channelKey');
+    },
+    { publicKey: host.publicKey, remember: rememberKey },
+  );
+  await page.context().addCookies([{ name: 'paired-device', value: 'fixture', url: REMOTE_ORIGIN }]);
+  await page.routeWebSocket('wss://doompi.test/**', async (socket) => {
+    sockets.push(socket.url());
+    await socket.close();
+  });
+  await page.route(`${REMOTE_ORIGIN}/**`, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/pair') {
+      await route.fulfill({ contentType: 'text/html', body: '<h1>Pairing recovery</h1>' });
+    } else if (url.pathname.startsWith('/api/')) {
+      plaintextRequests.push(url.pathname);
+      await route.fulfill({ status: 401, json: { error: 'Remote HTTP requests must use the sealed gateway.' } });
+    } else {
+      const response = await route.fetch({ url: `${localUrl}${url.pathname}${url.search}` });
+      await route.fulfill({ response });
+    }
+  });
+  await page.route(`${REMOTE_ORIGIN}/api/remote/request`, async (route) => {
+    const channel = channels.get('http');
+    if (channel === undefined) throw new Error('HTTP requested before its channel registration.');
+    const opened = channel.open(route.request().postDataJSON());
+    if (!opened.ok) throw new Error(`The gateway could not open the request: ${opened.failure}`);
+    const request = JSON.parse(Buffer.from(opened.plaintext).toString()) as { method: string; target: string };
+    sealedTargets.push(request.target);
+    // No trusted worker is installed at this controlled origin. Exercise startup
+    // and configuration through the existing composition-error recovery layout.
+    const response =
+      request.target === '/api/compositions'
+        ? { status: 503, body: Buffer.from('{"error":"fixture composition unavailable"}') }
+        : await (async () => {
+            const upstream = await route.fetch({ url: `${localUrl}${request.target}`, method: request.method });
+            return { status: upstream.status(), body: await upstream.body() };
+          })();
+    const sealed = channel.seal(
+      Buffer.from(
+        JSON.stringify({
+          v: 1,
+          status: response.status,
+          headers: [['content-type', 'application/json']],
+          body: response.body.toString('base64'),
+        }),
+      ),
+    );
+    if (!sealed.ok) throw new Error(`The gateway could not seal the response: ${sealed.failure}`);
+    await route.fulfill({ json: sealed.envelope });
+  });
+  return { host, channels, registrations, plaintextRequests, sealedTargets, sockets };
+}
+
+test('remote startup waits for every channel before settings, compositions and sockets', async ({
+  page,
+  cockpit,
+}, testInfo) => {
+  const startup = await remoteStartup(page, cockpit.url);
+  let releaseHttp!: () => void;
+  const httpAllowed = new Promise<void>((resolve) => {
+    releaseHttp = resolve;
+  });
+  await page.route(`${REMOTE_ORIGIN}/api/remote/channel`, async (route) => {
+    const registration = route.request().postDataJSON() as { scope: string; clientPublicKey: string };
+    startup.registrations.push(registration.scope);
+    const channel = startup.host.accept(registration.clientPublicKey);
+    if (channel === undefined) throw new Error('The host refused a valid fixture client key.');
+    startup.channels.set(registration.scope, channel);
+    if (registration.scope === 'http') await httpAllowed;
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${REMOTE_ORIGIN}/settings/appearance`);
+  try {
+    await expect.poll(() => startup.registrations).toEqual(['session', 'protocol', 'http']);
+    await expect(page.getByTestId('connection-loading')).toBeVisible();
+    const screenshotPath = testInfo.outputPath('mobile-connection-loading.png');
+    await page.screenshot({ path: screenshotPath });
+    await testInfo.attach('mobile-connection-loading', { path: screenshotPath, contentType: 'image/png' });
+    await expect(page.getByTestId('settings-section-appearance')).toHaveCount(0);
+    expect(startup.plaintextRequests).toEqual([]);
+    expect(startup.sealedTargets).toEqual([]);
+    expect(startup.sockets).toEqual([]);
+  } finally {
+    releaseHttp();
+  }
+  await expect(page.getByTestId('settings-section-appearance')).toHaveAttribute('data-active', 'true');
+  await expect.poll(() => startup.sealedTargets.some((target) => target.startsWith('/api/settings?'))).toBe(true);
+  expect(startup.sealedTargets).toContain('/api/compositions');
+  await expect.poll(() => startup.sockets.length).toBeGreaterThan(0);
+  expect(startup.registrations).toEqual(['session', 'protocol', 'http']);
+  expect(startup.plaintextRequests).toEqual([]);
+  await expect(page.getByTestId('connection-loading')).toHaveCount(0);
+  await expect(page.getByTestId('connection-error')).toHaveCount(0);
+});
+
+for (const refusedScope of ['protocol', 'http']) {
+  test(`remote startup refuses consumers when ${refusedScope} registration fails`, async ({ page, cockpit }) => {
+    const startup = await remoteStartup(page, cockpit.url);
+    await page.route(`${REMOTE_ORIGIN}/api/remote/channel`, async (route) => {
+      const registration = route.request().postDataJSON() as { scope: string; clientPublicKey: string };
+      startup.registrations.push(registration.scope);
+      await route.fulfill({ status: registration.scope === refusedScope ? 401 : 200, json: { ok: true } });
+    });
+    await page.goto(`${REMOTE_ORIGIN}/settings/appearance`);
+    await expect(page.getByTestId('connection-error')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in or pair again' })).toHaveAttribute('href', '/pair');
+    await expect(page.getByTestId('settings-section-appearance')).toHaveCount(0);
+    await expect(page.getByTestId('template-loading')).toHaveCount(0);
+    expect(startup.registrations).toContain(refusedScope);
+    expect(startup.plaintextRequests).toEqual([]);
+    expect(startup.sealedTargets).toEqual([]);
+    expect(startup.sockets).toEqual([]);
+    expect(page.url()).toBe(`${REMOTE_ORIGIN}/settings/appearance`);
+  });
+}
+
+test('remote startup with a missing tab key offers explicit pairing recovery', async ({ page, cockpit }, testInfo) => {
+  const startup = await remoteStartup(page, cockpit.url, false);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(REMOTE_ORIGIN);
+  await expect(page.getByTestId('connection-error')).toBeVisible();
+  const screenshotPath = testInfo.outputPath('mobile-connection-recovery.png');
+  await page.screenshot({ path: screenshotPath });
+  await testInfo.attach('mobile-connection-recovery', { path: screenshotPath, contentType: 'image/png' });
+  expect(startup.plaintextRequests).toEqual([]);
+  expect(startup.sealedTargets).toEqual([]);
+  expect(startup.sockets).toEqual([]);
+  expect(page.url()).toBe(`${REMOTE_ORIGIN}/`);
+  await page.getByRole('link', { name: 'Sign in or pair again' }).click();
+  await expect(page).toHaveURL(`${REMOTE_ORIGIN}/pair`);
+  await expect(page.getByRole('heading', { name: 'Pairing recovery' })).toBeVisible();
+});
+
+test('remote startup handles restoration failure for an invalid remembered key', async ({ page, cockpit }) => {
+  const startup = await remoteStartup(page, cockpit.url, 'not-a-channel-key');
+  await page.goto(REMOTE_ORIGIN);
+  await expect(page.getByTestId('connection-error')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reload', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Sign in or pair again' })).toHaveAttribute('href', '/pair');
+  expect(startup.plaintextRequests).toEqual([]);
+  expect(startup.sealedTargets).toEqual([]);
+  expect(startup.sockets).toEqual([]);
 });
 
 /** Echoes the settings a PUT carried, which is what the hub does after clamping. */

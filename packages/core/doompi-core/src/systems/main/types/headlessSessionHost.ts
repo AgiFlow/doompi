@@ -7,6 +7,7 @@ import type { DoomWebComposition } from '../../../exports/packageApi';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
 import type { DoomServerBundleEntry } from '../../../exports/serverFacet';
 import type { ContextProjectionInput } from '../../../services/contextProjection';
+import type { ServerTelemetry } from '../../../services/serverTelemetry';
 import type { SyncRegistration } from '../../../services/syncRegistration';
 import type { DirectHarnessRuntime } from '../../../types/server/directHarnessRuntime';
 import type { SessionToolSurface } from '../../../types/server/sessionToolSurface';
@@ -45,6 +46,7 @@ export interface HeadlessSessionHostOptions {
   ) => void;
   contextGroups?: (context: Context, selection: DoomHeadlessSelection) => ContextProjectionInput['groups'];
   onNotice?: (message: string) => void;
+  telemetry?: Pick<ServerTelemetry, 'recordError'>;
   /**
    * Load Pi native extensions from the synced composition. Defaults to enabled and resolves to
    * a no-op when the worktree has no valid sync registration.
