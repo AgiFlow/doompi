@@ -1,3 +1,31 @@
+## 0.0.1-alpha.121 (2026-10-05)
+
+### 🩹 Fixes
+
+- **doompi-web:** let the backend decide the web template without waiting for sessions ([#314](https://github.com/AgiFlow/doompi/pull/314))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.94
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.83
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.116
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.95
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.117
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.95
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.94
+- Updated @agimon-ai/doompi-plan to 0.0.1-alpha.117
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.95
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.118
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.95
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.117
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.117
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.120 (2026-10-05)
 
 ### 🧱 Updated Dependencies
