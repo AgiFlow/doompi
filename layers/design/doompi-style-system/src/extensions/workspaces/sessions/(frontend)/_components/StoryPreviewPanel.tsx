@@ -8,6 +8,7 @@ import type {
   ExportStoryPreviewImageView,
   StoryPreviewMetadataView,
   StoryPreviewSeed,
+  StoryPreviewSelection,
 } from '../../../../../types/previewApi';
 import { buildPreview, disposePreview, exportPreviewImage, storyMetadata } from '../_lib/previewApi';
 import {
@@ -39,6 +40,7 @@ interface StoryPreviewSource {
   kind?: string;
   revision?: number;
   sourceSha256?: string;
+  preview?: StoryPreviewSelection;
 }
 
 interface StoryPreviewIdentity {
@@ -94,14 +96,17 @@ export function StoryPreviewPanel({
   onAnnotationCandidate,
 }: StoryPreviewPanelProps) {
   const contextualSource = source ?? seed?.source;
-  const sourcePath = contextualSource?.path ?? '';
+  const sourcePath = contextualSource?.path ?? seed?.storyPath ?? '';
   const sourceDirty = contextualSource?.hasUnsavedChanges === true;
   const sourceRevision = contextualSource?.revision ?? 0;
   const sourceSha256 = contextualSource?.sourceSha256 ?? '';
-  const contextual = contextualSource !== undefined;
-  const [appPath, setAppPath] = useState(contextual ? '' : '.');
+  const selectedAppPath = seed?.appPath ?? contextualSource?.preview?.appPath;
+  const selectedExport = seed?.storyExport ?? contextualSource?.preview?.storyExport;
+  const snapshot = seed?.snapshot ?? contextualSource?.preview?.snapshot ?? false;
+  const contextual = contextualSource !== undefined || seed?.storyPath !== undefined;
+  const [appPath, setAppPath] = useState(selectedAppPath ?? (contextual ? '' : '.'));
   const [storyPath, setStoryPath] = useState(sourcePath);
-  const [storyExport, setStoryExport] = useState(contextual ? '' : 'Playground');
+  const [storyExport, setStoryExport] = useState(selectedExport ?? (contextual ? '' : 'Playground'));
   const [storyExports, setStoryExports] = useState<
     readonly StoryPreviewMetadataView['exports'][number][] | undefined
   >();
@@ -134,6 +139,7 @@ export function StoryPreviewPanel({
   const pinch = useRef<{ distance: number; zoom: number } | undefined>(undefined);
   const pan = useRef<{ x: number; y: number; left: number; top: number } | undefined>(undefined);
   const imageScroll = useRef<HTMLDivElement>(null);
+  const [snapshotImage, setSnapshotImage] = useState<ExportStoryPreviewImageView | undefined>();
 
   dirtyRef.current = sourceDirty;
 
@@ -156,9 +162,10 @@ export function StoryPreviewPanel({
     workingRef.current = false;
     setWorking(false);
     setStoryExports(undefined);
-    setAppPath(contextual ? '' : '.');
+    setAppPath(selectedAppPath ?? (contextual ? '' : '.'));
     setStoryPath(sourcePath);
-    setStoryExport(contextual ? '' : 'Playground');
+    setStoryExport(selectedExport ?? (contextual ? '' : 'Playground'));
+    setSnapshotImage(undefined);
     builtRequestRef.current = undefined;
     setBuiltRequest(undefined);
     setAnnotationImage(undefined);
@@ -184,7 +191,10 @@ export function StoryPreviewPanel({
 
     let current = true;
     setStatus(sourceDirty ? 'Loading story metadata. Preview uses saved source.' : 'Loading story metadata…');
-    void storyMetadata(sessionId, { storyPath: sourcePath })
+    void storyMetadata(sessionId, {
+      storyPath: sourcePath,
+      ...(selectedAppPath === undefined ? {} : { appPath: selectedAppPath }),
+    })
       .then((result) => {
         if (!current || generationRef.current !== generation) return;
         if (!result.ok) {
@@ -196,7 +206,12 @@ export function StoryPreviewPanel({
         setAppPath(result.metadata.appPath);
         setStoryPath(result.metadata.storyPath);
         setStoryExports(exports);
-        setStoryExport(preferredExport(exports));
+        if (selectedExport !== undefined && !exports.some((entry) => entry.exportName === selectedExport)) {
+          setStoryExport('');
+          setStatus(`Story export "${selectedExport}" is no longer available. Choose an export.`);
+          return;
+        }
+        setStoryExport(selectedExport ?? preferredExport(exports));
         if (exports.length === 0) {
           setStatus('No story exports were found in this file.');
         } else if (dirtyRef.current) {
@@ -219,7 +234,7 @@ export function StoryPreviewPanel({
       previewRef.current = undefined;
       if (ownedPreview !== undefined) void disposePreview(sessionId, ownedPreview.handle);
     };
-  }, [contextual, sessionId, sourcePath, sourceRevision, sourceSha256]);
+  }, [contextual, sessionId, sourcePath, sourceRevision, sourceSha256, selectedAppPath, selectedExport, snapshot]);
 
   useEffect(() => {
     if (!contextual || !sourceDirty) return;
@@ -248,6 +263,24 @@ export function StoryPreviewPanel({
     setWorking(true);
     setStatus('Building preview…');
     try {
+      if (snapshot) {
+        const result = await exportPreviewImage(requestSessionId, request);
+        if (generationRef.current !== generation || operationRef.current !== operation) return false;
+        if (!result.ok) {
+          setStatus(result.error);
+          return false;
+        }
+        const previous = previewRef.current;
+        previewRef.current = undefined;
+        setPreview(undefined);
+        if (previous !== undefined) void disposePreview(requestSessionId, previous.handle);
+        builtRequestRef.current = request;
+        setBuiltRequest(request);
+        setSnapshotImage(result.image);
+        setAnnotationImage(undefined);
+        setStatus('Snapshot preview ready. This configuration does not use the interactive web preview.');
+        return true;
+      }
       const result = await buildPreview(requestSessionId, request);
       if (generationRef.current !== generation || operationRef.current !== operation) {
         if (result.ok) void disposePreview(requestSessionId, result.preview.handle);
@@ -283,7 +316,7 @@ export function StoryPreviewPanel({
         setWorking(false);
       }
     }
-  }, [request, sessionId]);
+  }, [request, sessionId, snapshot]);
 
   useEffect(() => {
     if (
@@ -347,21 +380,22 @@ export function StoryPreviewPanel({
       setAnnotationRect(undefined);
       return;
     }
+    const captureKey = preview?.handle ?? snapshotImage?.captureId;
     if (
-      preview === undefined ||
+      captureKey === undefined ||
       annotationImage !== undefined ||
       working ||
-      annotationExportRef.current === preview.handle
+      annotationExportRef.current === captureKey
     )
       return;
     const generation = generationRef.current;
     void image().then((result) => {
       if (result === undefined || generationRef.current !== generation) return;
-      annotationExportRef.current = preview.handle;
+      annotationExportRef.current = captureKey;
       setAnnotationImage(result);
       setStatus('Frozen source-backed image ready for Author annotations.');
     });
-  }, [activeTool, annotationImage, image, onAnnotationCandidate, preview, working]);
+  }, [activeTool, annotationImage, image, onAnnotationCandidate, preview, snapshotImage, working]);
 
   function updateAnnotation(event: ReactPointerEvent<HTMLDivElement>): void {
     if (annotationStart === undefined) return;
@@ -405,7 +439,7 @@ export function StoryPreviewPanel({
   }
 
   const multipleExports = storyExports !== undefined && storyExports.length > 1;
-  const previewVisible = preview !== undefined;
+  const previewVisible = preview !== undefined || snapshotImage !== undefined;
   const authorAnnotationActive = onAnnotationCandidate !== undefined && activeTool !== 'select';
   useEffect(() => {
     setStroke([]);
@@ -515,17 +549,13 @@ export function StoryPreviewPanel({
         </Button>
         <Button
           variant="outline"
-          disabled={preview === undefined || working}
+          disabled={!previewVisible || working}
           onClick={() => void image().then((result) => result && imageDownload(result.data, result.storyExport))}
         >
           Export PNG
         </Button>
         {onAnnotationCandidate === undefined ? (
-          <Button
-            variant="outline"
-            disabled={preview === undefined || working}
-            onClick={() => void prepareAnnotation()}
-          >
+          <Button variant="outline" disabled={!previewVisible || working} onClick={() => void prepareAnnotation()}>
             Prepare annotation
           </Button>
         ) : null}
@@ -541,7 +571,7 @@ export function StoryPreviewPanel({
           Save changes to preview. Preview uses saved source.
         </p>
       ) : null}
-      {preview === undefined ? (
+      {!previewVisible ? (
         <div className="grid min-h-48 place-items-center rounded border border-dashed border-doom-border text-sm text-doom-faint">
           No preview built.
         </div>
@@ -784,7 +814,16 @@ export function StoryPreviewPanel({
             </div>
           </div>
         </div>
-      ) : (
+      ) : snapshotImage !== undefined ? (
+        <figure className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto rounded border border-doom-border p-2">
+          <figcaption className="text-xs text-doom-dim">Snapshot preview, not interactive</figcaption>
+          <img
+            className="max-w-full self-start"
+            src={`data:${snapshotImage.mimeType};base64,${snapshotImage.data}`}
+            alt={`${snapshotImage.storyExport} story snapshot`}
+          />
+        </figure>
+      ) : preview !== undefined ? (
         <iframe
           key={preview.handle}
           title={`${preview.storyExport} story preview`}
@@ -793,7 +832,7 @@ export function StoryPreviewPanel({
           srcDoc={isolatedPreviewHtml(preview.html)}
           className="min-h-0 flex-1 rounded border border-doom-border bg-white"
         />
-      )}
+      ) : null}
       {annotationImage === undefined || onAnnotationCandidate !== undefined ? null : (
         <div className="grid gap-2">
           <div
@@ -834,7 +873,7 @@ export function StoryPreviewPanel({
           </p>
         </div>
       )}
-      {preview === undefined || onAnnotationCandidate !== undefined ? null : (
+      {!previewVisible || onAnnotationCandidate !== undefined ? null : (
         <div className="flex gap-2">
           <label className="grid min-w-0 flex-1 gap-1 text-xs text-doom-dim">
             AI design feedback

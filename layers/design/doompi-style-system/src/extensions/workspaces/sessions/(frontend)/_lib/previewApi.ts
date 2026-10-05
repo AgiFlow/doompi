@@ -6,10 +6,19 @@ import type {
   StoryPreviewMetadataRequest,
   StoryPreviewMetadataView,
 } from '../../../../../types/previewApi';
+import type { StyleSystemCatalogRequest, StyleSystemCatalogView } from '../../../../../types/styleSystemCatalog';
 
 function errorMessage(result: { status: number; error: string }): string {
   if (result.status === 0) return 'The preview service is unreachable.';
   return result.error === '' ? `The preview service answered ${String(result.status)}.` : result.error;
+}
+
+export async function styleSystemCatalog(
+  sessionId: string,
+  request: StyleSystemCatalogRequest = {},
+): Promise<{ ok: true; catalog: StyleSystemCatalogView } | { ok: false; error: string }> {
+  const result = await api.session(sessionId).catalog({ body: request });
+  return result.ok ? { ok: true, catalog: result.data } : { ok: false, error: errorMessage(result) };
 }
 
 export async function storyMetadata(

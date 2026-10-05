@@ -8,6 +8,7 @@ import {
   authorPreviewActionSlot,
   type AuthorPreviewActionSource,
   type AuthorPreviewDisplayedAnnotation,
+  type AuthorOpenSourceAction,
 } from '../../../../../types/authorPreview';
 import { dropAuthorViewportSession, focusAuthorViewport, openAuthorCanvas } from '../_lib/authorBrowserBridge';
 import { canvasAliases, canvasFailures, canvasPaths } from '../_lib/authorCanvasState';
@@ -25,6 +26,7 @@ import {
   putAuthorDocument,
   releaseAuthorDocumentFocus,
   requestAuthorSave,
+  setAuthorPreviewSelection,
   setAuthorRegionCandidate,
   setAuthorStoryPreview,
   setAuthorToolMode,
@@ -93,7 +95,13 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
   const activeTool = workspace?.toolsByDocument[normalizeAuthorPath(path)] ?? 'select';
   const [markdownPreview, setMarkdownPreview] = useState(true);
   const [status, setStatus] = useState<string | undefined>();
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const previewSelection =
+    workspace?.previewSelections?.[normalizeAuthorPath(props.path)] ??
+    workspace?.previewSelections?.[normalizeAuthorPath(path)];
+  const [previewOpen, setPreviewOpen] = useState(previewSelection !== undefined);
+  useEffect(() => {
+    if (previewSelection !== undefined) setPreviewOpen(true);
+  }, [previewSelection]);
   const kind = document?.kind;
   const previewSource: AuthorPreviewActionSource | undefined =
     document === undefined
@@ -104,6 +112,7 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
           hasUnsavedChanges: document.version !== document.savedVersion,
           revision: document.savedVersion,
           sourceSha256: document.sourceSha256,
+          ...(previewSelection === undefined ? {} : { preview: previewSelection }),
         };
   const previewAction =
     previewSource === undefined
@@ -308,6 +317,39 @@ function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
   );
 }
 
+export const authorOpenSourceAction: AuthorOpenSourceAction = {
+  version: 1,
+  createTab({ sessionId, path, preview }) {
+    const normalized = normalizeAuthorPath(path);
+    if (
+      sessionId.trim() === '' ||
+      normalized === '' ||
+      path.startsWith('/') ||
+      /^[A-Za-z]:/.test(path) ||
+      path.replaceAll('\\', '/').split('/').includes('..')
+    )
+      throw new Error('Author source opening requires a session and a repository-relative path.');
+    if (
+      preview !== undefined &&
+      (typeof preview.appPath !== 'string' ||
+        preview.appPath.trim() === '' ||
+        typeof preview.storyExport !== 'string' ||
+        !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(preview.storyExport) ||
+        (preview.snapshot !== undefined && typeof preview.snapshot !== 'boolean'))
+    )
+      throw new Error('Author preview requires a project and an exact story export.');
+    const canonical = canvasPaths.state[authorDocumentKey(sessionId, normalized)] ?? normalized;
+    const prefix = `${sessionId}\n`;
+    const ownerKey = Object.entries(canvasPaths.state).find(
+      ([key, path]) => key.startsWith(prefix) && path === canonical,
+    )?.[0];
+    const tabPath = ownerKey?.slice(prefix.length) ?? normalized;
+    setAuthorPreviewSelection(sessionId, tabPath, preview);
+    if (canonical !== tabPath) setAuthorPreviewSelection(sessionId, canonical, preview);
+    return authorFileTab(tabPath, canvasAliases.state[authorDocumentKey(sessionId, tabPath)]);
+  },
+};
+
 export function authorFileTab(path: string, preferredAlias?: string): TransientTab {
   const normalized = normalizeAuthorPath(path);
   return {
@@ -400,7 +442,10 @@ export function authorFileTab(path: string, preferredAlias?: string): TransientT
     },
     onClose(sessionId) {
       const key = authorDocumentKey(sessionId, normalized);
-      setAuthorToolMode(sessionId, canvasPaths.state[key] ?? normalized, 'select');
+      const canonical = canvasPaths.state[key] ?? normalized;
+      setAuthorToolMode(sessionId, canonical, 'select');
+      setAuthorPreviewSelection(sessionId, normalized, undefined);
+      if (canonical !== normalized) setAuthorPreviewSelection(sessionId, canonical, undefined);
       pendingCanvases.get(key)?.abort();
       pendingCanvases.delete(key);
       const alias = canvasAliases.state[key] ?? preferredAlias;

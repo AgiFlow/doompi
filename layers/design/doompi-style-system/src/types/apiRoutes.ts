@@ -6,8 +6,14 @@ import type {
   ExportStoryPreviewImageView,
   StoryPreviewMetadataView,
 } from './previewApi';
+import type { StyleSystemCatalogView } from './styleSystemCatalog';
 
 export default defineApiRoutes({
+  catalog: {
+    method: 'POST',
+    path: '/catalog',
+    response: apiResponse<StyleSystemCatalogView>(),
+  },
   metadata: {
     method: 'POST',
     path: '/metadata',

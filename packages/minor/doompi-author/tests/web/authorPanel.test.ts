@@ -7,9 +7,10 @@ import { webPlugin as scopedWebPlugin } from '../../generated/web';
 import {
   AuthorDocumentPanel,
   authorFileTab,
+  authorOpenSourceAction,
   displayedAuthorRegions,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
-import { canvasAliases } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCanvasState';
+import { canvasAliases, canvasPaths } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCanvasState';
 import { authorDocumentContextContent } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCapture';
 import type { AuthorRequestRecord } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
 import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
@@ -34,6 +35,7 @@ describe('the Author web plugin', () => {
       expect.objectContaining({ id: 'authoring', label: 'authoring', order: 30, autoSelect: true }),
     ]);
     expect(webPlugin.slots).toEqual([
+      expect.objectContaining({ slot: 'author.open-source' }),
       expect.objectContaining({ slot: 'author.preview-action' }),
       expect.objectContaining({ slot: 'author.preview-provider' }),
     ]);
@@ -86,6 +88,64 @@ describe('the Author web plugin', () => {
       expect.objectContaining({ id: 'author.toggle', command: 'minor author' }),
     ]);
   });
+  it('hands off directly to Author and updates variants before focusing an existing source tab', () => {
+    const path = 'shared/Button.stories.tsx';
+    const first = { appPath: 'apps/web', storyExport: 'Default' };
+    const next = { appPath: 'apps/native', storyExport: 'Playground', snapshot: true };
+    try {
+      const tab = authorOpenSourceAction.createTab({ sessionId: 'handoff', path, preview: first });
+      expect(tab).toMatchObject({ retainComposer: true, label: 'Button.stories.tsx' });
+      expect(workspace.authorSessionWorkspace('handoff').previewSelections?.[path]).toEqual(first);
+      expect(authorOpenSourceAction.createTab({ sessionId: 'handoff', path, preview: next }).id).toBe(tab.id);
+      expect(workspace.authorSessionWorkspace('handoff').previewSelections?.[path]).toEqual(next);
+      expect(workspace.authorSessionWorkspace('other').previewSelections?.[path]).toBeUndefined();
+      expect(webPlugin.fills).toEqual(
+        expect.arrayContaining([expect.objectContaining({ slot: 'author.open-source', data: authorOpenSourceAction })]),
+      );
+    } finally {
+      workspace.dropAuthorSession('handoff');
+    }
+  });
+  it('reuses the provisional tab when a canonical path is handed off with another variant', () => {
+    const sessionId = 'canonical-handoff';
+    const provisional = 'linked/Button.stories.tsx';
+    const canonical = 'shared/Button.stories.tsx';
+    const key = workspace.authorDocumentKey(sessionId, provisional);
+    const next = { appPath: 'apps/native', storyExport: 'Playground', snapshot: true };
+    try {
+      const tab = authorOpenSourceAction.createTab({
+        sessionId,
+        path: provisional,
+        preview: { appPath: 'apps/web', storyExport: 'Default' },
+      });
+      canvasPaths.setState((state) => ({ ...state, [key]: canonical }));
+      canvasAliases.setState((state) => ({ ...state, [key]: 'button' }));
+      const reused = authorOpenSourceAction.createTab({ sessionId, path: canonical, preview: next });
+      expect(reused.id).toBe(tab.id);
+      expect(reused.label).toBe('button · Button.stories.tsx');
+      const selections = workspace.authorSessionWorkspace(sessionId).previewSelections;
+      expect(selections?.[provisional]).toEqual(next);
+      expect(selections?.[canonical]).toEqual(next);
+    } finally {
+      workspace.dropAuthorSession(sessionId);
+      canvasPaths.setState((state) => {
+        const next = { ...state };
+        delete next[key];
+        return next;
+      });
+      canvasAliases.setState((state) => {
+        const next = { ...state };
+        delete next[key];
+        return next;
+      });
+    }
+  });
+  it.each(['', '/outside.stories.tsx', '../outside.stories.tsx', 'C:\\outside.stories.tsx'])(
+    'rejects unsafe source handoffs: %s',
+    (path) => {
+      expect(() => authorOpenSourceAction.createTab({ sessionId: 'handoff', path })).toThrow();
+    },
+  );
   it('opens documents as closeable retained-Composer tabs', () => {
     expect(authorFileTab('docs/report.md')).toMatchObject({
       label: 'report.md',
