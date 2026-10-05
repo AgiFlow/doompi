@@ -134,41 +134,34 @@ for (const viewport of [
 test.describe('workspace template navigation', () => {
   test.use({ sessionCount: 2, workspaceCount: 2 });
 
-  test('retains the shell until the destination workspace preference resolves', async ({ context, cockpit }) => {
+  test('keeps the launch template across workspace selection and Settings remounts', async ({ context, cockpit }) => {
     const destination = cockpit.workspaces[1]!;
     fs.mkdirSync(path.join(destination.root, '.doom'), { recursive: true });
     fs.writeFileSync(path.join(destination.root, '.doom', 'config.yaml'), `web:\n  template: ${ELEGANT}\n`);
     const page = await context.newPage();
-    let release!: () => void;
-    let requested = false;
-    const pending = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await page.route(
-      (url) => url.pathname === `/api/workspaces/${destination.id}/settings` && url.searchParams.has('key'),
-      async (route) => {
-        requested = true;
-        await pending;
-        await route.continue();
-      },
-    );
+    await recordTemplateStartup(page);
     await page.goto(`${cockpit.url}/session/s1`);
-    await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
+    await expectFirstTemplate(page, ADVANCED);
     const rail = await page.getByTestId('session-rail-panel').elementHandle();
     await recordNavigationLoading(page);
-    try {
-      await page.getByTestId('session-open-s2').click();
-      await expect.poll(() => requested).toBe(true);
-      await expect(page.getByTestId('session-card-s2')).toHaveAttribute('data-active', 'true');
-      await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
-      expect(await rail!.evaluate((element) => element.isConnected)).toBe(true);
-      await expectNoNavigationLoading(page);
-      release();
-      await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ELEGANT);
-      await expectNoNavigationLoading(page);
-    } finally {
-      release();
-    }
+    await page.getByTestId('session-open-s2').click();
+    await expect(page.getByTestId('session-card-s2')).toHaveAttribute('data-active', 'true');
+    expect(await rail!.evaluate((element) => element.isConnected)).toBe(true);
+    await expectNoNavigationLoading(page);
+    await expectFirstTemplate(page, ADVANCED);
+    await openAppearance(page);
+    await page.getByTestId('template-scope').click();
+    await page.getByRole('option', { name: `Workspace: ${destination.root}`, exact: true }).click();
+    await expect(page.getByTestId('template-origin')).toContainText(`${ELEGANT} (repository)`);
+    await expectFirstTemplate(page, ADVANCED);
+    await page.getByTestId('template-scope').click();
+    await page.getByRole('option', { name: 'Global default', exact: true }).click();
+    await expect(page.getByTestId('template-origin')).toContainText('automatic fallback');
+    await expectFirstTemplate(page, ADVANCED);
+    await page.getByTestId('settings-close').click();
+    await expect(page.getByTestId('session-card-s2')).toHaveAttribute('data-active', 'true');
+    await expectFirstTemplate(page, ADVANCED);
+    await expectNoNavigationLoading(page);
   });
 });
 
@@ -277,11 +270,17 @@ test('discovers an independent package without a host import', async ({ page, co
   await expect(page.getByTestId('independent-template')).toBeVisible();
 });
 
-test('adopts the workspace implementation when a template keeps the same identifier', async ({ page, cockpit }) => {
+test('uses the backend mount for a same-id template regardless of the Settings target', async ({ page, cockpit }) => {
   await page.goto(`${cockpit.url}/settings/appearance`);
   await saveChoice(page, 'independent-reader');
-  await expect(page.getByTestId('independent-template')).toHaveAttribute('data-template-scope', 'global');
+  await expect(page.getByTestId('independent-template')).toHaveAttribute('data-template-scope', 'workspace');
   await page.getByTestId('independent-workspace-settings').click();
+  await expect(page.getByTestId('independent-template')).toHaveAttribute('data-template-scope', 'workspace');
+  await page.getByTestId('settings-workspace-general').click();
+  await page.getByTestId('settings-section-appearance').click();
+  await workspaceScope(page);
+  await page.getByTestId('template-scope').click();
+  await page.getByRole('option', { name: 'Global default', exact: true }).click();
   await expect(page.getByTestId('independent-template')).toHaveAttribute('data-template-scope', 'workspace');
   await expect(page.locator('[data-template]')).toHaveAttribute('data-template', 'independent-reader');
 });
@@ -318,7 +317,10 @@ test('uses Advanced for global Settings by default, including a cold appearance 
   await expect(page.getByTestId('session-rail-panel')).toBeVisible();
 });
 for (const template of [ADVANCED, ELEGANT]) {
-  test(`first renders ${template} only after composition and configuration are ready`, async ({ context, cockpit }) => {
+  test(`first renders ${template} from compositions while scoped Settings configuration is pending`, async ({
+    context,
+    cockpit,
+  }) => {
     // Use an unwrapped page so the fixture's interaction gate cannot conceal startup rendering.
     const page = await context.newPage();
     const file = path.join(path.dirname(cockpit.agentDir), '.pi', '.doom', 'config.yaml');
@@ -357,10 +359,15 @@ for (const template of [ADVANCED, ELEGANT]) {
         .locator('link[data-doompi-plugin-composition][media="all"]')
         .nth(cockpit.pluginStyleCount - 1)
         .waitFor({ state: 'attached' });
-      await expect(page.getByTestId('template-loading')).toBeVisible();
-      await expect(page.getByTestId('composer-input')).toHaveCount(0);
-      releaseConfiguration();
       await expectFirstTemplate(page, template);
+      await expect(page.getByTestId('composer-input')).toBeVisible();
+      await openAppearance(page);
+      await expect(page.getByTestId('template-save')).toBeDisabled();
+      await expectFirstTemplate(page, template);
+      releaseConfiguration();
+      await expect(page.getByTestId('template-save')).toBeEnabled();
+      await expectFirstTemplate(page, template);
+      await page.getByTestId('settings-close').click();
       await expect(page.getByTestId('composer-input')).toBeVisible();
       await page.reload();
       await expectFirstTemplate(page, template);
@@ -372,9 +379,12 @@ for (const template of [ADVANCED, ELEGANT]) {
 }
 
 for (const entry of ['landing', 'deep-link']) {
-  test(`waits for ${entry} session scope before rendering its workspace template`, async ({ context, cockpit }) => {
+  test(`renders the launch template on ${entry} before the WS session snapshot arrives`, async ({
+    context,
+    cockpit,
+  }) => {
     const page = await context.newPage();
-    const configFile = path.join(path.dirname(cockpit.teamTemp), 'workspaces', '.doom', 'config.yaml');
+    const configFile = path.join(cockpit.workspaces[0]!.root, '.doom', 'config.yaml');
     fs.mkdirSync(path.dirname(configFile), { recursive: true });
     fs.writeFileSync(configFile, `web:\n  template: ${ELEGANT}\n`);
     await recordTemplateStartup(page);
@@ -396,44 +406,100 @@ for (const entry of ['landing', 'deep-link']) {
       await page.goto(entry === 'landing' ? cockpit.url : `${cockpit.url}/session/${cockpit.session.id}`);
       await page.locator('link[data-doompi-plugin-composition][media="all"]').first().waitFor({ state: 'attached' });
       await expect.poll(() => releaseSockets.length).toBeGreaterThan(0);
-      await expect(page.getByTestId('template-loading')).toBeVisible();
-      await expect(page.getByTestId('template-diagnostic')).toHaveCount(0);
-      for (const release of releaseSockets) release();
       await expectFirstTemplate(page, ELEGANT);
-      await expect(page.getByTestId('composer-input')).toBeVisible();
+      await expect(page.getByTestId('template-loading')).toHaveCount(0);
+      await expect(page.getByTestId('template-diagnostic')).toHaveCount(0);
+      await expect(page.getByTestId('session-card-s1')).toHaveCount(0);
+      await expect(page.getByTestId('welcome')).toHaveCount(0);
+      for (const release of releaseSockets) release();
+      await expect(page).toHaveURL(/\/session\/s1$/);
+      await expectFirstTemplate(page, ELEGANT);
+      await expect(page.getByTestId('composer-input')).toBeEnabled();
     } finally {
       for (const release of releaseSockets) release();
     }
   });
 }
 
-for (const resource of ['compositions', 'settings']) {
-  test(`reports ${resource} bootstrap failure and retries without a stuck loading screen`, async ({
-    context,
-    cockpit,
-  }) => {
-    const page = await context.newPage();
-    let failing = true;
-    await page.route(
-      (url) => url.pathname === `/api/${resource}`,
-      async (route) => {
-        if (failing) await route.fulfill({ status: 503, json: { error: 'Bootstrap temporarily unavailable' } });
-        else await route.continue();
-      },
-    );
-    await page.goto(`${cockpit.url}/settings/appearance`);
-    await expect(page.getByTestId('template-diagnostic')).toContainText(
-      resource === 'compositions' ? '503' : 'Bootstrap temporarily unavailable',
-    );
-    await expect(page.getByTestId('template-loading')).toHaveCount(0);
-    await expect(page.getByTestId('template-diagnostic')).not.toContainText('No compatible');
-    await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
-    failing = false;
-    await page.getByRole('button', { name: 'Retry templates' }).click();
-    await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
-    await expect(page.getByTestId('template-diagnostic')).toHaveCount(0);
+test('retains the chosen template on reconnect and adopts changed launch config only on Settings Reload', async ({
+  context,
+  cockpit,
+}) => {
+  const page = await context.newPage();
+  const closeSockets: Array<() => Promise<void>> = [];
+  await page.routeWebSocket(/.*/, (socket) => {
+    socket.connectToServer();
+    closeSockets.push(() => socket.close());
   });
-}
+  await recordTemplateStartup(page);
+  await page.goto(`${cockpit.url}/session/s1`);
+  await expectFirstTemplate(page, ADVANCED);
+  await expect(page.getByTestId('session-card-s1')).toBeVisible();
+  const file = path.join(cockpit.workspaces[0]!.root, '.doom', 'config.yaml');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `web:\n  template: ${ELEGANT}\n`);
+  const refreshed = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/compositions');
+  await Promise.all(closeSockets.splice(0).map((close) => close()));
+  expect((await (await refreshed).json()).template).toEqual({
+    id: ELEGANT,
+    mount: { scope: 'workspace', workspaceId: cockpit.workspaces[0]!.id },
+  });
+  await expectFirstTemplate(page, ADVANCED);
+  await openAppearance(page);
+  await workspaceScope(page);
+  await expect(page.getByTestId('template-origin')).toContainText(`${ELEGANT} (repository)`);
+  await expectFirstTemplate(page, ADVANCED);
+  await page.getByTestId('template-reload').click();
+  await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ELEGANT);
+  await page.getByTestId('settings-close').click();
+  await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ELEGANT);
+});
+
+test('reports composition bootstrap failure and retries without a stuck loading screen', async ({
+  context,
+  cockpit,
+}) => {
+  const page = await context.newPage();
+  let failing = true;
+  await page.route('**/api/compositions', async (route) => {
+    if (failing) await route.fulfill({ status: 503, json: { error: 'Bootstrap temporarily unavailable' } });
+    else await route.continue();
+  });
+  await page.goto(`${cockpit.url}/settings/appearance`);
+  await expect(page.getByTestId('template-diagnostic')).toContainText('503');
+  await expect(page.getByTestId('template-loading')).toHaveCount(0);
+  await expect(page.getByTestId('template-diagnostic')).not.toContainText('No compatible');
+  await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
+  failing = false;
+  await page.getByRole('button', { name: 'Retry templates' }).click();
+  await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
+  await expect(page.getByTestId('template-diagnostic')).toHaveCount(0);
+});
+
+test('keeps the template usable when Settings configuration fails and reloads the editor explicitly', async ({
+  context,
+  cockpit,
+}) => {
+  const page = await context.newPage();
+  let failing = true;
+  await page.route(
+    (url) => url.pathname === '/api/settings' && url.searchParams.has('key'),
+    async (route) => {
+      if (failing) await route.fulfill({ status: 503, json: { error: 'Configuration temporarily unavailable' } });
+      else await route.continue();
+    },
+  );
+  await page.goto(`${cockpit.url}/settings/appearance`);
+  await expect(page.getByTestId('template-save-error')).toContainText('Configuration temporarily unavailable');
+  await expect(page.getByTestId('template-loading')).toHaveCount(0);
+  await expect(page.getByTestId('template-diagnostic')).toHaveCount(0);
+  await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
+  failing = false;
+  await page.getByTestId('template-reload').click();
+  await expect(page.getByTestId('template-save-error')).toHaveCount(0);
+  await expect(page.getByTestId('template-save')).toBeEnabled();
+  await expect(page.locator('[data-template]')).toHaveAttribute('data-template', ADVANCED);
+});
 
 test('renders Advanced when composition bootstrap fails while template configuration is pending', async ({
   context,

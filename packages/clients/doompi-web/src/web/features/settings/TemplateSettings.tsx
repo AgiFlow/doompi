@@ -12,6 +12,7 @@ import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
 
 import { webTemplateCatalog } from '../../lib/pluginRegistry';
+import { reloadWebTemplateDecision } from '../../lib/pluginRuntime';
 import { resolveWebTemplate } from '../../lib/templateCatalog';
 import {
   configuredTemplate,
@@ -117,7 +118,10 @@ export function TemplateSettings({
           onClick={() => {
             if (choice !== undefined)
               void saveTemplateDefault(choice, workspaceId).then((saved) => {
-                if (saved) setDraft(null);
+                if (saved) {
+                  setDraft(null);
+                  void reloadWebTemplateDecision();
+                }
               });
           }}
         >
@@ -130,7 +134,10 @@ export function TemplateSettings({
           disabled={busy || missingWorkspace || configuration.config === undefined}
           onClick={() => {
             void saveTemplateDefault(null, workspaceId).then((saved) => {
-              if (saved) setDraft(null);
+              if (saved) {
+                setDraft(null);
+                void reloadWebTemplateDecision();
+              }
             });
           }}
         >
@@ -142,7 +149,7 @@ export function TemplateSettings({
           variant="ghost"
           disabled={busy}
           onClick={() => {
-            void refreshTemplateConfiguration(workspaceId);
+            void refreshTemplateConfiguration(workspaceId).then(() => reloadWebTemplateDecision());
           }}
         >
           Reload configuration
