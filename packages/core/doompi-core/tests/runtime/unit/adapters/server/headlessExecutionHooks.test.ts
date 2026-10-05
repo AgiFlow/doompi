@@ -532,4 +532,116 @@ describe('active headless execution hooks', () => {
       }
     },
   );
+  it.each(['reconciliation', 'resource-failure', 'disposal'] as const)(
+    'prepares a prompt safely during %s',
+    async (scenario) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-headless-preparation-'));
+      const streamSimple = vi.fn<Models['streamSimple']>(() => response([{ type: 'text', text: 'done' }], 'stop'));
+      vi.spyOn(ModelRuntime, 'create').mockResolvedValue({
+        getModel: () => model,
+        getModels: () => [model],
+        getAvailable: async () => [model],
+        streamSimple,
+      } as unknown as ModelRuntime);
+      vi.spyOn(SettingsManager, 'create').mockReturnValue(SettingsManager.inMemory());
+      const facet: LoadedServerFacet = {
+        retained: true,
+        initiallyEligible: true,
+        declaration: {
+          packageName: '@test/preparation',
+          entry: './facet.ts',
+          module: './facet.mjs',
+          scopes: ['session'],
+          required: true,
+          owners: [{ majorMode: 'development', layer: 'tools' }],
+        },
+        facet: {
+          inject: [DOOM_HEADLESS_HOST_SERVICE],
+          apply(context: Context) {
+            requireDoomHeadlessHost(context).registerResource({
+              name: 'preparation-context',
+              kind: 'context',
+              read: () => 'prepared context',
+            });
+          },
+        },
+      };
+      let session: Awaited<ReturnType<typeof createHeadlessSessionHost>> | undefined;
+      let apis: Awaited<ReturnType<typeof serveSessionApis>> | undefined;
+      let release = () => {};
+      try {
+        session = await createHeadlessSessionHost({
+          cwd: root,
+          repoRoot: root,
+          sessionId: 'headless-preparation-test',
+          sessionName: 'Preparation',
+          agentArgs: ['--session-dir', root, '--system-prompt', 'base'],
+          environment: {},
+          candidates: [facet.declaration],
+          selection: { majorMode: 'development', activeLayers: ['tools'], domains: [], state: {} },
+        });
+        apis = await serveSessionApis({
+          sessionId: session.runtime.sessionId,
+          cwd: root,
+          internalToken: 'internal',
+          hubToken: 'hub',
+          environment: {},
+          directEvents: { publish: () => undefined, subscribe: () => () => undefined, close: () => undefined },
+          apis: [],
+          facets: [facet],
+          prepareFacets: session.prepareFacets,
+          activateFacets: session.activateFacets,
+          canDispatch: session.canDispatch,
+          onNotice: vi.fn(),
+        });
+        if (scenario === 'resource-failure') {
+          const failingRead = vi
+            .spyOn(session.host!, 'readResources')
+            .mockRejectedValue(new Error('fixture resource unavailable'));
+          await expect(session.runtime.prompt('prepare failing resource')).rejects.toThrow(
+            'fixture resource unavailable',
+          );
+          expect(streamSimple).not.toHaveBeenCalled();
+          failingRead.mockRestore();
+          await session.runtime.prompt('prepare recovered resource');
+          expect(streamSimple).toHaveBeenCalledOnce();
+        } else {
+          const gate = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          const unsubscribe = session.host!.subscribeSelection(() => gate);
+          const selecting = session.host!.select({});
+          const prompted = session.runtime.prompt('prepare while selecting');
+          // Attach rejection handling immediately, including on the unfixed host.
+          const outcome = prompted.then(
+            () => undefined,
+            (error: unknown) => error,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          expect(streamSimple).not.toHaveBeenCalled();
+          const disposing = scenario === 'disposal' ? session.dispose() : undefined;
+          release();
+          await selecting.catch((error: unknown) => {
+            if (scenario !== 'disposal') throw error;
+          });
+          const result = await outcome;
+          if (disposing !== undefined) {
+            await disposing;
+            expect(streamSimple).not.toHaveBeenCalled();
+          } else {
+            expect(result).toBeUndefined();
+            expect(streamSimple).toHaveBeenCalledOnce();
+          }
+          unsubscribe();
+        }
+      } finally {
+        release();
+        await session?.dispose().catch(() => undefined);
+        await apis?.close().catch(() => undefined);
+        vi.restoreAllMocks();
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    },
+    10_000,
+  );
 });

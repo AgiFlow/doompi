@@ -1,4 +1,6 @@
 import * as fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import {
   DOOM_BACKGROUND_WORK_SERVICE,
@@ -15,7 +17,13 @@ import {
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
 import type { DoomApi } from '@agimon-ai/doompi-core/packageApi';
+import { createHeadlessHub } from '@agimon-ai/doompi-core/server';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/serverFacet';
+import {
+  createSessionDeliveryService,
+  DOOM_SESSION_DELIVERY_SERVICE,
+  type DoomSessionDeliveryService,
+} from '@agimon-ai/doompi-session';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,8 +38,10 @@ import type { TeamExtensionRuntime } from '../../../src/services/teamRuntime';
 import { SUBAGENT_RUNS_TYPE } from '../../../src/types/webSubagents';
 import { TEST_SESSION_SCOPE } from '../../support/sessionScope';
 
-async function fixture(options: { serverHost?: unknown } = {}) {
-  const sessionId = TEST_SESSION_SCOPE.rootSessionId;
+async function fixture(
+  options: { serverHost?: unknown; sessionId?: string; delivery?: DoomSessionDeliveryService } = {},
+) {
+  const sessionId = options.sessionId ?? TEST_SESSION_SCOPE.rootSessionId;
   const execution = {
     cwd: process.cwd(),
     repoRoot: process.cwd(),
@@ -118,6 +128,7 @@ async function fixture(options: { serverHost?: unknown } = {}) {
       if (name === DOOM_BACKGROUND_WORK_SERVICE) return backgroundWork;
       if (name === DOOM_HEADLESS_HOST_SERVICE) return host;
       if (name === DOOM_SERVER_HOST_SERVICE) return serverHost;
+      if (name === DOOM_SESSION_DELIVERY_SERVICE) return options.delivery;
       return undefined;
     },
     effect: () => undefined,
@@ -163,6 +174,140 @@ afterEach(() => {
 });
 
 describe('teamHeadlessFacet', () => {
+  it('discovers live session peers and admits recovery delegation and replies without messaging foreign sessions', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'workflow-intercom-'));
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const deliveries: DoomSessionDeliveryService[] = [];
+    const fixtures: Awaited<ReturnType<typeof fixture>>[] = [];
+    const ids = [TEST_SESSION_SCOPE.rootSessionId, 'workflow-owner', 'foreign'];
+    const stops: Array<(() => void | Promise<void>) | undefined> = [];
+    try {
+      for (const id of ids) {
+        hub.register({
+          id,
+          name: id,
+          cwd: process.cwd(),
+          createdAt: 'now',
+          ...(id === 'workflow-owner' ? { parentSessionId: ids[0] } : {}),
+          host: {
+            runtime: { exited: new Promise(() => undefined) },
+            onPresentationFrame: () => () => undefined,
+          } as never,
+        });
+      }
+      const admissions = ids.map(() => vi.fn(async (_prompt: string, _delivery?: string) => undefined));
+      for (const [index, id] of ids.entries()) {
+        const communication = hub.sessionService.bindCommunication!(id);
+        const delivery = createSessionDeliveryService({
+          databasePath: path.join(directory, `${index}.sqlite`),
+          recipientKey: id,
+          communication,
+          authorizePeer: (peer) => hub.sessionService.canCommunicate!(id, peer),
+          admitPrompt: admissions[index]!,
+        });
+        deliveries.push(delivery);
+        if (index === 2) continue;
+        const test = await fixture({
+          sessionId: id,
+          delivery,
+          serverHost: {
+            scope: 'session',
+            registerApi: () => ({ dispose: vi.fn() }),
+            registerChannel: () => ({ dispose: vi.fn() }),
+            context: {
+              environment: {},
+              directEvents: hub.directEvents,
+              sessionCommunication: communication,
+              sessionService: hub.sessionService,
+            },
+          },
+        });
+        fixtures.push(test);
+        stops.push(await test.activities[0]!.start(test.execution));
+      }
+      const [parent, child] = fixtures;
+      const parentTool = parent!.tools.find((tool) => tool.name === 'intercom')!;
+      const childTool = child!.tools.find((tool) => tool.name === 'intercom')!;
+      expect(
+        await parentTool.execute('members', { action: 'members' }, undefined, undefined, parent!.execution),
+      ).toMatchObject({
+        details: { members: [{ name: 'main' }, { name: 'workflow-owner', role: 'session' }] },
+      });
+      expect(
+        await childTool.execute('members', { action: 'members' }, undefined, undefined, child!.execution),
+      ).toMatchObject({
+        details: { members: [{ name: 'main' }, { name: ids[0], role: 'session' }] },
+      });
+      const request = {
+        action: 'send',
+        to: 'workflow-owner',
+        message: 'Diagnose and recover run broken in your session.',
+      };
+      await expect(
+        parentTool.execute('session-ask', { ...request, action: 'ask' }, undefined, undefined, parent!.execution),
+      ).rejects.toThrow('Session peers support send only');
+      expect(parent!.mcpCatalog.get('intercom')?.execute).toBe(parentTool.execute);
+      const result = await parentTool.execute('recover-request', request, undefined, undefined, parent!.execution);
+      expect(result).toMatchObject({ details: { to: 'workflow-owner', deliveryId: expect.any(String) } });
+      await parentTool.execute('recover-request', request, undefined, undefined, parent!.execution);
+      await vi.waitFor(() => expect(admissions[1]).toHaveBeenCalledTimes(1));
+      expect(admissions[1]).toHaveBeenCalledWith(expect.stringContaining('Diagnose and recover run broken'), 'steer');
+      expect(admissions[1]!.mock.calls[0]![0]).toContain(ids[0]);
+      await childTool.execute(
+        'recovery-report',
+        { action: 'send', to: ids[0], message: 'Recovery is complete.' },
+        undefined,
+        undefined,
+        child!.execution,
+      );
+      await vi.waitFor(() =>
+        expect(admissions[0]).toHaveBeenCalledWith(expect.stringContaining('Recovery is complete.'), 'steer'),
+      );
+      await expect(
+        parentTool.execute(
+          'foreign',
+          { action: 'send', to: 'foreign', message: 'Recover this.' },
+          undefined,
+          undefined,
+          parent!.execution,
+        ),
+      ).rejects.toThrow();
+      expect(admissions[2]).not.toHaveBeenCalled();
+      await expect(
+        parentTool.execute(
+          'blank',
+          { action: 'send', to: 'workflow-owner', message: ' ' },
+          undefined,
+          undefined,
+          parent!.execution,
+        ),
+      ).rejects.toThrow('nonblank message');
+      await expect(
+        parentTool.execute(
+          'oversize',
+          { action: 'send', to: 'workflow-owner', message: 'x'.repeat(65_537) },
+          undefined,
+          undefined,
+          parent!.execution,
+        ),
+      ).rejects.toThrow('64 KiB');
+      await hub.closeSession('workflow-owner');
+      expect(
+        await parentTool.execute('closed-members', { action: 'members' }, undefined, undefined, parent!.execution),
+      ).toMatchObject({ details: { members: [{ name: 'main' }] } });
+      await expect(parentTool.execute('closed', request, undefined, undefined, parent!.execution)).rejects.toThrow();
+      await stops[0]?.();
+      await expect(parentTool.execute('detached', request, undefined, undefined, parent!.execution)).rejects.toThrow(
+        'Intercom is not active',
+      );
+    } finally {
+      for (const test of fixtures.reverse()) await test.dispose();
+      for (const delivery of deliveries.reverse()) await delivery.close();
+      await hub.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a missing session server host', async () => {
     await expect(fixture({ serverHost: null })).rejects.toThrow('The Doom server host is unavailable');
   });

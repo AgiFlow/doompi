@@ -218,13 +218,18 @@ export function createWorkflowServerRuntime(
     return active;
   };
   let runsTimer: ReturnType<typeof setTimeout> | undefined;
+  let runsAfter: ((active: boolean) => void) | undefined;
   /** Publishes the runs once for a burst of job and step events, which a fix loop can produce by the dozen. */
   const publishRunsSoon = (executionContext: typeof host.context, after?: (active: boolean) => void): void => {
+    if (after !== undefined) runsAfter = after;
     if (runsTimer !== undefined) return;
     runsTimer = setTimeout(() => {
       runsTimer = undefined;
+      const done = runsAfter;
+      runsAfter = undefined;
       try {
-        after?.(publishRuns(executionContext));
+        const active = publishRuns(executionContext);
+        done?.(active);
       } catch (error) {
         void telemetry.recordWarning('doom_workflow.publish_failed', error);
       }
@@ -409,7 +414,7 @@ export function createWorkflowServerRuntime(
       }
       const text = result.content.map((item) => item.text).join('\n');
       return textResult(
-        `${text}\nRuns in workflow session "${name}" (${child}), nested under this session. You will be told here when it finishes; troubleshoot and recover it there.`,
+        `${text}\nRuns in workflow session "${name}" (${child}), nested under this session. You will be told here when it finishes; troubleshoot and recover it there, or delegate to its owner with intercom send to "${child}".`,
       );
     } catch (error) {
       if (child !== undefined) await sessionService!.close(child).catch(reportLifecycleFailure);
@@ -919,6 +924,8 @@ export function createWorkflowServerRuntime(
       stopReleaseRequests?.();
       stopPeerReady?.();
       if (runsTimer !== undefined) clearTimeout(runsTimer);
+      runsTimer = undefined;
+      runsAfter = undefined;
       // Runs this session is running stop with it, rather than going on under a parent that is gone.
       await launcher.dispose();
       runProvider?.dispose();

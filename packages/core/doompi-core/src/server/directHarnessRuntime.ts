@@ -1366,7 +1366,9 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           await reconcile();
           await publish();
           if (status.status === 'unanswered' && status.reason !== 'aborted')
-            throw new Error(`Agent submission failed: ${status.reason}`);
+            throw new Error(
+              `Agent submission failed: ${status.reason}${typeof status.detail === 'string' && status.detail ? `: ${status.detail}` : ''}`,
+            );
           await drain();
         } finally {
           internalDelivery.delete(submission.id);

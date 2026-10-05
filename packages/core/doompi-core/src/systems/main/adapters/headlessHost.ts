@@ -574,14 +574,18 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       if (!this.disposed) this.options.onError?.(error);
     });
     await result;
-    // Selection listeners can replace tools and enqueue more selections before returning.
+    await this.settled();
+    if (this.failure !== undefined) throw this.failure;
+    this.assertReady();
+  }
+
+  /** Drain selections, including ones queued by selection listeners. */
+  async settled(): Promise<void> {
     let pending: Promise<void>;
     do {
       pending = this.tail;
       await pending;
     } while (pending !== this.tail);
-    if (this.failure !== undefined) throw this.failure;
-    this.assertReady();
   }
 
   private assertReady(): void {
