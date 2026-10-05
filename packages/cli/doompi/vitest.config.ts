@@ -11,6 +11,9 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
     bail: 10,
+    // Compiler subprocesses and recursive fixture cleanup share the runner's
+    // CPU and disk budget. Do not overlap these resource-heavy file suites.
+    maxWorkers: 1,
     // Browser specs run through the separate Playwright test:app target.
     exclude: ['node_modules/**/*', 'dist/**/*', 'coverage/**/*', 'tests/system/**/*', 'tests/browser/**/*'],
     coverage: {
