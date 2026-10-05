@@ -1,3 +1,18 @@
+## 0.0.1-alpha.116 (2026-10-05)
+
+### 🩹 Fixes
+
+- **doompi-core:** allow vanilla Pi hosts and roll back failed registration ([#311](https://github.com/AgiFlow/doompi/pull/311))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.63
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.115 (2026-10-05)
 
 ### 🩹 Fixes
