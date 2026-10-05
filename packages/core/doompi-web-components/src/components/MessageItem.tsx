@@ -15,8 +15,12 @@ import { STATUS_EDGE, StatusBadge, type StatusTone } from './StatusBadge';
  * looking alike.
  */
 
+/** The next item captures this accessory for its header, without passing it to nested items. */
+export const MessageItemHeaderAccessoryContext = createContext<ReactNode>(null);
+
 export interface MessageItemState {
   tone: StatusTone;
+  headerAccessory?: ReactNode;
   /** Whether the header offers the toggle; an item that hides nothing offers none. */
   expandable: boolean;
   expanded: boolean;
@@ -79,10 +83,12 @@ export function MessageItem({
 }: MessageItemProps) {
   const [own, setOwn] = useState(defaultExpanded);
   const group = useContext(MessageItemGroupContext);
+  const headerAccessory = useContext(MessageItemHeaderAccessoryContext);
   const grouped = group !== null;
   const current = expanded ?? own;
   const state: MessageItemState = {
     tone: tone ?? 'neutral',
+    headerAccessory,
     expandable,
     expanded: current,
     toggle: () => {
@@ -93,15 +99,17 @@ export function MessageItem({
   };
   return (
     <MessageItemContext.Provider value={state}>
-      <div
-        data-slot="message-item"
-        data-expanded={current}
-        data-grouped={grouped}
-        className={cn(grouped ? messageItemRowVariants({ tone }) : messageItemVariants({ tone }), className)}
-        {...props}
-      >
-        {typeof children === 'function' ? children(state) : children}
-      </div>
+      <MessageItemHeaderAccessoryContext value={null}>
+        <div
+          data-slot="message-item"
+          data-expanded={current}
+          data-grouped={grouped}
+          className={cn(grouped ? messageItemRowVariants({ tone }) : messageItemVariants({ tone }), className)}
+          {...props}
+        >
+          {typeof children === 'function' ? children(state) : children}
+        </div>
+      </MessageItemHeaderAccessoryContext>
     </MessageItemContext.Provider>
   );
 }
@@ -188,7 +196,7 @@ const SILENT_IN_GROUP: ReadonlySet<StatusTone> = new Set<StatusTone>(['ok', 'neu
  * of five are noise, and the one ERROR among them is the point.
  */
 export function MessageItemHeader({ className, title, badge, children, ...props }: MessageItemHeaderProps) {
-  const { tone, expandable, expanded, toggle } = useMessageItem();
+  const { headerAccessory, tone, expandable, expanded, toggle } = useMessageItem();
   const group = useContext(MessageItemGroupContext);
   const defaultLabel = group !== null && SILENT_IN_GROUP.has(tone) ? null : STATUS_LABEL[tone];
   const label = badge === undefined ? defaultLabel : badge;
@@ -202,6 +210,7 @@ export function MessageItemHeader({ className, title, badge, children, ...props 
       <div data-slot="message-item-summary" className="flex min-w-0 flex-1 items-center gap-2">
         {children}
       </div>
+      {headerAccessory}
       {label !== null && label !== '' ? (
         <StatusBadge tone={tone} data-testid="tool-status">
           {label}

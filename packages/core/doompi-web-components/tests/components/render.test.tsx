@@ -34,6 +34,7 @@ import {
   MessageItemBody,
   MessageItemGroup,
   MessageItemHeader,
+  MessageItemHeaderAccessoryContext,
   MessageItemStatus,
   MessageLines,
   NavTab,
@@ -254,6 +255,37 @@ describe('primitives', () => {
         </MessageItemStatus>,
       ),
     ).toContain('text-doom-blue');
+  });
+
+  it('captures a scoped header accessory before status without leaking into nested or sibling items', () => {
+    const accessory = <StatusBadge data-testid="accessory">HOOK</StatusBadge>;
+    const out = html(
+      <>
+        <MessageItemHeaderAccessoryContext value={accessory}>
+          <MessageItem tone="ok">
+            {({ headerAccessory }) => {
+              expect(headerAccessory).toBe(accessory);
+              return (
+                <>
+                  <MessageItemHeader title="outer" />
+                  <MessageItem tone="error">
+                    {({ headerAccessory: nested }) => {
+                      expect(nested).toBeNull();
+                      return <MessageItemHeader title="nested" />;
+                    }}
+                  </MessageItem>
+                </>
+              );
+            }}
+          </MessageItem>
+        </MessageItemHeaderAccessoryContext>
+        <MessageItem tone="ok">
+          <MessageItemHeader title="sibling" />
+        </MessageItem>
+      </>,
+    );
+    expect(out.match(/data-testid="accessory"/g)).toHaveLength(1);
+    expect(out.indexOf('data-testid="accessory"')).toBeLessThan(out.indexOf('data-testid="tool-status"'));
   });
 
   it('message lines and collapse follow the view logic', () => {

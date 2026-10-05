@@ -90,6 +90,7 @@ export {
   MessageItemGroup,
   type MessageItemGroupProps,
   MessageItemHeader,
+  MessageItemHeaderAccessoryContext,
   type MessageItemHeaderProps,
   type MessageItemProps,
   type MessageItemState,

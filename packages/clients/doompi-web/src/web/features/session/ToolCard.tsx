@@ -4,6 +4,8 @@ import {
   MessageItem,
   MessageItemBody,
   MessageItemHeader,
+  MessageItemHeaderAccessoryContext,
+  StatusBadge,
   MessageItemStatus,
   type StatusTone,
 } from '@agimon-ai/doompi-web-components';
@@ -218,6 +220,13 @@ export const ToolCard = memo(function ToolCard({
   const renderer = pluginToolRenderer(entry.name, statuses, entry.result?.details);
   const state = toneOf(entry);
   const props = toolMessageProps(slotProps, entry, statuses);
+  // ponytail: mirrors doompi-hook's status key; share a constant if another consumer needs it.
+  const hookStatus = statuses[`repository-hooks:${entry.toolCallId}:post`]?.trim();
+  const hookBadge = hookStatus ? (
+    <StatusBadge tone="running" title={hookStatus} aria-label={hookStatus} data-testid="tool-hook-status">
+      HOOK
+    </StatusBadge>
+  ) : null;
   return (
     <ToolRendererBoundary key={entry.toolCallId} toolName={entry.name}>
       {(failed) => (
@@ -227,7 +236,9 @@ export const ToolCard = memo(function ToolCard({
           data-tool-state={state}
           data-tool-renderer={failed ? 'failed' : renderer ? 'plugin' : 'host'}
         >
-          {renderer && !failed ? <renderer.message {...props} /> : <HostToolMessage entry={entry} />}
+          <MessageItemHeaderAccessoryContext value={hookBadge}>
+            {renderer && !failed ? <renderer.message {...props} /> : <HostToolMessage entry={entry} />}
+          </MessageItemHeaderAccessoryContext>
         </div>
       )}
     </ToolRendererBoundary>

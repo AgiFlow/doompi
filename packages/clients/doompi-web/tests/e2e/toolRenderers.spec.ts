@@ -466,6 +466,38 @@ test('a run of calls to one tool shares a frame, and a lone call keeps its card'
   await expect(page.getByTestId('entry-tool')).toHaveCount(4);
 });
 
+test('post-hook progress appears only in the matching grouped bash header and clears', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  for (const id of ['hook-first', 'hook-second']) {
+    cockpit.session.emit({
+      type: 'tool_execution_start',
+      toolCallId: id,
+      toolName: 'bash',
+      args: { command: 'pnpm lint' },
+    });
+  }
+  const status = 'Running post-tool hooks for bash (1/2)...';
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    method: 'setStatus',
+    statusKey: 'repository-hooks:hook-second:post',
+    statusText: status,
+  });
+  const group = page.getByTestId('entry-tool-group');
+  const rows = group.getByTestId('entry-tool');
+  await expect(rows.nth(1)).toHaveAttribute('data-tool-renderer', 'plugin');
+  await expect(rows.first().getByTestId('tool-hook-status')).toHaveCount(0);
+  await expect(rows.nth(1).getByTestId('tool-hook-status')).toHaveText('HOOK');
+  await expect(rows.nth(1).getByTestId('tool-hook-status')).toHaveAttribute('title', status);
+  await expect(rows.nth(1).getByTestId('tool-status')).toHaveText('RUNNING');
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    method: 'setStatus',
+    statusKey: 'repository-hooks:hook-second:post',
+  });
+  await expect(group.getByTestId('tool-hook-status')).toHaveCount(0);
+});
 /**
  * The path in a call header is the shortest way to the file itself.
  *
