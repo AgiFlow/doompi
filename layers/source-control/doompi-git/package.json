@@ -88,14 +88,14 @@
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@earendil-works/pi-agent-core": "1.0.2",
     "@earendil-works/pi-coding-agent": "1.0.2",
-    "@types/node": "26.6.2",
+    "@types/node": "26.6.4",
     "@types/react": "19.3.0",
-    "@vitest/coverage-v8": "5.0.1",
+    "@vitest/coverage-v8": "5.0.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
-    "vitest": "5.0.1"
+    "vitest": "5.0.3"
   },
   "peerDependencies": {
     "@earendil-works/pi-agent-core": "1.0.2",
