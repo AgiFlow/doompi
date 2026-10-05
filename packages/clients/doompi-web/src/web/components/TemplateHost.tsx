@@ -1,13 +1,17 @@
-import type { WebPluginMount, WebTemplateContribution, WebTemplateProps } from '@agimon-ai/doompi-core/web';
+import type { WebTemplateContribution, WebTemplateProps } from '@agimon-ai/doompi-core/web';
 import { Button } from '@agimon-ai/doompi-web-components';
 import { Link } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { Component, type ReactNode, useState } from 'react';
 
 import { webTemplateCatalog } from '../lib/pluginRegistry';
-import { retryWebPluginCompositions, webPluginCompositionStore, webPluginMountState } from '../lib/pluginRuntime';
+import {
+  reloadWebTemplateDecision,
+  retryWebPluginCompositions,
+  webPluginCompositionStore,
+  webPluginMountState,
+} from '../lib/pluginRuntime';
 import { type InstalledWebTemplate, resolveWebTemplate } from '../lib/templateCatalog';
-import { configuredTemplate, refreshTemplateConfiguration, useTemplateConfiguration } from '../stores/templateStore';
 import { useWebPluginRegistry } from '../stores/useWebPluginRegistry';
 
 class TemplateBoundary extends Component<{ children: ReactNode; onFailure(): void }, { failed: boolean }> {
@@ -27,17 +31,11 @@ class TemplateBoundary extends Component<{ children: ReactNode; onFailure(): voi
 }
 
 /** Runtime and mandatory overlays are above this boundary, not owned by a template package. */
-export function TemplateHost({
-  mount,
-  scopeReady = true,
-  ...props
-}: WebTemplateProps & { mount?: WebPluginMount; scopeReady?: boolean }) {
+export function TemplateHost(props: WebTemplateProps) {
   useWebPluginRegistry();
-  const requestedMount: WebPluginMount = mount ?? { scope: 'global' };
-  const workspaceId =
-    requestedMount.scope === 'workspace' || requestedMount.scope === 'session' ? requestedMount.workspaceId : undefined;
-  const configuration = useTemplateConfiguration(workspaceId);
   const composition = useStore(webPluginCompositionStore, (state) => state);
+  const requestedMount = composition.template?.mount ?? { scope: 'global' as const };
+  const workspaceId = requestedMount.scope === 'workspace' ? requestedMount.workspaceId : undefined;
   const mountReadiness = webPluginMountState(requestedMount, composition);
   const [failures, setFailures] = useState<WebTemplateContribution[]>([]);
   const catalog = webTemplateCatalog(requestedMount);
@@ -46,21 +44,20 @@ export function TemplateHost({
   const failed = catalog.templates
     .filter((entry) => failures.some((failure) => failure.id === entry.id && failure.layout === entry.layout))
     .map((entry) => entry.id);
-  const { template, warning } = resolveWebTemplate(catalog.templates, configuredTemplate(configuration), failed);
-  // Scope changes update the slots immediately, not the loaded presentation.
+  const { template, warning } = resolveWebTemplate(catalog.templates, composition.template?.id, failed);
+  // The server choice survives navigation and reconnects; a rebuild may replace its implementation.
   const [selected, setSelected] = useState<{ revision: number; template?: InstalledWebTemplate }>({ revision: 0 });
   const selectedTemplate = selected.template;
   const selectedFailed =
     selectedTemplate !== undefined &&
     failures.some((failure) => failure.id === selectedTemplate.id && failure.layout === selectedTemplate.layout);
-  const configurationPending = configuration.loading && configuration.config === undefined;
-  const loadError = mountReadiness.error ?? configuration.error;
+  const loadError = composition.templateError ?? mountReadiness.error;
   const hasLoadError = mountReadiness.phase === 'error' || loadError !== undefined;
   // A verified scope must wait for healthy bootstrap, but an error can immediately
   // render the bundled fallback while the failed request is retried.
   const waiting =
-    !scopeReady ||
-    (!hasLoadError && (configurationPending || mountReadiness.phase === 'idle' || mountReadiness.phase === 'loading'));
+    !hasLoadError &&
+    (composition.template === undefined || mountReadiness.phase === 'idle' || mountReadiness.phase === 'loading');
   const pending = selectedTemplate === undefined && waiting;
   if (
     !waiting &&
@@ -95,7 +92,7 @@ export function TemplateHost({
               size="xs"
               variant="ghost"
               onClick={() => {
-                if (configuration.error) void refreshTemplateConfiguration(workspaceId);
+                if (composition.templateError) void reloadWebTemplateDecision();
                 if (mountReadiness.error) void retryWebPluginCompositions().catch(() => undefined);
               }}
             >

@@ -172,6 +172,15 @@ export const headlessHttpContracts: DoomHttpContract[] = [
       global: Optional(WebCompositionSchema),
       publicKey: Optional(Text),
       shell: Optional(Type.Object({ publicKey: Text, revision: NumberValue })),
+      template: Optional(
+        Type.Object({
+          id: Optional(Text),
+          mount: Type.Union([
+            Type.Object({ scope: Type.Literal('global') }),
+            Type.Object({ scope: Type.Literal('workspace'), workspaceId: Text }),
+          ]),
+        }),
+      ),
       workspaces: Type.Array(Type.Object({ id: Text, root: Text, webComposition: Optional(WebCompositionSchema) })),
     }),
   ),

@@ -30,6 +30,7 @@ vi.mock('../../src/web/lib/sealedSession', () => ({ sealedHttpSession: { fetch: 
 
 import {
   refreshWebPluginCompositions,
+  reloadWebTemplateDecision,
   retryWebPluginCompositions,
   focusSessionWebPlugins,
   removeSessionWebPluginRuntime,
@@ -152,6 +153,101 @@ async function start() {
   vi.clearAllMocks();
 }
 
+describe('backend template decision', () => {
+  it('adopts the HTTP choice without a hub snapshot and keeps it through focus and reconnect', async () => {
+    const initial = { id: 'fixture-template', mount: { scope: 'workspace', workspaceId: 'workspace-one' } };
+    let decision = initial;
+    let revision = 1;
+    let reconnect!: () => void;
+    mocks.fetch.mockImplementation(async () =>
+      Response.json({
+        template: decision,
+        global: composition('f', 1),
+        workspaces: [
+          { id: 'workspace-one', webComposition: composition('e', revision) },
+          { id: 'workspace-two', webComposition: composition('d', 1) },
+        ],
+      }),
+    );
+    const sendHubFrame = vi.fn();
+    const stop = startSessionWebPluginRuntime({
+      sendHubFrame,
+      onHubConnected: (listener: () => void) => {
+        reconnect = listener;
+        return () => undefined;
+      },
+    } as unknown as WebPluginRuntime);
+    stops.push(stop);
+    await refreshWebPluginCompositions();
+    expect(webPluginCompositionStore.state.template).toEqual(initial);
+    expect(sendHubFrame).not.toHaveBeenCalled();
+    expect(mocks.installSessionWebPlugins).not.toHaveBeenCalled();
+
+    decision = { id: 'another-template', mount: { scope: 'workspace', workspaceId: 'workspace-two' } };
+    await focusSessionWebPlugins('two', composition('a', 1), 'workspace-two');
+    expect(webPluginCompositionStore.state.template).toEqual(initial);
+    const mounts = mocks.installWorkspaceWebPlugins.mock.calls.length;
+    revision = 2;
+    reconnect();
+    await refreshWebPluginCompositions();
+    expect(webPluginCompositionStore.state.template).toEqual(initial);
+    expect(mocks.installWorkspaceWebPlugins.mock.calls.length).toBeGreaterThan(mounts);
+
+    await reloadWebTemplateDecision();
+    expect(webPluginCompositionStore.state.template).toEqual(decision);
+  });
+
+  it('uses the existing global fallback when the server omits the decision', async () => {
+    await start();
+    expect(webPluginCompositionStore.state.template).toEqual({ mount: { scope: 'global' } });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    null,
+    { id: 42, mount: { scope: 'global' } },
+    { id: '', mount: { scope: 'global' } },
+    { mount: { scope: 'workspace' } },
+    { mount: { scope: 'workspace', workspaceId: '' } },
+    { mount: { scope: 'session', workspaceId: 'workspace-one', sessionId: 'one' } },
+  ])('rejects malformed template decisions instead of selecting from session state: %j', async (template) => {
+    mocks.fetch.mockResolvedValue(Response.json({ template, workspaces: [] }));
+    const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);
+    stops.push(stop);
+    await expect(refreshWebPluginCompositions()).rejects.toThrow('Invalid web template');
+    expect(webPluginCompositionStore.state.template).toBeUndefined();
+    expect(mocks.installGlobalWebPlugins).not.toHaveBeenCalled();
+  });
+
+  it('keeps the loaded choice and reports a failed explicit reload, then clears the error on success', async () => {
+    await start();
+    const initial = webPluginCompositionStore.state.template;
+    mocks.fetch.mockRejectedValueOnce(new Error('reload unavailable'));
+    await reloadWebTemplateDecision();
+    expect(webPluginCompositionStore.state.template).toBe(initial);
+    expect(webPluginCompositionStore.state.templateError).toBe('reload unavailable');
+    expect(webPluginCompositionStore.state.phase).toBe('ready');
+    await reloadWebTemplateDecision();
+    expect(webPluginCompositionStore.state.templateError).toBeUndefined();
+  });
+
+  it('does not adopt a reload from a stopped runtime', async () => {
+    await start();
+    let respond!: (response: Response) => void;
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          respond = resolve;
+        }),
+    );
+    const pending = reloadWebTemplateDecision();
+    stops.pop()?.();
+    respond(Response.json({ template: { id: 'another-template', mount: { scope: 'global' } }, workspaces: [] }));
+    await pending;
+    expect(webPluginCompositionStore.state.template).toBeUndefined();
+    expect(webPluginCompositionStore.state.phase).toBe('idle');
+  });
+});
 describe('composition bootstrap recovery', () => {
   it('reports a failed bootstrap and retries the remote composition', async () => {
     mocks.fetch.mockRejectedValueOnce(new Error('tunnel closed'));

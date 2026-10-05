@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { loadDoomConfigLayers } from '@agimon-ai/doompi-config/config';
 import type { OpenSessionRecord } from '@agimon-ai/doompi-core/history';
 import { type DoomHubSessionCreateRequest, type DoomPendingSessionSetup } from '@agimon-ai/doompi-core/hubChannel';
 import { type PackageApiServer, serveSessionApis } from '@agimon-ai/doompi-core/packageApiServer';
@@ -353,6 +354,14 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       return await webCompositions.request(request);
     };
 
+    const templateDecision = () => {
+      const launch = workspaces[0]!;
+      const id = loadDoomConfigLayers(launch.root, root, environment).valueAt(['web', 'template']);
+      return {
+        ...(typeof id === 'string' ? { id } : {}),
+        mount: { scope: 'workspace' as const, workspaceId: launch.id },
+      };
+    };
     let headless = await serveHeadlessServer({
       headlessHub: hub,
       port: 0,
@@ -366,6 +375,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         global: globalComposition,
         publicKey: webCompositions.publicKey(),
         shell: webCompositions.shellTrust(),
+        template: templateDecision(),
         workspaces: workspaceCompositions,
       }),
     });
@@ -386,6 +396,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
           global: globalComposition,
           publicKey: webCompositions.publicKey(),
           shell: webCompositions.shellTrust(),
+          template: templateDecision(),
           workspaces: workspaceCompositions,
         }),
       });

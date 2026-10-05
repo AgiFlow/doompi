@@ -77,10 +77,15 @@ interface LoadedComposition {
   styles: HTMLLinkElement[];
   releaseAssets: () => void;
 }
+interface WebTemplateDecision {
+  id?: string;
+  mount: Extract<WebPluginMount, { scope: 'global' | 'workspace' }>;
+}
 interface CompositionsResponse {
   global?: SessionWebComposition;
   shell?: { publicKey: string; revision: number };
   workspaces: { id: string; webComposition?: SessionWebComposition }[];
+  template: WebTemplateDecision;
 }
 
 export type WebPluginCompositionPhase = 'idle' | 'loading' | 'ready' | 'error';
@@ -92,6 +97,8 @@ export interface WebPluginMountState {
 
 export interface WebPluginCompositionState extends WebPluginMountState {
   mounts: Record<string, WebPluginMountState>;
+  template?: WebTemplateDecision;
+  templateError?: string;
 }
 
 /** The host's composition bootstrap and per-mount readiness state. */
@@ -394,10 +401,52 @@ export function webPluginMountState(
   return state.mounts[`session:${mount.sessionId}`] ?? { phase: 'loading' };
 }
 
+function readTemplateDecision(value: unknown): WebTemplateDecision {
+  if (value === undefined) return { mount: { scope: 'global' } };
+  if (typeof value !== 'object' || value === null) throw new Error('Invalid web template decision.');
+  const { id, mount } = value as Record<string, unknown>;
+  if (id !== undefined && (typeof id !== 'string' || id.length === 0)) throw new Error('Invalid web template id.');
+  if (typeof mount !== 'object' || mount === null) throw new Error('Invalid web template mount.');
+  if ('scope' in mount && mount.scope === 'global') return { id, mount: { scope: 'global' } };
+  if (
+    'scope' in mount &&
+    mount.scope === 'workspace' &&
+    'workspaceId' in mount &&
+    typeof mount.workspaceId === 'string' &&
+    mount.workspaceId.length > 0
+  )
+    return { id, mount: { scope: 'workspace', workspaceId: mount.workspaceId } };
+  throw new Error('Invalid web template mount.');
+}
+
 async function readCompositions(): Promise<CompositionsResponse> {
   const response = await sealedHttpSession.fetch('/api/compositions', { cache: 'no-store' });
   if (!response.ok) throw new Error(`Could not load web compositions (${response.status}).`);
-  return (await response.json()) as CompositionsResponse;
+  const metadata = (await response.json()) as CompositionsResponse;
+  if (
+    !metadata ||
+    !Array.isArray(metadata.workspaces) ||
+    !metadata.workspaces.every((workspace) => workspace && typeof workspace.id === 'string')
+  )
+    throw new Error('Invalid web compositions response.');
+  return { ...metadata, template: readTemplateDecision(metadata.template) };
+}
+
+/** Only explicit Settings actions re-read the server's launch-context choice. */
+export async function reloadWebTemplateDecision(): Promise<void> {
+  const epoch = runtimeEpoch;
+  try {
+    const metadata = await readCompositions();
+    if (epoch !== runtimeEpoch) return;
+    webPluginCompositionStore.setState((current) => ({
+      ...current,
+      template: metadata.template,
+      templateError: undefined,
+    }));
+  } catch (error) {
+    if (epoch === runtimeEpoch)
+      webPluginCompositionStore.setState((current) => ({ ...current, templateError: compositionError(error) }));
+  }
 }
 
 export function refreshWebPluginCompositions(): Promise<void> {
@@ -408,6 +457,7 @@ export function refreshWebPluginCompositions(): Promise<void> {
   const refresh = (async () => {
     const metadata = await readCompositions();
     if (epoch !== runtimeEpoch) return;
+    webPluginCompositionStore.setState((current) => ({ ...current, template: current.template ?? metadata.template }));
     await bootstrapLocalVerifier(metadata.shell);
     if (epoch !== runtimeEpoch) return;
     await mountComposition({ scope: 'global' }, metadata.global);

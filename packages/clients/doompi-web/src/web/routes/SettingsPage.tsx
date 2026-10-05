@@ -69,7 +69,6 @@ export function SettingsPage() {
   return (
     <div data-testid="settings" className="h-full min-w-0 overflow-hidden">
       <TemplateHost
-        mount={workspaceId === undefined ? { scope: 'global' } : { scope: 'workspace', workspaceId }}
         view="settings"
         navigationOpen={railOpen}
         desktopActivityOpen={false}

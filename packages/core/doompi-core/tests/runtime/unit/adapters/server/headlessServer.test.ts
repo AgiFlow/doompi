@@ -1203,12 +1203,18 @@ describe('serveHeadlessServer', () => {
       headlessHub: hub,
       port: 0,
       token: 'secret',
-      compositions: () => ({ workspaces: ['one'] }),
+      compositions: () => ({
+        template: { id: 'advanced', mount: { scope: 'workspace', workspaceId: 'test-workspace' } },
+        workspaces: [{ id: 'test-workspace', root: '/repo' }],
+      }),
       requestAsset,
     });
     servers.push(server);
     const headers = { authorization: 'Bearer secret' };
-    expect(await (await fetch(`${server.url}/api/compositions`, { headers })).json()).toEqual({ workspaces: ['one'] });
+    expect(await (await fetch(`${server.url}/api/compositions`, { headers })).json()).toEqual({
+      template: { id: 'advanced', mount: { scope: 'workspace', workspaceId: 'test-workspace' } },
+      workspaces: [{ id: 'test-workspace', root: '/repo' }],
+    });
     expect(await (await fetch(`${server.url}/api/web-plugins/found`, { headers })).text()).toBe('asset');
     expect((await fetch(`${server.url}/api/web-plugins/missing`, { headers })).status).toBe(404);
     expect(requestAsset).toHaveBeenCalledTimes(2);

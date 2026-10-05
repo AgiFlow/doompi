@@ -40,8 +40,6 @@ export function CockpitPage() {
   const mcp = useSessionMcp(workspaceId, sessionId);
   const mcpView = tabId === 'mcp';
   const mcpEnabled = mcp.snapshot?.enabled === true || mcpView;
-  // The landing redirect and deep-link hydration must finish before choosing a template scope.
-  const templateScopeReady = hydrated && (sessionId === undefined ? order.length === 0 : order.includes(sessionId));
   const transferLabel = useStore(sessionsStore, (state) => {
     if (state.transferringToId === null) return null;
     return state.byId[state.transferringToId]?.summary.name ?? 'destination session';
@@ -121,8 +119,6 @@ export function CockpitPage() {
   return (
     <div data-testid="cockpit" className="h-full min-w-0 overflow-hidden">
       <TemplateHost
-        scopeReady={templateScopeReady}
-        mount={workspaceId === undefined ? { scope: 'global' } : { scope: 'workspace', workspaceId }}
         view={mcpView || tab ? 'panel' : noSessions ? 'welcome' : 'conversation'}
         navigationOpen={railOpen}
         desktopActivityOpen={dockOpen}

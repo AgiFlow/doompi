@@ -67,6 +67,7 @@ import { type PinnedSelectionAxis, resolveSessionIdentity, sessionSelectionArgs 
 import { resolveSessionArtifact, resolveWorktreeRestart } from './sessionArtifact';
 import { withShutdownDeadline } from './shutdown';
 import type { ServeOptions, ServerRuntimeEnvironment } from './types';
+import { resolveWebTemplateDecision } from './webTemplateDecision';
 import { checkoutWorkspaceId } from './workspaceCheckout';
 
 async function bounded(operation: Promise<unknown>, label: string, notice: (message: string) => void): Promise<void> {
@@ -329,6 +330,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     openSessions.add({ ...record, name: event.session.name });
   });
   let harnessContext: Awaited<ReturnType<typeof buildHarnessContext>> | undefined;
+  let launchWorkspaceId: string | undefined;
   let cockpit: Awaited<ReturnType<typeof serveHeadlessServer>> | undefined;
   let attachToken: string | undefined;
   let webCompositions: ReturnType<typeof createWebCompositions> | undefined;
@@ -785,6 +787,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           environment: baseEnvironment,
         });
         const initialWorkspace = await admitWorkspace(initialOptions.repoRoot);
+        launchWorkspaceId = initialWorkspace.id;
         if (!isMemberCheckout(initialOptions.repoRoot, initialWorkspace)) {
           const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: initialWorkspace.root };
           for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete syncEnvironment[key];
@@ -1232,15 +1235,26 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         );
       },
       requestAsset: (request) => webCompositions?.request(request) ?? Promise.resolve(undefined),
-      compositions: () => ({
-        global: webCompositions?.get({ scope: 'global' }),
-        publicKey: webCompositions?.publicKey(),
-        shell: webCompositions?.shellTrust(),
-        workspaces: hub.workspaces().map((workspace) => ({
-          ...workspace,
-          webComposition: webCompositions?.get({ scope: 'workspace', workspaceId: workspace.id }),
-        })),
-      }),
+      compositions: () => {
+        const workspaces = hub.workspaces();
+        return {
+          global: webCompositions?.get({ scope: 'global' }),
+          publicKey: webCompositions?.publicKey(),
+          shell: webCompositions?.shellTrust(),
+          template: resolveWebTemplateDecision({
+            cwd: baseCwd,
+            launchWorkspaceId,
+            workspaces,
+            homeDirectory,
+            environment: baseEnvironment,
+            notice,
+          }),
+          workspaces: workspaces.map((workspace) => ({
+            ...workspace,
+            webComposition: webCompositions?.get({ scope: 'workspace', workspaceId: workspace.id }),
+          })),
+        };
+      },
       telemetry,
       onNotice: notice,
     });
