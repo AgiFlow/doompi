@@ -69,7 +69,7 @@
     "@earendil-works/pi-client": "1.0.2",
     "@simplewebauthn/browser": "^14.0.0",
     "@tailwindcss/vite": "4.3.3",
-    "@tanstack/react-router": "1.170.40",
+    "@tanstack/react-router": "1.170.41",
     "@tanstack/react-store": "0.11.2",
     "@tanstack/react-virtual": "3.14.13",
     "@tanstack/store": "0.11.2",
@@ -79,7 +79,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "tailwindcss": "4.3.3",
-    "vite": "8.3.1",
+    "vite": "8.3.2",
     "ws": "8.22.0"
   },
   "devDependencies": {

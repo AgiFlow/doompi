@@ -75,7 +75,7 @@
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-minor-mode": "workspace:*",
     "@deepseek-ai/cordis": "4.0.4",
-    "pi-cache-optimizer": "2.8.11"
+    "pi-cache-optimizer": "2.8.16"
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
