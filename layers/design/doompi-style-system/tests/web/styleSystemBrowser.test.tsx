@@ -15,10 +15,13 @@ import {
 import {
   authorSourceActionSlot,
   browserSelection,
+  componentKeywords,
   filteredComponents,
   forgetBrowserSelection,
   initialBrowserSelection,
+  matchesQuery,
   rememberBrowserSelection,
+  storyFolders,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/styleSystemBrowser';
 import activity from '../../src/extensions/workspaces/sessions/(frontend)/activity-group/style-system.web';
 import type { StyleSystemCatalogView } from '../../src/types/styleSystemCatalog';
@@ -59,18 +62,43 @@ afterEach(() => {
 });
 
 describe('Style system browser', () => {
-  it('filters by path, variant, tag and project without collapsing duplicate titles', () => {
+  it('filters by folder and every chosen tag without collapsing duplicate titles', () => {
     const selection = initialBrowserSelection();
     expect(filteredComponents(catalog, selection)).toHaveLength(2);
+    expect(filteredComponents(catalog, { ...selection, folder: 'apps/web', tags: ['web'] })).toHaveLength(1);
+    expect(filteredComponents(catalog, { ...selection, folder: 'apps/we' })).toHaveLength(0);
+    expect(filteredComponents(catalog, { ...selection, tags: ['web', 'style-system'] })).toHaveLength(0);
     expect(
-      filteredComponents(catalog, { ...selection, search: 'BUTTON disabled' }).map((entry) => entry.storyPath),
+      catalog.components
+        .filter((entry) => matchesQuery(componentKeywords(entry), 'BUTTON disabled'))
+        .map((entry) => entry.storyPath),
     ).toEqual(['packages/ui/Button.stories.tsx']);
+  });
+  it('builds a compacted, depth-capped tree of story folders only', () => {
+    const story = (storyPath: string) => ({ ...catalog.components[0]!, storyPath });
+    const folders = storyFolders([
+      story('packages/core/lib/src/components/A.stories.tsx'),
+      story('packages/core/lib/src/components/B.stories.tsx'),
+      story('packages/minor/x/src/a/b/c/d/e/C.stories.tsx'),
+      story('packages/minor/y/D.stories.tsx'),
+      story('Root.stories.tsx'),
+    ]);
+    expect(folders.map(({ path, depth, count }) => [path, depth, count])).toEqual([
+      ['packages', 0, 4],
+      ['packages/core', 1, 2],
+      ['packages/core/lib', 2, 2],
+      ['packages/core/lib/src/components', 3, 2],
+      ['packages/minor', 1, 2],
+      ['packages/minor/x', 2, 1],
+      ['packages/minor/x/src/a/b/c/d/e', 3, 1],
+      ['packages/minor/y', 2, 1],
+    ]);
+    expect(folders[3]!.label).toBe('src/components');
     expect(
-      filteredComponents(catalog, { ...selection, scope: 'project:apps/web', preset: 'web-app', tag: 'web' }),
-    ).toHaveLength(1);
-    expect(filteredComponents(catalog, { ...selection, scope: 'shared' })).toHaveLength(1);
-    expect(filteredComponents(catalog, { ...selection, scope: 'unassigned' })).toHaveLength(1);
-    expect(filteredComponents(catalog, { ...selection, tag: 'missing' })).toHaveLength(0);
+      storyFolders(Array.from({ length: 8 }, (_, depth) => story(`${'d/'.repeat(depth + 1)}S.stories.tsx`))).map(
+        (entry) => entry.depth,
+      ),
+    ).toEqual([0, 1, 2, 3, 4]);
   });
   it('opens one stable idle tab and retains session selection until close', () => {
     expect(activity.name).toBe('style system');
@@ -78,11 +106,11 @@ describe('Style system browser', () => {
     expect(activity.activeSource?.isActive('session')).toBe(false);
     expect(styleSystemTab().id).toBe(styleSystemTab().id);
     expect(styleSystemTab().label).toBe('style system');
-    rememberBrowserSelection('session', { ...initialBrowserSelection(), search: 'Button' });
-    expect(browserSelection('session').search).toBe('Button');
-    expect(browserSelection('other').search).toBe('');
+    rememberBrowserSelection('session', { ...initialBrowserSelection(), folder: 'apps' });
+    expect(browserSelection('session').folder).toBe('apps');
+    expect(browserSelection('other').folder).toBe('');
     styleSystemTab().onClose?.('session');
-    expect(browserSelection('session').search).toBe('');
+    expect(browserSelection('session').folder).toBe('');
   });
   it('does not mount a preview for catalog browsing or unassigned shared stories', () => {
     const props = slotPropsFixture({ sessionId: 'session' }).props;
