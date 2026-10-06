@@ -1,3 +1,22 @@
+## 0.0.1-alpha.120 (2026-10-06)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.34
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.119
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.102
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.119
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.77
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.65
+
 ## 0.0.1-alpha.119 (2026-10-06)
 
 ### 🩹 Fixes
