@@ -125,6 +125,7 @@ function fixture(
     };
   });
   const pending = vi.fn();
+  const onNotice = vi.fn();
   const provisionReservedWorktree = vi.fn(
     async ({ reservationId, parentSessionId }: { reservationId: string; parentSessionId: string }) => {
       const cwd = path.join(root, 'worktrees', reservationId);
@@ -158,6 +159,7 @@ function fixture(
     activityStore: createSessionMcpActivityStore(path.join(root, 'state')),
     registrationStore: createSessionMcpRegistrationStore({ stateDir: path.join(root, 'state') }),
     conversationStore: store,
+    onNotice,
     isSessionPersisted: (id, cwd) => persisted.get(id) === cwd,
   });
   handlers.push(routes);
@@ -265,6 +267,7 @@ function fixture(
     create,
     provisionReservedWorktree,
     pending,
+    onNotice,
     rpc,
     call,
     host,
@@ -577,12 +580,37 @@ describe('conversation-bound Session MCP routing', () => {
 
   it('publishes a failed automatic setup and retries the same reservation without creating a workspace', async () => {
     const f = fixture('conversation', false, true);
-    f.provisionReservedWorktree.mockRejectedValueOnce(new Error('private git credentials'));
+    const diagnostic = 'fatal: remote authentication failed';
+    const error = new Error(
+      `${diagnostic}: https://alice:pass@word@git.example/repo and SSH://bob:other-secret@mirror.example/repo`,
+      { cause: new Error('private cause') },
+    );
+    error.stack = 'private stack';
+    f.provisionReservedWorktree.mockRejectedValueOnce(error);
     const failed = await f.call('a');
     expect(failed.result?.structuredContent?.code).toBe('SESSION_WORKTREE_PROVISION_FAILED');
     const record = f.store.list()[0]!;
     expect(record).toMatchObject({ setupKind: 'managed-worktree', failureCode: 'SESSION_WORKTREE_PROVISION_FAILED' });
-    expect(JSON.stringify(record)).not.toContain('private git credentials');
+    expect(
+      f.onNotice.mock.calls.filter(([message]) => message.startsWith('session MCP worktree provisioning failed')),
+    ).toEqual([
+      [
+        `session MCP worktree provisioning failed for reservation ${record.id}: ${diagnostic}: https://***@git.example/repo and SSH://***@mirror.example/repo`,
+      ],
+    ]);
+    for (const output of [failed, record, f.pending.mock.calls]) {
+      const text = JSON.stringify(output);
+      for (const privateText of [
+        diagnostic,
+        'alice',
+        'pass@word',
+        'bob',
+        'other-secret',
+        'private cause',
+        'private stack',
+      ])
+        expect(text).not.toContain(privateText);
+    }
     expect(f.pending).toHaveBeenLastCalledWith('parent', [
       expect.objectContaining({
         id: record.id,
@@ -594,6 +622,24 @@ describe('conversation-bound Session MCP routing', () => {
     expect(f.create).toHaveBeenCalledOnce();
     expect(f.store.get(record.id, 'parent')).toMatchObject({ state: 'bound', workspaceId: 'workspace' });
     expect(f.pending).toHaveBeenCalledWith('parent', []);
+  });
+
+  it('uses a generic operator notice for non-Error provisioning failures without stringifying them', async () => {
+    const f = fixture('conversation', false, true);
+    const toString = vi.fn(() => 'private object');
+    f.provisionReservedWorktree.mockRejectedValueOnce({ message: 'private object', toString });
+    const failed = await f.call('a');
+    const record = f.store.list()[0]!;
+    expect(
+      f.onNotice.mock.calls.filter(([message]) => message.startsWith('session MCP worktree provisioning failed')),
+    ).toEqual([
+      [
+        `session MCP worktree provisioning failed for reservation ${record.id}: Automatic worktree provisioning failed.`,
+      ],
+    ]);
+    expect(toString).not.toHaveBeenCalled();
+    expect(failed.result?.structuredContent?.code).toBe('SESSION_WORKTREE_PROVISION_FAILED');
+    expect(JSON.stringify([failed, record, f.pending.mock.calls])).not.toContain('private object');
   });
 
   it('recovers a deleted managed child in its original workspace instead of admitting its checkout', async () => {
