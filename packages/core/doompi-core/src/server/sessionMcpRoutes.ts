@@ -51,6 +51,10 @@ function describeResource(resource: string): string {
   const query = [...parsed.searchParams.keys()].map((key) => `${key}=<redacted>`).join('&');
   return `${parsed.origin}${pathname}${query === '' ? '' : `?${query}`}${parsed.hash === '' ? '' : '#<redacted>'}`;
 }
+function redactUrlCredentials(text: string): string {
+  return text.replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/?#]*@/giu, '$1***@');
+}
+
 const PROTECTED_RESOURCE_PATTERN =
   /^\/\.well-known\/oauth-protected-resource(\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/mcp)$/u;
 
@@ -447,6 +451,9 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         return child;
       } catch (error) {
         if (error instanceof SessionMcpConversationError) throw error;
+        options.onNotice?.(
+          `session MCP worktree provisioning failed for reservation ${record.id}: ${error instanceof Error ? redactUrlCredentials(error.message) : 'Automatic worktree provisioning failed.'}`,
+        );
         throw new SessionMcpConversationError(
           'SESSION_WORKTREE_PROVISION_FAILED',
           'An automatic worktree could not be created for this conversation. Resolve the host Git setup, then retry.',

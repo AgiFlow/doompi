@@ -13,6 +13,51 @@ import { compileExtensionModule, extensionModuleManifestPath } from '../../compi
 
 export const HOOK_MODULES_FILE = 'hook-modules.json';
 
+/** Add checkout source names while retaining the admitted generation's artifact mappings. */
+export function checkoutHookDescriptor(
+  descriptor: { file: string } | undefined,
+  sourceRoot: string,
+  repoRoot: string,
+  directory: string,
+): { file: string } | undefined {
+  if (!descriptor || path.resolve(sourceRoot) === path.resolve(repoRoot)) return descriptor;
+  const value: unknown = JSON.parse(fs.readFileSync(descriptor.file, 'utf8'));
+  if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.modules))
+    throw new Error('invalid hook module descriptor');
+  const sources = new Set<string>();
+  const modules: Array<Record<string, unknown> & { source: string; artifact: string }> = [];
+  // Validate all originals first. Never repair an invalid descriptor by dropping entries.
+  for (const entry of value.modules) {
+    if (
+      !isRecord(entry) ||
+      typeof entry.source !== 'string' ||
+      typeof entry.artifact !== 'string' ||
+      !path.isAbsolute(entry.source) ||
+      !path.isAbsolute(entry.artifact) ||
+      !['.mjs', '.js', '.cjs'].includes(path.extname(entry.artifact)) ||
+      sources.has(entry.source)
+    )
+      throw new Error('invalid hook module artifact mapping');
+    sources.add(entry.source);
+    modules.push({ ...entry, source: entry.source, artifact: entry.artifact });
+  }
+  const aliases = [];
+  for (const entry of modules) {
+    const relative = path.relative(sourceRoot, entry.source);
+    if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue;
+    const source = path.resolve(repoRoot, relative);
+    if (sources.has(source)) continue;
+    sources.add(source);
+    aliases.push({ ...entry, source });
+  }
+  if (aliases.length === 0) return descriptor;
+  const file = path.join(directory, HOOK_MODULES_FILE);
+  fs.writeFileSync(file, `${JSON.stringify({ ...value, modules: [...modules, ...aliases] }, null, 2)}\n`, {
+    mode: 0o600,
+  });
+  return { file };
+}
+
 interface HookRegistryRow {
   module?: string;
   core: boolean;

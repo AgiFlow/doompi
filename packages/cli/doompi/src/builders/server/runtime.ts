@@ -57,7 +57,7 @@ import { readSyncDrift } from '../../composition/syncDrift';
 import { readSyncState, readRegisteredSyncState } from '../../composition/syncState';
 import { readRegisteredBootstrapStatus } from '../cli/bootstrapLocator';
 import { buildHarnessContext } from '../cli/harnessContext';
-import { validateHookModules } from '../hooks';
+import { checkoutHookDescriptor, validateHookModules } from '../hooks';
 import { createComputerUseBinding } from './computerUseBinding';
 import { createDefaultWorkspaceFolder } from './defaultWorkspace';
 import { ensureGlobalLogSink } from './logSink';
@@ -603,6 +603,28 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         }
       }
 
+      const sessionDescriptors = new WeakMap<
+        Awaited<ReturnType<typeof buildHarnessContext>>,
+        { file: string } | undefined
+      >();
+      const sessionHookModules = (
+        context: Awaited<ReturnType<typeof buildHarnessContext>>,
+        registration: SyncRegistration,
+      ): { file: string } | undefined => {
+        if (!sessionDescriptors.has(context)) {
+          sessionDescriptors.set(
+            context,
+            checkoutHookDescriptor(
+              readRegisteredSyncState(registration, homeDirectory).fileState.hookModules,
+              registration.root,
+              context.options.repoRoot,
+              context.resources.temporaryDirectory,
+            ),
+          );
+        }
+        return sessionDescriptors.get(context);
+      };
+
       const sessionHostOptions = (
         context: Awaited<ReturnType<typeof buildHarnessContext>>,
         bundle: Awaited<ReturnType<typeof loadServerBundle>>,
@@ -636,7 +658,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           throw new Error(`The admitted DoomPi bootstrap for generation '${registration.generation}' is unavailable.`);
         }
         // Read the admitted registration, not the repository's moving current pointer.
-        const hookModules = readRegisteredSyncState(registration, homeDirectory).fileState.hookModules;
+        const hookModules = sessionHookModules(context, registration);
         updateHarnessState({ hookModules }, context.environment);
         return {
           cwd: policyOptions.cwd,
@@ -807,7 +829,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               repoRoot: harnessContext.options.repoRoot,
               homeDirectory,
               hookGroups: harnessContext.hookGroups,
-              descriptor: readRegisteredSyncState(initialRegistration, homeDirectory).fileState.hookModules,
+              descriptor: sessionHookModules(harnessContext, initialRegistration),
               isSubagent: Boolean(baseEnvironment.PI_SUBAGENT_CHILD),
             });
           const initialBundle = await loadComposition(
@@ -960,7 +982,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
                 repoRoot: childContext.options.repoRoot,
                 homeDirectory,
                 hookGroups: childContext.hookGroups,
-                descriptor: readRegisteredSyncState(registration, homeDirectory).fileState.hookModules,
+                descriptor: sessionHookModules(childContext, registration),
                 isSubagent: Boolean(childEnvironment.PI_SUBAGENT_CHILD),
               });
             const bundle = await loadComposition(
