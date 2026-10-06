@@ -106,6 +106,7 @@ describe('hub hook generation admission', () => {
         return {
           options,
           environment,
+          resources: { temporaryDirectory: path.join(root, 'harness', String(contextId)) },
           hookGroups: undefined,
           selectedLayers: [],
           cleanup: async () => undefined,
