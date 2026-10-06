@@ -562,7 +562,7 @@ export function StoryPreviewPanel({
         <label className="flex items-center gap-1 text-xs text-doom-dim">
           <input type="checkbox" checked={darkMode} onChange={(event) => setDarkMode(event.target.checked)} /> Dark mode
         </label>
-        <output className="text-xs text-doom-dim" aria-live="polite">
+        <output className="min-w-0 whitespace-pre-wrap break-words text-xs text-doom-dim" aria-live="polite">
           {status}
         </output>
       </div>
