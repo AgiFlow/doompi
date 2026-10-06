@@ -1,3 +1,18 @@
+## 0.0.1-alpha.119 (2026-10-06)
+
+### 🩹 Fixes
+
+- **doompi:** admit hook modules in conversation worktrees ([#319](https://github.com/AgiFlow/doompi/pull/319))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.102
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.65
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.118 (2026-10-06)
 
 ### 🧱 Updated Dependencies
