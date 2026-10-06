@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createPreviewApi } from '../../src/services/previewApi';
+import type { StoryPreviewService } from '../../src/services/storyPreview';
 
 let root: string;
 
@@ -61,5 +62,25 @@ describe('story preview API', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'A preview requires appPath, storyPath, and an exact storyExport.',
     });
+  });
+
+  it('strips terminal color codes from build and image errors and keeps line breaks', async () => {
+    const failure = () =>
+      Promise.reject(new Error('\u001b[31m[UNLOADABLE_DEPENDENCY]\u001b[39m Could not load x\n  imported from y'));
+    const previews = { build: failure, exportImage: failure } as unknown as StoryPreviewService;
+    const app = createPreviewApi(root, previews);
+
+    for (const route of ['/build', '/image']) {
+      const response = await app.request(route, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ appPath: '.', storyPath: 'Button.stories.tsx', storyExport: 'Playground' }),
+      });
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: '[UNLOADABLE_DEPENDENCY] Could not load x\n  imported from y',
+      });
+    }
   });
 });

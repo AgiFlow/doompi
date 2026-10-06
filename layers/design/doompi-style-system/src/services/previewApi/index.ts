@@ -1,3 +1,5 @@
+import { stripVTControlCharacters } from 'node:util';
+
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/packageApi';
 import { Hono } from 'hono';
 
@@ -84,7 +86,10 @@ export function createPreviewApi(workspaceRoot: string, previews = new StoryPrev
       return context.json(await previews.build(request));
     } catch (reason) {
       return context.json(
-        { error: reason instanceof Error ? reason.message : 'Unable to build the story preview.' },
+        {
+          error:
+            reason instanceof Error ? stripVTControlCharacters(reason.message) : 'Unable to build the story preview.',
+        },
         400,
       );
     }
@@ -111,7 +116,10 @@ export function createPreviewApi(workspaceRoot: string, previews = new StoryPrev
       return context.json(await previews.exportImage(request));
     } catch (reason) {
       return context.json(
-        { error: reason instanceof Error ? reason.message : 'Unable to export the story image.' },
+        {
+          error:
+            reason instanceof Error ? stripVTControlCharacters(reason.message) : 'Unable to export the story image.',
+        },
         400,
       );
     }

@@ -1,10 +1,21 @@
-import type { DoomHeadlessCommand } from '@agimon-ai/doompi-core/headless';
+import type { DoomHeadlessCommand, DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
 import type { Skill } from '@earendil-works/pi-coding-agent';
 
 import { expandDeferredSkillCommand, type DeferredSkillSnapshot } from '../../../../../services/deferredSkills';
 import type { ServerSkillGroup } from '../../../../../services/serverInventory';
 import { SKILL_COMMAND_PREFIX, SKILL_INVOCATION_PREFIX, SKILLS_COMMAND } from '../../../../../types/skills';
 
+/**
+ * Admits the expanded skill without awaiting its turn.
+ *
+ * A command's `execute` is the prompt's admission acknowledgement: the web
+ * composer keeps the draft until it returns. `session.prompt` awaits the whole
+ * turn, so the `/skill:` draft stayed in the composer until the agent finished.
+ */
+async function admitSkill(execution: DoomHeadlessExecutionContext, text: string): Promise<void> {
+  if (!execution.session.admitPrompt) throw new Error('The session cannot admit a skill prompt.');
+  await execution.session.admitPrompt(text, 'prompt', 'operator');
+}
 /**
  * One command per skill, gated by whatever activates that skill.
  *
@@ -22,7 +33,7 @@ function skillCommand(skill: Skill, domain: string | undefined, inventory: Defer
       const text = `${SKILL_INVOCATION_PREFIX}${skill.name}${args ? ` ${args}` : ''}`;
       const expanded = expandDeferredSkillCommand(text, inventory.skills);
       if (expanded === text) throw new Error(`Skill '${skill.name}' is no longer readable.`);
-      await execution.session.prompt(expanded);
+      await admitSkill(execution, expanded);
     },
   };
 }
@@ -39,7 +50,8 @@ export function createSkillCommands(
       async execute(args, execution) {
         const requested = args.trim();
         if (requested) {
-          await execution.session.prompt(
+          await admitSkill(
+            execution,
             expandDeferredSkillCommand(`${SKILL_INVOCATION_PREFIX}${requested}`, inventory.skills),
           );
           return;

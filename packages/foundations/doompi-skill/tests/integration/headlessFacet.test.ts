@@ -74,7 +74,13 @@ describe('skill headless facet', () => {
     if (!command) throw new Error('Skill command was not registered');
     const notify = vi.fn();
     const prompt = vi.fn();
-    const execution = { cwd, client: { notify }, session: { prompt } } as unknown as DoomHeadlessExecutionContext;
+    // Admission, not `prompt`: the command's return is the composer's ack, and `prompt` awaits the turn.
+    const admitPrompt = vi.fn();
+    const execution = {
+      cwd,
+      client: { notify },
+      session: { prompt, admitPrompt },
+    } as unknown as DoomHeadlessExecutionContext;
 
     // A repository skill is its own prompt entry, with the path the agent reads it from.
     expect(resources.some(({ name }) => name === 'doompi/skills')).toBe(false);
@@ -99,13 +105,16 @@ describe('skill headless facet', () => {
       expect.objectContaining({ title: 'DoomPi skills', body: expect.stringContaining('Example skill') }),
     );
     await command.execute('example', execution);
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('<skill name="example"'));
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('# Example skill'));
+    expect(admitPrompt).toHaveBeenCalledWith(expect.stringContaining('<skill name="example"'), 'prompt', 'operator');
+    expect(admitPrompt).toHaveBeenCalledWith(expect.stringContaining('# Example skill'), 'prompt', 'operator');
     const namedSkill = commands.get('skill:example');
     if (!namedSkill) throw new Error('Named skill command was not registered');
     await namedSkill.execute('', execution);
     await namedSkill.execute('extra context', execution);
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('extra context'));
+    expect(admitPrompt).toHaveBeenCalledWith(expect.stringContaining('extra context'), 'prompt', 'operator');
+    expect(prompt).not.toHaveBeenCalled();
+    const noAdmission = { ...execution, session: { prompt } } as unknown as DoomHeadlessExecutionContext;
+    await expect(namedSkill.execute('', noAdmission)).rejects.toThrow('cannot admit a skill prompt');
     // Repository skills belong to the repository, so no selection gates them.
     expect(namedSkill.when).toBeUndefined();
 
