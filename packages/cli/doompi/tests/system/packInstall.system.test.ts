@@ -2112,7 +2112,7 @@ describe('DPI installed experiment runtime', () => {
 
       const version = await runCommand(process.execPath, [executable, '--version'], fixture.root, environment);
       expect(version.code, version.stderr || version.stdout).toBe(0);
-      expect(version.stdout.trim()).toBe('1.0.2');
+      expect(version.stdout.trim()).toBe('1.0.4');
 
       const runtime = startRuntime(
         executable,

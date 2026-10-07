@@ -2,9 +2,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { createAssistantMessageEventStream, type Api, type AssistantMessage, type Model } from '@earendil-works/pi-ai';
+import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DoomChildSessionHookScope, DoomChildSessionRequest } from '../../../../../src/exports/childSession';
+import type {
+  DoomChildSessionEvent,
+  DoomChildSessionHookScope,
+  DoomChildSessionRequest,
+  DoomChildSessionRuntime,
+} from '../../../../../src/exports/childSession';
 import type { DirectHarnessRuntime, DirectHarnessRuntimeOptions } from '../../../../../src/server/directHarnessRuntime';
 import {
   captureTerminalPiForkSource,
@@ -606,6 +613,111 @@ describe('terminal Pi child session provider', () => {
     await handle.dispose();
     await service.close();
   });
+
+  // Fresh sources run through the shared headless adapter; terminal-pi-fork sources run through
+  // this adapter's own runtime. Both must hand the intercom hold to the real prompt loop, or a
+  // child waiting on an ask reply finishes after its first turn.
+  it.each(['fresh', 'terminal-pi-fork'] as const)(
+    'keeps a %s child running while intercom holds it and finishes on the woken turn',
+    async (kind) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-provider-hold-'));
+      tempRoots.push(root);
+      const model: Model<Api> = {
+        id: 'test-model',
+        name: 'Test',
+        provider: 'test-provider',
+        api: 'test-api',
+        baseUrl: 'http://localhost',
+        reasoning: false,
+        input: ['text'],
+        contextWindow: 65536,
+        maxTokens: 128,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      };
+      const replies = ['first', 'second'];
+      const streamSimple = vi.fn<ModelRuntime['streamSimple']>(() => {
+        const stream = createAssistantMessageEventStream();
+        const message: AssistantMessage = {
+          role: 'assistant',
+          api: model.api,
+          provider: model.provider,
+          model: model.id,
+          timestamp: Date.now(),
+          stopReason: 'stop',
+          content: [{ type: 'text', text: replies.shift() ?? 'extra' }],
+          usage: {
+            input: 1,
+            output: 1,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 2,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+        };
+        stream.push({ type: 'start', partial: message });
+        stream.push({ type: 'done', reason: 'stop', message });
+        stream.end();
+        return stream;
+      });
+      const models = {
+        getModel: () => model,
+        getModels: () => [model],
+        getAvailable: async () => [model],
+        hasConfiguredAuth: () => true,
+        streamSimple,
+      } as unknown as ModelRuntime;
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let bound: DoomChildSessionRuntime | undefined;
+      const hold = vi.fn(async () => {
+        if (hold.mock.calls.length > 1) return false;
+        // Stands in for an ask reply landing while the child is idle: intercom steers it in.
+        await gate;
+        await bound!.steer('reply arrived');
+        return true;
+      });
+      const service = createTerminalPiChildSessionService({
+        cwd: root,
+        sessionsRoot: root,
+        models,
+        defaultModel: () => ({ provider: model.provider, id: model.id }),
+      });
+      try {
+        const source =
+          kind === 'fresh'
+            ? { kind }
+            : { kind, sourceSessionId: 'parent-session', sourceLeafId: 'parent-leaf', snapshotJsonl: v3Snapshot() };
+        const events: DoomChildSessionEvent[] = [];
+        const child = await service.start({
+          ...request(source, root),
+          intercom: {
+            bindRuntime: (runtime) => {
+              bound = runtime;
+              return { name: 'intercom', description: 'Team', parameters: {}, execute: async () => ({ content: [] }) };
+            },
+            hold,
+          },
+        });
+        child.subscribe((event) => events.push(event));
+
+        await vi.waitFor(() => expect(hold).toHaveBeenCalledOnce());
+        expect(streamSimple).toHaveBeenCalledOnce();
+        expect(child.state()).toBe('running');
+
+        release();
+        await vi.waitFor(() => expect(child.state()).toBe('completed'));
+        expect(hold).toHaveBeenCalledTimes(2);
+        expect(streamSimple).toHaveBeenCalledTimes(2);
+        expect(JSON.stringify(streamSimple.mock.calls[1]![1].messages)).toContain('reply arrived');
+        expect(events.at(-1)).toMatchObject({ state: 'completed', message: 'second' });
+        await child.dispose();
+      } finally {
+        await service.close();
+      }
+    },
+  );
 
   it.each([
     { model: 'anthropic-vertex/claude-sonnet-5:xhigh', id: 'claude-sonnet-5', thinkingLevel: 'xhigh' },

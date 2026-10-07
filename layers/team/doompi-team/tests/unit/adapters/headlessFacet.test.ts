@@ -701,6 +701,53 @@ describe('teamHeadlessFacet', () => {
     }
   });
 
+  it('wakes main with a child question and routes the reply back to the child', async () => {
+    const test = await fixture();
+    let activityStop: (() => void | Promise<void>) | undefined;
+    try {
+      activityStop = await test.activities[0]!.start(test.execution);
+      const received: string[] = [];
+      const child = test.runtime.teamChannel.createNativeChildIntercom({
+        rootSessionId: test.sessionId,
+        agent: 'worker',
+        runId: 'run-ask-main',
+      })!;
+      const childTool = child.bindRuntime({
+        sessionId: 'child-session',
+        prompt: async () => undefined,
+        steer: async (message) => void received.push(message),
+        followUp: async () => undefined,
+        abort: async () => undefined,
+        dispose: async () => undefined,
+      });
+
+      const asked = await childTool.execute('ask-main', { action: 'ask', to: 'main', message: 'which db?' });
+      // The question must reach the model, not just the operator toast.
+      expect(test.execution.session.admitPrompt).toHaveBeenCalledWith(expect.stringContaining('which db?'), 'steer');
+      expect(test.execution.session.prompt).not.toHaveBeenCalled();
+
+      const intercom = test.tools.find((tool) => tool.name === 'intercom')!;
+      const requestId = (asked.details as { requestId: string }).requestId;
+      await intercom.execute(
+        'reply-child',
+        { action: 'reply', requestId, message: 'postgres' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(received.at(-1)).toContain('postgres');
+
+      (test.execution.session.admitPrompt as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('lane closed'));
+      await expect(childTool.execute('send-main', { action: 'send', to: 'main', message: 'hi' })).rejects.toMatchObject(
+        { code: 'communication_unavailable' },
+      );
+      child.dispose?.();
+    } finally {
+      await activityStop?.();
+      await test.dispose();
+    }
+  });
+
   it('starts the poll scheduler on mount so registered subscriptions tick', async () => {
     const test = await fixture();
     // The delegation bridge registers a progress subscription against this

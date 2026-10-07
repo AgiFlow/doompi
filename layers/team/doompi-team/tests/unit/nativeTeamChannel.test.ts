@@ -1,8 +1,12 @@
 import type { DoomChildSessionRuntime } from '@agimon-ai/doompi-core/childSession';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { NativeTeamChannelService } from '../../src/services/nativeTeamChannel';
+import {
+  NativeTeamChannelService,
+  parseTeamToolParams,
+  TeamToolParamsSchema,
+} from '../../src/services/nativeTeamChannel';
 
 interface FakeTool {
   execute: (id: string, params: Record<string, unknown>) => Promise<unknown>;
@@ -18,7 +22,6 @@ function makePi() {
     registerTool: (tool: FakeTool & { name: string }) => tools.set(tool.name, tool),
     sendMessage: (message: { content: string; customType?: string; details?: Record<string, unknown> }) =>
       sendMessageCalls.push({ message }),
-    sendUserMessage: () => undefined,
     on: () => undefined,
     tools,
     sendMessageCalls,
@@ -160,27 +163,174 @@ describe('direct in-process native Team channel', () => {
     intercom?.dispose?.();
     main.dispose();
   });
-  it('supports direct ask, pending, and reply without filesystem polling', async () => {
-    const service = new NativeTeamChannelService();
-    const main = service.createRuntime(makePi() as never);
-    const root = main.bindMainSession('direct-ask');
-    const intercom = service.createNativeChildIntercom({
-      rootSessionId: root.rootSessionId,
-      agent: 'worker',
-      runId: 'run-direct-ask',
+  describe('async ask', () => {
+    afterEach(() => {
+      vi.useRealTimers();
     });
-    const childTool = intercom!.bindRuntime(childRuntime(async () => undefined));
 
-    const answer = main.execute('ask-child', { action: 'ask', to: 'worker', message: 'ready?' });
-    await Promise.resolve();
-    const pending = await childTool.execute('pending-child', { action: 'pending' });
-    const requestId = (pending.details as { pending: Array<{ id: string }> }).pending[0]?.id;
-    expect(requestId).toBeDefined();
-    await childTool.execute('reply-child', { action: 'reply', requestId, message: 'yes' });
-    await expect(answer).resolves.toMatchObject({ details: { reply: 'yes' } });
+    function setup(name: string, steer?: (message: string) => Promise<void>) {
+      const service = new NativeTeamChannelService();
+      const mainPi = makePi();
+      const main = service.createRuntime(mainPi as never);
+      const root = main.bindMainSession(name);
+      const received: string[] = [];
+      const intercom = service.createNativeChildIntercom({
+        rootSessionId: root.rootSessionId,
+        agent: 'worker',
+        runId: `run-${name}`,
+      })!;
+      const childTool = intercom.bindRuntime(childRuntime(steer ?? (async (message) => void received.push(message))));
+      const lastToMain = () => mainPi.sendMessageCalls.at(-1)?.message;
+      return { main, mainPi, received, intercom, childTool, lastToMain };
+    }
 
-    intercom!.dispose?.();
-    main.dispose();
+    it('returns at once and delivers the reply to the asker as a message, both directions', async () => {
+      const { main, received, intercom, childTool, lastToMain } = setup('ask-both-ways');
+
+      const asked = await main.execute('ask-child', { action: 'ask', to: 'worker', message: 'ready?' });
+      const requestId = (asked.details as { requestId: string }).requestId;
+      expect(asked.details).toMatchObject({ delivered: true, requestId: expect.any(String) });
+      expect(received).toEqual([expect.stringContaining('ready?')]);
+      await childTool.execute('reply-child', { action: 'reply', requestId, message: 'yes' });
+      expect(lastToMain()).toMatchObject({
+        content: expect.stringContaining(`Reply from worker-run-ask- [worker] to your question ${requestId}`),
+        details: { kind: 'reply', message: 'yes', requestId },
+      });
+      await expect(childTool.execute('reply-again', { action: 'reply', requestId, message: 'yes' })).rejects.toThrow(
+        'No open intercom ask',
+      );
+
+      const childAsk = await childTool.execute('ask-main', { action: 'ask', to: 'main', message: 'which db?' });
+      const childRequestId = (childAsk.details as { requestId: string }).requestId;
+      expect(lastToMain()).toMatchObject({ details: { kind: 'ask', message: 'which db?' } });
+      await main.execute('reply-main', { action: 'reply', requestId: childRequestId, message: 'postgres' });
+      expect(received.at(-1)).toContain(`Reply from main to your question ${childRequestId}.\n\npostgres`);
+
+      // A retried tool call returns the first outcome without asking twice.
+      const before = received.length;
+      await main.execute('ask-child-retry', { action: 'ask', to: 'worker', message: 'again?' });
+      await main.execute('ask-child-retry', { action: 'ask', to: 'worker', message: 'again?' });
+      expect(received).toHaveLength(before + 1);
+
+      intercom.dispose?.();
+      main.dispose();
+    });
+
+    it('reminds the asker once after 3 minutes, keeps the ask open, and lets the child decide', async () => {
+      vi.useFakeTimers();
+      const { main, received, intercom, childTool, lastToMain } = setup('ask-reminder');
+      const asked = await childTool.execute('ask-main', { action: 'ask', to: 'main', message: 'which db?' });
+      const requestId = (asked.details as { requestId: string }).requestId;
+      expect(lastToMain()?.details).toMatchObject({ kind: 'ask' });
+
+      let held: boolean | undefined;
+      void intercom.hold!().then((more) => (held = more));
+      await vi.advanceTimersByTimeAsync(3 * 60 * 1000 - 1);
+      expect(held).toBeUndefined();
+      expect(received).toEqual([]);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(held).toBe(true);
+      expect(received).toEqual([expect.stringContaining(`No reply from main to your question ${requestId}.`)]);
+      expect(received[0]).toContain('It is your call: keep working, ask again, or finish.');
+
+      // The ask stays open: still pending for main, and a late reply still lands.
+      const pending = await main.execute('pending-main', { action: 'pending' });
+      expect(pending.details).toEqual({ pending: [{ id: requestId, from: 'worker-run-ask-' }] });
+      await main.execute('late-reply', { action: 'reply', requestId, message: 'postgres' });
+      expect(received.at(-1)).toContain('postgres');
+      await vi.advanceTimersByTimeAsync(3 * 60 * 1000);
+      expect(received).toHaveLength(2);
+      expect(vi.getTimerCount()).toBe(0);
+
+      // Nothing left to wait for once the deliveries are drained: the run may finish.
+      await expect(intercom.hold!()).resolves.toBe(true);
+      await expect(intercom.hold!()).resolves.toBe(false);
+      await expect(main.execute('send-gone', { action: 'send', to: 'worker', message: 'hi' })).rejects.toThrow(
+        'not found',
+      );
+
+      main.dispose();
+    });
+
+    it('holds a child open while its question is unanswered and releases it on the reply', async () => {
+      const { main, intercom, childTool } = setup('ask-hold');
+      const asked = await childTool.execute('ask-main', { action: 'ask', to: 'main', message: 'which db?' });
+      const requestId = (asked.details as { requestId: string }).requestId;
+
+      let held: boolean | undefined;
+      const parked = intercom.hold!().then((more) => (held = more));
+      await Promise.resolve();
+      expect(held).toBeUndefined();
+      await main.execute('reply-main', { action: 'reply', requestId, message: 'postgres' });
+      await parked;
+      expect(held).toBe(true);
+
+      await expect(intercom.hold!()).resolves.toBe(true);
+      await expect(intercom.hold!()).resolves.toBe(false);
+      const members = await main.execute('members-op', { action: 'members' });
+      expect((members.details as { members: Array<{ agent?: string }> }).members).toEqual([
+        expect.objectContaining({ name: 'main' }),
+      ]);
+      main.dispose();
+    });
+
+    it('tells the asker at once when the asked member finishes without replying', async () => {
+      vi.useFakeTimers();
+      const { main, intercom, lastToMain } = setup('ask-target-gone');
+      const asked = await main.execute('ask-child', { action: 'ask', to: 'worker', message: 'ready?' });
+      const requestId = (asked.details as { requestId: string }).requestId;
+
+      intercom.dispose?.();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(lastToMain()).toMatchObject({
+        content: expect.stringContaining(`No reply from worker-run-ask- [worker] to your question ${requestId}.`),
+        details: { kind: 'no_reply', requestId },
+      });
+      expect(lastToMain()?.content).toContain('It finished without replying.');
+      expect(vi.getTimerCount()).toBe(0);
+      main.dispose();
+    });
+
+    it('surfaces a failed hand-off and leaves no ask behind', async () => {
+      const { main, intercom, childTool } = setup('ask-fails', async () => {
+        throw new Error('lane closed');
+      });
+      await expect(main.execute('send-child', { action: 'send', to: 'worker', message: 'hi' })).rejects.toMatchObject({
+        code: 'communication_unavailable',
+        message: expect.stringContaining('lane closed'),
+      });
+      await expect(main.execute('ask-child', { action: 'ask', to: 'worker', message: 'ready?' })).rejects.toMatchObject(
+        {
+          code: 'communication_unavailable',
+        },
+      );
+      const pending = await childTool.execute('pending-child', { action: 'pending' });
+      expect(pending.details).toEqual({ pending: [] });
+      intercom.dispose?.();
+      main.dispose();
+    });
+
+    it('releases a parked hold with false when the channel is disposed', async () => {
+      const { main, childTool, intercom } = setup('ask-dispose');
+      await childTool.execute('ask-main', { action: 'ask', to: 'main', message: 'which db?' });
+      const parked = intercom.hold!();
+      main.dispose();
+      await expect(parked).resolves.toBe(false);
+    });
+  });
+
+  it('declares a flat schema the model can see and still validates each action', () => {
+    const schema = TeamToolParamsSchema as unknown as { type: string; properties: object; oneOf?: unknown };
+    expect(schema.type).toBe('object');
+    expect(Object.keys(schema.properties)).toEqual(['action', 'to', 'message', 'requestId']);
+    expect(schema.oneOf).toBeUndefined();
+    expect(() => parseTeamToolParams({ action: 'send', message: 'hi' })).toThrow('requires to');
+    expect(() => parseTeamToolParams({ action: 'ask', to: ' ', message: 'hi' })).toThrow('requires to');
+    expect(() => parseTeamToolParams({ action: 'reply', message: 'hi' })).toThrow('requires requestId');
+    expect(() => parseTeamToolParams({ action: 'ask', to: 'main', message: 'hi', timeoutMs: 5 })).toThrow(
+      'does not accept: timeoutMs',
+    );
   });
 
   it('isolates members by root session and releases a disposed root', async () => {

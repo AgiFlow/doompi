@@ -237,22 +237,24 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
       return delivery;
     },
   });
+  // Intercom delivery to main. The toast alone never reached the model, so a
+  // child's question sat unread until its ask timed out. Same wake path and tail
+  // as completions above, so questions and completions reach main in order.
   const transport: NativeTeamTransport = {
-    sendMessage: ((message) =>
-      void execution.client.notify({
-        body:
-          typeof message.content === 'string'
-            ? message.content
-            : message.content.map((part) => ('text' in part ? part.text : '[image]')).join('\n'),
-        level: 'info',
-      })) as NativeTeamTransport['sendMessage'],
-    sendUserMessage: ((message) =>
-      void execution.session.prompt(
-        typeof message === 'string'
-          ? message
-          : message.map((part) => ('text' in part ? part.text : '[image]')).join('\n'),
-        'steer',
-      )) as NativeTeamTransport['sendUserMessage'],
+    sendMessage: (message, options) => {
+      const text =
+        typeof message.content === 'string'
+          ? message.content
+          : message.content.map((part) => ('text' in part ? part.text : '[image]')).join('\n');
+      void execution.client.notify({ body: text, level: 'info' });
+      if (options?.triggerTurn === false) return;
+      const delivery = deliveries.then(async () => {
+        if (!execution.session.admitPrompt) throw new Error('The session cannot admit an intercom message.');
+        await execution.session.admitPrompt(text, 'steer');
+      });
+      deliveries = delivery.catch(() => undefined);
+      return delivery;
+    },
   };
   const channel = runtime.teamChannel.createHeadlessRuntime(transport);
   const intercom = createHeadlessIntercomTool(channel, {

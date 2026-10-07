@@ -95,8 +95,8 @@
     "@agimon-ai/doompi-voice": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@deepseek-ai/cordis": "4.0.4",
-    "@earendil-works/pi-coding-agent": "1.0.2",
-    "@earendil-works/pi-tui": "1.0.2",
+    "@earendil-works/pi-coding-agent": "1.0.4",
+    "@earendil-works/pi-tui": "1.0.4",
     "@types/node": "26.6.4",
     "@vitest/coverage-v8": "5.0.3",
     "tsdown": "0.23.0",
@@ -105,8 +105,8 @@
   },
   "peerDependencies": {
     "@agimon-ai/doompi-core": "workspace:*",
-    "@earendil-works/pi-coding-agent": "1.0.2",
-    "@earendil-works/pi-tui": "1.0.2"
+    "@earendil-works/pi-coding-agent": "1.0.4",
+    "@earendil-works/pi-tui": "1.0.4"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

@@ -288,6 +288,25 @@ describe('durable direct runtime', () => {
     await expect(runtime.exited).resolves.toBe(1);
     await expect(runtime.dispose()).rejects.toMatchObject({ errors: [failure] });
   });
+  it('holds a prompt open across turns that intercom delivery starts on an idle lane', async () => {
+    const { runtime, streamSimple } = await setup({}, [
+      response([{ type: 'text', text: 'first' }]),
+      response([{ type: 'text', text: 'second' }]),
+    ]);
+    const hold = vi.fn(async () => {
+      if (hold.mock.calls.length > 1) return false;
+      // Admission only, like intercom steer: the turn it starts must be drained by the caller.
+      await runtime.submitInternalMessage('reply arrived', 'steer');
+      return true;
+    });
+    try {
+      expect(await promptForAssistantText(runtime, 'question', hold)).toBe('second');
+      expect(hold).toHaveBeenCalledTimes(2);
+      expect(streamSimple).toHaveBeenCalledTimes(2);
+    } finally {
+      await runtime.dispose();
+    }
+  });
   it('submits through durable Harness and projects string protocol IDs', async () => {
     const { runtime, streamSimple } = await setup();
     try {
