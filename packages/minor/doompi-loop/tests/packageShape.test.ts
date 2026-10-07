@@ -65,14 +65,14 @@ describe('doom-loop package boundary', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.peerDependencies).toEqual(
       expect.objectContaining({
-        '@earendil-works/pi-coding-agent': '1.0.2',
-        '@earendil-works/pi-tui': '1.0.2',
+        '@earendil-works/pi-coding-agent': '1.0.4',
+        '@earendil-works/pi-tui': '1.0.4',
       }),
     );
     expect(manifest.devDependencies).toEqual(
       expect.objectContaining({
-        '@earendil-works/pi-coding-agent': '1.0.2',
-        '@earendil-works/pi-tui': '1.0.2',
+        '@earendil-works/pi-coding-agent': '1.0.4',
+        '@earendil-works/pi-tui': '1.0.4',
       }),
     );
     expect(manifest.dependencies?.['@agimon-ai/doompi-web-components']).toBe('workspace:*');

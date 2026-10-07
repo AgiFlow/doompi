@@ -34,11 +34,11 @@ describe('doompi core server surface', () => {
   it('declares the server runtime dependencies', async () => {
     const manifest = await readManifest();
     expect(manifest.dependencies).toMatchObject({
-      '@earendil-works/chord': '1.0.2',
-      '@earendil-works/pi-protocol': '1.0.2',
+      '@earendil-works/chord': '1.0.4',
+      '@earendil-works/pi-protocol': '1.0.4',
       '@hono/node-server': '2.1.3',
     });
-    expect(manifest.devDependencies?.['@earendil-works/pi-client']).toBe('1.0.2');
+    expect(manifest.devDependencies?.['@earendil-works/pi-client']).toBe('1.0.4');
     expect(manifest.dependencies).not.toHaveProperty('@earendil-works/pi-session-backend-sqlite-node');
   });
 
