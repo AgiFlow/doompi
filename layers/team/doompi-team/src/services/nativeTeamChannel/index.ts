@@ -16,7 +16,7 @@ import type {
 } from '@agimon-ai/doompi-core/childSession';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import type { TSchema } from 'typebox';
+import { Type } from 'typebox';
 
 import { BoundedKeySet } from '../boundedKeySet';
 import { DoomTeamExpectedError, invalidRequest } from '../errors';
@@ -31,7 +31,8 @@ const FALLBACK_MEMBER_NAME = 'agent';
 const MAX_MEMBER_NAME_LENGTH = 48;
 const FANOUT_SUFFIX_SEPARATOR = '-';
 const MAX_MESSAGE_BYTES = 64 * 1024;
-const DEFAULT_ASK_TIMEOUT_MS = 10 * 60 * 1000;
+/** An unanswered ask wakes its asker once, after this long. */
+const ASK_WAKE_MS = 3 * 60 * 1000;
 const MAX_IDEMPOTENCY_KEYS = 1024;
 const HASH_ALGORITHM = 'sha256';
 const TOKEN_BYTES = 32;
@@ -88,46 +89,33 @@ interface TeamToolParams {
   to?: string;
   message?: string;
   requestId?: string;
-  timeoutMs?: number;
 }
 
-export const TeamToolParamsSchema = {
-  oneOf: [
-    ...(['members', 'pending'] as const).map((action) => ({
-      type: 'object',
-      properties: { action: { const: action } },
-      required: ['action'],
-      additionalProperties: false,
-    })),
-    {
-      type: 'object',
-      properties: { action: { const: 'send' }, to: { type: 'string' }, message: { type: 'string' } },
-      required: ['action', 'to', 'message'],
-      additionalProperties: false,
-    },
-    {
-      type: 'object',
-      properties: {
-        action: { const: 'ask' },
-        to: { type: 'string' },
-        message: { type: 'string' },
-        timeoutMs: { type: 'integer', minimum: 1 },
-      },
-      required: ['action', 'to', 'message'],
-      additionalProperties: false,
-    },
-    {
-      type: 'object',
-      properties: { action: { const: 'reply' }, requestId: { type: 'string' }, message: { type: 'string' } },
-      required: ['action', 'requestId', 'message'],
-      additionalProperties: false,
-    },
-  ],
-} as unknown as TSchema;
-
-function isInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value);
-}
+/**
+ * The schema declared to the model.
+ *
+ * A flat object rather than a per-action union. A top-level union has no
+ * `properties`, and Pi's Anthropic Messages adapter rebuilds tool input as
+ * `{type:'object', properties: schema.properties ?? {}, required: schema.required ?? []}`,
+ * so the union arrived at the model as an empty object and calls came back as `{}`.
+ * Nothing here relaxes what is accepted: `parseTeamToolParams` still rejects an
+ * unknown action, a field the action does not take, and a missing required one.
+ */
+export const TeamToolParamsSchema = Type.Object(
+  {
+    action: Type.String({
+      enum: [...TEAM_ACTIONS],
+      description:
+        'members: list active members. send: deliver a message. ask: deliver a question and return at once with a requestId; the reply arrives later as a message, and one reminder arrives if there is no reply after 3 minutes. reply: answer a question by requestId. pending: list questions waiting for your reply.',
+    }),
+    to: Type.Optional(Type.String({ minLength: 1, description: 'Member id to address. Actions: send, ask.' })),
+    message: Type.Optional(Type.String({ minLength: 1, description: 'Text to deliver. Actions: send, ask, reply.' })),
+    requestId: Type.Optional(
+      Type.String({ minLength: 1, description: 'The requestId of the question being answered. Actions: reply.' }),
+    ),
+  },
+  { additionalProperties: false },
+);
 
 function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === 'string';
@@ -215,17 +203,12 @@ export function parseTeamToolParams(raw: unknown): TeamToolParams {
       'Correct the action fields and retry.',
     );
   }
-  if (params.timeoutMs !== undefined && (!isInteger(params.timeoutMs) || params.timeoutMs < 1)) {
-    throw invalidRequest('Intercom timeoutMs must be a positive integer.', 'Correct timeoutMs and retry.');
-  }
   const allowed = new Set(
     action === 'members' || action === 'pending'
       ? ['action']
       : action === 'reply'
         ? ['action', 'requestId', 'message']
-        : action === 'ask'
-          ? ['action', 'to', 'message', 'timeoutMs']
-          : ['action', 'to', 'message'],
+        : ['action', 'to', 'message'],
   );
   const unknown = Object.keys(params).filter((field) => !allowed.has(field));
   if (unknown.length) {
@@ -234,12 +217,20 @@ export function parseTeamToolParams(raw: unknown): TeamToolParams {
       'Remove unknown fields and retry.',
     );
   }
+  if ((action === 'send' || action === 'ask') && !params.to?.trim()) {
+    throw invalidRequest(`Intercom action '${action}' requires to.`, 'Pass the member id to address and retry.');
+  }
+  if (action === 'reply' && !params.requestId?.trim()) {
+    throw invalidRequest(
+      "Intercom action 'reply' requires requestId.",
+      'Pass the requestId from the question and retry.',
+    );
+  }
   return {
     action,
     ...(params.to !== undefined ? { to: params.to } : {}),
     ...(params.message !== undefined ? { message: params.message } : {}),
     ...(params.requestId !== undefined ? { requestId: params.requestId } : {}),
-    ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
   };
 }
 
@@ -252,29 +243,6 @@ export function validateMessage(message: string | undefined): string {
     throw invalidRequest('Intercom message exceeds 64 KiB.', 'Shorten the message and retry.');
   }
   return normalized;
-}
-
-function delay(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new Error('Native team request cancelled.'));
-      return;
-    }
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const cleanup = (): void => {
-      if (timer) clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
-    };
-    const onAbort = (): void => {
-      cleanup();
-      reject(new Error('Native team request cancelled.'));
-    };
-    timer = setTimeout(() => {
-      cleanup();
-      resolve();
-    }, ms);
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
 }
 
 function toChildSessionToolResult(result: AgentToolResult<Record<string, unknown>>): DoomChildSessionToolResult {
@@ -296,7 +264,7 @@ function publicMember(context: TeamMemberContext): NativeTeamMemberSnapshot {
 }
 
 export interface IntercomMessageDetails {
-  readonly kind: 'send' | 'ask';
+  readonly kind: 'send' | 'ask' | 'reply' | 'no_reply';
   readonly from: NativeTeamMemberSnapshot;
   readonly message: string;
   readonly requestId: string;
@@ -313,15 +281,25 @@ function formatDirectMessage(
   requestId: string,
   message: string,
 ): DirectMessage {
-  return {
-    content: `${kind === 'ask' ? 'Question' : 'Message'} from ${from.memberId}${from.inline ? ' (inline)' : ''}${from.agent ? ` [${from.agent}]` : ''}.\n\n${message}${kind === 'ask' ? `\n\nReply with ${NATIVE_TEAM_TOOL_NAME}({ action: "reply", requestId: "${requestId}", message: "..." }).` : ''}`,
-    details: { kind, from: publicMember(from), message, requestId },
-  };
+  const who = `${from.memberId}${from.inline ? ' (inline)' : ''}${from.agent ? ` [${from.agent}]` : ''}`;
+  const content =
+    kind === 'reply'
+      ? `Reply from ${who} to your question ${requestId}.\n\n${message}`
+      : kind === 'no_reply'
+        ? `No reply from ${who} to your question ${requestId}. ${message}`
+        : `${kind === 'ask' ? 'Question' : 'Message'} from ${who}.\n\n${message}${kind === 'ask' ? `\n\nReply with ${NATIVE_TEAM_TOOL_NAME}({ action: "reply", requestId: "${requestId}", message: "..." }).` : ''}`;
+  return { content, details: { kind, from: publicMember(from), message, requestId } };
 }
 
 interface DirectMember {
   readonly context: TeamMemberContext;
   deliver?: (message: DirectMessage) => Promise<void>;
+  /** Deliveries whose admission has not settled yet. */
+  inFlight: number;
+  /** Something was admitted since the last `hold` check, so a turn may be starting. */
+  delivered: boolean;
+  /** Resolves a parked `hold`: true to drain and check again, false to let the run finish. */
+  release?: (more: boolean) => void;
 }
 
 interface DirectAsk {
@@ -329,9 +307,9 @@ interface DirectAsk {
   readonly fromMemberId: string;
   readonly toMemberId: string;
   readonly createdAt: number;
-  readonly promise: Promise<string>;
-  readonly resolve: (message: string) => void;
-  readonly reject: (error: unknown) => void;
+  readonly timer: ReturnType<typeof setTimeout>;
+  /** The single no-reply reminder fired. The ask stays open but no longer holds the asker. */
+  woken: boolean;
 }
 
 export interface NativeTeamChildIntercomInput {
@@ -357,8 +335,10 @@ class NativeTeamDirectChannel {
   bindMain(context: TeamMemberContext, transport: NativeTeamTransport): void {
     this.members.set(context.memberId, {
       context,
+      inFlight: 0,
+      delivered: false,
       deliver: async (message) => {
-        transport.sendMessage(
+        await transport.sendMessage(
           {
             customType: TEAM_MESSAGE_CUSTOM_TYPE,
             content: message.content,
@@ -386,7 +366,7 @@ class NativeTeamDirectChannel {
       ...(input.task === undefined ? {} : { task: validateTask(input.task) }),
     };
     if (this.members.has(memberId)) throw new Error(`Native team member '${memberId}' already exists.`);
-    this.members.set(memberId, { context });
+    this.members.set(memberId, { context, inFlight: 0, delivered: false });
     let disposed = false;
     const dispose = (): void => {
       if (disposed) return;
@@ -402,50 +382,69 @@ class NativeTeamDirectChannel {
           name: NATIVE_TEAM_TOOL_NAME,
           description: 'Communicate with active native agents in this root session.',
           parameters: TeamToolParamsSchema,
-          execute: async (operationId, rawParams, signal, onUpdate) => {
-            const result = await this.execute(
-              memberId,
-              operationId,
-              rawParams,
-              signal,
-              onUpdate && ((update) => onUpdate(toChildSessionToolResult(update))),
-            );
-            return toChildSessionToolResult(result);
-          },
+          execute: async (operationId, rawParams) =>
+            toChildSessionToolResult(await this.execute(memberId, operationId, rawParams)),
         };
       },
       dispose,
+      hold: () => this.hold(memberId),
     };
   }
 
+  /**
+   * Keeps a child run open while intercom still owes it something. Checked after
+   * each child turn settles. Holding means: a delivery to it is in flight, or it
+   * has an ask with neither a reply nor the reminder yet. Otherwise the member is
+   * removed in this same synchronous call, so nothing can be admitted into a
+   * runtime that is about to be disposed.
+   */
+  private hold(memberId: string): Promise<boolean> {
+    const member = this.members.get(memberId);
+    if (!member) return Promise.resolve(false);
+    if (member.delivered) {
+      member.delivered = false;
+      return Promise.resolve(true);
+    }
+    const waiting =
+      member.inFlight > 0 || [...this.asks.values()].some((ask) => ask.fromMemberId === memberId && !ask.woken);
+    if (!waiting) {
+      this.disposeMember(memberId);
+      return Promise.resolve(false);
+    }
+    return new Promise((resolve) => {
+      member.release = (more) => {
+        member.release = undefined;
+        resolve(more);
+      };
+    });
+  }
+
   disposeMember(memberId: string): void {
+    const member = this.members.get(memberId);
+    if (!member) return;
     this.members.delete(memberId);
-    for (const [id, ask] of this.asks) {
-      if (ask.fromMemberId === memberId || ask.toMemberId === memberId) {
-        ask.reject(new Error(`Native team member '${memberId}' became unreachable before replying.`));
-        this.asks.delete(id);
+    for (const ask of this.asks.values()) {
+      if (ask.fromMemberId === memberId) this.closeAsk(ask);
+      else if (ask.toMemberId === memberId) {
+        this.closeAsk(ask);
+        this.notifyAsker(ask, member.context, 'It finished without replying.');
       }
     }
+    member.release?.(false);
   }
 
   dispose(): void {
     this.disposed = true;
-    for (const ask of this.asks.values()) ask.reject(new Error('Native team channel is no longer active.'));
+    for (const ask of this.asks.values()) clearTimeout(ask.timer);
     this.asks.clear();
+    const members = [...this.members.values()];
     this.members.clear();
     this.delivered.clear();
+    for (const member of members) member.release?.(false);
   }
 
   snapshots(): NativeTeamMemberSnapshot[] {
     return [...this.members.values()].map((member) => publicMember(member.context));
-  }
-
-  hasMember(query: string | undefined): boolean {
-    return this.findMember(query) !== undefined;
-  }
-
-  hasAsk(requestId: string | undefined): boolean {
-    return requestId !== undefined && this.asks.has(requestId);
   }
 
   pending(memberId: string): Array<{ id: string; fromMemberId: string; createdAt: number }> {
@@ -459,8 +458,6 @@ class NativeTeamDirectChannel {
     memberId: string,
     operationId: string,
     rawParams: unknown,
-    signal?: AbortSignal,
-    onUpdate?: (result: AgentToolResult<Record<string, unknown>>) => void,
   ): Promise<AgentToolResult<Record<string, unknown>>> {
     const params = parseTeamToolParams(rawParams);
     const member = this.members.get(memberId);
@@ -504,16 +501,18 @@ class NativeTeamDirectChannel {
     const message = validateMessage(params.message);
     if (params.action === 'reply') {
       const request = this.asks.get(params.requestId ?? '');
-      if (!request || request.toMemberId !== memberId) {
+      const asker = request && this.members.get(request.fromMemberId);
+      if (!request || request.toMemberId !== memberId || !asker) {
         throw new DoomTeamExpectedError(
           'recipient_not_found',
-          `No pending intercom ask matches requestId '${params.requestId}'.`,
+          `No open intercom ask matches requestId '${params.requestId}'. It may already be answered, or its asker has finished.`,
           false,
-          'Call intercom({"action":"pending"}) and retry with an exact requestId.',
+          'Call intercom({"action":"pending"}) and retry with an exact requestId, or continue without replying.',
         );
       }
-      request.resolve(message);
-      this.asks.delete(request.id);
+      // On failure the ask stays open so the reply can be retried.
+      await this.deliver(asker, formatDirectMessage(member.context, 'reply', request.id, message));
+      this.closeAsk(request);
       return {
         content: [{ type: 'text', text: `Replied to native team request ${request.id}.` }],
         details: { requestId: request.id, to: request.fromMemberId },
@@ -530,67 +529,73 @@ class NativeTeamDirectChannel {
       );
     }
     const messageId = operationMessageId(memberId, operationId);
-    if (params.action === 'send') {
-      if (this.delivered.has(messageId)) {
-        return {
-          content: [{ type: 'text', text: `Message ${messageId} delivered to ${target.context.memberId}.` }],
-          details: { state: 'delivered', delivered: true, messageId, to: target.context.memberId },
-        };
-      }
-      await this.deliver(target, formatDirectMessage(member.context, 'send', messageId, message));
-      this.delivered.add(messageId);
-      return {
-        content: [{ type: 'text', text: `Message ${messageId} delivered to ${target.context.memberId}.` }],
-        details: { state: 'delivered', delivered: true, messageId, to: target.context.memberId },
-      };
-    }
-
-    let ask = this.asks.get(messageId);
-    let delivered = false;
-    if (!ask) {
-      ask = this.createAsk(memberId, target.context.memberId, messageId);
-      delivered = true;
-    }
-    onUpdate?.({
-      content: [{ type: 'text', text: `Waiting for ${target.context.memberId} to reply...` }],
-      details: { action: 'ask', to: target.context.memberId, partial: true },
+    const isAsk = params.action === 'ask';
+    const result = (): AgentToolResult<Record<string, unknown>> => ({
+      content: [
+        {
+          type: 'text',
+          text: isAsk
+            ? `Question ${messageId} delivered to ${target.context.memberId}. The reply will arrive later as a message; keep working.`
+            : `Message ${messageId} delivered to ${target.context.memberId}.`,
+        },
+      ],
+      details: {
+        state: 'delivered',
+        delivered: true,
+        messageId,
+        to: target.context.memberId,
+        ...(isAsk ? { requestId: messageId } : {}),
+      },
     });
+    // A retried tool call returns the first outcome instead of delivering twice.
+    if (this.delivered.has(messageId) || this.asks.has(messageId)) return result();
+    const ask = isAsk ? this.openAsk(memberId, target.context.memberId, messageId) : undefined;
     try {
-      if (delivered) {
-        await this.deliver(target, formatDirectMessage(member.context, 'ask', ask.id, message));
-        signal?.throwIfAborted();
-      }
-      const reply = await Promise.race([
-        ask.promise,
-        delay(params.timeoutMs ?? DEFAULT_ASK_TIMEOUT_MS, signal).then(() => {
-          throw new DoomTeamExpectedError(
-            'reply_timeout',
-            `Timed out waiting for intercom member '${target.context.memberId}' to reply.`,
-            true,
-            'Check member status before deciding whether to ask again.',
-          );
-        }),
-      ]);
-      return {
-        content: [{ type: 'text', text: `Reply from ${target.context.memberId}:\n${reply}` }],
-        details: { requestId: ask.id, from: target.context.memberId, reply },
-      };
-    } finally {
-      this.asks.delete(ask.id);
+      await this.deliver(target, formatDirectMessage(member.context, params.action, messageId, message));
+    } catch (error) {
+      if (ask) this.closeAsk(ask);
+      throw error;
     }
+    this.delivered.add(messageId);
+    return result();
   }
 
-  private createAsk(fromMemberId: string, toMemberId: string, id: string): DirectAsk {
-    let resolve!: (value: string) => void;
-    let reject!: (error: unknown) => void;
-    const promise = new Promise<string>((next, fail) => {
-      resolve = next;
-      reject = fail;
-    });
-    void promise.catch(() => undefined);
-    const ask: DirectAsk = { id, fromMemberId, toMemberId, createdAt: Date.now(), promise, resolve, reject };
+  /** Stored before delivery so a reply that races the delivery still finds it. */
+  private openAsk(fromMemberId: string, toMemberId: string, id: string): DirectAsk {
+    const timer = setTimeout(() => this.wake(id), ASK_WAKE_MS);
+    timer.unref?.();
+    const ask: DirectAsk = { id, fromMemberId, toMemberId, createdAt: Date.now(), timer, woken: false };
     this.asks.set(id, ask);
     return ask;
+  }
+
+  private closeAsk(ask: DirectAsk): void {
+    clearTimeout(ask.timer);
+    this.asks.delete(ask.id);
+    this.members.get(ask.fromMemberId)?.release?.(true);
+  }
+
+  /** The single reminder. The ask stays open; the asker decides what to do next. */
+  private wake(id: string): void {
+    const ask = this.asks.get(id);
+    if (!ask || ask.woken) return;
+    ask.woken = true;
+    const target = this.members.get(ask.toMemberId);
+    if (target) {
+      this.notifyAsker(
+        ask,
+        target.context,
+        'It has been 3 minutes. The question stays open and a late reply will still arrive while you are running. It is your call: keep working, ask again, or finish.',
+      );
+    }
+    this.members.get(ask.fromMemberId)?.release?.(true);
+  }
+
+  /** Best effort: the asker may be gone, and a lost notice must not fail the caller. */
+  private notifyAsker(ask: DirectAsk, about: TeamMemberContext, notice: string): void {
+    const asker = this.members.get(ask.fromMemberId);
+    if (!asker) return;
+    void this.deliver(asker, formatDirectMessage(about, 'no_reply', ask.id, notice)).catch(() => undefined);
   }
 
   private findMember(query: string | undefined): DirectMember | undefined {
@@ -607,23 +612,46 @@ class NativeTeamDirectChannel {
   }
 
   private async deliver(target: DirectMember, message: DirectMessage): Promise<void> {
+    const id = target.context.memberId;
+    if (this.members.get(id) !== target) {
+      throw new DoomTeamExpectedError(
+        'communication_unavailable',
+        `Intercom member '${id}' has finished.`,
+        false,
+        'Call intercom({"action":"members"}) to see who is active.',
+      );
+    }
     if (!target.deliver) {
       throw new DoomTeamExpectedError(
         'communication_unavailable',
-        `Intercom member '${target.context.memberId}' is not ready.`,
+        `Intercom member '${id}' is not ready.`,
         true,
         'Retry after the child session starts.',
       );
     }
-    await target.deliver(message);
+    target.inFlight += 1;
+    try {
+      await target.deliver(message);
+      target.delivered = true;
+    } catch (error) {
+      if (error instanceof DoomTeamExpectedError) throw error;
+      throw new DoomTeamExpectedError(
+        'communication_unavailable',
+        `Intercom member '${id}' could not receive the message: ${error instanceof Error ? error.message : String(error)}`,
+        true,
+        'Retry shortly, or continue without it.',
+      );
+    } finally {
+      target.inFlight -= 1;
+      target.release?.(true);
+    }
   }
 }
 
 export interface NativeTeamTransport {
-  sendMessage: ExtensionAPI['sendMessage'];
-  sendUserMessage: ExtensionAPI['sendUserMessage'];
+  /** Resolves once the message is admitted, so a failed hand-off reaches the sender. */
+  sendMessage: (...args: Parameters<ExtensionAPI['sendMessage']>) => void | Promise<void>;
 }
-
 export interface NativeTeamRuntime {
   bindMainSession(rootSessionId: string): TeamMemberContext;
   current(): TeamMemberContext | undefined;
@@ -659,12 +687,7 @@ class TeamChannelRuntime implements NativeTeamRuntime {
     return [];
   }
 
-  execute(
-    operationId: string,
-    rawParams: unknown,
-    signal?: AbortSignal,
-    onUpdate?: (result: AgentToolResult<Record<string, unknown>>) => void,
-  ): Promise<AgentToolResult<Record<string, unknown>>> {
+  execute(operationId: string, rawParams: unknown): Promise<AgentToolResult<Record<string, unknown>>> {
     const context = this.context;
     if (!context || !this.directChannel) {
       throw new DoomTeamExpectedError(
@@ -674,7 +697,7 @@ class TeamChannelRuntime implements NativeTeamRuntime {
         'Wait for session startup or reload Doom Team.',
       );
     }
-    return this.directChannel.execute(context.memberId, operationId, rawParams, signal, onUpdate);
+    return this.directChannel.execute(context.memberId, operationId, rawParams);
   }
 
   bindMainSession(rootSessionId: string): TeamMemberContext {

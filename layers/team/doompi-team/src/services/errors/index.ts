@@ -13,7 +13,6 @@ export type DoomTeamErrorCode =
   | 'recipient_not_found'
   | 'recipient_ambiguous'
   | 'delivery_unconfirmed'
-  | 'reply_timeout'
   | 'status_corrupt'
   | 'operation_conflict'
   | 'tool_conflict';

@@ -67,6 +67,13 @@ Use `/run` for one agent and `/parallel` for several. `/subagents-doctor` report
 The `subagent` tool exposes `agents`, `run`, `status`, `steer`, `stop`, `suspended`, and `restore`.
 The `intercom` tool exposes `members`, `send`, `ask`, `pending`, and `reply`.
 
+`ask` is asynchronous in every direction (child to main, main to child, child to sibling). It
+returns at once with a `requestId`. The answer arrives later as an intercom message that wakes the
+asker. A child with an open ask stays alive after its turn ends. If no reply lands within 180
+seconds, the asker gets one notice and a turn to decide: keep working, ask again, or finish. The ask
+stays open, so a late reply still lands while the asker is alive. If the target finishes without
+replying, the asker is told right away.
+
 Use `SPC a l` to browse agents and `SPC a r` to inspect current-session runs. TUI views require an
 interactive host; tools and commands support headless orchestration.
 

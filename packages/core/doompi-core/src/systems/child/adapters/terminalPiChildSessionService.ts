@@ -88,7 +88,7 @@ function childRuntime(
     ...(typeof file === 'string'
       ? { readTranscriptPage: (request, signal) => readNativeChildTranscript(file, request, signal) }
       : {}),
-    prompt: (task) => promptForAssistantText(runtime, task),
+    prompt: (task) => promptForAssistantText(runtime, task, intercom?.hold?.bind(intercom)),
     async steer(message) {
       await runtime.submitInternalMessage(message, 'steer');
     },

@@ -155,6 +155,11 @@ export interface DoomChildSessionMcpTool extends DoomChildSessionTool {
 export interface DoomChildSessionIntercom {
   bindRuntime(runtime: DoomChildSessionRuntime): DoomChildSessionTool;
   dispose?(): void;
+  /**
+   * Called after each child turn settles. Resolves true when intercom activity may have started
+   * another turn (the caller waits for idle and asks again), false when the run may finish.
+   */
+  hold?(): Promise<boolean>;
 }
 
 /** Host runtime owned by the direct headless or terminal adapter. */

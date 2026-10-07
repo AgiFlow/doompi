@@ -140,14 +140,21 @@ export async function projectDurableConversationEntries(
   records.reverse();
   return projectDurableEntries(records);
 }
+/**
+ * Runs one prompt and returns the newest assistant text it produced. `hold` keeps the run open
+ * across later turns started by intercom delivery: while it resolves true, wait for the lane to
+ * go idle and ask again. The returned text is the newest one across all of those turns.
+ */
 export async function promptForAssistantText(
   runtime: DirectHarnessRuntime,
   prompt: string,
+  hold?: () => Promise<boolean>,
 ): Promise<string | undefined> {
   const previous = new Set((await runtime.readEntries()).entries.map((e) => e.id));
   await (
     await runtime.submitInternalMessage(prompt)
   ).settled;
+  while (hold && (await hold())) await runtime.lane.waitForIdle(BACKGROUND_CONTEXT);
   return (
     (await runtime.readEntries()).entries
       .toReversed()
