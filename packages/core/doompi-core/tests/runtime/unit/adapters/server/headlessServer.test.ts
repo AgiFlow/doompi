@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createRemoteServiceBinding } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { Client, createClientServiceTransport, type ByteTransportFactory } from '@earendil-works/pi-client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import WebSocket from 'ws';
 
 import type { DoomHubChannel } from '../../../../../src/exports/hubChannel';
@@ -752,6 +752,60 @@ describe('serveHeadlessServer', () => {
     expect((await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/file?path=README.md`)).status).toBe(
       401,
     );
+    await hub.close();
+  });
+
+  it('stores composer attachments privately for the session, up to the request body cap', async () => {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-session-attachments-'));
+    temporaryDirectories.push(agentDir);
+    vi.stubEnv('PI_CODING_AGENT_DIR', agentDir);
+    onTestFinished(() => {
+      vi.unstubAllEnvs();
+    });
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: host().host,
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
+    servers.push(server);
+    const upload = (name: string, body: Uint8Array, token = 'secret') =>
+      fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/attachments?name=${encodeURIComponent(name)}`, {
+        method: 'POST',
+        headers: { 'x-doompi-token': token, 'content-type': 'application/pdf' },
+        body: new Uint8Array(body),
+      });
+
+    const created = await upload('../brief.pdf', Buffer.from('%PDF-1.7'));
+    expect(created.status).toBe(201);
+    const stored = (await created.json()) as { path: string; name: string; size: number; mimeType: string };
+    expect(stored).toMatchObject({ name: 'brief.pdf', size: 8, mimeType: 'application/pdf' });
+    expect(path.relative(path.join(agentDir, 'doom-attachments', 'one'), stored.path).split(path.sep)).toHaveLength(2);
+    expect(fs.readFileSync(stored.path, 'utf8')).toBe('%PDF-1.7');
+
+    const tooLarge = await upload('big.bin', Buffer.alloc(8 * 1024 * 1024 + 1));
+    expect(tooLarge.status).toBe(413);
+    expect((await upload('brief.pdf', Buffer.from('x'), 'wrong')).status).toBe(401);
+    expect(
+      (
+        await fetch(`${server.url}/api/workspaces/test-workspace/sessions/missing/attachments?name=a.pdf`, {
+          method: 'POST',
+          headers: { 'x-doompi-token': 'secret' },
+          body: 'x',
+        })
+      ).status,
+    ).toBe(404);
+    expect(fs.readdirSync(path.join(agentDir, 'doom-attachments', 'one'))).toHaveLength(1);
     await hub.close();
   });
 

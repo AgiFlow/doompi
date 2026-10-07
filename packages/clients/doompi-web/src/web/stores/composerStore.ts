@@ -10,6 +10,8 @@ export interface ComposerImageAttachment {
   dataUrl: string;
   data: string;
   mimeType: string;
+  /** Where the host stored a copy, when the best-effort upload succeeded. */
+  path?: string;
 }
 
 export interface ComposerTextAttachment {
@@ -18,6 +20,18 @@ export interface ComposerTextAttachment {
   name: string;
   size: number;
   content: string;
+  /** Where the host stored a copy, when the best-effort upload succeeded. */
+  path?: string;
+}
+
+/** Any other file: stored on the host and referenced by path, never inlined. */
+export interface ComposerFileAttachment {
+  id: string;
+  kind: 'file';
+  name: string;
+  size: number;
+  mimeType: string;
+  path: string;
 }
 
 export interface ComposerContextAttachment {
@@ -32,13 +46,27 @@ export interface ComposerContextAttachment {
   url?: string;
 }
 
-export type ComposerAttachment = ComposerContextAttachment | ComposerImageAttachment | ComposerTextAttachment;
+export type ComposerAttachment =
+  | ComposerContextAttachment
+  | ComposerFileAttachment
+  | ComposerImageAttachment
+  | ComposerTextAttachment;
 
 export const MAX_COMPOSER_ATTACHMENTS = 8;
 export const MAX_COMPOSER_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_COMPOSER_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024;
 export const MAX_COMPOSER_TEXT_BYTES = 100 * 1024;
 export const MAX_COMPOSER_TOTAL_TEXT_BYTES = 200 * 1024;
+/** The host's upload limit for one stored attachment. */
+export const MAX_COMPOSER_UPLOAD_BYTES = 8 * 1024 * 1024;
+
+/** Bytes counted against the inline text budget: stored files and images travel separately. */
+export function inlineTextBytes(attachments: ComposerAttachment[]): number {
+  return attachments.reduce(
+    (total, attachment) => total + (attachment.kind === 'text' || attachment.kind === 'context' ? attachment.size : 0),
+    0,
+  );
+}
 
 export interface ComposerSessionState {
   draft: string;
@@ -47,6 +75,8 @@ export interface ComposerSessionState {
   attachments: ComposerAttachment[];
   attachmentError: string;
   nextAttachmentId: number;
+  /** File batches still being read or uploaded; sending waits until they are staged. */
+  pendingAttachments: number;
 }
 
 type ComposerState = Partial<Record<string, ComposerSessionState>>;
@@ -58,6 +88,7 @@ const EMPTY_COMPOSER_SESSION: ComposerSessionState = {
   attachments: [],
   attachmentError: '',
   nextAttachmentId: 0,
+  pendingAttachments: 0,
 };
 
 /** Browser-only composer state, retained independently for each live session. */
@@ -229,10 +260,7 @@ export function attachComposerContext(sessionId: string | null, item: WebPluginC
     if (size > MAX_COMPOSER_TEXT_BYTES) {
       return { ...state, attachmentError: `${name} exceeds the 100 KB context limit.` };
     }
-    const textBytes = state.attachments.reduce(
-      (total, attachment) => total + (attachment.kind === 'image' ? 0 : attachment.size),
-      0,
-    );
+    const textBytes = inlineTextBytes(state.attachments);
     if (textBytes + size > MAX_COMPOSER_TOTAL_TEXT_BYTES) {
       return { ...state, attachmentError: `${name} exceeds the 200 KB total text limit.` };
     }
@@ -317,10 +345,7 @@ export function attachComposerCapture(sessionId: string | null, capture: Compose
     if (contextSize > MAX_COMPOSER_TEXT_BYTES) {
       return { ...state, attachmentError: `${name} exceeds the 100 KB context limit.` };
     }
-    const textBytes = state.attachments.reduce(
-      (total, attachment) => total + (attachment.kind === 'image' ? 0 : attachment.size),
-      0,
-    );
+    const textBytes = inlineTextBytes(state.attachments);
     if (textBytes + contextSize > MAX_COMPOSER_TOTAL_TEXT_BYTES) {
       return { ...state, attachmentError: `${name} exceeds the 200 KB total text limit.` };
     }
@@ -376,9 +401,14 @@ export function appendComposerQuote(sessionId: string | null, text: string): num
   return caret;
 }
 
+/** Empties the composer but keeps the id counter and pending batches, so a batch still uploading lands with a fresh id. */
 export function clearComposerState(sessionId: string | null): void {
   if (sessionId === null) return;
-  composerStore.setState((state) => ({ ...state, [sessionId]: EMPTY_COMPOSER_SESSION }));
+  updateComposerState(sessionId, ({ nextAttachmentId, pendingAttachments }) => ({
+    ...EMPTY_COMPOSER_SESSION,
+    nextAttachmentId,
+    pendingAttachments,
+  }));
 }
 
 /** A session that left takes its unfinished composer state with it. */

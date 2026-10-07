@@ -4,7 +4,7 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
 import { sealedHttpSession } from '../../src/web/lib/sealedSession';
-import { loadSessionAsset } from '../../src/web/lib/sessionAsset';
+import { loadSessionAsset, uploadSessionAttachment } from '../../src/web/lib/sessionAsset';
 
 const fetchSpy = vi.spyOn(sealedHttpSession, 'fetch');
 
@@ -45,5 +45,39 @@ describe('loadSessionAsset', () => {
 
     await expect(loadSessionAsset('session', 'missing.txt')).rejects.toThrow('could not be loaded (404)');
     expect(createUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe('uploadSessionAttachment', () => {
+  it('posts the raw file through the sealed HTTP channel and returns where it was stored', async () => {
+    fetchSpy.mockResolvedValue(
+      Response.json(
+        { path: '/host/attachments/a b.pdf', name: 'a b.pdf', size: 4, mimeType: 'application/pdf' },
+        { status: 201 },
+      ),
+    );
+    const file = new File(['%PDF'], 'a b.pdf', { type: 'application/pdf' });
+
+    await expect(uploadSessionAttachment('s 1', file)).resolves.toEqual({
+      path: '/host/attachments/a b.pdf',
+      mimeType: 'application/pdf',
+      size: 4,
+    });
+    expect(fetchSpy).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions/s%201/attachments?name=a%20b.pdf', {
+      method: 'POST',
+      body: file,
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/pdf' },
+    });
+  });
+
+  it('sends an untyped file as octet-stream and rejects an unsuccessful response', async () => {
+    fetchSpy.mockResolvedValue(new Response(null, { status: 413 }));
+
+    await expect(uploadSessionAttachment('s', new File(['x'], 'blob'))).rejects.toThrow('could not be uploaded (413)');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/workspaces/test-workspace/sessions/s/attachments?name=blob',
+      expect.objectContaining({ headers: { 'content-type': 'application/octet-stream' } }),
+    );
   });
 });

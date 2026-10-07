@@ -179,6 +179,19 @@ describe('createMcpTool', () => {
     expect(registered.get('pencil_get_screenshot')?.parameters).toMatchObject({ type: 'object' });
   });
 
+  it('declares file parameters to the model as path objects', () => {
+    const { pi, registered } = fakePi();
+    const tool = {
+      ...screenshotTool,
+      inputSchema: { type: 'object', properties: { image: { type: 'object' } } },
+      _meta: { 'openai/fileParams': ['image'] },
+    };
+
+    createMcpTool(() => clientManager, tool).register(pi);
+
+    expect(registered.get('pencil_get_screenshot')?.parameters).toHaveProperty('properties.image.required', ['path']);
+  });
+
   describe('execution', () => {
     it('rejects cached tools until a runtime is available', async () => {
       const { pi, registered } = fakePi();
@@ -187,6 +200,21 @@ describe('createMcpTool', () => {
       await expect(registered.get('pencil_get_screenshot')?.execute('call-1', {})).rejects.toThrow(
         'The MCP runtime is not ready',
       );
+      expect(ensureConnected).not.toHaveBeenCalled();
+    });
+
+    it('refuses a file parameter without a publisher before dialing the server', async () => {
+      const { pi, registered } = fakePi();
+      const tool = {
+        ...screenshotTool,
+        inputSchema: { type: 'object', properties: { image: { type: 'object' } } },
+        _meta: { 'openai/fileParams': ['image'] },
+      };
+      createMcpTool(() => clientManager, tool).register(pi);
+
+      await expect(
+        registered.get('pencil_get_screenshot')?.execute('call-1', { image: { path: 'shot.png' } }),
+      ).rejects.toThrow('needs the DoomPi web host with remote access on');
       expect(ensureConnected).not.toHaveBeenCalled();
     });
 

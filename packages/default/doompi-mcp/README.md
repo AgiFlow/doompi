@@ -108,6 +108,12 @@ app-visible tools on the original configured server. Visibility is not consent.
 Private result metadata and bounded widget state are not injected into model content.
 Reopening a widget reads its retained result and state, never reruns the original tool.
 
+`window.openai` is present in every widget, beside the MCP Apps bridge, so standard Apps
+built on the ChatGPT SDK work too. Only ChatGPT widgets receive `toolOutput` globals updates
+after their own `callTool`. Each App root gets a `light`/`dark` class, `data-theme` and
+`color-scheme` (an App's own class or `data-theme` is kept), and theme changes sync live.
+A tool result that rendered an App stays behind the card toggle unless the call failed.
+
 The ChatGPT adapter implements tool input/output and private metadata globals, globals
 updates, `callTool`, `setWidgetState`, `sendFollowUpMessage`, inline display mode, height,
 close, and confirmed external links. File libraries, checkout, accounts, modal/fullscreen

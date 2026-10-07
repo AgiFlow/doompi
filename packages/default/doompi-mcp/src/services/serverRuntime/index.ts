@@ -18,6 +18,7 @@ import { McpHeadlessToolParameters } from '../../schemas/mcpHeadlessTool';
 import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../types/webMcp';
 import { isModelVisibleMcpTool } from '../mcpCatalog';
 import { formatStatus } from '../mcpCommand';
+import type { McpFilePublisher } from '../mcpFileParams/type';
 import { McpSession } from '../mcpSession';
 import { createMcpSessionApi } from '../mcpSessionApi';
 import { createMcpChildTool, createMcpSessionToolsService } from '../mcpSessionTools';
@@ -55,6 +56,7 @@ export function createMcpServerRuntime(
   environment: Readonly<Record<string, string | undefined>> = {},
   workspaceRoot?: string,
   getResolver?: () => DoomMcpProjectionResolverService | undefined,
+  publishFile?: McpFilePublisher,
 ) {
   let active: DoomHeadlessExecutionContext | undefined;
   let currentSelection: DoomHeadlessSelection | undefined;
@@ -63,7 +65,10 @@ export function createMcpServerRuntime(
   let transition = Promise.resolve();
   const authorizing = new Map<string, symbol>();
   // Authorization URLs reach clients through the MCP status snapshot, not the transcript.
-  const session = new McpSession({ environment: { ...environment } });
+  const session = new McpSession({
+    environment: { ...environment },
+    ...(publishFile === undefined ? {} : { publishFile }),
+  });
   const assertAvailable = () => {
     if (!active) throw new Error('The MCP runtime has not started yet.');
     if (staleSelection) throw new Error('The MCP projection is stale for the current selection.');

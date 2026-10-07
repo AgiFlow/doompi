@@ -75,6 +75,30 @@ function jpeg(width: number, height: number): string {
 beforeEach(() => resetComposerStore());
 
 describe('composer state', () => {
+  it.each(['context', 'capture'] as const)('does not count stored files against the %s text budget', (kind) => {
+    updateComposerState('s1', (state) => ({
+      ...state,
+      nextAttachmentId: 1,
+      attachments: [
+        {
+          id: 'attachment-0',
+          kind: 'file',
+          name: 'brief.pdf',
+          size: 5 * 1024 * 1024,
+          mimeType: 'application/pdf',
+          path: '/attachments/brief.pdf',
+        },
+      ],
+    }));
+    const context = { kind: 'work-item', source: 'agiflow', id: 'task-1', label: 'Task', content: 'work' };
+    if (kind === 'context') attachComposerContext('s1', context);
+    else attachComposerCapture('s1', { data: png(1, 1), mimeType: 'image/png', context });
+    expect(composerStore.state.s1?.attachmentError).toBe('');
+    expect(composerStore.state.s1?.attachments.map((attachment) => attachment.kind)).toEqual(
+      kind === 'context' ? ['file', 'context'] : ['file', 'image', 'context'],
+    );
+  });
+
   it('retains unfinished input independently for each session', () => {
     updateComposerState('s1', (state) => ({ ...state, draft: 'first draft', caret: 11 }));
     updateComposerState('s2', (state) => ({ ...state, draft: 'second draft', caret: 12 }));

@@ -7,6 +7,7 @@ import type { TSchema } from 'typebox';
 
 import { mcpToolExecutionMetadata, normalizeMcpAppMetadata, type CatalogTool } from '../../services/mcpCatalog';
 import type { McpAppPresentation, McpResultBlock, McpToolDetails } from '../../types/webMcp';
+import { modelInputSchema, publishFileParams } from '../mcpFileParams';
 
 const MAX_APP_RESULT_BYTES = 1024 * 1024;
 const appSnapshots = new WeakMap<CallToolResult, McpAppPresentation>();
@@ -73,9 +74,6 @@ export function parseMcpAppSnapshot(value: unknown): McpAppPresentation | undefi
 export function retainMcpAppResult(result: CallToolResult, snapshot: McpAppPresentation | undefined): void {
   if (snapshot) appSnapshots.set(result, snapshot);
 }
-
-/** Pi requires a schema; a downstream tool that declares none takes any object. */
-const ANY_OBJECT_SCHEMA = { type: 'object', properties: {} };
 
 type ContentBlock = CallToolResult['content'][number];
 
@@ -222,7 +220,8 @@ export function createMcpTool(
     // built: TypeBox validates the shape without it having to be declared here.
     // Type.Unsafe only brands this runtime JSON Schema object. A type cast keeps
     // cached stub registration from evaluating the whole TypeBox package.
-    parameters: (Object.keys(tool.inputSchema).length > 0 ? tool.inputSchema : ANY_OBJECT_SCHEMA) as TSchema,
+    // File parameters are declared as `{path}` objects; they are published at call time.
+    parameters: modelInputSchema(tool) as TSchema,
     ...(tool._meta === undefined ? {} : { _meta: mcpToolExecutionMetadata(tool) }),
     renderShell: 'self',
     ...renderers,
@@ -233,6 +232,8 @@ export function createMcpTool(
       if (executeTool) {
         return toAgentToolResult(tool, await executeTool(tool, (params ?? {}) as Record<string, unknown>, signal));
       }
+      // No publisher on this path, so a file argument is refused before anything is dialled.
+      const { outbound } = await publishFileParams(tool, (params ?? {}) as Record<string, unknown>);
       const clientManager = clientManagerSource();
       if (!clientManager) {
         throw new Error(`The MCP runtime is not ready, so ${tool.serverName} cannot be reached yet.`);
@@ -241,7 +242,7 @@ export function createMcpTool(
       const timeout = clientManager.getServerRequestTimeout(tool.serverName);
       const result = await connection.callTool(
         tool.toolName,
-        (params ?? {}) as Record<string, unknown>,
+        outbound,
         timeout === undefined ? undefined : { timeout },
       );
       return toAgentToolResult(tool, result);

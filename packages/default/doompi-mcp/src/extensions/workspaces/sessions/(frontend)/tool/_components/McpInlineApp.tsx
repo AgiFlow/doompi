@@ -179,15 +179,20 @@ function AppFrame({ runtime, sessionId, toolCallId, data, savedState, saveState,
           fail(new Error('MCP App navigation was blocked; reopen it to continue'));
           return;
         }
-        if (message?.type !== 'legacy' || data.protocol !== 'openai') return;
+        if (message?.type !== 'legacy') return;
         const legacy = message.data as { channel?: string; id?: number; method?: string; input?: unknown } | null;
         if (legacy?.channel !== LEGACY_CHANNEL) return;
         void (async () => {
           const input = object(legacy.input ?? {});
           switch (legacy.method) {
-            case 'initialized':
+            case 'initialized': {
               markReady();
+              // A theme change while the App document loaded reached no listener; this one runs after it.
+              const loadedTheme = currentTheme();
+              if (loadedTheme !== theme)
+                channels.port1.postMessage({ channel: LEGACY_CHANNEL, globals: { theme: loadedTheme } });
               return {};
+            }
             case 'height':
               resize(input.height);
               return {};
@@ -207,7 +212,9 @@ function AppFrame({ runtime, sessionId, toolCallId, data, savedState, saveState,
         })().then(
           (result) => {
             if (!live || legacy.id === undefined) return;
-            const returned = legacy.method === 'callTool' ? (result as CallToolResult) : undefined;
+            // A widget's own call returns its result; replacing the rendered tool's output corrupts widgets that persist it.
+            const returned =
+              legacy.method === 'callTool' && data.protocol === 'openai' ? (result as CallToolResult) : undefined;
             channels.port1.postMessage({
               channel: LEGACY_CHANNEL,
               id: legacy.id,
@@ -232,7 +239,7 @@ function AppFrame({ runtime, sessionId, toolCallId, data, savedState, saveState,
       const load = (): void => {
         frame.contentWindow?.postMessage(
           {
-            html: mcpAppDocument(data.html, policy, data.protocol === 'openai' ? mcpOpenAiScript(globals) : ''),
+            html: mcpAppDocument(data.html, policy, mcpOpenAiScript(globals), theme),
             policy,
             protocol: data.protocol,
           },
@@ -241,12 +248,11 @@ function AppFrame({ runtime, sessionId, toolCallId, data, savedState, saveState,
         );
       };
       frame.addEventListener('load', load, { once: true });
-      frame.srcdoc = mcpAppRelayHtml(policy);
+      frame.srcdoc = mcpAppRelayHtml(policy, theme);
       const observer = new MutationObserver(() => {
         const nextTheme = currentTheme();
         bridge?.setHostContext({ theme: nextTheme });
-        if (data.protocol === 'openai')
-          channels.port1.postMessage({ channel: LEGACY_CHANNEL, globals: { theme: nextTheme } });
+        channels.port1.postMessage({ channel: LEGACY_CHANNEL, globals: { theme: nextTheme } });
       });
       observer.observe(document.documentElement, {
         attributes: true,
@@ -328,10 +334,12 @@ export function McpInlineApp({ sessionId, toolCallId }: { sessionId: string | nu
     };
   }, [runtime, sessionId, toolCallId]);
 
-  if (closed) return <p className="text-doom-faint">MCP App closed. The tool result remains below.</p>;
+  if (closed) return <p className="text-doom-faint">MCP App closed. Expand the card to view the tool result.</p>;
   if (!supportsMcpAppSandbox())
     return (
-      <p className="text-doom-faint">This browser cannot securely display MCP Apps. The tool result remains below.</p>
+      <p className="text-doom-faint">
+        This browser cannot securely display MCP Apps. Expand the card to view the tool result.
+      </p>
     );
   if (failure !== null)
     return (
@@ -342,7 +350,7 @@ export function McpInlineApp({ sessionId, toolCallId }: { sessionId: string | nu
   if (runtime === null || sessionId === null)
     return (
       <p className="text-doom-faint">
-        The interactive MCP App is unavailable in this view. The tool result remains below.
+        The interactive MCP App is unavailable in this view. Expand the card to view the tool result.
       </p>
     );
   if (data === null) return <output className="text-doom-faint">Loading MCP App…</output>;

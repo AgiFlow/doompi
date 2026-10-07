@@ -84,6 +84,7 @@ function McpBlock({ block }: { block: McpResultBlock }) {
  * renderMcpResult: `mcp | server / tool · k=v` in the header; the text lines,
  * collapsed to twelve, then the images Pi carries beside the text, the
  * blocks the adapter put in the details, and one status line in the body.
+ * A call that rendered an MCP App keeps its result behind the toggle, unless it failed.
  */
 export function McpToolMessage({
   sessionId,
@@ -111,12 +112,14 @@ export function McpToolMessage({
     app.version === 1 &&
     'resourceUri' in app &&
     typeof app.resourceUri === 'string';
+  const resultFirst = !hasApp || isError;
 
   return (
-    <MessageItem tone={toolTone({ running, isError })} expandable={collapsed.status?.tone === 'hint'}>
+    <MessageItem tone={toolTone({ running, isError })} expandable={!resultFirst || collapsed.status?.tone === 'hint'}>
       {({ expanded }) => {
         const view = expanded ? mcpResultView({ output, expanded: true, isPartial: running, isError }) : collapsed;
         const hint = view.status?.tone === 'hint';
+        const showResult = resultFirst || expanded;
         return (
           <>
             <MessageItemHeader title="mcp">
@@ -132,7 +135,7 @@ export function McpToolMessage({
                 <McpInlineApp key={`${sessionId}:${toolCallId}`} sessionId={sessionId} toolCallId={toolCallId} />
               </MessageItemBody>
             ) : null}
-            {view.lines.length > 0 || view.status !== null || images.length > 0 || blocks.length > 0 ? (
+            {showResult && (view.lines.length > 0 || view.status !== null || images.length > 0 || blocks.length > 0) ? (
               <MessageItemBody
                 data-testid="tool-result-mcp"
                 data-mcp-server={identity.server}

@@ -45,12 +45,17 @@ function appHtml(protocol) {
     });
     document.querySelector('#follow').onclick = () => send({ id: nextId++, method: 'ui/message', params: { role: 'user', content: [{ type: 'text', text: 'Continue from the approved fixture App.' }] } });
     document.querySelector('#call').onclick = () => send({ id: nextId++, method: 'tools/call', params: { name: 'app_data', arguments: {} } });
+    document.querySelector('#bridge').textContent = typeof window.openai;
+    document.querySelector('#legacy-call').onclick = async () => {
+      try { show(await window.openai.callTool('app_data')); } catch (error) { show({ error: error.message }); }
+      document.querySelector('#output').textContent = JSON.stringify(window.openai.toolOutput);
+    };
     send({ id: 'init', method: 'ui/initialize', params: {
       appInfo: { name: 'Fixture', version: '1' }, appCapabilities: {}, protocolVersion: '2026-01-26',
     } });
   `;
   return `<!doctype html><html><body><h1>Deterministic App fixture</h1>
-    <button id="call">Call data</button>${protocol === 'legacy' ? '<button id="save">Save state</button>' : ''}
+    <button id="call">Call data</button>${protocol === 'legacy' ? '<button id="save">Save state</button>' : '<button id="legacy-call">Use openai bridge</button><output id="bridge"></output><output id="output"></output>'}
     <button id="follow">Follow up</button><output id="result"></output><output id="state"></output>
     <script>const show = (value) => { document.querySelector('#result').textContent = JSON.stringify({ ...value.structuredContent, private: value._meta?.['fixture/private'], error: value.error }); };${script}</script>
   </body></html>`;

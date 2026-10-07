@@ -33,6 +33,8 @@ export interface PackageApiServerOptions {
   /** Lifecycle-owned direct events shared with the hub. */
   readonly directEvents: DoomDirectEventBus;
   readonly computerUse?: DoomApiContext['computerUse'];
+  /** Bound to this session's id and cwd by the host. */
+  readonly shareFile?: DoomApiContext['shareFile'];
   readonly mediaArbitration?: DoomApiContext['mediaArbitration'];
   readonly executionBudget?: DoomApiContext['executionBudget'];
   readonly peerAgents?: DoomApiContext['peerAgents'];
@@ -167,6 +169,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     environment: options.environment,
     directEvents: options.directEvents,
     ...(options.computerUse === undefined ? {} : { computerUse: options.computerUse }),
+    ...(options.shareFile === undefined ? {} : { shareFile: options.shareFile }),
     ...(options.mediaArbitration === undefined ? {} : { mediaArbitration: options.mediaArbitration }),
     ...(options.executionBudget === undefined ? {} : { executionBudget: options.executionBudget }),
     ...(options.peerAgents === undefined ? {} : { peerAgents: options.peerAgents }),

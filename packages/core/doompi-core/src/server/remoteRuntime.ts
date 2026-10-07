@@ -16,6 +16,7 @@ import {
 } from '../schemas/packageApi';
 import { isDevProxyPath, parseProxyPath } from '../services/devProxyPolicy';
 import { createDevProxyStore } from '../services/devProxyStore';
+import { createPublicFileShares, PUBLIC_FILE_SHARE_PREFIX, type PublicFileShares } from '../services/publicFileShares';
 import { createRemoteAccess, type RemoteAccess } from '../services/remoteAccess';
 import { createRemoteAccessStore } from '../services/remoteAccessStore';
 import {
@@ -42,6 +43,10 @@ const SEALED_HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DEL
 /** HMAC-authenticated peer routes are the only non-device tunnel APIs. */
 const SESSION_PEER_INBOX_ROUTE = '/api/plugins/session-peer/inbox';
 const VOICE_PEER_ROUTES = new Set(['/api/plugins/voice/peer', '/api/plugins/voice/peer-ownership']);
+/** The one public file share shape: a 256-bit base64url token and nothing after it. */
+const PUBLIC_FILE_SHARE_ROUTE = /^\/mcp-file\/([A-Za-z0-9_-]{43})$/u;
+/** Everything under this name is reserved for shares, so a near miss never reaches another route. */
+const PUBLIC_FILE_SHARE_NAMESPACE = PUBLIC_FILE_SHARE_PREFIX.slice(0, -1);
 const FORBIDDEN_HEADERS = new Set([
   'authorization',
   'connection',
@@ -122,6 +127,8 @@ export interface RemoteRuntimeOptions {
 
 export interface RemoteRuntime {
   readonly remote: RemoteAccess;
+  /** Short-lived public links served by the tunnel listener itself, never forwarded to the hub. */
+  readonly fileShares: PublicFileShares;
   fetchLocal(request: Request): Promise<Response>;
   close(): Promise<void>;
 }
@@ -158,12 +165,26 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
   const app = new Hono<{ Bindings: ListenerBindings }>();
   let remote: RemoteAccess;
   let frontendOrigin: string | undefined;
+  const fileShares = createPublicFileShares({
+    publicOrigin: () => remote.publicOrigin(),
+    publicOriginRevision: () => remote.publicOriginRevision(),
+    onNotice: (message) => options.onNotice(message),
+  });
+  /** Exact share route on the decoded path, and the raw path must not have needed decoding. */
+  const publicFileShareToken = (request: Request, path: string): string | undefined =>
+    new URL(request.url).pathname === path ? PUBLIC_FILE_SHARE_ROUTE.exec(path)?.[1] : undefined;
+  const inFileShareNamespace = (request: Request, path: string): boolean =>
+    path.startsWith(PUBLIC_FILE_SHARE_NAMESPACE) ||
+    new URL(request.url).pathname.startsWith(PUBLIC_FILE_SHARE_NAMESPACE);
   app.use('*', async (context, next) => {
     if (context.env.listener === 'local') return next();
     const path = context.req.path;
     const publicSessionMcp = isPublicSessionMcpRoute(context.req.method, path);
     const publicSessionPeer = context.req.method === 'POST' && path === SESSION_PEER_INBOX_ROUTE;
     const publicVoicePeer = context.req.method === 'POST' && VOICE_PEER_ROUTES.has(path);
+    const publicFileShare =
+      (context.req.method === 'GET' || context.req.method === 'HEAD') &&
+      publicFileShareToken(context.req.raw, path) !== undefined;
     const verdict = originVerdict({
       listener: 'tunnel',
       // Exact OAuth, MCP, and HMAC-authenticated peer routes authenticate at the
@@ -176,6 +197,9 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
       tunnel: remote.tunnelPolicy(),
     });
     if (verdict !== 'allow') return context.json({ error: `Tunnel request refused: ${verdict}.` }, 403);
+    // The token is the credential, so a share needs no device. Near misses never fall through.
+    if (publicFileShare) return next();
+    if (inFileShareNamespace(context.req.raw, path)) return context.json({ error: 'Not found.' }, 404);
     if (isPublicPairingRoute(context.req.method, path) || publicSessionMcp || publicSessionPeer || publicVoicePeer)
       return next();
     const device = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
@@ -519,6 +543,13 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
     return options.forward(context.req.raw);
   });
   app.on(['GET', 'HEAD'], '*', async (context) => {
+    // Served here and never through forward(), which would attach the host token.
+    if (inFileShareNamespace(context.req.raw, context.req.path)) {
+      const token = publicFileShareToken(context.req.raw, context.req.path);
+      return context.env.listener === 'tunnel' && token !== undefined
+        ? fileShares.serve(token, context.req.method)
+        : context.json({ error: 'Not found.' }, 404);
+    }
     if (isPublicSessionMcpRoute(context.req.method, context.req.path)) return options.forward(context.req.raw);
     if (context.req.path.startsWith('/api/')) return context.json({ error: 'Not found.' }, 404);
     if (context.req.path === '/' && remote.authorize(getCookie(context, DEVICE_COOKIE, 'host')) === undefined)
@@ -542,6 +573,7 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
 
   return {
     remote,
+    fileShares,
     fetchLocal: async (request) => app.fetch(request, { listener: 'local' }),
     close: async () => remote.close(),
   };

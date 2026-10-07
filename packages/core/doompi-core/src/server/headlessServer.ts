@@ -12,6 +12,11 @@ import { WebSocketServer } from 'ws';
 
 import { API_BASE_PATH as CONTEXT_API_BASE_PATH } from '../constants/contextApi';
 import {
+  MAX_SESSION_FILE_BYTES,
+  SESSION_FILE_CONTENT_TYPES,
+  SESSION_FILE_DEFAULT_CONTENT_TYPE,
+} from '../constants/sessionFiles';
+import {
   DOOM_API_CALLER_HEADERS,
   DOOM_API_CALLER_LOCALITY_HEADER,
   DOOM_API_CALLER_STEP_UP_HEADER,
@@ -23,6 +28,7 @@ import type { DoomHubSessionReservations } from '../schemas/hubChannel';
 import { readContextDetail } from '../services/contextDetailStore';
 import type { OpenSessionRecord } from '../services/openSessionRegistry';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
+import { writeSessionAttachment } from '../services/sessionAttachments';
 import { createSessionMcpActivityStore } from '../services/sessionMcpActivity';
 import { createSessionMcpConversationStore } from '../services/sessionMcpConversations';
 import { createSessionMcpRegistrationStore } from '../services/sessionMcpRegistrationStore';
@@ -52,27 +58,11 @@ export const DOOM_PACKAGE_API_PATH_PATTERN =
 const HEALTH_ROLE = 'hub';
 const PROTOCOL_VERSION = 1;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
-const MAX_SESSION_FILE_BYTES = 25 * 1024 * 1024;
 const DIRECTORY_SUGGESTION_LIMIT = 12;
 const DIRECTORY_CHILDREN_LIMIT = 500;
 const HOME_PREFIX = '~';
 const WORKSPACE_NAME_MAX_LENGTH = 80;
 const WORKSPACE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ._-]*$/u;
-const SESSION_FILE_CONTENT_TYPES: Readonly<Record<string, string>> = {
-  '.avif': 'image/avif',
-  '.bmp': 'image/bmp',
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-  '.m4v': 'video/mp4',
-  '.mov': 'video/quicktime',
-  '.mp4': 'video/mp4',
-  '.webm': 'video/webm',
-  '.pdf': 'application/pdf',
-};
 
 export interface HeadlessServerOptions {
   headlessHub: HeadlessHub;
@@ -237,7 +227,8 @@ async function sessionFile(session: HeadlessHubSession, requestedPath: string | 
       return Response.json({ error: 'Session file is too large.' }, { status: 413 });
     return new Response(bytes, {
       headers: {
-        'content-type': SESSION_FILE_CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream',
+        'content-type':
+          SESSION_FILE_CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? SESSION_FILE_DEFAULT_CONTENT_TYPE,
         'content-length': String(bytes.byteLength),
         'cache-control': 'no-store',
         'x-content-type-options': 'nosniff',
@@ -336,13 +327,19 @@ async function directoryChildren(
   return { path: resolved, ...(parent === resolved ? {} : { parent }), directories };
 }
 
+class RequestBodyTooLargeError extends Error {
+  constructor() {
+    super('Request body is too large.');
+  }
+}
+
 async function readBody(request: IncomingMessage): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.byteLength;
-    if (size > MAX_BODY_BYTES) throw new Error('Request body is too large.');
+    if (size > MAX_BODY_BYTES) throw new RequestBodyTooLargeError();
     chunks.push(buffer);
   }
   return Buffer.concat(chunks);
@@ -1042,6 +1039,18 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     }
     if (suffix === '/file' && request.method === 'GET') {
       await writeResponse(response, await sessionFile(session, url.searchParams.get('path')));
+      return;
+    }
+    if (suffix === '/attachments' && request.method === 'POST') {
+      let bytes: Uint8Array;
+      try {
+        bytes = await readBody(request);
+      } catch (error) {
+        if (!(error instanceof RequestBodyTooLargeError)) throw error;
+        json(response, 413, { error: 'The attachment exceeds the 8 MB upload limit.' });
+        return;
+      }
+      json(response, 201, await writeSessionAttachment(sessionId, url.searchParams.get('name') ?? 'file', bytes));
       return;
     }
     if (suffix === '/restart' && request.method === 'POST' && options.restartSession) {

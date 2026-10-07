@@ -25,12 +25,15 @@ const AGENT_DIR_ENV = 'PI_CODING_AGENT_DIR';
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
 
-function agentDirectory(environment: NodeJS.ProcessEnv): string {
+export function agentDirectory(environment: Readonly<Record<string, string | undefined>>): string {
   return environment[AGENT_DIR_ENV] || path.join(os.homedir(), '.pi', 'agent');
 }
 
-/** A session id reaches this from a query string, so it never becomes a path. */
-function safeName(sessionId: string): string {
+/**
+ * A session id reaches this from a query string, so it never becomes a path.
+ * `.` and `..` pass through unchanged: a caller using the result as a directory must refuse them.
+ */
+export function safeName(sessionId: string): string {
   return sessionId.replace(/[^a-zA-Z0-9._-]/gu, '_');
 }
 

@@ -197,6 +197,24 @@ export interface DoomPeerAgentRegistry {
   get(sessionId: string): { fetch(request: Request): Promise<Response>; hubToken: string } | undefined;
 }
 
+/** Why shareFile rejects while the host has no public tunnel origin. */
+export const DOOM_SHARE_FILE_REMOTE_OFF_MESSAGE =
+  'Remote access is off, so DoomPi cannot share files with remote MCP servers. Turn it on and retry.';
+
+/**
+ * A file published at a short-lived public tunnel URL: 10 minutes, 3 downloads, and gone
+ * when the tunnel revision changes. Call revoke as soon as the consumer is done with it.
+ */
+export interface DoomSharedFile {
+  /** Bearer link; never log or persist it. */
+  url: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  /** Idempotent. */
+  revoke(): void;
+}
+
 /** What the host tells an API about itself when it starts. */
 export interface DoomApiContext {
   scope: DoomApiScope;
@@ -264,6 +282,12 @@ export interface DoomApiContext {
   peerAgents?: DoomPeerAgentRegistry;
   /** Machine-owned Remote Control service, mounted only by the global core facet. */
   remoteControl?: { fetch(request: Request): Promise<Response> };
+  /**
+   * Publishes a file from this session's cwd or attachments at a short-lived tunnel URL.
+   * Session mounts only; rejects with DOOM_SHARE_FILE_REMOTE_OFF_MESSAGE while remote access is off.
+   * The host asks no consent: the caller must obtain it before passing the URL on.
+   */
+  shareFile?(path: string, label: string): Promise<DoomSharedFile>;
   onNotice(message: string): void;
 }
 
