@@ -1,3 +1,13 @@
+## 0.0.1-alpha.121 (2026-10-07)
+
+### 🩹 Fixes
+
+- **doompi-mcp:** support themed widgets and consented file sharing ([#323](https://github.com/AgiFlow/doompi/pull/323))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.120 (2026-10-07)
 
 ### 🩹 Fixes

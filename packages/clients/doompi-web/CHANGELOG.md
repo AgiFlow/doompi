@@ -1,3 +1,21 @@
+## 0.0.1-alpha.88 (2026-10-07)
+
+### 🩹 Fixes
+
+- **doompi-mcp:** support themed widgets and consented file sharing ([#323](https://github.com/AgiFlow/doompi/pull/323))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.125
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.120
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.121
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.79
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.87 (2026-10-07)
 
 ### 🩹 Fixes
