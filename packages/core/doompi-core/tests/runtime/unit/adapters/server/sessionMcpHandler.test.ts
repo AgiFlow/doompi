@@ -30,7 +30,11 @@ const MODERN_ENVELOPE = {
   'io.modelcontextprotocol/clientCapabilities': {},
 };
 
-function fixture(scope: 'restricted' | 'session' = 'restricted', toolGrants: readonly string[] = ['allowed_tool']) {
+function fixture(
+  scope: 'restricted' | 'session' = 'restricted',
+  toolGrants: readonly string[] = ['allowed_tool'],
+  { toolPrefix }: { toolPrefix?: string } = {},
+) {
   const authorization = createSessionMcpAuthorizationService();
   const mint = (generation = 7) => {
     const client = authorization.createClient({ name: 'MCP client', redirectUri: 'https://client.example/callback' });
@@ -39,6 +43,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted', toolGrants: rea
       sessionId: 'alpha',
       sessionGeneration: generation,
       audience: AUDIENCE,
+      ...(toolPrefix === undefined ? {} : { toolPrefix }),
     };
     authorization.createAuthorizationBinding(
       scope === 'session'
@@ -68,6 +73,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted', toolGrants: rea
   const readSkill = vi.fn(async () => '# Allowed skill');
   const readUiResource = vi.fn(async () => '<!doctype html><title>Session</title>');
   const onNotice = vi.fn();
+  const onInvocation = vi.fn();
   let uiEnabled = false;
   let widgetEnabled = false;
   let revision = 12;
@@ -125,6 +131,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted', toolGrants: rea
     audience: AUDIENCE,
     authorization,
     onNotice,
+    onInvocation,
     resolveSession: async () => {
       resolveCount += 1;
       if (resolveCount === revokeAtResolve) authorization.revokeGrant(tokens.grantId);
@@ -194,6 +201,7 @@ function fixture(scope: 'restricted' | 'session' = 'restricted', toolGrants: rea
     request,
     invokeTool,
     onNotice,
+    onInvocation,
     readSkill,
     readUiResource,
     setUiEnabled: (value: boolean) => (uiEnabled = value),
@@ -406,7 +414,13 @@ describe('session MCP Streamable HTTP handler', () => {
     });
 
     const hidden = await request('tools/call', { name: 'hidden_tool', arguments: {} });
-    await expect(hidden.json()).resolves.toMatchObject({ error: { code: -32602 } });
+    expect(rpcResult(await hidden.json())).toMatchObject({
+      isError: true,
+      structuredContent: {
+        code: 'TOOL_NOT_AVAILABLE',
+        message: "Tool 'hidden_tool' is not available on this connection.",
+      },
+    });
     expect(invokeTool).toHaveBeenCalledTimes(1);
   });
 
@@ -443,14 +457,18 @@ describe('session MCP Streamable HTTP handler', () => {
   it('emits a failed lifecycle notice with the same correlation ID', async () => {
     const current = fixture();
     current.invokeTool.mockRejectedValueOnce(new Error('failed'));
-    await expect((await current.request('tools/call', { name: 'allowed_tool' })).json()).resolves.toMatchObject({
-      error: { code: -32603 },
+    expect(rpcResult(await (await current.request('tools/call', { name: 'allowed_tool' })).json())).toMatchObject({
+      isError: true,
+      structuredContent: {
+        code: 'TOOL_CALL_FAILED',
+        message: expect.stringMatching(/^allowed_tool did not return a result: failed\. If the tool changes/u),
+      },
     });
 
     const notices = current.onNotice.mock.calls.map(([notice]) => notice);
     expect(notices).toHaveLength(2);
     expect(notices[0]).toMatch(/^session MCP invocation id=[0-9a-f-]{36} lifecycle=started$/u);
-    expect(notices[1]).toMatch(/^session MCP invocation id=[0-9a-f-]{36} lifecycle=failed cause=Error$/u);
+    expect(notices[1]).toMatch(/^session MCP invocation id=[0-9a-f-]{36} lifecycle=failed cause=TOOL_CALL_FAILED$/u);
     expect(notices[0]!.match(/id=([^ ]+)/u)?.[1]).toBe(notices[1]!.match(/id=([^ ]+)/u)?.[1]);
   });
 
@@ -588,7 +606,10 @@ describe('session MCP Streamable HTTP handler', () => {
     const f = fixture('session');
     await f.request('tools/list');
     const response = await f.request('tools/call', { name: 'use_extra_tools', arguments: args });
-    expect(await response.json()).toMatchObject({ error: { code: -32602 } });
+    expect(rpcResult(await response.json())).toMatchObject({
+      isError: true,
+      structuredContent: { code: 'TOOL_ARGUMENTS_INVALID', message: expect.stringContaining("'use_extra_tools'") },
+    });
     expect(f.invokeTool).not.toHaveBeenCalled();
   });
 
@@ -597,8 +618,8 @@ describe('session MCP Streamable HTTP handler', () => {
     await restricted.request('tools/list');
     for (const name of ['load_extra_tools', 'use_extra_tools']) {
       expect(
-        await (await restricted.request('tools/call', { name, arguments: { name: 'allowed_tool' } })).json(),
-      ).toMatchObject({ error: { code: -32602 } });
+        rpcResult(await (await restricted.request('tools/call', { name, arguments: { name: 'allowed_tool' } })).json()),
+      ).toMatchObject({ isError: true, structuredContent: { code: 'TOOL_NOT_AVAILABLE' } });
     }
     expect(restricted.invokeTool).not.toHaveBeenCalled();
 
@@ -621,13 +642,15 @@ describe('session MCP Streamable HTTP handler', () => {
     });
     expect(session.invokeTool).not.toHaveBeenCalled();
     expect(
-      await (
-        await session.request('tools/call', {
-          name: 'use_extra_tools',
-          arguments: { name: 'hidden_tool' },
-        })
-      ).json(),
-    ).toMatchObject({ error: { code: -32602 } });
+      rpcResult(
+        await (
+          await session.request('tools/call', {
+            name: 'use_extra_tools',
+            arguments: { name: 'hidden_tool' },
+          })
+        ).json(),
+      ),
+    ).toMatchObject({ isError: true, structuredContent: { code: 'TOOL_NOT_AVAILABLE' } });
     expect(session.invokeTool).not.toHaveBeenCalled();
     const called = rpcResult(
       await (
@@ -657,7 +680,10 @@ describe('session MCP Streamable HTTP handler', () => {
     );
     expect(discovered).toMatchObject({ structuredContent: { tools: [{ name: 'allowed_tool' }], skills: [] } });
     const denied = await f.request('tools/call', { name: 'use_extra_tools', arguments: { name: 'hidden_tool' } });
-    expect(await denied.json()).toMatchObject({ error: { code: -32602 } });
+    expect(rpcResult(await denied.json())).toMatchObject({
+      isError: true,
+      structuredContent: { code: 'TOOL_NOT_AVAILABLE' },
+    });
     expect(f.invokeTool).not.toHaveBeenCalled();
     const allowed = await f.request('tools/call', { name: 'use_extra_tools', arguments: { name: 'allowed_tool' } });
     expect(rpcResult(await allowed.json())).toMatchObject({ isError: false, content: [{ text: 'called' }] });
@@ -895,6 +921,101 @@ describe('session MCP Streamable HTTP handler', () => {
       expect(JSON.stringify(result)).not.toContain('must-not-leak');
     },
   );
+});
+
+describe('prefixed session MCP connection', () => {
+  const prefixed = (scope: 'restricted' | 'session' = 'restricted', grants?: readonly string[]) =>
+    fixture(scope, grants, { toolPrefix: 'p' });
+  const call = async (f: ReturnType<typeof fixture>, name: string, args: Record<string, unknown> = {}) =>
+    rpcResult(await (await f.request('tools/call', { name, arguments: args })).json());
+
+  it('prefixes every listed name, wrappers included, and keeps the baseline internal', async () => {
+    const f = prefixed('session');
+    const listed = ListToolsResultSchema.parse(rpcResult(await (await f.request('tools/list')).json()));
+    expect(listed.tools.map((tool) => tool.name)).toEqual([
+      'p_allowed_tool',
+      'p_hidden_tool',
+      'p_load_extra_tools',
+      'p_use_extra_tools',
+      'p_session_capabilities',
+    ]);
+    expect(await call(f, 'p_load_extra_tools')).toMatchObject({
+      isError: false,
+      structuredContent: { tools: [], skills: [] },
+    });
+  });
+
+  it('maps a prefixed name to the internal tool and records internal history', async () => {
+    const f = prefixed();
+    expect(await call(f, 'p_allowed_tool')).toMatchObject({ isError: false, content: [{ text: 'called' }] });
+    expect(f.invokeTool).toHaveBeenCalledWith(expect.objectContaining({ name: 'allowed_tool' }));
+    expect(f.onInvocation.mock.calls.map(([invocation]) => invocation.toolName)).not.toContain('p_allowed_tool');
+    expect(f.onInvocation.mock.calls.at(-1)?.[0]).toMatchObject({ toolName: 'allowed_tool', status: 'succeeded' });
+  });
+
+  it.each(['allowed_tool', 'p_hidden_tool', 'p_p_allowed_tool', 'p_', 'q_allowed_tool'])(
+    'rejects %s without invoking a tool',
+    async (name) => {
+      const f = prefixed();
+      const result = await call(f, name);
+      expect(result).toMatchObject({
+        isError: true,
+        structuredContent: {
+          code: 'TOOL_NOT_AVAILABLE',
+          message: `Tool '${name}' is not available on this connection. Tool names here start with 'p_'.`,
+        },
+      });
+      expect(f.invokeTool).not.toHaveBeenCalled();
+    },
+  );
+
+  it('accepts prefixed names in use_extra_tools and rejects bare ones', async () => {
+    const f = prefixed('session');
+    await f.request('tools/list');
+    f.setChildTools([
+      { name: 'child_only', label: 'Child only', description: 'Child contract', parameters: Type.Object({}) },
+    ]);
+    expect(await call(f, 'p_load_extra_tools')).toMatchObject({
+      structuredContent: { tools: [{ name: 'p_child_only' }] },
+    });
+    expect(await call(f, 'p_use_extra_tools', { name: 'child_only' })).toMatchObject({
+      isError: true,
+      structuredContent: { code: 'TOOL_NOT_AVAILABLE' },
+    });
+    expect(f.invokeTool).not.toHaveBeenCalled();
+    expect(await call(f, 'p_use_extra_tools', { name: 'p_child_only' })).toMatchObject({ isError: false });
+    expect(f.invokeTool).toHaveBeenCalledWith(expect.objectContaining({ name: 'child_only' }));
+  });
+
+  it('prefixes session_capabilities names and the widget tool name', async () => {
+    const f = prefixed('restricted', ['session_capabilities', 'allowed_tool']);
+    await f.request('tools/list');
+    const capabilities = await call(f, 'p_session_capabilities');
+    expect((capabilities.structuredContent as { tools: { name: string }[] }).tools.map((tool) => tool.name)).toEqual([
+      'p_allowed_tool',
+      'p_session_capabilities',
+    ]);
+    f.setWidgetEnabled(true);
+    expect(await call(f, 'p_allowed_tool')).toMatchObject({ _meta: { 'doompi/toolName': 'p_allowed_tool' } });
+  });
+
+  it('keeps instructions within 512 characters with a 24-character prefix', async () => {
+    const f = fixture('restricted', undefined, { toolPrefix: 'abcdefghijklmnopqrstuvwx' });
+    const result = rpcResult(await (await f.request('server/discover')).json()) as { instructions?: string };
+    expect(result.instructions).toContain("start with 'abcdefghijklmnopqrstuvwx_'");
+    expect(result.instructions?.length).toBeLessThanOrEqual(512);
+  });
+
+  it('withholds the result when the tool contract changes while the call runs', async () => {
+    const f = prefixed();
+    f.invokeTool.mockImplementationOnce(async () => {
+      f.setWidgetEnabled(true);
+      return { content: [{ type: 'text' as const, text: 'must-not-leak' }] };
+    });
+    const result = await call(f, 'p_allowed_tool');
+    expect(result).toMatchObject({ isError: true, structuredContent: { code: 'SESSION_RESULT_WITHHELD' } });
+    expect(JSON.stringify(result)).not.toContain('must-not-leak');
+  });
 });
 
 describe('composed widget result identity', () => {

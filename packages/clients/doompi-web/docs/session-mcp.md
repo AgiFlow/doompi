@@ -20,7 +20,35 @@ DoomPi also supports a host-created OAuth client with an exact HTTPS redirect UR
 
 Remote clients can use `search_skills` to discover repository and active-domain skills, then `load_skill` with an exact skill name to retrieve its current Markdown. Both tools see only skills granted to the connection. Existing skill resources remain available for clients that support MCP resources.
 
-Refresh the MCP tool catalog after deploying these tools, or after reconnecting to a restarted host. Each successful `tools/list` refresh captures the parent session's then-current, grant-filtered tools and skill summaries as the baseline for that credential. After changing a conversation worktree's major mode, minor modes, domains, or profile, call `load_context` and `load_extra_tools` without refreshing the catalog. `load_extra_tools` takes `{}` and returns full tool descriptors plus skill names and descriptions that differ from the cached parent baseline. An empty response means there are no differences; it is not a complete capability inventory. Call `session_capabilities` for the current conversation's grant-filtered tools and skills, surface revision, and baseline status. Invoke an extra tool with `use_extra_tools` using `{ "name": "tool_name", "arguments": {} }`; read a newly available skill with the existing `load_skill`. The target must still be active and separately granted at execution time. Refreshing the parent catalog rebases every conversation sharing the credential. If the host restarts, refresh before using either extra-tool operation.
+Refresh the MCP tool catalog after deploying these tools, or after reconnecting to a restarted host. Each successful `tools/list` refresh captures the parent session's then-current, grant-filtered tools and skill summaries as the baseline for that credential. After changing a conversation worktree's major mode, minor modes, domains, or profile, call `load_context` and `load_extra_tools` without refreshing the catalog. `load_extra_tools` takes `{}` and returns full tool descriptors plus skill names and descriptions that differ from the cached parent baseline. An empty response means there are no differences; it is not a complete capability inventory. Call `session_capabilities` for the current conversation's grant-filtered tools and skills, surface revision, and baseline status. Invoke an extra tool with `use_extra_tools` using the remote name it returned, for example `{ "name": "myrepo_tool_name", "arguments": {} }` on a connection with the `myrepo` prefix; read a newly available skill with the existing `load_skill`. The target must still be active and separately granted at execution time. Refreshing the parent catalog rebases every conversation sharing the credential. If the host restarts, refresh before using either extra-tool operation.
+
+## Tool name prefix
+
+Each new connection gets a tool name prefix, and every remote tool name becomes `<prefix>_<name>`, for example `myrepo_bash` and `myrepo_read`. This keeps DoomPi tools apart from the remote agent's own `bash`, `read`, `edit`, and similar tools, and gives tool search a distinct name to match.
+
+- Leave the **tool prefix** field blank to use the session name, lowercased with other characters turned into underscores. An empty or `untitled` session name gets a random short word instead.
+- A prefix is 1 to 24 lowercase letters or digits joined by single underscores. An invalid prefix is rejected when the connection is created.
+- The prefix is fixed when the connection is created. Renaming the session does not change it. To get a different prefix, create a new connection.
+- Connections created before prefixes existed keep their bare names. Recreate one to get a prefix.
+- Refresh the client's tool catalog after creating or recreating a connection.
+
+On a prefixed connection, only prefixed names are accepted, including the `name` passed to `use_extra_tools`. A bare name such as `bash` is rejected. `load_extra_tools`, `session_capabilities`, and the server instructions all report prefixed names. DoomPi's call history and grants keep the internal names.
+
+## Errors the agent can fix
+
+Mistakes a remote agent can correct come back as tool results with `isError: true`, a readable message, and `structuredContent.code`, so the agent sees them and can retry:
+
+- `TOOL_ARGUMENTS_INVALID`: wrong arguments, with the offending field or key named;
+- `TOOL_NOT_AVAILABLE`: unknown, ungranted, or wrongly prefixed tool name;
+- `SESSION_TOOL_SURFACE_CHANGED`: the session tools changed before the call ran;
+- `SESSION_RESULT_WITHHELD`: the call may have run, but the tools or grants changed, so the result was withheld;
+- `TOOL_CALL_FAILED`: the tool did not return a result. Inspect state before retrying a tool that changes files.
+
+These stay JSON-RPC protocol errors: authentication failures, a revoked or replaced grant, a duplicate request ID, too many active calls, a reserved tool-name conflict, revoked skill access, a skill that is not granted, aborted calls, registration save failures, and `resources/read` errors.
+
+## Copy as prompt
+
+The MCP lane in DoomPi Web has a **copy as prompt** button. It copies a short prompt for the remote agent: use the DoomPi tools for work in the session repository instead of its built-in tools, the tool name prefix, when to call `load_context` and the extra-tool pair, and the full tool list with descriptions.
 
 The client name is generated from the trusted Remote Control domain. OAuth callbacks must be exact absolute HTTPS URLs supplied by the client. They are not derived from the DoomPi domain.
 
@@ -121,39 +149,10 @@ must use a dedicated-session connection. DoomPi never silently redirects a missi
 conversation ID to a shared session. The widget also hides its data if a refresh
 returns a different session ID.
 
-### Activity widgets for remote tools
-
-Config also packages a read-only activity template at
-`ui://doompi/activity/<content-hash>/index.html`. Its resource metadata sets
-`doompi/defaultToolUi: true`. The HTTP transport attaches this template to every
-active, granted tool without an explicit widget, including `read`, `write`,
-`edit`, `grep`, `find`, `ls`, `bash`, skills, planning, tasks, computer tools, and
-future remote tools. An existing custom widget, such as `show_session`, wins.
-A missing or ambiguous default does not change a tool's existing UI metadata.
-
-The card shows host-delivered input progress, an allowlisted input summary,
-elapsed tool-call time, errors or cancellation, and an expandable output preview
-capped at 8,000 characters. File contents, scripts, and arbitrary nested arguments
-are not echoed into the input summary. Output is inserted as text, never HTML;
-non-text results are counted rather than fetched or embedded. A returned background
-runner is labelled **Result received**, not as completed background work. This is
-an invocation view, not a continuously polled runner dashboard.
-
-Widget context is carried in result `_meta['doompi/toolActivity']`. Original
-`content`, `structuredContent`, output schemas, and error semantics are preserved.
-The activity widget makes no server calls and introduces no replay controls.
-Attaching it does not opt a tool into component invocation: existing visibility,
-grants, authorization rechecks, and conversation isolation remain authoritative.
-Only resources referenced by granted tools are listed or readable.
-
-After rebuilding Config and Core, relaunch the updated host and session, refresh
-the MCP connection, and make new tool calls to exercise the new template. Existing
-rendered cards and an already running server do not reload from a source edit.
-
 The repository tests cover protocol metadata, grants and revocation, conversation
 isolation, installed-package resources, and a sandboxed browser host using the
 standard SDK's `AppBridge`. Run the component tests with
-`pnpm --filter @agimon-ai/doompi-config test:app` after building Config. Testing in
+`pnpm --filter @agimon-ai/doompi test:app`. Testing in
 ChatGPT itself remains a separate integration check; a passing reference-host test
 is not evidence that ChatGPT preserved conversation metadata.
 

@@ -13,6 +13,7 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
 
+import { sessionMcpToolsPrompt } from '../lib/sessionMcpPrompt';
 import type { SessionMcpViewState } from '../lib/useSessionMcp';
 
 const TONES = {
@@ -151,10 +152,28 @@ export function SessionMcp({ state }: { state: SessionMcpViewState }) {
   );
 }
 
+type CopyState = 'idle' | 'copied' | 'failed';
+
 /** Inventory comes from the same grant-filtered surface that the remote caller can use. */
 export function SessionMcpTools({ state }: { state: SessionMcpViewState }) {
   const [query, setQuery] = useState('');
+  const [copyState, setCopyState] = useState<CopyState>('idle');
   const tools = state.snapshot?.tools ?? [];
+  const toolPrefix = state.snapshot?.toolPrefix;
+
+  async function copyPrompt(): Promise<void> {
+    if (navigator.clipboard === undefined) {
+      setCopyState('failed');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(sessionMcpToolsPrompt(tools, toolPrefix));
+      setCopyState('copied');
+    } catch {
+      setCopyState('failed');
+    }
+  }
+
   const filtered = tools.filter((tool) =>
     `${tool.name} ${tool.description}`.toLowerCase().includes(query.trim().toLowerCase()),
   );
@@ -167,11 +186,34 @@ export function SessionMcpTools({ state }: { state: SessionMcpViewState }) {
       <div className="space-y-3 border-b border-doom-border-soft px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <SectionLabel>available tools</SectionLabel>
-          <StatusBadge tone="info" size="xs">
-            {tools.length}
-          </StatusBadge>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              data-testid="session-mcp-copy-prompt"
+              disabled={!state.snapshot?.available || tools.length === 0}
+              onClick={() => void copyPrompt()}
+            >
+              {copyState === 'copied' ? 'copied' : 'copy as prompt'}
+            </Button>
+            <StatusBadge tone="info" size="xs">
+              {tools.length}
+            </StatusBadge>
+          </div>
         </div>
-        <p className="text-xs text-doom-dim">Tools granted to this session's remote connections.</p>
+        <div className="text-xs text-doom-dim">
+          <p>Tools granted to this session's remote connections.</p>
+          {toolPrefix ? (
+            <p className="mt-1" data-testid="session-mcp-remote-prefix">
+              remote names start with <code className="text-doom-text">{toolPrefix}_</code>
+            </p>
+          ) : null}
+          <output aria-live="polite">
+            {copyState === 'failed' ? 'copying the prompt was blocked. allow clipboard access and try again.' : ''}
+            {copyState === 'copied' ? 'prompt copied.' : ''}
+          </output>
+        </div>
         <Input
           aria-label="Search MCP tools"
           placeholder="search tools..."

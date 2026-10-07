@@ -38,14 +38,15 @@ describe('explicit MCP file tools', () => {
     ['find', find, createFindTool],
     ['ls', ls, createLsTool],
   ] as const)(
-    'preserves native %s metadata without reading local registrations',
+    'preserves native %s schema with a remote description and no local registrations',
     (name, declaration, nativeFactory) => {
       if (typeof declaration !== 'function') throw new Error('Expected an MCP factory');
       const tool = declaration(context);
       const native = nativeFactory(cwd);
       expect(tool.name).toBe(name);
       expect(tool.parameters).toBe(native.parameters);
-      expect(tool.description).toBe(native.description);
+      expect(tool.description).toContain("DoomPi session's repository");
+      expect(tool.description).not.toBe(native.description);
       expect(tool.executionMode).toBe(native.executionMode === 'sequential' ? 'serial' : native.executionMode);
       expect(context.services.get).not.toHaveBeenCalled();
       expect(tool).not.toHaveProperty('register');

@@ -32,6 +32,8 @@ export interface SessionMcpClient {
   tools: string[];
   skills: string[];
   audience: string;
+  /** Remote tool names on this connection are `${toolPrefix}_${name}`. Absent on legacy, unprefixed connections. */
+  toolPrefix?: string;
 }
 
 export interface CreatedSessionMcpClient extends SessionMcpClient {
@@ -41,5 +43,5 @@ export interface CreatedSessionMcpClient extends SessionMcpClient {
 }
 
 export type CreateSessionMcpClientInput =
-  | { redirectUri: string; scope: 'session'; routing: SessionMcpRouting }
-  | { authMethod: 'api_key' | 'url_token'; scope: 'session'; routing: SessionMcpRouting };
+  | { redirectUri: string; scope: 'session'; routing: SessionMcpRouting; toolPrefix?: string }
+  | { authMethod: 'api_key' | 'url_token'; scope: 'session'; routing: SessionMcpRouting; toolPrefix?: string };

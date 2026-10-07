@@ -19,6 +19,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isOptionalString(value: unknown): value is string | undefined {
+  return value === undefined || typeof value === 'string';
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
@@ -68,7 +72,8 @@ function isClient(value: unknown): value is SessionMcpClient {
     (value.routing === undefined || value.routing === 'conversation') &&
     isStringArray(value.tools) &&
     isStringArray(value.skills) &&
-    typeof value.audience === 'string'
+    typeof value.audience === 'string' &&
+    isOptionalString(value.toolPrefix)
   );
 }
 
@@ -85,6 +90,7 @@ function clientMetadata(value: unknown): SessionMcpClient | undefined {
     tools: value.tools,
     skills: value.skills,
     audience: value.audience,
+    ...(value.toolPrefix === undefined ? {} : { toolPrefix: value.toolPrefix }),
   };
 }
 
@@ -194,6 +200,7 @@ export function isSessionMcpActivity(value: unknown): value is SessionMcpActivit
     !Number.isSafeInteger(value.total) ||
     Number(value.total) < 0 ||
     (value.nextBefore !== undefined && (!Number.isSafeInteger(value.nextBefore) || Number(value.nextBefore) <= 0)) ||
+    !isOptionalString(value.toolPrefix) ||
     !Array.isArray(value.tools) ||
     !Array.isArray(value.calls)
   )

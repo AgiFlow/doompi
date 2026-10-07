@@ -130,11 +130,22 @@ function protocolName(channel: string): string {
   return match[1];
 }
 
-function validationDetails(schema: TSchema, value: unknown): string {
-  return Errors(schema, value)
-    .slice(0, 3)
-    .map((error) => `${error.instancePath || '/'} ${error.message}`)
-    .join('; ');
+/** Up to three field-level problems, e.g. `/ must have required properties path`. */
+export function validationDetails(schema: TSchema, value: unknown): string {
+  return (
+    Errors(schema, value)
+      // Each extra key also yields a bare `schema is false`; the additionalProperties entry names them instead.
+      .filter((error) => !(error.keyword === 'boolean' && error.schemaPath.endsWith('/additionalProperties')))
+      .slice(0, 3)
+      .map((error) => {
+        const extra =
+          error.keyword === 'additionalProperties'
+            ? `: ${((error.params as { additionalProperties?: string[] }).additionalProperties ?? []).join(', ')}`
+            : '';
+        return `${error.instancePath || '/'} ${error.message}${extra}`;
+      })
+      .join('; ')
+  );
 }
 
 function assertValid<TSchemaValue extends TSchema>(

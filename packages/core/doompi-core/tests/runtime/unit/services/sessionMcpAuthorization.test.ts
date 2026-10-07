@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createSessionMcpAuthorizationService,
+  defaultSessionMcpToolPrefix,
   SessionMcpOAuthError,
+  sessionMcpToolPrefix,
 } from '../../../../src/services/sessionMcpAuthorization';
 
 const CALLBACK = 'https://client.example/callback';
@@ -349,5 +351,96 @@ describe('session MCP restricted OAuth', () => {
     const authorization = issue();
     advance(101);
     expect(() => exchange(authorization.code)).toThrow('Authorization code is invalid or expired');
+  });
+});
+
+describe('session MCP tool prefix', () => {
+  const FALLBACKS = 'alba bruno cora dex elio fern gus hana ivo juno kai lena milo nora otto pia'.split(' ');
+  it('validates the remote-name format', () => {
+    for (const bad of ['Bad', 'a__b', '_a', 'a_', '', 'a-b', 'a'.repeat(25), 7])
+      expect(() => sessionMcpToolPrefix(bad)).toThrow(SessionMcpOAuthError);
+    expect(sessionMcpToolPrefix('a'.repeat(24))).toBe('a'.repeat(24));
+    expect(sessionMcpToolPrefix('my_repo2')).toBe('my_repo2');
+    expect(sessionMcpToolPrefix(undefined)).toBeUndefined();
+  });
+
+  it('normalizes session names and falls back to a word for empty or default names', () => {
+    expect(defaultSessionMcpToolPrefix('My Repo (dev)')).toBe('my_repo_dev');
+    expect(defaultSessionMcpToolPrefix('Ünïcode')).toBe('unicode');
+    expect(defaultSessionMcpToolPrefix(`${'a'.repeat(23)} b`)).toBe('a'.repeat(23));
+    for (const name of ['', '!!!', 'untitled', 'Untitled'])
+      expect(FALLBACKS).toContain(defaultSessionMcpToolPrefix(name));
+  });
+
+  it('carries the prefix on every grant kind without changing URL token claims', () => {
+    const service = createSessionMcpAuthorizationService();
+    const bind = (clientId: string) =>
+      service.createAuthorizationBinding({
+        clientId,
+        sessionId: 'alpha',
+        sessionGeneration: 4,
+        audience: AUDIENCE,
+        scope: 'session',
+        toolPrefix: 'alpha',
+      });
+    const oauth = service.createClient({ name: 'OAuth', redirectUri: CALLBACK });
+    bind(oauth.clientId);
+    const code = service.issueAuthorizationCode({
+      clientId: oauth.clientId,
+      redirectUri: CALLBACK,
+      codeChallenge: CHALLENGE,
+      codeChallengeMethod: 'S256',
+    });
+    expect(code.grant.toolPrefix).toBe('alpha');
+    const key = service.createClient({ name: 'Key', authMethod: 'api_key' });
+    bind(key.clientId);
+    expect(service.authenticateAccessToken(key.clientSecret, AUDIENCE)?.toolPrefix).toBe('alpha');
+    const url = service.createClient({ name: 'URL', authMethod: 'url_token' });
+    bind(url.clientId);
+    const token = service.issueUrlToken(url.clientId);
+    expect(service.authenticateUrlToken(token, AUDIENCE)?.toolPrefix).toBe('alpha');
+    const claims = JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString('utf8')) as object;
+    expect(Object.keys(claims).sort()).toEqual(['aud', 'iat', 'iss', 'sid', 'sub']);
+    expect(() =>
+      service.createAuthorizationBinding({
+        clientId: service.createClient({ name: 'Bad', authMethod: 'api_key' }).clientId,
+        sessionId: 'alpha',
+        sessionGeneration: 4,
+        audience: AUDIENCE,
+        scope: 'session',
+        toolPrefix: 'Bad',
+      }),
+    ).toThrow(SessionMcpOAuthError);
+  });
+
+  it('restores the prefix, keeps legacy records bare, and rejects only a bad saved prefix', () => {
+    const service = createSessionMcpAuthorizationService();
+    const create = (toolPrefix?: string) => {
+      const client = service.createClient({ name: 'Key', authMethod: 'api_key' });
+      service.createAuthorizationBinding({
+        clientId: client.clientId,
+        sessionId: 'alpha',
+        sessionGeneration: 4,
+        audience: AUDIENCE,
+        scope: 'session',
+        ...(toolPrefix === undefined ? {} : { toolPrefix }),
+      });
+      return { client, registration: service.persistentRegistration(client.clientId, 'workspace', 10_000)! };
+    };
+    const prefixed = create('alpha');
+    const legacy = create();
+    const bad = create('alpha');
+    const restored = createSessionMcpAuthorizationService();
+    expect(restored.restorePersistentRegistration(prefixed.registration, 5)).toBe(true);
+    expect(restored.restorePersistentRegistration(legacy.registration, 5)).toBe(true);
+    expect(
+      restored.restorePersistentRegistration(
+        { ...bad.registration, binding: { ...bad.registration.binding, toolPrefix: 'Not Valid' } },
+        5,
+      ),
+    ).toBe(false);
+    expect(restored.readAuthorizationBinding(prefixed.client.clientId)?.toolPrefix).toBe('alpha');
+    expect(restored.readAuthorizationBinding(legacy.client.clientId)).not.toHaveProperty('toolPrefix');
+    expect(restored.readClient(bad.client.clientId)).toBeUndefined();
   });
 });

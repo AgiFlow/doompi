@@ -10,6 +10,8 @@ export function createMcpWriteTool(
   const { outputSchema: _outputSchema, ...tool } = createWriteTool(context.execution.cwd);
   return {
     ...tool,
+    description:
+      "Create or fully overwrite a file in the DoomPi session's repository on the host machine, creating parent folders. Use this server's edit tool to change part of an existing file.",
     executionMode: tool.executionMode === 'sequential' ? 'serial' : tool.executionMode,
     async execute(toolCallId, parameters, signal, onUpdate) {
       return toDoomHeadlessToolResult(
@@ -30,6 +32,8 @@ export function createMcpFindTool(
   const { outputSchema: _outputSchema, ...tool } = createFindTool(context.execution.cwd);
   return {
     ...tool,
+    description:
+      "Find files by name or glob pattern in the DoomPi session's repository on the host machine (locate paths). Respects .gitignore. Up to 1000 results by default, with output capped at 50KB.",
     executionMode: tool.executionMode === 'sequential' ? 'serial' : tool.executionMode,
     async execute(toolCallId, parameters, signal, onUpdate) {
       return toDoomHeadlessToolResult(
@@ -50,6 +54,8 @@ export function createMcpLsTool(
   const { outputSchema: _outputSchema, ...tool } = createLsTool(context.execution.cwd);
   return {
     ...tool,
+    description:
+      "List a directory in the DoomPi session's repository on the host machine (folder contents). Sorted, directories end with '/', dotfiles included. Up to 500 entries by default, with output capped at 50KB.",
     executionMode: tool.executionMode === 'sequential' ? 'serial' : tool.executionMode,
     async execute(toolCallId, parameters, signal, onUpdate) {
       return toDoomHeadlessToolResult(

@@ -51,6 +51,24 @@ describe('session MCP registration store', () => {
     expect(createSessionMcpRegistrationStore({ stateDir }).registrations()).toEqual([registration]);
   });
 
+  it('round-trips a tool prefix, loads legacy records bare, and fails closed on a non-string prefix', () => {
+    const stateDir = directory();
+    const prefixed = { ...registration, binding: { ...registration.binding, toolPrefix: 'my_repo' } };
+    expect(createSessionMcpRegistrationStore({ stateDir }).save(prefixed)).toBe(true);
+    expect(createSessionMcpRegistrationStore({ stateDir }).registrations()).toEqual([prefixed]);
+    const file = path.join(stateDir, 'session-mcp-registrations.json');
+    fs.writeFileSync(file, JSON.stringify({ version: 1, registrations: [registration] }));
+    expect(createSessionMcpRegistrationStore({ stateDir }).registrations()).toEqual([registration]);
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        version: 1,
+        registrations: [{ ...registration, binding: { ...registration.binding, toolPrefix: 7 } }],
+      }),
+    );
+    expect(createSessionMcpRegistrationStore({ stateDir }).registrations()).toEqual([]);
+  });
+
   it('round-trips API key hashes without a callback and rejects malformed key metadata', () => {
     const stateDir = directory();
     const store = createSessionMcpRegistrationStore({ stateDir });
