@@ -63,6 +63,7 @@ function systemPromptOptions(root: string, skills: Skill[] = []): BeforeAgentSta
   return {
     cwd: root,
     selectedTools: ['read'],
+    hiddenTools: [],
     toolSnippets: {},
     toolGuidelines: {},
     promptGuidelines: [],
