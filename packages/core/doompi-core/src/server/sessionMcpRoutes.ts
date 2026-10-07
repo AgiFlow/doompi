@@ -6,8 +6,10 @@ import type { SessionMcpActivitySnapshot, SessionMcpAvailableTool } from '../sch
 import type { SessionMcpActivityStore } from '../services/sessionMcpActivity';
 import {
   createSessionMcpAuthorizationService,
+  defaultSessionMcpToolPrefix,
   SessionMcpOAuthError,
   sessionMcpRouting,
+  sessionMcpToolPrefix,
   type SessionMcpAuthorizationBinding,
   type SessionMcpAuthorizationService,
   type SessionMcpClient,
@@ -132,6 +134,7 @@ function publicClient(client: SessionMcpClient, binding: SessionMcpAuthorization
     tools: binding.tools,
     skills: binding.skills,
     audience: binding.audience,
+    ...(binding.toolPrefix === undefined ? {} : { toolPrefix: binding.toolPrefix }),
   };
 }
 
@@ -837,11 +840,13 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
               available = false;
             }
           }
+          const toolPrefix = bindings[0]?.binding.toolPrefix;
           const snapshot: SessionMcpActivitySnapshot = {
             ...history,
             enabled: true,
             available,
             tools,
+            ...(toolPrefix === undefined ? {} : { toolPrefix }),
           };
           return json(200, snapshot);
         } catch {
@@ -935,6 +940,15 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         if (input.routing !== undefined && input.routing !== 'session' && input.routing !== 'conversation')
           return json(400, { error: 'Session MCP routing is not supported.' });
         const routing = sessionMcpRouting(input.routing);
+        if (input.toolPrefix !== undefined && typeof input.toolPrefix !== 'string')
+          return json(400, { error: 'Tool prefix must be a string.' });
+        // Fixed at creation: session names can be renamed or empty later.
+        const toolPrefix = input.toolPrefix?.trim() || defaultSessionMcpToolPrefix(resolved.session.name);
+        try {
+          sessionMcpToolPrefix(toolPrefix);
+        } catch (error) {
+          return json(400, { error: (error as Error).message });
+        }
         const requestedScope = input.scope;
         if (requestedScope !== undefined && requestedScope !== 'session' && requestedScope !== 'restricted') {
           return json(400, { error: 'Authorization scope is not supported.' });
@@ -999,6 +1013,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
                     audience,
                     scope: 'session',
                     routing,
+                    toolPrefix,
                   })
                 : authorization.createAuthorizationBinding({
                     clientId: client.clientId,
@@ -1007,6 +1022,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
                     audience,
                     scope: 'restricted',
                     routing,
+                    toolPrefix,
                     tools: [...new Set(tools!)],
                     skills: [...new Set(skills!)],
                   });

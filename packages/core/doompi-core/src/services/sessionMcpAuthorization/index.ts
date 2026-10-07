@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 
 const ACCESS_TOKEN_TTL_MS = 15 * 60_000;
 const AUTHORIZATION_CODE_TTL_MS = 5 * 60_000;
@@ -40,6 +40,60 @@ export function sessionMcpRouting(value: unknown): SessionMcpRouting {
   throw new SessionMcpOAuthError('invalid_request', 'Session MCP routing is not supported.');
 }
 
+const SESSION_MCP_TOOL_PREFIX_MAX_LENGTH = 24;
+const SESSION_MCP_TOOL_PREFIX = /^[a-z0-9]+(?:_[a-z0-9]+)*$/u;
+const FALLBACK_TOOL_PREFIXES = Object.freeze([
+  'alba',
+  'bruno',
+  'cora',
+  'dex',
+  'elio',
+  'fern',
+  'gus',
+  'hana',
+  'ivo',
+  'juno',
+  'kai',
+  'lena',
+  'milo',
+  'nora',
+  'otto',
+  'pia',
+]);
+
+/**
+ * Remote tool names are `${prefix}_${name}`. The prefix keeps them distinct from
+ * the remote agent's native tools and stays inside OpenAI and MCP name rules.
+ */
+export function sessionMcpToolPrefix(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== 'string' ||
+    value.length > SESSION_MCP_TOOL_PREFIX_MAX_LENGTH ||
+    !SESSION_MCP_TOOL_PREFIX.test(value)
+  ) {
+    throw new SessionMcpOAuthError(
+      'invalid_request',
+      `Tool prefix must be 1 to ${SESSION_MCP_TOOL_PREFIX_MAX_LENGTH} lowercase letters or digits, joined by single underscores.`,
+    );
+  }
+  return value;
+}
+
+/** Normalized session name, or a random readable word when the name is empty or the CLI default. */
+export function defaultSessionMcpToolPrefix(sessionName: string): string {
+  const prefix = sessionName
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '_')
+    .replace(/^_+|_+$/gu, '')
+    .slice(0, SESSION_MCP_TOOL_PREFIX_MAX_LENGTH)
+    .replace(/_+$/u, '');
+  if (prefix !== '' && prefix !== 'untitled') return prefix;
+  return FALLBACK_TOOL_PREFIXES[randomInt(FALLBACK_TOOL_PREFIXES.length)]!;
+}
+
 export interface SessionMcpClient {
   readonly clientId: string;
   readonly name: string;
@@ -63,6 +117,8 @@ export interface SessionMcpAuthorizationBinding {
   readonly routing?: SessionMcpRouting;
   readonly tools: readonly string[];
   readonly skills: readonly string[];
+  /** Fixed at creation. Absent on legacy registrations, which keep bare tool names. */
+  readonly toolPrefix?: string;
 }
 
 export type CreateSessionMcpAuthorizationBindingInput = Omit<
@@ -463,6 +519,7 @@ export function createSessionMcpAuthorizationService(
         tools = exactUniqueGrants(input.tools, 'Tool');
         skills = exactUniqueGrants(input.skills, 'Skill');
       }
+      const toolPrefix = sessionMcpToolPrefix(input.toolPrefix);
       const binding: SessionMcpAuthorizationBinding = Object.freeze({
         clientId: input.clientId,
         sessionId: requireName(input.sessionId, 'Session ID'),
@@ -472,6 +529,7 @@ export function createSessionMcpAuthorizationService(
         routing,
         tools,
         skills,
+        ...(toolPrefix === undefined ? {} : { toolPrefix }),
       });
       bindings.set(input.clientId, binding);
       return binding;
@@ -531,6 +589,7 @@ export function createSessionMcpAuthorizationService(
           secretHash: Buffer.from(registration.secretHash, 'hex'),
         };
         const routing = sessionMcpRouting(registration.binding.routing);
+        const toolPrefix = sessionMcpToolPrefix(registration.binding.toolPrefix);
         const scope = registration.binding.scope;
         const tools =
           scope === 'session' ? Object.freeze([] as string[]) : exactUniqueGrants(registration.binding.tools, 'Tool');
@@ -554,6 +613,7 @@ export function createSessionMcpAuthorizationService(
             routing,
             tools,
             skills,
+            ...(toolPrefix === undefined ? {} : { toolPrefix }),
           }),
         );
         return true;

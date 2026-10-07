@@ -194,6 +194,56 @@ describe('session MCP management API', () => {
     expect(result).toEqual({ error: expect.stringContaining('did not enable automatic per-conversation worktrees') });
     expect(result).not.toHaveProperty('client');
   });
+  it('keeps the assigned tool prefix on client metadata and sends an explicit prefix', async () => {
+    const prefixed = { ...client, toolPrefix: 'my_repo' };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(respond(201, { client: { ...prefixed, clientSecret: 'once' } }))
+      .mockResolvedValueOnce(respond(200, { clients: [prefixed, client] }))
+      .mockResolvedValueOnce(respond(200, { clients: [{ ...client, toolPrefix: 7 }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      createSessionMcpClient('w', 's', {
+        authMethod: 'api_key',
+        scope: 'session',
+        routing: 'conversation',
+        toolPrefix: 'my_repo',
+      }),
+    ).resolves.toEqual({ client: { ...prefixed, clientSecret: 'once' } });
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      authMethod: 'api_key',
+      scope: 'session',
+      routing: 'conversation',
+      toolPrefix: 'my_repo',
+    });
+    const listed = await listSessionMcpClients('w', 's');
+    expect(listed).toEqual({ clients: [prefixed, client] });
+    expect('clients' in listed && listed.clients[1]).not.toHaveProperty('toolPrefix');
+    await expect(listSessionMcpClients('w', 's')).resolves.toEqual({ error: 'The hub answered 200.' });
+  });
+
+  it('surfaces the host error for an invalid explicit tool prefix', async () => {
+    const message = 'Tool prefix must be 1 to 24 lowercase letters or digits, joined by single underscores.';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respond(400, { error: message })));
+    await expect(
+      createSessionMcpClient('w', 's', {
+        authMethod: 'url_token',
+        scope: 'session',
+        routing: 'conversation',
+        toolPrefix: 'Bad',
+      }),
+    ).resolves.toEqual({ error: message });
+  });
+
+  it('accepts a string activity tool prefix and rejects any other type', () => {
+    const base = { enabled: true, available: true, total: 0, tools: [], calls: [] };
+    expect(isSessionMcpActivity({ ...base, toolPrefix: 'my_repo' })).toBe(true);
+    expect(isSessionMcpActivity(base)).toBe(true);
+    expect(isSessionMcpActivity({ ...base, toolPrefix: 1 })).toBe(false);
+    expect(isSessionMcpActivity({ ...base, toolPrefix: null })).toBe(false);
+  });
+
   it('removes a failed automatic setup using the reserved target identity', async () => {
     const fetchMock = vi.fn().mockResolvedValue(respond(200, { ok: true }));
     vi.stubGlobal('fetch', fetchMock);

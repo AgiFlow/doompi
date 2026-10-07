@@ -20,7 +20,8 @@ export const SESSION_MCP_EXTRA_TOOLS: readonly Tool[] = [
   {
     name: 'load_extra_tools',
     title: 'Load extra tools',
-    description: 'Discover tools and skills in this conversation that differ from the last parent catalog refresh.',
+    description:
+      'List DoomPi tools and skills added to this conversation after your tool list loaded, for example after a mode change. Takes {}. Empty means no change.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true },
     _meta: { ui: { visibility: ['model'] } },
@@ -28,7 +29,8 @@ export const SESSION_MCP_EXTRA_TOOLS: readonly Tool[] = [
   {
     name: 'use_extra_tools',
     title: 'Use extra tools',
-    description: 'Invoke one currently available extra tool by exact name with its declared arguments.',
+    description:
+      'Run a DoomPi tool returned by load_extra_tools that is not in your tool list. Pass { name, arguments }.',
     inputSchema: {
       type: 'object',
       properties: { name: { type: 'string' }, arguments: { type: 'object' } },
@@ -41,7 +43,7 @@ export const SESSION_MCP_EXTRA_TOOLS: readonly Tool[] = [
     name: 'session_capabilities',
     title: 'Session capabilities',
     description:
-      'Inspect the tools and skills currently available in this conversation, independently of the parent catalog diff.',
+      'List every DoomPi tool and skill this connection can use now, with input schemas. Call it when a tool seems missing, a call fails, or the session mode changed.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true },
     _meta: { ui: { visibility: ['model'] } },
@@ -85,20 +87,58 @@ function extraTools(baseline: SessionMcpBaseline, tools: readonly SessionToolDes
   );
 }
 
-function toolArguments(name: string, value: unknown): { name?: string; arguments?: Record<string, unknown> } {
-  if (typeof value !== 'object' || value === null || Array.isArray(value))
-    throw new ProtocolError(ProtocolErrorCode.InvalidParams, `Invalid arguments for '${name}'.`);
+/** Remote agents see `${prefix}_${name}`; grants, baselines, and history keep internal names. */
+export function sessionMcpWireName(prefix: string | undefined, name: string): string {
+  return prefix === undefined ? name : `${prefix}_${name}`;
+}
+
+/** Strips the prefix exactly once. A bare name on a prefixed connection maps to nothing. */
+export function sessionMcpInternalName(prefix: string | undefined, wire: string): string | undefined {
+  if (prefix === undefined) return wire;
+  const head = `${prefix}_`;
+  return wire.startsWith(head) && wire.length > head.length ? wire.slice(head.length) : undefined;
+}
+
+function wireTool(prefix: string | undefined, tool: Tool): Tool {
+  return prefix === undefined ? tool : { ...tool, name: sessionMcpWireName(prefix, tool.name) };
+}
+
+/** Kept at or under 512 characters with a 24-character prefix. */
+function sessionMcpInstructions(prefix: string | undefined): string {
+  return (
+    (prefix === undefined ? '' : `Tool names here start with '${prefix}_'. `) +
+    'Use only this bound DoomPi session; tools run in its host repository, not locally. ' +
+    'Call load_context first and after selection changes. session_capabilities lists current tools; ' +
+    'load_extra_tools lists conversation changes, run with use_extra_tools; load_skill loads guidance. ' +
+    'Inspect before editing; follow repository checks. Assume no UI, downloads, or notifications. ' +
+    'Read saved logs, do not relaunch work. Saving a plan does not authorize implementation.'
+  );
+}
+
+function toolArguments(
+  name: string,
+  value: unknown,
+  wire: (name: string) => string,
+): { name?: string; arguments?: Record<string, unknown> } {
+  const invalid = (problem: string): SessionMcpConversationError =>
+    new SessionMcpConversationError('TOOL_ARGUMENTS_INVALID', `Invalid arguments for '${wire(name)}': ${problem}`);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw invalid('pass a JSON object.');
   const args = value as Record<string, unknown>;
+  const keys = Object.keys(args);
+  if (name !== 'use_extra_tools') {
+    if (keys.length !== 0) throw invalid(`it takes no arguments. Remove: ${keys.join(', ')}. Call it with {}.`);
+    return args;
+  }
+  const unexpected = keys.filter((key) => key !== 'name' && key !== 'arguments');
+  if (unexpected.length !== 0)
+    throw invalid(`unexpected keys: ${unexpected.join(', ')}. Pass { "name": string, "arguments"?: object }.`);
+  if (typeof args.name !== 'string' || args.name.trim() === '')
+    throw invalid(`"name" must be a tool name returned by ${wire('load_extra_tools')}.`);
   if (
-    Object.keys(args).some((key) => key !== 'name' && key !== 'arguments') ||
-    ((name === 'load_extra_tools' || name === 'session_capabilities') && Object.keys(args).length !== 0) ||
-    (name === 'use_extra_tools' &&
-      (typeof args.name !== 'string' ||
-        args.name.trim() === '' ||
-        (args.arguments !== undefined &&
-          (typeof args.arguments !== 'object' || args.arguments === null || Array.isArray(args.arguments)))))
+    args.arguments !== undefined &&
+    (typeof args.arguments !== 'object' || args.arguments === null || Array.isArray(args.arguments))
   )
-    throw new ProtocolError(ProtocolErrorCode.InvalidParams, `Invalid arguments for '${name}'.`);
+    throw invalid('"arguments" must be an object.');
   return args as { name?: string; arguments?: Record<string, unknown> };
 }
 export interface SessionMcpTarget {
@@ -193,13 +233,18 @@ function grantedSurface(grant: SessionMcpAccessGrant, surface: SessionToolSurfac
 }
 
 /** Identity is supplied by the approved tool descriptor, never by upstream result metadata. */
-function widgetResult(tool: SessionToolDescriptor | undefined, result: CallToolResult): CallToolResult {
+function widgetResult(
+  tool: SessionToolDescriptor | undefined,
+  result: CallToolResult,
+  prefix: string | undefined,
+): CallToolResult {
   const widget = tool?._meta?.['doompi/widget'];
   return typeof widget !== 'string'
     ? result
     : {
         ...result,
-        _meta: { ...result._meta, 'doompi/widget': widget, 'doompi/toolName': tool!.name },
+        // The host compares this with the tool name it called, which is the remote name.
+        _meta: { ...result._meta, 'doompi/widget': widget, 'doompi/toolName': sessionMcpWireName(prefix, tool!.name) },
       };
 }
 
@@ -239,6 +284,17 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       return options.pathToken === undefined
         ? jsonError(401, 'The Bearer access token is invalid or expired.', true, options.resourceMetadataUrl)
         : jsonError(401, 'The signed MCP URL is invalid or revoked.');
+    // Bindings are immutable, so the prefix cannot change for the lifetime of this grant.
+    const prefix = grant.toolPrefix;
+    const wire = (name: string): string => sessionMcpWireName(prefix, name);
+    /** Names a wrapper as the next call only when this grant can use it. */
+    const nextCall = (tool: string, text: string): string =>
+      grantedExtraTools(grant).some((wrapper) => wrapper.name === tool) ? ` Call ${wire(tool)}${text}` : '';
+    const surfaceChanged = (): SessionMcpConversationError =>
+      new SessionMcpConversationError(
+        'SESSION_TOOL_SURFACE_CHANGED',
+        `The session tools changed before this call ran.${nextCall('session_capabilities', ', then retry.')}`,
+      );
     const authorizeOperation = async (): Promise<{
       grant: SessionMcpAccessGrant;
       target: SessionMcpTarget;
@@ -271,12 +327,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       { name: options.serverName ?? 'doompi-session', version: options.serverVersion ?? '1.0.0' },
       {
         capabilities: { tools: {}, resources: {} },
-        instructions:
-          'Use only this bound DoomPi session. Call load_context before work and after selection changes. ' +
-          'Call session_capabilities for the current inventory; load_extra_tools returns only conversation differences. ' +
-          'Invoke extras with use_extra_tools and guidance with load_skill. Inspect before editing and follow repository checks. ' +
-          'Do not assume UI, downloadable files, or background notifications. Read saved logs instead of relaunching work. ' +
-          'Saving a plan does not authorize implementation.',
+        instructions: sessionMcpInstructions(prefix),
       },
     );
     server.setNotificationHandler('notifications/cancelled', async (notification) => {
@@ -304,7 +355,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       });
       await authorizeOperation();
       baselines.set(active.grant.clientId, baseline);
-      return { tools: [...parentTools, ...wrappers] };
+      return { tools: [...parentTools, ...wrappers].map((tool) => wireTool(prefix, tool)) };
     });
     server.setRequestHandler('tools/call', async (message, ctx): Promise<CallToolResult> => {
       const conversation = sessionMcpConversationDigest(
@@ -349,30 +400,31 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       };
       try {
         const parent = await authorizeOperation();
+        const requested = sessionMcpInternalName(prefix, message.params.name);
         invocation = {
           id: invocationId,
           parentSessionId: parent.grant.sessionId,
           clientId: parent.grant.clientId,
           conversationDigest: conversation,
-          toolName: message.params.name,
+          toolName: requested ?? message.params.name,
           startedAt: Date.now(),
           status: 'running',
           input: message.params.arguments ?? {},
         };
         publishInvocation();
-        const wrapper = grantedExtraTools(parent.grant).some((tool) => tool.name === message.params.name);
+        const wrapper = grantedExtraTools(parent.grant).some((tool) => tool.name === requested);
         const advertised = wrapper
           ? undefined
-          : grantedSurface(parent.grant, parent.target.toolSurface).tools.find(
-              (tool) => tool.name === message.params.name,
-            );
+          : grantedSurface(parent.grant, parent.target.toolSurface).tools.find((tool) => tool.name === requested);
         if (!wrapper && !advertised)
-          throw new ProtocolError(
-            ProtocolErrorCode.InvalidParams,
-            `Tool '${message.params.name}' is not granted or active.`,
+          throw new SessionMcpConversationError(
+            'TOOL_NOT_AVAILABLE',
+            `Tool '${message.params.name}' is not available on this connection.` +
+              (prefix === undefined ? '' : ` Tool names here start with '${prefix}_'.`) +
+              nextCall('session_capabilities', ' for the current list.'),
           );
         widgetTool = advertised;
-        const wrapperArgs = wrapper ? toolArguments(message.params.name, message.params.arguments ?? {}) : undefined;
+        const wrapperArgs = wrapper ? toolArguments(requested!, message.params.arguments ?? {}, wire) : undefined;
         // A binding must not outlive an unpersisted registration when tools/call precedes tools/list.
         await options.onVerified?.(parent.grant);
         options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=started`);
@@ -400,7 +452,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             'This connection requires conversation metadata. Use a compatible ChatGPT conversation and retry.',
           );
         if (
-          (message.params.name === 'load_extra_tools' || message.params.name === 'use_extra_tools') &&
+          (requested === 'load_extra_tools' || requested === 'use_extra_tools') &&
           !baselines.has(parent.grant.clientId)
         )
           throw new SessionMcpConversationError(
@@ -413,7 +465,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         const { snapshot, tools, skills } = grantedSurface(active.grant, active.target.toolSurface);
         const baseline = baselines.get(parent.grant.clientId);
         const extras = wrapper && baseline ? extraTools(baseline, tools) : [];
-        if (message.params.name === 'session_capabilities' && wrapper) {
+        if (requested === 'session_capabilities' && wrapper) {
           const capabilities = {
             sessionId: active.target.sessionId ?? parent.grant.sessionId,
             generation: active.target.generation,
@@ -421,7 +473,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             baseline: baseline === undefined ? 'missing' : 'available',
             inventory: 'active_surface',
             discovery: 'unknown',
-            tools: [...tools.map(publicTool), ...grantedExtraTools(active.grant)],
+            tools: [...tools.map(publicTool), ...grantedExtraTools(active.grant)].map((tool) => wireTool(prefix, tool)),
             skills: skills.map(({ name, description }) => ({ name, description })),
           };
           const current = await resolveTarget(false);
@@ -431,7 +483,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             current.target.sessionId !== active.target.sessionId ||
             current.target.toolSurface.readSurface().revision !== snapshot.revision
           )
-            throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session tool surface has changed.');
+            throw surfaceChanged();
           options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
           return completeInvocation({
             content: [{ type: 'text', text: JSON.stringify(capabilities) }],
@@ -439,9 +491,9 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             isError: false,
           });
         }
-        if (message.params.name === 'load_extra_tools' && wrapper) {
+        if (requested === 'load_extra_tools' && wrapper) {
           const discovery = {
-            tools: extras,
+            tools: extras.map((tool) => wireTool(prefix, tool)),
             skills: (tools.some((tool) => tool.name === 'load_skill') ? skills : [])
               .map(({ name, description }) => ({ name, description }))
               .filter(
@@ -459,7 +511,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             current.target.sessionId !== active.target.sessionId ||
             current.target.toolSurface.readSurface().revision !== snapshot.revision
           )
-            throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session tool surface has changed.');
+            throw surfaceChanged();
           options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
           return completeInvocation({
             content: [{ type: 'text', text: JSON.stringify(discovery) }],
@@ -467,10 +519,14 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             isError: false,
           });
         }
-        const name = wrapper ? wrapperArgs!.name! : message.params.name;
+        const name = wrapper ? sessionMcpInternalName(prefix, wrapperArgs!.name!) : requested;
         const selected = tools.find((tool) => tool.name === name);
-        if (wrapper && (!extras.some((tool) => tool.name === name) || !selected))
-          throw new ProtocolError(ProtocolErrorCode.InvalidParams, `Extra tool '${name}' is not granted or active.`);
+        if (name === undefined || (wrapper && (!extras.some((tool) => tool.name === name) || !selected)))
+          throw new SessionMcpConversationError(
+            'TOOL_NOT_AVAILABLE',
+            `Extra tool '${wrapperArgs?.name ?? message.params.name}' is not available.` +
+              nextCall('load_extra_tools', ' and pass a name it returns.'),
+          );
         if (
           !wrapper &&
           (!selected ||
@@ -491,16 +547,14 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             current.target.generation !== active.target.generation ||
             current.target.sessionId !== active.target.sessionId
           )
-            throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session tool surface has changed.');
+            throw surfaceChanged();
           if (wrapper) {
-            if (!grantedExtraTools(current.grant).some((tool) => tool.name === message.params.name))
-              throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The connection tool surface has changed.');
+            if (!grantedExtraTools(current.grant).some((tool) => tool.name === requested)) throw surfaceChanged();
           } else {
             const currentAdvertised = grantedSurface(current.grant, parent.target.toolSurface).tools.find(
-              (tool) => tool.name === message.params.name,
+              (tool) => tool.name === requested,
             );
-            if (!currentAdvertised || !isDeepStrictEqual(currentAdvertised, advertised))
-              throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The connection tool surface has changed.');
+            if (!currentAdvertised || !isDeepStrictEqual(currentAdvertised, advertised)) throw surfaceChanged();
           }
           return current;
         };
@@ -524,8 +578,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             const text = await active.target.toolSurface.readSkill(current.snapshot.revision, skill.uri);
             signal.throwIfAborted();
             const after = await authorizedSkills();
-            if (after.snapshot.revision !== current.snapshot.revision)
-              throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The session skill surface has changed.');
+            if (after.snapshot.revision !== current.snapshot.revision) throw surfaceChanged();
             return text;
           },
         };
@@ -535,32 +588,56 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           input: wrapper ? (wrapperArgs!.arguments ?? {}) : (message.params.arguments ?? {}),
         };
         publishInvocation();
-        const result = await active.target.toolSurface.invokeTool({
-          revision: snapshot.revision,
-          name,
-          arguments: wrapper ? (wrapperArgs!.arguments ?? {}) : (message.params.arguments ?? {}),
-          signal,
-          mcpSkills,
-          authorize: async () => {
-            const current = await recheck();
-            if (wrapper) {
-              const currentTool = grantedSurface(current.grant, current.target.toolSurface).tools.find(
-                (tool) => tool.name === name,
-              );
-              if (!currentTool || !isDeepStrictEqual(currentTool, selected))
-                throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'The extra tool surface has changed.');
-            }
-          },
-        });
-        await recheck();
+        let result: Awaited<ReturnType<SessionToolSurface['invokeTool']>>;
+        try {
+          result = await active.target.toolSurface.invokeTool({
+            revision: snapshot.revision,
+            name,
+            arguments: wrapper ? (wrapperArgs!.arguments ?? {}) : (message.params.arguments ?? {}),
+            signal,
+            mcpSkills,
+            authorize: async () => {
+              const current = await recheck();
+              if (wrapper) {
+                const currentTool = grantedSurface(current.grant, current.target.toolSurface).tools.find(
+                  (tool) => tool.name === name,
+                );
+                if (!currentTool || !isDeepStrictEqual(currentTool, selected)) throw surfaceChanged();
+              }
+            },
+          });
+        } catch (error) {
+          if (signal.aborted || error instanceof ProtocolError || error instanceof SessionMcpConversationError)
+            throw error;
+          // After-hooks can fail once execution finished, so never claim the call did not run.
+          throw new SessionMcpConversationError(
+            'TOOL_CALL_FAILED',
+            `${wire(name)} did not return a result: ${error instanceof Error ? error.message : 'unknown error'}. ` +
+              'If the tool changes files or state, inspect before retrying.',
+          );
+        }
+        try {
+          await recheck();
+        } catch (error) {
+          if (!(error instanceof SessionMcpConversationError)) throw error;
+          throw new SessionMcpConversationError(
+            'SESSION_RESULT_WITHHELD',
+            'The call may have run, but its result was withheld because the session tools or grants changed. ' +
+              'Inspect state before retrying.',
+          );
+        }
         options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
         return completeInvocation(
-          widgetResult(wrapper ? undefined : selected, {
-            content: result.content,
-            ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
-            ...(result._meta === undefined ? {} : { _meta: result._meta }),
-            isError: result.isError ?? false,
-          }),
+          widgetResult(
+            wrapper ? undefined : selected,
+            {
+              content: result.content,
+              ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
+              ...(result._meta === undefined ? {} : { _meta: result._meta }),
+              isError: result.isError ?? false,
+            },
+            prefix,
+          ),
         );
       } catch (error) {
         // The cause is logged because the client may drop the answer, for example on a timeout
@@ -587,15 +664,19 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           publishInvocation();
         }
         if (!(error instanceof SessionMcpConversationError)) throw error;
-        return widgetResult(widgetTool, {
-          content: [{ type: 'text', text: error.message }],
-          isError: true,
-          structuredContent: {
-            code: error.code,
-            message: error.message,
-            ...(error.bindingId === undefined ? {} : { bindingId: error.bindingId }),
+        return widgetResult(
+          widgetTool,
+          {
+            content: [{ type: 'text', text: error.message }],
+            isError: true,
+            structuredContent: {
+              code: error.code,
+              message: error.message,
+              ...(error.bindingId === undefined ? {} : { bindingId: error.bindingId }),
+            },
           },
-        });
+          prefix,
+        );
       } finally {
         skillAccessOpen = false;
         operations.delete(key);
@@ -619,7 +700,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         if (!conversation)
           throw new ProtocolError(
             ProtocolErrorCode.InvalidParams,
-            'Use load_skill with conversation metadata to read target-session guidance.',
+            `Use ${wire('load_skill')} with conversation metadata to read target-session guidance.`,
           );
         if (!options.resolveConversation)
           throw new ProtocolError(
@@ -654,7 +735,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'UI resource is not granted or active.');
       throw new ProtocolError(
         ProtocolErrorCode.InvalidParams,
-        'Use load_skill with conversation metadata to read target-session guidance.',
+        `Use ${wire('load_skill')} with conversation metadata to read target-session guidance.`,
       );
     });
 

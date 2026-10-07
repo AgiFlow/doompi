@@ -39,6 +39,7 @@ import {
 import type { DoomSessionContext } from '../../../exports/hubChannel';
 import type { DoomMcpContextSnapshot, DoomMcpSkill, DoomMcpUiResource } from '../../../exports/mcpFacet';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
+import { validationDetails } from '../../../schemas/protocol';
 import { createDirectHarnessRuntime } from '../../../server/directHarnessRuntime';
 import { harnessErrorMessage } from '../../../server/harnessErrorMessage';
 import { buildContextDetail } from '../../../services/contextDetail';
@@ -1561,13 +1562,15 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     lifecycleSignal?: AbortSignal,
   ): Promise<import('../../../exports/headless').DoomHeadlessToolResult> => {
     if (disposed || !headlessReady || !ready() || !headlessHost?.status.ready)
-      throw new Error('Headless capability preparation is not ready.');
+      throw new Error('Headless capability preparation is not ready. Retry in a few seconds.');
     if (invocation.revision !== readRevision()) throw new Error('The session tool surface has changed');
     if (!isJsonObject(invocation.arguments)) throw new Error('Tool arguments must be a JSON object');
     const applied = readTools().get(invocation.name);
     if (applied === undefined) throw new Error(`Tool '${invocation.name}' is not active`);
     if (!Value.Check(applied.descriptor.parameters, invocation.arguments))
-      throw new Error(`Invalid arguments for tool '${invocation.name}'`);
+      throw new Error(
+        `Invalid arguments for tool '${invocation.name}': ${validationDetails(applied.descriptor.parameters, invocation.arguments)}`,
+      );
     const signals = [invocation.signal, lifecycleSignal].filter(
       (signal): signal is AbortSignal => signal !== undefined,
     );
@@ -1582,11 +1585,13 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       if (before?.block !== undefined) return { content: [{ type: 'text', text: before.block.reason }], isError: true };
       const args = before?.args ?? (invocation.arguments as Record<string, JsonValue>);
       if (!Value.Check(applied.descriptor.parameters, args))
-        throw new Error(`A tool hook produced invalid arguments for '${invocation.name}'`);
+        throw new Error(
+          `A tool hook produced invalid arguments for '${invocation.name}': ${validationDetails(applied.descriptor.parameters, args)}`,
+        );
       await invocation.authorize?.();
       signal?.throwIfAborted();
       if (disposed || !headlessReady || !ready() || !headlessHost?.status.ready)
-        throw new Error('Headless capability preparation is not ready.');
+        throw new Error('Headless capability preparation is not ready. Retry in a few seconds.');
       if (invocation.revision !== readRevision() || readTools().get(invocation.name) !== applied)
         throw new Error(`Tool '${invocation.name}' is no longer active`);
       const startEvent = {

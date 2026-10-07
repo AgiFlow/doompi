@@ -485,7 +485,7 @@ describe('global remote control', () => {
       },
     );
     expect(mcp.status, await mcp.clone().text()).toBe(200);
-    await expect(mcp.json()).resolves.toMatchObject({ result: { tools: [{ name: 'read' }] } });
+    await expect(mcp.json()).resolves.toMatchObject({ result: { tools: [{ name: 'one_read' }] } });
     const called = await tunnel(
       port,
       root,
@@ -495,7 +495,7 @@ describe('global remote control', () => {
         id: 2,
         method: 'tools/call',
         params: {
-          name: 'read',
+          name: 'one_read',
           arguments: {},
           _meta: { ...MODERN_ENVELOPE, 'openai/session': 'surviving-chatgpt-conversation' },
         },
@@ -507,7 +507,7 @@ describe('global remote control', () => {
         accept: 'application/json, text/event-stream',
         'mcp-protocol-version': MODERN_PROTOCOL_VERSION,
         'mcp-method': 'tools/call',
-        'mcp-name': 'read',
+        'mcp-name': 'one_read',
       },
     );
     expect(called.status, await called.clone().text()).toBe(200);

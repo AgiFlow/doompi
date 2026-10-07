@@ -434,7 +434,7 @@ describe('active headless execution hooks', () => {
         );
         await expect(
           session.toolSurface.invokeTool({ revision: surface.revision, name: 'fixture_tool', arguments: {} }),
-        ).rejects.toThrow("Invalid arguments for tool 'fixture_tool'");
+        ).rejects.toThrow("Invalid arguments for tool 'fixture_tool': / must have required properties value");
 
         const providerCalls = streamSimple.mock.calls.length;
         onNotice.mockClear();

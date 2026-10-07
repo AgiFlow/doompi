@@ -866,7 +866,7 @@ describe('conversation-bound Session MCP routing', () => {
               ...(method === 'tools/call' ? { id } : {}),
               method,
               params: {
-                ...(method === 'tools/call' ? { name: 'load_context', arguments: {} } : { requestId: id }),
+                ...(method === 'tools/call' ? { name: 'parent_load_context', arguments: {} } : { requestId: id }),
                 ...(chat === undefined ? {} : { _meta: { 'openai/session': chat } }),
               },
             }),
@@ -932,7 +932,7 @@ describe('conversation-bound Session MCP routing', () => {
     };
     const call = () =>
       signed('tools/call', {
-        name: 'load_extra_tools',
+        name: 'parent_load_extra_tools',
         arguments: {},
         _meta: { 'openai/session': 'signed-chat' },
       });
@@ -1038,6 +1038,51 @@ describe('conversation-bound Session MCP routing', () => {
     expect((await f.host('POST', '/clients', input))!.status).toBe(201);
     expect((await f.host('POST', '/clients', { ...input, routing: 'unknown' }))!.status).toBe(400);
   });
+  it('fixes a tool prefix at creation and reports it with internal call names', async () => {
+    const f = fixture('conversation', false, true);
+    const input = { authMethod: 'api_key', name: 'External MCP', scope: 'session', routing: 'conversation' };
+    const clients = async () =>
+      ((await (await f.host('GET', '/clients'))!.json()) as { clients: Record<string, unknown>[] }).clients;
+    const before = (await clients()).length;
+    for (const toolPrefix of ['Bad', 'a__b', '_a', 'a'.repeat(25), 7]) {
+      const rejected = await f.host('POST', '/clients', { ...input, toolPrefix });
+      expect(rejected!.status).toBe(400);
+      expect(await rejected!.json()).toMatchObject({ error: expect.any(String) });
+    }
+    expect(await clients()).toHaveLength(before);
+    const defaulted = (await (await f.host('POST', '/clients', { ...input, toolPrefix: '  ' }))!.json()) as {
+      client: { toolPrefix?: string };
+    };
+    expect(defaulted.client.toolPrefix).toBe('parent');
+    const created = (await (await f.host('POST', '/clients', { ...input, toolPrefix: 'kit' }))!.json()) as {
+      client: { clientSecret: string; toolPrefix?: string };
+    };
+    expect(created.client.toolPrefix).toBe('kit');
+    const response = await f.routes.handlePublic(
+      await modernMcpRequest(
+        new Request(audience, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${created.client.clientSecret}`,
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: 'kit_load_context', arguments: {}, _meta: { 'openai/session': 'kit-chat' } },
+          }),
+        }),
+      ),
+    );
+    const called = (await response!.json()) as { result: { structuredContent: { sessionId: string } } };
+    const childId = called.result.structuredContent.sessionId;
+    const activity = await f.routes.handleHost(
+      new Request(`https://host.example/api/workspaces/workspace/sessions/${childId}/mcp/activity`),
+    );
+    expect(await activity!.json()).toMatchObject({ toolPrefix: 'kit', calls: [{ toolName: 'load_context' }] });
+  });
   it('creates host-only API keys, persists before revealing them, and revokes conversation access', async () => {
     const f = fixture('conversation', false, true);
     const input = { authMethod: 'api_key', name: 'External MCP', scope: 'session', routing: 'conversation' };
@@ -1077,7 +1122,7 @@ describe('conversation-bound Session MCP routing', () => {
     expect(saveSpy).not.toHaveBeenCalled();
     saveSpy.mockRestore();
     const body = (await response!.json()) as { result: { tools: { name: string }[] } };
-    expect(body.result.tools.map((tool) => tool.name)).toContain('write');
+    expect(body.result.tools.map((tool) => tool.name)).toContain('parent_write');
     expect((await f.host('DELETE', `/clients/${created.client.clientId}`))!.status).toBe(200);
     expect(f.authorization.authenticateAccessToken(created.client.clientSecret, audience)).toBeUndefined();
   });

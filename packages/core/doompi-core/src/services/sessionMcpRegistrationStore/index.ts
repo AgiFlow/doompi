@@ -58,7 +58,9 @@ function validRegistration(value: unknown): value is SessionMcpPersistentRegistr
     Array.isArray(binding.tools) &&
     binding.tools.every((name) => typeof name === 'string') &&
     Array.isArray(binding.skills) &&
-    binding.skills.every((name) => typeof name === 'string')
+    binding.skills.every((name) => typeof name === 'string') &&
+    // The format is checked on restore, so one bad prefix drops one record, not the file.
+    (binding.toolPrefix === undefined || typeof binding.toolPrefix === 'string')
   );
 }
 

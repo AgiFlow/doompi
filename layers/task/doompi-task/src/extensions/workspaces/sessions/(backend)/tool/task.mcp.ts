@@ -23,6 +23,8 @@ export default defineMcpTool(({ execution }: DoomMcpPluginContext) => {
   let initialized: Promise<void> | undefined;
   return {
     ...tool,
+    description:
+      'Track multi-step work in the DoomPi session as a persistent task list (todo, plan, task graph) and delegate ready tasks to background agents on the host.',
     async execute(...args) {
       initialized ??= store.readAsync().then(async () => {
         await manager.reconcile();

@@ -24,7 +24,9 @@ export interface SessionMcpAvailableTool {
 export interface SessionMcpActivitySnapshot {
   enabled: boolean;
   available: boolean;
+  /** Internal names. Remote names are `${toolPrefix}_${name}` when toolPrefix is set. */
   tools: SessionMcpAvailableTool[];
+  toolPrefix?: string;
   calls: SessionMcpCall[];
   total: number;
   nextBefore?: number;

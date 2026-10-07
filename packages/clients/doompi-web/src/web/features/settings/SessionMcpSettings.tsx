@@ -106,6 +106,7 @@ export function SessionMcpSettings() {
   const [config, setConfig] = useState<SessionMcpConfig>();
   const [clients, setClients] = useState<SessionMcpClient[]>([]);
   const [redirectUri, setRedirectUri] = useState('');
+  const [toolPrefix, setToolPrefix] = useState('');
   const [authMethod, setAuthMethod] = useState<'url_token' | 'api_key' | 'oauth'>('url_token');
   const [created, setCreated] = useState<{ sessionId: string; client: CreatedSessionMcpClient }>();
   const visibleCreated = created?.sessionId === sessionId ? created.client : undefined;
@@ -127,6 +128,7 @@ export function SessionMcpSettings() {
     // eslint-disable-next-line react/set-state-in-effect -- selection owns and resets this local credential draft.
     setCreated(undefined);
     setRedirectUri('');
+    setToolPrefix('');
     setConfig(undefined);
     setClients([]);
     setError(undefined);
@@ -168,12 +170,15 @@ export function SessionMcpSettings() {
     const operationSelection = selectionKey;
     setBusy(true);
     setError(undefined);
+    // Blank leaves the choice to the host, which defaults to the session name.
+    const prefix = toolPrefix.trim();
+    const naming = prefix === '' ? {} : { toolPrefix: prefix };
     const result = await createSessionMcpClient(
       workspaceId,
       sessionId,
       authMethod === 'oauth'
-        ? { redirectUri: redirectUri.trim(), scope: 'session', routing: 'conversation' }
-        : { authMethod, scope: 'session', routing: 'conversation' },
+        ? { redirectUri: redirectUri.trim(), scope: 'session', routing: 'conversation', ...naming }
+        : { authMethod, scope: 'session', routing: 'conversation', ...naming },
     );
     if (selectionKeyRef.current !== operationSelection) return;
     setBusy(false);
@@ -184,6 +189,7 @@ export function SessionMcpSettings() {
     setCreated({ sessionId, client: result.client });
     setClients((current) => [withoutCredential(result.client), ...current]);
     setRedirectUri('');
+    setToolPrefix('');
   }
 
   async function revoke(clientId: string): Promise<void> {
@@ -329,6 +335,23 @@ export function SessionMcpSettings() {
               ) : null}
             </>
           ) : null}
+          <label htmlFor="session-mcp-tool-prefix" className="flex flex-col gap-1 text-sm text-doom-faint">
+            tool prefix
+            <Input
+              id="session-mcp-tool-prefix"
+              data-testid="session-mcp-tool-prefix"
+              value={toolPrefix}
+              placeholder="defaults to the session name"
+              autoComplete="off"
+              spellCheck={false}
+              aria-describedby="session-mcp-tool-prefix-help"
+              onChange={(event) => setToolPrefix(event.target.value)}
+            />
+          </label>
+          <p id="session-mcp-tool-prefix-help" className="text-xs leading-relaxed text-doom-faint">
+            Remote tools become &lt;prefix&gt;_bash, &lt;prefix&gt;_read. Lowercase letters and digits joined by single
+            underscores, up to 24 characters.
+          </p>
           <p className="text-xs leading-relaxed text-doom-faint">
             Access follows this session&apos;s current major mode, minor modes, domains, and profile, including future
             changes. Session tools run with the session&apos;s permissions.
@@ -361,7 +384,14 @@ export function SessionMcpSettings() {
           data-testid="session-mcp-secret"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-bold text-doom-hi">save these connection details now</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-bold text-doom-hi">save these connection details now</span>
+              {visibleCreated.toolPrefix ? (
+                <Badge tone="neutral" data-testid="session-mcp-created-prefix">
+                  {visibleCreated.toolPrefix}_*
+                </Badge>
+              ) : null}
+            </div>
             <Button variant="ghost" size="xs" onClick={() => setCreated(undefined)}>
               dismiss
             </Button>
@@ -430,6 +460,7 @@ export function SessionMcpSettings() {
                 <Badge tone="neutral">{client.scope === 'session' ? 'session scope' : 'restricted scope'}</Badge>
                 <Badge tone="neutral">automatic worktree per conversation</Badge>
                 <Badge tone="neutral">{client.tokenEndpointAuthMethod}</Badge>
+                {client.toolPrefix ? <Badge tone="neutral">{client.toolPrefix}_*</Badge> : null}
               </div>
               <code className="block break-all text-xs text-doom-faint">{client.clientId}</code>
               {client.redirectUri ? (

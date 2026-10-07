@@ -469,9 +469,9 @@ describe('serveHeadlessServer', () => {
       ),
     );
     const mcpCatalog = (await mcp.json()) as { result: { tools: { name: string }[] } };
-    expect(mcpCatalog.result.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'read' })]));
+    expect(mcpCatalog.result.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'one_read' })]));
     expect(mcpCatalog.result.tools.map(({ name }) => name)).toEqual(
-      expect.arrayContaining(['load_extra_tools', 'use_extra_tools']),
+      expect.arrayContaining(['one_load_extra_tools', 'one_use_extra_tools']),
     );
     expect(
       (
@@ -496,7 +496,7 @@ describe('serveHeadlessServer', () => {
             jsonrpc: '2.0',
             id: 42,
             method: 'tools/call',
-            params: { name: 'read', _meta: { 'openai/session': conversation } },
+            params: { name: 'one_read', _meta: { 'openai/session': conversation } },
           }),
         }),
       ),
@@ -604,7 +604,7 @@ describe('serveHeadlessServer', () => {
     expect(listed.status).toBe(200);
     const catalog = (await listed.json()) as { result: { tools: { name: string }[] } };
     expect(catalog.result.tools.map(({ name }) => name)).toEqual(
-      expect.arrayContaining(['read', 'load_extra_tools', 'use_extra_tools']),
+      expect.arrayContaining(['one_read', 'one_load_extra_tools', 'one_use_extra_tools']),
     );
     expect((await rpc(first.url, 'wrong')).status).toBe(401);
     expect((await fetch(`${first.url}/oauth/authorize?client_id=${client.clientId}&redirect_uri=`)).status).toBe(401);
@@ -681,7 +681,7 @@ describe('serveHeadlessServer', () => {
     expect(listed.status).toBe(200);
     const catalog = (await listed.json()) as { result: { tools: { name: string }[] } };
     expect(catalog.result.tools.map(({ name }) => name)).toEqual(
-      expect.arrayContaining(['read', 'load_extra_tools', 'use_extra_tools']),
+      expect.arrayContaining(['one_read', 'one_load_extra_tools', 'one_use_extra_tools']),
     );
 
     const token = signedPath.slice(signedPath.lastIndexOf('/') + 1);
