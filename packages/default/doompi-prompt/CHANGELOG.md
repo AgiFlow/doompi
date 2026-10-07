@@ -1,3 +1,22 @@
+## 0.0.1-alpha.70 (2026-10-07)
+
+### 🩹 Fixes
+
+- **doompi-team:** make intercom ask asynchronous in every direction ([#321](https://github.com/AgiFlow/doompi/pull/321))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.35
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.120
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.120
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.78
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.66
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.102
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.69 (2026-10-06)
 
 ### 🧱 Updated Dependencies
