@@ -108,7 +108,7 @@ export const Playground = {
 
       <div className="flex flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">
-          historical widget · text fallback without a live session
+          historical widget · result behind the toggle
         </span>
         <McpToolMessage
           {...props({

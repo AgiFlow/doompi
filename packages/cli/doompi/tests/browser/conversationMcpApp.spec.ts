@@ -201,6 +201,19 @@ test('activates a fixture App from a real admitted conversation tool call', asyn
     await expect(standardCard.getByText('Read-only MCP App', { exact: true })).toBeVisible();
     await expect(standard.locator('#result')).toContainText('"invocations":1');
     await expect(standard.locator('#result')).toContainText('private-sentinel');
+    // The result stays behind the toggle while the App renders it.
+    await expect(standardCard.getByTestId('tool-result-mcp')).toHaveCount(0);
+    await standardCard.getByRole('button', { name: 'expand', exact: true }).click();
+    await expect(standardCard.getByTestId('tool-result-mcp')).toContainText('public result');
+    const initialTheme = await standard.locator('html').getAttribute('data-theme');
+    expect(initialTheme === 'light' || initialTheme === 'dark').toBe(true);
+    await expect(standard.locator('html')).toHaveClass(new RegExp(`\\b${String(initialTheme)}\\b`, 'u'));
+    const nextTheme = initialTheme === 'dark' ? 'light' : 'dark';
+    await page.evaluate((theme) => {
+      document.documentElement.style.colorScheme = theme;
+    }, nextTheme);
+    await expect(standard.locator('html')).toHaveAttribute('data-theme', nextTheme);
+    await expect(standard.locator('html')).toHaveClass(new RegExp(`\\b${nextTheme}\\b`, 'u'));
     await standard.getByRole('button', { name: 'Call data' }).click();
     await expect(standard.locator('#result')).toContainText('Enable interactions');
     await expect(page.getByTestId('dialog-confirm')).toHaveCount(0);
@@ -213,6 +226,14 @@ test('activates a fixture App from a real admitted conversation tool call', asyn
     await page.getByTestId('dialog-confirm').click();
     await expect(standard.locator('#result')).toContainText('"value":7');
     await expect(standard.locator('#result')).toContainText('"invocations":2');
+    await expect(standard.locator('#bridge')).toHaveText('object');
+    await standard.getByRole('button', { name: 'Use openai bridge' }).click();
+    await expect(page.getByText('Allow fixture App to call app_data?', { exact: true })).toBeVisible();
+    await page.getByTestId('dialog-confirm').click();
+    await expect(standard.locator('#result')).toContainText('"value":7');
+    await expect(standard.locator('#result')).toContainText('"invocations":3');
+    // A standard App's own call never replaces the rendered tool's output.
+    await expect(standard.locator('#output')).toHaveText('{"invocations":1}');
     expect(model.requests).toHaveLength(2);
 
     await composer.fill('Show the legacy fixture App.');
@@ -221,14 +242,14 @@ test('activates a fixture App from a real admitted conversation tool call', asyn
     const legacyCard = page.locator('[data-tool-name="fixture_legacy"]');
     const legacy = legacyCard.frameLocator('iframe[title="legacy MCP App"]').frameLocator('iframe');
     // The first script consumes the injected output and private metadata immediately.
-    await expect(legacy.locator('#result')).toContainText('"invocations":3');
+    await expect(legacy.locator('#result')).toContainText('"invocations":4');
     await expect(legacy.locator('#result')).toContainText('private-sentinel');
     await legacy.getByRole('button', { name: 'Save state' }).click();
     await expect(legacy.locator('#state')).toHaveText('{"page":1}');
     await page.reload();
     await expect(page.getByTestId('composer-input')).toBeEnabled({ timeout: 30_000 });
     await expect(legacy.locator('#state')).toHaveText('{"page":1}');
-    await expect(legacy.locator('#result')).toContainText('"invocations":3');
+    await expect(legacy.locator('#result')).toContainText('"invocations":4');
     await expect(legacyCard.getByText('Read-only MCP App', { exact: true })).toBeVisible();
     await expect(standardCard.getByText('Read-only MCP App', { exact: true })).toBeVisible();
     expect(model.requests).toHaveLength(4);
@@ -252,8 +273,8 @@ test('activates a fixture App from a real admitted conversation tool call', asyn
     await standard.getByRole('button', { name: 'Call data' }).click();
     await expect(page.getByText('Allow fixture App to call app_data?', { exact: true })).toBeVisible();
     await page.getByTestId('dialog-confirm').click();
-    // 1 standard + 1 callback + 1 legacy + 1 exported widget, no replay calls.
-    await expect(standard.locator('#result')).toContainText('"invocations":5');
+    // 1 standard + 2 callbacks + 1 legacy + 1 exported widget, no replay calls.
+    await expect(standard.locator('#result')).toContainText('"invocations":6');
     await standard.getByRole('button', { name: 'Follow up' }).click();
     await expect(page.getByText('Send a follow-up from fixture?', { exact: true })).toBeVisible();
     await page.getByTestId('dialog-confirm').click();

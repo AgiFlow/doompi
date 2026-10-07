@@ -20,6 +20,8 @@ import type { McpConfigGroups, McpConfigSource, McpSessionConfig } from '../../t
 import { buildMcpConfigGroups } from '../configSources';
 import { readDirectToolFilter } from '../directToolsEnvironment';
 import { type CatalogTool, isModelVisibleMcpTool, McpCatalog, normalizeMcpAppMetadata } from '../mcpCatalog';
+import { publishFileParams } from '../mcpFileParams';
+import type { McpFilePublisher } from '../mcpFileParams/type';
 import { type McpRuntimeOwner, readCachedCatalog } from '../mcpRuntime';
 import { captureMcpAppResult, retainMcpAppResult, toHeadlessToolResult } from '../mcpTools';
 import { readSessionConfig } from '../sessionConfig';
@@ -72,6 +74,8 @@ export interface McpSessionOptions {
   onAuthorizationUrl?: (url: URL, serverName: string, options: { openBrowser: boolean }) => void | Promise<void>;
   /** Overrides the OS keyring store, for tests. */
   tokenStore?: TokenStore;
+  /** Publishes a file argument after consent. Without it, a tool with a file argument is refused. */
+  publishFile?: McpFilePublisher;
 }
 
 /**
@@ -299,25 +303,33 @@ export class McpSession {
     const services = runtime?.getServices();
     if (!runtime || !services) throw new Error(RUNTIME_NOT_STARTED);
     signal?.throwIfAborted();
-    const connection = await services.clientManager.ensureConnected(tool.serverName);
-    signal?.throwIfAborted();
-    if (!runtime.isCurrent(services) || !this.isToolAvailable(tool))
-      throw new Error(`MCP tool ${name} is no longer available in the current session configuration.`);
-    const timeout = services.clientManager.getServerRequestTimeout(tool.serverName);
-    this.clearToolWarnings(tool.serverName, 'tools/call', tool.toolName);
-    let snapshot: ReturnType<typeof captureMcpAppResult>;
-    const result = await connection.callTool(tool.toolName, parameters, {
-      ...(timeout === undefined ? {} : { timeout }),
-      ...(signal === undefined ? {} : { signal }),
-      onResult: (original) => {
-        snapshot = captureMcpAppResult(tool, original);
-      },
-    });
-    signal?.throwIfAborted();
-    if (!runtime.isCurrent(services) || !this.isToolAvailable(tool))
-      throw new Error(`MCP tool ${name} is no longer available in the current session configuration.`);
-    retainMcpAppResult(result, snapshot);
-    return result;
+    // Shared before dialling, so a refused or declined file never reaches the server.
+    const { publishFile } = this.options;
+    const files = await publishFileParams(tool, parameters, publishFile && ((path) => publishFile(path, tool, signal)));
+    try {
+      signal?.throwIfAborted();
+      const connection = await services.clientManager.ensureConnected(tool.serverName);
+      signal?.throwIfAborted();
+      if (!runtime.isCurrent(services) || !this.isToolAvailable(tool))
+        throw new Error(`MCP tool ${name} is no longer available in the current session configuration.`);
+      const timeout = services.clientManager.getServerRequestTimeout(tool.serverName);
+      this.clearToolWarnings(tool.serverName, 'tools/call', tool.toolName);
+      let snapshot: ReturnType<typeof captureMcpAppResult>;
+      const result = await connection.callTool(tool.toolName, files.outbound, {
+        ...(timeout === undefined ? {} : { timeout }),
+        ...(signal === undefined ? {} : { signal }),
+        onResult: (original) => {
+          snapshot = captureMcpAppResult(tool, original);
+        },
+      });
+      signal?.throwIfAborted();
+      if (!runtime.isCurrent(services) || !this.isToolAvailable(tool))
+        throw new Error(`MCP tool ${name} is no longer available in the current session configuration.`);
+      retainMcpAppResult(result, snapshot);
+      return result;
+    } finally {
+      files.release();
+    }
   }
 
   /**

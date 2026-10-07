@@ -7,13 +7,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 import { createDoomToolSurface, type DoomToolSurfaceService } from '@agimon-ai/doompi-core/toolSurface';
 import type { McpOutputSchemaWarning, McpServerStateChange } from '@agimon-ai/mcp-proxy';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createMcpServerRoot } from '../src/extensions/workspaces/sessions/(backend)/_lib/serverRoot';
 import { SESSION_ENV_VAR } from '../src/schemas/sessionConfig';
-import { McpSession } from '../src/services/mcpSession';
+import { McpSession, type McpSessionOptions } from '../src/services/mcpSession';
 import type { McpSessionConfig } from '../src/types/mcpConfig';
 
 const createProxyContainer = vi.fn();
@@ -74,10 +76,11 @@ function configuration(overrides: Partial<McpSessionConfig> = {}): McpSessionCon
   };
 }
 
-async function newSession(pi: ExtensionAPI): Promise<McpSession> {
+async function newSession(pi: ExtensionAPI, options: Partial<McpSessionOptions> = {}): Promise<McpSession> {
   const active = new McpSession({
     environment: { [SESSION_ENV_VAR]: JSON.stringify({ repoRoot, stagingDirectory: path.join(repoRoot, '.staging') }) },
     tokenStore: { read: vi.fn(), write: vi.fn(), clear: vi.fn() },
+    ...options,
   });
   const context = new Context();
   toolContexts.push(context);
@@ -98,19 +101,22 @@ function toolSurfaceFor(pi: ExtensionAPI): DoomToolSurfaceService {
 }
 
 /** A session already bound to its own tool surface, as the session fiber binds it. */
-async function sessionWithSurface(pi: ExtensionAPI): Promise<{
+async function sessionWithSurface(
+  pi: ExtensionAPI,
+  options: Partial<McpSessionOptions> = {},
+): Promise<{
   active: McpSession;
   surface: DoomToolSurfaceService;
   unbind: () => void;
 }> {
-  const active = await newSession(pi);
+  const active = await newSession(pi, options);
   const surface = toolSurfaceFor(pi);
   const unbind = active.bindToolSurface(surface);
   return { active, surface, unbind };
 }
 
-async function session(pi: ExtensionAPI): Promise<McpSession> {
-  return (await sessionWithSurface(pi)).active;
+async function session(pi: ExtensionAPI, options: Partial<McpSessionOptions> = {}): Promise<McpSession> {
+  return (await sessionWithSurface(pi, options)).active;
 }
 
 beforeEach(() => {
@@ -773,6 +779,184 @@ describe('McpSession', () => {
         { quality: 'full' },
         { timeout: 500, onResult: expect.any(Function) },
       );
+    });
+
+    describe('file parameters', () => {
+      const uploadTool = {
+        name: 'get_screenshot',
+        inputSchema: { type: 'object', properties: { image: { type: 'object' }, note: { type: 'string' } } },
+        _meta: { 'openai/fileParams': ['image'] },
+      };
+      const shared = {
+        url: `https://tunnel.example/mcp-file/${'a'.repeat(43)}`,
+        fileName: 'shot.png',
+        mimeType: 'image/png',
+        size: 3,
+        revoke: vi.fn(),
+      };
+
+      async function fileSession(publishFile?: McpSessionOptions['publishFile']) {
+        listTools.mockResolvedValue([uploadTool]);
+        const active = await session(fakePi().pi, publishFile === undefined ? {} : { publishFile });
+        active.install();
+        await active.start();
+        emitState({ serverName: 'pencil', state: 'connected' });
+        await vi.waitFor(() => expect(active.activeToolDefinitions()[0]?._meta).toBeDefined());
+        ensureConnected.mockClear();
+        return active;
+      }
+
+      it('sends the published file and revokes it once the call settles', async () => {
+        const publishFile = vi.fn().mockResolvedValue(shared);
+        const active = await fileSession(publishFile);
+        callTool.mockImplementation(async () => {
+          expect(shared.revoke).not.toHaveBeenCalled();
+          return { content: [{ type: 'text', text: 'ok' }] };
+        });
+        const parameters = { image: { path: 'shots/shot.png' }, note: 'hi' };
+
+        await active.invokeTool('pencil_get_screenshot', parameters);
+
+        expect(publishFile).toHaveBeenCalledExactlyOnceWith(
+          'shots/shot.png',
+          expect.objectContaining({ serverName: 'pencil', toolName: 'get_screenshot' }),
+          undefined,
+        );
+        expect(callTool).toHaveBeenCalledWith(
+          'get_screenshot',
+          {
+            image: {
+              file_id: expect.stringMatching(/^doomfile_/u),
+              download_url: shared.url,
+              file_name: 'shot.png',
+              mime_type: 'image/png',
+            },
+            note: 'hi',
+          },
+          expect.objectContaining({ timeout: 500 }),
+        );
+        expect(parameters).toEqual({ image: { path: 'shots/shot.png' }, note: 'hi' });
+        expect(shared.revoke).toHaveBeenCalledOnce();
+      });
+
+      it('revokes the link when the server call fails', async () => {
+        const active = await fileSession(vi.fn().mockResolvedValue(shared));
+        callTool.mockRejectedValue(new Error('upstream down'));
+
+        await expect(active.invokeTool('pencil_get_screenshot', { image: { path: 'shot.png' } })).rejects.toThrow(
+          'upstream down',
+        );
+        expect(shared.revoke).toHaveBeenCalledOnce();
+      });
+
+      it('revokes the link once when the server cannot be reached after the share', async () => {
+        const active = await fileSession(vi.fn().mockResolvedValue(shared));
+        ensureConnected.mockRejectedValue(new Error('pencil unreachable'));
+
+        await expect(active.invokeTool('pencil_get_screenshot', { image: { path: 'shot.png' } })).rejects.toThrow(
+          'pencil unreachable',
+        );
+        expect(shared.revoke).toHaveBeenCalledOnce();
+        expect(callTool).not.toHaveBeenCalled();
+      });
+
+      describe('through the server root publisher', () => {
+        /** A session from createMcpServerRoot, so the file publisher is the one the root wires in. */
+        async function rootFileSession(agent?: { request: ReturnType<typeof vi.fn> }) {
+          listTools.mockResolvedValue([uploadTool]);
+          const shareFile = vi.fn().mockResolvedValue(shared);
+          const appendCustomEntry = vi.fn().mockResolvedValue(undefined);
+          const root = createMcpServerRoot({
+            host: { context: { shareFile } },
+            ...(agent === undefined
+              ? {}
+              : { agent: { context: { client: { request: agent.request }, session: { appendCustomEntry } } } }),
+            signal: new AbortController().signal,
+          } as unknown as DoomServerPluginContext);
+          const active = root.value.session;
+          active.install(configuration());
+          await active.start();
+          emitState({ serverName: 'pencil', state: 'connected' });
+          await vi.waitFor(() => expect(active.activeToolDefinitions()[0]?._meta).toBeDefined());
+          ensureConnected.mockClear();
+          return { active, shareFile, appendCustomEntry };
+        }
+
+        it('asks the user before the server sees the published file, then revokes it', async () => {
+          const request = vi.fn().mockResolvedValue(true);
+          const { active, shareFile, appendCustomEntry } = await rootFileSession({ request });
+          callTool.mockImplementation(async () => {
+            expect(request).toHaveBeenCalledOnce();
+            expect(shared.revoke).not.toHaveBeenCalled();
+            return { content: [{ type: 'text', text: 'ok' }] };
+          });
+
+          await active.invokeTool('pencil_get_screenshot', { image: { path: 'shots/shot.png' } });
+
+          expect(shareFile).toHaveBeenCalledExactlyOnceWith('shots/shot.png', 'pencil / get_screenshot');
+          expect(request).toHaveBeenCalledWith(expect.objectContaining({ kind: 'confirm' }), expect.any(AbortSignal));
+          expect(appendCustomEntry).toHaveBeenCalledWith(
+            'mcp.file.share',
+            expect.objectContaining({ outcome: 'shared' }),
+          );
+          expect(callTool).toHaveBeenCalledWith(
+            'get_screenshot',
+            { image: expect.objectContaining({ download_url: shared.url, file_name: 'shot.png' }) },
+            expect.anything(),
+          );
+          expect(shared.revoke).toHaveBeenCalledOnce();
+        });
+
+        it('fails closed without a client to approve the share', async () => {
+          const { active, shareFile } = await rootFileSession();
+
+          await expect(active.invokeTool('pencil_get_screenshot', { image: { path: 'shot.png' } })).rejects.toThrow(
+            'There is no DoomPi client to approve sharing "shot.png".',
+          );
+          expect(shareFile).toHaveBeenCalledOnce();
+          expect(shared.revoke).toHaveBeenCalledOnce();
+          expect(ensureConnected).not.toHaveBeenCalled();
+          expect(callTool).not.toHaveBeenCalled();
+        });
+      });
+
+      it.each([
+        ['a refused share', new Error('Remote access is off')],
+        ['a declined consent', new Error('The user declined to share "shot.png".')],
+      ])('never dials the server after %s', async (_label, error) => {
+        const active = await fileSession(vi.fn().mockRejectedValue(error));
+
+        await expect(active.invokeTool('pencil_get_screenshot', { image: { path: 'shot.png' } })).rejects.toThrow(
+          error.message,
+        );
+        expect(ensureConnected).not.toHaveBeenCalled();
+        expect(callTool).not.toHaveBeenCalled();
+      });
+
+      it('refuses a file without a publisher before dialing the server', async () => {
+        const active = await fileSession();
+
+        await expect(active.invokeTool('pencil_get_screenshot', { image: { path: 'shot.png' } })).rejects.toThrow(
+          'needs the DoomPi web host with remote access on',
+        );
+        expect(ensureConnected).not.toHaveBeenCalled();
+      });
+
+      it('leaves calls to tools without file parameters unchanged', async () => {
+        listTools.mockResolvedValue([{ name: 'get_screenshot', inputSchema: { type: 'object' } }]);
+        const publishFile = vi.fn();
+        const active = await session(fakePi().pi, { publishFile });
+        active.install();
+        await active.start();
+        emitState({ serverName: 'pencil', state: 'connected' });
+        await vi.waitFor(() => expect(active.activeToolDefinitions()).toHaveLength(1));
+        callTool.mockResolvedValue({ content: [] });
+
+        await active.invokeTool('pencil_get_screenshot', { image: { path: 'shot.png' } });
+
+        expect(publishFile).not.toHaveBeenCalled();
+        expect(callTool).toHaveBeenCalledWith('get_screenshot', { image: { path: 'shot.png' } }, expect.anything());
+      });
     });
 
     it('captures pre-guard component data and forwards cancellation while keeping the guarded result', async () => {

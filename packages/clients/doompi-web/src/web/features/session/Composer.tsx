@@ -23,17 +23,21 @@ import { publishComposerSubmission } from '../../lib/composerSubmissions';
 import { searchSessionFiles } from '../../lib/hubApi';
 import { HOST_SLOTS } from '../../lib/pluginRegistry';
 import { registerPromptInput } from '../../lib/promptFocus';
+import { uploadSessionAttachment } from '../../lib/sessionAsset';
 import type { QueuedEntry } from '../../lib/sessionModel';
 import {
   clearComposerState,
   composerStore,
   type ComposerAttachment,
   type ComposerImageAttachment,
+  type ComposerSessionState,
+  inlineTextBytes,
   MAX_COMPOSER_ATTACHMENTS,
   MAX_COMPOSER_IMAGE_BYTES,
   MAX_COMPOSER_TEXT_BYTES,
   MAX_COMPOSER_TOTAL_IMAGE_BYTES,
   MAX_COMPOSER_TOTAL_TEXT_BYTES,
+  MAX_COMPOSER_UPLOAD_BYTES,
   tabComposerContext,
   updateComposerState,
   useComposerState,
@@ -101,8 +105,6 @@ const TEXT_EXTENSIONS = new Set([
   'yaml',
   'yml',
 ]);
-const FILE_INPUT_ACCEPT =
-  'image/png,image/jpeg,image/gif,image/webp,text/*,.json,.jsonl,.md,.markdown,.yaml,.yml,.toml,.ini,.log,.csv,.tsv,.xml,.html,.css,.js,.jsx,.ts,.tsx,.sh,.py,.rb,.rs,.go,.java,.c,.h,.cpp,.hpp,.sql';
 
 function isReadableText(file: File): boolean {
   const extension = file.name.toLowerCase().split('.').pop() ?? '';
@@ -119,21 +121,212 @@ function readDataUrl(file: File): Promise<string> {
   });
 }
 
-function attachmentPrompt(draft: string, attachments: ComposerAttachment[], tabContext?: WebPluginContextItem): string {
+/**
+ * Stores a copy on the host so a tool can be handed the file by path. Images and
+ * text still travel inline, so for them a failed upload only means no path.
+ */
+async function storedPath(sessionId: string, file: File): Promise<string | undefined> {
+  try {
+    return (await uploadSessionAttachment(sessionId, file)).path;
+  } catch {
+    return undefined; // Documented fallback: the inline copy is still sent.
+  }
+}
+
+const TOO_MANY_ATTACHMENTS = `Only ${String(MAX_COMPOSER_ATTACHMENTS)} attachments are allowed.`;
+
+/** Why one more image or text file would break a total budget, or '' when it fits. */
+function totalBudgetRejection(
+  attachments: ComposerAttachment[],
+  kind: ComposerAttachment['kind'],
+  name: string,
+  size: number,
+): string {
+  if (kind === 'image') {
+    const imageBytes = attachments.reduce((total, item) => total + (item.kind === 'image' ? item.size : 0), 0);
+    return imageBytes + size > MAX_COMPOSER_TOTAL_IMAGE_BYTES ? `${name} exceeds the 20 MB total image limit.` : '';
+  }
+  if (kind === 'text' && inlineTextBytes(attachments) + size > MAX_COMPOSER_TOTAL_TEXT_BYTES) {
+    return `${name} exceeds the 200 KB total text limit.`;
+  }
+  return '';
+}
+
+/**
+ * Reads picked, pasted or dropped files into new attachments, numbered from
+ * `current.nextAttachmentId` and budgeted after the ones already staged.
+ */
+export async function readComposerFiles(
+  sessionId: string,
+  files: File[],
+  current: Pick<ComposerSessionState, 'attachments' | 'nextAttachmentId'>,
+): Promise<Pick<ComposerSessionState, 'attachments' | 'attachmentError'>> {
+  const next = [...current.attachments];
+  const rejected: string[] = [];
+  let attachmentId = current.nextAttachmentId;
+
+  for (const file of files) {
+    if (next.length >= MAX_COMPOSER_ATTACHMENTS) {
+      rejected.push(TOO_MANY_ATTACHMENTS);
+      break;
+    }
+    const id = `attachment-${String(attachmentId++)}`;
+    if (IMAGE_TYPES.has(file.type)) {
+      if (file.size > MAX_COMPOSER_IMAGE_BYTES) {
+        rejected.push(`${file.name} exceeds the 10 MB image limit.`);
+        continue;
+      }
+      const overBudget = totalBudgetRejection(next, 'image', file.name, file.size);
+      if (overBudget) {
+        rejected.push(overBudget);
+        continue;
+      }
+      try {
+        const dataUrl = await readDataUrl(file);
+        const path = file.size > MAX_COMPOSER_UPLOAD_BYTES ? undefined : await storedPath(sessionId, file);
+        next.push({
+          id,
+          kind: 'image',
+          name: file.name,
+          size: file.size,
+          dataUrl,
+          data: dataUrl.slice(dataUrl.indexOf(',') + 1),
+          mimeType: file.type,
+          ...(path === undefined ? {} : { path }),
+        });
+      } catch {
+        rejected.push(`${file.name} could not be read.`);
+      }
+      continue;
+    }
+    if (!isReadableText(file)) {
+      if (file.size > MAX_COMPOSER_UPLOAD_BYTES) {
+        rejected.push(`"${file.name}" exceeds the 8 MB file limit.`);
+        continue;
+      }
+      try {
+        const stored = await uploadSessionAttachment(sessionId, file);
+        next.push({
+          id,
+          kind: 'file',
+          name: file.name,
+          size: stored.size,
+          mimeType: stored.mimeType,
+          path: stored.path,
+        });
+      } catch {
+        rejected.push(`"${file.name}" could not be uploaded.`);
+      }
+      continue;
+    }
+    if (file.size > MAX_COMPOSER_TEXT_BYTES) {
+      rejected.push(`${file.name} exceeds the 100 KB text file limit.`);
+      continue;
+    }
+    const overBudget = totalBudgetRejection(next, 'text', file.name, file.size);
+    if (overBudget) {
+      rejected.push(overBudget);
+      continue;
+    }
+    try {
+      const content = await file.text();
+      const path = await storedPath(sessionId, file);
+      next.push({
+        id,
+        kind: 'text',
+        name: file.name,
+        size: file.size,
+        content,
+        ...(path === undefined ? {} : { path }),
+      });
+    } catch {
+      rejected.push(`${file.name} could not be read.`);
+    }
+  }
+  return { attachments: next.slice(current.attachments.length), attachmentError: rejected.join(' ') };
+}
+
+/**
+ * Stages files on a session's composer. Reading and uploading are async, so
+ * the batch reserves its ids and marks itself pending up front, then appends
+ * to whatever the composer holds by the time it finishes: chips removed, a
+ * message sent, or another batch staged meanwhile all stay as they are, and
+ * the count and total budgets are checked again against that latest state.
+ */
+export async function addComposerFiles(sessionId: string, files: File[]): Promise<void> {
+  if (files.length === 0) return;
+  let current: Pick<ComposerSessionState, 'attachments' | 'nextAttachmentId'> = {
+    attachments: [],
+    nextAttachmentId: 0,
+  };
+  updateComposerState(sessionId, (state) => {
+    current = state;
+    return {
+      ...state,
+      nextAttachmentId: state.nextAttachmentId + files.length,
+      pendingAttachments: state.pendingAttachments + 1,
+    };
+  });
+  const read = await readComposerFiles(sessionId, files, current);
+  if (composerStore.state[sessionId] === undefined) return; // The session left while the files were read.
+  updateComposerState(sessionId, (state) => {
+    const attachments = [...state.attachments];
+    const rejected = read.attachmentError ? [read.attachmentError] : [];
+    for (const attachment of read.attachments) {
+      if (attachments.length >= MAX_COMPOSER_ATTACHMENTS) {
+        if (!read.attachmentError.includes(TOO_MANY_ATTACHMENTS)) rejected.push(TOO_MANY_ATTACHMENTS);
+        break;
+      }
+      const overBudget = totalBudgetRejection(attachments, attachment.kind, attachment.name, attachment.size);
+      if (overBudget) rejected.push(overBudget);
+      else attachments.push(attachment);
+    }
+    return {
+      ...state,
+      attachments,
+      attachmentError: rejected.join(' '),
+      pendingAttachments: Math.max(0, state.pendingAttachments - 1),
+    };
+  });
+}
+
+function toolPathHint(path: string): string {
+  return `To send it to a tool's file parameter, pass {"path": ${JSON.stringify(path)}}.`;
+}
+
+export function attachmentPrompt(
+  draft: string,
+  attachments: ComposerAttachment[],
+  tabContext?: WebPluginContextItem,
+): string {
   const parts: string[] = [];
   const trimmed = draft.trim();
   if (trimmed) parts.push(trimmed);
   for (const attachment of attachments) {
     if (attachment.kind === 'image') continue;
     const safeName = attachment.name.replace(/[\r\n]/g, ' ').slice(0, 200);
+    if (attachment.kind === 'file') {
+      parts.push(
+        `Attached file "${safeName}" (${attachment.mimeType}, ${String(attachment.size)} bytes) saved at ${attachment.path}. ${toolPathHint(attachment.path)}`,
+      );
+      continue;
+    }
     parts.push(
       attachment.kind === 'context'
         ? `Referenced context "${safeName}":\n\n${attachment.content}`
         : `Attached file "${safeName}":\n\n${attachment.content}`,
     );
+    if (attachment.kind === 'text' && attachment.path !== undefined) {
+      parts.push(`"${safeName}" is also saved at ${attachment.path}. ${toolPathHint(attachment.path)}`);
+    }
   }
   if (parts.length === 0 && attachments.some((attachment) => attachment.kind === 'image')) {
     parts.push('Please review the attached image.');
+  }
+  for (const attachment of attachments) {
+    if (attachment.kind !== 'image' || attachment.path === undefined) continue;
+    const safeName = attachment.name.replace(/[\r\n]/g, ' ').slice(0, 200);
+    parts.push(`Attached image "${safeName}" is also saved at ${attachment.path}. ${toolPathHint(attachment.path)}`);
   }
   if (tabContext !== undefined) parts.push(`Referenced context "${tabContext.label}":\n\n${tabContext.content}`);
   return parts.join('\n\n');
@@ -189,7 +382,8 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
   const commands = useActiveSession((state) => state.commands);
   const editorTextRequest = useActiveSession((state) => state.editorTextRequest);
   const prompt = useToolPrompt();
-  const { draft, caret, dismissedToken, attachments, attachmentError, nextAttachmentId } = useComposerState(sessionId);
+  const { draft, caret, dismissedToken, attachments, attachmentError, pendingAttachments } =
+    useComposerState(sessionId);
   const [completion, setCompletion] = useState<CompletionState | null>(null);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -363,71 +557,10 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
 
   const addFiles = useCallback(
     async (files: File[]): Promise<void> => {
-      const next = [...attachments];
-      const rejected: string[] = [];
-      let imageBytes = next.reduce((total, item) => total + (item.kind === 'image' ? item.size : 0), 0);
-      let textBytes = next.reduce((total, item) => total + (item.kind === 'image' ? 0 : item.size), 0);
-      let attachmentId = nextAttachmentId;
-
-      for (const file of files) {
-        if (next.length >= MAX_COMPOSER_ATTACHMENTS) {
-          rejected.push(`Only ${String(MAX_COMPOSER_ATTACHMENTS)} attachments are allowed.`);
-          break;
-        }
-        const id = `attachment-${String(attachmentId++)}`;
-        if (IMAGE_TYPES.has(file.type)) {
-          if (file.size > MAX_COMPOSER_IMAGE_BYTES) {
-            rejected.push(`${file.name} exceeds the 10 MB image limit.`);
-            continue;
-          }
-          if (imageBytes + file.size > MAX_COMPOSER_TOTAL_IMAGE_BYTES) {
-            rejected.push(`${file.name} exceeds the 20 MB total image limit.`);
-            continue;
-          }
-          try {
-            const dataUrl = await readDataUrl(file);
-            next.push({
-              id,
-              kind: 'image',
-              name: file.name,
-              size: file.size,
-              dataUrl,
-              data: dataUrl.slice(dataUrl.indexOf(',') + 1),
-              mimeType: file.type,
-            });
-            imageBytes += file.size;
-          } catch {
-            rejected.push(`${file.name} could not be read.`);
-          }
-          continue;
-        }
-        if (!isReadableText(file)) {
-          rejected.push(`${file.name} is not a supported image or text file.`);
-          continue;
-        }
-        if (file.size > MAX_COMPOSER_TEXT_BYTES) {
-          rejected.push(`${file.name} exceeds the 100 KB text file limit.`);
-          continue;
-        }
-        if (textBytes + file.size > MAX_COMPOSER_TOTAL_TEXT_BYTES) {
-          rejected.push(`${file.name} exceeds the 200 KB total text limit.`);
-          continue;
-        }
-        try {
-          next.push({ id, kind: 'text', name: file.name, size: file.size, content: await file.text() });
-          textBytes += file.size;
-        } catch {
-          rejected.push(`${file.name} could not be read.`);
-        }
-      }
-      updateComposerState(sessionId, (state) => ({
-        ...state,
-        attachments: next,
-        attachmentError: rejected.join(' '),
-        nextAttachmentId: attachmentId,
-      }));
+      if (sessionId === null) return;
+      await addComposerFiles(sessionId, files);
     },
-    [attachments, nextAttachmentId, sessionId],
+    [sessionId],
   );
 
   const submittedContextItems = () =>
@@ -448,6 +581,7 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
 
   const submitAccepted = async (delivery: 'submit' | 'queue'): Promise<void> => {
     if ((!draft.trim() && attachments.length === 0) || !attached || sessionId === null || pendingSubmission) return;
+    if (pendingAttachments > 0) return; // A file still uploading would otherwise miss this message.
     const tabContext = tabComposerContext(composerContext, sessionId, draft);
     const message = attachmentPrompt(draft, attachments, tabContext);
     const images = attachments
@@ -714,7 +848,9 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
                     {attachment.kind === 'image' ? (
                       <img src={attachment.dataUrl} alt="" className="h-6 w-6 rounded object-cover" />
                     ) : (
-                      <span className="font-bold text-doom-blue">{attachment.kind === 'context' ? 'CTX' : 'TXT'}</span>
+                      <span className="font-bold text-doom-blue">
+                        {attachment.kind === 'context' ? 'CTX' : attachment.kind === 'file' ? 'FILE' : 'TXT'}
+                      </span>
                     )}
                     <span className="max-w-40 truncate">{attachment.name}</span>
                     <Button
@@ -801,9 +937,8 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
                       <input
                         type="file"
                         multiple
-                        accept={FILE_INPUT_ACCEPT}
                         disabled={!attached}
-                        aria-label="attach images or text files"
+                        aria-label="attach files"
                         className="absolute inset-0 cursor-pointer opacity-0"
                         data-testid="composer-file-input"
                         onChange={(event) => {
@@ -829,7 +964,12 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
                 size="md"
                 data-testid="composer-queue"
                 onClick={queue}
-                disabled={!attached || pendingSubmission || (!draft.trim() && attachments.length === 0)}
+                disabled={
+                  !attached ||
+                  pendingSubmission ||
+                  pendingAttachments > 0 ||
+                  (!draft.trim() && attachments.length === 0)
+                }
                 title="deliver after the current run settles"
               >
                 queue
@@ -839,7 +979,12 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
                 size="md"
                 data-testid="composer-send"
                 onClick={submit}
-                disabled={!attached || pendingSubmission || (!draft.trim() && attachments.length === 0)}
+                disabled={
+                  !attached ||
+                  pendingSubmission ||
+                  pendingAttachments > 0 ||
+                  (!draft.trim() && attachments.length === 0)
+                }
                 className="px-2.5 sm:px-3.5"
               >
                 {active ? 'steer' : 'send'}

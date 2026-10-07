@@ -69,6 +69,7 @@ export function seedConversationStory(
       attachments: [],
       attachmentError: '',
       nextAttachmentId: 0,
+      pendingAttachments: 0,
       ...composer,
     },
   }));

@@ -6,6 +6,7 @@ import { Value } from 'typebox/value';
 
 import { McpHeadlessToolParameters } from '../../schemas/mcpHeadlessTool';
 import { mcpToolExecutionMetadata, type CatalogTool } from '../mcpCatalog';
+import { modelInputSchema } from '../mcpFileParams';
 import type { McpSession } from '../mcpSession';
 
 export const MCP_SESSION_TOOLS_SERVICE = 'doom/mcp-session-tools';
@@ -69,9 +70,8 @@ export function createMcpSessionToolsService(
         ...(definition.annotations === undefined ? {} : { annotations: definition.annotations }),
         ...(definition._meta === undefined ? {} : { _meta: mcpToolExecutionMetadata(definition) }),
         ...(definition.outputSchema === undefined ? {} : { outputSchema: definition.outputSchema }),
-        parameters: (Object.keys(definition.inputSchema).length > 0
-          ? definition.inputSchema
-          : { type: 'object', properties: {} }) as TSchema,
+        // File parameters are validated as the `{path}` objects the model sends.
+        parameters: modelInputSchema(definition) as TSchema,
         async execute(_toolCallId, parameters, signal) {
           assertAvailable();
           if (retired) throw new Error(`MCP tool ${definition.piName} is no longer available.`);

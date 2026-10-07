@@ -28,7 +28,7 @@ import type {
   DoomHubSessionScope,
 } from '@agimon-ai/doompi-core/hubChannel';
 import { loadMcpBundle, type LoadedMcpBundle } from '@agimon-ai/doompi-core/mcpFacet';
-import { createServerExecutionBudget } from '@agimon-ai/doompi-core/packageApi';
+import { createServerExecutionBudget, DOOM_SHARE_FILE_REMOTE_OFF_MESSAGE } from '@agimon-ai/doompi-core/packageApi';
 import type { DoomHostMediaArbitration, DoomPeerAgentRegistry } from '@agimon-ai/doompi-core/packageApi';
 import { serveSessionApis, type PackageApiServer } from '@agimon-ai/doompi-core/packageApiServer';
 import { piAgentDirectory } from '@agimon-ai/doompi-core/piSettings';
@@ -731,6 +731,16 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           directEvents: hub.directEvents,
           requestApi: (mount, basePath, request) => hub.requestApi(mount, basePath, request),
           publishActivity: (activity) => hub.setSessionActivity?.(sessionOptions.sessionId, activity),
+          // Read per call: remote control is created during startup, and shares follow its tunnel.
+          shareFile: (filePath, label) =>
+            remoteRuntime === undefined
+              ? Promise.reject(new Error(DOOM_SHARE_FILE_REMOTE_OFF_MESSAGE))
+              : remoteRuntime.fileShares.mint({
+                  sessionId: sessionOptions.sessionId,
+                  cwd: sessionOptions.cwd,
+                  path: filePath,
+                  label,
+                }),
           ...(computerUse === undefined
             ? {}
             : {

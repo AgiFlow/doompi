@@ -148,6 +148,38 @@ describe('MCP session tools service', () => {
     expect(invoke).toHaveBeenCalledExactlyOnceWith({ query: 'valid' }, undefined);
     service.dispose();
   });
+
+  it('validates file parameters as the path objects the model sends, not the server shape', async () => {
+    const invoke = vi.fn().mockResolvedValue({ content: [] });
+    const session = {
+      activeToolDefinitions: () => [
+        {
+          piName: 'work_upload',
+          serverName: 'work',
+          toolName: 'upload',
+          inputSchema: {
+            type: 'object',
+            properties: { file: { type: 'object', properties: { download_url: { type: 'string' } } } },
+            required: ['file'],
+          },
+          _meta: { 'openai/fileParams': ['file'] },
+        },
+      ],
+      onChange: () => () => undefined,
+      bindToolInvocation: () => invoke,
+    };
+    const service = createMcpSessionToolsService(session as never, 'file-params');
+    const direct = service.project()[0]!;
+
+    expect(direct.parameters).toHaveProperty('properties.file.required', ['path']);
+    await expect(direct.execute('server-shape', { file: { download_url: 'https://cdn.example/f' } })).rejects.toThrow(
+      'Invalid arguments',
+    );
+    expect(invoke).not.toHaveBeenCalled();
+    await direct.execute('path', { file: { path: 'docs/report.pdf' } });
+    expect(invoke).toHaveBeenCalledExactlyOnceWith({ file: { path: 'docs/report.pdf' } }, undefined);
+    service.dispose();
+  });
 });
 
 describe('native child MCP dispatcher', () => {

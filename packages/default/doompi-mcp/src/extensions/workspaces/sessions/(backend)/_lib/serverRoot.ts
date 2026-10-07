@@ -18,20 +18,32 @@ import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet
 import type { Context } from '@deepseek-ai/cordis';
 
 import { createMcpAppsService } from '../../../../../services/mcpApps';
+import { createConsentedFilePublisher } from '../../../../../services/mcpFileParams';
 import { mountMcpHeadlessTools } from '../../../../../services/mcpHeadlessTools';
 import { MCP_SESSION_TOOLS_SERVICE } from '../../../../../services/mcpSessionTools';
 import { createMcpServerRuntime } from '../../../../../services/serverRuntime';
 
 export const createMcpServerRoot = (context?: DoomServerPluginContext) => {
   let resolver: DoomMcpProjectionResolverService | undefined;
+  let appHost = context?.agent;
+  const hostContext = context?.host.context;
+  // One consent point for model, widget, and child-session calls: each share asks the user.
+  const publishFile =
+    hostContext?.shareFile === undefined
+      ? undefined
+      : createConsentedFilePublisher({
+          shareFile: (path, label) => hostContext.shareFile!(path, label),
+          host: () => appHost,
+          signal: context?.signal,
+        });
   const runtime = createMcpServerRuntime(
     context?.agent?.context?.environment,
     context?.host.context.workspaceRoot,
     () => resolver,
+    publishFile,
   );
   const generation = `${context?.agent?.context?.sessionId ?? crypto.randomUUID()}:mcp-server`;
   const { session } = runtime;
-  let appHost = context?.agent;
   const apps = createMcpAppsService(runtime.sessionTools, () => appHost, context?.signal);
   const mountSession = (cordis: Context) => {
     cordis.inject([DOOM_MCP_PROJECTION_RESOLVER_SERVICE], (resolverContext) => {

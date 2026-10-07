@@ -12,6 +12,7 @@ export {
   DOOM_API_ROUTE_PREFIX,
   DOOM_HUB_API_SESSION_QUERY_PARAM,
   DOOM_API_SCOPES,
+  DOOM_SHARE_FILE_REMOTE_OFF_MESSAGE,
   type DoomApi,
   type DoomApiCaller,
   type DoomApiCallerStepUp,
@@ -28,6 +29,7 @@ export {
   type DoomRequestReceiptReservation,
   type DoomRequestReceiptReserveResult,
   type DoomRequestReceipts,
+  type DoomSharedFile,
   type DoomApiScope,
 } from '../schemas/packageApi';
 export { createExecutionBudget, createServerExecutionBudget, sharedExecutionBudget } from '../services/executionBudget';

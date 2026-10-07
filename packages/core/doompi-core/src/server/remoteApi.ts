@@ -1,4 +1,4 @@
-import type { DoomApi } from '../exports/packageApi';
+import { DOOM_API_CALLER_LOCALITY_HEADER, type DoomApi } from '../exports/packageApi';
 
 /** Global package mount for the machine's Remote Control service. */
 export const remoteApi: DoomApi = {
@@ -11,6 +11,9 @@ export const remoteApi: DoomApi = {
     return {
       fetch(request) {
         if (closed) return Response.json({ error: 'Remote Control is closed.' }, { status: 503 });
+        // Paired devices use /api/remote on the tunnel; this mount drives host-only actions.
+        if (request.headers.get(DOOM_API_CALLER_LOCALITY_HEADER) === 'remote')
+          return Response.json({ error: 'Remote Control is local only.' }, { status: 403 });
         const origin = request.headers.get('origin');
         if (origin !== null) {
           let allowed = false;

@@ -59,6 +59,14 @@ export const Attachments = {
             size: 29,
           },
           {
+            id: 'story-file',
+            kind: 'file',
+            name: 'release-notes.pdf',
+            size: 48213,
+            mimeType: 'application/pdf',
+            path: '/home/doom/.pi/agent/attachments/story/release-notes.pdf',
+          },
+          {
             id: 'story-context',
             kind: 'context',
             name: 'Component review notes',

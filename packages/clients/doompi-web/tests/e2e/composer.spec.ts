@@ -300,7 +300,10 @@ test('attaches image payloads and inlines removable text files', async ({ page, 
   );
 
   const prompt = await cockpit.session.waitForCommand('prompt');
-  expect(prompt.message).toBe('Review these\n\nAttached file "details.md":\n\nexpected behavior');
+  // Inline copies still travel in the message; the host-stored copies add a path a tool can take.
+  expect(prompt.message).toMatch(
+    /^Review these\n\nAttached file "details\.md":\n\nexpected behavior\n\n"details\.md" is also saved at (\/\S+\/details\.md)\. To send it to a tool's file parameter, pass \{"path": "\1"\}\.\n\nAttached image "screen\.png" is also saved at (\/\S+\/screen\.png)\. To send it to a tool's file parameter, pass \{"path": "\2"\}\.$/,
+  );
   expect(prompt.images).toEqual([
     { type: 'image', data: Buffer.from('image bytes').toString('base64'), mimeType: 'image/png' },
   ]);

@@ -204,6 +204,70 @@ describe('global remote control', () => {
     expect(forward).toHaveBeenCalledTimes(7);
   });
 
+  it('serves an exact public file share without pairing and never forwards its namespace', async () => {
+    const forward = vi.fn(async () => Response.json({ forwarded: true }));
+    const control = runtime(forward);
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-remote-share-'));
+    homes.push(cwd);
+    fs.writeFileSync(path.join(cwd, 'report.pdf'), '%PDF-1.7');
+    await expect(control.fileShares.mint({ sessionId: 's', cwd, path: 'report.pdf', label: 'test' })).rejects.toThrow(
+      'Remote access is off',
+    );
+    await local(control, '/api/remote/settings', 'PUT', {
+      tunnel: { kind: 'named', hostname: 'remote.example.com' },
+    });
+    expect((await local(control, '/api/remote/enable', 'POST')).status).toBe(200);
+    const port = control.remote.tunnelPort()!;
+    const shared = await control.fileShares.mint({ sessionId: 's', cwd, path: 'report.pdf', label: 'test' });
+    const route = new URL(shared.url).pathname;
+    expect(shared.url).toBe(`${PUBLIC_ORIGIN}${route}`);
+    const token = route.slice('/mcp-file/'.length);
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+
+    expect((await local(control, route)).status).toBe(404);
+    expect(
+      (await tunnel(port, route, 'GET', undefined, undefined, true, { origin: 'https://evil.example' })).status,
+    ).toBe(403);
+    for (const refused of [
+      `/mcp-file/${token.slice(1)}`,
+      `/mcp-file/${token}A`,
+      `/mcp-file/${token}/x`,
+      `/mcp-file/${token}/`,
+      `/mcp-file/%${token.charCodeAt(0).toString(16)}${token.slice(1)}`,
+      `/mcp%2Dfile/${token}`,
+      `/mcp-file/${token}%3Fdownload=1`,
+      '/mcp-file/',
+      '/mcp-file',
+    ])
+      expect((await tunnel(port, refused)).status, refused).toBe(404);
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH'])
+      // Node sends a DELETE body unframed, which the parser rejects before routing.
+      expect((await tunnel(port, route, method, method === 'DELETE' ? undefined : {})).status, method).toBe(404);
+
+    for (let head = 0; head < 4; head += 1) {
+      const probe = await tunnel(port, route, 'HEAD');
+      expect(probe.status).toBe(200);
+      expect(probe.headers.get('content-length')).toBe('8');
+    }
+    for (let download = 0; download < 3; download += 1) {
+      const served = await tunnel(port, route);
+      expect(served.status).toBe(200);
+      expect(await served.text()).toBe('%PDF-1.7');
+      expect(served.headers.get('content-type')).toBe('application/octet-stream');
+      expect(served.headers.get('access-control-allow-origin')).toBeNull();
+    }
+    expect((await tunnel(port, route)).status).toBe(404);
+
+    const revoked = await control.fileShares.mint({ sessionId: 's', cwd, path: 'report.pdf', label: 'test' });
+    revoked.revoke();
+    expect((await tunnel(port, new URL(revoked.url).pathname)).status).toBe(404);
+    expect((await local(control, '/api/remote/disable', 'POST')).status).toBe(200);
+    await expect(control.fileShares.mint({ sessionId: 's', cwd, path: 'report.pdf', label: 'test' })).rejects.toThrow(
+      'Remote access is off',
+    );
+    expect(forward).not.toHaveBeenCalled();
+  });
+
   it('keeps preauthorized sibling MCP tools available through the public tunnel after stalled Pi admission exits', async () => {
     const reservations = new Map<string, { parentSessionId: string; cwd: string }>();
     const hub = createHeadlessHub({
