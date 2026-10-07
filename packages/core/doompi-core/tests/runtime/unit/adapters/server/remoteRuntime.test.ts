@@ -235,7 +235,7 @@ describe('global remote control', () => {
       `/mcp-file/${token}/`,
       `/mcp-file/%${token.charCodeAt(0).toString(16)}${token.slice(1)}`,
       `/mcp%2Dfile/${token}`,
-      `/mcp-file/${token}?download=1`.replace('?', '%3F'),
+      `/mcp-file/${token}%3Fdownload=1`,
       '/mcp-file/',
       '/mcp-file',
     ])
