@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 
 import {
   browserNotificationPermission,
+  requestBrowserNotificationPermission,
   type BrowserNotificationPermissionStatus,
 } from '../../lib/browserNotifications';
 import { disableLivePush, enableLivePush, livePushStatus, type LivePushStatus } from '../../lib/livePush';
@@ -42,6 +43,10 @@ export function NotificationSettings() {
     setPushStatus(await disableLivePush());
   };
 
+  const allow = async (): Promise<void> => {
+    setStatus(await requestBrowserNotificationPermission());
+  };
+
   return (
     <div data-testid="notification-settings" className="flex flex-col gap-4">
       <SettingsSectionHeader
@@ -62,6 +67,11 @@ export function NotificationSettings() {
         ) : pushStatus !== 'denied' && pushStatus !== 'unsupported' ? (
           <Button size="sm" data-testid="notification-permission-request" onClick={() => void enable()}>
             enable closed-app alerts
+          </Button>
+        ) : null}
+        {status === 'default' ? (
+          <Button size="sm" variant="outline" data-testid="browser-notification-request" onClick={() => void allow()}>
+            allow browser notifications
           </Button>
         ) : null}
         {status === 'denied' ? (

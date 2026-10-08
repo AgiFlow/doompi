@@ -395,6 +395,8 @@ function eventFrame(event: HeadlessHubEvent): Record<string, unknown> {
         payload: event.payload,
         ...(event.connectionId === undefined ? {} : { connectionId: event.connectionId }),
       };
+    case 'frame':
+      return { type: 'session_frame', sessionId: event.sessionId, frame: event.frame };
   }
 }
 

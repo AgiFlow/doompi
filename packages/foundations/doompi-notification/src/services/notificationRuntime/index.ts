@@ -148,7 +148,9 @@ export function createNotificationRuntime({
     return surface;
   };
   const notifyAttention = (body: string): void => {
-    if (active) void router.request(attentionNotification(body));
+    // A server session's client raises this from the hub's dialog frame, which also
+    // covers server tools that never reach this UI wrap.
+    if (active && activeContext?.mode !== 'rpc') void router.request(attentionNotification(body));
   };
 
   const stop = (): void => {

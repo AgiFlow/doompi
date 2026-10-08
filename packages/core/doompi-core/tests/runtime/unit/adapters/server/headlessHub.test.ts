@@ -99,6 +99,52 @@ describe('createHeadlessHub', () => {
     ).toThrow('closed');
   });
 
+  it('forwards a trimmed dialog request after the upsert that marks the session as waiting', async () => {
+    const session = host();
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: session.host });
+    const events: unknown[] = [];
+    hub.onEvent((event) => events.push(event));
+    session.emitFrame({ type: 'agent_start' });
+    events.length = 0;
+    session.emitFrame({
+      type: 'extension_ui_request',
+      id: 'q1',
+      method: 'select',
+      title: 'Pick one',
+      message: 'Which?',
+      options: ['a', 'b'],
+    });
+    session.emitFrame({ type: 'extension_ui_request', id: 'n1', method: 'notify', message: 'hi' });
+    expect(events).toEqual([
+      { kind: 'upsert', session: expect.objectContaining({ phase: 'turn', awaitingInput: true }) },
+      {
+        kind: 'frame',
+        sessionId: 'one',
+        frame: { type: 'extension_ui_request', id: 'q1', method: 'select', title: 'Pick one', message: 'Which?' },
+      },
+      { kind: 'upsert', session: expect.objectContaining({ awaitingInput: true }) },
+    ]);
+    await hub.close();
+  });
+
+  it('forwards a doom-notification entry without touching the session summary', async () => {
+    const session = host();
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: session.host });
+    const events: unknown[] = [];
+    hub.onEvent((event) => events.push(event));
+    const notice = {
+      type: 'entry_appended',
+      entry: { type: 'custom', id: 'e1', customType: 'doom-notification', data: { body: 'done' } },
+    };
+    session.emitFrame(notice);
+    session.emitFrame({ type: 'entry_appended', entry: { type: 'custom', id: 'e2', customType: 'other', data: {} } });
+    session.emitFrame({ type: 'message_update' });
+    expect(events).toEqual([{ kind: 'frame', sessionId: 'one', frame: notice }]);
+    await hub.close();
+  });
+
   it('publishes pending setup changes in live upserts, including removal', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
     const updates: unknown[] = [];

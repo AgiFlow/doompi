@@ -337,6 +337,27 @@ test('requests browser notification permission from the settings button', async 
   ).toBe(true);
 });
 
+test('requests open-page notification permission without Web Push', async ({ page, cockpit }) => {
+  await page.addInitScript(() => {
+    class NotificationStub {
+      static permission = 'default';
+      static requestPermission(): Promise<'granted'> {
+        NotificationStub.permission = 'granted';
+        return Promise.resolve('granted');
+      }
+    }
+    Object.defineProperty(window, 'Notification', { configurable: true, value: NotificationStub });
+    Reflect.deleteProperty(window, 'PushManager');
+  });
+
+  await page.goto(`${cockpit.url}/settings/notifications`);
+  await expect(page.getByTestId('push-subscription-status')).toContainText('Web Push is unavailable');
+  await expect(page.getByTestId('notification-permission-request')).toHaveCount(0);
+  await page.getByTestId('browser-notification-request').click();
+  await expect(page.getByTestId('notification-permission-status')).toContainText('are allowed');
+  await expect(page.getByTestId('browser-notification-request')).toHaveCount(0);
+});
+
 test('lists the active global plugin composition and nothing to resolve', async ({ page, cockpit }) => {
   await page.goto(`${cockpit.url}/settings/plugins`);
   await expect(page.getByTestId('settings-section-plugins')).toHaveAttribute('data-active', 'true');

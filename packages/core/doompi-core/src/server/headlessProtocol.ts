@@ -153,6 +153,8 @@ function frameOf(event: HeadlessHubEvent): HubFrame {
       return { type: 'workspace_removed', workspaceId: event.workspaceId };
     case 'channel':
       return { type: event.frameType, sessionId: event.sessionId, payload: event.payload as JsonValue };
+    case 'frame':
+      return { type: 'session_frame', sessionId: event.sessionId, frame: event.frame as JsonValue };
   }
 }
 
