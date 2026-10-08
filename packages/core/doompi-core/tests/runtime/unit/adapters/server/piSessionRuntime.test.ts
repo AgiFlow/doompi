@@ -71,6 +71,7 @@ function fixture(telemetry?: ServerTelemetry) {
     setModel: vi.fn(async () => undefined),
     setThinkingLevel: vi.fn(async () => undefined),
     setFastMode: vi.fn(async () => undefined),
+    setAgentLock: vi.fn(async () => undefined),
     setSteeringMode: vi.fn(async () => undefined),
     setFollowUpMode: vi.fn(async () => undefined),
     clearQueue: vi.fn(async () => ({ steering: [], followUp: [] })),
@@ -146,6 +147,19 @@ describe('typed session runtime controls', () => {
     expect(runtime.state.value.snapshot.fastMode).toBe(true);
     await runtime.dispose();
     await expect(runtime.setFastMode(false, BACKGROUND_CONTEXT)).rejects.toThrow('disposed');
+  });
+  it('projects the agent lock from frames and the control', async () => {
+    const { direct, runtime, emit } = fixture();
+    await expect(runtime.setAgentLock('on' as never, BACKGROUND_CONTEXT)).rejects.toThrow('Invalid agent lock');
+    await runtime.setAgentLock(true, BACKGROUND_CONTEXT);
+    expect(direct.setAgentLock).toHaveBeenCalledWith(true);
+    expect(runtime.state.value.snapshot.locked).toBe(true);
+    emit({ type: 'agent_start' });
+    emit({ type: 'agent_settled' });
+    expect(runtime.state.value.snapshot.locked).toBe(true);
+    emit({ type: 'agent_lock_changed', locked: false });
+    expect(runtime.state.value.snapshot.locked).toBe(false);
+    await runtime.dispose();
   });
   it('uses direct typed reads and model controls', async () => {
     const { direct, runtime } = fixture();

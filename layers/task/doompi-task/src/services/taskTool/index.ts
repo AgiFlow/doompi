@@ -68,7 +68,8 @@ async function assignmentBatch(
 
 export function createHeadlessTaskTool(
   store: TaskStore,
-  manager: DelegationManager,
+  /** Absent on remote MCP connections, which track tasks but never delegate. */
+  manager: DelegationManager | undefined,
   maxTasks: number,
 ): DoomHeadlessTool<typeof TaskParamsSchema> {
   return {
@@ -82,12 +83,14 @@ export function createHeadlessTaskTool(
       if (!Check(TaskParamsSchema, rawParams)) return failure('Invalid task parameters.');
       const params = rawParams as TaskParams;
       try {
+        if ((params.action === 'assign' || params.action === 'cancel') && !manager)
+          throw new Error('Delegation is not available on this connection.');
         if (params.action === 'assign') {
           if (!params.assignments?.length) throw new Error('assign requires a non-empty assignments[] array');
           onUpdate?.(
             output(`Delegating ${params.assignments.length} task${params.assignments.length === 1 ? '' : 's'}...`),
           );
-          const items = await assignmentBatch(manager, params.assignments, signal);
+          const items = await assignmentBatch(manager!, params.assignments, signal);
           const assigned = items.filter((item) => item.ok).map((item) => item.id);
           const text = formatAssignmentResults(items);
           if (assigned.length === 0) throw new Error(text);
@@ -97,7 +100,7 @@ export function createHeadlessTaskTool(
           });
         }
         if (params.action === 'cancel') {
-          const outcome = await manager.cancel(params.id ?? Number.NaN);
+          const outcome = await manager!.cancel(params.id ?? Number.NaN);
           if (!outcome.ok) throw new Error(outcome.message);
           return buildTextResult('cancel', params as TaskMutationParams, store.snapshot, outcome.message);
         }

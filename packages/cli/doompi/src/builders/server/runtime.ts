@@ -642,6 +642,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           minorModes?: readonly string[];
           allowedTools?: readonly string[];
           initialFastMode?: boolean;
+          initialAgentLocked?: boolean;
         } = { pinned: [] },
       ): HeadlessSessionHostOptions => {
         const policyOptions = context.options;
@@ -670,6 +671,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           ...(isMemberCheckout(policyOptions.repoRoot, workspace) ? { inheritedArtifact: registration } : {}),
           sessionName: identity.sessionName,
           ...(explicit.initialFastMode === undefined ? {} : { initialFastMode: explicit.initialFastMode }),
+          ...(explicit.initialAgentLocked === undefined ? {} : { initialAgentLocked: explicit.initialAgentLocked }),
           webComposition: webCompositions?.publish(
             { scope: 'session', sessionId: identity.sessionId },
             registration,
@@ -1024,6 +1026,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
               sessionHostOptions(childContext, bundle, mcpBundle, registration, identity, workspace, {
                 pinned: explicit.pinned,
                 ...(initialFastMode === undefined ? {} : { initialFastMode }),
+                // A remote MCP conversation owns its session, so the local agent starts locked.
+                ...(request.reservationId === undefined ? {} : { initialAgentLocked: true }),
                 ...(request.selection?.minorModes === undefined ? {} : { minorModes: request.selection.minorModes }),
                 ...(request.tools === undefined ? {} : { allowedTools: request.tools }),
               }),

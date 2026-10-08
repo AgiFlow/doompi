@@ -601,7 +601,12 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
                 'The bound session is unavailable. Resume it in DoomPi; no other session will be used.',
                 record.id,
               );
-            return { sessionId: record.id, generation: child.generation, toolSurface: child.session.host.mcpSurface };
+            return {
+              sessionId: record.id,
+              generation: child.generation,
+              toolSurface: child.session.host.mcpSurface,
+              agentLocked: () => child.session.host.runtime.agentLocked(),
+            };
           },
           onVerified: (grant) => {
             if (options.registrationStore === undefined) return;
@@ -623,7 +628,12 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
             const resolved = target(workspaceId, sessionId);
             return resolved === undefined
               ? undefined
-              : { sessionId, generation: resolved.generation, toolSurface: resolved.session.host.mcpSurface };
+              : {
+                  sessionId,
+                  generation: resolved.generation,
+                  toolSurface: resolved.session.host.mcpSurface,
+                  agentLocked: () => resolved.session.host.runtime.agentLocked(),
+                };
           },
         });
       if (pathToken === undefined) handlers?.set(resource, handler);

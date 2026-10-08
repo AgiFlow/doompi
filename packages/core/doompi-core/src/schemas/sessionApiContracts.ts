@@ -276,6 +276,7 @@ export const SessionMethodSchemas = {
   setModel: { input: Type.Tuple([Model]) },
   setThinking: { input: Type.Tuple([Thinking]) },
   setFastMode: { input: Type.Tuple([Flag]) },
+  setAgentLock: { input: Type.Tuple([Flag]) },
   followUp: { input: Type.Tuple([Message]) },
   enqueueAutomatic: { input: Type.Tuple([Message]), output: Type.Object({ id: Text }) },
   removeQueued: {

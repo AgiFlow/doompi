@@ -102,6 +102,9 @@ export function bindSessionProtocol(
       case 'set_fast_mode':
         if (typeof frame.enabled !== 'boolean') throw new Error('Invalid Fast mode.');
         return service.setFastMode(frame.enabled, context);
+      case 'set_agent_lock':
+        if (typeof frame.locked !== 'boolean') throw new Error('Invalid agent lock.');
+        return service.setAgentLock(frame.locked, context);
       case 'set_thinking_level': {
         const level = text(frame.level);
         if (!['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(level))

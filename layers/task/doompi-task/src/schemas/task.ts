@@ -172,6 +172,14 @@ export const TaskParamsSchema = Type.Object({
   ),
 });
 
+/** Remote MCP connections track tasks only; delegation stays with the local agent. */
+export const REMOTE_TASK_ACTIONS = ['upsert', 'list', 'get', 'delete', 'clear'] as const;
+const { assignments: _assignments, ...remoteTaskProperties } = TaskParamsSchema.properties;
+export const RemoteTaskParamsSchema = Type.Object({
+  ...remoteTaskProperties,
+  action: Type.String({ enum: [...REMOTE_TASK_ACTIONS] }),
+});
+
 export type TaskItemParams = Static<typeof TaskItemSchema>;
 export type TaskAssignmentParams = Static<typeof TaskAssignmentSchema>;
 export type TaskParams = Static<typeof TaskParamsSchema>;

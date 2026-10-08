@@ -217,3 +217,18 @@ describe('Fast mode commands', () => {
     expect(setFastMode).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('agent lock commands', () => {
+  it('sends a validated lock change to the service', async () => {
+    const setAgentLock = vi.fn().mockResolvedValue(undefined);
+    releases.push(bindSessionProtocol('lock', service({ setAgentLock }), vi.fn()));
+    expect(await requestSessionProtocolFrame('lock', { type: 'set_agent_lock', locked: true })).toMatchObject({
+      success: true,
+    });
+    expect(await requestSessionProtocolFrame('lock', { type: 'set_agent_lock', locked: 'yes' })).toMatchObject({
+      success: false,
+      error: 'Invalid agent lock.',
+    });
+    expect(setAgentLock.mock.calls.map((call) => call[0])).toEqual([true]);
+  });
+});

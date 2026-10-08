@@ -42,8 +42,8 @@ export const createRunnerServerRoot = ({ host, agent, signal }: DoomServerPlugin
       }
     });
   const runtime = createRunnerServerRuntime(dependencies, host.context.directEvents, wakeAgent);
-  const value = {
-    tool: createHeadlessBashTool(
+  const bash = (wakeOnExit: boolean) =>
+    createHeadlessBashTool(
       {
         run: async (request) => {
           await runtime.ensureSession(request.sessionId);
@@ -52,12 +52,16 @@ export const createRunnerServerRoot = ({ host, agent, signal }: DoomServerPlugin
             ...(signal ? { signal: request.signal ? AbortSignal.any([signal, request.signal]) : signal } : {}),
           });
           // Without this, nothing tells the agent the runner ended.
-          if (result.kind === 'promoted') runtime.watchRunner(result.id);
+          if (wakeOnExit && result.kind === 'promoted') runtime.watchRunner(result.id);
           return result;
         },
       },
       summarizeLog,
-    ),
+    );
+  const value = {
+    tool: bash(true),
+    // Remote MCP runners must not wake the local agent; the remote caller polls instead.
+    remoteTool: bash(false),
     command: createHeadlessRunnersCommand(dependencies),
   };
   return {

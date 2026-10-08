@@ -230,6 +230,10 @@ export function createPagedTranscript(
       if (!latestState || fastMode !== (latestState.snapshot.fastMode === true)) {
         emit({ type: 'fast_mode_changed', enabled: fastMode });
       }
+      const locked = state.snapshot.locked === true;
+      if (!latestState || locked !== (latestState.snapshot.locked === true)) {
+        emit({ type: 'agent_lock_changed', locked });
+      }
       latestState = state;
       if (state.snapshot.lifecycle) applySessionLifecycle(sessionId, state.snapshot.lifecycle, previous === undefined);
       if (previous !== undefined && state.presentation && state.presentation.revision < previous) {

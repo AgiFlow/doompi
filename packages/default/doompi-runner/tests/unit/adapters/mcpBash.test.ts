@@ -40,7 +40,7 @@ function factory(context: DoomMcpPluginContext) {
 }
 
 function servicesFor(tool: ReturnType<typeof createHeadlessBashTool>): DoomMcpPluginContext['services'] {
-  return { get: <T>() => ({ tool }) as unknown as T };
+  return { get: <T>() => ({ remoteTool: tool }) as unknown as T };
 }
 
 describe('MCP Bash adapter', () => {
@@ -62,6 +62,36 @@ describe('MCP Bash adapter', () => {
     await tool.execute('call', { command: 'pwd' }, undefined, undefined, execution);
 
     expect(run).toHaveBeenCalledWith(expect.objectContaining({ command: 'pwd', sessionId: 'mcp-session' }));
+  });
+
+  it('tells the remote caller to poll a promoted runner', async () => {
+    const run = vi.fn(async (): Promise<BashRunResult> => ({
+      kind: 'promoted',
+      id: 'runner-7',
+      name: 'build',
+      pid: 4,
+      logPath: '/tmp/build.log',
+      backend: 'native',
+      reason: 'requested',
+    }));
+    const tool = factory({
+      execution,
+      services: servicesFor(createHeadlessBashTool({ run })),
+      selection: { read: () => execution.selection, change: vi.fn() },
+      signal: new AbortController().signal,
+      refresh: () => {},
+      loadContext: () => {
+        throw new Error('Not used by this test.');
+      },
+    });
+
+    const result = await tool.execute('call', { command: 'make', background: true }, undefined, undefined, execution);
+
+    expect(result.content.at(-1)).toEqual({
+      type: 'text',
+      text: expect.stringContaining('`doom-runner status runner-7`'),
+    });
+    expect(JSON.stringify(result.content)).toContain('`doom-runner logs runner-7 --lines 100`');
   });
 
   it('rejects calls after the MCP surface has closed', async () => {

@@ -56,6 +56,7 @@ import {
   useActiveSession,
 } from '../../stores/sessionStore';
 import { useToolPrompt } from '../../stores/useToolPrompt';
+import { AgentLockPanel } from './AgentLockPanel';
 import { ComposerPrompt } from './ComposerPrompt';
 import { DormantPanel } from './DormantPanel';
 import { QueueSheet } from './QueueSheet';
@@ -374,6 +375,7 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
   const meta = useActiveSessionMeta();
   const streaming = useActiveSession((state) => state.streaming);
   const lifecycle = useActiveSession((state) => state.lifecycle);
+  const agentLocked = useActiveSession((state) => state.agentLocked);
   const active = lifecycle === null ? streaming : lifecycle.operation !== null;
   const aborting = lifecycle?.operation?.status === 'aborting';
   const queuedEntries = useActiveSession((state) =>
@@ -664,6 +666,15 @@ export function Composer({ composerContext }: { composerContext?: TransientTab['
           <ComposerPrompt claim={prompt} sessionId={sessionId} />
         </div>
         {active ? <div className="mt-2 flex justify-end">{abortAction}</div> : null}
+      </div>
+    );
+  }
+
+  // After the tool prompt: a remote call can still ask the user something while locked.
+  if (agentLocked && sessionId !== null) {
+    return (
+      <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
+        <AgentLockPanel key={sessionId} sessionId={sessionId} />
       </div>
     );
   }

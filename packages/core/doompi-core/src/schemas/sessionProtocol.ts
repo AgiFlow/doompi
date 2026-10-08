@@ -230,6 +230,7 @@ export interface SessionStateInfo {
   model?: ModelRef;
   thinkingLevel: ThinkingLevel;
   fastMode: boolean;
+  agentLocked?: boolean;
   isStreaming: boolean;
   isCompacting: boolean;
   steeringMode: 'all' | 'one-at-a-time';
@@ -286,6 +287,7 @@ export interface SessionService {
   setModel(model: ModelRef, context: Context): Promise<void>;
   setThinking(thinkingLevel: ThinkingLevel, context: Context): Promise<void>;
   setFastMode(enabled: boolean, context: Context): Promise<void>;
+  setAgentLock(locked: boolean, context: Context): Promise<void>;
   followUp(args: FollowUpArgs, context: Context): Promise<void>;
   enqueueAutomatic(args: FollowUpArgs, context: Context): Promise<{ id: string }>;
   removeQueued(

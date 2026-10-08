@@ -3,12 +3,15 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { Check } from 'typebox/value';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DelegationManager } from '../src/exports/delegationManager';
 import { TaskStore } from '../src/exports/storeTaskStore';
 import { TaskAssignmentSchema, TaskParamsSchema } from '../src/exports/toolSchema';
 import { DEFAULT_PROMPT_GUIDELINES, createTaskTool } from '../src/exports/toolTaskTool';
+import { RemoteTaskParamsSchema } from '../src/schemas/task';
+import { createHeadlessTaskTool } from '../src/services/taskTool';
 
 let directory: string;
 
@@ -330,5 +333,35 @@ describe('task Pi tool boundary', () => {
     expect(onUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ content: [{ type: 'text', text: 'Requesting cancellation for task #1...' }] }),
     );
+  });
+});
+
+describe('remote task tool', () => {
+  it('tracks tasks but refuses delegation without a manager', async () => {
+    const store = new TaskStore({ storePath: path.join(directory, 'tasks.json') });
+    store.read();
+    const tool = createHeadlessTaskTool(store, undefined, 50);
+    const created = await tool.execute(
+      'c1',
+      { action: 'upsert', tasks: [{ subject: 'Write plan' }] },
+      undefined,
+      undefined,
+      {} as never,
+    );
+    expect(created.isError).not.toBe(true);
+    for (const params of [
+      { action: 'assign', assignments: [{ id: 1, agent: 'worker' }] },
+      { action: 'cancel', id: 1 },
+    ]) {
+      const result = await tool.execute('c2', params as never, undefined, undefined, {} as never);
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result.content)).toContain('Delegation is not available');
+    }
+  });
+
+  it('advertises only tracking actions', () => {
+    expect(Check(RemoteTaskParamsSchema, { action: 'list' })).toBe(true);
+    expect(Check(RemoteTaskParamsSchema, { action: 'assign' })).toBe(false);
+    expect(RemoteTaskParamsSchema.properties).not.toHaveProperty('assignments');
   });
 });

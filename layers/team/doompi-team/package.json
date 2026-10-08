@@ -184,13 +184,6 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "doompiMcp": {
-    "entry": "./generated/mcp.ts",
-    "dist": "./dist/extensions/mcp.mjs",
-    "scopes": [
-      "session"
-    ]
-  },
   "doompiServer": {
     "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",

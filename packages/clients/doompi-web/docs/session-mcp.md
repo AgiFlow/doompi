@@ -102,11 +102,28 @@ Use the existing `read` tool with the returned path to verify persistence. Savin
 is not implementation approval. `complete_plan` requires the local DoomPi UI;
 headless Fable planning is unavailable. Local transcript-based planning is unchanged.
 
-A runner handle is not command completion. Use bounded `doom-runner status` and
-`doom-runner logs --lines` calls through Bash to retrieve the existing run's result.
-Do not assume that background notifications resume a remote conversation, and do
-not launch background delegation without a demonstrated result-delivery path.
+A runner handle is not command completion. A runner started through remote `bash`
+never wakes any agent when it ends, local or remote. The result says so and asks the
+caller to check `doom-runner status <id>` and `doom-runner logs <id> --lines 100`
+through Bash until State is completed. Remote `task` tracks work only (`upsert`, `list`,
+`get`, `delete`, `clear`); delegation and the Team skill are not exposed remotely.
 Host paths are not automatically downloadable ChatGPT attachments.
+
+## Local agent lock
+
+A session created for a remote conversation starts with its local agent locked. While
+locked, the local agent starts no turns: web and CLI prompts, steer, follow-up, queue
+promotion, queue drain, and extension prompts are refused, and model requests are
+blocked. Remote MCP tool calls still run. Notices that arrive while locked, such as a
+local runner finishing, are written to the transcript for the next turn instead of
+starting one.
+
+The composer shows `unlock agent` while locked. `lock agent` in the top bar locks any
+session again and aborts a running local turn; a running remote call is never aborted.
+The lock is saved with the session and survives restart, resume, revive, and dormancy.
+It is not released when MCP disconnects. While unlocked, every remote tool result ends
+with a notice that the local agent may also act, and `session_capabilities` reports
+`localAgent: "unlocked"`.
 
 ## MCP Apps session widget
 

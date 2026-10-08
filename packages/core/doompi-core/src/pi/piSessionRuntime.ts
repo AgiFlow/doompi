@@ -127,6 +127,7 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       if (!disposed)
         state.change(BACKGROUND_CONTEXT, (draft) => {
           draft.snapshot.fastMode = runtimeState.fastMode === true;
+          draft.snapshot.locked = runtimeState.agentLocked === true;
         });
     })
     .catch((error) => {
@@ -136,6 +137,10 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     if (frame.type === 'fast_mode_changed' && typeof frame.enabled === 'boolean')
       state.change(BACKGROUND_CONTEXT, (draft) => {
         draft.snapshot.fastMode = frame.enabled as boolean;
+      });
+    if (frame.type === 'agent_lock_changed' && typeof frame.locked === 'boolean')
+      state.change(BACKGROUND_CONTEXT, (draft) => {
+        draft.snapshot.locked = frame.locked as boolean;
       });
     const entry = frame.entry as { seq?: number } | undefined;
     if (frame.type === 'entry_appended' && typeof entry?.seq === 'number')
@@ -234,6 +239,7 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
           draft.snapshot = {
             ...summary(reduction.snapshot),
             fastMode: draft.snapshot.fastMode ?? false,
+            locked: draft.snapshot.locked ?? false,
             ...(draft.snapshot.lifecycle === undefined ? {} : { lifecycle: draft.snapshot.lifecycle }),
           };
         if (updates.length > 0) {
@@ -530,6 +536,14 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       await options.runtime.setFastMode(enabled);
       state.change(context, (draft) => {
         draft.snapshot.fastMode = enabled;
+      });
+    },
+    async setAgentLock(locked, context) {
+      guardContext(context);
+      if (typeof locked !== 'boolean') throw new Error('Invalid agent lock');
+      await options.runtime.setAgentLock(locked);
+      state.change(context, (draft) => {
+        draft.snapshot.locked = locked;
       });
     },
     async setThinking(thinkingLevel, context) {

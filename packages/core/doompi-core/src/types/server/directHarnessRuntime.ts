@@ -284,6 +284,8 @@ export interface DirectHarnessRuntimeOptions<TContext extends object | undefined
   thinkingLevel?: ThinkingLevel;
   /** Creation-time inherited intent. Persisted child state wins on reopen; requests remain Codex-only. */
   initialFastMode?: boolean;
+  /** Creation-time lock. Persisted lock state wins on reopen. */
+  initialAgentLocked?: boolean;
   activeToolNames?: string[];
   steeringMode?: QueueMode;
   followUpMode?: QueueMode;
@@ -370,6 +372,10 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   /** Dispatches a registered command without admitting a model turn. */
   dispatchCommand(text: string): Promise<boolean>;
   setFastMode(enabled: boolean): Promise<void>;
+  /** True while local agent turns are blocked. Remote MCP operations still run. */
+  agentLocked(): boolean;
+  /** Persists the lock; locking aborts a running local agent turn. */
+  setAgentLock(locked: boolean): Promise<void>;
   setModel(model: { provider: string; id: string }): Promise<void>;
   availableModels(): Promise<readonly Model<Api>[]>;
   /** Shares the harness dispatch guards with host-owned auxiliary model requests. */

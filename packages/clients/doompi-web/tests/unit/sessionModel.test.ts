@@ -1251,6 +1251,16 @@ describe('persona identity attribution', () => {
   });
 });
 
+describe('agent lock state', () => {
+  it('defaults unlocked and follows authoritative state and live updates', () => {
+    expect(initialSessionState.agentLocked).toBe(false);
+    const locked = fold([{ type: 'response', command: 'get_state', success: true, data: { agentLocked: true } }]);
+    expect(locked.agentLocked).toBe(true);
+    expect(fold([{ type: 'agent_lock_changed', locked: false }], locked).agentLocked).toBe(false);
+    expect(fold([{ type: 'agent_lock_changed', locked: 'no' }], locked).agentLocked).toBe(true);
+  });
+});
+
 describe('Fast mode state', () => {
   it('defaults off and uses authoritative state and live updates', () => {
     expect(initialSessionState.fastMode).toBe(false);
