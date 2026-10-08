@@ -1,3 +1,32 @@
+## 0.0.1-alpha.126 (2026-10-08)
+
+### 🚀 Features
+
+- **doompi-core:** lock the local agent while a remote MCP agent drives a session ([#327](https://github.com/AgiFlow/doompi/pull/327))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.99
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.88
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.121
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.122
+- Updated @agimon-ai/doompi-hook to 0.0.1-alpha.99
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.99
+- Updated @agimon-ai/doompi-plan to 0.0.1-alpha.122
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.123
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.100
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.122
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.80
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.122
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.125 (2026-10-07)
 
 ### 🩹 Fixes
