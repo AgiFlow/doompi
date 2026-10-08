@@ -60,6 +60,8 @@ function fakeRuntime(options: DirectHarnessRuntimeOptions): DirectHarnessRuntime
     listCommands: () => [],
     dispatchCommand: async () => false,
     setFastMode: async () => undefined,
+    agentLocked: () => false,
+    setAgentLock: async () => undefined,
     setModel: async () => undefined,
     availableModels: async () => [],
     availableThinkingLevels: async () => [],

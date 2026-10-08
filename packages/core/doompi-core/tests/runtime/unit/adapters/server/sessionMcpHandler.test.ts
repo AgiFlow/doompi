@@ -79,6 +79,7 @@ function fixture(
   let revision = 12;
   let includeNewCapabilities = false;
   let childSurface: SessionToolSurface | undefined;
+  let agentLocked: boolean | undefined;
   const toolSurface: SessionToolSurface = {
     readSurface: () => ({
       revision,
@@ -137,7 +138,11 @@ function fixture(
       if (resolveCount === revokeAtResolve) authorization.revokeGrant(tokens.grantId);
       return { generation, toolSurface };
     },
-    resolveConversation: async () => ({ generation, toolSurface: childSurface ?? toolSurface }),
+    resolveConversation: async () => ({
+      generation,
+      toolSurface: childSurface ?? toolSurface,
+      ...(agentLocked === undefined ? {} : { agentLocked: () => agentLocked! }),
+    }),
   });
   const request = (
     method: string,
@@ -205,6 +210,7 @@ function fixture(
     readSkill,
     readUiResource,
     setUiEnabled: (value: boolean) => (uiEnabled = value),
+    setAgentLocked: (value: boolean | undefined) => (agentLocked = value),
     setWidgetEnabled: (value: boolean) => (widgetEnabled = value),
     setChildTools: (tools: readonly SessionToolDescriptor[]) => {
       childSurface ??= { ...toolSurface, readSurface: () => ({ ...toolSurface.readSurface(), tools }) };
@@ -706,6 +712,28 @@ describe('session MCP Streamable HTTP handler', () => {
       skills: [{ name: 'allowed-skill', description: 'May read' }],
     });
     expect(JSON.stringify(result.structuredContent)).not.toContain('hidden');
+    expect(result.structuredContent).not.toHaveProperty('localAgent');
+  });
+
+  it('tells the remote agent when the local agent is unlocked', async () => {
+    const f = fixture('restricted', ['session_capabilities', 'allowed_tool']);
+    await f.request('tools/list');
+    const capabilities = async () =>
+      rpcResult(await (await f.request('tools/call', { name: 'session_capabilities', arguments: {} })).json())
+        .structuredContent;
+    const call = async () =>
+      rpcResult(await (await f.request('tools/call', { name: 'allowed_tool', arguments: {} })).json());
+
+    f.setAgentLocked(true);
+    expect(await capabilities()).toMatchObject({ localAgent: 'locked' });
+    expect((await call()).content).toEqual([{ type: 'text', text: 'called' }]);
+
+    f.setAgentLocked(false);
+    expect(await capabilities()).toMatchObject({ localAgent: 'unlocked' });
+    expect((await call()).content).toEqual([
+      { type: 'text', text: 'called' },
+      { type: 'text', text: expect.stringContaining('unlocked the local agent') },
+    ]);
   });
 
   it('discovers a changed same-name child contract while rejecting a normal call to that name', async () => {

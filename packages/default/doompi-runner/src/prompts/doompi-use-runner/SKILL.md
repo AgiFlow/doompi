@@ -34,10 +34,12 @@ Input requires a running interactive process backed by RMUX. Preserve the return
 
 ## Close the lifecycle
 
-Remote MCP does not guarantee that completion notifications resume a ChatGPT
-conversation. Retrieve a bounded status or log result during the current turn
-when needed. Otherwise report that the run is still active with its identifier.
-Do not promise automatic follow-up, continuously poll, or relaunch uncertain work.
+Remote MCP never receives runner completion notices, and a runner you start
+does not resume your conversation when it ends. While a runner matters to your
+task, check `doom-runner status <id>` between steps of your own work and read
+`doom-runner logs <id> --lines 100`. Stop checking when State is completed, and
+report a runner that is still running with its identifier. Do not promise
+automatic follow-up or relaunch uncertain work.
 
 - Inspect logs instead of relaunching a command whose status is uncertain.
 - Stop watchers, servers, and failed interactive processes when they are no longer needed.

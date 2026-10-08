@@ -67,10 +67,34 @@ it('publishes Fast only on initialization or an authoritative mode change', () =
     transcript.publish({ ...state, snapshot: { ...state.snapshot, fastMode: true } });
     transcript.publish({ ...state, snapshot: { ...state.snapshot, fastMode: true } });
     transcript.publish(state);
-    expect(frames).toEqual([
+    expect(frames.filter((frame) => frame.type === 'fast_mode_changed')).toEqual([
       { type: 'fast_mode_changed', enabled: false },
       { type: 'fast_mode_changed', enabled: true },
       { type: 'fast_mode_changed', enabled: false },
+    ]);
+  } finally {
+    transcript.dispose();
+  }
+});
+
+it('publishes the agent lock only on initialization or a lock change', () => {
+  const frames: Record<string, unknown>[] = [];
+  const transcript = createPagedTranscript(
+    id,
+    { readTranscriptPage: vi.fn() },
+    (_key, frame) => frames.push(frame),
+    BACKGROUND_CONTEXT,
+  );
+  try {
+    const state = { snapshot: {}, progress: null } as SessionServiceState;
+    transcript.publish(state);
+    transcript.publish({ ...state, snapshot: { ...state.snapshot, locked: true } });
+    transcript.publish({ ...state, snapshot: { ...state.snapshot, locked: true } });
+    transcript.publish(state);
+    expect(frames.filter((frame) => frame.type === 'agent_lock_changed')).toEqual([
+      { type: 'agent_lock_changed', locked: false },
+      { type: 'agent_lock_changed', locked: true },
+      { type: 'agent_lock_changed', locked: false },
     ]);
   } finally {
     transcript.dispose();
@@ -276,6 +300,7 @@ it('replays projections, context, and live drafts only at the latest page', asyn
     await transcript.initialize();
     expect(frames.map((frame) => frame.type)).toEqual([
       'fast_mode_changed',
+      'agent_lock_changed',
       'entry_appended',
       'status',
       'message_update',

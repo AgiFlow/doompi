@@ -54,6 +54,7 @@ function host() {
     availableModels: async () => [],
     availableThinkingLevels: async () => [],
     getSessionStats: async () => ({}),
+    agentLocked: () => true,
   } as unknown as HeadlessSessionHost['runtime'];
   return {
     host: {

@@ -1,5 +1,13 @@
 import type { TabContribution, TransientTab } from '@agimon-ai/doompi-core/web';
-import { ActivityIcon, Button, CloseIcon, Input, NavTab, NavTabBadge } from '@agimon-ai/doompi-web-components';
+import {
+  ActivityIcon,
+  Button,
+  CloseIcon,
+  Input,
+  LockIcon,
+  NavTab,
+  NavTabBadge,
+} from '@agimon-ai/doompi-web-components';
 import { Link } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
@@ -7,7 +15,7 @@ import { useState } from 'react';
 import { useActivityGroups } from '../../lib/composition';
 import { webTabs } from '../../lib/pluginRegistry';
 import { sessionsStore, useActiveSessionMeta, useNoSessions } from '../../stores/sessionsStore';
-import { renameSession, useActiveSession } from '../../stores/sessionStore';
+import { renameSession, setAgentLock, useActiveSession } from '../../stores/sessionStore';
 import { closeTransientTab, useTransientTabs } from '../../stores/transientTabsStore';
 /** One registry tab: the badge hook is stable per tab, so the call is unconditional. */
 function PluginTab({ tab, sessionId, active }: { tab: TabContribution; sessionId: string; active: boolean }) {
@@ -191,6 +199,18 @@ export function TopBar({
       </div>
 
       <div className="flex shrink-0 items-center">
+        {activeId !== null && meta?.summary.dormant !== true && !session.agentLocked ? (
+          <Button
+            variant="ghost"
+            data-testid="agent-lock"
+            title="stop the local agent and keep it from starting turns"
+            onClick={() => setAgentLock(true, activeId)}
+            className="shrink-0 text-doom-dim"
+          >
+            <LockIcon className="h-3 w-3" />
+            lock agent
+          </Button>
+        ) : null}
         {onShowActivity ? (
           <Button
             variant="ghost"

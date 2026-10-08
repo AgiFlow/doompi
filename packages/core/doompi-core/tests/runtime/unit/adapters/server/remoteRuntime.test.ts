@@ -300,6 +300,7 @@ describe('global remote control', () => {
         runtime: {
           exited: new Promise<number>(() => undefined),
           readState: async () => ({ sessionId: 'one', fastMode: false }),
+          agentLocked: () => true,
         } as never,
         host: undefined,
         toolSurface: {

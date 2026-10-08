@@ -145,7 +145,12 @@ export interface SessionMcpTarget {
   readonly generation: number;
   readonly sessionId?: string;
   readonly toolSurface: SessionToolSurface;
+  /** Reports whether the session's local agent is blocked from starting turns. */
+  readonly agentLocked?: () => boolean;
 }
+
+const LOCAL_AGENT_UNLOCKED_NOTICE =
+  'The DoomPi user unlocked the local agent in this session, so it may also act here. Check state before you edit.';
 
 export interface SessionMcpHttpHandlerOptions {
   /** Exact HTTPS resource indicator minted into access grants. */
@@ -475,6 +480,9 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             discovery: 'unknown',
             tools: [...tools.map(publicTool), ...grantedExtraTools(active.grant)].map((tool) => wireTool(prefix, tool)),
             skills: skills.map(({ name, description }) => ({ name, description })),
+            ...(active.target.agentLocked === undefined
+              ? {}
+              : { localAgent: active.target.agentLocked() ? 'locked' : 'unlocked' }),
           };
           const current = await resolveTarget(false);
           if (
@@ -631,7 +639,10 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           widgetResult(
             wrapper ? undefined : selected,
             {
-              content: result.content,
+              content:
+                active.target.agentLocked?.() === false
+                  ? [...result.content, { type: 'text', text: LOCAL_AGENT_UNLOCKED_NOTICE }]
+                  : result.content,
               ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
               ...(result._meta === undefined ? {} : { _meta: result._meta }),
               isError: result.isError ?? false,

@@ -508,6 +508,13 @@ export function selectFastMode(enabled: boolean, sessionId: string | null = acti
   sendFrame(sessionId, getStateCommand());
 }
 
+/** Locking aborts a running local turn; the snapshot reports the new state back. */
+export function setAgentLock(locked: boolean, sessionId: string | null = activeSessionId()): void {
+  if (sessionId === null) return;
+  sendFrame(sessionId, { type: 'set_agent_lock', locked });
+  sendFrame(sessionId, getStateCommand());
+}
+
 /** The set reply carries nothing back, so get_state is what updates the chip. */
 export function selectThinkingLevel(level: string, sessionId: string | null = activeSessionId()): void {
   if (sessionId === null) return;

@@ -79,6 +79,14 @@ const FastModeDoc = defineDoc({
   scope: 'session',
   initial: (): { enabled: boolean } => ({ enabled: false }),
 });
+// Blocks local agent turns so a remote MCP agent can work without the local model acting.
+const AgentLockDoc = defineDoc({
+  kind: 'doompi.agent-lock',
+  version: 1,
+  scope: 'session',
+  initial: (): { locked: boolean } => ({ locked: false }),
+});
+const AGENT_LOCKED_ERROR = 'The local agent is locked. Unlock it to start a turn.';
 const CODEX_API = 'openai-codex-responses';
 const CODEX_PROVIDER = 'openai-codex';
 const LabelsDoc = defineDoc({
@@ -169,6 +177,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
 ): Promise<DirectHarnessRuntime<TContext>> {
   if (options.initialFastMode !== undefined && typeof options.initialFastMode !== 'boolean')
     throw new Error('Initial Fast mode must be a boolean.');
+  if (options.initialAgentLocked !== undefined && typeof options.initialAgentLocked !== 'boolean')
+    throw new Error('Initial agent lock must be a boolean.');
   const context = options.context ?? BACKGROUND_CONTEXT;
   if (options.storage === 'jsonl' || options.legacySessionPath !== undefined)
     throw new Error('Legacy JSONL direct storage is unsupported; use durable-v1 SQLite');
@@ -192,6 +202,10 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     let preparationFailure: unknown;
     const terminatingCalls = new Set<string>();
     let fastMode = false;
+    let agentLocked = false;
+    const assertUnlocked = () => {
+      if (agentLocked) throw new Error(AGENT_LOCKED_ERROR);
+    };
     let resources = options.resources ?? {};
     let tools = options.tools ?? [];
     let activeNames = new Set(options.activeToolNames ?? tools.map((t) => t.name));
@@ -420,6 +434,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         hooks: [
           hook(GenerationTask, {
             async beforeRequest(request, api, ctx) {
+              // Outside the try: a lock must not poison model dispatch for remote operations.
+              assertUnlocked();
               try {
                 const live = await api.snapshot(LiveDoc, api.conversationId, ctx);
                 const retained = await api.snapshot(LifecycleDoc, ctx);
@@ -644,6 +660,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     );
     const storedFastMode = await harness.snapshot(FastModeDoc, context);
     fastMode = storedFastMode?.enabled ?? options.initialFastMode ?? false;
+    const storedAgentLock = await harness.snapshot(AgentLockDoc, context);
+    agentLocked = storedAgentLock?.locked ?? options.initialAgentLocked ?? false;
     const storedIdentity = await harness.snapshot(SessionIdentityDoc, context);
     const sessionId = storedIdentity?.id || options.sessionId || randomUUID();
     await writable(() =>
@@ -654,6 +672,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           identity.createdAt = Date.now();
           identity.parentSessionId = options.parentSessionId ?? '';
         }
+        if (!storedAgentLock && options.initialAgentLocked !== undefined)
+          (await tx.doc(AgentLockDoc)).locked = agentLocked;
         if (!storedFastMode) {
           (await tx.doc(FastModeDoc)).enabled = fastMode;
           if (options.initialFastMode !== undefined)
@@ -1225,7 +1245,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         await reconcile();
         while (!disposed) {
           const record = await readRecord();
-          if (userAdmission || record.paused || (await execution())) break;
+          if (agentLocked || userAdmission || record.paused || (await execution())) break;
           const item = record.queue.find((q) => q.disposition === 'pending');
           if (!item) break;
           const submission = await handoff(item, 'reject');
@@ -1338,6 +1358,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       delivery: 'followUp' | 'nextRun',
     ) => {
       guardUserAdmission();
+      assertUnlocked();
       await enqueue(message, images, delivery, 'automatic');
       void drain().catch((error) => emit({ type: 'error', error: String(error) }));
     };
@@ -1347,6 +1368,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       if (external) throw new Error('An operation is already running');
       if (typeof message === 'string' && (await dispatchCommand(message)))
         return { settled: Promise.resolve(), handledCommand: true };
+      assertUnlocked();
       const record = await readRecord();
       await flushNextTurn();
       const { id } = await enqueue(message, images, mode ?? 'nextRun', 'automatic');
@@ -1555,6 +1577,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         throw new Error('User input must contain text or an image');
       if (!selection && typeof message === 'string' && (await dispatchCommand(message)))
         return { settled: Promise.resolve(), handledCommand: true };
+      assertUnlocked();
       guardUserAdmission();
       userAdmission = true;
       userAdmissionSettled = new Promise<void>((resolve) => {
@@ -1829,6 +1852,15 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       await publish();
       return result;
     };
+    const appendMessage = (message: AgentMessage) =>
+      appendEntry({
+        type: 'write',
+        entry: {
+          kind: 'doompi.entry',
+          data: json({ type: 'message', message, timestamp: message.timestamp }),
+          model: convertToLlm([message]),
+        },
+      });
     return {
       sessionId,
       sessionFile: storage.sessionFile,
@@ -1880,6 +1912,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           operationId: lifecycle.operation?.id,
           executionStatus: lifecycle.operation?.status,
           fastMode,
+          agentLocked,
           queuePaused: lifecycle.paused,
           queueRevision: lifecycle.revision,
           steeringMode: settings.steeringMode ?? 'one-at-a-time',
@@ -1894,6 +1927,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         }) as Record<string, unknown>;
       },
       enqueueAutomatic: async (value, images) => {
+        assertUnlocked();
         const result = await enqueue(value, images, 'nextRun', 'automatic', true);
         void drain().catch((error) => emit({ type: 'error', error: String(error) }));
         return result;
@@ -1932,6 +1966,21 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         );
         fastMode = enabled;
         emit({ type: 'fast_mode_changed', enabled });
+      },
+      agentLocked: () => agentLocked,
+      async setAgentLock(locked) {
+        if (typeof locked !== 'boolean') throw new Error('Agent lock must be a boolean.');
+        await writable(() =>
+          harness.commit(async (tx) => {
+            (await tx.doc(AgentLockDoc)).locked = locked;
+          }, context),
+        );
+        agentLocked = locked;
+        emit({ type: 'agent_lock_changed', locked });
+        if (!locked) return;
+        // Only a local agent run stops; a remote MCP operation keeps running.
+        const current = await execution();
+        if (current?.kind === 'run') await abort(current.id);
       },
       async setModel(model) {
         const previous = (await conversation.agent(context)).model;
@@ -2165,15 +2214,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
             )
           ).id,
         ),
-      appendMessage: (message) =>
-        appendEntry({
-          type: 'write',
-          entry: {
-            kind: 'doompi.entry',
-            data: json({ type: 'message', message, timestamp: message.timestamp }),
-            model: convertToLlm([message]),
-          },
-        }),
+      appendMessage,
       setLabel: (targetId, label) =>
         writable(() =>
           harness.commit(async (tx) => {
@@ -2206,6 +2247,11 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         }
         const preserved: AgentMessage =
           typeof message === 'string' ? { role: 'user', content: message, timestamp: Date.now() } : message;
+        // A locked agent records environmental input for its next turn without starting one.
+        if (agentLocked) {
+          await appendMessage(preserved);
+          return { settled: Promise.resolve() };
+        }
         const deliveryRecord: InternalDeliveryRecord = { message: preserved, conversationId: conversation.id };
         if (userAdmission) {
           deferredInternalCount++;

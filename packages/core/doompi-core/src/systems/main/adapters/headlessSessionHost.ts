@@ -654,6 +654,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     cwd: options.cwd,
     sessionId: options.sessionId,
     ...(options.initialFastMode === undefined ? {} : { initialFastMode: options.initialFastMode }),
+    ...(options.initialAgentLocked === undefined ? {} : { initialAgentLocked: options.initialAgentLocked }),
     ...(options.parentSessionId === undefined ? {} : { parentSessionId: options.parentSessionId }),
     storage: 'sqlite',
     historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),

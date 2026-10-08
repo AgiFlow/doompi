@@ -18,6 +18,8 @@ export {
   GitBranch as BranchIcon,
   GitFork as ForkIcon,
   Loader2 as LoaderIcon,
+  Lock as LockIcon,
+  LockOpen as UnlockIcon,
   MessageCircle as MessageIcon,
   Mic as MicIcon,
   MoreVertical as KebabIcon,

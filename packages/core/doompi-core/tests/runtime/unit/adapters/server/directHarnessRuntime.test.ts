@@ -1024,6 +1024,127 @@ describe('durable direct runtime', () => {
     await expect(setup({ initialFastMode: 'true' as unknown as boolean })).rejects.toThrow('Initial Fast mode');
   });
 
+  describe('agent lock', () => {
+    it('refuses every local turn while locked and still runs remote operations', async () => {
+      const { runtime, streamSimple } = await setup({ initialAgentLocked: true });
+      try {
+        expect(runtime.agentLocked()).toBe(true);
+        expect((await runtime.readState()).agentLocked).toBe(true);
+        const locked = 'The local agent is locked';
+        await expect(runtime.prompt('hi')).rejects.toThrow(locked);
+        await expect(runtime.steer('hi')).rejects.toThrow(locked);
+        await expect(runtime.followUp('hi')).rejects.toThrow(locked);
+        await expect(runtime.nextRun('hi')).rejects.toThrow(locked);
+        await expect(runtime.enqueueAutomatic('hi')).rejects.toThrow(locked);
+        await expect(runtime.submitUserPrompt('hi')).rejects.toThrow(locked);
+        await expect(runtime.runExternalOperation(async () => 'remote')).resolves.toBe('remote');
+        expect(streamSimple).not.toHaveBeenCalled();
+      } finally {
+        await runtime.dispose();
+      }
+    });
+
+    it('records internal messages while locked without starting a turn', async () => {
+      const { runtime, streamSimple } = await setup({ initialAgentLocked: true });
+      try {
+        await (
+          await runtime.submitInternalMessage('runner finished', 'steer')
+        ).settled;
+        let release!: () => void;
+        const external = runtime.runExternalOperation(
+          () =>
+            new Promise<void>((resolve) => {
+              release = resolve;
+            }),
+        );
+        await vi.waitFor(() => expect(release).toBeDefined());
+        await (
+          await runtime.submitInternalMessage('during remote call', 'followUp')
+        ).settled;
+        release();
+        await external;
+        const text = JSON.stringify((await runtime.readEntries()).entries);
+        expect(text).toContain('runner finished');
+        expect(text).toContain('during remote call');
+        expect(streamSimple).not.toHaveBeenCalled();
+        expect((await runtime.readLifecycle()).operation).toBeNull();
+      } finally {
+        await runtime.dispose();
+      }
+    });
+
+    it('aborts a running local turn on lock but never a remote operation', async () => {
+      let started!: () => void;
+      const toolStarted = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const { runtime, streamSimple } = await setup(
+        {
+          tools: [
+            {
+              name: 'wait',
+              description: 'test',
+              parameters: Type.Object({}),
+              execute: () =>
+                new Promise(() => {
+                  started();
+                }),
+            },
+          ],
+        },
+        [
+          response([{ type: 'toolCall', id: 'call', name: 'wait', arguments: {} }], 'toolUse'),
+          response([{ type: 'text', text: 'must not run' }]),
+        ],
+      );
+      try {
+        const run = runtime.prompt('work');
+        await toolStarted;
+        await runtime.setAgentLock(true);
+        await run;
+        expect(streamSimple).toHaveBeenCalledOnce();
+
+        let release!: () => void;
+        const external = runtime.runExternalOperation(
+          () =>
+            new Promise<string>((resolve) => {
+              release = () => resolve('remote');
+            }),
+        );
+        await vi.waitFor(() => expect(release).toBeDefined());
+        await runtime.setAgentLock(false);
+        await runtime.setAgentLock(true);
+        release();
+        await expect(external).resolves.toBe('remote');
+      } finally {
+        await runtime.dispose();
+      }
+    });
+
+    it('persists the lock on reopen and lets a stored unlock win over the creation default', async () => {
+      const storage = new MemoryStorage();
+      const close = vi.spyOn(storage, 'close').mockResolvedValue(undefined);
+      try {
+        let { runtime } = await setup({ durableStorage: storage, initialAgentLocked: true });
+        await runtime.dispose();
+        ({ runtime } = await setup({ durableStorage: storage }));
+        expect(runtime.agentLocked()).toBe(true);
+        await runtime.setAgentLock(false);
+        await runtime.dispose();
+        ({ runtime } = await setup({ durableStorage: storage, initialAgentLocked: true }));
+        expect(runtime.agentLocked()).toBe(false);
+        await runtime.dispose();
+      } finally {
+        close.mockRestore();
+        await storage.close(BACKGROUND_CONTEXT);
+      }
+    });
+
+    it('rejects an invalid creation lock before opening storage', async () => {
+      await expect(setup({ initialAgentLocked: 'yes' as unknown as boolean })).rejects.toThrow('Initial agent lock');
+    });
+  });
+
   it('chains existing payload callbacks and does not override independent non-Codex priority', async () => {
     const existing = vi.fn(async (payload: unknown) => ({
       ...(payload as object),

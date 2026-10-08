@@ -351,15 +351,18 @@ describe('runnerServerFacet', () => {
       backend: 'native',
       hostPid: 7,
     };
-    const promote = async () => {
+    const promote = async (remote = false) => {
       const harness = headlessFacetContext();
       let notifyRegistry = (): void => undefined;
       lifecycleMocks.container.runnerRegistry.subscribe.mockImplementationOnce(() => () => undefined);
-      lifecycleMocks.container.runnerRegistry.subscribe.mockImplementationOnce((listener) => {
-        notifyRegistry = listener;
-        return () => undefined;
-      });
-      lifecycleMocks.container.runnerRegistry.get.mockResolvedValueOnce({ ...runner, state: 'running' });
+      // A remote run is never watched, so it must not queue the watcher's subscription or first read.
+      if (!remote) {
+        lifecycleMocks.container.runnerRegistry.subscribe.mockImplementationOnce((listener) => {
+          notifyRegistry = listener;
+          return () => undefined;
+        });
+        lifecycleMocks.container.runnerRegistry.get.mockResolvedValueOnce({ ...runner, state: 'running' });
+      }
       lifecycleMocks.container.bashRunService.run.mockResolvedValueOnce({
         kind: 'promoted',
         id: runner.id,
@@ -370,10 +373,15 @@ describe('runnerServerFacet', () => {
         reason: 'requested',
       });
       const dispose = (await runnerServerFacet.apply(harness.context)) as () => Promise<void>;
-      await harness
-        .tool('bash')
-        .execute('call-1', { command: runner.command, background: true }, undefined, undefined, harness.execution);
-      await vi.waitFor(() => expect(lifecycleMocks.container.runnerRegistry.get).toHaveBeenCalledOnce());
+      const bash = remote ? harness.context.get(RUNNER_SERVER_SCOPE_SERVICE)!.remoteTool : harness.tool('bash');
+      await bash.execute(
+        'call-1',
+        { command: runner.command, background: true },
+        undefined,
+        undefined,
+        harness.execution,
+      );
+      if (!remote) await vi.waitFor(() => expect(lifecycleMocks.container.runnerRegistry.get).toHaveBeenCalledOnce());
       const finish = (duplicate = true) => {
         lifecycleMocks.container.runnerRegistry.get.mockResolvedValue({
           ...runner,
@@ -400,6 +408,16 @@ describe('runnerServerFacet', () => {
         undefined,
         `runner-finished:${JSON.stringify(['session-a', runner.id])}`,
       );
+      await dispose();
+    });
+
+    it('never wakes the local agent for a runner promoted by a remote MCP call', async () => {
+      const { harness, dispose } = await promote(true);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Two subscriptions mean the watcher started; the remote path must only open runner updates.
+      expect(lifecycleMocks.container.runnerRegistry.subscribe).toHaveBeenCalledOnce();
+      expect(lifecycleMocks.container.runnerRegistry.get).not.toHaveBeenCalled();
+      expect(harness.execution.session.admitPrompt).not.toHaveBeenCalled();
       await dispose();
     });
 

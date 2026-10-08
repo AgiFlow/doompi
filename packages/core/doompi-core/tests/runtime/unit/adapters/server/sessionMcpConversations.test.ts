@@ -104,7 +104,7 @@ function fixture(
       workspaceId: id === 'parent' || inheritedWorkspace ? 'workspace' : `workspace-${id}`,
       createdAt: new Date().toISOString(),
       parentSessionId,
-      host: { mcpSurface: realSurface ?? surface },
+      host: { mcpSurface: realSurface ?? surface, runtime: { agentLocked: () => true } },
     } as unknown as HeadlessHubSession;
     sessions.set(id, session);
     persisted.set(id, cwd);

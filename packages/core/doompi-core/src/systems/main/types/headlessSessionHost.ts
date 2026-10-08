@@ -27,6 +27,8 @@ export interface HeadlessSessionHostOptions {
   sessionName: string;
   /** Creation-only Fast snapshot. Restored session state takes precedence. */
   initialFastMode?: boolean;
+  /** Creation-only agent lock. Restored session state takes precedence. */
+  initialAgentLocked?: boolean;
   parentSessionId?: string;
   sessionProvenance?: string;
   agentArgs: readonly string[];
