@@ -1,3 +1,19 @@
+## 0.0.1-alpha.122 (2026-10-08)
+
+### 🚀 Features
+
+- **doompi-core:** prefix remote session MCP tools and return fixable errors as tool results ([#325](https://github.com/AgiFlow/doompi/pull/325))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.122
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.80
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.122
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.121 (2026-10-07)
 
 ### 🧱 Updated Dependencies

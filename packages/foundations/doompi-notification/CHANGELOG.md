@@ -1,3 +1,17 @@
+## 0.0.1-alpha.99 (2026-10-08)
+
+### 🩹 Fixes
+
+- **doompi-web:** deliver settle and input-needed notifications for every session ([#326](https://github.com/AgiFlow/doompi/pull/326))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.122
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.98 (2026-10-07)
 
 ### 🧱 Updated Dependencies

@@ -1,3 +1,18 @@
+## 0.0.1-alpha.122 (2026-10-08)
+
+### 🚀 Features
+
+- **doompi-core:** lock the local agent while a remote MCP agent drives a session ([#327](https://github.com/AgiFlow/doompi/pull/327))
+- **doompi-core:** prefix remote session MCP tools and return fixable errors as tool results ([#325](https://github.com/AgiFlow/doompi/pull/325))
+
+### 🩹 Fixes
+
+- **doompi-web:** deliver settle and input-needed notifications for every session ([#326](https://github.com/AgiFlow/doompi/pull/326))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.121 (2026-10-07)
 
 ### 🩹 Fixes

@@ -1,3 +1,17 @@
+## 0.0.1-alpha.80 (2026-10-08)
+
+### 🚀 Features
+
+- **doompi-core:** lock the local agent while a remote MCP agent drives a session ([#327](https://github.com/AgiFlow/doompi/pull/327))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.122
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.79 (2026-10-07)
 
 ### 🧱 Updated Dependencies
