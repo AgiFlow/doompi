@@ -1,3 +1,4 @@
+import { createDoomNotificationEntryData } from '@agimon-ai/doompi-core/notification';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { batch } from '@tanstack/store';
 
@@ -209,14 +210,6 @@ export function startSessionRuntime(): () => void {
     // The direct protocol callback has no hub envelope, but channel demux needs the session identity.
     dispatchChannelFrame({ ...frame, sessionId });
     if (replay) return;
-    const notification = parseDoomNotificationEntry(frame);
-    if (notification)
-      void deliverBrowserNotification(
-        sessionId,
-        notification.entryId,
-        notification.data,
-        sessionsStore.state.byId[sessionId]?.summary.name,
-      );
     applyCaptureFrame(sessionId, frame);
     if (sessionId !== sessionsStore.state.activeId) return;
     if (frame.type === 'extension_ui_request' && frame.method === 'select')
@@ -231,6 +224,33 @@ export function startSessionRuntime(): () => void {
       clearPendingMenu();
       if (hasSessionProtocol(sessionId)) refreshSessionFacts(sessionId);
     }
+  };
+  /**
+   * The hub sends notification entries and agent dialogs for every session, live
+   * only, so it is the single source of browser alerts. The focused transcript
+   * stream cannot be: its reloads replay entries that arrived moments ago.
+   */
+  const alertFromHub = (sessionId: string, frame: Record<string, unknown>): void => {
+    const summary = sessionsStore.state.byId[sessionId]?.summary;
+    const watching =
+      sessionId === sessionsStore.state.activeId &&
+      typeof document !== 'undefined' &&
+      document.visibilityState === 'visible' &&
+      document.hasFocus();
+    if (watching) return;
+    const notification = parseDoomNotificationEntry(frame);
+    if (notification) {
+      deliverBrowserNotification(sessionId, notification.entryId, notification.data, summary?.name);
+      return;
+    }
+    // An idle session's dialog comes from a command the user just ran.
+    if (frame.type !== 'extension_ui_request' || typeof frame.id !== 'string' || summary?.phase !== 'turn') return;
+    const question = [frame.title, frame.message].find((text) => typeof text === 'string' && text.trim() !== '');
+    const data = createDoomNotificationEntryData({
+      title: 'Input needed',
+      body: typeof question === 'string' ? question : 'The agent is waiting for your answer.',
+    });
+    if (data) deliverBrowserNotification(sessionId, `input:${frame.id}`, data, summary.name);
   };
   const protocol = startProtocolRuntime(window.location, applyPresentationFrame);
   const dormantTranscripts = new Map<string, ReturnType<typeof createPagedTranscript>>();
@@ -430,14 +450,12 @@ export function startSessionRuntime(): () => void {
           return;
         }
         case SESSION_FRAME_TYPE: {
-          // Hub-wide notifications cover sessions that are not the focused presentation.
-          if (
-            typeof frame.sessionId !== 'string' ||
-            !isRecord(frame.frame) ||
-            frame.sessionId === sessionsStore.state.activeId
-          )
-            return;
-          applyPresentationFrame(frame.sessionId, frame.frame, false);
+          if (typeof frame.sessionId !== 'string' || !isRecord(frame.frame)) return;
+          // The focused presentation already renders its own frames. The hub trims
+          // dialog frames to their prompt text, so those only ever raise an alert.
+          if (frame.frame.type !== 'extension_ui_request' && frame.sessionId !== sessionsStore.state.activeId)
+            applyPresentationFrame(frame.sessionId, frame.frame, false);
+          alertFromHub(frame.sessionId, frame.frame);
           return;
         }
         // A thread folds like a session of its own, under a key of its own;

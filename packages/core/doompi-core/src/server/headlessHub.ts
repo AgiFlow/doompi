@@ -32,6 +32,7 @@ import {
   type InstalledServerFacets,
   type LoadedServerFacet,
 } from '../exports/serverFacet';
+import { DOOM_NOTIFICATION_ENTRY_TYPE } from '../schemas/notification';
 import { PROFILE_ICON_MIME_TYPES } from '../schemas/profileIdentity';
 import { readSessionGitStatus } from '../services/sessionGitStatus';
 import type { SessionGitStatus } from '../services/sessionGitStatus/type';
@@ -107,7 +108,9 @@ export type HeadlessHubEvent =
   | { kind: 'removed'; sessionId: string; dormant?: true }
   | { kind: 'workspace_upsert'; workspace: HeadlessWorkspace }
   | { kind: 'workspace_removed'; workspaceId: string }
-  | { kind: 'channel'; frameType: string; sessionId: string; payload: unknown; connectionId?: string };
+  | { kind: 'channel'; frameType: string; sessionId: string; payload: unknown; connectionId?: string }
+  /** A live session frame every hub client needs: notification entries and agent dialogs. */
+  | { kind: 'frame'; sessionId: string; frame: Record<string, unknown> };
 
 export interface HeadlessHubOptions {
   manager: HeadlessSessionManager;
@@ -725,6 +728,11 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     const stopPresentation = session.host.onPresentationFrame((frame) => {
       if (sessions.get(session.id)?.host !== session.host) return;
       const type = typeof frame.type === 'string' ? frame.type : '';
+      const entry = frame.entry as { customType?: unknown } | undefined;
+      if (type === 'entry_appended' && entry?.customType === DOOM_NOTIFICATION_ENTRY_TYPE) {
+        emit({ kind: 'frame', sessionId: session.id, frame });
+        return;
+      }
       // Streaming updates belong to the session presentation. Replicating the
       // hub's growing event list for every token makes model output quadratic.
       if (
@@ -740,12 +748,12 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       const phase = type === 'agent_start' ? 'turn' : type === 'agent_settled' ? 'idle' : current.phase;
       const phaseChanged = phase !== current.phase;
       const method = typeof frame.method === 'string' ? frame.method : '';
-      const awaitingInput =
-        type === 'extension_ui_request' && ['select', 'confirm', 'input', 'editor'].includes(method)
-          ? true
-          : type === 'extension_ui_answered' || type === 'agent_settled'
-            ? false
-            : current.awaitingInput;
+      const dialog = type === 'extension_ui_request' && ['select', 'confirm', 'input', 'editor'].includes(method);
+      const awaitingInput = dialog
+        ? true
+        : type === 'extension_ui_answered' || type === 'agent_settled'
+          ? false
+          : current.awaitingInput;
       current = {
         ...current,
         name: type === 'session_info_changed' && typeof frame.name === 'string' ? frame.name : current.name,
@@ -758,6 +766,15 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       };
       sessions.set(session.id, current);
       emit({ kind: 'upsert', session: current });
+      // Only the prompt text travels: options and defaults stay with the focused presentation.
+      if (dialog) {
+        const text = (key: string) => (typeof frame[key] === 'string' ? { [key]: frame[key] } : {});
+        emit({
+          kind: 'frame',
+          sessionId: session.id,
+          frame: { type, ...text('id'), method, ...text('title'), ...text('message') },
+        });
+      }
       if (type === 'agent_settled') refreshGit();
     });
     let registered = false;

@@ -229,6 +229,16 @@ describe('notification extension', () => {
     expect(harness.exec).not.toHaveBeenCalled();
   });
 
+  it('leaves agent dialogs to the client in RPC mode, which the server hub already announces', async () => {
+    const rpcContext = { ...harness.context, mode: 'rpc' } as ExtensionContext;
+    harness.handlers.get('session_start')?.({ type: 'session_start' }, rpcContext);
+    harness.handlers.get('agent_start')?.({ type: 'agent_start' }, rpcContext);
+
+    await harness.ui.select('Pick a branch', ['main']);
+
+    expect(harness.appendEntry).not.toHaveBeenCalled();
+    expect(harness.exec).not.toHaveBeenCalled();
+  });
   it('wraps each session UI exactly once across a reload', async () => {
     harness.handlers.get('session_start')?.({ type: 'session_start' }, harness.context);
     harness.handlers.get('session_start')?.({ type: 'session_start' }, harness.context);

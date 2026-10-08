@@ -971,7 +971,12 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         const state = await runtime.readState();
         // Also fence lifecycle reads started while the authoritative read was in flight.
         ++pendingRead;
-        if (!shuttingDown) retainedQueuedMessages = Number(state.pendingMessageCount) || 0;
+        // The authoritative count already includes native queue items, so a queue
+        // snapshot from before the read must not keep reporting consumed work.
+        if (!shuttingDown) {
+          retainedQueuedMessages = Number(state.pendingMessageCount) || 0;
+          nativeQueuedMessages = 0;
+        }
         currentOperation = null;
         if (logicalLoopActive) {
           logicalLoopActive = false;

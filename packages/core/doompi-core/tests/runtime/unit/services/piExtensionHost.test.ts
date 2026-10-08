@@ -581,6 +581,34 @@ describe('Pi extension tool surface in the headless host', () => {
       await host.shutdown();
     }
   });
+  it('settles without pending work once the authoritative read drained a queue the run consumed', async () => {
+    const seen = vi.fn((_event: unknown, context: { hasPendingMessages(): boolean }) => context.hasPendingMessages());
+    const { host, emit } = await loadedHost(
+      [],
+      undefined,
+      new Map<string, unknown>([['agent_settled', [seen]]]),
+      undefined,
+      (runtime) => {
+        runtime.readState = vi.fn(async () => ({ pendingMessageCount: 0 }));
+      },
+    );
+    try {
+      await emit({ type: 'run_start', lane: 'main', runId: 'run', startedAt: CREATED_AT });
+      await emit({ type: 'queue_update', queues: [{ kind: 'followUp', id: 'q1' }] } as never);
+      await emit({
+        type: 'run_end',
+        lane: 'main',
+        runId: 'run',
+        fromTipId: null,
+        tipId: null,
+        endedAt: CREATED_AT,
+        status: 'completed',
+      });
+      expect(seen).toHaveReturnedWith(false);
+    } finally {
+      await host.shutdown();
+    }
+  });
   it('admits extension-generated user and custom content internally with explicit delivery', async () => {
     const { actions, runtime, emit } = await loadedHost([]);
     const content = [

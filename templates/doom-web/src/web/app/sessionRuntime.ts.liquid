@@ -297,9 +297,11 @@ export function startSessionRuntime(): () => void {
         }
         case SESSION_FRAME_TYPE: {
           // Hub-wide notifications cover sessions that are not the focused presentation.
+          // Hub dialog frames carry only their prompt text, so they never reach a store.
           if (
             typeof frame.sessionId !== 'string' ||
             !isRecord(frame.frame) ||
+            frame.frame.type === 'extension_ui_request' ||
             frame.sessionId === sessionsStore.state.activeId
           )
             return;
