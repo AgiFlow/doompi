@@ -72,9 +72,9 @@ describe('doom Pi UI package boundary', () => {
     expect(manifest.version).toMatch(SEMVER_PATTERN);
     expect(manifest.private).toBeUndefined();
     expect(manifest.type).toBe('module');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.0.4');
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.0.4');
-    expect(manifest.dependencies?.['@earendil-works/pi-tui']).toBe('1.0.4');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.1.0');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.1.0');
+    expect(manifest.dependencies?.['@earendil-works/pi-tui']).toBe('1.1.0');
     expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBeUndefined();
   });
 

@@ -206,12 +206,17 @@ describe('Help on the real headless host', () => {
       name: 'help_status',
       arguments: {},
     });
-    expect(status.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('"skills": 2') });
+    expect(status.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('"skills": 3') });
     const inventory = host.inspectCapabilities();
     expect(inventory.capabilities.find((entry) => entry.name === 'doompi-use-help')).toMatchObject({
       active: true,
       discoverable: true,
     });
+    expect(inventory.capabilities.find((entry) => entry.name === 'doompi-use-chatgpt-instructions')).toMatchObject({
+      active: true,
+      discoverable: true,
+    });
+    expect(snapshot.skills.map((skill) => skill.name)).toContain('doompi-use-chatgpt-instructions');
     expect(host.appliedResources.find((resource) => resource.name === 'doompi-help')?.text).toBe(HELP_GUIDANCE);
     expect(host.appliedResources.find((resource) => resource.name === 'fixture-help')?.path).toBe(skillPath);
     const actualPrompt = await prompt();
@@ -231,6 +236,9 @@ describe('Help on the real headless host', () => {
     ).rejects.toThrow();
     expect(current.toolSurface.readSurface().skills.some((skill) => skill.name === 'doompi-use-help')).toBe(false);
     expect(await prompt()).not.toContain('doompi-use-help');
+    expect(
+      current.toolSurface.readSurface().skills.some((skill) => skill.name === 'doompi-use-chatgpt-instructions'),
+    ).toBe(false);
 
     await host.dispatchCommand('doom-help', '');
     await contributor.dispose();
@@ -277,7 +285,7 @@ describe('Help on the real headless host', () => {
     const text = result.content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n');
     expect(JSON.parse(text)).toMatchObject({
       activation: 'degraded',
-      counts: { skills: 3, tools: 2 },
+      counts: { skills: 4, tools: 2 },
       diagnostics: [{ source: '@fixture/help-contributor', code: 'HELP_UNAVAILABLE' }],
     });
     expect(text).not.toContain('fixture-sensitive-error');

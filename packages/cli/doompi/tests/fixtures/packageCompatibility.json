@@ -1704,7 +1704,12 @@
     "pi": {
       "extensions": ["./dist/extensions/pi.mjs"]
     },
-    "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-help/SKILL.md"],
+    "assets": [
+      "./llms.txt",
+      "./README.md",
+      "./src/prompts/doompi-use-help/SKILL.md",
+      "./src/prompts/doompi-use-chatgpt-instructions/SKILL.md"
+    ],
     "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []

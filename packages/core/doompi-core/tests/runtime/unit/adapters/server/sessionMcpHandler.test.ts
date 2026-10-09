@@ -258,6 +258,8 @@ describe('session MCP Streamable HTTP handler', () => {
     expect(result.instructions?.length).toBeLessThanOrEqual(512);
     expect(result.instructions).toContain('load_context');
     expect(result.instructions).toContain('load_skill');
+    expect(result.instructions).toContain('session_capabilities lists granted tools');
+    expect(result.instructions).toContain('load_extra_tools lists additions or changes');
     expect(result.instructions).toContain('Saving a plan does not authorize implementation');
   });
 
@@ -849,7 +851,11 @@ describe('session MCP Streamable HTTP handler', () => {
       captured = invocation.mcpSkills;
       await expect(captured!.list()).resolves.toEqual([{ name: 'allowed-skill', description: 'May read' }]);
       await expect(captured!.read('allowed-skill')).resolves.toBe('# Allowed skill');
-      await expect(captured!.read('hidden-skill')).rejects.toMatchObject({ code: -32602 });
+      await expect(captured!.read('hidden-skill')).rejects.toMatchObject({
+        code: -32602,
+        message:
+          "Skill 'hidden-skill' is not granted or active on this connection. Continue without it if unavailable.",
+      });
       return { content: [{ type: 'text' as const, text: 'called' }] };
     });
 
@@ -1066,4 +1072,74 @@ describe('composed widget result identity', () => {
       });
     },
   );
+});
+
+describe('remote result fallback and admission errors', () => {
+  it('maps independently bundled busy errors to SESSION_BUSY', async () => {
+    const f = fixture('session', undefined, { toolPrefix: 'p' });
+    f.invokeTool.mockRejectedValueOnce(
+      Object.assign(new Error('An operation is already running'), { name: 'DoomHeadlessToolBusyError' }),
+    );
+    expect(rpcResult(await (await f.request('tools/call', { name: 'p_allowed_tool' })).json())).toMatchObject({
+      isError: true,
+      structuredContent: {
+        code: 'SESSION_BUSY',
+        message:
+          'The session stayed busy for 30 seconds, so p_allowed_tool did not start. Wait for the current turn to finish, then retry once.',
+      },
+    });
+  });
+
+  it.each([false, true])(
+    'copies final structured-only results, preserving metadata and errors: %s',
+    async (isError) => {
+      for (const wrapped of [false, true]) {
+        const f = fixture('session');
+        await f.request('tools/list');
+        f.enableNewCapabilities();
+        const native = {
+          content: [],
+          structuredContent: { status: 'hook-processed' },
+          _meta: { custom: 'kept' },
+          isError,
+        };
+        f.invokeTool.mockResolvedValueOnce(native);
+        const result = rpcResult(
+          await (
+            await f.request(
+              'tools/call',
+              wrapped ? { name: 'use_extra_tools', arguments: { name: 'new_tool' } } : { name: 'allowed_tool' },
+            )
+          ).json(),
+        );
+        expect(result).toMatchObject({
+          ...native,
+          content: [{ type: 'text', text: JSON.stringify(native.structuredContent) }],
+        });
+      }
+    },
+  );
+
+  it('puts the fallback before the unlocked notice', async () => {
+    const f = fixture();
+    f.setAgentLocked(false);
+    f.invokeTool.mockResolvedValueOnce({ content: [], structuredContent: { value: 1 } });
+    expect(rpcResult(await (await f.request('tools/call', { name: 'allowed_tool' })).json())).toMatchObject({
+      content: [
+        { type: 'text', text: '{"value":1}' },
+        { type: 'text', text: expect.stringContaining('unlocked the local agent') },
+      ],
+    });
+  });
+
+  it('leaves image-only and empty unstructured results unchanged', async () => {
+    const f = fixture();
+    for (const content of [[], [{ type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' }]]) {
+      f.invokeTool.mockResolvedValueOnce({ content });
+      expect(rpcResult(await (await f.request('tools/call', { name: 'allowed_tool' })).json())).toMatchObject({
+        content,
+        isError: false,
+      });
+    }
+  });
 });

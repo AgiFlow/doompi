@@ -61,7 +61,7 @@ describe('doompi-goal package contract', () => {
   it('pins matching Pi peer and development versions', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.0.4');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.0.4');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.1.0');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.1.0');
   });
 });

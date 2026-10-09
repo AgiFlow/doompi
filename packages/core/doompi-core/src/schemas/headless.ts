@@ -26,6 +26,20 @@ export class DoomHeadlessPromptAdmissionError extends Error {
 export function isDoomHeadlessPromptAdmissionError(error: unknown): boolean {
   return error instanceof Error && error.name === PROMPT_ADMISSION_ERROR;
 }
+const TOOL_BUSY_ERROR = 'DoomHeadlessToolBusyError';
+
+/** The tool and its hooks have not started. */
+export class DoomHeadlessToolBusyError extends Error {
+  constructor() {
+    super('An operation is already running');
+    this.name = TOOL_BUSY_ERROR;
+  }
+}
+
+export function isDoomHeadlessToolBusyError(error: unknown): boolean {
+  return error instanceof Error && error.name === TOOL_BUSY_ERROR;
+}
+
 export interface DoomHeadlessSelection {
   readonly majorMode: string;
   readonly activeLayers: readonly string[];

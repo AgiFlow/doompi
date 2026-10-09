@@ -101,8 +101,8 @@
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
-    "@earendil-works/pi-coding-agent": "1.0.4",
-    "@earendil-works/pi-tui": "1.0.4",
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@earendil-works/pi-tui": "1.1.0",
     "@modelcontextprotocol/client": "2.2.0",
     "@tanstack/react-store": "0.11.2",
     "@tanstack/store": "0.11.2",
@@ -116,8 +116,8 @@
     "vitest": "5.0.3"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "1.0.4",
-    "@earendil-works/pi-tui": "1.0.4"
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@earendil-works/pi-tui": "1.1.0"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

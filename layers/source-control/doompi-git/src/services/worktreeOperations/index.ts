@@ -7,7 +7,6 @@ import type { DoomSessionDeliveryService } from '@agimon-ai/doompi-session';
 
 import { WORKTREE_RECORD_VERSION } from '../../types/worktreeRegistry';
 import type { WorktreeGit, WorktreeRecord } from '../../types/worktreeRegistry';
-import { mirrorComposition } from '../compositionMirror';
 import { DoomGitExpectedError, HubUnavailableError } from '../errors';
 import { registryFile, worktreesRoot } from '../paths';
 import { repositoryId, repositoryLabel, shortId } from '../repositoryIdentity';
@@ -67,8 +66,6 @@ export interface WorktreeOperationsDeps {
   messageInbox?: WorktreeMessageInbox;
   /** Reads the active Session provider when an operation executes. */
   sessionDelivery?: () => DoomSessionDeliveryService | undefined;
-  /** Injected so a test never copies a real dependency tree. */
-  mirror?: typeof mirrorComposition;
   /** Injected so tests can observe generated-storage cleanup without touching real sync state. */
   cleanupStorage?: (repositoryRoot: string, worktreeRoot: string) => void;
   homeDir?: string;
@@ -79,7 +76,6 @@ export interface WorktreeOperationsDeps {
 export function createWorktreeOperations(deps: WorktreeOperationsDeps): WorktreeOperations {
   const { git } = deps;
   const sessionService = deps.sessionService;
-  const mirror = deps.mirror ?? mirrorComposition;
   const removeStorage =
     deps.cleanupStorage ??
     ((repositoryRoot: string, worktreeRoot: string): void => {
@@ -372,14 +368,6 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
             : 'The worktree was removed; run it again when you are ready.',
         );
       }
-
-      // Before the session, because the session composes the extensions this
-      // repository's config names and those live in build output git does not
-      // track. A worktree without it starts and dies on the first package it
-      // cannot resolve. Nothing here can fail the spawn: a repository with no
-      // build output to mirror simply has none.
-      options?.onProgress?.('mirroring build output\u2026');
-      if (!recovering) mirror(root, path);
 
       // The worktree exists from here on, so every later failure has to leave
       // it removed or recorded. An unrecorded directory on disk is the one

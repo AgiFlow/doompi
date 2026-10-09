@@ -17,6 +17,7 @@ import { parseServerMessage } from '@earendil-works/pi-protocol';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 
+import { DoomHeadlessToolBusyError } from '../../../../../src/schemas/headless';
 import { createDirectHarnessRuntime, promptForAssistantText } from '../../../../../src/server/directHarnessRuntime';
 import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../../src/services/historyOwnership';
 import type { HarnessEvent } from '../../../../../src/types/server/directHarnessRuntime';
@@ -1022,6 +1023,223 @@ describe('durable direct runtime', () => {
 
   it('rejects invalid inherited Fast intent before opening storage', async () => {
     await expect(setup({ initialFastMode: 'true' as unknown as boolean })).rejects.toThrow('Initial Fast mode');
+  });
+
+  describe('bounded remote admission', () => {
+    const waitMs = 30_000;
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((done) => {
+        resolve = done;
+      });
+      return { promise, resolve };
+    }
+
+    it('waits for a native run to settle, preserving immediate nonwaiting busy errors', async () => {
+      const pending = createAssistantMessageEventStream();
+      const { runtime } = await setup({}, [pending]);
+      vi.useFakeTimers();
+      const work = vi.fn(async () => 'remote');
+      try {
+        const active = await runtime.submitPrompt('native');
+        await vi.advanceTimersByTimeAsync(0);
+        await expect(runtime.runExternalOperation(work)).rejects.toBeInstanceOf(DoomHeadlessToolBusyError);
+        await expect(runtime.runExternalOperation(work)).rejects.toThrow('An operation is already running');
+        const remote = runtime.runExternalOperation(work, { waitMs });
+        await vi.advanceTimersByTimeAsync(100);
+        expect(work).not.toHaveBeenCalled();
+        pending.push({ type: 'done', reason: 'stop', message: await response([]).result() });
+        await active.settled;
+        await vi.advanceTimersByTimeAsync(100);
+        await expect(remote).resolves.toBe('remote');
+        await vi.advanceTimersByTimeAsync(waitMs);
+        expect(work).toHaveBeenCalledOnce();
+      } finally {
+        await runtime.dispose();
+        vi.useRealTimers();
+      }
+    });
+
+    it.each(['timeout', 'pre-abort', 'abort', 'dispose'] as const)(
+      '%s stops a busy waiter without executing it later',
+      async (kind) => {
+        const { runtime } = await setup();
+        const hold = deferred<void>();
+        const started = deferred<void>();
+        const owner = runtime.runExternalOperation(async () => {
+          started.resolve();
+          await hold.promise;
+        });
+        await started.promise;
+        vi.useFakeTimers();
+        const controller = new AbortController();
+        const reason = new Error('cancel admission');
+        const work = vi.fn(async () => 'must not execute');
+        try {
+          if (kind === 'pre-abort') controller.abort(reason);
+          const remote = runtime.runExternalOperation(work, { signal: controller.signal, waitMs });
+          const rejected = expect(remote).rejects;
+          const assertion =
+            kind === 'timeout'
+              ? rejected.toBeInstanceOf(DoomHeadlessToolBusyError)
+              : kind === 'dispose'
+                ? rejected.toThrow('disposed')
+                : rejected.toThrow();
+          await vi.advanceTimersByTimeAsync(0);
+          if (kind === 'timeout') {
+            await vi.advanceTimersByTimeAsync(waitMs - 1);
+            expect(work).not.toHaveBeenCalled();
+            await vi.advanceTimersByTimeAsync(1);
+          } else if (kind === 'abort') {
+            await vi.advanceTimersByTimeAsync(100);
+            controller.abort(reason);
+          } else if (kind === 'dispose') {
+            const disposal = runtime.dispose();
+            hold.resolve();
+            await owner;
+            await disposal;
+            await vi.advanceTimersByTimeAsync(100);
+          }
+          await assertion;
+          hold.resolve();
+          await owner;
+          await vi.advanceTimersByTimeAsync(waitMs);
+          expect(work).not.toHaveBeenCalled();
+        } finally {
+          hold.resolve();
+          await owner;
+          await runtime.dispose();
+          vi.useRealTimers();
+        }
+      },
+    );
+
+    it.each(['submitPrompt', 'submitUserPrompt'] as const)(
+      '%s rejects a remote claim made during command dispatch without retaining the prompt',
+      async (method) => {
+        const dispatchEntered = deferred<void>();
+        const dispatchRelease = deferred<void>();
+        const { runtime, streamSimple } = await setup({
+          dispatchCommand: async () => {
+            dispatchEntered.resolve();
+            await dispatchRelease.promise;
+            return false;
+          },
+        });
+        const hold = deferred<void>();
+        const started = deferred<void>();
+        let owner: Promise<void> | undefined;
+        try {
+          const user = runtime[method]('native');
+          await dispatchEntered.promise;
+          owner = runtime.runExternalOperation(
+            async () => {
+              started.resolve();
+              await hold.promise;
+            },
+            { waitMs },
+          );
+          await started.promise;
+          const rejected = expect(user).rejects.toThrow('An operation is already running');
+          dispatchRelease.resolve();
+          await rejected;
+          expect((await runtime.readLifecycle()).queue).toEqual([]);
+          expect(streamSimple).not.toHaveBeenCalled();
+        } finally {
+          dispatchRelease.resolve();
+          hold.resolve();
+          await owner;
+          await runtime.dispose();
+        }
+      },
+    );
+
+    it('waits for user admission to end before claiming the lane', async () => {
+      const { runtime } = await setup();
+      const hold = deferred<void>();
+      const entered = deferred<void>();
+      const idle = vi.spyOn(runtime.lane, 'waitForIdle').mockImplementationOnce(async () => {
+        entered.resolve();
+        await hold.promise;
+      });
+      vi.useFakeTimers();
+      const work = vi.fn(async () => 'remote');
+      try {
+        const user = runtime.submitUserPrompt('user');
+        await entered.promise;
+        const remote = runtime.runExternalOperation(work, { waitMs });
+        await vi.advanceTimersByTimeAsync(100);
+        expect(work).not.toHaveBeenCalled();
+        hold.resolve();
+        await (
+          await user
+        ).settled;
+        await vi.advanceTimersByTimeAsync(100);
+        await expect(remote).resolves.toBe('remote');
+        expect(work).toHaveBeenCalledOnce();
+      } finally {
+        hold.resolve();
+        idle.mockRestore();
+        await runtime.dispose();
+        vi.useRealTimers();
+      }
+    });
+
+    it('serializes simultaneous remote operations without promising FIFO', async () => {
+      const { runtime } = await setup();
+      vi.useFakeTimers();
+      const hold = deferred<void>();
+      let active = 0;
+      let maximum = 0;
+      const work = vi.fn(async () => {
+        maximum = Math.max(maximum, ++active);
+        await hold.promise;
+        active--;
+        return 'done';
+      });
+      try {
+        const first = runtime.runExternalOperation(work, { waitMs });
+        const second = runtime.runExternalOperation(work, { waitMs });
+        await vi.advanceTimersByTimeAsync(100);
+        expect(work).toHaveBeenCalledOnce();
+        hold.resolve();
+        await vi.advanceTimersByTimeAsync(100);
+        await expect(Promise.all([first, second])).resolves.toEqual(['done', 'done']);
+        expect(work).toHaveBeenCalledTimes(2);
+        expect(maximum).toBe(1);
+      } finally {
+        hold.resolve();
+        await runtime.dispose();
+        vi.useRealTimers();
+      }
+    });
+
+    it('gives pending follow-up work priority over a waiting remote operation', async () => {
+      const firstStream = createAssistantMessageEventStream();
+      const followStream = createAssistantMessageEventStream();
+      const { runtime, streamSimple } = await setup({}, [firstStream, followStream]);
+      vi.useFakeTimers();
+      const work = vi.fn(async () => 'remote');
+      try {
+        const active = await runtime.submitPrompt('native');
+        await vi.advanceTimersByTimeAsync(0);
+        await runtime.followUp('follow-up');
+        const remote = runtime.runExternalOperation(work, { waitMs });
+        await vi.advanceTimersByTimeAsync(100);
+        firstStream.push({ type: 'done', reason: 'stop', message: await response([]).result() });
+        await vi.advanceTimersByTimeAsync(100);
+        expect(streamSimple).toHaveBeenCalledTimes(2);
+        expect(work).not.toHaveBeenCalled();
+        followStream.push({ type: 'done', reason: 'stop', message: await response([]).result() });
+        await active.settled;
+        await vi.advanceTimersByTimeAsync(100);
+        await expect(remote).resolves.toBe('remote');
+        expect(work).toHaveBeenCalledOnce();
+      } finally {
+        await runtime.dispose();
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('agent lock', () => {

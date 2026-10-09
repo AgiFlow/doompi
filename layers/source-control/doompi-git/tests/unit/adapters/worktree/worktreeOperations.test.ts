@@ -106,8 +106,7 @@ afterEach(() => {
 describe('spawn', () => {
   it('does not acquire a registry lock or create Git state without the cockpit lifecycle', async () => {
     const git = fakeGit();
-    const mirror = vi.fn();
-    const ops = createWorktreeOperations({ git, mirror, homeDir: home });
+    const ops = createWorktreeOperations({ git, homeDir: home });
 
     await expect(ops.spawn(CONTEXT, { branch: 'wt/one' })).rejects.toMatchObject({
       code: 'hub_unavailable',
@@ -117,7 +116,6 @@ describe('spawn', () => {
     expect(git.repositoryRoot).not.toHaveBeenCalled();
     expect(git.addWorktree).not.toHaveBeenCalled();
     expect(git.removeWorktree).not.toHaveBeenCalled();
-    expect(mirror).not.toHaveBeenCalled();
     await expect(ops.list(CONTEXT)).resolves.toEqual([]);
   });
 
@@ -420,32 +418,35 @@ describe('spawn', () => {
 
     await ops.spawn(CONTEXT, { branch: 'wt/one' }, { onProgress: (label) => labels.push(label) });
 
-    expect(labels).toEqual(['creating branch wt/one\u2026', 'mirroring build output\u2026', 'starting session\u2026']);
+    expect(labels).toEqual(['creating branch wt/one\u2026', 'starting session\u2026']);
   });
 
-  // The session composes this repository's own packages from build output git
-  // does not track. Mirroring after the session starts would be too late.
-  it('mirrors the parent checkout into the worktree before the session starts', async () => {
-    const order: string[] = [];
-    const mirror = vi.fn().mockImplementation(() => {
-      order.push('mirror');
-      return { kind: 'mirrored', copied: 3, linked: 2 };
+  it('starts a worktree session without linking dependencies or copying build output', async () => {
+    const generatedPaths = ['node_modules', 'packages/a/node_modules', 'packages/a/dist'];
+    for (const relative of generatedPaths) {
+      fs.mkdirSync(path.join(repository, relative), { recursive: true });
+      fs.writeFileSync(path.join(repository, relative, 'index.js'), 'origin output');
+    }
+    const git = fakeGit({
+      addWorktree: vi.fn(async ({ path: worktreePath }: { path: string }) => {
+        fs.mkdirSync(worktreePath, { recursive: true });
+      }),
     });
-    const createSession = vi.fn().mockImplementation(() => {
-      order.push('session');
-      return Promise.resolve({ sessionId: 'session-9', cwd: '/worktree' });
+    const createSession = vi.fn(async ({ cwd }: { cwd: string }) => {
+      expect(fs.statSync(cwd).isDirectory()).toBe(true);
+      for (const relative of generatedPaths) {
+        expect(() => fs.lstatSync(path.join(cwd, relative))).toThrowError(expect.objectContaining({ code: 'ENOENT' }));
+      }
+      return { sessionId: 'session-9', cwd };
     });
-    const ops = createWorktreeOperations({
-      git: fakeGit(),
-      sessionService: fakeSessionService([], createSession),
-      mirror,
-      homeDir: home,
-    });
+    const { ops } = operations(git, createSession);
 
     const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
 
-    expect(mirror).toHaveBeenCalledWith(repository, record.path);
-    expect(order).toEqual(['mirror', 'session']);
+    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ cwd: record.path }));
+    for (const relative of generatedPaths) {
+      expect(fs.readFileSync(path.join(repository, relative, 'index.js'), 'utf8')).toBe('origin output');
+    }
   });
 });
 

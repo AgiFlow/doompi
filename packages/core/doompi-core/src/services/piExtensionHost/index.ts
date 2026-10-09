@@ -981,7 +981,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         if (logicalLoopActive) {
           logicalLoopActive = false;
           await runner?.emit({ type: 'agent_end', messages: runMessages });
-          await runner?.emit({ type: 'agent_settled' });
+          await runner?.emit({ type: 'agent_settled', aborted: event.status === 'aborted' });
         }
         runMessages = [];
         turnEntryIds.clear();

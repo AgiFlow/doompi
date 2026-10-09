@@ -48,6 +48,7 @@ import {
 } from '@earendil-works/pi-durable';
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node';
 
+import { DoomHeadlessToolBusyError } from '../schemas/headless';
 import { contextTokensOf, contextUsageOf, latestAssistantUsage } from '../services/contextUsage';
 import { initializeDurableNavigation, navigateDurableConversation } from '../services/durableNavigation';
 import { formatSkillsForSystemPrompt } from '../services/piExtensionHost';
@@ -709,6 +710,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         }, context),
       );
     let userAdmission = false;
+    let promptAdmissions = 0;
     let userAdmissionSettled: Promise<void> = Promise.resolve();
     let releaseUserAdmission: (() => void) | undefined;
     const guardUserAdmission = () => {
@@ -716,7 +718,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     };
     let external: string | undefined;
     let externalAbort: AbortController | undefined;
-    const execution = async () => {
+    let compactionAdmission = false;
+    const nativeExecution = async () => {
       const live = await harness.snapshot(LiveDoc, conversation.id, context);
       const inspected = await harness.inspect(context);
       const task = inspected.tasks.find((t) => t.record.conversationId === conversation.id && !t.record.background);
@@ -735,12 +738,15 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
               kind: 'compaction' as const,
               status: task.record.abortRequested ? ('aborting' as const) : ('open' as const),
             }
-          : external
-            ? { id: external, kind: 'navigation' as const, status: 'open' as const }
-            : settling
-              ? { id: 'settling', kind: 'run' as const, status: 'open' as const }
-              : null;
+          : null;
     };
+    const execution = async () =>
+      (await nativeExecution()) ??
+      (external
+        ? { id: external, kind: 'navigation' as const, status: 'open' as const }
+        : settling
+          ? { id: 'settling', kind: 'run' as const, status: 'open' as const }
+          : null);
     const readLifecycle = async (): Promise<DirectHarnessLifecycle> => {
       const record = await readRecord();
       return {
@@ -1269,7 +1275,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       recovering = false,
       allowPaused = false,
     ) => {
-      if (handingOff.has(item.id)) return undefined;
+      if (external || handingOff.has(item.id)) return undefined;
       handingOff.add(item.id);
       try {
         const claimed = await changeRecord((r) => {
@@ -1368,43 +1374,50 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       if (external) throw new Error('An operation is already running');
       if (typeof message === 'string' && (await dispatchCommand(message)))
         return { settled: Promise.resolve(), handledCommand: true };
-      assertUnlocked();
-      const record = await readRecord();
-      await flushNextTurn();
-      const { id } = await enqueue(message, images, mode ?? 'nextRun', 'automatic');
-      const submission = await handoff(
-        (await readRecord()).queue.find((q) => q.id === id)!,
-        mode ?? 'reject',
-        false,
-        record.paused,
-      );
-      if (!submission) return { settled: Promise.resolve() };
-      let resolveDelivery!: () => void;
-      const delivered = new Promise<void>((resolve) => {
-        resolveDelivery = resolve;
-      });
-      internalDelivery.set(submission.id, { done: delivered, resolve: resolveDelivery });
-      if (deliveredInputs.has(submission.id)) resolveDelivery();
-      const settled = (async () => {
-        try {
-          const status = await submission.wait(context);
-          // A durable receipt can finish before the watcher has queued run_end.
-          // Wait for this input's settlement hooks, not the current event tail.
-          if (status.status === 'done' || status.entry !== undefined) await delivered;
-          await eventsSettled;
-          await reconcile();
-          await publish();
-          if (status.status === 'unanswered' && status.reason !== 'aborted')
-            throw new Error(
-              `Agent submission failed: ${status.reason}${typeof status.detail === 'string' && status.detail ? `: ${status.detail}` : ''}`,
-            );
-          await drain();
-        } finally {
-          internalDelivery.delete(submission.id);
-        }
-      })();
-      void settled.catch((error) => emit({ type: 'error', error: String(error) }));
-      return { settled };
+      guardUserAdmission();
+      if (external) throw new Error('An operation is already running');
+      promptAdmissions++;
+      try {
+        assertUnlocked();
+        const record = await readRecord();
+        await flushNextTurn();
+        const { id } = await enqueue(message, images, mode ?? 'nextRun', 'automatic');
+        const submission = await handoff(
+          (await readRecord()).queue.find((q) => q.id === id)!,
+          mode ?? 'reject',
+          false,
+          record.paused,
+        );
+        if (!submission) return { settled: Promise.resolve() };
+        let resolveDelivery!: () => void;
+        const delivered = new Promise<void>((resolve) => {
+          resolveDelivery = resolve;
+        });
+        internalDelivery.set(submission.id, { done: delivered, resolve: resolveDelivery });
+        if (deliveredInputs.has(submission.id)) resolveDelivery();
+        const settled = (async () => {
+          try {
+            const status = await submission.wait(context);
+            // A durable receipt can finish before the watcher has queued run_end.
+            // Wait for this input's settlement hooks, not the current event tail.
+            if (status.status === 'done' || status.entry !== undefined) await delivered;
+            await eventsSettled;
+            await reconcile();
+            await publish();
+            if (status.status === 'unanswered' && status.reason !== 'aborted')
+              throw new Error(
+                `Agent submission failed: ${status.reason}${typeof status.detail === 'string' && status.detail ? `: ${status.detail}` : ''}`,
+              );
+            await drain();
+          } finally {
+            internalDelivery.delete(submission.id);
+          }
+        })();
+        void settled.catch((error) => emit({ type: 'error', error: String(error) }));
+        return { settled };
+      } finally {
+        promptAdmissions--;
+      }
     };
     const abort = async (operationId?: string) => {
       const current = await execution();
@@ -1579,6 +1592,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         return { settled: Promise.resolve(), handledCommand: true };
       assertUnlocked();
       guardUserAdmission();
+      if (external) throw new Error('An operation is already running');
       userAdmission = true;
       userAdmissionSettled = new Promise<void>((resolve) => {
         releaseUserAdmission = resolve;
@@ -1703,10 +1717,67 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       await reconcile();
       await changeRecord(() => undefined);
     };
-    const runExternalOperation = async <T>(work: () => Promise<T>): Promise<T> => {
-      guardUserAdmission();
-      if (await execution()) throw new Error('An operation is already running');
-      external = randomUUID();
+    const runExternalOperation = async <T>(
+      work: () => Promise<T>,
+      { signal, waitMs = 0 }: { signal?: AbortSignal; waitMs?: number } = {},
+    ): Promise<T> => {
+      if (!Number.isFinite(waitMs) || waitMs < 0) throw new RangeError('waitMs must be finite and non-negative');
+      const deadline = Date.now() + waitMs;
+      const admissionBusy = () =>
+        userAdmission ||
+        promptAdmissions > 0 ||
+        settling > 0 ||
+        handingOff.size > 0 ||
+        admittingInternal.size > 0 ||
+        compactionAdmission;
+      const pendingFollowUp = async () => {
+        if (waitMs === 0 || agentLocked) return false;
+        const record = await readRecord();
+        return (
+          !record.paused &&
+          record.queue.some((item) => item.disposition === 'pending' || item.disposition === 'handoff')
+        );
+      };
+      for (;;) {
+        if (waitMs === 0) guardUserAdmission();
+        signal?.throwIfAborted();
+        if (disposed || disposePromise) throw new Error('Direct harness is disposed');
+        const busy = (await nativeExecution()) || (await pendingFollowUp());
+        signal?.throwIfAborted();
+        if (disposed || disposePromise) throw new Error('Direct harness is disposed');
+        // Claim synchronously after every await, so simultaneous external calls cannot both own the lane.
+        if (!busy && !external && !admissionBusy()) {
+          external = randomUUID();
+          let admitted = false;
+          try {
+            const changed = (await nativeExecution()) || (await pendingFollowUp());
+            signal?.throwIfAborted();
+            if (disposed || disposePromise) throw new Error('Direct harness is disposed');
+            if (waitMs > 0 && Date.now() >= deadline) throw new DoomHeadlessToolBusyError();
+            admitted = !changed && !admissionBusy();
+          } finally {
+            if (!admitted) {
+              external = undefined;
+              void drain().catch((error) => emit({ type: 'error', error: String(error) }));
+            }
+          }
+          if (admitted) break;
+        }
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) throw new DoomHeadlessToolBusyError();
+        // ponytail: bounded polling, not FIFO. Add ordered admission only if callers need it.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await awaitWithContext(
+            new Promise<void>((resolve) => {
+              timer = setTimeout(resolve, Math.min(100, remaining));
+            }),
+            signal ? withAbortSignal(signal, context) : context,
+          );
+        } finally {
+          clearTimeout(timer);
+        }
+      }
       externalAbort = new AbortController();
       try {
         await publish();
@@ -2351,10 +2422,12 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       interrupt,
       async compact(instructions) {
         guardUserAdmission();
-        if (await execution()) throw new Error('An operation is already running');
+        if (external || compactionAdmission) throw new Error('An operation is already running');
+        compactionAdmission = true;
         const previous = settings;
-        settings = { ...settings, compaction: { ...settings.compaction, keepRecentTokens: 0 } };
         try {
+          if (await execution()) throw new Error('An operation is already running');
+          settings = { ...settings, compaction: { ...settings.compaction, keepRecentTokens: 0 } };
           const task = await writable(() => conversation.compact(instructions, context));
           const receipt = await harness.waitForTask(task, context);
           await eventsSettled;
@@ -2362,6 +2435,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
             throw new Error('Compaction failed');
         } finally {
           settings = previous;
+          compactionAdmission = false;
         }
       },
       async admitResume() {

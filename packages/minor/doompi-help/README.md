@@ -81,3 +81,5 @@ Tests cover contribution withdrawal and rollback, Pi provider replacement and re
 ## License
 
 MIT
+
+Active Help also exposes `doompi-use-chatgpt-instructions`, which prints a paste-ready instruction of at most 8,000 characters using session tools and every root AGENTS.md rule. It writes no files and does not test connector calls.

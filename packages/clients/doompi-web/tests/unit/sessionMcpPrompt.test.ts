@@ -7,6 +7,11 @@ const PREAMBLE = [
   'Prefer them over your built-in bash, read, edit, write, grep, find, or ls tools for that repository.',
 ];
 
+const CALL_GUIDANCE = [
+  'If a tool below is not in your visible tool list, find it in ALL_TOOLS (code mode) before concluding it is missing; do not use tool search or guess names.',
+  'Await every call, print its result, and check isError. If a call may have changed files or state, inspect before retrying.',
+];
+
 const tools = [
   { name: 'load_context', description: 'Load the session context.' },
   { name: 'bash', description: 'Run a shell\n  command\tin the repo.  ' },
@@ -20,7 +25,8 @@ describe('sessionMcpToolsPrompt', () => {
       ...PREAMBLE,
       'Every tool name starts with "repo_".',
       'Start each task with repo_load_context.',
-      'If a tool below is missing from your tool list, call repo_load_extra_tools, then run it with repo_use_extra_tools.',
+      'repo_load_extra_tools lists tools added or changed after you connected. Run one of those with repo_use_extra_tools, passing the exact name it returns.',
+      ...CALL_GUIDANCE,
       '',
       'Tools:',
       '- repo_load_context: Load the session context.',
@@ -44,15 +50,16 @@ describe('sessionMcpToolsPrompt', () => {
     expect(sessionMcpToolsPrompt(bare, 'p').split('\n')).toEqual([
       ...PREAMBLE,
       'Every tool name starts with "p_".',
+      ...CALL_GUIDANCE,
       '',
       'Tools:',
       '- p_bash: Run.',
     ]);
     const loadOnly = sessionMcpToolsPrompt([...bare, { name: 'load_extra_tools', description: 'List.' }], 'p');
-    expect(loadOnly).not.toContain('If a tool below is missing');
+    expect(loadOnly).not.toContain('lists tools added or changed');
     expect(loadOnly).not.toContain('Start each task');
     const useOnly = sessionMcpToolsPrompt([...bare, { name: 'use_extra_tools', description: 'Use.' }], 'p');
-    expect(useOnly).not.toContain('If a tool below is missing');
+    expect(useOnly).not.toContain('lists tools added or changed');
   });
 
   it('collapses whitespace inside descriptions to single spaces', () => {

@@ -156,7 +156,12 @@ const PACKAGE_RESOURCES: Readonly<Record<string, readonly string[]>> = {
   ],
   '@agimon-ai/doompi-git': ['./llms.txt', './README.md', './src/prompts/doompi-use-git/SKILL.md'],
   '@agimon-ai/doompi-goal': ['./llms.txt', './README.md', './src/prompts/doompi-use-goal/SKILL.md'],
-  '@agimon-ai/doompi-help': ['./llms.txt', './README.md', './src/prompts/doompi-use-help/SKILL.md'],
+  '@agimon-ai/doompi-help': [
+    './llms.txt',
+    './README.md',
+    './src/prompts/doompi-use-help/SKILL.md',
+    './src/prompts/doompi-use-chatgpt-instructions/SKILL.md',
+  ],
   '@agimon-ai/doompi-hook': ['./llms.txt', './README.md', './src/prompts/doompi-author-hook/SKILL.md'],
   '@agimon-ai/doompi-loop': ['./llms.txt', './README.md', './src/prompts/doompi-use-loop/SKILL.md'],
   '@agimon-ai/doompi-major-mode': [

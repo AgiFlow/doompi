@@ -1511,7 +1511,7 @@ describe('Pi lifecycle events in the headless host', () => {
     expect(ends.mock.calls[0]?.[0]).toMatchObject({ type: 'agent_end', messages: [first, second] });
   });
 
-  it('keeps successor runs in one logical loop and resets only after settlement', async () => {
+  it.each(['completed', 'aborted', 'failed'] as const)('settles successor runs together (%s)', async (status) => {
     const starts = vi.fn();
     const ends = vi.fn();
     const settled = vi.fn();
@@ -1565,7 +1565,7 @@ describe('Pi lifecycle events in the headless host', () => {
         fromTipId: null,
         tipId: null,
         endedAt: CREATED_AT,
-        status: 'completed',
+        status: index < 2 ? 'completed' : status,
         successorActive: index < 2,
       });
       expect(starts).toHaveBeenCalledTimes(1);
@@ -1594,6 +1594,10 @@ describe('Pi lifecycle events in the headless host', () => {
     expect(ends).toHaveBeenCalledTimes(2);
     expect(ends.mock.calls[1]?.[0]).toEqual({ type: 'agent_end', messages: [fresh] });
     expect(settled).toHaveBeenCalledTimes(2);
+    expect(settled.mock.calls.map(([event]) => event)).toEqual([
+      { type: 'agent_settled', aborted: status === 'aborted' },
+      { type: 'agent_settled', aborted: false },
+    ]);
   });
 
   it('captures and deduplicates history written by session_start handlers', async () => {

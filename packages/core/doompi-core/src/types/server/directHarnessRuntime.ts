@@ -394,8 +394,8 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   replaceTools(tools: AgentHarnessTool<TContext>[]): Promise<void>;
   replaceResources(resources: AgentHarnessResources): Promise<void>;
   readResources(): Promise<AgentHarnessResources>;
-  /** Runs one non-agent operation only while the lane is idle, rejecting conflicting starts. */
-  runExternalOperation<T>(operation: () => Promise<T>): Promise<T>;
+  /** Runs one non-agent operation while idle. Waiting is opt-in and does not guarantee ordering. */
+  runExternalOperation<T>(operation: () => Promise<T>, options?: { signal?: AbortSignal; waitMs?: number }): Promise<T>;
   appendCustomEntry(customType: string, data?: unknown): Promise<string>;
   /**
    * Records a message without waking the agent.

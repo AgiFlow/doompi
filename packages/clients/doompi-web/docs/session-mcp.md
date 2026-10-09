@@ -48,7 +48,7 @@ These stay JSON-RPC protocol errors: authentication failures, a revoked or repla
 
 ## Copy as prompt
 
-The MCP lane in DoomPi Web has a **copy as prompt** button. It copies a short prompt for the remote agent: use the DoomPi tools for work in the session repository instead of its built-in tools, the tool name prefix, when to call `load_context` and the extra-tool pair, and the full tool list with descriptions.
+The MCP lane in DoomPi Web has a **copy as prompt** button. It copies a short prompt for the remote agent: use the DoomPi tools for work in the session repository instead of its built-in tools, the tool name prefix, when to call `load_context` and the extra-tool pair, and the grant-filtered tool list with descriptions. Extra-tool discovery includes additions and changed contracts, not the whole inventory. Run only returned tools through `use_extra_tools`, using the exact returned name. Find a tool absent from the visible list in `ALL_TOOLS` in code mode before concluding it is missing; do not use tool search or guess names. Await each call, print its result, check `isError`, and inspect state before retrying a call that may have changed files or state.
 
 The client name is generated from the trusted Remote Control domain. OAuth callbacks must be exact absolute HTTPS URLs supplied by the client. They are not derived from the DoomPi domain.
 
