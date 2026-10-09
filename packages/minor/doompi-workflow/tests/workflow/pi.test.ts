@@ -603,6 +603,7 @@ async function createHarness(
     modePublications: (): number => modePublicationCount,
     backgroundWorkLifecycle: () => [...backgroundWorkLifecycle],
     backgroundWorkSnapshot: () => backgroundWorkService.snapshot(SESSION_ID),
+    backgroundWorkService,
     footerRegistrations: () => registerFooter.mock.calls.length,
     /** Seed the run's progress log the way a live runner would append it. */
     writeProgress: (events: unknown[]) => {
@@ -780,6 +781,30 @@ async function chooseInOverlay(overlay: OverlayComponent, label: string): Promis
 }
 
 describe('workflow-mcp Pi extension', () => {
+  it('does not inspect background work for ordinary settled sessions', async () => {
+    vi.stubEnv('WORKFLOW_DECISION_FILE', '');
+    const harness = await createHarness();
+    const snapshot = vi.spyOn(harness.backgroundWorkService, 'snapshot').mockImplementation(() => {
+      throw new Error('unavailable');
+    });
+    await harness.handlers.get('agent_settled')?.({}, harness.ctx);
+    expect(snapshot).not.toHaveBeenCalled();
+    expect(harness.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('defers pane gating when its snapshot fails, without prompting a turn', async () => {
+    vi.stubEnv('WORKFLOW_DECISION_FILE', '/missing/decision.json');
+    vi.stubEnv('WORKFLOW_DECISION_STEERING', '');
+    vi.stubEnv('PI_SUBAGENT_CHILD', '');
+    const harness = await createHarness();
+    vi.spyOn(harness.backgroundWorkService, 'snapshot').mockImplementation(() => {
+      throw new Error('unavailable');
+    });
+    await harness.handlers.get('agent_settled')?.({}, harness.ctx);
+    expect(harness.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Cannot inspect step background work') }),
+    );
+  });
   it('discovers workflows in the invoking workspace or worktree, never the parent checkout', async () => {
     const root = mkdtempSync(resolve(tmpdir(), 'workflow-list-'));
     try {

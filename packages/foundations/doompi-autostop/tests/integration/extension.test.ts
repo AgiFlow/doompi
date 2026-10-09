@@ -67,7 +67,9 @@ describe('auto-stop Pi factory', () => {
     vi.advanceTimersByTime(cooldownMs);
     expect(session.shutdown).not.toHaveBeenCalled();
 
-    items = items.filter((item) => item.provider !== 'doom-runner');
+    items = items.filter((item) => item.provider !== 'team-direct-runs');
+    // An exited runner retains ownership until its asynchronous wake is admitted.
+    items = items.map(({ status: _status, ...item }) => item);
     vi.advanceTimersByTime(cooldownMs);
     expect(session.shutdown).not.toHaveBeenCalled();
 

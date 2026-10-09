@@ -1,6 +1,6 @@
 # Doom Pi Autostop
 
-Shuts a Doom Pi session down once the agent settles and stays idle.
+Shuts a Doom Pi session down once the agent settles and stays idle. Shares core's holding rule with workflow supervision: runners awaiting asynchronous completion admission and owned subagents keep the session open.
 
 ## Resources
 

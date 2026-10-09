@@ -14,3 +14,7 @@ Package-owned guidance for authoring, launching, monitoring, and recovering Doom
 ## Package reference
 
 - [Package README](./README.md): Workflow mode, leader bindings, execution model, monitoring, and public entrypoints.
+
+## Completion policy
+
+In-process steps wait cancellably for child-session quietness before consulting the mutating decision gate, without consuming reminders or imposing a wait cap. Pi panes require this package for native settled gating; generic hooks do not own the Pi gate. Subagents and host-steered sessions skip it. Owned runner/subagent/task work and provider errors defer gating; workflow monitoring does not.

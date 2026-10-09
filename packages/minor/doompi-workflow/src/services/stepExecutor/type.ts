@@ -2,7 +2,10 @@ import type { DoomHubSessionService } from '@agimon-ai/doompi-core/hubChannel';
 import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 
 /** The part of the hub session service a customRun step drives. */
-export type StepSessionService = Pick<DoomHubSessionService, 'create' | 'prompt' | 'abort' | 'release'>;
+export type StepSessionService = Pick<
+  DoomHubSessionService,
+  'create' | 'prompt' | 'abort' | 'release' | 'readExecutionState'
+>;
 
 /** Where a step records what happened to its session or pane, for telemetry. */
 export type StepTelemetry = Pick<DoomTelemetry, 'recordEvent' | 'recordWarning' | 'recordError'>;

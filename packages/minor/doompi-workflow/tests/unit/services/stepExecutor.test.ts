@@ -23,6 +23,8 @@ vi.mock('@agimon-ai/workflow-mcp', async (importOriginal) => ({
   serveNativeTerminal: paneServer.serve,
 }));
 
+const quietState = () => ({ isIdle: true, hasPendingMessages: false, backgroundWork: { items: [], errors: [] } });
+
 const STEP_ENV = {
   PATH: '/usr/bin',
   WORKFLOW_NAME: 'dev-fix',
@@ -44,6 +46,7 @@ function dependencies(overrides: Partial<StepExecutorDependencies> = {}) {
       return { sessionId: 'step-session', cwd: request.cwd };
     }),
     prompt: vi.fn(async () => ({ settled })),
+    readExecutionState: vi.fn(async () => quietState()),
     abort: vi.fn(async () => undefined),
     release: vi.fn(async () => undefined),
   };
@@ -358,6 +361,124 @@ describe('createStepExecutor', () => {
     expect(harness.sessionService.create).not.toHaveBeenCalled();
   });
 
+  it('waits across background work and its completion turn without spending reminders', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'step-wait-'));
+    const decisionFile = path.join(directory, 'decision.json');
+    const decision = {
+      schemaVersion: 1,
+      job: 'develop',
+      step: 'Develop',
+      restartTargets: [],
+      required: true,
+      nudges: 0,
+    };
+    fs.writeFileSync(decisionFile, JSON.stringify(decision));
+    const harness = dependencies();
+    let reads = 0;
+    const readExecutionState = vi.fn(async () => {
+      expect(JSON.parse(fs.readFileSync(decisionFile, 'utf8')).nudges).toBe(0);
+      reads += 1;
+      if (reads <= 8)
+        return {
+          ...quietState(),
+          backgroundWork: {
+            items: [{ id: 'child', sessionId: 'step-session', provider: 'team-direct-runs' }],
+            errors: [],
+          },
+        };
+      if (reads === 9) return { ...quietState(), isIdle: false };
+      fs.writeFileSync(decisionFile, JSON.stringify({ ...decision, decision: { decision: 'complete' } }));
+      return quietState();
+    });
+    const execution = await createStepExecutor({
+      ...harness.deps,
+      sessionService: { ...harness.sessionService, readExecutionState },
+      busyRetryMs: 1,
+    }).custom!({
+      cwd: '/repo',
+      env: { ...STEP_ENV, WORKFLOW_DECISION_FILE: decisionFile },
+      stepName: 'Develop',
+      customRun: { prompt: 'Implement it' },
+    });
+    harness.settle();
+    await expect(execution.completion).resolves.toEqual({ exitCode: 0 });
+    expect(reads).toBe(10);
+    expect(harness.sessionService.prompt).toHaveBeenCalledOnce();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+
+  it('requires inspection support before creating a step session', async () => {
+    const harness = dependencies();
+    const execution = await createStepExecutor({
+      ...harness.deps,
+      sessionService: { ...harness.sessionService, readExecutionState: undefined },
+    }).custom!({ cwd: '/repo', env: STEP_ENV, stepName: 'Develop', customRun: { prompt: 'Implement it' } });
+    expect(await execution.completion).toMatchObject({
+      error: expect.objectContaining({ message: expect.stringContaining('inspect step execution state') }),
+    });
+    expect(harness.sessionService.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['missing', 'provider-error', 'queued'] as const)(
+    'waits cancellably for %s execution state',
+    async (kind) => {
+      const harness = dependencies();
+      const readExecutionState = vi.fn(async () => ({
+        isIdle: true,
+        hasPendingMessages: kind === 'queued',
+        backgroundWork:
+          kind === 'missing'
+            ? undefined
+            : {
+                items: [],
+                errors: kind === 'provider-error' ? [{ provider: 'doom-runner', message: 'unavailable' }] : [],
+              },
+      }));
+      const execution = await createStepExecutor({
+        ...harness.deps,
+        sessionService: { ...harness.sessionService, readExecutionState },
+        busyRetryMs: 1,
+      }).custom!({ cwd: '/repo', env: STEP_ENV, stepName: 'Develop', customRun: { prompt: 'Implement it' } });
+      harness.settle();
+      await vi.waitFor(() => expect(readExecutionState.mock.calls.length).toBeGreaterThan(7));
+      expect(harness.sessionService.prompt).toHaveBeenCalledOnce();
+      await execution.stop();
+      await expect(execution.completion).resolves.toEqual({ exitCode: 0 });
+    },
+  );
+
+  it('fails and releases the child when execution inspection throws', async () => {
+    const harness = dependencies();
+    const error = new Error('inspection failed');
+    const execution = await createStepExecutor({
+      ...harness.deps,
+      sessionService: {
+        ...harness.sessionService,
+        readExecutionState: vi.fn(async () => {
+          throw error;
+        }),
+      },
+    }).custom!({ cwd: '/repo', env: STEP_ENV, stepName: 'Develop', customRun: { prompt: 'Implement it' } });
+    harness.settle();
+    await expect(execution.completion).resolves.toEqual({ error });
+    expect(harness.sessionService.release).toHaveBeenCalledOnce();
+  });
+
+  it('cancels an unresolved inspection without consuming a reminder', async () => {
+    const harness = dependencies();
+    const readExecutionState = vi.fn(() => new Promise<ReturnType<typeof quietState>>(() => undefined));
+    const execution = await createStepExecutor({
+      ...harness.deps,
+      sessionService: { ...harness.sessionService, readExecutionState },
+      busyRetryMs: 1,
+    }).custom!({ cwd: '/repo', env: STEP_ENV, stepName: 'Develop', customRun: { prompt: 'Implement it' } });
+    harness.settle();
+    await vi.waitFor(() => expect(readExecutionState).toHaveBeenCalled());
+    await execution.stop();
+    await expect(execution.completion).resolves.toEqual({ exitCode: 0 });
+    expect(harness.sessionService.release).toHaveBeenCalledOnce();
+  });
+
   it('prompts an idle session that has not decided, until it records a decision', async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'step-decision-'));
     const decisionFile = path.join(directory, 'decision.json');
@@ -378,6 +499,7 @@ describe('createStepExecutor', () => {
     const prompts: string[] = [];
     const sessionService = {
       create: vi.fn(async (request: DoomHubSessionCreateRequest) => ({ sessionId: 's1', cwd: request.cwd })),
+      readExecutionState: vi.fn(async () => quietState()),
       // The agent settles at once; on its second turn it records a decision.
       prompt: vi.fn(async (_id: string, text: string) => {
         prompts.push(text);
@@ -422,6 +544,7 @@ describe('createStepExecutor', () => {
     let busyAttempts = 0;
     const sessionService = {
       create: vi.fn(async (request: DoomHubSessionCreateRequest) => ({ sessionId: 's1', cwd: request.cwd })),
+      readExecutionState: vi.fn(async () => quietState()),
       // Web guidance started a turn just as the agent settled; that turn records the decision.
       prompt: vi.fn(async (_id: string, text: string) => {
         prompts.push(text);

@@ -1,16 +1,11 @@
 import {
+  BACKGROUND_WORK_HOLDING_PROVIDERS,
   DOOM_BACKGROUND_WORK_SERVICE,
+  holdsSettledSession,
   readDoomBackgroundWorkService,
-  type BackgroundWorkItem,
   type DoomBackgroundWorkService,
 } from '@agimon-ai/doompi-core/backgroundWork';
 import type { Context } from '@deepseek-ai/cordis';
-
-import {
-  AUTO_STOP_BLOCKING_PROVIDERS,
-  AUTO_STOP_RUNNER_PROVIDER,
-  AUTO_STOP_RUNNER_WORKING_STATUS,
-} from '../../constants/idlePolicy';
 
 /** What is holding a session open, named so a stuck shutdown can say why. */
 export interface BackgroundWorkSummary {
@@ -27,13 +22,6 @@ export interface BackgroundWorkGate {
   inspect(sessionId: string): BackgroundWorkSummary;
 }
 
-function holdsSessionOpen(item: BackgroundWorkItem): boolean {
-  if (!AUTO_STOP_BLOCKING_PROVIDERS.includes(item.provider)) return false;
-  // Every runner item carries its state; one without it is not known to be done.
-  if (item.provider !== AUTO_STOP_RUNNER_PROVIDER || item.status === undefined) return true;
-  return item.status === AUTO_STOP_RUNNER_WORKING_STATUS;
-}
-
 const NO_WORK: BackgroundWorkSummary = Object.freeze({ active: false, items: [], errors: [] });
 
 /**
@@ -46,9 +34,9 @@ export function createBackgroundWorkGate(): BackgroundWorkGate {
     if (!backgroundWork) return NO_WORK;
     try {
       const snapshot = backgroundWork.snapshot(sessionId);
-      const items = snapshot.items.filter(holdsSessionOpen).map((item) => `${item.provider}:${item.id}`);
+      const items = snapshot.items.filter(holdsSettledSession).map((item) => `${item.provider}:${item.id}`);
       const errors = snapshot.errors
-        .filter((error) => AUTO_STOP_BLOCKING_PROVIDERS.includes(error.provider))
+        .filter((error) => BACKGROUND_WORK_HOLDING_PROVIDERS.includes(error.provider))
         .map((error) => `${error.provider}: ${error.message}`);
       return { active: items.length > 0 || errors.length > 0, items, errors };
     } catch (error) {

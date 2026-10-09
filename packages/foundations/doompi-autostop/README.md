@@ -22,10 +22,11 @@ waits, looks again, and only then stops.
 Any `input` or `agent_start` event disarms a pending stop. The cooldown is the grace period;
 the 100 ms recheck waits out a stream that has not finished draining. Only two kinds of
 background work keep a settled session alive: supervised Doom Runner processes (`doom-runner`)
-while they are still running (a runner listed as `completed` or `failed` no longer counts)
-and running subagents (`team-direct-runs`, `doom-task`) owned by the current session, including
-provider errors from them. Workflow runs (`workflow-mcp`) never hold a session open: a workflow
-step does not launch another workflow, so a run the session started is not a reason to stay.
+while running or awaiting asynchronous completion admission (published without a status).
+A runner listed as `completed` or `failed` no longer counts. Subagents
+(`team-direct-runs`, `doom-task`) owned by the current session also hold it open, including
+provider errors from them. The holding rule is shared with workflow step supervision through
+core's `holdsSettledSession`. Workflow runs (`workflow-mcp`) do not hold a session open.
 
 Each wait is recorded as `doom_autostop.waiting_on_background_work` telemetry naming the work
 holding the session, along with `doom_autostop.stood_down` and `doom_autostop.shutdown_requested`.

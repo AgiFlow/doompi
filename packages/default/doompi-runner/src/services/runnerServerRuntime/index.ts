@@ -129,12 +129,13 @@ export function createRunnerServerRuntime(
     try {
       const records = await container.runnerRegistry.listAll(ownedSessionId);
       const nextBackgroundWork = records
-        .filter((record) => record.state === 'running')
+        .filter((record) => record.state === 'running' || watched.has(record.id))
         .map((record) => ({
           id: record.id,
           sessionId: record.sessionId,
           label: record.name,
-          status: record.state,
+          // An absent status holds ownership until completion admission succeeds.
+          ...(record.state === 'running' ? { status: record.state } : {}),
         }));
       if (JSON.stringify(nextBackgroundWork) !== JSON.stringify(backgroundWorkItems)) {
         backgroundWorkItems = nextBackgroundWork;
@@ -190,6 +191,7 @@ export function createRunnerServerRuntime(
                 `runner-finished:${JSON.stringify([ownedSessionId, id])}`,
               );
             watched.delete(id);
+            requestPublish(ownedSessionId);
           } catch (error) {
             retry = true;
             process.emitWarning(`Could not report finished runner ${id}: ${String(error)}`);
@@ -218,6 +220,7 @@ export function createRunnerServerRuntime(
     const ownedSessionId = sessionId;
     if (!wakeAgent || closing || ownedSessionId === undefined) return;
     watched.add(id);
+    requestPublish(ownedSessionId);
     // Independent of the optional activity: the wake-up must not depend on a
     // browser watching the runner list.
     unsubscribeWatched ??= container.runnerRegistry.subscribe(() => wakeForFinished(ownedSessionId), ownedSessionId);

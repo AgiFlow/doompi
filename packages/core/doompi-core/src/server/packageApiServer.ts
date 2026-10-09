@@ -114,6 +114,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
 
   const owningSessionService = options.sessionService;
   const communication = owningSessionService?.bindCommunication?.(options.sessionId);
+  const ownedReadExecutionState = owningSessionService?.readExecutionState?.bind(owningSessionService);
   const ownedPrompt = owningSessionService?.prompt?.bind(owningSessionService);
   const ownedAbort = owningSessionService?.abort?.bind(owningSessionService);
   const ownedSteer = owningSessionService?.steer?.bind(owningSessionService);
@@ -125,6 +126,12 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
           create: (request) => owningSessionService.create(request),
           close: (sessionId) => owningSessionService.close(sessionId),
           isLive: (sessionId) => owningSessionService.isLive(sessionId),
+          ...(ownedReadExecutionState === undefined
+            ? {}
+            : {
+                readExecutionState: (sessionId: string) =>
+                  ownedReadExecutionState(sessionId, { parentSessionId: options.sessionId }),
+              }),
           // A session may drive only the children it started, never its parent or a sibling.
           ...(ownedPrompt === undefined
             ? {}

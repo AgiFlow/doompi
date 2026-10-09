@@ -1,3 +1,8 @@
+import {
+  DOOM_BACKGROUND_WORK_SERVICE,
+  readDoomBackgroundWorkService,
+  type DoomBackgroundWorkService,
+} from '@agimon-ai/doompi-core/backgroundWork';
 import type { PiPluginContext, PiPluginContributions } from '@agimon-ai/doompi-core/piExtension';
 import { definePiTool } from '@agimon-ai/doompi-core/piExtension';
 import { DOOM_SKILL_SOURCES_SERVICE, requireDoomSkillSourcesService } from '@agimon-ai/doompi-core/skills';
@@ -5,6 +10,7 @@ import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui
 import type { Context } from '@deepseek-ai/cordis';
 
 import { PACKAGE_SOURCE } from '../../../../../constants/workflow';
+import { isStepStopGateEligible, stepStopGate } from '../../../../../services/stepStopGate';
 import {
   createWorkflowFence,
   dispatcherTools,
@@ -21,6 +27,7 @@ import { createWorkflowPiRuntime, type WorkflowPiExtensionOptions } from '../../
 export default (({ pi, context, options, signal }) => {
   const environment = options?.environment ?? Object.freeze({ ...process.env });
   const dispatcher = isWorkflowDispatcherProcess(environment);
+  let backgroundWork: DoomBackgroundWorkService | undefined;
   const fence = createWorkflowFence(pi, signal);
   let workflowMode = false;
   let leader: ReturnType<typeof registerLeaderContribution> | undefined;
@@ -55,6 +62,13 @@ export default (({ pi, context, options, signal }) => {
     services: [
       ...(runtime.services ?? []),
       (cordis: Context) => {
+        cordis.inject([DOOM_BACKGROUND_WORK_SERVICE], (serviceContext) => {
+          const service = readDoomBackgroundWorkService(serviceContext);
+          backgroundWork = service;
+          return () => {
+            if (backgroundWork === service) backgroundWork = undefined;
+          };
+        });
         cordis.inject([DOOM_SKILL_SOURCES_SERVICE], (skillContext) => {
           const directory = workflowSkillDirectory();
           const contribution = requireDoomSkillSourcesService(skillContext).register({
@@ -87,7 +101,29 @@ export default (({ pi, context, options, signal }) => {
     ),
     commands: runtime.commands.map(([name, command]) => fence.command(name, command)),
     shortcuts: runtime.shortcuts?.map(([key, shortcut]) => fence.shortcut(key, shortcut)),
-    events: fence.events(runtime.events ?? {}),
+    events: fence.events({
+      ...runtime.events,
+      async agent_settled(_event, ctx) {
+        if (!fence.isCurrentInvocation() || !isStepStopGateEligible(environment)) return;
+        let snapshot;
+        try {
+          snapshot = backgroundWork?.snapshot(ctx.sessionManager.getSessionId());
+        } catch (error) {
+          pi.sendMessage({
+            customType: 'workflow-step',
+            content: `Cannot inspect step background work: ${String(error)}`,
+            display: true,
+          });
+          return;
+        }
+        const message = await stepStopGate(environment, snapshot);
+        if (message && fence.isCurrentInvocation())
+          pi.sendMessage(
+            { customType: 'workflow-step', content: message, display: true },
+            { triggerTurn: true, deliverAs: 'followUp' },
+          );
+      },
+    }),
 
     toolRestrictions: [
       ...(runtime.toolRestrictions ?? []),

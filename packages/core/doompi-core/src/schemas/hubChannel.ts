@@ -1,3 +1,5 @@
+import type { DoomBackgroundWorkSnapshot } from './backgroundWork';
+
 export interface DoomHubChannelFrame {
   type: string;
   sessionId: string;
@@ -159,11 +161,23 @@ export interface DoomHubSessionReservations {
   complete(id: string, parentSessionId: string): Promise<DoomHubSessionScope>;
 }
 
+/** Authoritative target-session execution state; a missing coordinator is unknown, not empty. */
+export interface DoomHubSessionExecutionState {
+  readonly isIdle: boolean;
+  readonly hasPendingMessages: boolean;
+  readonly backgroundWork?: DoomBackgroundWorkSnapshot;
+}
+
 /** Direct lifecycle owned by the canonical headless hub, never by a package transport. */
 export interface DoomHubSessionService {
   create(request: DoomHubSessionCreateRequest): Promise<DoomHubSessionScope>;
   close(sessionId: string): Promise<void>;
   isLive(sessionId: string): boolean;
+  /** Reads a live child's current execution and background ownership without starting a turn. */
+  readExecutionState?(
+    sessionId: string,
+    options?: Pick<DoomHubSessionPromptOptions, 'parentSessionId'>,
+  ): Promise<DoomHubSessionExecutionState>;
   /** Starts a turn in a live session, as if its user had submitted `text`. */
   prompt?(sessionId: string, text: string, options?: DoomHubSessionPromptOptions): Promise<DoomHubSessionPromptReceipt>;
   /** Aborts the live session's current turn. The session stays open. */

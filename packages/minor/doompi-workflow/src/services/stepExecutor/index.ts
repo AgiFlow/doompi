@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+import { BACKGROUND_WORK_HOLDING_PROVIDERS, holdsSettledSession } from '@agimon-ai/doompi-core/backgroundWork';
 import { type DoomHubSessionSelection, WORKFLOW_STEP_SESSION_PROVENANCE } from '@agimon-ai/doompi-core/hubChannel';
 import {
   gateStepDecision,
@@ -176,6 +177,9 @@ export function createStepExecutor(dependencies: StepExecutorDependencies): Step
    */
   async function runSession(request: StepSessionRequest): Promise<StepExecution> {
     if (prompt === undefined) return failedExecution('This host cannot prompt sessions, so this step cannot run here.');
+    const readExecutionState = sessionService.readExecutionState?.bind(sessionService);
+    if (readExecutionState === undefined)
+      return failedExecution('This host cannot inspect step execution state, so this step cannot run here.');
     const attributes = { 'workflow.step.name': request.stepName, templated: request.template !== undefined };
     let scope: Awaited<ReturnType<typeof sessionService.create>>;
     let name: string;
@@ -254,11 +258,43 @@ export function createStepExecutor(dependencies: StepExecutorDependencies): Step
       }
     };
 
+    const untilQuiet = async (): Promise<void> => {
+      let reported = false;
+      while (!stopRequested) {
+        const state = await Promise.race([readExecutionState(sessionId), stopped.promise.then(() => undefined)]);
+        if (stopRequested || state === undefined) return;
+        const snapshot = state.backgroundWork;
+        const items = snapshot?.items.filter(holdsSettledSession) ?? [];
+        const errors =
+          snapshot?.errors.filter((error) => BACKGROUND_WORK_HOLDING_PROVIDERS.includes(error.provider)) ?? [];
+        if (
+          state.isIdle &&
+          !state.hasPendingMessages &&
+          snapshot !== undefined &&
+          items.length === 0 &&
+          errors.length === 0
+        )
+          return;
+        if (!reported) {
+          reported = true;
+          void telemetry?.recordEvent('doom_workflow.step_waiting', {
+            ...attributes,
+            items: items.map((item) => `${item.provider}:${item.id}`).join(', '),
+            errors: errors.map((error) => `${error.provider}: ${error.message}`).join(', '),
+            coordinator: snapshot === undefined ? 'missing' : 'available',
+          });
+        }
+        await Promise.race([delay(dependencies.busyRetryMs ?? BUSY_RETRY_MS), stopped.promise]);
+      }
+    };
+
     const completion = async (): Promise<StepExecutionOutcome> => {
       let receipt: { settled: Promise<void> } | undefined = await prompt(sessionId, request.prompt);
       while (receipt !== undefined) {
         // A stop ends the wait even when the turn itself never settles.
         await Promise.race([receipt.settled, stopped.promise]);
+        if (stopRequested) return { exitCode: 0 };
+        await untilQuiet();
         if (stopRequested) return { exitCode: 0 };
         const gate = await gateStepDecision(request.env);
         if (gate.action === 'allow') return { exitCode: 0 };

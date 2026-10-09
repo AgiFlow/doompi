@@ -26,6 +26,15 @@ export const BackgroundWorkItemSchema = Type.Object(
 );
 export type BackgroundWorkItem = Static<typeof BackgroundWorkItemSchema>;
 
+/** Runners and subagents whose ownership keeps a settled session open. */
+export const BACKGROUND_WORK_HOLDING_PROVIDERS: readonly string[] = ['doom-runner', 'team-direct-runs', 'doom-task'];
+
+/** Missing runner status represents unresolved ownership, including a pending completion handoff. */
+export function holdsSettledSession(item: BackgroundWorkItem): boolean {
+  if (!BACKGROUND_WORK_HOLDING_PROVIDERS.includes(item.provider)) return false;
+  return item.provider !== 'doom-runner' || item.status === undefined || item.status === 'running';
+}
+
 export interface BackgroundWorkProvider {
   readonly provider: string;
   /**

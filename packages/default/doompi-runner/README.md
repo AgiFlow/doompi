@@ -6,6 +6,8 @@ Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doomp
 
 Runner replaces Pi's built-in `bash` tool only in sessions that load it. Short commands return
 inline; long commands can be promoted to a background runner instead of blocking the agent.
+In headless sessions, an agent-watched runner keeps background-work ownership until its completion
+wake-up is admitted, so workflow steps cannot finish during a delayed or retried handoff.
 
 > **Alpha:** tool and process contracts may change between releases.
 
