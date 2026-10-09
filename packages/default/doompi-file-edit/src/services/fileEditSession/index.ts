@@ -94,7 +94,7 @@ export function createFileEditSession({ agent, host }: DoomServerPluginContext):
     },
   };
   const startHook: DoomHeadlessHook = {
-    event: 'tool_execution_start',
+    event: 'tool_call',
     handle: async (event, executionContext) => {
       const runtime = active;
       const toolCallId = stringValue(event, 'toolCallId');
@@ -105,7 +105,7 @@ export function createFileEditSession({ agent, host }: DoomServerPluginContext):
     },
   };
   const endHook: DoomHeadlessHook = {
-    event: 'tool_execution_end',
+    event: 'tool_result',
     handle: async (event, executionContext) => {
       const runtime = active;
       const toolCallId = stringValue(event, 'toolCallId');

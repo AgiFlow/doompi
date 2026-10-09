@@ -122,6 +122,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
   }, [sessionId, filePath, revision]);
 
   const working = detail?.working;
+  const outside = relPath === '..' || relPath.startsWith('../') || relPath.startsWith('/');
   const content = source ?? working?.content ?? '';
   const previewMode = previewModeOf(relPath, working?.unavailable === true);
   // An image, a video or a PDF is shown rather than read as text, and it is
@@ -245,7 +246,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
           <DropdownMenuContent data-testid="files-menu-list">
             <DropdownMenuItem
               data-testid="files-edit"
-              disabled={working?.unavailable === true}
+              disabled={outside || working?.unavailable === true}
               onSelect={() => setView('edit')}
             >
               edit
@@ -253,7 +254,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
             <DropdownMenuItem
               variant="destructive"
               data-testid="files-delete"
-              disabled={working?.unavailable === true}
+              disabled={outside || working?.unavailable === true}
               onSelect={() => setConfirmingDelete(true)}
             >
               delete

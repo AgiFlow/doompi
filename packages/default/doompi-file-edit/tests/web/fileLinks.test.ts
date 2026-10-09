@@ -59,6 +59,19 @@ describe('fileLinks', () => {
     expect(tab?.id).toBe(fileLinks.resolve(SESSION, 'src/app.ts')?.id);
   });
 
+  it('opens recorded outside paths on history rather than the cwd-bounded preview', () => {
+    filesChannel.apply(
+      SESSION,
+      filesChannel.parse({ items: [{ ...item('../../tmp/note.md'), path: '/tmp/note.md' }] })!,
+    );
+    for (const filePath of ['/tmp/note.md', '../../tmp/note.md']) {
+      const tab = fileLinks.openPath?.(SESSION, filePath);
+      expect(tab?.id).toBe(fileLinks.resolve(SESSION, filePath)?.id);
+      expect(tab?.label).toBe('note.md');
+      expect(tab?.id.endsWith('-preview')).toBe(false);
+    }
+  });
+
   it('opens a file the session never changed read-only, which resolve refuses', () => {
     expect(fileLinks.resolve(SESSION, 'src/other.ts')).toBeUndefined();
     const tab = fileLinks.openPath?.(SESSION, '/repo/src/other.ts');
