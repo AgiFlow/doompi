@@ -1,3 +1,21 @@
+## 0.0.1-alpha.91 (2026-10-09)
+
+### 🩹 Fixes
+
+- **core:** steer prompts admitted during active turns ([#330](https://github.com/AgiFlow/doompi/pull/330))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.128
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.123
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.124
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.82
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.90 (2026-10-09)
 
 ### 🧱 Updated Dependencies
