@@ -267,46 +267,6 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       }
       const taskDelivery = request.task === undefined ? undefined : requireSessionDelivery();
       const existingBranch = request.checkout === 'existing';
-      if (existingBranch) {
-        const branches = await git.listBranches(root);
-        const local = branches.local.find((branch) => branch.name === request.branch);
-        const available =
-          request.remote === undefined
-            ? local !== undefined && local.checkedOutAt === undefined
-            : local === undefined &&
-              branches.remote.some((branch) => branch.remote === request.remote && branch.name === request.branch);
-        if (!available)
-          throw new DoomGitExpectedError(
-            'invalid_request',
-            local?.checkedOutAt === undefined
-              ? `The branch ${request.branch} is not available to check out.`
-              : `The branch ${request.branch} is already checked out at ${local.checkedOutAt}.`,
-            false,
-            'Pick another branch, or create a new one.',
-          );
-      } else {
-        // ponytail: the branch list caps at 2,000 refs; use show-ref --verify if older duplicates need covering.
-        if ((await git.listBranches(root)).local.some((branch) => branch.name === request.branch))
-          throw new DoomGitExpectedError(
-            'invalid_request',
-            `The branch ${request.branch} already exists.`,
-            false,
-            'Pick another name, or open it as an existing branch.',
-          );
-      }
-      const baseRef = existingBranch
-        ? request.remote === undefined
-          ? request.branch
-          : `${request.remote}/${request.branch}`
-        : (request.baseRef ?? (await git.remoteBaseRef(root)));
-      if (baseRef === undefined) {
-        throw new DoomGitExpectedError(
-          'git_failed',
-          'No remote base branch is available for this repository.',
-          false,
-          'Fetch a remote branch or pass an explicit baseRef.',
-        );
-      }
       const id = shortId(reserved?.sessionId ?? randomUUID());
       let path = worktreeDirectory({
         worktreesRoot: worktreesRoot(deps.homeDir),
@@ -329,6 +289,48 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           false,
           'Inspect the existing directory; it will not be replaced.',
         );
+      if (!recovering) {
+        if (existingBranch) {
+          const branches = await git.listBranches(root);
+          const local = branches.local.find((branch) => branch.name === request.branch);
+          const available =
+            request.remote === undefined
+              ? local !== undefined && local.checkedOutAt === undefined
+              : local === undefined &&
+                branches.remote.some((branch) => branch.remote === request.remote && branch.name === request.branch);
+          if (!available)
+            throw new DoomGitExpectedError(
+              'invalid_request',
+              local?.checkedOutAt === undefined
+                ? `The branch ${request.branch} is not available to check out.`
+                : `The branch ${request.branch} is already checked out at ${local.checkedOutAt}.`,
+              false,
+              'Pick another branch, or create a new one.',
+            );
+        } else {
+          // ponytail: the branch list caps at 2,000 refs; use show-ref --verify if older duplicates need covering.
+          if ((await git.listBranches(root)).local.some((branch) => branch.name === request.branch))
+            throw new DoomGitExpectedError(
+              'invalid_request',
+              `The branch ${request.branch} already exists.`,
+              false,
+              'Pick another name, or open it as an existing branch.',
+            );
+        }
+      }
+      const baseRef = existingBranch
+        ? request.remote === undefined
+          ? request.branch
+          : `${request.remote}/${request.branch}`
+        : (request.baseRef ?? (await git.remoteBaseRef(root)));
+      if (baseRef === undefined) {
+        throw new DoomGitExpectedError(
+          'git_failed',
+          'No remote base branch is available for this repository.',
+          false,
+          'Fetch a remote branch or pass an explicit baseRef.',
+        );
+      }
       // The worktree and the branch are made by one command, so they are undone
       // by one too. `worktree remove` leaves the branch behind, and a branch
       // nobody asked for is what a failed spawn used to leave on the floor.
