@@ -6,8 +6,8 @@
  * DESIGN PATTERNS:
  * - Like a pull request's file view. Picking a file in the list scrolls to it;
  *   each file's header stays pinned while its diff scrolls past.
- * - The first files load at once and the rest load when opened, so a branch
- *   with hundreds of changed files does not fetch hundreds of diffs up front.
+ * - Only nearby file bodies mount and load; distant files retain their headers
+ *   and measured-height placeholders.
  * - A comment is drawn under the line it is about, on the side it is about.
  *   The open draft sits in the same place, so writing happens in context.
  * - Only UI state lives here (the open draft, which files are collapsed, which
@@ -31,16 +31,18 @@ import {
   type DiffSelection,
   type ReviewComment,
 } from '@agimon-ai/doompi-web-components';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { GitReviewFileDiff, GitReviewFileEntry, GitReviewSummary } from '../../../../../types/gitReview';
 import { GitReviewBrowser } from './GitReviewBrowser';
 import { GitSyncBar, type GitSyncBarProps } from './GitSyncBar';
 
-/** How many files load their diff before the reader asks for more. */
-export const EAGER_FILES = 20;
+const PICK_ALIGNMENT_MS = 300;
+const ESTIMATED_ROW_HEIGHT = 21;
+const MAX_DIFF_ROWS = 5_000;
 
 const NO_FILES: readonly GitReviewFileEntry[] = [];
+const NO_PATHS: ReadonlySet<string> = new Set();
 
 export type ReviewSummaryState =
   | { state: 'loading' }
@@ -62,6 +64,8 @@ export interface GitReviewViewProps {
   onRemoveComment: (id: string) => void;
   onSendReview: () => void;
   onDiscard: () => void;
+  /** Defer refresh while an unsent draft owns local input state. */
+  onDraftChange?: (open: boolean) => void;
   /** Why the last send did not reach the session; the comments are still here. */
   sendError?: string;
   /** Opens with this draft already raised. Stories use it; the panel never does. */
@@ -87,45 +91,133 @@ export function GitReviewView({
   onRemoveComment,
   onSendReview,
   onDiscard,
+  onDraftChange,
   sendError,
   initialDraft,
 }: GitReviewViewProps) {
   const entries = summary.state === 'ready' ? summary.summary.files : NO_FILES;
-  // A file is open by default when it is among the first EAGER_FILES; the
-  // reader's own toggles override that, so a list that arrives later still
-  // opens exactly the files that load.
   const [openOverride, setOpenOverride] = useState<Readonly<Record<string, boolean>>>({});
-  const [picked, setPicked] = useState<string | undefined>();
-  const activePath = picked ?? entries[0]?.path;
+  const [picked, setPicked] = useState<string>();
+  const [navigation, setNavigation] = useState<string>();
+  const [proximity, setProximity] = useState<{ entries: readonly GitReviewFileEntry[]; paths: ReadonlySet<string> }>({
+    entries: NO_FILES,
+    paths: NO_PATHS,
+  });
+  const near = proximity.entries === entries ? proximity.paths : NO_PATHS;
+  const paneRef = useRef<HTMLDivElement>(null);
+  const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map());
+  const pickedAt = useRef(0);
+  const activePath = entries.some((entry) => entry.path === picked) ? picked : entries[0]?.path;
   const [draft, setDraft] = useState<{ path: string; selection: DiffSelection } | undefined>(initialDraft);
 
-  // The eager slice loads as soon as the list arrives; anything already asked
-  // for is left alone, so a re-render never refetches.
   useEffect(() => {
-    for (const file of entries.slice(0, EAGER_FILES)) {
-      if (files[file.path] === undefined) onLoadFile(file.path);
+    const pane = paneRef.current;
+    if (pane === null || typeof IntersectionObserver === 'undefined') return;
+    // Observer measurements belong to this summary snapshot.
+    // eslint-disable-next-line react/set-state-in-effect
+    setHeights(new Map());
+    let observer: IntersectionObserver;
+    const observe = (): void => {
+      observer?.disconnect();
+      observer = new IntersectionObserver(
+        (changes) => {
+          for (const change of changes) {
+            if (change.isIntersecting) continue;
+            const section = change.target as HTMLElement;
+            const path = section.dataset.reviewPath;
+            const body = section.querySelector<HTMLElement>('[data-review-body="measured"]');
+            if (path !== undefined && body !== null) {
+              const height = body.offsetHeight;
+              setHeights((measured) => new Map(measured).set(path, height));
+            }
+          }
+          setProximity((current) => {
+            const next = new Set(current.entries === entries ? current.paths : NO_PATHS);
+            for (const change of changes) {
+              const section = change.target as HTMLElement;
+              const path = section.dataset.reviewPath;
+              if (path === undefined) continue;
+              if (change.isIntersecting) next.add(path);
+              else {
+                next.delete(path);
+              }
+            }
+            return { entries, paths: next };
+          });
+        },
+        { root: pane, rootMargin: `${String(pane.clientHeight)}px 0px` },
+      );
+      for (const section of pane.querySelectorAll('[data-review-path]')) observer.observe(section);
+    };
+    observe();
+    const resize = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(observe);
+    resize?.observe(pane);
+    let frame = 0;
+    const scroll = (): void => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        // ponytail: a short alignment lock keeps explicit picks authoritative; use scrollend for longer animated navigation.
+        if (Date.now() - pickedAt.current < PICK_ALIGNMENT_MS) return;
+        const rect = pane.getBoundingClientRect();
+        const section = document
+          .elementFromPoint(rect.left + 8, rect.top + 1)
+          ?.closest<HTMLElement>('[data-review-path]');
+        if (section !== null && section !== undefined && pane.contains(section)) setPicked(section.dataset.reviewPath);
+      });
+    };
+    pane.addEventListener('scroll', scroll, { passive: true });
+    return () => {
+      observer.disconnect();
+      resize?.disconnect();
+      pane.removeEventListener('scroll', scroll);
+      cancelAnimationFrame(frame);
+    };
+  }, [entries]);
+
+  useLayoutEffect(() => {
+    if (navigation === undefined) return;
+    const section = [...(paneRef.current?.querySelectorAll<HTMLElement>('[data-review-path]') ?? [])].find(
+      (element) => element.dataset.reviewPath === navigation,
+    );
+    section?.scrollIntoView({ block: 'start' });
+  }, [navigation, openOverride]);
+
+  useEffect(() => {
+    if (navigation === undefined) return;
+    const timeout = setTimeout(() => setNavigation(undefined), PICK_ALIGNMENT_MS);
+    return () => clearTimeout(timeout);
+  }, [navigation]);
+
+  useEffect(() => {
+    for (const file of entries) {
+      if (
+        (openOverride[file.path] ?? true) &&
+        (near.has(file.path) || navigation === file.path || draft?.path === file.path) &&
+        files[file.path] === undefined
+      )
+        onLoadFile(file.path);
     }
-  }, [entries, files, onLoadFile]);
+  }, [entries, files, near, navigation, draft, openOverride, onLoadFile]);
 
   const commentCounts: Record<string, number> = {};
   for (const comment of comments) commentCounts[comment.path] = (commentCounts[comment.path] ?? 0) + 1;
 
-  const isOpen = (path: string, index: number): boolean => openOverride[path] ?? index < EAGER_FILES;
+  const isOpen = (path: string): boolean => openOverride[path] ?? true;
 
   const open = (path: string): void => {
     setOpenOverride((current) => (current[path] === true ? current : { ...current, [path]: true }));
-    if (files[path] === undefined) onLoadFile(path);
   };
 
   const pick = (path: string): void => {
+    if (!entries.some((entry) => entry.path === path)) return;
+    pickedAt.current = Date.now();
     setPicked(path);
+    setNavigation(path);
     open(path);
-    const index = entries.findIndex((file) => file.path === path);
-    globalThis.document?.getElementById(sectionId(index))?.scrollIntoView({ block: 'start' });
   };
 
-  const toggle = (path: string, index: number): void => {
-    if (isOpen(path, index)) setOpenOverride((current) => ({ ...current, [path]: false }));
+  const toggle = (path: string): void => {
+    if (isOpen(path)) setOpenOverride((current) => ({ ...current, [path]: false }));
     else open(path);
   };
 
@@ -141,6 +233,7 @@ export function GitReviewView({
       body: body.trim(),
     });
     setDraft(undefined);
+    onDraftChange?.(false);
   };
 
   return (
@@ -187,7 +280,7 @@ export function GitReviewView({
             onPick={pick}
             {...(activePath === undefined ? {} : { activePath })}
           />
-          <div data-testid="git-review-diffs" className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+          <div ref={paneRef} data-testid="git-review-diffs" className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             {summary.summary.truncated ? (
               <p className="px-4 pt-2 text-2xs text-doom-faint">
                 more files changed than the review lists; the rest are left out.
@@ -199,16 +292,25 @@ export function GitReviewView({
                 id={sectionId(index)}
                 entry={file}
                 state={files[file.path]}
-                collapsed={!isOpen(file.path, index)}
+                collapsed={!isOpen(file.path)}
+                mounted={near.has(file.path) || navigation === file.path || draft?.path === file.path}
+                placeholderHeight={
+                  heights.get(file.path) ??
+                  (file.binary ? 40 : Math.min(MAX_DIFF_ROWS, file.added + file.removed + 6) * ESTIMATED_ROW_HEIGHT)
+                }
                 comments={comments.filter((comment) => comment.path === file.path)}
                 draft={draft?.path === file.path ? draft.selection : undefined}
-                onToggle={() => toggle(file.path, index)}
+                onToggle={() => toggle(file.path)}
                 onSelect={(selection) => {
                   setPicked(file.path);
                   setDraft({ path: file.path, selection });
+                  onDraftChange?.(true);
                 }}
                 onSubmitDraft={submitDraft}
-                onCancelDraft={() => setDraft(undefined)}
+                onCancelDraft={() => {
+                  setDraft(undefined);
+                  onDraftChange?.(false);
+                }}
                 onRemoveComment={onRemoveComment}
                 onRetry={() => onLoadFile(file.path)}
               />
@@ -270,6 +372,8 @@ function FileSection({
   entry,
   state,
   collapsed,
+  mounted,
+  placeholderHeight,
   comments,
   draft,
   onToggle,
@@ -283,6 +387,8 @@ function FileSection({
   entry: GitReviewFileEntry;
   state: ReviewFileState | undefined;
   collapsed: boolean;
+  mounted: boolean;
+  placeholderHeight: number;
   comments: readonly ReviewComment[];
   draft: DiffSelection | undefined;
   onToggle: () => void;
@@ -341,7 +447,12 @@ function FileSection({
   };
 
   return (
-    <section id={id} data-testid={`git-review-file-${entry.path}`} className="border-b border-doom-border-soft">
+    <section
+      id={id}
+      data-review-path={entry.path}
+      data-testid={`git-review-file-${entry.path}`}
+      className="border-b border-doom-border-soft"
+    >
       <Button
         variant="ghost"
         size="card"
@@ -369,32 +480,42 @@ function FileSection({
           </span>
         )}
       </Button>
-      {collapsed ? null : state === undefined || state.state === 'loading' ? (
-        <div className="flex items-center gap-2 px-4 py-3">
-          <Spinner className="h-3 w-3 text-doom-faint" label={`loading ${entry.path}`} />
-          <span className="text-2xs text-doom-faint">loading diff…</span>
-        </div>
-      ) : state.state === 'error' ? (
-        <div className="flex items-center gap-2 px-4 py-3">
-          <span role="alert" className="text-2xs text-doom-red">
-            {state.error}
-          </span>
-          <Button variant="ghost" size="xs" onClick={onRetry}>
-            retry
-          </Button>
-        </div>
-      ) : state.diff.binary ? (
-        <p className="px-4 py-3 text-2xs text-doom-faint">binary file, not drawn</p>
-      ) : state.diff.tooLarge ? (
-        <p className="px-4 py-3 text-2xs text-doom-faint">this diff is too large to draw here</p>
+      {/* ponytail: file bodies are windowed; visible files retain the server's 5,000-row ceiling. Virtualize rows if needed. */}
+      {collapsed ? null : !mounted ? (
+        <div aria-hidden style={{ height: placeholderHeight }} />
       ) : (
-        <DiffView
-          hunks={state.diff.hunks}
-          testId={`git-review-diff-${id}`}
-          onSelect={onSelect}
-          renderAfterRow={renderAfterRow}
-          className="py-1"
-        />
+        <div
+          data-review-body={state === undefined || state.state === 'loading' ? 'loading' : 'measured'}
+          style={state === undefined || state.state === 'loading' ? { minHeight: placeholderHeight } : undefined}
+        >
+          {state === undefined || state.state === 'loading' ? (
+            <div className="flex items-center gap-2 px-4 py-3">
+              <Spinner className="h-3 w-3 text-doom-faint" label={`loading ${entry.path}`} />
+              <span className="text-2xs text-doom-faint">loading diff…</span>
+            </div>
+          ) : state.state === 'error' ? (
+            <div className="flex items-center gap-2 px-4 py-3">
+              <span role="alert" className="text-2xs text-doom-red">
+                {state.error}
+              </span>
+              <Button variant="ghost" size="xs" onClick={onRetry}>
+                retry
+              </Button>
+            </div>
+          ) : state.diff.binary ? (
+            <p className="px-4 py-3 text-2xs text-doom-faint">binary file, not drawn</p>
+          ) : state.diff.tooLarge ? (
+            <p className="px-4 py-3 text-2xs text-doom-faint">this diff is too large to draw here</p>
+          ) : (
+            <DiffView
+              hunks={state.diff.hunks}
+              testId={`git-review-diff-${id}`}
+              onSelect={onSelect}
+              renderAfterRow={renderAfterRow}
+              className="py-1"
+            />
+          )}
+        </div>
       )}
     </section>
   );

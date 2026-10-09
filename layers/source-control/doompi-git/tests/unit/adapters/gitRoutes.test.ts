@@ -7,6 +7,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../../src/extensions/(backend)/api/git/_lib/route.server';
 import { createGitSandbox, type GitSandbox } from '../../support/gitSandbox';
 
+const { reviewCall } = vi.hoisted(() => ({ reviewCall: vi.fn() }));
+vi.mock('../../../src/services/branchDiff', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../../src/services/branchDiff')>();
+  return {
+    ...original,
+    createBranchDiff: () => {
+      const real = original.createBranchDiff();
+      return {
+        ...real,
+        review: (...args: Parameters<typeof real.review>) => reviewCall(() => real.review(...args)),
+      };
+    },
+  };
+});
+
 let sandbox: GitSandbox;
 let repo: string;
 
@@ -31,6 +46,7 @@ async function call(ctx: DoomApiContext, method: string, pathname: string, body?
 }
 
 beforeEach(() => {
+  reviewCall.mockReset().mockImplementation((run: () => Promise<unknown>) => run());
   sandbox = createGitSandbox('doompi-git-routes2-');
   vi.stubEnv('GIT_CONFIG_GLOBAL', sandbox.env.GIT_CONFIG_GLOBAL!);
   vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1');
@@ -115,6 +131,39 @@ describe('session review routes', () => {
     expect(((await file.json()) as { hunks: unknown[] }).hunks).toHaveLength(1);
     expect((await call(session(), 'GET', `/review/file?path=${encodeURIComponent('../secret')}`)).status).toBe(404);
     expect((await call(session(), 'GET', '/review/file?path=--output=x')).status).toBe(404);
+  });
+
+  it('shares overlapping reviews, then recomputes after settlement', async () => {
+    fs.writeFileSync(path.join(repo, 'README.md'), '# changed\n');
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    reviewCall.mockImplementationOnce(async (run: () => Promise<unknown>) => {
+      await gate;
+      return run();
+    });
+    const handler = api.start(session());
+    const request = (pathname: string) => Promise.resolve(handler.fetch(new Request(`http://git.local${pathname}`)));
+    const responses = [
+      request('/review'),
+      request('/review/file?path=README.md'),
+      request('/review/file?path=../secret'),
+    ];
+    await vi.waitFor(() => expect(reviewCall).toHaveBeenCalledTimes(1));
+    release();
+    expect((await Promise.all(responses)).map((response) => response.status)).toEqual([200, 200, 404]);
+    expect((await request('/review')).status).toBe(200);
+    expect(reviewCall).toHaveBeenCalledTimes(2);
+  });
+
+  it('removes a failed in-flight review so the next request can retry', async () => {
+    reviewCall.mockRejectedValueOnce(new Error('read failed'));
+    const handler = api.start(session());
+    const request = () => handler.fetch(new Request('http://git.local/review'));
+    expect((await request()).status).toBe(500);
+    expect((await request()).status).toBe(200);
+    expect(reviewCall).toHaveBeenCalledTimes(2);
   });
 
   it('reports a session outside a repository, and does not exist on a workspace mount', async () => {

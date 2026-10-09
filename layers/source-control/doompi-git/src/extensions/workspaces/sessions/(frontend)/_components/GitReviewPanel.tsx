@@ -18,7 +18,7 @@ import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/we
  */
 import { buildReviewPrompt } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { gitChanges, requestGitSync } from '../_lib/gitChangesStore';
 import { fetchReviewFile, fetchReviewSummary } from '../_lib/gitReviewApi';
@@ -39,7 +39,11 @@ export function GitReviewPanel({ sessionId, sendSessionFrame }: WebPluginSlotPro
   const [files, setFiles] = useState<Record<string, ReviewFileState | undefined>>({});
   const [sendError, setSendError] = useState<string>();
   const [dismissedError, setDismissedError] = useState<string>();
+  const [draftSnapshot, setDraftSnapshot] = useState<{ sessionId: string | null; fingerprint: string }>();
   const changes = activity.changes;
+  const generation = useRef(0);
+  const pendingFiles = useRef(new Map<string, AbortController>());
+  const readyGeneration = useRef(false);
 
   // What the hub reported, reduced to the facts that move the file list. A new
   // value means the list and every loaded hunk may be stale.
@@ -51,13 +55,24 @@ export function GitReviewPanel({ sessionId, sendSessionFrame }: WebPluginSlotPro
     changes?.files,
     changes?.rebase?.conflicts.length,
   ]);
-
+  // Keep the mounted draft input intact until it is submitted or cancelled.
+  const refreshFingerprint = draftSnapshot?.sessionId === sessionId ? draftSnapshot.fingerprint : fingerprint;
   useEffect(() => {
+    generation.current += 1;
+    readyGeneration.current = false;
+    const pending = pendingFiles.current;
+    for (const request of pending.values()) request.abort();
+    pending.clear();
+    // Invalidate the visible snapshot while the external change notification is being reread.
+    // eslint-disable-next-line react/set-state-in-effect
+    setSummary({ state: 'loading' });
+    setFiles({});
     if (sessionId === null) return;
     const controller = new AbortController();
     fetchReviewSummary(sessionId, controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return;
+        readyGeneration.current = result.ok;
         setSummary(result.ok ? { state: 'ready', summary: result.summary } : { state: 'error', error: result.error });
         setFiles({});
       })
@@ -68,21 +83,36 @@ export function GitReviewPanel({ sessionId, sendSessionFrame }: WebPluginSlotPro
           error: error instanceof Error ? error.message : 'The changes could not be read.',
         });
       });
-    return () => controller.abort();
-  }, [sessionId, fingerprint]);
+    return () => {
+      controller.abort();
+      generation.current += 1;
+      readyGeneration.current = false;
+      for (const request of pending.values()) request.abort();
+      pending.clear();
+    };
+  }, [sessionId, refreshFingerprint]);
 
   const loadFile = useCallback(
     (path: string): void => {
-      if (sessionId === null) return;
+      if (sessionId === null || !readyGeneration.current || pendingFiles.current.has(path)) return;
+      const requestGeneration = generation.current;
+      const controller = new AbortController();
+      pendingFiles.current.set(path, controller);
       setFiles((current) => ({ ...current, [path]: { state: 'loading' } }));
-      const settle = (state: ReviewFileState): void => setFiles((current) => ({ ...current, [path]: state }));
-      fetchReviewFile(sessionId, path)
+      const settle = (state: ReviewFileState): void => {
+        if (controller.signal.aborted || requestGeneration !== generation.current) return;
+        setFiles((current) => ({ ...current, [path]: state }));
+      };
+      fetchReviewFile(sessionId, path, controller.signal)
         .then((result) =>
           settle(result.ok ? { state: 'ready', diff: result.diff } : { state: 'error', error: result.error }),
         )
         .catch((error: unknown) =>
           settle({ state: 'error', error: error instanceof Error ? error.message : 'The diff could not be read.' }),
-        );
+        )
+        .finally(() => {
+          if (pendingFiles.current.get(path) === controller) pendingFiles.current.delete(path);
+        });
     },
     [sessionId],
   );
@@ -101,6 +131,12 @@ export function GitReviewPanel({ sessionId, sendSessionFrame }: WebPluginSlotPro
 
   return (
     <GitReviewView
+      key={sessionId}
+      onDraftChange={(open) =>
+        setDraftSnapshot((current) =>
+          open ? (current?.sessionId === sessionId ? current : { sessionId, fingerprint }) : undefined,
+        )
+      }
       sync={{
         ...(changes === undefined ? {} : { changes }),
         ...(activity.pending === undefined ? {} : { pending: activity.pending }),
