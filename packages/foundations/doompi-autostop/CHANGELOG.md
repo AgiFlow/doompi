@@ -1,3 +1,17 @@
+## 0.0.1-alpha.102 (2026-10-09)
+
+### 🩹 Fixes
+
+- **workflow:** wait for owned background work before decision gates ([#337](https://github.com/AgiFlow/doompi/pull/337))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.125
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.101 (2026-10-09)
 
 ### 🧱 Updated Dependencies

@@ -1,3 +1,32 @@
+## 0.0.1-alpha.129 (2026-10-09)
+
+### 🩹 Fixes
+
+- **doompi:** resolve worktree hook parser from workspace ([#338](https://github.com/AgiFlow/doompi/pull/338))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.102
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.91
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.124
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.103
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.125
+- Updated @agimon-ai/doompi-hook to 0.0.1-alpha.102
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.103
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.102
+- Updated @agimon-ai/doompi-plan to 0.0.1-alpha.125
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.103
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.126
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.103
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.125
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.83
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.125
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.128 (2026-10-09)
 
 ### 🧱 Updated Dependencies
