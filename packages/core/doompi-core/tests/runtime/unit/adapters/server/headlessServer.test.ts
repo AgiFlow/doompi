@@ -203,7 +203,7 @@ describe('serveHeadlessServer', () => {
         .use(DoomSessionService)
         .prompt({ text: 'native-after-grant', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
       expect(first.runtime.submitPrompt).not.toHaveBeenCalledWith('browser-after-grant', undefined);
-      expect(first.runtime.submitPrompt).toHaveBeenCalledWith('native-after-grant', undefined);
+      expect(first.runtime.submitPrompt).toHaveBeenCalledWith('native-after-grant', undefined, 'steer');
       const sessionUrl = `${server.url}/api/workspaces/test-workspace/sessions/one`;
       expect((await fetch(sessionUrl)).status).toBe(404);
       expect((await fetch(sessionUrl, { headers: { 'x-doompi-desktop': 'forged' } })).status).toBe(404);
@@ -1900,7 +1900,7 @@ describe('serveHeadlessServer', () => {
     const sessionService = sessionBinding.use(DoomSessionService);
     await sessionBinding.ready(BACKGROUND_CONTEXT);
     await sessionService.prompt({ text: 'hello', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
-    expect(first.runtime.submitPrompt).toHaveBeenCalledWith('hello', undefined);
+    expect(first.runtime.submitPrompt).toHaveBeenCalledWith('hello', undefined, 'steer');
     expect(second.runtime.submitPrompt).not.toHaveBeenCalled();
 
     await sessionBinding.dispose(BACKGROUND_CONTEXT);
@@ -1952,11 +1952,11 @@ describe('serveHeadlessServer', () => {
       const pending = expect(
         bindings[0]!.use(DoomSessionService).prompt('stalled', BACKGROUND_CONTEXT),
       ).rejects.toThrow();
-      await vi.waitFor(() => expect(first.runtime.submitPrompt).toHaveBeenCalledWith('stalled', undefined));
+      await vi.waitFor(() => expect(first.runtime.submitPrompt).toHaveBeenCalledWith('stalled', undefined, 'steer'));
       first.exit();
       await pending;
       const prompt = bindings[1]!.use(DoomSessionService).prompt('survives', BACKGROUND_CONTEXT);
-      await vi.waitFor(() => expect(second.runtime.submitPrompt).toHaveBeenCalledWith('survives', undefined));
+      await vi.waitFor(() => expect(second.runtime.submitPrompt).toHaveBeenCalledWith('survives', undefined, 'steer'));
       second.emitFrame({ type: 'agent_settled' });
       await prompt;
       expect(clients[1]!.attachment).toEqual(attachment);
@@ -2010,7 +2010,7 @@ describe('serveHeadlessServer', () => {
     });
     await firstBinding.ready(BACKGROUND_CONTEXT);
     await firstBinding.use(DoomSessionService).prompt({ text: 'before', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
-    expect(first.runtime.submitPrompt).toHaveBeenCalledWith('before', undefined);
+    expect(first.runtime.submitPrompt).toHaveBeenCalledWith('before', undefined, 'steer');
 
     await hub.closeSession('one');
     await vi.waitFor(() => expect(client.attachment).toBeUndefined());
@@ -2029,7 +2029,7 @@ describe('serveHeadlessServer', () => {
     });
     await secondBinding.ready(BACKGROUND_CONTEXT);
     await secondBinding.use(DoomSessionService).prompt({ text: 'after', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
-    expect(second.runtime.submitPrompt).toHaveBeenCalledWith('after', undefined);
+    expect(second.runtime.submitPrompt).toHaveBeenCalledWith('after', undefined, 'steer');
     expect(first.runtime.submitPrompt).not.toHaveBeenCalledWith('after', undefined);
 
     await secondBinding.dispose(BACKGROUND_CONTEXT);
