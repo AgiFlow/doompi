@@ -465,7 +465,7 @@ describe('global remote control', () => {
           args: ['stalled'],
         }),
       ).rejects.toThrow();
-      await vi.waitFor(() => expect(submitPrompt).toHaveBeenCalledWith('stalled', undefined));
+      await vi.waitFor(() => expect(submitPrompt).toHaveBeenCalledWith('stalled', undefined, 'steer'));
       exit(1);
       await pending;
     } finally {

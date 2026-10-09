@@ -440,7 +440,8 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       const submit = async () => {
         guardPrompt();
         submitted = true;
-        const submission = await options.runtime.submitPrompt(args.message, args.images);
+        // Native admission atomically chooses idle submission or busy steering.
+        const submission = await options.runtime.submitPrompt(args.message, args.images, 'steer');
         observe(submission.settled);
         guardPrompt();
         return submission;
@@ -462,14 +463,14 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
             guardPrompt();
             if (handled) return;
           }
-          throw new Error('A turn is already running');
         }
         if (waitFor === 'accepted' && !options.telemetry) {
           await submit();
           return;
         }
         const startedAt = Date.now();
-        latency = promptLatency = { startedAt, lastStageAt: startedAt, reported: new Set() };
+        if (promptLatency === undefined)
+          latency = promptLatency = { startedAt, lastStageAt: startedAt, reported: new Set() };
         const settled = (projection = awaitSettled());
         let resolveAdmission: (() => void) | undefined;
         const admitted =
@@ -482,7 +483,7 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
           const submission = await span('doompi_server.prompt_admission', submit);
           guardPrompt();
           if (submission.handledCommand) settled.resolve();
-          reportPromptLatency('accepted');
+          if (latency !== undefined && promptLatency === latency) reportPromptLatency('accepted');
           resolveAdmission?.();
           await Promise.all([
             span('doompi_server.prompt_engine_settlement', () => submission.settled),

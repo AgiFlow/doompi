@@ -1143,6 +1143,79 @@ describe('direct harness durable lifecycle', () => {
       await repository.close(BACKGROUND_CONTEXT);
     }
   });
+  it('admits steering during a held tool without aborting or delivering early', async () => {
+    const { repository, models, streams, streamSimple } = fixtures(true);
+    let started!: () => void;
+    let release!: () => void;
+    const toolStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let aborted = false;
+    const runtime = await createDirectHarnessRuntime({
+      cwd: '/tmp',
+      durableStorage: repository,
+      models,
+      model,
+      tools: [
+        {
+          name: 'gated',
+          label: 'Gated',
+          description: 'Waits for release',
+          parameters: Type.Object({}),
+          async execute(_id, _args, _update, _toolContext, _invocation, context) {
+            context.abortSignal!.addEventListener(
+              'abort',
+              () => {
+                aborted = true;
+              },
+              { once: true },
+            );
+            started();
+            await gate;
+            return { content: [{ type: 'text', text: 'released tool result' }], details: undefined };
+          },
+        },
+      ],
+    });
+    try {
+      const first = await runtime.submitPrompt('use tool');
+      await waitFor(() => streams.length === 1);
+      streams[0]!.push({
+        type: 'done',
+        reason: 'toolUse',
+        message: {
+          ...message('tool'),
+          stopReason: 'toolUse',
+          content: [{ type: 'toolCall', id: 'gated-1', name: 'gated', arguments: {} }],
+        },
+      });
+      await toolStarted;
+      const steered = await runtime.submitPrompt('steered', undefined, 'steer');
+      expect(aborted).toBe(false);
+      expect(streams).toHaveLength(1);
+      expect(JSON.stringify(streamSimple.mock.calls[0]![1])).not.toContain('steered');
+      release();
+      await waitFor(() => streams.length === 2);
+      const messages = streamSimple.mock.calls[1]![1].messages;
+      const resultIndex = messages.findIndex((entry) => entry.role === 'toolResult');
+      const steeredIndices = messages.flatMap((entry, index) =>
+        entry.role === 'user' && JSON.stringify(entry.content).includes('steered') ? [index] : [],
+      );
+      expect(resultIndex).toBeGreaterThanOrEqual(0);
+      expect(steeredIndices).toHaveLength(1);
+      expect(steeredIndices[0]).toBeGreaterThan(resultIndex);
+      streams[1]!.push({ type: 'done', reason: 'stop', message: message('answer') });
+      await Promise.all([first.settled, steered.settled]);
+    } finally {
+      release();
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   it('waits for signal-aware tool cleanup before starting the replacement provider', async () => {
     const { repository, models, streams } = fixtures();
     const session = repository;

@@ -331,7 +331,7 @@ describe('typed session runtime controls', () => {
 
     const settled = runtime.prompt('hello', BACKGROUND_CONTEXT);
     await Promise.resolve();
-    expect(direct.submitPrompt).toHaveBeenCalledWith('hello', undefined);
+    expect(direct.submitPrompt).toHaveBeenCalledWith('hello', undefined, 'steer');
     let finished = false;
     void settled.then(() => {
       finished = true;
@@ -342,7 +342,7 @@ describe('typed session runtime controls', () => {
     await settled;
 
     await runtime.prompt({ text: 'accepted', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
-    expect(direct.submitPrompt).toHaveBeenLastCalledWith('accepted', undefined);
+    expect(direct.submitPrompt).toHaveBeenLastCalledWith('accepted', undefined, 'steer');
     await runtime.dispose();
   });
 
@@ -351,7 +351,7 @@ describe('typed session runtime controls', () => {
     async (command) => {
       const { direct, runtime, emit } = fixture();
       const active = runtime.prompt('active turn', BACKGROUND_CONTEXT);
-      await vi.waitFor(() => expect(direct.submitPrompt).toHaveBeenCalledWith('active turn', undefined));
+      await vi.waitFor(() => expect(direct.submitPrompt).toHaveBeenCalledWith('active turn', undefined, 'steer'));
       emit({ type: 'agent_start' });
       vi.mocked(direct.dispatchCommand).mockResolvedValueOnce(true);
 
@@ -372,25 +372,86 @@ describe('typed session runtime controls', () => {
     },
   );
 
-  it('keeps ordinary and unrelated commands blocked during a turn', async () => {
+  it.each(['accepted', 'settled'] as const)('admits overlapping prompts with %s acknowledgement', async (waitFor) => {
     const { direct, runtime, emit } = fixture();
     const active = runtime.prompt('active turn', BACKGROUND_CONTEXT);
-    await vi.waitFor(() => expect(direct.submitPrompt).toHaveBeenCalledWith('active turn', undefined));
+    await vi.waitFor(() => expect(direct.submitPrompt).toHaveBeenCalledOnce());
     emit({ type: 'agent_start' });
-
-    await expect(runtime.prompt('/run', BACKGROUND_CONTEXT)).rejects.toThrow('A turn is already running');
-    await expect(runtime.prompt('ordinary text', BACKGROUND_CONTEXT)).rejects.toThrow('A turn is already running');
-    expect(direct.dispatchCommand).not.toHaveBeenCalled();
-
+    const overlap = runtime.prompt({ text: 'ordinary text', waitFor }, BACKGROUND_CONTEXT);
+    await vi.waitFor(() => expect(direct.submitPrompt).toHaveBeenCalledTimes(2));
+    expect(direct.submitPrompt).toHaveBeenLastCalledWith('ordinary text', undefined, 'steer');
+    if (waitFor === 'accepted') await overlap;
+    expect(direct.abort).not.toHaveBeenCalled();
     emit({ type: 'agent_settled' });
-    await active;
+    await Promise.all([active, overlap]);
     await runtime.dispose();
+  });
+
+  it('submits unrelated slash commands through native steer admission while busy', async () => {
+    const f = fixture();
+    f.emit({ type: 'agent_start' });
+    vi.mocked(f.direct.submitPrompt).mockResolvedValueOnce({ settled: Promise.resolve(), handledCommand: true });
+    await f.runtime.prompt('/run', BACKGROUND_CONTEXT);
+    expect(f.direct.submitPrompt).toHaveBeenCalledWith('/run', undefined, 'steer');
+    expect(f.direct.dispatchCommand).not.toHaveBeenCalled();
+    expect(f.direct.abort).not.toHaveBeenCalled();
+    await f.runtime.dispose();
+  });
+
+  it('admits an idle prompt while an earlier receipt remains outstanding', async () => {
+    const f = fixture();
+    const firstEngine = deferred<void>();
+    const ownEngine = deferred<void>();
+    vi.mocked(f.direct.submitPrompt)
+      .mockResolvedValueOnce({ settled: firstEngine.promise })
+      .mockResolvedValueOnce({ settled: ownEngine.promise });
+    const first = f.runtime.prompt('first', BACKGROUND_CONTEXT);
+    await vi.waitFor(() => expect(f.direct.submitPrompt).toHaveBeenCalledOnce());
+    const second = f.runtime.prompt('second', BACKGROUND_CONTEXT);
+    await vi.waitFor(() => expect(f.direct.submitPrompt).toHaveBeenCalledTimes(2));
+    f.emit({ type: 'agent_settled' });
+    firstEngine.resolve();
+    await first;
+    let finished = false;
+    void second.then(() => {
+      finished = true;
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(finished).toBe(false);
+    const third = f.runtime.prompt({ text: 'idle', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+    await third;
+    expect(f.direct.submitPrompt).toHaveBeenLastCalledWith('idle', undefined, 'steer');
+    ownEngine.resolve();
+    await second;
+    await f.runtime.dispose();
+  });
+
+  it('does not report overlap admission against the original latency owner', async () => {
+    const telemetry = tracing();
+    const f = fixture(telemetry);
+    const admission = deferred<Awaited<ReturnType<DirectHarnessRuntime['submitPrompt']>>>();
+    vi.mocked(f.direct.submitPrompt).mockImplementationOnce(() => admission.promise);
+    const first = f.runtime.prompt({ text: 'first', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+    await vi.waitFor(() => expect(f.direct.submitPrompt).toHaveBeenCalledOnce());
+    await f.runtime.prompt({ text: 'overlap', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+    expect(telemetry.recordEvent).not.toHaveBeenCalledWith(
+      'doompi_server.prompt_latency',
+      expect.objectContaining({ phase: 'accepted' }),
+    );
+    admission.resolve({ settled: Promise.resolve() });
+    await first;
+    expect(telemetry.recordEvent).toHaveBeenCalledWith(
+      'doompi_server.prompt_latency',
+      expect.objectContaining({ phase: 'accepted' }),
+    );
+    f.emit({ type: 'agent_settled' });
+    await f.runtime.dispose();
   });
 
   it('does not abort the active turn when a selection command fails', async () => {
     const { direct, runtime, emit } = fixture();
     const active = runtime.prompt('active turn', BACKGROUND_CONTEXT);
-    await vi.waitFor(() => expect(direct.submitPrompt).toHaveBeenCalledWith('active turn', undefined));
+    await vi.waitFor(() => expect(direct.submitPrompt).toHaveBeenCalledWith('active turn', undefined, 'steer'));
     emit({ type: 'agent_start' });
     vi.mocked(direct.dispatchCommand).mockRejectedValueOnce(new Error('selection failed'));
 
@@ -596,7 +657,7 @@ describe('typed session runtime controls', () => {
       ).rejects.toThrow('Invalid prompt acknowledgement mode');
 
       emit({ type: 'agent_start' });
-      await expect(runtime.prompt('overlapping', BACKGROUND_CONTEXT)).rejects.toThrow('A turn is already running');
+      await runtime.prompt({ text: 'overlapping', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
       await runtime.steer(
         { text: 'steer', images: [{ type: 'image', data: 'data', mimeType: 'image/png' }] },
         BACKGROUND_CONTEXT,
