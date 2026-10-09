@@ -174,7 +174,7 @@ test.describe('with the synced MCP context contribution', () => {
 
     await expect
       .poll(() => cockpit.session.received.slice(commandOffset).filter((frame) => frame.type === 'prompt'))
-      .toEqual([{ type: 'prompt', message: `/mcp auth ${serverName}` }]);
+      .toEqual([{ type: 'prompt', message: `/mcp auth ${serverName}`, streamingBehavior: 'steer' }]);
 
     cockpit.session.emit(status('doom-mcp-session-auth', ''));
     await expect(auth).toBeHidden();
@@ -213,7 +213,7 @@ test.describe('with the synced MCP context contribution', () => {
     await expect(dialog).toBeVisible();
     await expect
       .poll(() => cockpit.session.received.filter((frame) => frame.type === 'prompt'))
-      .toEqual([{ type: 'prompt', message: '/mcp auth agiflow-mcp' }]);
+      .toEqual([{ type: 'prompt', message: '/mcp auth agiflow-mcp', streamingBehavior: 'steer' }]);
     const authorizationUrl = 'https://auth.example.test/oauth?state=example&code_challenge=test';
     cockpit.session.emit(
       status('doom-mcp-session-auth', JSON.stringify([{ name: 'agiflow-mcp', state: 'needs-auth', authorizationUrl }])),
@@ -248,8 +248,8 @@ test.describe('with the synced MCP context contribution', () => {
     await expect
       .poll(() => cockpit.session.received.filter((frame) => frame.type === 'prompt'))
       .toEqual([
-        { type: 'prompt', message: '/mcp auth agiflow-mcp' },
-        { type: 'prompt', message: '/mcp disconnect agiflow-mcp' },
+        { type: 'prompt', message: '/mcp auth agiflow-mcp', streamingBehavior: 'steer' },
+        { type: 'prompt', message: '/mcp disconnect agiflow-mcp', streamingBehavior: 'steer' },
       ]);
     expect(page.context().pages()).toHaveLength(pageCount);
     cockpit.session.emit(status('doom-mcp-session-auth', JSON.stringify([{ name: 'agiflow-mcp', state: 'closed' }])));
@@ -263,6 +263,7 @@ test.describe('with the synced MCP context contribution', () => {
     expect(cockpit.session.received.filter((frame) => frame.type === 'prompt').at(-1)).toEqual({
       type: 'prompt',
       message: '/mcp auth agiflow-mcp',
+      streamingBehavior: 'steer',
     });
     await dialog.getByRole('button', { name: 'close', exact: true }).click();
     await expect.poll(() => retryPopup.isClosed()).toBe(true);
