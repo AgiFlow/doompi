@@ -1039,6 +1039,58 @@ describe('direct worktree messages', () => {
 });
 
 describe('concurrent and reserved worktree creation', () => {
+  it('recovers an unrecorded reserved checkout whose branch already exists', async () => {
+    let cwd: string | undefined;
+    let created = false;
+    const git = fakeGit({
+      listBranches: vi.fn(async () => ({
+        current: 'main',
+        defaultBase: 'origin/main',
+        local: created ? [{ name: 'wt/one', checkedOutAt: cwd }] : [],
+        remote: [],
+      })),
+      addWorktree: vi.fn(async ({ path: checkout }) => {
+        fs.mkdirSync(checkout, { recursive: true });
+        created = true;
+      }),
+      listWorktreePaths: vi.fn(async () => (created ? [cwd!] : [])),
+      currentBranch: vi.fn().mockResolvedValue('wt/one'),
+    });
+    const create = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('session refused'))
+      .mockImplementation(async () => ({ sessionId: 'reserved-session', cwd: cwd! }));
+    const complete = vi.fn().mockResolvedValue({ sessionId: 'reserved-session' });
+    const ops = createWorktreeOperations({
+      git,
+      homeDir: home,
+      sessionService: {
+        ...fakeSessionService([], create),
+        reservations: {
+          read: () => ({ sessionId: 'reserved-session', cwd }),
+          prepare: async (_id, _parent, directory) => {
+            cwd = directory;
+            return { sessionId: 'reserved-session', cwd };
+          },
+          complete,
+        },
+      },
+    });
+    const request = { branch: 'wt/one', reservationId: 'reserved-session' };
+
+    await expect(ops.spawn(CONTEXT, request)).rejects.toThrow('session refused');
+    expect(await ops.list(CONTEXT)).toEqual([]);
+    await expect(ops.spawn(CONTEXT, request)).resolves.toMatchObject({
+      branch: 'wt/one',
+      sessionId: 'reserved-session',
+      path: cwd,
+    });
+    expect(git.addWorktree).toHaveBeenCalledOnce();
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(complete).toHaveBeenCalledOnce();
+    expect(git.removeWorktree).not.toHaveBeenCalled();
+    expect(git.deleteBranch).not.toHaveBeenCalled();
+  });
   it('keeps both records when independent sessions create worktrees concurrently', async () => {
     const create = vi.fn(async () => {
       await new Promise<void>((resolve) => setImmediate(resolve));
