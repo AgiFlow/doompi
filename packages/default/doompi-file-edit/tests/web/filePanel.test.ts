@@ -2,7 +2,25 @@ import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 import { beforeEach as beforeEachApiRoutes } from 'vitest';
 beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/webTesting';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { createElement, type ReactNode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const menu = vi.hoisted(() => ({ visible: false }));
+vi.mock('@agimon-ai/doompi-web-components', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agimon-ai/doompi-web-components')>()),
+  // Static rendering cannot open a Radix portal. Expose only the action props.
+  DropdownMenuContent: ({ children }: { children: ReactNode }) =>
+    menu.visible ? createElement('div', null, children) : null,
+  DropdownMenuItem: ({
+    children,
+    disabled,
+    'data-testid': testId,
+  }: {
+    children: ReactNode;
+    disabled?: boolean;
+    'data-testid'?: string;
+  }) => createElement('button', { disabled, 'data-testid': testId }, children),
+}));
 
 import { FilePanel } from '../../src/extensions/workspaces/sessions/(frontend)/_components/FilePanel';
 import { files, storeDetail } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/filesStore';
@@ -42,6 +60,7 @@ function render(detail?: FileEditsDetailView) {
 
 beforeEach(() => {
   files.reset();
+  menu.visible = false;
 });
 
 describe('the file tab header', () => {
@@ -73,6 +92,22 @@ describe('the file tab header', () => {
     // Radix renders menu contents into a portal on open, so the header itself
     // must carry no delete: that is the whole point of moving it.
     expect(rendered.html).not.toContain('>delete<');
+  });
+
+  it.each([
+    ['../../tmp/x.md', true],
+    ['../note.md', true],
+    ['/tmp/x.md', true],
+    ['src/app.ts', false],
+  ])('sets mutation controls for %s (disabled: %s)', (relPath, disabled) => {
+    menu.visible = true;
+    const rendered = render(detailOf({ relPath }));
+    expect(rendered.error).toBeUndefined();
+    for (const id of ['files-edit', 'files-delete']) {
+      const button = rendered.html.match(new RegExp(`<button[^>]*data-testid="${id}"[^>]*>`))?.[0];
+      expect(button).toBeDefined();
+      expect(button!.includes('disabled')).toBe(disabled);
+    }
   });
 
   it('shows the line counts the session changed', () => {

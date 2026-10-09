@@ -114,8 +114,8 @@ async function isRealPathInside(root: string, candidate: string): Promise<boolea
   try {
     realRoot = await fs.realpath(root);
     real = await fs.realpath(candidate);
-  } catch {
-    return true;
+  } catch (error) {
+    return hasCode(error, 'ENOENT');
   }
   return isInside(realRoot, real);
 }
@@ -250,6 +250,11 @@ export function createFileEditsApi(options: FileEditsApiOptions = {}): Hono {
     return versions.length === 0 ? undefined : versions;
   };
 
+  const isInsideSession = async (filePath: string): Promise<boolean> => {
+    if (cwd === '') return false;
+    const root = path.resolve(cwd);
+    return isInside(root, filePath) && (await isRealPathInside(root, filePath));
+  };
   app.get(routes.detail.path, async (context) => {
     const requested = context.req.query(PATH_QUERY_PARAM);
     const versions = await recordedVersions(requested);
@@ -287,7 +292,7 @@ export function createFileEditsApi(options: FileEditsApiOptions = {}): Hono {
     if (cwd === '') return context.json({ error: 'This session has no working directory to read from.' }, 403);
     const root = path.resolve(cwd);
     const filePath = path.resolve(root, requested);
-    if (!isInside(root, filePath) || !(await isRealPathInside(root, filePath))) {
+    if (!(await isInsideSession(filePath))) {
       return context.json({ error: 'The path leaves the session directory.' }, 403);
     }
     const body: FileEditsPreviewView = {
@@ -312,6 +317,9 @@ export function createFileEditsApi(options: FileEditsApiOptions = {}): Hono {
       return context.json({ error: 'This session recorded no changes to that file.' }, 404);
     }
     const filePath = path.resolve(cwd, request.path);
+    if (!(await isInsideSession(filePath))) {
+      return context.json({ error: 'Files outside the session directory are read-only.' }, 403);
+    }
     const current = await readWorking(filePath);
     if (current.unavailable) {
       return context.json({ error: current.reason ?? 'The file cannot be read.' }, 409);
@@ -333,6 +341,9 @@ export function createFileEditsApi(options: FileEditsApiOptions = {}): Hono {
       return context.json({ error: 'This session recorded no changes to that file.' }, 404);
     }
     const filePath = path.resolve(cwd, requested);
+    if (!(await isInsideSession(filePath))) {
+      return context.json({ error: 'Files outside the session directory are read-only.' }, 403);
+    }
     try {
       await fs.unlink(filePath);
     } catch (error) {

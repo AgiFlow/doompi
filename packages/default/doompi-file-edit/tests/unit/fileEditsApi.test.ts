@@ -307,6 +307,42 @@ describe('the file-edits session API', () => {
     expect(fs.existsSync(secret)).toBe(true);
   });
 
+  it.each([false, true])('keeps recorded outside files view-only (symlink: %s)', async (symlink) => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-file-edit-readonly-'));
+    try {
+      const target = path.join(outside, 'note.md');
+      fs.writeFileSync(target, 'outside\n');
+      const filePath = symlink ? path.join(cwd, 'linked.md') : target;
+      if (symlink) fs.symlinkSync(target, filePath);
+      await timeline.append({
+        version: 2,
+        path: filePath,
+        tool: 'write',
+        at: 10,
+        origin: 'tool',
+        after: await snapshots.put('outside\n'),
+      });
+      const detailResponse = await app.fetch(new Request(routeUrl('detail', { path: filePath })));
+      expect(detailResponse.status).toBe(200);
+      const detail = (await detailResponse.json()) as FileEditsDetailView;
+      expect(detail.working.content).toBe('outside\n');
+      const save = await app.fetch(
+        new Request(routeUrl('save'), {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ path: filePath, expectedHash: detail.working.hash, content: 'changed\n' }),
+        }),
+      );
+      expect(save.status).toBe(403);
+      const remove = await app.fetch(new Request(routeUrl('remove', { path: filePath }), { method: 'DELETE' }));
+      expect(remove.status).toBe(403);
+      expect(fs.readFileSync(target, 'utf8')).toBe('outside\n');
+      expect(fs.existsSync(filePath)).toBe(true);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
   it('says a change predating content capture has no diff, without blaming a command', async () => {
     // A version 1 record: the path and the tool, and nothing else.
     const filePath = path.join(cwd, 'legacy.ts');

@@ -6,7 +6,10 @@ import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headle
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FileEditPaths } from '../../../src/services/fileEditPaths';
 import { createFileEditSession } from '../../../src/services/fileEditSession';
+import { NodeSnapshotStoreAdapter } from '../../../src/services/snapshotStore';
+import { TimelineStore } from '../../../src/services/timelineStore';
 import { filesStatusKey } from '../../../src/types/webFiles';
 
 /**
@@ -18,12 +21,17 @@ import { filesStatusKey } from '../../../src/types/webFiles';
  */
 describe('the file-edit server activity', () => {
   let cwd: string;
+  let root: string;
 
   beforeEach(() => {
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-file-edit-status-'));
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-file-edit-status-'));
+    cwd = path.join(root, 'repo');
+    fs.mkdirSync(cwd);
+    vi.stubEnv('PI_CODING_AGENT_DIR', path.join(root, 'agent'));
   });
   afterEach(() => {
-    fs.rmSync(cwd, { recursive: true, force: true });
+    vi.unstubAllEnvs();
+    fs.rmSync(root, { recursive: true, force: true });
   });
 
   function session() {
@@ -55,5 +63,45 @@ describe('the file-edit server activity', () => {
 
     await stop();
     expect(test.setStatus).toHaveBeenLastCalledWith(filesStatusKey, undefined);
+  });
+  it('captures outside files around awaited calls and preserves successive versions', async () => {
+    const test = session();
+    const stop = await test.plugin.activities![0]!.start(test.executionContext);
+    try {
+      const start = test.plugin.hooks?.find((hook) => hook.event === 'tool_call');
+      const end = test.plugin.hooks?.find((hook) => hook.event === 'tool_result');
+      expect(start).toBeDefined();
+      expect(end).toBeDefined();
+      const filePath = path.join(root, 'outside.md');
+      for (const [id, content, isError] of [
+        ['first', 'one\n', false],
+        ['second', 'two\n', false],
+        ['noop', 'two\n', false],
+        ['failed', 'ignored\n', true],
+      ] as const) {
+        await start!.handle(
+          { toolCallId: id, toolName: 'write', args: { path: filePath, content } },
+          test.executionContext,
+        );
+        if (!isError) fs.writeFileSync(filePath, content);
+        await end!.handle({ toolCallId: id, toolName: 'write', isError }, test.executionContext);
+      }
+      const paths = new FileEditPaths();
+      const timeline = new TimelineStore();
+      timeline.initialize(paths.timelinePath(cwd, test.executionContext.sessionId));
+      const snapshots = new NodeSnapshotStoreAdapter();
+      snapshots.initialize(paths.snapshotsPath(cwd, test.executionContext.sessionId));
+      const versions = await timeline.versions(filePath);
+      expect(versions).toHaveLength(2);
+      expect(versions[0]).toMatchObject({ origin: 'tool', tool: 'write', created: true });
+      expect(await snapshots.read(versions[0]!.after!)).toBe('one\n');
+      expect(await snapshots.read(versions[1]!.before!)).toBe('one\n');
+      expect(await snapshots.read(versions[1]!.after!)).toBe('two\n');
+      expect(test.publish).toHaveBeenLastCalledWith(expect.any(String), test.executionContext.sessionId, {
+        items: [expect.objectContaining({ path: filePath, tool: 'write', count: 2 })],
+      });
+    } finally {
+      await stop();
+    }
   });
 });
