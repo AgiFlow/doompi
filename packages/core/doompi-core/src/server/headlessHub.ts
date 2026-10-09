@@ -868,6 +868,11 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     },
     close: closeSession,
     isLive: (sessionId) => !closed && sessions.has(sessionId),
+    readExecutionState: async (sessionId, readOptions) => {
+      const target = promptTarget(sessionId, readOptions?.parentSessionId);
+      if (!target.host.readExecutionState) throw new Error('The session cannot report execution state.');
+      return target.host.readExecutionState();
+    },
     prompt: async (sessionId, text, promptOptions) => {
       promptOptions?.signal?.throwIfAborted();
       const { settled } = await promptTarget(sessionId, promptOptions?.parentSessionId).host.runtime.submitPrompt(text);

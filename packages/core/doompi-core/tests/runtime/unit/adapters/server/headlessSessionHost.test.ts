@@ -14,6 +14,7 @@ import {
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { DOOM_BACKGROUND_WORK_SERVICE } from '../../../../../src/exports/backgroundWork';
 import {
   DOOM_HEADLESS_OWNER,
   requireDoomHeadlessHost,
@@ -436,6 +437,21 @@ describe('real host and hub acceptance', () => {
 });
 
 describe('session execution controls', () => {
+  it('reads only its own coordinator and keeps missing coordination unknown', async () => {
+    const { host, context } = await fixture();
+    expect(await host.readExecutionState?.()).toEqual({ isIdle: true, hasPendingMessages: false });
+    const snapshot = vi.fn(() => ({
+      items: [{ id: 'child-run', sessionId: 'headless-session-mapping', provider: 'team-direct-runs' }],
+      errors: [],
+    }));
+    context.provide(DOOM_BACKGROUND_WORK_SERVICE, { generation: 'test', register: vi.fn(), snapshot });
+    expect(await host.readExecutionState?.()).toMatchObject({
+      isIdle: true,
+      hasPendingMessages: false,
+      backgroundWork: { items: [{ id: 'child-run' }], errors: [] },
+    });
+    expect(snapshot).toHaveBeenCalledWith('headless-session-mapping');
+  });
   it.each([true, false])('seeds the creation Fast snapshot %s', async (initialFastMode) => {
     const current = await fixture([], { initialFastMode });
     await expect(current.runtime.readState()).resolves.toMatchObject({ fastMode: initialFastMode });

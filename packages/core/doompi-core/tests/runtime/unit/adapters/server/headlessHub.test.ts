@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { holdsSettledSession } from '../../../../../src/exports/backgroundWork';
 import type { DoomHubChannel } from '../../../../../src/exports/hubChannel';
 import {
   DOOM_SERVER_HOST_SERVICE,
@@ -28,6 +29,7 @@ function host() {
   return {
     host: {
       runtime,
+      readExecutionState: vi.fn(async () => ({ isIdle: true, hasPendingMessages: false })),
       host: undefined,
       toolSurface: {} as HeadlessSessionHost['toolSurface'],
       mcpSurface: {} as HeadlessSessionHost['mcpSurface'],
@@ -53,6 +55,46 @@ function host() {
 }
 
 describe('createHeadlessHub', () => {
+  it('holds unresolved runners and subagents, not terminal runners or workflows', () => {
+    const item = { id: 'run', sessionId: 'session', provider: 'doom-runner' };
+    expect(holdsSettledSession(item)).toBe(true);
+    expect(holdsSettledSession({ ...item, status: 'running' })).toBe(true);
+    expect(holdsSettledSession({ ...item, status: 'completed' })).toBe(false);
+    expect(holdsSettledSession({ ...item, status: 'failed' })).toBe(false);
+    expect(holdsSettledSession({ ...item, provider: 'team-direct-runs', status: 'completed' })).toBe(true);
+    expect(holdsSettledSession({ ...item, provider: 'doom-task' })).toBe(true);
+    expect(holdsSettledSession({ ...item, provider: 'workflow-mcp' })).toBe(false);
+  });
+
+  it('reads target execution ownership and rejects non-parent or unavailable targets', async () => {
+    const child = host();
+    const state = {
+      isIdle: true,
+      hasPendingMessages: false,
+      backgroundWork: {
+        items: [{ id: 'run', sessionId: 'child', provider: 'team-direct-runs' }],
+        errors: [],
+      },
+    };
+    child.host.readExecutionState = vi.fn(async () => state);
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({
+      id: 'child',
+      parentSessionId: 'parent',
+      name: 'Child',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: child.host,
+    });
+    await expect(hub.sessionService.readExecutionState?.('child', { parentSessionId: 'parent' })).resolves.toEqual(
+      state,
+    );
+    await expect(hub.sessionService.readExecutionState?.('child', { parentSessionId: 'sibling' })).rejects.toThrow(
+      'Only the parent',
+    );
+    await expect(hub.sessionService.readExecutionState?.('missing')).rejects.toThrow('not live');
+    await hub.close();
+  });
   it('tracks prompt and extension input phases without changing phase on ordinary messages', async () => {
     const session = host();
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });

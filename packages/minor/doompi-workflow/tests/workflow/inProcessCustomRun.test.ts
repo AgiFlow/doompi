@@ -65,6 +65,11 @@ describe('an in-process run with a customRun step', () => {
         if (runDir) fs.writeFileSync(path.join(runDir, 'diagnosis.md'), 'root cause');
         return { settled: Promise.resolve() };
       }),
+      readExecutionState: vi.fn(async () => ({
+        isIdle: true,
+        hasPendingMessages: false,
+        backgroundWork: { items: [], errors: [] },
+      })),
       abort: vi.fn(async () => undefined),
     };
     const feature = createEmbeddedWorkflowFeature({

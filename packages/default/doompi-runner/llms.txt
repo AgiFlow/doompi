@@ -2,7 +2,7 @@
 
 ## Resources
 
-- [Package README](./README.md): Supervised Bash behavior, CLI controls, storage, limits, and native artifacts.
+- [Package README](./README.md): Supervised Bash behavior, CLI controls, storage, limits, completion handoff ownership, and native artifacts.
 
 ## How to use
 

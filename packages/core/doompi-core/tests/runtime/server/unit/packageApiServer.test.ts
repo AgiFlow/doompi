@@ -115,6 +115,7 @@ describe('serving a session package APIs', () => {
     const seen: { context?: DoomApiContext } = {};
     const settled = Promise.resolve();
     const prompt = vi.fn(async () => ({ settled }));
+    const readExecutionState = vi.fn(async () => ({ isIdle: true, hasPendingMessages: false }));
     const abort = vi.fn(async () => undefined);
     const steer = vi.fn(async () => undefined);
     const release = vi.fn(async () => undefined);
@@ -126,6 +127,7 @@ describe('serving a session package APIs', () => {
         create: vi.fn(),
         close: vi.fn(async () => undefined),
         isLive: () => true,
+        readExecutionState,
         prompt,
         abort,
         steer,
@@ -136,6 +138,8 @@ describe('serving a session package APIs', () => {
     });
     cleanups.push(() => server.close());
 
+    await seen.context?.sessionService?.readExecutionState?.('child', { parentSessionId: 'someone-else' });
+    expect(readExecutionState).toHaveBeenCalledWith('child', { parentSessionId: 's1' });
     const receipt = await seen.context?.sessionService?.prompt?.('child', 'go', { parentSessionId: 'someone-else' });
     expect(receipt?.settled).toBe(settled);
     expect(prompt).toHaveBeenCalledWith('child', 'go', { parentSessionId: 's1' });

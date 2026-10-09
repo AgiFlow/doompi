@@ -49,19 +49,7 @@ groups:
             else echo "workflow-stop: $CLI is missing, so this step cannot record that it ended" >&2; exit 1; fi;
             elif [ -f "$CLI" ]; then node "$CLI" claude-stop-hook || true; fi; fi
           timeout: 10
-        pi:
-          # A workflow step's gate is its run's own workflow-mcp, by path, the
-          # engine version that runs the step. It sends the agent back until
-          # the step records its decision and writes the artifacts it must
-          # leave; a missing CLI is reported, not skipped.
-          command: >-
-            if [ -z "$WORKFLOW_DECISION_FILE" ]; then exit 0; fi; CLI="$WORKFLOW_RUN_DIR/bin/workflow-mcp";
-            if [ -x "$CLI" ]; then exec "$CLI" step stop-hook; fi;
-            echo "workflow-stop: $CLI is missing, so the step decision gate cannot run" >&2; exit 1
-          timeout: 10
-          # Only the root agent reports settled; subagents must not hold the
-          # parent's workflow step.
-          skipInSubagent: true
+        # Pi's workflow extension owns the step gate and background-work wait.
 
       - id: workflow-notification
         event: Notification

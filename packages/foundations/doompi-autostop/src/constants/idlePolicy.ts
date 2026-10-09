@@ -28,19 +28,3 @@ export const AUTO_STOP_REPORT_INTERVAL_MS = 60_000;
 export const AUTO_STOP_TELEMETRY_FLUSH_MS = 2_000;
 /** Longest list of work items or errors carried on one event. */
 export const AUTO_STOP_DETAIL_MAX_LENGTH = 500;
-
-/**
- * The only background work that keeps a settled session open: background
- * runners (`doom-runner`) and running subagents (`team-direct-runs`,
- * `doom-task`). Workflow runs are left out on purpose; a workflow step never
- * launches another workflow, so a run a session started must not hold it open.
- */
-export const AUTO_STOP_BLOCKING_PROVIDERS: readonly string[] = ['doom-runner', 'team-direct-runs', 'doom-task'];
-
-/**
- * A runner holds the session only while it is working. The runner keeps a
- * finished one listed (completed or failed) until its exit message is sent,
- * and that must not delay the stop.
- */
-export const AUTO_STOP_RUNNER_PROVIDER = 'doom-runner';
-export const AUTO_STOP_RUNNER_WORKING_STATUS = 'running';

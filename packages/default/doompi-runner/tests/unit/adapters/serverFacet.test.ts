@@ -1,3 +1,4 @@
+import { DOOM_BACKGROUND_WORK_SERVICE, type BackgroundWorkProvider } from '@agimon-ai/doompi-core/backgroundWork';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
@@ -13,6 +14,7 @@ import { facet as runnerServerFacet } from '../../../generated/server';
 import { RUNNER_SERVER_SCOPE_SERVICE } from '../../../src/extensions/workspaces/sessions/(backend)/_lib/serverRoot';
 import type { RunnerDependencies } from '../../../src/services/runnerDependencies/type';
 import { createRunnerServerRuntime } from '../../../src/services/runnerServerRuntime';
+import type { RunnerRecord } from '../../../src/types/runnerRegistry';
 
 const lifecycleMocks = vi.hoisted(() => {
   const container = {
@@ -37,7 +39,7 @@ const lifecycleMocks = vi.hoisted(() => {
           hostPid: 7,
         },
       ]),
-      listAll: vi.fn(async () => []),
+      listAll: vi.fn(async (): Promise<RunnerRecord[]> => []),
       get: vi.fn(async (): Promise<unknown> => undefined),
       subscribe: vi.fn((_listener: () => void, _sessionId: string) => () => undefined),
       complete: vi.fn(async () => undefined),
@@ -351,6 +353,57 @@ describe('runnerServerFacet', () => {
       backend: 'native',
       hostPid: 7,
     };
+    it.each(['delayed', 'rejected'])('retains terminal ownership during %s completion admission', async (admission) => {
+      const events: DoomDirectEventBus = { publish: vi.fn(), subscribe: vi.fn(() => () => undefined), close: vi.fn() };
+      let accept = (): void => undefined;
+      const wake = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            accept = resolve;
+          }),
+      );
+      if (admission === 'rejected') wake.mockRejectedValueOnce(new Error('temporarily unavailable'));
+      const runtime = createRunnerServerRuntime(
+        lifecycleMocks.container as unknown as RunnerDependencies,
+        events,
+        wake,
+      );
+      const context = new Context();
+      let provider: BackgroundWorkProvider | undefined;
+      context.provide(DOOM_BACKGROUND_WORK_SERVICE, {
+        generation: 'test',
+        snapshot: () => ({ items: [], errors: [] }),
+        register(candidate: BackgroundWorkProvider) {
+          provider = candidate;
+          return { provider: candidate.provider, generation: 'test', update: vi.fn(), dispose: vi.fn() };
+        },
+      });
+      context.plugin(runtime.backgroundWorkPlugin);
+      lifecycleMocks.container.runnerRegistry.get.mockResolvedValue({ ...runner, state: 'completed' });
+      lifecycleMocks.container.runnerRegistry.listAll.mockResolvedValue([
+        { ...runner, backend: 'native', state: 'completed' },
+      ]);
+      try {
+        await runtime.ensureSession('session-a');
+        runtime.watchRunner(runner.id);
+        await vi.waitFor(() => expect(wake).toHaveBeenCalled());
+        await vi.waitFor(() =>
+          expect(provider?.listActiveWork()).toEqual([
+            { id: runner.id, sessionId: runner.sessionId, label: runner.name },
+          ]),
+        );
+        if (admission === 'rejected') await vi.waitFor(() => expect(wake).toHaveBeenCalledTimes(2), { timeout: 2_000 });
+        accept();
+        await vi.waitFor(() => expect(provider?.listActiveWork()).toEqual([]));
+      } finally {
+        accept();
+        await runtime.dispose();
+        await context.fiber.dispose();
+        lifecycleMocks.container.runnerRegistry.get.mockReset();
+        lifecycleMocks.container.runnerRegistry.listAll.mockResolvedValue([]);
+      }
+    });
+
     const promote = async (remote = false) => {
       const harness = headlessFacetContext();
       let notifyRegistry = (): void => undefined;

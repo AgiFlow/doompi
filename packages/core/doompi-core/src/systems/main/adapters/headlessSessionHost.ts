@@ -17,6 +17,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { Value } from 'typebox/value';
 
+import { readDoomBackgroundWorkService } from '../../../exports/backgroundWork';
 import {
   DOOM_CHILD_SESSION_SERVICE,
   DOOM_CHILD_SESSION_MCP_TOOL_SERVICE,
@@ -1779,6 +1780,18 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
 
   return {
     runtime,
+    async readExecutionState() {
+      const state = await runtime.readState();
+      const backgroundWork =
+        mcpServiceRoot === undefined
+          ? undefined
+          : readDoomBackgroundWorkService(mcpServiceRoot)?.snapshot(options.sessionId);
+      return {
+        isIdle: !state.isStreaming && !state.isCompacting,
+        hasPendingMessages: Number(state.pendingMessageCount) > 0,
+        ...(backgroundWork === undefined ? {} : { backgroundWork }),
+      };
+    },
     ...(sessionContext === undefined ? {} : { sessionContext }),
     get host() {
       return headlessHost;

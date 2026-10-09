@@ -175,3 +175,9 @@ readiness discovery; dependent calls await that session's readiness. On shutdown
 also handles startup failure. Both use the same idempotent cleanup. A generation
 fence prevents retired callbacks from sending messages or updating the UI; only
 explicit resource teardown may use a retired UI context.
+
+## Step completion
+
+In-process steps wait, without a timeout or decision reminders, for the child session to be idle with no queued messages or owned subagent/task/runner work. Cancellation interrupts this wait. Missing coordinator snapshots and holding-provider errors defer the decision gate; a failed inspection fails the step. Workflow monitoring itself does not hold completion.
+
+Pi terminal steps must load this package: its native settled handler owns the decision gate, not generic `hooks.yaml`. It skips host-steered sessions and subagents, and defers the gate while owned background work remains. Missing pane coordinators retain the no-work fallback; snapshot failures defer gating with a diagnostic.
