@@ -93,7 +93,11 @@ export function requiredHookGroups(config: MajorModesConfig): Set<string> | unde
   return groups;
 }
 
-async function hookParser(options: { repoRoot: string; homeDirectory: string }): Promise<HookParserModule | undefined> {
+async function hookParser(options: {
+  repoRoot: string;
+  configRoot?: string;
+  homeDirectory: string;
+}): Promise<HookParserModule | undefined> {
   const candidates = doomConfigCandidates('hooks.yaml', options.repoRoot, options.homeDirectory);
   // Command-only registries predate module compilation and do not require the package.
   // This is discovery only. The public parser still owns validation and attribution.
@@ -110,6 +114,12 @@ async function hookParser(options: { repoRoot: string; homeDirectory: string }):
   });
   const parserEntry =
     optionalPackageEntry('@agimon-ai/doompi-hook', pathToFileURL(path.join(options.repoRoot, 'package.json')).href) ??
+    (options.configRoot && options.configRoot !== options.repoRoot
+      ? optionalPackageEntry(
+          '@agimon-ai/doompi-hook',
+          pathToFileURL(path.join(options.configRoot, 'package.json')).href,
+        )
+      : undefined) ??
     optionalPackageEntry('@agimon-ai/doompi-hook', import.meta.url);
   if (hasModuleRows && !parserEntry)
     throw new Error(
@@ -123,6 +133,7 @@ async function hookParser(options: { repoRoot: string; homeDirectory: string }):
 /** Validate the selected compiled hooks without importing repository code. */
 export async function validateHookModules(options: {
   repoRoot: string;
+  configRoot?: string;
   homeDirectory: string;
   hookGroups?: readonly string[];
   descriptor?: { file: string };
