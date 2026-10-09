@@ -1,3 +1,13 @@
+## 0.0.1-alpha.61 (2026-10-09)
+
+### 🩹 Fixes
+
+- **doompi-git:** recover reserved conversation checkouts before branch checks ([#334](https://github.com/AgiFlow/doompi/pull/334))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.60 (2026-10-09)
 
 ### 🧱 Updated Dependencies
