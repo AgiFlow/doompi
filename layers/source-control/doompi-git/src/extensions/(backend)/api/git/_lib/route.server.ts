@@ -109,6 +109,7 @@ export const api: DoomApi = {
     const homeDir = context.homeDirectory ?? os.homedir();
     const gitAuth = createGitAuthStore(homeDir);
     const branchDiff = createBranchDiff();
+    const pendingReviews = new Map<string, ReturnType<typeof branchDiff.review>>();
 
     /**
      * A workspace's remote auth. Workspace mounts only, so the step-up gate on
@@ -140,7 +141,7 @@ export const api: DoomApi = {
     /**
      * The session's change against its base. Session mounts only, rooted at the
      * session's own checkout; a file is served only when it is in the change set
-     * computed for the same request.
+     * computed for the request. Overlapping requests share an in-flight snapshot.
      */
     const review = async (request: Request, url: URL): Promise<Response | undefined> => {
       if (url.pathname !== GIT_REVIEW_PATH && url.pathname !== GIT_REVIEW_FILE_PATH) return undefined;
@@ -155,7 +156,15 @@ export const api: DoomApi = {
       } catch {
         recordedBaseRef = undefined;
       }
-      const result = await branchDiff.review(cwd, recordedBaseRef === undefined ? {} : { recordedBaseRef });
+      const key = JSON.stringify([cwd, recordedBaseRef ?? null]);
+      let pending = pendingReviews.get(key);
+      if (pending === undefined) {
+        pending = branchDiff
+          .review(cwd, recordedBaseRef === undefined ? {} : { recordedBaseRef })
+          .finally(() => pendingReviews.delete(key));
+        pendingReviews.set(key, pending);
+      }
+      const result = await pending;
       if (url.pathname === GIT_REVIEW_PATH) {
         const outside: GitReviewSummary = { repository: false, files: [] };
         return Response.json(result?.summary ?? outside);

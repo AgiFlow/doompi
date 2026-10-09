@@ -5,7 +5,7 @@
  * fetch is stubbed and no store is seeded.
  */
 import type { ReviewComment } from '@agimon-ai/doompi-web-components';
-import type { ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 
 import type { GitChangesView, GitReviewFileDiff, GitReviewSummary } from '../../../../../types/gitReview';
 import { GitReviewView, type ReviewFileState } from './GitReviewView';
@@ -195,3 +195,57 @@ export const States = {
     </div>
   ),
 };
+
+const LARGE_SUMMARY: GitReviewSummary = {
+  ...SUMMARY,
+  files: Array.from({ length: 300 }, (_, index) => ({
+    path: `src/feature/file-${String(index).padStart(3, '0')}.ts`,
+    status: 'modified',
+    added: 80,
+    removed: 0,
+  })),
+};
+
+function LargeBranchPreview() {
+  const [files, setFiles] = useState<Record<string, ReviewFileState>>({});
+  const load = useCallback((path: string) => {
+    setFiles((current) => {
+      if (current[path] !== undefined) return current;
+      return {
+        ...current,
+        [path]: {
+          state: 'ready',
+          diff: {
+            path,
+            hunks: [
+              {
+                start: 1,
+                rows: Array.from({ length: 80 }, (_, index) => ({
+                  marker: '+' as const,
+                  line: index + 1,
+                  content: `export const value${String(index)} = ${String(index)};`,
+                })),
+              },
+            ],
+          },
+        },
+      };
+    });
+  }, []);
+  return (
+    <div className="flex flex-col gap-6 bg-doom-bg p-6">
+      <Frame label={`300 files · ${String(Object.keys(files).length)} requested`}>
+        <GitReviewView
+          sync={{ ...sync, changes: { ...CHANGES, files: 300, added: 24000, removed: 0 } }}
+          summary={{ state: 'ready', summary: LARGE_SUMMARY }}
+          files={files}
+          comments={[]}
+          {...handlers}
+          onLoadFile={load}
+        />
+      </Frame>
+    </div>
+  );
+}
+
+export const LargeBranch = { render: () => <LargeBranchPreview /> };
