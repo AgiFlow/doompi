@@ -102,6 +102,7 @@ export async function runLaunch(context: HarnessContext, telemetry: HarnessTelem
         ?.fileState.hookModules;
     await validateHookModules({
       repoRoot: options.repoRoot,
+      ...(options.configRoot !== undefined ? { configRoot: options.configRoot } : {}),
       homeDirectory: options.homeDirectory ?? context.environment.HOME ?? os.homedir(),
       hookGroups: context.hookGroups,
       descriptor: hookModules,

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import * as moduleResolution from '@agimon-ai/doompi-core/moduleResolution';
@@ -182,7 +183,16 @@ describe('checkout hook descriptor', () => {
       'module missing from descriptor',
     );
     const aliased = checkoutHookDescriptor(descriptor, options.repoRoot, checkout, temporary)!;
-    await expect(validateHookModules({ ...options, repoRoot: checkout, descriptor: aliased })).resolves.toBe(true);
+    const parserEntry = path.resolve(__dirname, '../../../../default/doompi-hook/src/exports/index.ts');
+    vi.spyOn(moduleResolution, 'optionalPackageEntry').mockImplementation((_name, from) =>
+      from === pathToFileURL(path.join(options.repoRoot, 'package.json')).href ? parserEntry : undefined,
+    );
+    await expect(validateHookModules({ ...options, repoRoot: checkout, descriptor: aliased })).rejects.toThrow(
+      'Install it in the repository',
+    );
+    await expect(
+      validateHookModules({ ...options, repoRoot: checkout, configRoot: options.repoRoot, descriptor: aliased }),
+    ).resolves.toBe(true);
     expect(fs.statSync(aliased.file).mode & 0o777).toBe(0o600);
     expect(fs.readFileSync(descriptor.file, 'utf8')).toBe(original);
     const { createHookModules } = await import('@agimon-ai/doompi-hook');

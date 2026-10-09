@@ -839,6 +839,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           if (harnessContext.options.hooks)
             await validateHookModules({
               repoRoot: harnessContext.options.repoRoot,
+              configRoot: initialWorkspace.root,
               homeDirectory,
               hookGroups: harnessContext.hookGroups,
               descriptor: sessionHookModules(harnessContext, initialRegistration),
@@ -992,6 +993,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             if (childContext.options.hooks)
               await validateHookModules({
                 repoRoot: childContext.options.repoRoot,
+                configRoot: workspace.root,
                 homeDirectory,
                 hookGroups: childContext.hookGroups,
                 descriptor: sessionHookModules(childContext, registration),
