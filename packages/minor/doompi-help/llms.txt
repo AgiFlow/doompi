@@ -9,3 +9,5 @@ Activation-gated, package-owned guidance for Doom Pi parent sessions.
 ## How to use
 
 - [doompi-use-help](./src/prompts/doompi-use-help/SKILL.md): Activate package guidance, load exact-version skills, and diagnose unavailable or conflicting contributions.
+
+- [doompi-use-chatgpt-instructions](./src/prompts/doompi-use-chatgpt-instructions/SKILL.md): Print paste-ready code-mode instructions with all repository rules.

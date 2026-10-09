@@ -101,6 +101,8 @@ describe('createBuiltinTools', () => {
       expanded: false,
       showImages: true,
       isError: false,
+      durationMs: undefined,
+      outputPad: 0,
     };
 
     const output = write.renderCall?.(args, plainTheme(), context).render(120).join('\n');

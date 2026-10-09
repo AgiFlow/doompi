@@ -1388,7 +1388,9 @@ describe('MCP execution boundary', () => {
       _meta: { ui: { visibility: ['app'] } },
     });
     const authorize = vi.fn();
+    const admission = vi.spyOn(current.runtime, 'runExternalOperation');
     await surface.invokeTool({ revision: snapshot.revision, name: 'app_action', arguments: {}, authorize });
+    expect(admission.mock.calls[0]![1]?.waitMs).toBeUndefined();
     expect(authorize).toHaveBeenCalled();
     expect(execute).toHaveBeenCalledOnce();
     await expect(
@@ -1554,7 +1556,52 @@ describe('MCP execution boundary', () => {
     expect(current.host.host!.context.mcpSkills).toBeUndefined();
   });
 
-  it('reauthorizes after tool hooks and never executes on denial', async () => {
+  it.each(['grant', 'selection', 'cancellation'] as const)(
+    'rejects %s changes during remote admission before any tool hook',
+    async (change) => {
+      const current = await remoteFixture();
+      const controller = new AbortController();
+      const dispatchHook = vi.spyOn(current.host.host!, 'dispatchHook');
+      const original = current.runtime.runExternalOperation.bind(current.runtime);
+      let release!: () => void;
+      let entered!: () => void;
+      const waiting = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const barrier = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const admission = vi
+        .spyOn(current.runtime, 'runExternalOperation')
+        .mockImplementationOnce(async (work, options) => {
+          expect(options).toMatchObject({ waitMs: 30_000, signal: expect.any(AbortSignal) });
+          entered();
+          await barrier;
+          return original(work, options);
+        });
+      let granted = true;
+      const call = current.host.mcpSurface.invokeTool({
+        ...current.invocation,
+        signal: controller.signal,
+        authorize: () => {
+          if (!granted) throw new Error('revoked');
+        },
+      });
+      const rejected = expect(call).rejects.toThrow();
+      await waiting;
+      if (change === 'grant') granted = false;
+      else if (change === 'selection')
+        await current.host.host!.changeSelection({ axis: 'state', key: 'test', values: ['other'] });
+      else controller.abort();
+      release();
+      await rejected;
+      expect(admission).toHaveBeenCalledOnce();
+      expect(dispatchHook.mock.calls.some(([name]) => name === 'tool_call')).toBe(false);
+      expect(current.execute).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reauthorizes before and after tool hooks and never executes on denial', async () => {
     const current = await remoteFixture();
     const order: string[] = [];
     vi.spyOn(current.host.host!, 'dispatchHook').mockImplementation(async (name) => {
@@ -1566,11 +1613,11 @@ describe('MCP execution boundary', () => {
         ...current.invocation,
         authorize: () => {
           order.push('authorize');
-          throw new Error('revoked');
+          if (order.length > 1) throw new Error('revoked');
         },
       }),
     ).rejects.toThrow('revoked');
-    expect(order).toEqual(['hook', 'authorize']);
+    expect(order).toEqual(['authorize', 'hook', 'authorize']);
     expect(current.execute).not.toHaveBeenCalled();
   });
 

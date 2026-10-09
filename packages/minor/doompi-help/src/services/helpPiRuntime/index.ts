@@ -11,7 +11,7 @@ import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
 
-import { HELP_PACKAGE_SOURCE, HELP_SKILL, HELP_STATUS_TOOL_NAME } from '../../constants/help';
+import { HELP_PACKAGE_SOURCE, HELP_CHATGPT_SKILL, HELP_SKILL, HELP_STATUS_TOOL_NAME } from '../../constants/help';
 import type { HelpActivationService } from '../../types/help';
 import { createHelpCommand } from '../helpCommand';
 import { helpMinorModeState, registerHelpModeIntegration, registerHelpUiIntegration } from '../helpMode';
@@ -41,7 +41,11 @@ export function createHelpPiRuntime(
         cordis.inject([DOOM_CORDIS_SESSION_SERVICE], (sessionContext) => {
           const session = sessionContext.get(DOOM_CORDIS_SESSION_SERVICE) as DoomCordisSessionService;
           const service = createDoomHelpService(`${session.generation}:help`);
-          const selfContribution = service.register({ source: HELP_PACKAGE_SOURCE, moduleUrl, skills: [HELP_SKILL] });
+          const selfContribution = service.register({
+            source: HELP_PACKAGE_SOURCE,
+            moduleUrl,
+            skills: [HELP_SKILL, HELP_CHATGPT_SKILL],
+          });
           const runtime = createHelpRuntime(service, options);
           activeActivation = runtime.activation;
           activeService = service;

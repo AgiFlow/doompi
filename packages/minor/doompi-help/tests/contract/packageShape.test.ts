@@ -95,10 +95,35 @@ describe('doompi-help package contract', () => {
     expect(manifest.files).toEqual(expect.arrayContaining(['llms.txt', 'README.md']));
   });
 
+  it('ships indexed, bounded ChatGPT guidance without writing files', async () => {
+    const manifest = await readManifest();
+    const index = await readFile(path.join(packageDirectory, 'llms.txt'), 'utf8');
+    const skill = await readFile(
+      path.join(packageDirectory, 'src/prompts/doompi-use-chatgpt-instructions/SKILL.md'),
+      'utf8',
+    );
+    expect(manifest.files).toContain('src/prompts');
+    expect(index).toContain('./src/prompts/doompi-use-chatgpt-instructions/SKILL.md');
+    for (const text of [
+      'default prefix is mcp_proxy',
+      '8,000 characters',
+      'Character count:',
+      'Write no files',
+      'every AGENTS.md rule',
+      'session_capabilities',
+      'duplicate',
+      'exact ALL_TOOLS names',
+      'Never accept an estimated count over the limit',
+    ]) {
+      expect(skill).toContain(text);
+    }
+    expect(skill).not.toContain('\u2014');
+  });
+
   it('pins matching Pi peer and development versions', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.0.4');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.0.4');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.1.0');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('1.1.0');
   });
 });

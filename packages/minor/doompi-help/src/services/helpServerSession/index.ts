@@ -22,6 +22,7 @@ import {
   HELP_GUIDANCE,
   HELP_MODE_ID,
   HELP_PACKAGE_SOURCE,
+  HELP_CHATGPT_SKILL,
   HELP_SKILL,
 } from '../../constants/help';
 import { createHelpStatusTool, helpStatusDetail, serverHelpStatus } from '../helpStatus';
@@ -76,6 +77,17 @@ export function createHelpServerSession(host: DoomHeadlessHostService): DoomServ
       read: async () => {
         const text = await readPackageResource(import.meta.url, 'src/prompts/doompi-use-help/SKILL.md');
         if (!text.trim()) throw new Error('The installed Help skill is missing or unreadable.');
+        return text;
+      },
+    },
+    {
+      when: HELP_WHEN,
+      ...HELP_CHATGPT_SKILL,
+      kind: 'skill',
+      path: packageResourcePath(import.meta.url, 'src/prompts/doompi-use-chatgpt-instructions/SKILL.md'),
+      read: async () => {
+        const text = await readPackageResource(import.meta.url, 'src/prompts/doompi-use-chatgpt-instructions/SKILL.md');
+        if (!text.trim()) throw new Error('The installed ChatGPT instruction skill is missing or unreadable.');
         return text;
       },
     },

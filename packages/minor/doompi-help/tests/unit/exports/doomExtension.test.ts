@@ -139,7 +139,7 @@ describe('standard Help extension', () => {
       expect(service.getSnapshot().activation).toBe('active');
       expect(current.active()).toEqual(['read', 'help_status']);
       const result = await current.tool.execute('on', {}, undefined, undefined, current.context);
-      expect(result.details).toMatchObject({ activation: 'active', counts: { skills: 1, tools: 1 } });
+      expect(result.details).toMatchObject({ activation: 'active', counts: { skills: 2, tools: 1 } });
       await current.command.handler('', current.context as Parameters<typeof current.command.handler>[1]);
       expect(service.getSnapshot().skills).toEqual([]);
       expect(current.active()).toEqual(['read']);
@@ -194,7 +194,7 @@ describe('standard Help extension', () => {
       expect(catalog.list()[0]?.state).toMatchObject({
         activation: 'active',
         condition: 'ready',
-        detail: '1 Help skills, 1 diagnostic tools',
+        detail: '2 Help skills, 1 diagnostic tools',
       }),
     );
     await provider.dispose();

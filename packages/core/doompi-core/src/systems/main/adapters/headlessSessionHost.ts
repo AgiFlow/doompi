@@ -86,6 +86,7 @@ type CompactResult = NonNullable<NonNullable<HookMap['before_compaction']['resul
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 const EXTERNAL_OPERATION = 'external';
+const REMOTE_TOOL_WAIT_MS = 30_000;
 const PROMPT_PREPARATION_FAILED_EVENT = 'doompi_server.system_prompt_preparation_failed';
 
 interface AppliedSessionTool {
@@ -1561,6 +1562,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     readTools: () => Map<string, AppliedSessionTool>,
     ready: () => boolean,
     lifecycleSignal?: AbortSignal,
+    waitMs?: number,
   ): Promise<import('../../../exports/headless').DoomHeadlessToolResult> => {
     if (disposed || !headlessReady || !ready() || !headlessHost?.status.ready)
       throw new Error('Headless capability preparation is not ready. Retry in a few seconds.');
@@ -1577,109 +1579,122 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     );
     const signal = signals.length === 0 ? undefined : AbortSignal.any(signals);
     signal?.throwIfAborted();
-    return runtime.runExternalOperation(async () => {
-      const toolCallId = `external-${randomUUID()}`;
-      const before = await beforeTool(
-        { toolCallId, toolName: invocation.name, args: invocation.arguments as Record<string, JsonValue> },
-        signal ? withAbortSignal(signal, BACKGROUND_CONTEXT) : BACKGROUND_CONTEXT,
-      );
-      if (before?.block !== undefined) return { content: [{ type: 'text', text: before.block.reason }], isError: true };
-      const args = before?.args ?? (invocation.arguments as Record<string, JsonValue>);
-      if (!Value.Check(applied.descriptor.parameters, args))
-        throw new Error(
-          `A tool hook produced invalid arguments for '${invocation.name}': ${validationDetails(applied.descriptor.parameters, args)}`,
+    return runtime.runExternalOperation(
+      async () => {
+        signal?.throwIfAborted();
+        await invocation.authorize?.();
+        signal?.throwIfAborted();
+        if (disposed || !headlessReady || !ready() || !headlessHost?.status.ready)
+          throw new Error('Headless capability preparation is not ready. Retry in a few seconds.');
+        if (invocation.revision !== readRevision() || readTools().get(invocation.name) !== applied)
+          throw new Error(`Tool '${invocation.name}' is no longer active`);
+        const toolCallId = `external-${randomUUID()}`;
+        const before = await beforeTool(
+          { toolCallId, toolName: invocation.name, args: invocation.arguments as Record<string, JsonValue> },
+          signal ? withAbortSignal(signal, BACKGROUND_CONTEXT) : BACKGROUND_CONTEXT,
         );
-      await invocation.authorize?.();
-      signal?.throwIfAborted();
-      if (disposed || !headlessReady || !ready() || !headlessHost?.status.ready)
-        throw new Error('Headless capability preparation is not ready. Retry in a few seconds.');
-      if (invocation.revision !== readRevision() || readTools().get(invocation.name) !== applied)
-        throw new Error(`Tool '${invocation.name}' is no longer active`);
-      const startEvent = {
-        type: 'tool_execution_start',
-        runId: EXTERNAL_OPERATION,
-        turnId: EXTERNAL_OPERATION,
-        toolCallId,
-        toolName: invocation.name,
-        args,
-      };
-      emitTo(listeners, startEvent);
-      // External calls bypass the harness event stream. Deliver the same lifecycle
-      // to package hooks as native tools, not just to presentation subscribers.
-      await headlessHost.dispatchHook('tool_execution_start', startEvent);
-      let result;
-      try {
-        result = await applied.execute(
-          toolCallId,
-          args,
-          signal,
-          (partial) => {
-            emitTo(listeners, {
-              type: 'tool_execution_update',
-              runId: EXTERNAL_OPERATION,
-              turnId: EXTERNAL_OPERATION,
-              toolCallId,
-              toolName: invocation.name,
-              partialResult: partial,
-            });
-            invocation.onUpdate?.(partial);
-          },
-          invocation.mcpSkills === undefined ? undefined : { ...headlessHost.context, mcpSkills: invocation.mcpSkills },
-        );
-      } catch (error) {
-        result = {
-          content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
-          isError: true,
-        };
-      }
-      // A caller-cancelled tool can still settle normally. Do not begin post hooks
-      // for that cancelled operation or replace its already-settled result.
-      const patch = signal?.aborted
-        ? undefined
-        : await afterTool(
-            {
-              toolCallId,
-              toolName: invocation.name,
-              args,
-              content: result.content,
-              ...(isJsonValue(result.details) ? { details: result.details } : {}),
-              isError: result.isError === true,
-            },
-            signal ? withAbortSignal(signal, BACKGROUND_CONTEXT) : BACKGROUND_CONTEXT,
+        if (before?.block !== undefined)
+          return { content: [{ type: 'text', text: before.block.reason }], isError: true };
+        const args = before?.args ?? (invocation.arguments as Record<string, JsonValue>);
+        if (!Value.Check(applied.descriptor.parameters, args))
+          throw new Error(
+            `A tool hook produced invalid arguments for '${invocation.name}': ${validationDetails(applied.descriptor.parameters, args)}`,
           );
-      const patched = {
-        content: patch?.content ?? result.content,
-        // A hook that rewrites a result must not leave the original payload available remotely.
-        ...(patch?.content !== undefined || patch?.isError !== undefined || result.structuredContent === undefined
-          ? {}
-          : { structuredContent: result.structuredContent }),
-        ...(patch?.content !== undefined ||
-        patch?.isError !== undefined ||
-        patch?.details !== undefined ||
-        result._meta === undefined
-          ? {}
-          : { _meta: result._meta }),
-        ...(patch?.details !== undefined
-          ? { details: patch.details }
-          : result.details === undefined
+        await invocation.authorize?.();
+        signal?.throwIfAborted();
+        if (disposed || !headlessReady || !ready() || !headlessHost?.status.ready)
+          throw new Error('Headless capability preparation is not ready. Retry in a few seconds.');
+        if (invocation.revision !== readRevision() || readTools().get(invocation.name) !== applied)
+          throw new Error(`Tool '${invocation.name}' is no longer active`);
+        const startEvent = {
+          type: 'tool_execution_start',
+          runId: EXTERNAL_OPERATION,
+          turnId: EXTERNAL_OPERATION,
+          toolCallId,
+          toolName: invocation.name,
+          args,
+        };
+        emitTo(listeners, startEvent);
+        // External calls bypass the harness event stream. Deliver the same lifecycle
+        // to package hooks as native tools, not just to presentation subscribers.
+        await headlessHost.dispatchHook('tool_execution_start', startEvent);
+        let result;
+        try {
+          result = await applied.execute(
+            toolCallId,
+            args,
+            signal,
+            (partial) => {
+              emitTo(listeners, {
+                type: 'tool_execution_update',
+                runId: EXTERNAL_OPERATION,
+                turnId: EXTERNAL_OPERATION,
+                toolCallId,
+                toolName: invocation.name,
+                partialResult: partial,
+              });
+              invocation.onUpdate?.(partial);
+            },
+            invocation.mcpSkills === undefined
+              ? undefined
+              : { ...headlessHost.context, mcpSkills: invocation.mcpSkills },
+          );
+        } catch (error) {
+          result = {
+            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+            isError: true,
+          };
+        }
+        // A caller-cancelled tool can still settle normally. Do not begin post hooks
+        // for that cancelled operation or replace its already-settled result.
+        const patch = signal?.aborted
+          ? undefined
+          : await afterTool(
+              {
+                toolCallId,
+                toolName: invocation.name,
+                args,
+                content: result.content,
+                ...(isJsonValue(result.details) ? { details: result.details } : {}),
+                isError: result.isError === true,
+              },
+              signal ? withAbortSignal(signal, BACKGROUND_CONTEXT) : BACKGROUND_CONTEXT,
+            );
+        const patched = {
+          content: patch?.content ?? result.content,
+          // A hook that rewrites a result must not leave the original payload available remotely.
+          ...(patch?.content !== undefined || patch?.isError !== undefined || result.structuredContent === undefined
             ? {}
-            : { details: result.details }),
-        isError: patch?.isError ?? result.isError ?? false,
-      };
-      const endEvent = {
-        type: 'tool_execution_end',
-        runId: EXTERNAL_OPERATION,
-        turnId: EXTERNAL_OPERATION,
-        toolCallId,
-        toolName: invocation.name,
-        result: patched,
-        isError: patched.isError,
-        terminate: patch?.terminate ?? false,
-      };
-      emitTo(listeners, endEvent);
-      await headlessHost.dispatchHook('tool_execution_end', endEvent);
-      return patched;
-    });
+            : { structuredContent: result.structuredContent }),
+          ...(patch?.content !== undefined ||
+          patch?.isError !== undefined ||
+          patch?.details !== undefined ||
+          result._meta === undefined
+            ? {}
+            : { _meta: result._meta }),
+          ...(patch?.details !== undefined
+            ? { details: patch.details }
+            : result.details === undefined
+              ? {}
+              : { details: result.details }),
+          isError: patch?.isError ?? result.isError ?? false,
+        };
+        const endEvent = {
+          type: 'tool_execution_end',
+          runId: EXTERNAL_OPERATION,
+          turnId: EXTERNAL_OPERATION,
+          toolCallId,
+          toolName: invocation.name,
+          result: patched,
+          isError: patched.isError,
+          terminate: patch?.terminate ?? false,
+        };
+        emitTo(listeners, endEvent);
+        await headlessHost.dispatchHook('tool_execution_end', endEvent);
+        return patched;
+      },
+      { signal, waitMs },
+    );
   };
 
   const toolSurface: SessionToolSurface = {
@@ -1732,6 +1747,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         () => appliedMcpTools,
         () => mcpSurfaceReady,
         mcpLifecycle.signal,
+        REMOTE_TOOL_WAIT_MS,
       ),
     async readUiResource(revision, uri) {
       if (disposed || !headlessReady || !mcpSurfaceReady || !headlessHost?.status.ready)

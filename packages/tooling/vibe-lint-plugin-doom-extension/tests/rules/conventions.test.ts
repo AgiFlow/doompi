@@ -82,8 +82,8 @@ describe('Doom package convention rules', () => {
   it('requires exact Pi dependency pins while allowing unrelated manifests', () => {
     const manifest = writeManifest({
       peerDependencies: {
-        '@earendil-works/pi-coding-agent': '^1.0.4',
-        '@earendil-works/pi-tui': '1.0.4',
+        '@earendil-works/pi-coding-agent': '^1.1.0',
+        '@earendil-works/pi-tui': '1.1.0',
       },
       devDependencies: {
         '@earendil-works/pi-tui': '0.84.0',
@@ -97,8 +97,8 @@ describe('Doom package convention rules', () => {
     fs.writeFileSync(
       manifest,
       JSON.stringify({
-        peerDependencies: { '@earendil-works/pi-coding-agent': '1.0.4' },
-        devDependencies: { '@earendil-works/pi-coding-agent': '1.0.4' },
+        peerDependencies: { '@earendil-works/pi-coding-agent': '1.1.0' },
+        devDependencies: { '@earendil-works/pi-coding-agent': '1.1.0' },
       }),
     );
     expect(piPeerVersion.check?.(manifest, root, boundaryContext())).toBeNull();

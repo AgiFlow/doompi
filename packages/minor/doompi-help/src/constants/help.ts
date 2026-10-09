@@ -13,3 +13,9 @@ export const HELP_STATUS_TOOL_NAME = 'help_status';
 export const HELP_STATUS_TOOL_DESCRIPTION =
   'Inspect active Help skills, diagnostic tools, contributor ownership, and unavailable contributions in this session. Read-only; does not change selection or permissions.';
 export const HELP_STATUS_LIMIT = 128;
+
+export const HELP_CHATGPT_SKILL = {
+  name: 'doompi-use-chatgpt-instructions',
+  description:
+    "Print a paste-ready ChatGPT project instruction (at most 8,000 characters) that routes code-mode work through this session's MCP tools and condenses every AGENTS.md rule. Writes no files.",
+} as const;

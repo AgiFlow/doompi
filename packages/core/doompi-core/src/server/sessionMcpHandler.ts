@@ -10,6 +10,7 @@ import {
   type Tool,
 } from '@modelcontextprotocol/server';
 
+import { isDoomHeadlessToolBusyError } from '../schemas/headless';
 import type { SessionMcpInvocation } from '../schemas/sessionMcpActivity';
 import type { SessionMcpAccessGrant, SessionMcpAuthorizationService } from '../services/sessionMcpAuthorization';
 import { sessionMcpConversationDigest, SessionMcpConversationError } from '../services/sessionMcpConversations';
@@ -21,7 +22,7 @@ export const SESSION_MCP_EXTRA_TOOLS: readonly Tool[] = [
     name: 'load_extra_tools',
     title: 'Load extra tools',
     description:
-      'List DoomPi tools and skills added to this conversation after your tool list loaded, for example after a mode change. Takes {}. Empty means no change.',
+      'List DoomPi tools and skills added or changed in this conversation after your tool list loaded, for example after a mode change. Takes {}. Empty means nothing was added or changed. Run a returned tool with use_extra_tools.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true },
     _meta: { ui: { visibility: ['model'] } },
@@ -30,10 +31,16 @@ export const SESSION_MCP_EXTRA_TOOLS: readonly Tool[] = [
     name: 'use_extra_tools',
     title: 'Use extra tools',
     description:
-      'Run a DoomPi tool returned by load_extra_tools that is not in your tool list. Pass { name, arguments }.',
+      "Run a DoomPi tool returned by load_extra_tools, in the session's host repository. Pass { name, arguments }. Check isError in the result.",
     inputSchema: {
       type: 'object',
-      properties: { name: { type: 'string' }, arguments: { type: 'object' } },
+      properties: {
+        name: { type: 'string', description: 'Exact name returned by load_extra_tools, including any prefix.' },
+        arguments: {
+          type: 'object',
+          description: "Arguments object matching that tool's input schema. Defaults to {}.",
+        },
+      },
       required: ['name'],
       additionalProperties: false,
     },
@@ -43,7 +50,7 @@ export const SESSION_MCP_EXTRA_TOOLS: readonly Tool[] = [
     name: 'session_capabilities',
     title: 'Session capabilities',
     description:
-      'List every DoomPi tool and skill this connection can use now, with input schemas. Call it when a tool seems missing, a call fails, or the session mode changed.',
+      'List every DoomPi tool and skill this connection is granted now, with input schemas. Takes {}. This is an inventory and does not add tools to your tool list. Call it once when a tool seems missing or the session mode changed.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true },
     _meta: { ui: { visibility: ['model'] } },
@@ -107,9 +114,9 @@ function wireTool(prefix: string | undefined, tool: Tool): Tool {
 function sessionMcpInstructions(prefix: string | undefined): string {
   return (
     (prefix === undefined ? '' : `Tool names here start with '${prefix}_'. `) +
-    'Use only this bound DoomPi session; tools run in its host repository, not locally. ' +
-    'Call load_context first and after selection changes. session_capabilities lists current tools; ' +
-    'load_extra_tools lists conversation changes, run with use_extra_tools; load_skill loads guidance. ' +
+    'Use only this DoomPi session; tools run in its host repository, not locally. ' +
+    'Call load_context first and after selection changes. session_capabilities lists granted tools; ' +
+    'load_extra_tools lists additions or changes, run with use_extra_tools; load_skill loads guidance. ' +
     'Inspect before editing; follow repository checks. Assume no UI, downloads, or notifications. ' +
     'Read saved logs, do not relaunch work. Saving a plan does not authorize implementation.'
   );
@@ -545,7 +552,12 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         )
           throw new SessionMcpConversationError(
             'SESSION_TOOL_SURFACE_CHANGED',
-            'The target session does not expose the approved tool contract. Refresh the connection or restore a compatible session selection.',
+            `This tool changed or was removed after your tool list loaded.${nextCall(
+              'load_extra_tools',
+              grantedExtraTools(grant).some((tool) => tool.name === 'use_extra_tools')
+                ? ', and if it lists the tool, run it with ' + wire('use_extra_tools') + '.'
+                : ', then refresh the connection to call a returned tool.',
+            )}`,
           );
         widgetTool = wrapper ? undefined : selected;
         const recheck = async () => {
@@ -582,7 +594,11 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           async read(name: string) {
             const current = await authorizedSkills();
             const skill = current.skills.find((candidate) => candidate.name === name);
-            if (!skill) throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Skill is not granted or active.');
+            if (!skill)
+              throw new ProtocolError(
+                ProtocolErrorCode.InvalidParams,
+                `Skill '${name}' is not granted or active on this connection.${nextCall('session_capabilities', ' to see available skills.')} Continue without it if unavailable.`,
+              );
             const text = await active.target.toolSurface.readSkill(current.snapshot.revision, skill.uri);
             signal.throwIfAborted();
             const after = await authorizedSkills();
@@ -617,6 +633,11 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         } catch (error) {
           if (signal.aborted || error instanceof ProtocolError || error instanceof SessionMcpConversationError)
             throw error;
+          if (isDoomHeadlessToolBusyError(error))
+            throw new SessionMcpConversationError(
+              'SESSION_BUSY',
+              `The session stayed busy for 30 seconds, so ${wire(name)} did not start. Wait for the current turn to finish, then retry once.`,
+            );
           // After-hooks can fail once execution finished, so never claim the call did not run.
           throw new SessionMcpConversationError(
             'TOOL_CALL_FAILED',
@@ -635,14 +656,18 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           );
         }
         options.onNotice?.(`session MCP invocation id=${invocationId} lifecycle=succeeded`);
+        const content =
+          result.content.length === 0 && result.structuredContent !== undefined
+            ? [{ type: 'text' as const, text: JSON.stringify(result.structuredContent) }]
+            : result.content;
         return completeInvocation(
           widgetResult(
             wrapper ? undefined : selected,
             {
               content:
                 active.target.agentLocked?.() === false
-                  ? [...result.content, { type: 'text', text: LOCAL_AGENT_UNLOCKED_NOTICE }]
-                  : result.content,
+                  ? [...content, { type: 'text', text: LOCAL_AGENT_UNLOCKED_NOTICE }]
+                  : content,
               ...(result.structuredContent === undefined ? {} : { structuredContent: result.structuredContent }),
               ...(result._meta === undefined ? {} : { _meta: result._meta }),
               isError: result.isError ?? false,

@@ -1878,6 +1878,7 @@ describe('conventional Pi discovery', () => {
     });
     const contributors = [
       ['@agimon-ai/doompi-help', 'doompi-use-help'],
+      ['@agimon-ai/doompi-help', 'doompi-use-chatgpt-instructions'],
       ['@agimon-ai/doompi-log', 'doompi-debug-agent'],
       ['@agimon-ai/doompi-config', 'doompi-author-config'],
       ['@agimon-ai/doompi-domain', 'doompi-author-domain'],
@@ -1886,6 +1887,7 @@ describe('conventional Pi discovery', () => {
       ['@agimon-ai/doompi-skill', 'doompi-author-skill'],
     ] as const;
     try {
+      const grouped = new Map<string, { name: string; description: string }[]>();
       for (const [source, name] of contributors) {
         const moduleUrl = pathToFileURL(installedConditionalTarget(source, './extensions/server', 'import')).href;
         const skillPath = resources.packageResourcePath(moduleUrl, `src/prompts/${name}/SKILL.md`);
@@ -1894,7 +1896,13 @@ describe('conventional Pi discovery', () => {
         expect(skillPath).not.toContain(REPOSITORY_ROOT);
         expect(fs.readFileSync(skillPath, 'utf8')).toContain(`name: ${name}`);
         expect(fs.readFileSync(indexPath, 'utf8')).toContain(`./src/prompts/${name}/SKILL.md`);
-        service.register({ source, moduleUrl, skills: [{ name, description: `Installed ${name} guidance` }] });
+        const skills = grouped.get(source) ?? [];
+        skills.push({ name, description: `Installed ${name} guidance` });
+        grouped.set(source, skills);
+      }
+      for (const [source, skills] of grouped) {
+        const moduleUrl = pathToFileURL(installedConditionalTarget(source, './extensions/server', 'import')).href;
+        service.register({ source, moduleUrl, skills });
       }
       await runtime.activation.activate();
       const snapshot = service.getSnapshot();
@@ -2112,7 +2120,7 @@ describe('DPI installed experiment runtime', () => {
 
       const version = await runCommand(process.execPath, [executable, '--version'], fixture.root, environment);
       expect(version.code, version.stderr || version.stdout).toBe(0);
-      expect(version.stdout.trim()).toBe('1.0.4');
+      expect(version.stdout.trim()).toBe('1.1.0');
 
       const runtime = startRuntime(
         executable,
