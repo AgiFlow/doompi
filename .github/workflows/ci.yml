@@ -46,10 +46,11 @@ jobs:
               pnpm examples:check
           - name: Lint
             command: pnpm nx run-many -t lint --parallel=3
-          - name: Vibe-Lint
-            command: |
-              pnpm nx run-many -t build --parallel=3
-              pnpm lint:vibe --preflight-only
+          # The sweep reads sources and the plugins `prepare` builds on install; it needs no package build.
+          - name: Vibe-Lint 1/2
+            command: VIBE_LINT_SHARD=1/2 pnpm lint:vibe --preflight-only
+          - name: Vibe-Lint 2/2
+            command: VIBE_LINT_SHARD=2/2 pnpm lint:vibe --preflight-only
           - name: Type-check
             command: pnpm nx run-many -t typecheck --parallel=3
           - name: Tests
