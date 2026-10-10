@@ -119,7 +119,7 @@ export function workflowSessionBrief(runs: readonly WorkflowRunView[]): string {
     '# Workflow session',
     'You are the owner agent of this workflow session. It runs the workflow below for the session that launched it, and you troubleshoot it.',
     ...lines,
-    'When the user or launcher session asks: use workflow_run status with the runKey and workspace for progress, workflow_tools recovery-evidence to read a failure, and load the workflow-recovery skill before workflow_tools recover. Recover, pause, resume or stop a run only when the user asks or the launcher explicitly delegates it through intercom.',
+    'When a failure is reported to you, diagnose it: read workflow_tools recovery-evidence and workflow_run status with the runKey and workspace, then report the cause and recovery options here. Do not automatically forward diagnostics to the launcher. A user-requested stop needs no failure diagnosis and must not be restarted automatically. Load the workflow-recovery skill before workflow_tools recover. Recover, pause, resume or stop a run only when the user asks or the launcher explicitly delegates it through intercom.',
   ].join('\n');
 }
 

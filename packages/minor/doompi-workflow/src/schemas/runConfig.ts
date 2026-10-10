@@ -23,6 +23,8 @@ export const doompiRunConfigSchema = z
     domains: nameList.optional().describe('Domains selected for the step session. An empty list selects none.'),
     model: singleName.optional().describe('Model selector, provider/id.'),
     thinking: singleName.optional().describe('Thinking level for the model.'),
+    subagentModel: singleName.optional().describe('Preferred Team subagent model, independent of the step model.'),
+    subagentThinking: singleName.optional().describe('Preferred Team subagent thinking level.'),
   })
   .strict();
 

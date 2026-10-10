@@ -80,6 +80,7 @@ import { preflightSubagentDepth, resolveCurrentSubagentDepth } from '../depthGua
 import { DoomTeamExpectedError } from '../errors';
 import type { McpDirectToolResolver } from '../mcpDirectToolAllowlist';
 import { type AvailableModelInfo, type ParentModel, selectAvailableModel } from '../modelFallback';
+import { findModelInfo, getSupportedThinkingLevels, splitKnownThinkingSuffix, THINKING_LEVELS } from '../modelInfo';
 import type { NativeRunCoordinatorContract } from '../nativeRunCoordinator';
 import type { NativeTeamChannelContract } from '../nativeTeamChannel';
 import { isPiRuntime, type RuntimeTable, resolveRuntimeLaunch, resolveRuntimeTable } from '../runtimeRegistry';
@@ -289,6 +290,7 @@ interface SpawnOneChildInput {
   identity: AgentIdentity;
   excludeTools?: string[];
   teamPackageModels?: string[];
+  workflowPreferences: WorkflowPreferences;
   capabilityCeiling?: ResolvedSubagentCapabilityCeiling;
   taskInput: SpawnPlanTaskInput;
   childIndex: number;
@@ -400,7 +402,42 @@ interface ChildSkillProjection {
   warnings: string[];
 }
 
+interface WorkflowPreferences {
+  subagentModel?: string;
+  subagentThinking?: string;
+}
+
+function readWorkflowPreferences(payload: string | undefined): WorkflowPreferences {
+  if (payload === undefined) return {};
+  const invalid = (detail: string) =>
+    new DoomTeamExpectedError(
+      ERROR_CODE_INVALID_REQUEST,
+      `WORKFLOW_RUN_CONFIG ${detail}`,
+      false,
+      'Provide a JSON object with optional nonblank subagentModel and recognized subagentThinking.',
+    );
+  let value: unknown;
+  try {
+    value = JSON.parse(payload);
+  } catch {
+    throw invalid('must contain valid JSON.');
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalid('must be a JSON object.');
+  const preferences: WorkflowPreferences = {};
+  for (const key of ['subagentModel', 'subagentThinking'] as const) {
+    if (!(key in value)) continue;
+    const field = (value as Record<string, unknown>)[key];
+    if (typeof field !== 'string' || !field.trim()) throw invalid(`${key} must be a nonblank string.`);
+    preferences[key] = field.trim();
+  }
+  if (preferences.subagentThinking && !THINKING_LEVELS.some((level) => level === preferences.subagentThinking)) {
+    throw invalid(`subagentThinking must be one of: ${THINKING_LEVELS.join(', ')}.`);
+  }
+  return preferences;
+}
+
 interface ResolvedModelSelection {
+  thinking?: string;
   primaryModel: string | undefined;
   fallbackModels: string[];
   model: string | undefined;
@@ -408,11 +445,12 @@ interface ResolvedModelSelection {
 
 function resolvedModelSelection(
   taskInput: SpawnPlanTaskInput,
-  agentConfig: Pick<ExecutableAgentConfig, 'model' | 'modelSource' | 'fallbackModels'>,
+  agentConfig: Pick<ExecutableAgentConfig, 'model' | 'modelSource' | 'fallbackModels' | 'thinking'>,
   runtime: string,
   parentModel: ParentModel | undefined,
   availableModels: AvailableModelInfo[] | undefined,
   teamPackageModels: string[] | undefined,
+  preferences: WorkflowPreferences,
 ): ResolvedModelSelection {
   const parentModelId =
     isPiRuntime(runtime) && parentModel && availableModels !== undefined
@@ -423,15 +461,50 @@ function resolvedModelSelection(
     ...(agentConfig.fallbackModels ?? []),
   ];
   const ordered = isPiRuntime(runtime)
-    ? [taskInput.model, ...agentModels, ...(teamPackageModels ?? []), parentModelId]
-    : [taskInput.model, ...agentModels, ...(teamPackageModels ?? [])];
+    ? [taskInput.model, preferences.subagentModel, ...agentModels, ...(teamPackageModels ?? []), parentModelId]
+    : [taskInput.model, preferences.subagentModel, ...agentModels, ...(teamPackageModels ?? [])];
   const candidates = ordered.filter((candidate): candidate is string => Boolean(candidate?.trim()));
   const [primaryModel, ...fallbackModels] = candidates;
-  return {
-    primaryModel,
-    fallbackModels,
-    model: selectAvailableModel(primaryModel, fallbackModels, availableModels),
-  };
+  const agentThinking = typeof agentConfig.thinking === 'string' ? agentConfig.thinking : undefined;
+  if (!preferences.subagentModel && !preferences.subagentThinking) {
+    return {
+      primaryModel,
+      fallbackModels,
+      model: selectAvailableModel(primaryModel, fallbackModels, availableModels),
+      thinking: agentThinking,
+    };
+  }
+  // Resolve candidates separately so a rejected candidate never contributes thinking.
+  let model: string | undefined;
+  let selectedCandidate: string | undefined;
+  for (const candidate of candidates) {
+    model = selectAvailableModel(candidate, [], availableModels);
+    if (model) {
+      selectedCandidate = candidate;
+      break;
+    }
+  }
+  const selectedSuffix = model ? splitKnownThinkingSuffix(model).thinkingSuffix.slice(1) : undefined;
+  const explicitThinking = selectedCandidate === taskInput.model ? selectedSuffix : undefined;
+  const thinking = explicitThinking || preferences.subagentThinking || selectedSuffix || agentThinking;
+  const workflowThinking =
+    !explicitThinking &&
+    (preferences.subagentThinking || (selectedCandidate === preferences.subagentModel && selectedSuffix));
+  const modelInfo = findModelInfo(model, availableModels);
+  if (
+    isPiRuntime(runtime) &&
+    workflowThinking &&
+    modelInfo &&
+    !getSupportedThinkingLevels(modelInfo).some((level) => level === thinking)
+  ) {
+    throw new DoomTeamExpectedError(
+      ERROR_CODE_INVALID_REQUEST,
+      `WORKFLOW_RUN_CONFIG thinking '${thinking}' is unsupported by model '${modelInfo.fullId}'.`,
+      false,
+      `Choose a supported thinking level: ${getSupportedThinkingLevels(modelInfo).join(', ')}.`,
+    );
+  }
+  return { primaryModel, fallbackModels, model, thinking };
 }
 
 export interface SpawnPlannerContract {
@@ -464,6 +537,7 @@ export class SpawnPlanner implements SpawnPlannerContract {
     private readonly childSessions?: DoomChildSessionServiceProvider,
     private readonly nativeRuns?: NativeRunCoordinatorContract,
     private readonly teamChannel?: Pick<NativeTeamChannelContract, 'createNativeChildIntercom'>,
+    private readonly environment: Readonly<Record<string, string | undefined>> = {},
   ) {}
 
   protected generateRunId(): string {
@@ -691,6 +765,7 @@ export class SpawnPlanner implements SpawnPlannerContract {
       capabilityCeiling,
       excludeTools,
       teamPackageModels,
+      workflowPreferences,
       taskInput,
       childIndex,
       fanout,
@@ -722,6 +797,7 @@ export class SpawnPlanner implements SpawnPlannerContract {
       parentModel,
       availableModels,
       teamPackageModels,
+      workflowPreferences,
     );
     if (modelSelection.primaryModel && availableModels !== undefined && !modelSelection.model) {
       return {
@@ -846,7 +922,7 @@ export class SpawnPlanner implements SpawnPlannerContract {
               task,
               cwd,
               ...(modelSelection.model ? { model: modelSelection.model } : {}),
-              ...(typeof agentConfig.thinking === 'string' ? { thinking: agentConfig.thinking } : {}),
+              ...(typeof modelSelection.thinking === 'string' ? { thinking: modelSelection.thinking } : {}),
               ...(skillProjection.systemPrompt ? { systemPrompt: skillProjection.systemPrompt } : {}),
               systemPromptMode: agentConfig.systemPromptMode,
               ...(agentConfig.extensions ? { extensions: agentConfig.extensions } : {}),
@@ -911,6 +987,9 @@ export class SpawnPlanner implements SpawnPlannerContract {
 
   async spawn(request: SpawnPlanRequest, config: ExtensionConfig): Promise<SpawnPlanResult> {
     const tasks = this.resolveTaskList(request);
+    const workflowPreferences = readWorkflowPreferences(
+      request.environment?.WORKFLOW_RUN_CONFIG ?? this.environment.WORKFLOW_RUN_CONFIG,
+    );
     const fanout = tasks.length > 1;
     const teamPackageExcludeTools = this.resolveTeamPackageExcludeTools();
     const teamPackageModels = this.resolveTeamPackageModels();
@@ -1042,6 +1121,7 @@ export class SpawnPlanner implements SpawnPlannerContract {
         request.parentModel,
         request.availableModels,
         teamPackageModels,
+        workflowPreferences,
       );
       if (modelSelection.primaryModel && request.availableModels !== undefined && !modelSelection.model) {
         throw new DoomTeamExpectedError(
@@ -1105,6 +1185,7 @@ export class SpawnPlanner implements SpawnPlannerContract {
           identity: identities[childIndex]!,
           excludeTools: teamPackageExcludeTools,
           teamPackageModels,
+          workflowPreferences,
           capabilityCeiling,
           taskInput,
           childIndex,

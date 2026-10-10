@@ -306,7 +306,7 @@
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
-    "@agimon-ai/log-sink-mcp": "0.30.8",
+    "@agimon-ai/log-sink-mcp": "0.30.10",
     "@deepseek-ai/cordis": "4.0.4",
     "@earendil-works/chord": "1.1.0",
     "@earendil-works/pi-agent-core": "1.1.0",

@@ -72,7 +72,7 @@ export function launchedRunHint(record: WorkflowRunRecord): string {
 
 /**
  * True when this session owns a run another session handed to it: it is the
- * run's workflow session, so a finished run is posted without starting a turn.
+ * run's workflow session. A success is posted without a turn; a failure starts one.
  */
 export function isOwnedDelegatedRun(record: WorkflowRunRecord, sessionId: string | undefined): boolean {
   const launcher = record.env?.[WORKFLOW_LAUNCHER_SESSION_ENV];

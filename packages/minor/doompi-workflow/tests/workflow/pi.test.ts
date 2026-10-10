@@ -2354,7 +2354,7 @@ describe('workflow-mcp Pi extension', () => {
     expect(harness.sendMessage.mock.calls.some(([message]) => message.customType === 'workflow-step')).toBe(false);
   });
 
-  it('posts a handed-off run to its workflow session without starting a turn', async () => {
+  it('posts a completed handed-off run to its workflow session without starting a turn', async () => {
     const handed = runRecord({
       runKey: 'handed-run',
       stage: 'running',
@@ -2391,6 +2391,63 @@ describe('workflow-mcp Pi extension', () => {
     });
   });
 
+  it('wakes the workflow session on a handed-off failure once', async () => {
+    const handed = runRecord({
+      runKey: 'handed-failure',
+      stage: 'running',
+      env: { PI_SESSION_ID: SESSION_ID, DOOMPI_WORKFLOW_LAUNCHER_SESSION_ID: 'launcher' },
+    });
+    const harness = await createHarness([handed], { monitorIntervalMs: 10 });
+    await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
+    listRuns(harness, [{ ...handed, stage: 'error', failedJob: 'verify' }]);
+
+    await vi.waitFor(() => {
+      const finished = harness.sendMessage.mock.calls.find(
+        ([message]) => message.customType === MESSAGE_TYPE_RUN_FINISHED,
+      );
+      expect(finished?.[1]).toEqual({ triggerTurn: true, deliverAs: 'steer' });
+      expect(finished?.[0].content).toContain('ended in error');
+      expect(finished?.[0].content).toContain('Failed job: verify');
+    });
+    await pollsSettle(harness);
+    expect(
+      harness.sendMessage.mock.calls.filter(([message]) => message.customType === MESSAGE_TYPE_RUN_FINISHED),
+    ).toHaveLength(1);
+  });
+
+  it('keeps handed-off failures out of launcher context but delivers completion after recovery', async () => {
+    const handed = runRecord({
+      runKey: 'delegated-failure',
+      stage: 'running',
+      env: { PI_SESSION_ID: 'workflow-child', DOOMPI_WORKFLOW_LAUNCHER_SESSION_ID: SESSION_ID },
+    });
+    const harness = await createHarness([handed], { monitorIntervalMs: 10 });
+    await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
+    listRuns(harness, [{ ...handed, stage: 'error', failedJob: 'verify' }]);
+    await vi.waitFor(() => {
+      expect(harness.ui.notify.mock.calls.map(([message]) => String(message)).join('\n')).toContain(
+        'delegated-failure',
+      );
+    });
+    await pollsSettle(harness);
+    expect(
+      harness.sendMessage.mock.calls.filter(([message]) => message.customType === MESSAGE_TYPE_RUN_FINISHED),
+    ).toHaveLength(0);
+    expect(harness.backgroundWorkSnapshot()).toEqual({ items: [], errors: [] });
+
+    // Keep the identity to prove a suppressed failure was not marked delivered.
+    listRuns(harness, [handed]);
+    await pollsSettle(harness);
+    listRuns(harness, [{ ...handed, stage: 'completed' }]);
+    await vi.waitFor(() => {
+      const finished = harness.sendMessage.mock.calls.filter(
+        ([message]) => message.customType === MESSAGE_TYPE_RUN_FINISHED,
+      );
+      expect(finished).toHaveLength(1);
+      expect(finished[0]?.[1]).toEqual({ triggerTurn: true, deliverAs: 'steer' });
+      expect(finished[0]?.[0].content).toContain('completed');
+    });
+  });
   it('announces a run that starts and finishes between monitor polls', async () => {
     const harness = await createHarness([], { monitorIntervalMs: 10 });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);

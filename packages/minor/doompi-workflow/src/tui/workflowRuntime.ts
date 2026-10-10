@@ -1201,7 +1201,7 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
       const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId(), options.environment);
       const rootProcess = isRootProcess(ctx, sessionId);
       const ownRecords = records.filter((record) => isSessionRun(record, sessionId));
-      // Runs this session handed to its own workflow sessions: it is told when they end, but does not own them.
+      // Runs this session handed to its own workflow sessions: it is told when they succeed, but does not own them.
       const sessionRecords = records.filter(
         (record) => isSessionRun(record, sessionId) || isLaunchedRun(record, sessionId),
       );
@@ -1245,6 +1245,8 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
           narrateWorkflowTransition(narrationSink, record, narratedPrevious, startedDuringSession);
         }
         if (!notifyChanges || !rootProcess || record.stage === RUNNING_STATUS) continue;
+        // Handed-off failures belong to the workflow session; the launcher only gets the toast.
+        if (record.stage === ERROR_STAGE && isLaunchedRun(record, sessionId)) continue;
         if (!deliveredTerminalRuns.has(identity) && (previous === RUNNING_STATUS || startedDuringSession)) {
           pendingTerminalRuns.set(identity, record);
         }
@@ -1314,7 +1316,7 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
                 runEvents.get(identity) ??
                 progressEventsForRun(record, await readWorkflowProgress(registry.runDirectoryFor(record)));
               const summary = finishedRunSummary(record, summarizeWorkflowProgress(events));
-              return isLaunchedRun(record, sessionId) ? `${summary}\n${launchedRunHint(record)}` : summary;
+              return summary;
             }),
           );
           if (!refreshIsCurrent()) return;
@@ -1337,12 +1339,12 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
               }),
             },
           });
-          // A workflow session's own run is posted, not steered: its agent waits for the reader to ask.
+          // A delegated success is posted quietly; a failure wakes its workflow session to diagnose it.
           const quiet = terminalRecords.flatMap((record, index) =>
-            isOwnedDelegatedRun(record, sessionId) ? [index] : [],
+            isOwnedDelegatedRun(record, sessionId) && record.stage !== ERROR_STAGE ? [index] : [],
           );
           const loud = terminalRecords.flatMap((record, index) =>
-            isOwnedDelegatedRun(record, sessionId) ? [] : [index],
+            isOwnedDelegatedRun(record, sessionId) && record.stage !== ERROR_STAGE ? [] : [index],
           );
           if (quiet.length > 0) pi.sendMessage(message(quiet), { triggerTurn: false });
           if (loud.length > 0) pi.sendMessage(message(loud), { triggerTurn: true, deliverAs: 'steer' });

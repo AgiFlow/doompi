@@ -32,6 +32,7 @@ import {
   SpawnPlanner,
   type SpawnPlanRequest,
 } from '../../src/services/spawnPlan';
+import { createTeamExtensionRuntime } from '../../src/services/teamRuntime';
 import type { AgentConfig, AgentDiscoveryResult, AgentScope, AgentDiscoveryContract } from '../../src/types/agent';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 function agentConfig(name: string, overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -263,6 +264,166 @@ describe('SpawnPlanner', () => {
     skills = new FakeSkillDiscovery();
     planner = new TestableSpawnPlanner(discovery, spawner, undefined, skills, undefined, undefined, undefined, child);
     config = {};
+  });
+
+  describe('workflow preferences', () => {
+    const availableModels = ['explicit', 'workflow', 'agent', 'fallback', 'team', 'parent'].map((id) => ({
+      provider: 'test',
+      id,
+      fullId: `test/${id}`,
+      reasoning: true,
+    }));
+    function request(preferences: unknown, model?: string): SpawnPlanRequest {
+      return baseRequest({
+        single: { agent: 'worker', task: 'x', model },
+        availableModels,
+        parentModel: { provider: 'test', id: 'parent' },
+        environment: { WORKFLOW_RUN_CONFIG: JSON.stringify(preferences) },
+      });
+    }
+    beforeEach(() => {
+      discovery.agents.set(
+        'worker',
+        agentConfig('worker', {
+          model: 'test/agent:low',
+          fallbackModels: ['test/fallback:medium'],
+          thinking: 'minimal',
+        }),
+      );
+      planner.teamPackageModels = ['test/team:high'];
+    });
+
+    it.each([
+      [
+        { subagentModel: 'test/workflow:high', subagentThinking: 'medium' },
+        'test/explicit:xhigh',
+        'test/explicit:xhigh',
+        'xhigh',
+      ],
+      [{ subagentModel: 'test/workflow:high', subagentThinking: 'medium' }, 'test/explicit', 'test/explicit', 'medium'],
+      [{ subagentModel: 'test/workflow:high' }, undefined, 'test/workflow:high', 'high'],
+      [{ subagentModel: 'test/workflow' }, undefined, 'test/workflow', 'minimal'],
+      [{ subagentThinking: 'high' }, undefined, 'test/agent:low', 'high'],
+      [{ subagentModel: 'test/missing:xhigh' }, 'test/missing:high', 'test/agent:low', 'low'],
+      [
+        { subagentModel: 'test/workflow:low', subagentThinking: 'medium' },
+        'test/missing:high',
+        'test/workflow:low',
+        'medium',
+      ],
+      [{ subagentModel: 'test/workflow:low' }, 'test/missing:high', 'test/workflow:low', 'low'],
+      [{}, 'test/explicit:high', 'test/explicit:high', 'minimal'],
+      [{ model: 'ignored', thinking: 'unknown' }, undefined, 'test/agent:low', 'minimal'],
+    ])('resolves %j with explicit %s', async (preferences, explicit, model, thinking) => {
+      await planner.spawn(request(preferences, explicit), config);
+      expect(child.calls[0]).toMatchObject({ model, thinking });
+    });
+
+    it('preserves legacy thinking and model when the payload is absent', async () => {
+      const input = request({});
+      delete input.environment;
+      await planner.spawn(input, config);
+      expect(child.calls[0]).toMatchObject({ model: 'test/agent:low', thinking: 'minimal' });
+    });
+
+    it.each([
+      ['test/agent:low', ['test/fallback:medium'], ['test/team:high'], 'test/fallback:medium', 'medium'],
+      ['missing', ['missing'], ['test/team:high'], 'test/team:high', 'high'],
+      ['missing', ['missing'], ['missing'], 'test/parent', 'minimal'],
+    ])('retains fallback order for %s', async (model, fallbackModels, teamModels, expectedModel, thinking) => {
+      discovery.agents.set('worker', agentConfig('worker', { model, fallbackModels, thinking: 'minimal' }));
+      planner.teamPackageModels = teamModels;
+      const input = request({ subagentModel: 'missing:xhigh' });
+      input.availableModels = availableModels.filter((entry) => entry.id !== 'agent');
+      await planner.spawn(input, config);
+      expect(child.calls[0]).toMatchObject({ model: expectedModel, thinking });
+    });
+
+    it.each([
+      '{',
+      'null',
+      '[]',
+      '42',
+      '"text"',
+      '',
+      '{"subagentModel":false}',
+      '{"subagentModel":" "}',
+      '{"subagentThinking":null}',
+      '{"subagentThinking":" "}',
+      '{"subagentThinking":"ultra"}',
+    ])('rejects invalid payload %s before spawning', async (payload) => {
+      const input = request({});
+      input.environment = { WORKFLOW_RUN_CONFIG: payload };
+      await expect(planner.spawn(input, config)).rejects.toThrow(/\[invalid_request\].*WORKFLOW_RUN_CONFIG/);
+      expect(child.calls).toHaveLength(0);
+      expect(spawner.calls).toHaveLength(0);
+    });
+
+    it.each([{ subagentThinking: 'high' }, { subagentModel: 'test/workflow:high' }])(
+      'rejects unsupported workflow thinking %j in preflight',
+      async (preferences) => {
+        const input = request(preferences);
+        input.availableModels = availableModels.map((entry) => ({ ...entry, reasoning: false }));
+        await expect(planner.spawn(input, config)).rejects.toThrow(/thinking 'high' is unsupported/);
+        expect(child.calls).toHaveLength(0);
+      },
+    );
+
+    it('uses capability maps and allows supported extended levels', async () => {
+      const input = request({ subagentThinking: 'max' });
+      await expect(planner.spawn(input, config)).rejects.toThrow(/thinking 'max' is unsupported/);
+      input.availableModels = availableModels.map((entry) => ({ ...entry, thinkingLevelMap: { max: 'max' } }));
+      await planner.spawn(input, config);
+      expect(child.calls[0]?.thinking).toBe('max');
+    });
+
+    it('does not validate a workflow level overridden by the selected explicit suffix', async () => {
+      const input = request({ subagentThinking: 'max' }, 'test/explicit:off');
+      await planner.spawn(input, config);
+      expect(child.calls[0]?.thinking).toBe('off');
+    });
+
+    it('does not invent capability information for callers without a registry', async () => {
+      const input = request({ subagentThinking: 'max' });
+      delete input.availableModels;
+      await planner.spawn(input, config);
+      expect(child.calls[0]?.thinking).toBe('max');
+    });
+
+    it('isolates two bound runtimes without request environments or process-global preferences', async () => {
+      const firstChild = new FakeChildSessionService();
+      const secondChild = new FakeChildSessionService();
+      const runtimes = [
+        createTeamExtensionRuntime(undefined, {
+          environment: {
+            WORKFLOW_RUN_CONFIG: JSON.stringify({ subagentModel: 'test/workflow', subagentThinking: 'high' }),
+          },
+          childSessions: { get: () => firstChild },
+        }),
+        createTeamExtensionRuntime(undefined, {
+          environment: {
+            WORKFLOW_RUN_CONFIG: JSON.stringify({ subagentModel: 'test/explicit', subagentThinking: 'low' }),
+          },
+          childSessions: { get: () => secondChild },
+        }),
+      ];
+      try {
+        const input = baseRequest({
+          cwd: os.tmpdir(),
+          single: { agent: 'inline', task: 'x', inlineAgent: { systemPrompt: 'Explore only.' } },
+          availableModels,
+          parentModel: { provider: 'test', id: 'parent' },
+        });
+        await Promise.all(runtimes.map((runtime) => runtime.spawnPlanner.spawn(input, config)));
+        expect(firstChild.calls[0]).toMatchObject({ model: 'test/workflow', thinking: 'high' });
+        expect(secondChild.calls[0]).toMatchObject({ model: 'test/explicit', thinking: 'low' });
+        await runtimes[0]!.spawnPlanner.spawn({ ...input, environment: { WORKFLOW_RUN_CONFIG: '{}' } }, config);
+        expect(firstChild.calls[1]?.thinking).toBeUndefined();
+        expect(firstChild.calls[1]?.model).toBe('test/parent');
+      } finally {
+        for (const runtime of runtimes) runtime.dispose();
+      }
+    });
   });
 
   describe('request shape validation', () => {

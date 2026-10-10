@@ -88,12 +88,27 @@ When the DoomPi server launches a workflow (the `launch_workflow` tool, `/workfl
 
 Every job must be the last to have written each run-directory entry it produces. After each step, workflow-mcp records in the run's `writes.ndjson` each declared entry that changed (new content, the same content written again, or removal) with the job and step that changed it. A job attempt fails, naming the entry and who wrote it last, unless this job is the latest writer of every entry it produces, and its retries apply. A retry, or a job that skips work it already did, keeps its own output; an entry another job wrote after it must be written again, so several jobs can produce one file and each is held to its own write. When an agent step ends the job, it is held to the entries it has yet to write before it stops, as it is to its own `artifacts` (which must also not be empty): the in-process runner asks the gate each time the agent settles, and a terminal agent is held the same way by its Stop hook (Claude Code and Codex) or the native `doompi-workflow` settled handler (Pi). Each reminder names the files and what the run directory says each holds, so give every entry a `description`. After the gate's cap (3 reminders by default, set with `WORKFLOW_DECISION_NUDGE_CAP`), the agent may stop, and the step or job fails with what is still missing. A job that ends with a script is only checked once it ends, since that script may still write its entries.
 
-`runConfig` keys are validated: `majorMode`, `profile`, `model`, and `thinking` take one name, while `minorModes` and `domains` take a list or a comma-separated string (an empty list selects no domains). An unknown key fails the step; on a templated step, a key the template of any command the step offers reads is known too.
+`runConfig` keys are validated: `majorMode`, `profile`, `model`, `thinking`, `subagentModel`, and `subagentThinking` take one name, while `minorModes` and `domains` take a list or a comma-separated string (an empty list selects no domains). An unknown key fails the step; on a templated step, a key the template of any command the step offers reads is known too.
+
+Choices can configure the step and its Team children independently:
+
+```yaml
+choices:
+  default:
+    model: provider/step-model
+    thinking: high
+    subagentModel: provider/child-model
+    subagentThinking: medium
+```
+
+Template choices support per-command overrides. `customRun` uses only the launch/default choice's subagent fields, without changing its existing step model/thinking behavior. Explicit child model requests outrank `subagentModel`, which outranks agent and Team defaults; unavailable models retain the existing fallback behavior. Thinking uses the selected explicit request's suffix first, then `subagentThinking`, the selected candidate's suffix, and agent defaults. Step model/thinking are never reused automatically. With neither subagent field present, existing Team behavior stays unchanged.
+
+These preferences cover direct Team spawns from the step, including subagent runs and task assignments. External launchers must already support the corresponding model/thinking settings. Choice support requires a workflow-mcp release containing these fields; older versions reject them.
 
 Check workflows before running them with `workflow-mcp doctor`, which reports what a run would otherwise only meet mid-step: schema and import problems, runConfig keys nothing reads, jobs that need a missing job, runner maps no runner satisfies, customRun steps without a terminal fallback, and inputs a workflow does not declare. Pass DoomPi's keys so runConfig typos are errors:
 
 ```bash
-workflow-mcp doctor automations/workflows --run-config-keys majorMode,minorModes,profile,domains,model,thinking
+workflow-mcp doctor automations/workflows --run-config-keys majorMode,minorModes,profile,domains,model,thinking,subagentModel,subagentThinking
 ```
 
 It exits non-zero on errors (and on warnings with `--strict`), and `--format json` reports each finding with its code and location. The DoomPi server runs the same check on its workflow catalog: a workflow with errors shows as needing fixing and cannot be launched until it is fixed. `${{ runConfig.<key> }}` interpolates into any command, with lists joined by commas, and `WORKFLOW_RUN_CONFIG` holds the whole map as JSON.

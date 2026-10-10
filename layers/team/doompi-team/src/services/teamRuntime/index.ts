@@ -98,6 +98,7 @@ export function createTeamExtensionRuntime(
     options.childSessions,
     nativeRuns,
     teamChannel,
+    options.environment,
   );
   const management = new ManagementActions(asyncJobTracker, nativeRuns, externalProcesses);
   const onExternalEvent = (event: ExternalProcessEvent): void => {
