@@ -24,6 +24,7 @@ import {
 import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 import { serveHeadlessServer, type HeadlessServer } from '../../../../../src/server/headlessServer';
 import { writeContextDetail } from '../../../../../src/services/contextDetailStore';
+import { createHeadlessClient } from '../../../../../src/services/headlessClient';
 import type { HeadlessSessionHost } from '../../../../../src/systems/main/types/headlessSessionHost';
 import type { SessionToolInvocation } from '../../../../../src/types/server/sessionToolSurface';
 import { modernMcpRequest } from './modernMcpRequest';
@@ -1910,9 +1911,12 @@ describe('serveHeadlessServer', () => {
     await hub.close();
   });
 
-  it('keeps a sibling Pi attachment and HTTP health alive when stalled prompt admission exits', async () => {
+  it('keeps a sibling Pi attachment and HTTP health alive after exit and a late notification', async () => {
     const first = host();
     const second = host();
+    const appendCustomEntry = vi.fn(async () => undefined);
+    const emitFrame = vi.fn(first.emitFrame);
+    const notification = createHeadlessClient({ appendCustomEntry, emitFrame });
     vi.mocked(first.runtime.submitPrompt).mockImplementation(() => new Promise(() => undefined));
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
     for (const [id, session] of [
@@ -1955,6 +1959,11 @@ describe('serveHeadlessServer', () => {
       await vi.waitFor(() => expect(first.runtime.submitPrompt).toHaveBeenCalledWith('stalled', undefined, 'steer'));
       first.exit();
       await pending;
+      notification.dispose();
+      void Promise.resolve().then(() => notification.client.notify({ body: 'late exit failure', level: 'error' }));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(appendCustomEntry).not.toHaveBeenCalled();
+      expect(emitFrame).not.toHaveBeenCalled();
       const prompt = bindings[1]!.use(DoomSessionService).prompt('survives', BACKGROUND_CONTEXT);
       await vi.waitFor(() => expect(second.runtime.submitPrompt).toHaveBeenCalledWith('survives', undefined, 'steer'));
       second.emitFrame({ type: 'agent_settled' });
@@ -1968,9 +1977,12 @@ describe('serveHeadlessServer', () => {
     }
   });
 
-  it('reattaches a Pi client to a replacement runtime with the same session id', async () => {
+  it('reattaches a Pi client without delivering an old runtime notification to its replacement', async () => {
     const first = host();
     const second = host();
+    const appendCustomEntry = vi.fn(async () => undefined);
+    const emitFrame = vi.fn(first.emitFrame);
+    const notification = createHeadlessClient({ appendCustomEntry, emitFrame });
     const hub = createHeadlessHub({
       manager: {
         closeSession: vi.fn(async (sessionId: string) => {
@@ -2013,6 +2025,7 @@ describe('serveHeadlessServer', () => {
     expect(first.runtime.submitPrompt).toHaveBeenCalledWith('before', undefined, 'steer');
 
     await hub.closeSession('one');
+    notification.dispose();
     await vi.waitFor(() => expect(client.attachment).toBeUndefined());
     hub.register({
       workspaceId: 'test-workspace',
@@ -2028,6 +2041,10 @@ describe('serveHeadlessServer', () => {
       transport: createClientServiceTransport(client, () => client.attachment),
     });
     await secondBinding.ready(BACKGROUND_CONTEXT);
+    void Promise.resolve().then(() => notification.client.notify({ body: 'late old runtime failure', level: 'error' }));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(appendCustomEntry).not.toHaveBeenCalled();
+    expect(emitFrame).not.toHaveBeenCalled();
     await secondBinding.use(DoomSessionService).prompt({ text: 'after', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
     expect(second.runtime.submitPrompt).toHaveBeenCalledWith('after', undefined, 'steer');
     expect(first.runtime.submitPrompt).not.toHaveBeenCalledWith('after', undefined);

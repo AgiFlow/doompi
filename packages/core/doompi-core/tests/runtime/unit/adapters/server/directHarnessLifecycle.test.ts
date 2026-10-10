@@ -15,6 +15,7 @@ import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createDirectHarnessRuntime } from '../../../../../src/server/directHarnessRuntime';
+import { createHeadlessClient } from '../../../../../src/services/headlessClient';
 import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
 import type { Entry } from '../../../../../src/types/server/directHarnessRuntime';
 
@@ -664,6 +665,53 @@ describe('direct harness durable lifecycle', () => {
       await waitFor(async () => (await runtime.readLifecycle()).operation === null);
       expect(streamSimple).toHaveBeenCalledTimes(2);
     } finally {
+      await runtime.dispose();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves committed SQLite history when a disposed client receives a delayed notification', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-late-notification-'));
+    const { models } = fixtures();
+    const open = () =>
+      createDirectHarnessRuntime({
+        cwd: root,
+        sessionsRoot: root,
+        sessionId: 'late_notification_restart',
+        storage: 'sqlite' as const,
+        historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
+        models,
+        model,
+      });
+    let runtime = await open();
+    const original = runtime;
+    const emitFrame = vi.fn();
+    const appendCustomEntry = vi.fn(async (type: string, data: unknown) => {
+      await original.appendCustomEntry(type, data);
+    });
+    const bridge = createHeadlessClient({ emitFrame, appendCustomEntry });
+    let release!: () => void;
+    const late = new Promise<void>((resolve) => {
+      release = resolve;
+    }).then(() => bridge.client.notify({ body: 'late shutdown failure', level: 'error' }));
+    try {
+      await runtime.appendCustomEntry('committed-work', { text: 'keep this work' });
+      const committed = (await runtime.readEntries()).entries;
+      expect(
+        committed.filter((entry) => entry.type === 'custom' && entry.customType === 'committed-work'),
+      ).toHaveLength(1);
+      bridge.dispose();
+      await runtime.dispose();
+      release();
+      await expect(late).resolves.toBeUndefined();
+      expect(appendCustomEntry).not.toHaveBeenCalled();
+      expect(emitFrame).not.toHaveBeenCalled();
+      runtime = await open();
+      expect((await runtime.readEntries()).entries).toEqual(committed);
+    } finally {
+      bridge.dispose();
+      release();
+      await late.catch(() => undefined);
       await runtime.dispose();
       fs.rmSync(root, { recursive: true, force: true });
     }

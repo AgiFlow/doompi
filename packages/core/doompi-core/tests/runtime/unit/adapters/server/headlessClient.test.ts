@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { createHeadlessClient } from '../../../../../src/services/headlessClient';
@@ -92,6 +94,89 @@ describe('headless client bridge', () => {
       },
     ]);
   });
+  it('ignores notifications after disposal without writing or emitting', async () => {
+    const bridge = setup();
+    bridge.dispose();
+    bridge.dispose();
+    await expect(bridge.client.notify({ body: 'late failure', level: 'error' })).resolves.toBeUndefined();
+    expect(bridge.appendCustomEntry).not.toHaveBeenCalled();
+    expect(bridge.frames).toEqual([]);
+  });
+
+  it.each(['resolve', 'reject'] as const)('does not redeliver an append that %s after disposal', async (outcome) => {
+    const bridge = setup();
+    let resolve!: () => void;
+    let reject!: (error: Error) => void;
+    bridge.appendCustomEntry.mockReturnValueOnce(
+      new Promise<void>((yes, no) => {
+        resolve = yes;
+        reject = no;
+      }),
+    );
+    const notification = bridge.client.notify({ body: 'pending failure', level: 'error' });
+    bridge.dispose();
+    if (outcome === 'resolve') resolve();
+    else reject(new Error('journal closed'));
+    await expect(notification).resolves.toBeUndefined();
+    expect(bridge.appendCustomEntry).toHaveBeenCalledOnce();
+    expect(bridge.frames).toEqual([]);
+  });
+
+  it('still rejects invalid notifications while live', async () => {
+    const bridge = setup();
+    await expect(bridge.client.notify({ body: '', level: 'error' })).rejects.toThrow('Invalid notification request');
+    expect(bridge.appendCustomEntry).not.toHaveBeenCalled();
+    bridge.dispose();
+  });
+
+  it('keeps strict Node alive for discarded late notification promises', async () => {
+    const entry = new URL('../../../../../dist/src/services/headlessClient/index.mjs', import.meta.url).href;
+    const script = `
+import assert from 'node:assert/strict';
+import { createHeadlessClient } from ${JSON.stringify(entry)};
+const tick = () => new Promise(resolve => setImmediate(resolve));
+const closed = createHeadlessClient({ appendCustomEntry: async () => { throw Error('unexpected append'); }, emitFrame: () => { throw Error('stale frame'); } });
+closed.dispose();
+void closed.client.notify({ body: 'late failure', level: 'error' });
+await tick();
+const append = Promise.withResolvers();
+let appends = 0;
+const pending = createHeadlessClient({ appendCustomEntry: () => { appends++; return append.promise; }, emitFrame: () => { throw Error('stale fallback'); } });
+void pending.client.notify({ body: 'pending failure', level: 'error' });
+pending.dispose();
+append.reject(Error('journal closed'));
+await tick();
+assert.equal(appends, 1);
+let saved = 0;
+const sibling = createHeadlessClient({ appendCustomEntry: async () => { saved++; }, emitFrame: () => {} });
+await sibling.client.notify({ body: 'sibling survives', level: 'info' });
+assert.equal(saved, 1);
+sibling.dispose();
+console.log('LATE_NOTIFICATIONS_CONTAINED');`;
+    const child = spawn(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '-e', script], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (data: Buffer) => {
+      stdout += data.toString();
+    });
+    child.stderr.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
+    const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
+    try {
+      const code = await new Promise<number | null>((resolve, reject) => {
+        child.once('error', reject);
+        child.once('close', resolve);
+      });
+      expect(code, stderr + stdout).toBe(0);
+      expect(stdout).toContain('LATE_NOTIFICATIONS_CONTAINED');
+    } finally {
+      clearTimeout(timer);
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    }
+  }, 15_000);
 });
 
 it('emits a distinct append request for native dictation and rejects it after disposal', () => {
