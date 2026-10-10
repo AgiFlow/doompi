@@ -108,12 +108,15 @@ session creates a child **workflow session** (provenance `workflow-session`), ne
 rail, and hands it the launch. The workflow session owns the run (`PI_SESSION_ID`), runs its step
 sessions, and has Workflow mode on, so its agent can troubleshoot and recover the run. The run's
 environment also carries `DOOMPI_WORKFLOW_LAUNCHER_SESSION_ID`, naming the launching session, which
-lists the run in its Activity group, is told when it ends, and may read its status.
+lists the run in its Activity group, is told when it completes, and may read its status. Failures only
+raise a UI toast there, without adding a message to the launching agent's context.
 
 - The workflow session's rail row shows the run (`workflow · build › test · 4m`, or a failure or
   pause marked like a pending question) through the host's per-session activity line.
-- A failure or finish is posted into the workflow session's conversation as a notice, without
-  starting an agent turn. The owner agent also gets a live brief of its runs on every turn.
+- A failure starts a turn in the workflow session to diagnose and report locally. Recovery requires
+  a user request or explicit launcher delegation. Completion is posted without starting a turn,
+  and completion after recovery still notifies the launcher. The owner agent also gets a live brief
+  of its runs on every turn.
 - After a success, a workflow session nobody interacted with asks its launcher to release it, and it
   becomes `stopped · open to wake`. A session whose run failed or paused, or whose agent you
   prompted, stays live until you remove it. Removing or restarting a live workflow session stops its

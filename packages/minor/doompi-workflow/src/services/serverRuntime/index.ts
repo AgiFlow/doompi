@@ -414,7 +414,7 @@ export function createWorkflowServerRuntime(
       }
       const text = result.content.map((item) => item.text).join('\n');
       return textResult(
-        `${text}\nRuns in workflow session "${name}" (${child}), nested under this session. You will be told here when it finishes; troubleshoot and recover it there, or delegate to its owner with intercom send to "${child}".`,
+        `${text}\nRuns in workflow session "${name}" (${child}), nested under this session. Completion is reported here. Failures wake that workflow session to diagnose locally, without notifying your agent. Recovery requires a request; delegate to its owner with intercom send to "${child}".`,
       );
     } catch (error) {
       if (child !== undefined) await sessionService!.close(child).catch(reportLifecycleFailure);
