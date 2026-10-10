@@ -56,7 +56,9 @@ const DOOMPI_KEYS: ReadonlySet<string> = new Set(DOOMPI_RUN_CONFIG_KEYS);
  * A templated step's may also carry keys its command template reads. A key
  * that is neither, such as `majormode`, fails the step rather than running it
  * on workspace defaults. An engine that does not say what its template reads
- * leaves such keys unchecked.
+ * leaves such keys unchecked. A step must name its major mode, itself or
+ * through the workflow's top-level `runConfig`: the workspace default may be an
+ * interactive mode whose tools, like asking the user, hang an unattended step.
  */
 export function readDoompiRunConfig(runConfig: unknown, template?: RunConfigTemplate): DoompiRunConfig {
   const parsed = (template === undefined ? doompiRunConfigSchema : doompiTemplateRunConfigSchema).safeParse(
@@ -74,6 +76,11 @@ export function readDoompiRunConfig(runConfig: unknown, template?: RunConfigTemp
         `Invalid runConfig: ${unknown.join(', ')} is neither a DoomPi setting nor read by the "${template.name}" command.`,
       );
     }
+  }
+  if (parsed.data.majorMode === undefined) {
+    throw new Error(
+      "Invalid runConfig: majorMode is required; set it on the step or in the workflow's top-level runConfig.",
+    );
   }
   return parsed.data;
 }

@@ -18,12 +18,19 @@ const packageRoots = [
 ];
 const packagePatterns = ['**/*.ts', '**/*.tsx', '**/*.cts', '**/*.mts', '**/package.json'];
 const pathspecs = packageRoots.flatMap((packageRoot) => packagePatterns.map((pattern) => `${packageRoot}/${pattern}`));
+// VIBE_LINT_SHARD=1/2 reviews every second file, so CI can split the sweep across runners.
+const [shard, shardCount] = (process.env.VIBE_LINT_SHARD ?? '1/1').split('/').map(Number);
+if (!Number.isInteger(shard) || !Number.isInteger(shardCount) || shard < 1 || shard > shardCount) {
+  console.error(`[vibe-lint] Invalid VIBE_LINT_SHARD "${process.env.VIBE_LINT_SHARD}"; expected <index>/<count>.`);
+  process.exit(1);
+}
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', ...pathspecs], {
   cwd: root,
   encoding: 'utf8',
 })
   .split('\n')
   .filter(Boolean)
+  .filter((_file, index) => index % shardCount === shard - 1)
   .map((file) => path.join(root, file))
   .filter((file) => fs.existsSync(file));
 

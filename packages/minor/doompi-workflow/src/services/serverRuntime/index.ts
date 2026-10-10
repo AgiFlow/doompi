@@ -13,7 +13,7 @@ import { createDoomNotificationEntryData, DOOM_NOTIFICATION_ENTRY_TYPE } from '@
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
-import { createEmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
+import { createEmbeddedWorkflowFeature, type Workflow } from '@agimon-ai/workflow-mcp';
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
@@ -23,11 +23,12 @@ import {
   WORKFLOW_SESSION_RELEASE_TYPE,
   WORKFLOW_TOOLS_TOOL_NAME,
 } from '../../constants/workflow';
+import { doompiTemplateRunConfigSchema } from '../../schemas/runConfig';
 import { workflowToolsInputSchema } from '../../schemas/workflowPi';
 import { registerRunProvider, type RunProviderHandle } from '../../services/backgroundWork';
 import { resolveMaxConcurrent } from '../../services/piToolBridge';
 import { createServerLauncher } from '../../services/serverLaunch';
-import { createNativeStepPaneLauncher, createStepExecutor } from '../../services/stepExecutor';
+import { createNativeStepPaneLauncher, createStepExecutor, sessionSelection } from '../../services/stepExecutor';
 import { createWorkflowCatalogReader, presentWorkflowCatalog } from '../../services/webWorkflowCatalog';
 import { defaultCatalogDeps } from '../../services/workflowCatalogDeps';
 import type { WorkflowLaunchInput } from '../../services/workflowExecution';
@@ -98,6 +99,24 @@ function errorOf(value: unknown): string | undefined {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * The selection a workflow session runs in: the workflow's top-level
+ * `runConfig` plus the workflow mode. Its owner agent works unattended, so a
+ * workflow that names no major mode is refused rather than left on the
+ * workspace default, which may be an interactive mode that asks the user.
+ */
+function workflowSessionSelection(workflow: Workflow) {
+  const config = doompiTemplateRunConfigSchema.parse(workflow.runConfig ?? {});
+  if (config.majorMode === undefined) {
+    throw new Error(
+      'This workflow sets no top-level runConfig.majorMode, so its workflow session would run in the workspace default mode. Set one.',
+    );
+  }
+  const selection = sessionSelection(config);
+  const minorModes = (selection.minorModes ?? []).filter((mode) => mode !== WORKFLOW_MODE_ID);
+  return { ...selection, minorModes: [...minorModes, WORKFLOW_MODE_ID] };
 }
 
 /** The text of a launch's tool result, as the launch tool and the API report it. */
@@ -392,6 +411,7 @@ export function createWorkflowServerRuntime(
     creatingWorkflowSessions += 1;
     let child: string | undefined;
     try {
+      const selection = workflowSessionSelection(feature.parser.parseWorkflowFile(workflowPath));
       const entry = (await catalogReader.read(where.cwd)).find((candidate) => candidate.path === workflowPath);
       const name = workflowSessionName(workflowPath, entry?.name);
       // No environment: nothing of this session's is copied, and no root-session marker moves ownership back here.
@@ -400,7 +420,7 @@ export function createWorkflowServerRuntime(
         name,
         parentSessionId: self,
         sessionProvenance: WORKFLOW_SESSION_PROVENANCE,
-        selection: { minorModes: [WORKFLOW_MODE_ID] },
+        selection,
       });
       child = scope.sessionId;
       const result = await launchIn(child, {

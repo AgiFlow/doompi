@@ -90,10 +90,21 @@ describe('readDoompiRunConfig', () => {
       'majormode is neither a DoomPi setting nor read by the "pi" command',
     );
     // An engine that does not say what its template reads leaves such keys to it.
-    expect(readDoompiRunConfig({ majormode: 'dev' }, { name: 'pi' })).toEqual({});
+    expect(readDoompiRunConfig({ majorMode: 'dev', majormode: 'dev' }, { name: 'pi' })).toEqual({ majorMode: 'dev' });
+  });
+
+  it('requires a major mode so a step never runs on the workspace default', () => {
+    expect(() => readDoompiRunConfig({ model: 'p/m' })).toThrow('majorMode is required');
+    expect(() => readDoompiRunConfig(undefined, { name: 'pi' })).toThrow('majorMode is required');
   });
   it('accepts independent subagent preferences for custom and templated steps', () => {
-    const config = { model: 'p/step', thinking: 'high', subagentModel: 'p/child', subagentThinking: 'medium' };
+    const config = {
+      majorMode: 'dev',
+      model: 'p/step',
+      thinking: 'high',
+      subagentModel: 'p/child',
+      subagentThinking: 'medium',
+    };
     expect(readDoompiRunConfig(config)).toEqual(config);
     expect(readDoompiRunConfig(config, { name: 'pi', reads: ['prompt'] })).toEqual(config);
     expect(() => readDoompiRunConfig({ subagentModel: ' ' })).toThrow('subagentModel');
@@ -166,7 +177,13 @@ describe('createStepExecutor', () => {
 
   it('transports subagent preferences without replacing the step model or thinking', async () => {
     const harness = dependencies();
-    const config = { model: 'p/step', thinking: 'high', subagentModel: 'p/child', subagentThinking: 'medium' };
+    const config = {
+      majorMode: 'dev',
+      model: 'p/step',
+      thinking: 'high',
+      subagentModel: 'p/child',
+      subagentThinking: 'medium',
+    };
     await createStepExecutor(harness.deps).custom!({
       cwd: '/repo',
       env: { ...STEP_ENV, WORKFLOW_RUN_CONFIG: JSON.stringify(config) },
@@ -186,6 +203,7 @@ describe('createStepExecutor', () => {
       hostEnvironment: { PATH: '/usr/bin', WORKFLOW_RUN_CONFIG: JSON.stringify({ subagentModel: 'p/stale' }) },
     });
     await createStepExecutor(harness.deps).custom!({
+      runConfig: { majorMode: 'dev' },
       cwd: '/repo',
       env: { ...STEP_ENV, WORKFLOW_RUN_CONFIG: '{}' },
       stepName: 'Develop',
@@ -202,7 +220,7 @@ describe('createStepExecutor', () => {
       env: STEP_ENV,
       stepName: 'Develop',
       customRun: { prompt: 'Implement the task', systemPrompt: 'You are running job "development".' },
-      runConfig: { model: 'claude-bridge/claude-opus-5-5', thinking: 'medium' },
+      runConfig: { majorMode: 'dev', model: 'claude-bridge/claude-opus-5-5', thinking: 'medium' },
     });
 
     expect(harness.created[0]).toMatchObject({
@@ -216,6 +234,7 @@ describe('createStepExecutor', () => {
   it('reports a harness fault as an error outcome and releases the session', async () => {
     const harness = dependencies();
     const execution = await createStepExecutor(harness.deps).custom!({
+      runConfig: { majorMode: 'dev' },
       cwd: '/repo',
       env: STEP_ENV,
       stepName: 'Diagnose',
@@ -230,6 +249,7 @@ describe('createStepExecutor', () => {
   it('ends the step on stop even when its turn never settles', async () => {
     const harness = dependencies();
     const execution = await createStepExecutor(harness.deps).custom!({
+      runConfig: { majorMode: 'dev' },
       cwd: '/repo',
       env: STEP_ENV,
       stepName: 'Diagnose',
@@ -245,6 +265,7 @@ describe('createStepExecutor', () => {
     const harness = dependencies();
     const { release: _release, ...withoutRelease } = harness.sessionService;
     const execution = await createStepExecutor({ ...harness.deps, sessionService: withoutRelease }).custom!({
+      runConfig: { majorMode: 'dev' },
       cwd: '/repo',
       env: STEP_ENV,
       stepName: 'Diagnose',
@@ -260,6 +281,7 @@ describe('createStepExecutor', () => {
     const harness = dependencies({ releaseTimeoutMs: 5 });
     harness.sessionService.release.mockImplementation(() => new Promise<undefined>(() => undefined));
     const execution = await createStepExecutor({ ...harness.deps, releaseTimeoutMs: 5 }).custom!({
+      runConfig: { majorMode: 'dev' },
       cwd: '/repo',
       env: STEP_ENV,
       stepName: 'Diagnose',
@@ -301,6 +323,7 @@ describe('createStepExecutor', () => {
     const harness = dependencies();
     harness.sessionService.create.mockRejectedValueOnce(new Error('No configured model matched p/unknown.'));
     const execution = await createStepExecutor(harness.deps).custom!({
+      runConfig: { majorMode: 'dev' },
       cwd: '/repo',
       env: STEP_ENV,
       stepName: 'Diagnose',
@@ -432,6 +455,7 @@ describe('createStepExecutor', () => {
       sessionService: { ...harness.sessionService, readExecutionState },
       busyRetryMs: 1,
     }).custom!({
+      runConfig: { majorMode: 'dev' },
       cwd: '/repo',
       env: { ...STEP_ENV, WORKFLOW_DECISION_FILE: decisionFile },
       stepName: 'Develop',
@@ -449,7 +473,13 @@ describe('createStepExecutor', () => {
     const execution = await createStepExecutor({
       ...harness.deps,
       sessionService: { ...harness.sessionService, readExecutionState: undefined },
-    }).custom!({ cwd: '/repo', env: STEP_ENV, stepName: 'Develop', customRun: { prompt: 'Implement it' } });
+    }).custom!({
+      cwd: '/repo',
+      env: STEP_ENV,
+      stepName: 'Develop',
+      customRun: { prompt: 'Implement it' },
+      runConfig: { majorMode: 'dev' },
+    });
     expect(await execution.completion).toMatchObject({
       error: expect.objectContaining({ message: expect.stringContaining('inspect step execution state') }),
     });
@@ -475,7 +505,13 @@ describe('createStepExecutor', () => {
         ...harness.deps,
         sessionService: { ...harness.sessionService, readExecutionState },
         busyRetryMs: 1,
-      }).custom!({ cwd: '/repo', env: STEP_ENV, stepName: 'Develop', customRun: { prompt: 'Implement it' } });
+      }).custom!({
+        cwd: '/repo',
+        env: STEP_ENV,
+        stepName: 'Develop',
+        customRun: { prompt: 'Implement it' },
+        runConfig: { majorMode: 'dev' },
+      });
       harness.settle();
       await vi.waitFor(() => expect(readExecutionState.mock.calls.length).toBeGreaterThan(7));
       expect(harness.sessionService.prompt).toHaveBeenCalledOnce();
@@ -495,7 +531,13 @@ describe('createStepExecutor', () => {
           throw error;
         }),
       },
-    }).custom!({ cwd: '/repo', env: STEP_ENV, stepName: 'Develop', customRun: { prompt: 'Implement it' } });
+    }).custom!({
+      cwd: '/repo',
+      env: STEP_ENV,
+      stepName: 'Develop',
+      customRun: { prompt: 'Implement it' },
+      runConfig: { majorMode: 'dev' },
+    });
     harness.settle();
     await expect(execution.completion).resolves.toEqual({ error });
     expect(harness.sessionService.release).toHaveBeenCalledOnce();
@@ -508,7 +550,13 @@ describe('createStepExecutor', () => {
       ...harness.deps,
       sessionService: { ...harness.sessionService, readExecutionState },
       busyRetryMs: 1,
-    }).custom!({ cwd: '/repo', env: STEP_ENV, stepName: 'Develop', customRun: { prompt: 'Implement it' } });
+    }).custom!({
+      cwd: '/repo',
+      env: STEP_ENV,
+      stepName: 'Develop',
+      customRun: { prompt: 'Implement it' },
+      runConfig: { majorMode: 'dev' },
+    });
     harness.settle();
     await vi.waitFor(() => expect(readExecutionState).toHaveBeenCalled());
     await execution.stop();
@@ -551,6 +599,7 @@ describe('createStepExecutor', () => {
       stepName: 'Develop',
       command: 'unused',
       interactive: true,
+      runConfig: { majorMode: 'dev' },
       template: { name: 'pi', inProcess: true, prompt: 'Implement it' },
     });
 
@@ -599,6 +648,7 @@ describe('createStepExecutor', () => {
       stepName: 'Develop',
       command: 'unused',
       interactive: true,
+      runConfig: { majorMode: 'dev' },
       template: { name: 'pi', inProcess: true, prompt: 'Implement it' },
     });
 

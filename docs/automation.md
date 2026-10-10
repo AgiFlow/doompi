@@ -90,6 +90,12 @@ Every job must be the last to have written each run-directory entry it produces.
 
 `runConfig` keys are validated: `majorMode`, `profile`, `model`, `thinking`, `subagentModel`, and `subagentThinking` take one name, while `minorModes` and `domains` take a list or a comma-separated string (an empty list selects no domains). An unknown key fails the step; on a templated step, a key the template of any command the step offers reads is known too.
 
+Every in-process agent step must name `majorMode`. The workflow session a launch hands off to runs in the top-level `runConfig` selection plus the `workflow` minor mode, and a workflow without a top-level `majorMode` is refused before that session is created. A workflow sets the default once in its top-level `runConfig`, which workflow-mcp lays under the `runConfig` of every `interactiveRun` and `customRun` step (a key the step sets wins; imports merge it per key). A step with neither fails instead of running on the workspace default mode, whose tools, such as asking the user, would hang an unattended step:
+
+```yaml
+runConfig: { majorMode: dev }
+```
+
 Choices can configure the step and its Team children independently:
 
 ```yaml
@@ -103,7 +109,7 @@ choices:
 
 Template choices support per-command overrides. `customRun` uses only the launch/default choice's subagent fields, without changing its existing step model/thinking behavior. Explicit child model requests outrank `subagentModel`, which outranks agent and Team defaults; unavailable models retain the existing fallback behavior. Thinking uses the selected explicit request's suffix first, then `subagentThinking`, the selected candidate's suffix, and agent defaults. Step model/thinking are never reused automatically. With neither subagent field present, existing Team behavior stays unchanged.
 
-These preferences cover direct Team spawns from the step, including subagent runs and task assignments. External launchers must already support the corresponding model/thinking settings. Choice support requires a workflow-mcp release containing these fields; older versions reject them.
+These preferences cover direct Team spawns from the step, including subagent runs and task assignments. External launchers must already support the corresponding model/thinking settings.
 
 Check workflows before running them with `workflow-mcp doctor`, which reports what a run would otherwise only meet mid-step: schema and import problems, runConfig keys nothing reads, jobs that need a missing job, runner maps no runner satisfies, customRun steps without a terminal fallback, and inputs a workflow does not declare. Pass DoomPi's keys so runConfig typos are errors:
 
