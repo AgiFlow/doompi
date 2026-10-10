@@ -16,12 +16,14 @@ export function createHeadlessClient(options: HeadlessClientOptions): HeadlessCl
   return {
     client: {
       async notify(request) {
-        if (disposed) throw new Error('Headless client is closed');
+        // Detached callbacks can outlive their session. A closed client has no recipient.
+        if (disposed) return;
         const data = createDoomNotificationEntryData(request);
         if (!data) throw new Error('Invalid notification request');
         try {
           await options.appendCustomEntry(DOOM_NOTIFICATION_ENTRY_TYPE, data);
         } catch (error) {
+          if (disposed) return;
           // Callers fire notify without awaiting, often to report a journal failure. A rejection here
           // would crash the session server, so a refused append still reaches the browser live.
           options.emitFrame({
