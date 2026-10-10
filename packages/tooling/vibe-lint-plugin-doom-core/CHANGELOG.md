@@ -1,3 +1,7 @@
+## 0.0.1-alpha.39 (2026-10-10)
+
+This was a version bump only for @agimon-ai/vibe-lint-plugin-doom-core to align it with other projects, there were no code changes.
+
 ## 0.0.1-alpha.38 (2026-10-09)
 
 This was a version bump only for @agimon-ai/vibe-lint-plugin-doom-core to align it with other projects, there were no code changes.

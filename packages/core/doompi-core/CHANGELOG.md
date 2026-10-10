@@ -1,3 +1,18 @@
+## 0.0.1-alpha.126 (2026-10-10)
+
+### 🩹 Fixes
+
+- **doompi-core:** contain late notifications after session disposal ([#340](https://github.com/AgiFlow/doompi/pull/340))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.105
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.68
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.125 (2026-10-09)
 
 ### 🩹 Fixes
