@@ -104,6 +104,9 @@ const embeddedFeature = vi.hoisted(() => {
       return { run };
     }),
     registry,
+    parser: {
+      parseWorkflowFile: vi.fn((): Record<string, unknown> => ({ runConfig: { majorMode: 'dev', model: 'any' } })),
+    },
     listWorkflowsTool: {
       getInputSchema: vi.fn(() => ({})),
       execute: vi.fn(async () => ({
@@ -201,7 +204,8 @@ const telemetry = vi.hoisted(() => ({
 }));
 vi.mock('@agimon-ai/doompi-telemetry', () => ({ createDoomTelemetry: () => telemetry }));
 // The executor has its own tests; this suite covers how the facet launches and controls runs.
-vi.mock('../../../src/services/stepExecutor', () => ({
+vi.mock('../../../src/services/stepExecutor', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/services/stepExecutor')>()),
   createStepExecutor: vi.fn(() => ({})),
   createNativeStepPaneLauncher: vi.fn(),
 }));
@@ -1278,7 +1282,7 @@ describe('workflow sessions', () => {
           name: 'build',
           parentSessionId: 'workflow-headless-test',
           sessionProvenance: 'workflow-session',
-          selection: { minorModes: ['workflow'] },
+          selection: { majorMode: 'dev', minorModes: ['workflow'] },
         }),
       );
       expect((service.create.mock.calls as unknown as [Record<string, unknown>][])[0]![0]).not.toHaveProperty(
@@ -1323,6 +1327,19 @@ describe('workflow sessions', () => {
       );
       expect(failed).toMatchObject({ isError: true });
       expect(service.close).toHaveBeenCalledWith('workflow-child');
+      service.create.mockClear();
+
+      embeddedFeature.feature.parser.parseWorkflowFile.mockReturnValueOnce({ runConfig: { model: 'any' } });
+      const modeless = await launch.execute(
+        'launch',
+        { workflowPath: '/tmp/build.workflow.yml' },
+        undefined,
+        undefined,
+        test.execution,
+      );
+      expect(modeless).toMatchObject({ isError: true });
+      expect(JSON.stringify(modeless)).toContain('no top-level runConfig.majorMode');
+      expect(service.create).not.toHaveBeenCalled();
     } finally {
       await test.close?.();
     }
