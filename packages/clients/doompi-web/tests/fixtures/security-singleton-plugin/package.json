@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@agimon-ai/doompi-web-security": "0.0.1-alpha.60"
+    "@agimon-ai/doompi-web-security": "0.0.1-alpha.67"
   },
   "doompiWeb": {
     "pluginId": "security-singleton-probe",

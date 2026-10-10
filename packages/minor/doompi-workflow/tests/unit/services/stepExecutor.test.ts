@@ -92,6 +92,13 @@ describe('readDoompiRunConfig', () => {
     // An engine that does not say what its template reads leaves such keys to it.
     expect(readDoompiRunConfig({ majormode: 'dev' }, { name: 'pi' })).toEqual({});
   });
+  it('accepts independent subagent preferences for custom and templated steps', () => {
+    const config = { model: 'p/step', thinking: 'high', subagentModel: 'p/child', subagentThinking: 'medium' };
+    expect(readDoompiRunConfig(config)).toEqual(config);
+    expect(readDoompiRunConfig(config, { name: 'pi', reads: ['prompt'] })).toEqual(config);
+    expect(() => readDoompiRunConfig({ subagentModel: ' ' })).toThrow('subagentModel');
+    expect(() => readDoompiRunConfig({ subagentThinking: ['medium'] })).toThrow('subagentThinking');
+  });
 });
 
 describe('stepEnvironment', () => {
@@ -155,6 +162,36 @@ describe('createStepExecutor', () => {
     await expect(execution.completion).resolves.toEqual({ exitCode: 0 });
     // Done, the session stops running but stays readable in the workflow's view.
     expect(harness.sessionService.release).toHaveBeenCalledExactlyOnceWith('step-session');
+  });
+
+  it('transports subagent preferences without replacing the step model or thinking', async () => {
+    const harness = dependencies();
+    const config = { model: 'p/step', thinking: 'high', subagentModel: 'p/child', subagentThinking: 'medium' };
+    await createStepExecutor(harness.deps).custom!({
+      cwd: '/repo',
+      env: { ...STEP_ENV, WORKFLOW_RUN_CONFIG: JSON.stringify(config) },
+      stepName: 'Develop',
+      customRun: { prompt: 'go' },
+      runConfig: config,
+    });
+    expect(harness.created[0]).toMatchObject({
+      model: 'p/step',
+      thinking: 'high',
+      environment: { WORKFLOW_RUN_CONFIG: JSON.stringify(config) },
+    });
+  });
+
+  it('overlays empty current config over stale workflow preferences in the host', async () => {
+    const harness = dependencies({
+      hostEnvironment: { PATH: '/usr/bin', WORKFLOW_RUN_CONFIG: JSON.stringify({ subagentModel: 'p/stale' }) },
+    });
+    await createStepExecutor(harness.deps).custom!({
+      cwd: '/repo',
+      env: { ...STEP_ENV, WORKFLOW_RUN_CONFIG: '{}' },
+      stepName: 'Develop',
+      customRun: { prompt: 'go' },
+    });
+    expect(harness.created[0]?.environment?.WORKFLOW_RUN_CONFIG).toBe('{}');
   });
 
   it("appends the entry's system prompt to the step session", async () => {
