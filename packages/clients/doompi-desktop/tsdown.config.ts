@@ -20,6 +20,7 @@ export default defineConfig({
   outExtensions: () => ({ js: '.cjs' }),
   platform: 'node',
   external: ['electron'],
+  deps: { alwaysBundle: ['@agimon-ai/doompi-config'] },
   sourcemap: true,
   unbundle: false,
 });
