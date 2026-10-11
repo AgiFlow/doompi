@@ -1,3 +1,16 @@
+## 0.0.1-alpha.128 (2026-10-11)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.39
+- Updated @agimon-ai/doompi-author to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.127
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.128
+- Updated @agimon-ai/doompi-team to 0.0.1-alpha.128
+- Updated @agimon-ai/doompi-voice to 0.0.1-alpha.129
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.86
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.128
+
 ## 0.0.1-alpha.127 (2026-10-10)
 
 ### 🧱 Updated Dependencies
