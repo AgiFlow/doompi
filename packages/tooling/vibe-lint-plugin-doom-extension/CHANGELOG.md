@@ -1,3 +1,9 @@
+## 0.0.1-alpha.106 (2026-10-11)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.39
+
 ## 0.0.1-alpha.105 (2026-10-10)
 
 ### 🧱 Updated Dependencies

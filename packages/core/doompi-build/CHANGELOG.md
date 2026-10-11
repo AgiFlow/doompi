@@ -1,3 +1,13 @@
+## 0.0.1-alpha.39 (2026-10-11)
+
+### 🩹 Fixes
+
+- **doompi-mcp:** split session endpoints and add file transfer ([#346](https://github.com/AgiFlow/doompi/pull/346))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.38 (2026-10-10)
 
 This was a version bump only for @agimon-ai/doompi-build to align it with other projects, there were no code changes.

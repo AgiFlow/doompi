@@ -1,3 +1,22 @@
+## 0.0.1-alpha.95 (2026-10-11)
+
+### 🩹 Fixes
+
+- **doompi-mcp:** split session endpoints and add file transfer ([#346](https://github.com/AgiFlow/doompi/pull/346))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.132
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.127
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.128
+- Updated @agimon-ai/doompi-template-advanced to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.86
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.104
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.94 (2026-10-10)
 
 ### 🧱 Updated Dependencies
