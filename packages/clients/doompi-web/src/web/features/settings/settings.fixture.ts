@@ -97,6 +97,8 @@ export const providers: ProviderAuthSummary[] = [
 export const mcpRoute = `/api/workspaces/${STORY_WORKSPACE_ID}/sessions/${STORY_SESSION_ID}/mcp`;
 export const mcpConfig: SessionMcpConfig = {
   audience: 'https://example.invalid/mcp/story-session',
+  mcpUrl: 'https://example.invalid/mcp/story-session',
+  mcpAppUrl: 'https://example.invalid/mcp-app/story-session',
   authorizationEndpoint: 'https://example.invalid/oauth/authorize',
   tokenEndpoint: 'https://example.invalid/oauth/token',
   tools: [{ name: 'read', label: 'Read file', description: 'Read a file in the selected workspace.' }],
@@ -130,6 +132,14 @@ export function seedSettingsStory(responses: Readonly<Record<string, unknown>> =
     'GET /api/remote/state': remoteView,
     [`GET ${mcpRoute}/config`]: mcpConfig,
     [`GET ${mcpRoute}/clients`]: { clients: [mcpClient] },
+    [`POST ${mcpRoute}/clients`]: {
+      client: {
+        ...mcpClient,
+        tokenEndpointAuthMethod: 'url_token',
+        connectionUrl: `${mcpConfig.mcpUrl}/story-token`,
+        mcpAppConnectionUrl: `${mcpConfig.mcpAppUrl}/story-token`,
+      },
+    },
     ...responses,
   });
 }

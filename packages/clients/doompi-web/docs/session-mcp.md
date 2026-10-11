@@ -4,10 +4,26 @@ DoomPi Web can expose one live DoomPi session as a remote MCP server. Remote Con
 
 This is an inbound connection. It is separate from outbound MCP servers, remote pairing, and Remote Control.
 
+## Choose an endpoint
+
+Settings offers two copy rows: **MCP** (`/mcp`) is pure MCP without widget metadata or UI resources. **MCP with widgets** (`/mcp-app`) enables MCP Apps widgets. Both use the same credentials, grants, and conversation routing; the authorization audience remains unchanged.
+
+For signed URL authentication, create a signed MCP URL and copy either one-time URL into Server URL with no additional authentication. The signed app URL is returned as `mcpAppConnectionUrl`. Treat both URLs as secrets and revoke the client to invalidate both.
+
+## File transfer
+
+File transfer is always on, subject to capability grants, with no opt-out switch. Use `share_file` to share a worktree file with the remote client and `save_file` to save a client file into the conversation worktree. Host paths alone are not downloadable attachments. Transfers enforce host size caps and worktree path boundaries. `save_file` defaults to private conversation-session attachments. Its optional
+`path` writes relative to that conversation's cwd with existing non-symlink
+parents, and never overwrites. On a failed cwd write, owned bytes are truncated,
+but an empty 0600 file may remain. Remove that empty artifact before retrying the
+same destination. Cleanup does not unlink mutable paths, which could delete an
+unrelated replacement. Portable identity/realpath rechecks are not atomic against
+concurrent ancestor swaps. Choose a new destination when a file already exists.
+
 ## Connect ChatGPT with an API key
 
 1. Start the session and enable Remote Control with a public HTTPS origin.
-2. Open **Settings → Remote control → session MCP** and copy the **MCP URL**.
+2. Open **Settings → Remote control → session MCP** and copy **MCP** or **MCP with widgets**.
 3. In ChatGPT, create an MCP app using **Server URL** and **API key** authentication with the **Bearer** header.
 4. In DoomPi Web, select **API key (Bearer)** and create a key. Paste the one-time key into ChatGPT as the API key value.
 5. Keep the key private. Revoke it in DoomPi Web when the connection is no longer needed.

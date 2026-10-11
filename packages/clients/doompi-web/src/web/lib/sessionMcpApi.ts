@@ -49,6 +49,8 @@ function isConfig(value: unknown): value is SessionMcpConfig {
   return (
     isRecord(value) &&
     typeof value.audience === 'string' &&
+    typeof value.mcpUrl === 'string' &&
+    typeof value.mcpAppUrl === 'string' &&
     typeof value.authorizationEndpoint === 'string' &&
     typeof value.tokenEndpoint === 'string' &&
     Array.isArray(value.tools) &&
@@ -97,8 +99,15 @@ function clientMetadata(value: unknown): SessionMcpClient | undefined {
 function isCreatedClient(value: unknown): value is CreatedSessionMcpClient {
   if (!isClient(value) || !isRecord(value)) return false;
   return value.tokenEndpointAuthMethod === 'url_token'
-    ? typeof value.connectionUrl === 'string' && value.connectionUrl !== '' && value.clientSecret === undefined
-    : typeof value.clientSecret === 'string' && value.clientSecret !== '' && value.connectionUrl === undefined;
+    ? typeof value.connectionUrl === 'string' &&
+        value.connectionUrl !== '' &&
+        typeof value.mcpAppConnectionUrl === 'string' &&
+        value.mcpAppConnectionUrl !== '' &&
+        value.clientSecret === undefined
+    : typeof value.clientSecret === 'string' &&
+        value.clientSecret !== '' &&
+        value.connectionUrl === undefined &&
+        value.mcpAppConnectionUrl === undefined;
 }
 
 function route(workspaceId: string, sessionId: string): string {

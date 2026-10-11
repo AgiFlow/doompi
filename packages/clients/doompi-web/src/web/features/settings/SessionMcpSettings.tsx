@@ -33,7 +33,12 @@ function exactHttpsUrl(value: string): boolean {
 }
 
 function withoutCredential(client: CreatedSessionMcpClient): SessionMcpClient {
-  const { clientSecret: _clientSecret, connectionUrl: _connectionUrl, ...metadata } = client;
+  const {
+    clientSecret: _clientSecret,
+    connectionUrl: _connectionUrl,
+    mcpAppConnectionUrl: _mcpAppConnectionUrl,
+    ...metadata
+  } = client;
   return metadata;
 }
 
@@ -261,7 +266,11 @@ export function SessionMcpSettings() {
 
       {config === undefined ? null : (
         <div className="flex flex-col gap-3 rounded-md border border-doom-border bg-doom-deep p-3 text-sm">
-          <CopyValue label="Base MCP URL" value={config.audience} testId="session-mcp-url" />
+          <CopyValue label="MCP" value={config.mcpUrl} testId="session-mcp-url" />
+          <CopyValue label="MCP with widgets" value={config.mcpAppUrl} testId="session-mcp-app-url" />
+          <p className="text-xs leading-relaxed text-doom-faint">
+            Both URLs use the same credentials. File transfer is always available within the connection’s grants.
+          </p>
           <details>
             <summary className="cursor-pointer text-doom-faint">connection details</summary>
             <div className="mt-2 flex flex-col gap-1">
@@ -398,20 +407,24 @@ export function SessionMcpSettings() {
           </div>
           {visibleCreated.tokenEndpointAuthMethod === 'url_token' ? (
             <>
+              <CopyValue label="MCP" value={visibleCreated.connectionUrl!} testId="session-mcp-created-url" />
               <CopyValue
-                label="signed MCP URL"
-                value={visibleCreated.connectionUrl!}
-                testId="session-mcp-created-url"
+                label="MCP with widgets"
+                value={visibleCreated.mcpAppConnectionUrl!}
+                testId="session-mcp-created-app-url"
               />
               <p className="text-xs leading-relaxed text-doom-faint">
-                In ChatGPT, paste this value into Server URL and use no additional authentication. Treat the URL as a
+                In ChatGPT, paste either URL into Server URL and use no additional authentication. Treat the URL as a
                 secret. It is shown only once and remains valid until this client is revoked.
               </p>
             </>
           ) : (
             <>
               {config === undefined ? null : (
-                <CopyValue label="MCP URL" value={config.audience} testId="session-mcp-created-url" />
+                <>
+                  <CopyValue label="MCP" value={config.mcpUrl} testId="session-mcp-created-url" />
+                  <CopyValue label="MCP with widgets" value={config.mcpAppUrl} testId="session-mcp-created-app-url" />
+                </>
               )}
               {visibleCreated.tokenEndpointAuthMethod === 'api_key' ? (
                 <>

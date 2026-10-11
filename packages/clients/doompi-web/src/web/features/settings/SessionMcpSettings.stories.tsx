@@ -1,4 +1,6 @@
+import { remoteView } from '../../components/Remote.fixture.tsx';
 import { StoryFrame } from '../../components/Story.fixture.tsx';
+import { remoteAccessStore } from '../../stores/remoteAccessStore.ts';
 import { SessionMcpSettings } from './SessionMcpSettings.tsx';
 import { seedSettingsStory, mcpRoute } from './settings.fixture.ts';
 
@@ -8,6 +10,10 @@ export default meta;
 export const Playground = {
   render: () => {
     seedSettingsStory();
+    remoteAccessStore.setState((state) => ({
+      ...state,
+      view: { ...remoteView, status: 'on', publicUrl: 'https://example.invalid' },
+    }));
     return (
       <StoryFrame>
         <SessionMcpSettings />
@@ -19,6 +25,10 @@ export const Playground = {
 export const NoClients = {
   render: () => {
     seedSettingsStory({ [`GET ${mcpRoute}/clients`]: { clients: [] } });
+    remoteAccessStore.setState((state) => ({
+      ...state,
+      view: { ...remoteView, status: 'on', publicUrl: 'https://example.invalid' },
+    }));
     return (
       <StoryFrame>
         <SessionMcpSettings />

@@ -112,7 +112,7 @@ describe('package-owned MCP widgets', () => {
     });
   });
 
-  it('provides exactly one package-owned widget for every supported remote tool declaration', () => {
+  it('provides package-owned widgets for visual remote tools and none for file-transfer tools', () => {
     const repository = path.resolve(import.meta.dirname, '../../../..');
     const roots = ['packages', 'layers'].flatMap((directory) =>
       fs
@@ -126,6 +126,7 @@ describe('package-owned MCP widgets', () => {
         ),
     );
     let count = 0;
+    let fileTransfers = 0;
     for (const root of roots) {
       if (!fs.existsSync(path.join(root, 'package.json'))) continue;
       const graph = scanExtensions({ packageDir: root });
@@ -140,6 +141,14 @@ describe('package-owned MCP widgets', () => {
             entry.surface === 'tool' &&
             entry.name === tool.name,
         );
+        if (
+          root === path.join(repository, 'packages/default/doompi-mcp') &&
+          ['share_file', 'save_file'].includes(tool.name)
+        ) {
+          expect(widgets, tool.file).toEqual([]);
+          fileTransfers += 1;
+          continue;
+        }
         expect(
           widgets.map((entry) => entry.file),
           tool.file,
@@ -148,5 +157,6 @@ describe('package-owned MCP widgets', () => {
       }
     }
     expect(count).toBeGreaterThanOrEqual(21);
+    expect(fileTransfers).toBe(2);
   });
 });

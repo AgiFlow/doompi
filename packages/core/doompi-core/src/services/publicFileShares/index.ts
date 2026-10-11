@@ -191,6 +191,7 @@ export function createPublicFileShares(options: PublicFileSharesOptions): Public
       const token = randomBytes(TOKEN_BYTES).toString('base64url');
       const key = tokenDigest(token);
       const fileName = path.basename(filePath);
+      const expiresAt = Date.now() + SHARE_TTL_MS;
       shares.set(key, {
         sessionId: request.sessionId,
         filePath,
@@ -200,7 +201,7 @@ export function createPublicFileShares(options: PublicFileSharesOptions): Public
         size: stat.size,
         mtimeMs: stat.mtimeMs,
         revision,
-        expiresAt: Date.now() + SHARE_TTL_MS,
+        expiresAt,
         downloadsLeft: SHARE_DOWNLOADS,
       });
       options.onNotice(`file share: published "${fileName}" for ${request.label} on the remote-access tunnel.`);
@@ -209,6 +210,8 @@ export function createPublicFileShares(options: PublicFileSharesOptions): Public
         fileName,
         mimeType: SESSION_FILE_CONTENT_TYPES[path.extname(fileName).toLowerCase()] ?? SESSION_FILE_DEFAULT_CONTENT_TYPE,
         size: stat.size,
+        expiresAt,
+        maxDownloads: SHARE_DOWNLOADS,
         revoke: () => {
           shares.delete(key);
         },

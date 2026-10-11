@@ -61,3 +61,17 @@ Filtering activates only when every selected domain declares `mcp`. A selection 
 5. If Doom Pi was launched with `--no-mcp`, keep MCP disabled unless the user explicitly starts a new session without that flag.
 
 Domain filtering happens before disallowed stdio processes are spawned. Treat allowed stdio configuration as executable code because it runs with the Pi process environment and operating-system privileges. Keep OAuth stores and emitted configuration private.
+
+## Session file transfer
+
+Use advertised `share_file({path})` for a short-lived public link to a session
+file, not an absolute host path as an attachment. It needs remote access and
+returns URL, file name, MIME, size, expiry, and a three-download limit without a
+consent prompt. Outbound file parameters to other MCP servers still ask consent.
+
+`save_file` accepts exactly one `file` form: a public HTTPS
+`{download_url,file_name,file_id?,mime_type?}` (25 MiB maximum), or
+`{name,data_base64}` (5 MiB decoded maximum). Default storage is private session
+attachments; optional relative `path` writes a new file in the bound cwd through
+existing non-symlink parents. Never expect overwrite. Failed cwd writes discard
+bytes but may leave an empty private file that must be removed before retry.

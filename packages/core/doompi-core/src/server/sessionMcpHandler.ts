@@ -62,6 +62,15 @@ export interface SessionMcpBaseline {
   readonly skills: readonly { name: string; description: string }[];
 }
 
+function presentationMeta(meta: Tool['_meta'], presentation: 'pure' | 'app'): Tool['_meta'] {
+  if (presentation === 'app' || meta === undefined) return meta;
+  return Object.fromEntries(
+    Object.entries(meta)
+      .filter(([key]) => (key !== 'ui' && !key.startsWith('openai/')) || key === 'openai/fileParams')
+      .filter(([key]) => key !== 'doompi/widget' && key !== 'doompi/toolName'),
+  );
+}
+
 function publicTool(tool: SessionToolDescriptor): Tool {
   return {
     name: tool.name,
@@ -83,15 +92,22 @@ function grantedExtraTools(grant: SessionMcpAccessGrant): readonly Tool[] {
     : SESSION_MCP_EXTRA_TOOLS.filter((tool) => grant.tools.includes(tool.name));
 }
 
-function extraTools(baseline: SessionMcpBaseline, tools: readonly SessionToolDescriptor[]): Tool[] {
-  return tools.map(publicTool).filter(
-    (tool) =>
-      !SESSION_MCP_EXTRA_TOOLS.some((wrapper) => wrapper.name === tool.name) &&
-      !isDeepStrictEqual(
-        baseline.tools.find((original) => original.name === tool.name),
-        tool,
-      ),
-  );
+function extraTools(
+  baseline: SessionMcpBaseline,
+  tools: readonly SessionToolDescriptor[],
+  presentTool: (tool: Tool) => Tool,
+): Tool[] {
+  return tools
+    .map(publicTool)
+    .map(presentTool)
+    .filter(
+      (tool) =>
+        !SESSION_MCP_EXTRA_TOOLS.some((wrapper) => wrapper.name === tool.name) &&
+        !isDeepStrictEqual(
+          baseline.tools.find((original) => original.name === tool.name),
+          tool,
+        ),
+    );
 }
 
 /** Remote agents see `${prefix}_${name}`; grants, baselines, and history keep internal names. */
@@ -162,6 +178,7 @@ const LOCAL_AGENT_UNLOCKED_NOTICE =
 export interface SessionMcpHttpHandlerOptions {
   /** Exact HTTPS resource indicator minted into access grants. */
   readonly audience: string;
+  readonly presentation?: 'pure' | 'app';
   readonly authorization: Pick<SessionMcpAuthorizationService, 'authenticateAccessToken' | 'authenticateUrlToken'>;
   readonly onVerified?: (grant: SessionMcpAccessGrant) => void | Promise<void>;
   readonly resourceMetadataUrl?: string;
@@ -276,7 +293,11 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
   if (options.pathToken !== undefined && !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u.test(options.pathToken)) {
     throw new Error('Session MCP path token must be a compact JWT.');
   }
-  const exactResource = options.pathToken === undefined ? exactAudience : `${exactAudience}/${options.pathToken}`;
+  const presentation = options.presentation ?? 'pure';
+  const resourceAudience = presentation === 'app' ? exactAudience.replace(/\/mcp$/u, '/mcp-app') : exactAudience;
+  const presentTool = (tool: Tool): Tool => ({ ...tool, _meta: presentationMeta(tool._meta, presentation) });
+  const baselineKey = (clientId: string): string => JSON.stringify([presentation, clientId]);
+  const exactResource = options.pathToken === undefined ? resourceAudience : `${resourceAudience}/${options.pathToken}`;
   const authenticate =
     options.pathToken === undefined
       ? options.authorization.authenticateAccessToken
@@ -359,15 +380,15 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       const active = await authorizeOperation();
       await options.onVerified?.(active.grant);
       const { tools, skills } = grantedSurface(active.grant, active.target.toolSurface);
-      const parentTools = tools.map(publicTool);
+      const parentTools = tools.map(publicTool).map(presentTool);
       const wrappers = grantedExtraTools(active.grant);
       const baseline = structuredClone({
         tools: parentTools,
         skills: skills.map(({ name, description }) => ({ name, description })),
       });
       await authorizeOperation();
-      baselines.set(active.grant.clientId, baseline);
-      return { tools: [...parentTools, ...wrappers].map((tool) => wireTool(prefix, tool)) };
+      baselines.set(baselineKey(active.grant.clientId), baseline);
+      return { tools: [...parentTools, ...wrappers].map((tool) => wireTool(prefix, presentTool(tool))) };
     });
     server.setRequestHandler('tools/call', async (message, ctx): Promise<CallToolResult> => {
       const conversation = sessionMcpConversationDigest(
@@ -389,10 +410,19 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       let skillAccessOpen = true;
       let widgetTool: SessionToolDescriptor | undefined;
       let invocation: SessionMcpInvocation | undefined;
+      let fileTransfer = false;
       const publishInvocation = (): void => {
         if (invocation?.sessionId === undefined) return;
         try {
-          options.onInvocation?.({ ...invocation });
+          options.onInvocation?.(
+            fileTransfer
+              ? {
+                  ...invocation,
+                  input: { redacted: 'file transfer' },
+                  ...(invocation.output === undefined ? {} : { output: { redacted: 'file transfer' } }),
+                }
+              : { ...invocation },
+          );
         } catch {
           // Observability failures must not turn an already executed tool into a retryable failure.
           options.onNotice?.('session MCP call history could not be saved');
@@ -408,7 +438,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           };
           publishInvocation();
         }
-        return result;
+        return { ...result, _meta: presentationMeta(result._meta, presentation) };
       };
       try {
         const parent = await authorizeOperation();
@@ -421,9 +451,8 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           toolName: requested ?? message.params.name,
           startedAt: Date.now(),
           status: 'running',
-          input: message.params.arguments ?? {},
+          input: { redacted: 'pending tool authorization' },
         };
-        publishInvocation();
         const wrapper = grantedExtraTools(parent.grant).some((tool) => tool.name === requested);
         const advertised = wrapper
           ? undefined
@@ -435,6 +464,14 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
               (prefix === undefined ? '' : ` Tool names here start with '${prefix}_'.`) +
               nextCall('session_capabilities', ' for the current list.'),
           );
+        const transferName =
+          requested === 'use_extra_tools' && typeof message.params.arguments?.name === 'string'
+            ? sessionMcpInternalName(prefix, message.params.arguments.name)
+            : requested;
+        fileTransfer = grantedSurface(parent.grant, parent.target.toolSurface).tools.some(
+          (tool) => tool.name === transferName && tool._meta?.['doompi/fileTransfer'] === true,
+        );
+        publishInvocation();
         widgetTool = advertised;
         const wrapperArgs = wrapper ? toolArguments(requested!, message.params.arguments ?? {}, wire) : undefined;
         // A binding must not outlive an unpersisted registration when tools/call precedes tools/list.
@@ -465,7 +502,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           );
         if (
           (requested === 'load_extra_tools' || requested === 'use_extra_tools') &&
-          !baselines.has(parent.grant.clientId)
+          !baselines.has(baselineKey(parent.grant.clientId))
         )
           throw new SessionMcpConversationError(
             'SESSION_MCP_BASELINE_REQUIRED',
@@ -475,8 +512,8 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         invocation = { ...invocation, sessionId: active.target.sessionId ?? parent.grant.sessionId };
         publishInvocation();
         const { snapshot, tools, skills } = grantedSurface(active.grant, active.target.toolSurface);
-        const baseline = baselines.get(parent.grant.clientId);
-        const extras = wrapper && baseline ? extraTools(baseline, tools) : [];
+        const baseline = baselines.get(baselineKey(parent.grant.clientId));
+        const extras = wrapper && baseline ? extraTools(baseline, tools, presentTool) : [];
         if (requested === 'session_capabilities' && wrapper) {
           const capabilities = {
             sessionId: active.target.sessionId ?? parent.grant.sessionId,
@@ -485,7 +522,9 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             baseline: baseline === undefined ? 'missing' : 'available',
             inventory: 'active_surface',
             discovery: 'unknown',
-            tools: [...tools.map(publicTool), ...grantedExtraTools(active.grant)].map((tool) => wireTool(prefix, tool)),
+            tools: [...tools.map(publicTool).map(presentTool), ...grantedExtraTools(active.grant)].map((tool) =>
+              wireTool(prefix, presentTool(tool)),
+            ),
             skills: skills.map(({ name, description }) => ({ name, description })),
             ...(active.target.agentLocked === undefined
               ? {}
@@ -508,7 +547,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         }
         if (requested === 'load_extra_tools' && wrapper) {
           const discovery = {
-            tools: extras.map((tool) => wireTool(prefix, tool)),
+            tools: extras.map((tool) => wireTool(prefix, presentTool(tool))),
             skills: (tools.some((tool) => tool.name === 'load_skill') ? skills : [])
               .map(({ name, description }) => ({ name, description }))
               .filter(
@@ -559,6 +598,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
                 : ', then refresh the connection to call a returned tool.',
             )}`,
           );
+        fileTransfer ||= selected?._meta?.['doompi/fileTransfer'] === true;
         widgetTool = wrapper ? undefined : selected;
         const recheck = async () => {
           const current = await resolveTarget(false);
@@ -695,12 +735,19 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
             ...invocation,
             status: signal.aborted ? 'cancelled' : 'failed',
             finishedAt: Date.now(),
-            output: { cause, message: error instanceof Error ? error.message : 'Tool call failed.' },
+            output: {
+              cause,
+              message: fileTransfer
+                ? 'File transfer failed.'
+                : error instanceof Error
+                  ? error.message
+                  : 'Tool call failed.',
+            },
           };
           publishInvocation();
         }
         if (!(error instanceof SessionMcpConversationError)) throw error;
-        return widgetResult(
+        const failure = widgetResult(
           widgetTool,
           {
             content: [{ type: 'text', text: error.message }],
@@ -713,6 +760,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
           },
           prefix,
         );
+        return { ...failure, _meta: presentationMeta(failure._meta, presentation) };
       } finally {
         skillAccessOpen = false;
         operations.delete(key);
@@ -722,7 +770,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       const active = await authorizeOperation();
       const { uiResources } = grantedSurface(active.grant, active.target.toolSurface);
       return {
-        resources: [...uiResources],
+        resources: presentation === 'app' ? [...uiResources] : [],
       };
     });
     server.setRequestHandler('resources/read', async (message, ctx) => {
@@ -749,7 +797,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         return { contents: [{ uri: skill.uri, mimeType: 'text/markdown', text }] };
       }
       const resource = uiResources.find((candidate) => candidate.uri === message.params.uri);
-      if (resource !== undefined && active.target.toolSurface.readUiResource !== undefined) {
+      if (presentation === 'app' && resource !== undefined && active.target.toolSurface.readUiResource !== undefined) {
         // Templates are immutable and session-independent, so hosts may prefetch them without a conversation ID.
         request.signal.throwIfAborted();
         const text = await active.target.toolSurface.readUiResource(snapshot.revision, resource.uri);

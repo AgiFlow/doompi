@@ -89,6 +89,8 @@ test('saves a named tunnel on the remote control settings page and reuses it aft
 test('creates and revokes signed URL and OAuth session MCP clients', async ({ page, cockpit }) => {
   const config = {
     audience: 'https://doom.example.com/api/workspaces/workspace/sessions/s1/mcp',
+    mcpUrl: 'https://doom.example.com/api/workspaces/workspace/sessions/s1/mcp',
+    mcpAppUrl: 'https://doom.example.com/api/workspaces/workspace/sessions/s1/mcp-app',
     authorizationEndpoint: 'https://doom.example.com/oauth/authorize',
     tokenEndpoint: 'https://doom.example.com/oauth/token',
     tools: [{ name: 'bash', label: 'Bash', description: 'Run a shell command.' }],
@@ -147,6 +149,7 @@ test('creates and revokes signed URL and OAuth session MCP clients', async ({ pa
       const credential =
         input.authMethod === 'url_token'
           ? {
+              mcpAppConnectionUrl: `${config.mcpAppUrl}/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature`,
               connectionUrl: `${config.audience}/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature`,
             }
           : { clientSecret: 'one-time-secret' };
@@ -176,6 +179,9 @@ test('creates and revokes signed URL and OAuth session MCP clients', async ({ pa
     routing: 'conversation',
   });
   await expect(page.getByTestId('session-mcp-created-url')).toContainText('/mcp/eyJ');
+  await expect(page.getByTestId('session-mcp-created-app-url')).toContainText('/mcp-app/eyJ');
+  await expect(page.getByTestId('session-mcp-app-url')).toHaveText(config.mcpAppUrl);
+  await expect(page.getByTestId('session-mcp-settings').getByRole('checkbox')).toHaveCount(0);
   await expect(page.getByTestId('session-mcp-secret')).toContainText('no additional authentication');
   await page.getByRole('button', { name: 'revoke' }).click();
   await expect(page.getByTestId('session-mcp-secret')).toHaveCount(0);
@@ -224,6 +230,8 @@ test('hides session MCP creation from a remote caller while retaining permitted 
     route.fulfill({
       json: {
         audience: 'https://doom.example.com/session/mcp',
+        mcpUrl: 'https://doom.example.com/session/mcp',
+        mcpAppUrl: 'https://doom.example.com/session/mcp-app',
         authorizationEndpoint: 'https://doom.example.com/oauth/authorize',
         tokenEndpoint: 'https://doom.example.com/oauth/token',
         tools: [],

@@ -189,10 +189,15 @@ function fixture(
     });
   };
   let token = mint().accessToken;
-  const rpc = async (method: string, params?: Record<string, unknown>, requestId: string | number = 1) => {
+  const rpc = async (
+    method: string,
+    params?: Record<string, unknown>,
+    requestId: string | number = 1,
+    presentation: 'pure' | 'app' = 'pure',
+  ) => {
     const response = await routes.handlePublic(
       await modernMcpRequest(
-        new Request(audience, {
+        new Request(presentation === 'app' ? `${audience}-app` : audience, {
           method: 'POST',
           headers: {
             authorization: `Bearer ${token}`,
@@ -448,12 +453,69 @@ describe('conversation-bound Session MCP routing', () => {
     expect(f.provisionReservedWorktree).toHaveBeenCalledTimes(2);
   });
 
+  it('rejects noncanonical OAuth resources before consuming codes or rotating refresh tokens', async () => {
+    const f = fixture('conversation', false, true);
+    const redirectUri = 'https://client.example/callback';
+    const { client } = (await (await f.host('POST', '/clients', { scope: 'session', redirectUri }))!.json()) as {
+      client: { clientId: string; clientSecret: string; audience: string };
+    };
+    const verifier = 'v'.repeat(43);
+    const code = f.authorization.issueAuthorizationCode({
+      clientId: client.clientId,
+      redirectUri,
+      codeChallenge: createHash('sha256').update(verifier).digest('base64url'),
+      codeChallengeMethod: 'S256',
+    });
+    const exchange = (params: Record<string, string>) =>
+      f.routes.handlePublic(
+        new Request('https://host.example/oauth/token', {
+          method: 'POST',
+          body: new URLSearchParams({ client_id: client.clientId, client_secret: client.clientSecret, ...params }),
+        }),
+      );
+    const params = {
+      grant_type: 'authorization_code',
+      code: code.code,
+      redirect_uri: redirectUri,
+      code_verifier: verifier,
+    };
+    expect((await exchange({ ...params, resource: `${client.audience}-app/` }))!.status).toBe(400);
+    const issued = await exchange({ ...params, resource: client.audience });
+    expect(issued!.status).toBe(200);
+    const tokens = (await issued!.json()) as { refresh_token: string };
+    const refresh = { grant_type: 'refresh_token', refresh_token: tokens.refresh_token };
+    expect((await exchange({ ...refresh, resource: `${client.audience}?wrong=1` }))!.status).toBe(400);
+    expect((await exchange({ ...refresh, resource: `${client.audience}-app` }))!.status).toBe(200);
+  });
+  it('publishes both presentations with one canonical audience and signed credential', async () => {
+    const f = fixture('conversation', true, true);
+    const config = (await (await f.host('GET', '/config'))!.json()) as {
+      audience: string;
+      mcpUrl: string;
+      mcpAppUrl: string;
+    };
+    expect(config.mcpUrl).toBe(config.audience);
+    expect(config.mcpAppUrl).toBe(`${config.audience}-app`);
+    const created = (await (await f.host('POST', '/clients', {
+      authMethod: 'url_token',
+      scope: 'session',
+    }))!.json()) as { client: { connectionUrl: string; mcpAppConnectionUrl: string } };
+    expect(created.client.mcpAppConnectionUrl).toBe(created.client.connectionUrl.replace('/mcp/', '/mcp-app/'));
+    expect((await f.rpc('resources/list')).result?.resources).toEqual([]);
+    expect((await f.rpc('resources/list', undefined, 1, 'app')).result?.resources).toHaveLength(1);
+    const discovery = await f.routes.handlePublic(
+      new Request(
+        config.mcpAppUrl.replace('https://host.example', 'https://host.example/.well-known/oauth-protected-resource'),
+      ),
+    );
+    expect(await discovery!.json()).toMatchObject({ resource: config.mcpAppUrl });
+  });
   it('prefetches static UI without allocating a child or exposing session guidance', async () => {
     const f = fixture('conversation', true);
-    expect((await f.rpc('resources/list')).result?.resources).toEqual([
+    expect((await f.rpc('resources/list', undefined, 1, 'app')).result?.resources).toEqual([
       { uri: UI_URI, name: 'Session', mimeType: 'text/html;profile=mcp-app' },
     ]);
-    expect(await f.rpc('resources/read', { uri: UI_URI })).toMatchObject({
+    expect(await f.rpc('resources/read', { uri: UI_URI }, 1, 'app')).toMatchObject({
       result: {
         contents: [
           {
@@ -769,7 +831,7 @@ describe('conversation-bound Session MCP routing', () => {
           description: childTool.description,
           inputSchema: childTool.parameters,
           annotations: childTool.annotations,
-          _meta: childTool._meta,
+          _meta: {},
         },
       ],
       skills: [{ name: 'child-guide', description: 'Child guidance' }],

@@ -17,6 +17,7 @@ import {
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/serverFacet';
 import type { Context } from '@deepseek-ai/cordis';
 
+import { createFileTransferTools } from '../../../../../services/fileTransfer';
 import { createMcpAppsService } from '../../../../../services/mcpApps';
 import { createConsentedFilePublisher } from '../../../../../services/mcpFileParams';
 import { mountMcpHeadlessTools } from '../../../../../services/mcpHeadlessTools';
@@ -44,6 +45,7 @@ export const createMcpServerRoot = (context?: DoomServerPluginContext) => {
   );
   const generation = `${context?.agent?.context?.sessionId ?? crypto.randomUUID()}:mcp-server`;
   const { session } = runtime;
+  const tools = [...runtime.tools, ...createFileTransferTools(context)];
   const apps = createMcpAppsService(runtime.sessionTools, () => appHost, context?.signal);
   const mountSession = (cordis: Context) => {
     cordis.inject([DOOM_MCP_PROJECTION_RESOLVER_SERVICE], (resolverContext) => {
@@ -101,7 +103,7 @@ export const createMcpServerRoot = (context?: DoomServerPluginContext) => {
   return {
     value: { ...runtime, appMethods: apps.methods },
     activities: runtime.activities,
-    services: [mountMcpHeadlessTools(runtime.tools), mountSession],
+    services: [mountMcpHeadlessTools(tools), mountSession],
     onDispose: apps.dispose,
   };
 };
