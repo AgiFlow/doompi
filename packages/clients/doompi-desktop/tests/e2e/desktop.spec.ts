@@ -98,13 +98,14 @@ const test = base.extend<{ desktop: DesktopFixture }>({
     const markerPath = path.join(root, 'hub.jsonl');
     fs.mkdirSync(home, { recursive: true });
     fs.mkdirSync(userDataDirectory, { recursive: true });
-
+    const isolatedDist = path.join(root, 'dist');
+    fs.cpSync(path.join(packageRoot, 'dist'), isolatedDist, { recursive: true });
     let app: ElectronApplication | undefined;
     let appProcess: ChildProcess | undefined;
     try {
       app = await electron.launch({
-        args: [mainEntry, `--user-data-dir=${userDataDirectory}`],
-        cwd: packageRoot,
+        args: [path.join(isolatedDist, 'bin', path.basename(mainEntry)), `--user-data-dir=${userDataDirectory}`],
+        cwd: root,
         env: {
           ...process.env,
           HOME: home,
@@ -141,7 +142,7 @@ const test = base.extend<{ desktop: DesktopFixture }>({
   },
 });
 
-test('starts the desktop headless server and web proxy through the development seam', async ({ desktop }) => {
+test('starts the desktop outside the workspace without installed dependencies', async ({ desktop }) => {
   await expect(desktop.page).toHaveTitle('DoomPi desktop fake hub');
   await expect(desktop.page.getByTestId('hub-status')).toHaveText('ready');
   expect(desktop.hubOrigin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/u);
