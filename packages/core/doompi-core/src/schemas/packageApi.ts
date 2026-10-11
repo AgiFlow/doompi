@@ -211,6 +211,9 @@ export interface DoomSharedFile {
   fileName: string;
   mimeType: string;
   size: number;
+  /** Expiry as epoch milliseconds. */
+  expiresAt: number;
+  maxDownloads: number;
   /** Idempotent. */
   revoke(): void;
 }

@@ -391,3 +391,15 @@ Parenthesised directory names are safe across oxlint, oxfmt, TypeScript `include
 2. **Nx globs cannot target a side folder.** Nx's native matcher has no working spelling. Nothing in the layout needs one, but it forecloses an Nx named input that mentions a side.
 
 See [Extension lifecycles](lifecycles.md) for what happens to these contributions once mounted, and [Architecture](architecture.md) for how a package becomes part of a composition.
+
+Session file transfer tools in `default/doompi-mcp` use routed `.mcp.ts` entries
+and the backend headless-tool catalog. Their `doompi/fileTransfer` metadata marks
+them as always available independently of external MCP server selection.
+`share_file` uses session-bound host sharing; outbound server file parameters
+retain their separate consent flow. Storage helpers are exported through the
+core `serverFacet` boundary rather than imported from core internals.
+
+Optional cwd writes truncate owned bytes on failure but may retain an empty 0600
+artifact. No-overwrite means removing that artifact before retry. Mutable paths
+are not unlinked during error cleanup, and portable identity/realpath rechecks do
+not provide atomic containment against concurrent ancestor swaps.

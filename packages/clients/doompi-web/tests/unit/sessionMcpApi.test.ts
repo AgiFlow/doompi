@@ -16,6 +16,8 @@ function respond(status: number, body: unknown): Response {
 
 const config = {
   audience: 'https://doom.example/api/workspaces/w/mcp',
+  mcpUrl: 'https://doom.example/api/workspaces/w/mcp',
+  mcpAppUrl: 'https://doom.example/api/workspaces/w/mcp-app',
   authorizationEndpoint: 'https://doom.example/oauth/authorize',
   tokenEndpoint: 'https://doom.example/oauth/token',
   tools: [{ name: 'bash', label: 'Bash', description: 'Run a shell command.' }],
@@ -104,6 +106,7 @@ describe('session MCP management API', () => {
       redirectUri: '',
       tokenEndpointAuthMethod: 'url_token' as const,
       connectionUrl,
+      mcpAppConnectionUrl: `${config.mcpAppUrl}/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature`,
     };
     const fetchMock = vi
       .fn()

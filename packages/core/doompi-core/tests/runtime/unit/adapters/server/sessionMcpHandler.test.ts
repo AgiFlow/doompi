@@ -33,7 +33,7 @@ const MODERN_ENVELOPE = {
 function fixture(
   scope: 'restricted' | 'session' = 'restricted',
   toolGrants: readonly string[] = ['allowed_tool'],
-  { toolPrefix }: { toolPrefix?: string } = {},
+  { toolPrefix, presentation = 'app' }: { toolPrefix?: string; presentation?: 'pure' | 'app' } = {},
 ) {
   const authorization = createSessionMcpAuthorizationService();
   const mint = (generation = 7) => {
@@ -130,6 +130,7 @@ function fixture(
   let revokeAtResolve = -1;
   const handler = createSessionMcpHttpHandler({
     audience: AUDIENCE,
+    presentation,
     authorization,
     onNotice,
     onInvocation,
@@ -152,7 +153,7 @@ function fixture(
     id: string | number | undefined = 1,
   ) =>
     handler(
-      new Request(AUDIENCE, {
+      new Request(presentation === 'app' ? AUDIENCE.replace('/mcp', '/mcp-app') : AUDIENCE, {
         method: 'POST',
         signal,
         headers: {
@@ -186,7 +187,7 @@ function fixture(
     mint,
     notify: (requestId: string | number, token = tokens.accessToken) =>
       handler(
-        new Request(AUDIENCE, {
+        new Request(presentation === 'app' ? AUDIENCE.replace('/mcp', '/mcp-app') : AUDIENCE, {
           method: 'POST',
           headers: {
             authorization: `Bearer ${token}`,
@@ -231,7 +232,7 @@ describe('session MCP Streamable HTTP handler', () => {
   it('refuses a 2025-era request with the versions it supports', async () => {
     const { handler, mint } = fixture();
     const response = await handler(
-      new Request(AUDIENCE, {
+      new Request(AUDIENCE.replace('/mcp', '/mcp-app'), {
         method: 'POST',
         headers: {
           accept: 'application/json, text/event-stream',
@@ -296,7 +297,7 @@ describe('session MCP Streamable HTTP handler', () => {
     const { handler } = fixture();
 
     const missing = await handler(
-      new Request(AUDIENCE, {
+      new Request(AUDIENCE.replace('/mcp', '/mcp-app'), {
         method: 'POST',
         headers: { accept: 'application/json', 'content-type': 'application/json' },
         body: '{}',
@@ -306,7 +307,7 @@ describe('session MCP Streamable HTTP handler', () => {
     expect(missing.headers.get('www-authenticate')).toBe('Bearer');
 
     const basic = await handler(
-      new Request(AUDIENCE, {
+      new Request(AUDIENCE.replace('/mcp', '/mcp-app'), {
         method: 'POST',
         headers: { authorization: 'Basic abc', 'content-type': 'application/json' },
         body: '{}',
@@ -374,7 +375,7 @@ describe('session MCP Streamable HTTP handler', () => {
     });
 
     const wrongPath = await handler(
-      new Request(AUDIENCE, {
+      new Request(AUDIENCE.replace('/mcp', '/mcp-app'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{}',
@@ -907,6 +908,60 @@ describe('session MCP Streamable HTTP handler', () => {
     const current = fixture();
     expect(current.authorization.revokeSessionGeneration('alpha', 7)).toBe(1);
     expect((await current.request('tools/list')).status).toBe(401);
+  });
+  it('redacts marked file tool history while preserving the wire result', async () => {
+    const f = fixture('session');
+    f.setChildTools([
+      {
+        name: 'allowed_tool',
+        label: 'File',
+        description: 'File',
+        parameters: Type.Object({}),
+        annotations: { readOnlyHint: true, openWorldHint: false },
+        outputSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+        _meta: { 'doompi/fileTransfer': true },
+      },
+    ]);
+    await f.request('tools/list');
+    f.invokeTool.mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'download_url=https://secret base64=secret' }],
+    });
+    // Child-only tools are invoked through the extra-tools wrapper.
+    const result = rpcResult(
+      await (
+        await f.request('tools/call', {
+          name: 'use_extra_tools',
+          arguments: { name: 'allowed_tool', arguments: { base64: 'secret' } },
+        })
+      ).json(),
+    );
+    expect(JSON.stringify(result)).toContain('https://secret');
+    expect(JSON.stringify(f.onInvocation.mock.calls)).not.toContain('secret');
+  });
+  it('strips widget presentation from pure tools and results and refuses UI resources', async () => {
+    const f = fixture('restricted', ['allowed_tool'], { presentation: 'pure' });
+    f.setUiEnabled(true);
+    const listing = ListToolsResultSchema.parse(rpcResult(await (await f.request('tools/list')).json()));
+    expect(listing.tools[0]?._meta).toEqual({});
+    expect(rpcResult(await (await f.request('resources/list')).json())).toMatchObject({ resources: [] });
+    expect(await (await f.request('resources/read', { uri: UI_RESOURCE.uri })).json()).toHaveProperty('error');
+    for (const isError of [false, true]) {
+      f.invokeTool.mockResolvedValueOnce({
+        content: [],
+        isError,
+        _meta: {
+          ui: { resourceUri: UI_RESOURCE.uri },
+          'doompi/widget': 'secret',
+          'openai/outputTemplate': UI_RESOURCE.uri,
+          'openai/fileParams': ['file'],
+          custom: true,
+        },
+      });
+      const result = rpcResult(await (await f.request('tools/call', { name: 'allowed_tool' })).json());
+      expect(result).toMatchObject({ _meta: { 'openai/fileParams': ['file'], custom: true }, isError });
+      expect(JSON.stringify(result)).not.toContain(UI_RESOURCE.uri);
+      expect(JSON.stringify(result)).not.toContain('doompi/widget');
+    }
   });
   it('advertises and reads only UI resources associated with granted tools', async () => {
     const f = fixture();

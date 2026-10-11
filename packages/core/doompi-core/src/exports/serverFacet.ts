@@ -53,3 +53,5 @@ export type {
 export { defineServerPlugin } from '../extensions/serverPlugin';
 
 export { packageResourcePath, readPackageResource } from '../services/packageResource';
+
+export { writeSessionAttachment } from '../services/sessionAttachments';

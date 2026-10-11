@@ -28,9 +28,9 @@ import {
 const AUTHORIZATION_SERVER_DISCOVERY = '/.well-known/oauth-authorization-server';
 const AUTHORIZE_ROUTE = '/oauth/authorize';
 const TOKEN_ROUTE = '/oauth/token';
-const SESSION_MCP_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp$/u;
+const SESSION_MCP_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp(?:-app)?$/u;
 const SESSION_MCP_URL_TOKEN_PATTERN =
-  /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/u;
+  /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp(?:-app)?\/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/u;
 const SESSION_MCP_ACTIVITY_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/activity$/u;
 const SESSION_MCP_CONFIG_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/config$/u;
 const SESSION_MCP_CLIENTS_PATTERN = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)\/mcp\/clients(?:\/([^/]+))?$/u;
@@ -58,7 +58,7 @@ function redactUrlCredentials(text: string): string {
 }
 
 const PROTECTED_RESOURCE_PATTERN =
-  /^\/\.well-known\/oauth-protected-resource(\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/mcp)$/u;
+  /^\/\.well-known\/oauth-protected-resource(\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/mcp(?:-app)?)$/u;
 
 export interface SessionMcpRoutesOptions {
   readonly headlessHub: HeadlessHub;
@@ -486,11 +486,13 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       const workspaceId = decodeURIComponent(mcpMatch[1]);
       const sessionId = decodeURIComponent(mcpMatch[2]);
       const pathToken = signedMcpMatch?.[3];
-      const basePath = sessionPath(workspaceId, sessionId);
+      const presentation = url.pathname.includes('/mcp-app') ? 'app' : 'pure';
+      const canonicalPath = sessionPath(workspaceId, sessionId);
+      const basePath = presentation === 'app' ? `${canonicalPath}-app` : canonicalPath;
       const exactPath = pathToken === undefined ? basePath : `${basePath}/${pathToken}`;
       if (url.pathname !== exactPath || url.search !== '') return json(404, { error: 'Not found.' });
-      const audience = `${configuredOrigin}${basePath}`;
-      const resource = pathToken === undefined ? audience : `${audience}/${pathToken}`;
+      const audience = `${configuredOrigin}${canonicalPath}`;
+      const resource = `${configuredOrigin}${exactPath}`;
       const incarnation = target(workspaceId, sessionId) === undefined ? undefined : incarnations.get(sessionId);
       const handlers = incarnation?.handlers;
       const cachedHandler = pathToken === undefined ? handlers?.get(resource) : undefined;
@@ -498,6 +500,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         cachedHandler ??
         createSessionMcpHttpHandler({
           audience,
+          presentation,
           baselines: incarnation?.baselines ?? new Map(),
           authorization,
           onNotice: options.onNotice,
@@ -696,10 +699,13 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         if (url.searchParams.get('response_type') !== 'code')
           throw new SessionMcpOAuthError('invalid_request', 'Only the code response type is supported.');
         const resource = url.searchParams.get('resource');
-        if (resource !== null && resource !== binding.audience) {
+        if (
+          url.searchParams.getAll('resource').length > 1 ||
+          (resource !== null && resource !== binding.audience && resource !== `${binding.audience}-app`)
+        ) {
           // The requested URL can carry a URL token, which is redacted.
           options.onNotice?.(
-            `session MCP authorize refused: client ${clientId} is bound to session ${binding.sessionId}, expecting ${binding.audience} but the connector asked for ${describeResource(resource)}`,
+            `session MCP authorize refused: client ${clientId} is bound to session ${binding.sessionId}, expecting ${binding.audience} but the connector asked for ${describeResource(resource ?? '')}`,
           );
           throw new SessionMcpOAuthError(
             'invalid_request',
@@ -729,6 +735,15 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         const grantType = formString(form, 'grant_type');
         const clientId = formString(form, 'client_id');
         const clientSecret = formString(form, 'client_secret');
+        const resource = form.get('resource');
+        const binding = authorization.readAuthorizationBinding(clientId);
+        if (
+          form.getAll('resource').length > 1 ||
+          (resource !== null &&
+            (typeof resource !== 'string' ||
+              (resource !== binding?.audience && resource !== `${binding?.audience}-app`)))
+        )
+          throw new SessionMcpOAuthError('invalid_request', 'The requested resource is not preauthorized.');
         const result =
           grantType === 'authorization_code'
             ? authorization.exchangeToken({
@@ -913,6 +928,8 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
           return json(409, { error: 'The session capability surface contains a reserved remote tool name.' });
         return json(200, {
           audience: `${configuredOrigin}${sessionPath(workspaceId, sessionId)}`,
+          mcpUrl: `${configuredOrigin}${sessionPath(workspaceId, sessionId)}`,
+          mcpAppUrl: `${configuredOrigin}${sessionPath(workspaceId, sessionId)}-app`,
           authorizationEndpoint: `${configuredOrigin}${AUTHORIZE_ROUTE}`,
           tokenEndpoint: `${configuredOrigin}${TOKEN_ROUTE}`,
           tools: [
@@ -1047,7 +1064,9 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
             return json(201, {
               client: {
                 ...publicClient(client, binding),
-                ...(connectionUrl === undefined ? { clientSecret: client.clientSecret } : { connectionUrl }),
+                ...(connectionUrl === undefined
+                  ? { clientSecret: client.clientSecret }
+                  : { connectionUrl, mcpAppConnectionUrl: connectionUrl.replace('/mcp/', '/mcp-app/') }),
               },
             });
           } catch (error) {
@@ -1065,7 +1084,8 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
           return json(500, { error: 'Client revocation could not be saved.' });
         }
         authorization.revokeClient(clientId);
-        incarnations.get(sessionId)?.baselines.delete(clientId);
+        for (const presentation of ['pure', 'app'])
+          incarnations.get(sessionId)?.baselines.delete(JSON.stringify([presentation, clientId]));
         options.conversationStore?.closeClient(clientId);
         publishPending();
         return json(200, { ok: true });

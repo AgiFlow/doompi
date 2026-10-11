@@ -200,3 +200,31 @@ MIT
 The direct `src/extensions/` entries declare host contributions. MCP session state and connection behavior live in named service folders; controllers handle commands and API requests. `tools/` produces typed declarations, and `exports/` exposes reusable public APIs.
 
 Pi tools use a live collection. The helper subscribes to discovery changes and owns registrations and cleanup. Unchanged tools retain their declaration identity across reconnects. Removed tools are unavailable, and incompatible schema reuse stays hidden until the runtime is relaunched. Renderer callbacks enter through the Pi extension, keeping services independent of terminal presentation.
+
+### Remote file transfer
+
+Session MCP always exposes `share_file` and `save_file`, both marked with
+`_meta['doompi/fileTransfer']=true`. `share_file({path})` uses the session-bound
+host publisher directly, without a consent prompt. Its structured result contains
+`url`, `fileName`, `mimeType`, `size`, `expiresAt` (epoch milliseconds), and
+`maxDownloads` (3). Links expire after 10 minutes and require remote access.
+Outbound file parameters sent to other MCP servers still require consent.
+
+`save_file` declares `openai/fileParams=['file']` and accepts exactly one file
+form: `{download_url,file_name,file_id?,mime_type?}` or `{name,data_base64}`.
+HTTPS downloads accept only public addresses, pin DNS for each request, revalidate
+up to three redirects, and have a 30-second deadline and 25 MiB cap. Base64 is
+validated before decoding and capped at 5 MiB. Without `path`, files are stored
+as private session attachments using the bound session environment. Optional
+`path` is relative to the bound session cwd, requires existing non-symlink
+parents, and creates a private file exclusively, never overwriting a file.
+Results contain `path`, `name`, `size`, and `mimeType`; supplied MIME hints are
+not trusted as content detection.
+
+Path containment uses portable Node identity and realpath rechecks, not atomic
+descriptor-relative operations, so concurrent ancestor swaps remain a limitation.
+Failed cwd writes discard bytes by truncating the exclusively created descriptor,
+but may leave an empty private file. Cleanup never unlinks a mutable pathname,
+which could delete an unrelated replacement. No-overwrite requires removing the
+empty file before retry. Session attachments retain their normal temporary-file
+cleanup.

@@ -37,6 +37,8 @@ function sharedFile(name = 'report.pdf') {
     fileName: name,
     mimeType: 'application/pdf',
     size: 2048,
+    expiresAt: Date.now() + 600_000,
+    maxDownloads: 3,
     revoke: vi.fn<() => void>(),
   } satisfies DoomSharedFile;
 }

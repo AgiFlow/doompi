@@ -14,6 +14,8 @@ export interface SessionMcpSkill {
 }
 
 export interface SessionMcpConfig {
+  mcpUrl: string;
+  mcpAppUrl: string;
   audience: string;
   authorizationEndpoint: string;
   tokenEndpoint: string;
@@ -37,9 +39,10 @@ export interface SessionMcpClient {
 }
 
 export interface CreatedSessionMcpClient extends SessionMcpClient {
-  /** One-time credential material. Signed URL clients receive only connectionUrl. */
+  /** One-time credential material. Signed URL clients receive both connection URLs. */
   clientSecret?: string;
   connectionUrl?: string;
+  mcpAppConnectionUrl?: string;
 }
 
 export type CreateSessionMcpClientInput =
