@@ -581,22 +581,22 @@
   "devDependencies": {
     "@agimon-ai/vibe-lint-plugin-doom-core": "workspace:*",
     "@apidevtools/swagger-parser": "^13.1.0",
-    "@asyncapi/parser": "^3.6.3",
+    "@asyncapi/parser": "^3.6.4",
     "@earendil-works/pi-ai": "1.1.0",
     "@earendil-works/pi-client": "1.1.0",
     "@earendil-works/pi-tui": "1.1.0",
-    "@modelcontextprotocol/core": "2.2.0",
+    "@modelcontextprotocol/core": "2.3.1",
     "@types/cross-spawn": "6.0.6",
-    "@types/node": "26.6.4",
+    "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/ws": "8.18.2",
-    "@vitest/coverage-v8": "5.0.3",
+    "@vitest/coverage-v8": "5.0.5",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "tsdown": "0.23.0",
+    "tsdown": "0.23.1",
     "typescript": "7.0.2",
-    "vitest": "5.0.3"
+    "vitest": "5.0.5"
   },
   "peerDependencies": {
     "react": "19.3.0",
