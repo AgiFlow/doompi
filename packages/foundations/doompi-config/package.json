@@ -163,7 +163,7 @@
     "@agimon-ai/doompi-build": "workspace:*",
     "@earendil-works/pi-coding-agent": "1.1.0",
     "@modelcontextprotocol/ext-apps": "2.0.3",
-    "@modelcontextprotocol/server": "2.2.0",
+    "@modelcontextprotocol/server": "2.3.0",
     "@playwright/test": "1.63.0",
     "@types/node": "26.6.4",
     "@types/react": "19.3.0",
