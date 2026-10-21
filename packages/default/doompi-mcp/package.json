@@ -89,7 +89,7 @@
     "@agimon-ai/mcp-proxy": "0.32.12",
     "@deepseek-ai/cordis": "4.0.4",
     "@modelcontextprotocol/ext-apps": "2.0.3",
-    "@modelcontextprotocol/server": "2.2.0",
+    "@modelcontextprotocol/server": "2.3.0",
     "@napi-rs/keyring": "2.1.0",
     "gpt-tokenizer": "4.0.0",
     "open": "11.0.4",
