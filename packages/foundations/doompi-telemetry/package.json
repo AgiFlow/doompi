@@ -58,8 +58,8 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/log-sink-mcp": "0.30.12",
-    "@opentelemetry/api": "1.9.1"
+    "@agimon-ai/log-sink-mcp": "0.30.14",
+    "@opentelemetry/api": "1.10.0"
   },
   "devDependencies": {
     "@types/node": "26.6.4",
