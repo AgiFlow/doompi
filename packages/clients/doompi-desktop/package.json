@@ -44,7 +44,7 @@
     "@agimon-ai/doompi-web": "workspace:*",
     "@playwright/test": "1.63.0",
     "@types/node": "26.6.4",
-    "electron": "44.5.1",
+    "electron": "44.9.1",
     "npm": "12.2.0",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
