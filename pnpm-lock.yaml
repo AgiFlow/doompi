@@ -3224,6 +3224,12 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@agimon-ai/rmux-linux-x64@0.10.12':
+    resolution: {integrity: sha512-1hcrlPySBbxnMoF6KrMxmamIjLh5NtGqbpb7/zGBSDPiahkODd4iva7JXkCxqAs3SNyg9iTbmfrRj0DF9GuaNw==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
   '@agimon-ai/style-system@0.2.12':
     resolution: {integrity: sha512-iNK1uL4uCwoaiSpNgInF65YuGGVgSW5gXAdlOXyn0TSWH93DFV4FSP3L8I0o2XxF5+QwVtziGE1aEAkEc/CYSw==}
     hasBin: true
@@ -8635,8 +8641,8 @@ packages:
   fast-string-width@3.0.2:
     resolution: {integrity: sha512-gX8LrtNEI5hq8DVUfRQMbr5lpaS4nMIWV+7XEbXk2b8kiQIizgnlr12B4dA3ZEx3308ze0O4Q1R+cHts8kyUJg==}
 
-  fast-uri@3.1.8:
-    resolution: {integrity: sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==}
+  fast-uri@3.1.9:
+    resolution: {integrity: sha512-hS/0Wt3Ya043oKXs0sIxrMpKQITXhMLIrVAKKXi4gozGC9v7YRWVnXIZzjNPTO02M9BdxLCWqK1yRXgNziVyJQ==}
 
   fast-wrap-ansi@0.2.0:
     resolution: {integrity: sha512-rLV8JHxTyhVmFYhBJuMujcrHqOT2cnO5Zxj37qROj23CP39GXubJRBUFF0z8KFK77Uc0SukZUf7JZhsVEQ6n8w==}
@@ -11709,6 +11715,9 @@ snapshots:
   '@agimon-ai/rmux-linux-arm64@0.10.12':
     optional: true
 
+  '@agimon-ai/rmux-linux-x64@0.10.12':
+    optional: true
+
   '@agimon-ai/style-system@0.2.12(@types/node@26.6.4)(@types/react@19.3.0)(esbuild@0.28.2)(hono@4.13.12)(jiti@2.7.0)(yaml@2.9.1)(zod@4.6.5)':
     dependencies:
       '@agimon-ai/foundation-exec': 0.27.12(zod@4.6.5)
@@ -11930,6 +11939,7 @@ snapshots:
       '@agimon-ai/rmux-darwin-arm64': 0.10.12
       '@agimon-ai/rmux-darwin-x64': 0.10.12
       '@agimon-ai/rmux-linux-arm64': 0.10.12
+      '@agimon-ai/rmux-linux-x64': 0.10.12
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cloudflare/workers-types'
@@ -11982,6 +11992,7 @@ snapshots:
       '@agimon-ai/rmux-darwin-arm64': 0.10.12
       '@agimon-ai/rmux-darwin-x64': 0.10.12
       '@agimon-ai/rmux-linux-arm64': 0.10.12
+      '@agimon-ai/rmux-linux-x64': 0.10.12
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cloudflare/workers-types'
@@ -16704,7 +16715,7 @@ snapshots:
   ajv@8.20.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.8
+      fast-uri: 3.1.9
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -17742,7 +17753,7 @@ snapshots:
     dependencies:
       fast-string-truncated-width: 3.0.3
 
-  fast-uri@3.1.8: {}
+  fast-uri@3.1.9: {}
 
   fast-wrap-ansi@0.2.0:
     dependencies:
