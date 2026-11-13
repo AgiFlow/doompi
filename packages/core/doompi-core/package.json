@@ -570,7 +570,7 @@
     "@tanstack/store": "0.11.2",
     "cross-spawn": "7.0.6",
     "gpt-tokenizer": "4.0.0",
-    "hono": "4.13.12",
+    "hono": "4.13.16",
     "ignore": "7.0.11",
     "minimatch": "10.2.6",
     "protobufjs": "8.8.0",
